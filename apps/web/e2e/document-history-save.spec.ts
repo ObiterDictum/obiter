@@ -110,7 +110,12 @@ async function openFixtureDocument(
       .getByRole('button', { name: 'Create matter', exact: true })
       .last()
       .click()
-    await page.keyboard.press('Escape')
+    // The dialog stays mounted after a successful create; dismiss it so the
+    // matter row underneath is clickable. Escape is not reliable here.
+    await page
+      .getByRole('button', { name: 'Cancel' })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined)
   }
   await page.getByRole('link', { name: matterName }).first().click()
   await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
@@ -178,6 +183,23 @@ async function settledParagraphCount(page: Page) {
 async function saveAndWait(page: Page) {
   await save(page).click()
   await expect(save(page)).toBeDisabled({ timeout: 30_000 })
+}
+
+/** Saves a pending tracked rejection and waits for the decision version. */
+async function saveAndWaitForDecision(page: Page) {
+  const decision = page.waitForResponse(
+    (response) => response.url().includes('/tracked-changes/decision'),
+    { timeout: 30_000 },
+  )
+  await save(page).click()
+  await decision
+  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
+}
+
+async function enableTracking(page: Page) {
+  await page.getByRole('tab', { name: 'Review' }).click()
+  await page.getByRole('button', { name: 'Track changes off' }).click()
+  await page.getByRole('tab', { name: 'Home' }).click()
 }
 
 test.use({ viewport: { width: 1440, height: 900 } })
@@ -262,6 +284,43 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
         message: 'no duplicate paragraph after save-undo-save',
       })
       .toBe(before)
+  } finally {
+    await fresh.close()
+  }
+})
+
+test('undo of a saved tracked edit rejects the change and persists the reversal', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E50 tracked ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  await enableTracking(page)
+  await caretAtEnd(page, HEADING)
+  await page.keyboard.type(' TRACKED')
+  await expect(editor(page)).toHaveValue(/TRACKED$/)
+  await shot(page, '07-tracked-typed')
+  await saveAndWait(page)
+  await shot(page, '08-tracked-saved')
+
+  // Undo the saved tracked edit; the reversal is a tracked-change rejection.
+  for (let step = 0; step < ' TRACKED'.length; step += 1) {
+    await undo(page).click()
+  }
+  await shot(page, '09-tracked-undone')
+  await saveAndWaitForDecision(page)
+  await shot(page, '10-tracked-reversal-saved')
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await focusParagraph(reloaded, HEADING)
+    await expect(editor(reloaded)).not.toHaveValue(/TRACKED/)
+    await shot(reloaded, '11-tracked-reopened-no-marker')
   } finally {
     await fresh.close()
   }

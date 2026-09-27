@@ -45,6 +45,17 @@ export type TrackedEditContext = {
   date: string
 }
 
+/**
+ * A tracked-change element the writer just created, addressed by the persisted
+ * OOXML change id (`w:id`). It is the only cross-version identity for content
+ * that serialization wraps in `w:ins`/`w:del` and the parser therefore excludes
+ * from the paragraph model.
+ */
+export type TrackedChangeCreated = {
+  elementName: 'ins' | 'del' | 'rPrChange' | 'pPrChange'
+  ooxmlId: string
+}
+
 export function createTrackedEditWriter(
   document: OoxmlDocument,
   context: TrackedEditContext,
@@ -58,9 +69,14 @@ export function createTrackedEditWriter(
     throw new OoxmlError('invalid-document-edit')
   }
   let nextChangeId = allocateFirstChangeId(document)
-  const attributes = (prefix: string) => {
+  let created: TrackedChangeCreated[] = []
+  const attributes = (
+    prefix: string,
+    elementName: TrackedChangeCreated['elementName'],
+  ) => {
     const id = String(nextChangeId)
     nextChangeId += 1
+    created.push({ elementName, ooxmlId: id })
     return `${prefix}:id="${id}" ${prefix}:author="${escapeXmlAttribute(context.author)}" ${prefix}:date="${escapeXmlAttribute(context.date)}"`
   }
 
@@ -88,7 +104,7 @@ export function createTrackedEditWriter(
       setOverlayReplacement(part.overlay, `${anchor.wire.id}:tracked-text`, {
         start: anchor.runRange.start,
         end: anchor.runRange.end,
-        value: `<${prefix}:del ${attributes(prefix)}>${oldRun}</${prefix}:del><${prefix}:ins ${attributes(prefix)}>${newRun}</${prefix}:ins>`,
+        value: `<${prefix}:del ${attributes(prefix, 'del')}>${oldRun}</${prefix}:del><${prefix}:ins ${attributes(prefix, 'ins')}>${newRun}</${prefix}:ins>`,
       })
       anchor.wire.text = text
       part.dirty = true
@@ -120,7 +136,7 @@ export function createTrackedEditWriter(
         {
           prefix,
           wrapRun: (run) =>
-            `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
+            `<${prefix}:ins ${attributes(prefix, 'ins')}>${run}</${prefix}:ins>`,
           paragraphFormat,
           ...(position ? { position } : {}),
         },
@@ -147,7 +163,7 @@ export function createTrackedEditWriter(
             source,
             anchor,
             prefix,
-            attributes(prefix),
+            attributes(prefix, 'del'),
           ),
         )
         story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
@@ -171,7 +187,7 @@ export function createTrackedEditWriter(
         setOverlayReplacement(part.overlay, `${run.wire.id}:tracked-delete`, {
           start: run.runRange.start,
           end: run.runRange.end,
-          value: `<${prefix}:del ${attributes(prefix)}>${deletedRun}</${prefix}:del>`,
+          value: `<${prefix}:del ${attributes(prefix, 'del')}>${deletedRun}</${prefix}:del>`,
         })
       }
       part.dirty = true
@@ -189,7 +205,7 @@ export function createTrackedEditWriter(
         styleName: 'rStyle',
         prefix,
         styleId,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'rPrChange'),
         wire: anchor.wire,
       })
     },
@@ -206,7 +222,7 @@ export function createTrackedEditWriter(
         styleName: 'pStyle',
         prefix,
         styleId,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'pPrChange'),
         wire: anchor.wire,
       })
     },
@@ -221,7 +237,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.runPropertiesRange,
         propertiesName: 'rPr',
         prefix,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'rPrChange'),
         patch: (current) => patchRunEmphasisXml(current, emphasis),
       })
     },
@@ -239,7 +255,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.paragraphPropertiesRange,
         propertiesName: 'pPr',
         prefix,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'pPrChange'),
         patch: (current) => patchParagraphNumberingXml(current, numbering),
       })
     },
@@ -254,9 +270,19 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.paragraphPropertiesRange,
         propertiesName: 'pPr',
         prefix,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'pPrChange'),
         patch: (current) => patchParagraphFormatXml(current, format),
       })
+    },
+
+    /**
+     * The changes created since the previous call, in order. The lineage uses
+     * them to name a reversal by persisted `w:id`, not by run position.
+     */
+    takeChanges() {
+      const next = created
+      created = []
+      return next
     },
   }
 }

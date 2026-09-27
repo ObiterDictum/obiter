@@ -51,22 +51,29 @@ export function useWorkspaceDraftHistory() {
 
   /**
    * Rewrites every snapshot with the save boundary's translation. A snapshot
-   * the boundary cannot express is dropped rather than left replayable. This is
-   * the history's only view of a baseline advance, so undo and redo always
-   * restore a state the saved document can actually hold.
+   * the boundary cannot express is dropped rather than left replayable, and the
+   * caller is told so it can surface the loss instead of silently continuing.
+   * This is the history's only view of a baseline advance, so undo and redo
+   * always restore a state the saved document can actually hold.
    */
   function translate(
     rewrite: (
       snapshot: WorkspaceDraftSnapshot,
     ) => WorkspaceDraftSnapshot | null,
-  ) {
+  ): { translated: boolean } {
+    let translated = true
     const map = (stack: WorkspaceDraftSnapshot[]) =>
       stack.flatMap((snapshot) => {
         const next = rewrite(snapshot)
-        return next ? [next] : []
+        if (!next) {
+          translated = false
+          return []
+        }
+        return [next]
       })
     setPast(map)
     setFuture(map)
+    return { translated }
   }
 
   /**

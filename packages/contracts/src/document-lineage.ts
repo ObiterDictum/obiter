@@ -102,6 +102,40 @@ export type DocumentParagraphLineage = z.infer<
   typeof documentParagraphLineageSchema
 >
 
+/**
+ * How a tracked operation is reversed. A tracked text replacement removes the
+ * base run from the reparsed model (it lives inside `w:del`/`w:ins`), so it has
+ * no result run address. Its reversal is a tracked-change rejection, addressed
+ * by the persisted OOXML change ids (`w:id`, stable across versions) the
+ * operation created. The client resolves those against the reloaded model's
+ * `changes` list and rejects them as one unit; it never invents a run id for
+ * content absent from `paragraphs[].runs`.
+ */
+export const documentLineageReversalSchema = z
+  .object({
+    /** Index in the accepted batch whose reversal this describes. */
+    operation: z.number().int().nonnegative(),
+    /** Base run the reversal addresses, when it is run-keyed. */
+    fromRunId: lineageIdSchema.nullable(),
+    /** Base paragraph the reversal addresses, when it is paragraph-keyed. */
+    fromParagraphId: lineageIdSchema.nullable(),
+    /** Persisted OOXML change ids to reject together, as one unit. */
+    rejectOoxmlIds: z.array(lineageIdSchema).min(1),
+  })
+  .strict()
+  .superRefine((reversal, context) => {
+    if (reversal.fromRunId === null && reversal.fromParagraphId === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['fromRunId'],
+        message: 'A reversal must name a base run or paragraph.',
+      })
+    }
+  })
+export type DocumentLineageReversal = z.infer<
+  typeof documentLineageReversalSchema
+>
+
 export const documentVersionLineageSchema = z
   .object({
     version: z.literal(1),
@@ -115,6 +149,12 @@ export const documentVersionLineageSchema = z
      * omitted; the caller does not need a full-document map.
      */
     paragraphs: z.array(documentParagraphLineageSchema),
+    /**
+     * Tracked operations whose reversal is a change rejection rather than a run
+     * address. Absent when the batch was not tracked or created no changes a
+     * rejection can reverse.
+     */
+    reversals: z.array(documentLineageReversalSchema).optional(),
   })
   .strict()
 export type DocumentVersionLineage = z.infer<

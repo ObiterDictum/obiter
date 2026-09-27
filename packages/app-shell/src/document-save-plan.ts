@@ -17,6 +17,21 @@ export type DraftState = {
   deletedParagraphIds: string[]
   extraRuns: ExtraRuns
   format: FormatDrafts
+  /**
+   * Tracked changes a saved edit left behind, grouped by the history step that
+   * created them. A tracked text replacement removes its run from the reparsed
+   * model, so its reversal is a tracked-change rejection addressed by persisted
+   * `w:id`, never a run id. Each group is rejected as one unit.
+   */
+  trackedRejections: TrackedRejection[]
+}
+
+/** One history step's tracked changes, rejected together. */
+export type TrackedRejection = {
+  /** Stable key for clearing/looking up this group. */
+  key: string
+  /** Persisted OOXML change ids (`w:id`) to reject as a unit. */
+  ooxmlIds: string[]
 }
 
 /**
@@ -45,6 +60,7 @@ export function emptyDraftState(): DraftState {
     deletedParagraphIds: [],
     extraRuns: {},
     format: { emphasis: [], paragraphStyles: {}, numbering: {} },
+    trackedRejections: [],
   }
 }
 
@@ -60,6 +76,7 @@ export type DraftSlot =
   | { kind: 'paragraph-style'; key: string; paragraphId: string }
   | { kind: 'numbering'; key: string; paragraphId: string }
   | { kind: 'emphasis'; key: string }
+  | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 
 export type BlockedDraft = {
   slot: DraftSlot
@@ -83,6 +100,11 @@ export type SavePlan = {
    * itself saved while one exists.
    */
   pending: number
+  /**
+   * Tracked-change decisions to send, one per history step. Each carries the
+   * current version's wire change ids resolved from the persisted `w:id`s.
+   */
+  rejections: Array<{ key: string; ooxmlIds: string[]; changeIds: string[] }>
 }
 
 /**
@@ -290,6 +312,34 @@ export function planDocumentSave(
     })
   })
 
+  // A tracked reversal is a decision, not an edit operation. Its persisted
+  // `w:id`s are resolved against the loaded model's change list; a change the
+  // model no longer names blocks honestly rather than targeting a stale id.
+  const rejections: SavePlan['rejections'] = []
+  for (const group of state.trackedRejections) {
+    const changeIds: string[] = []
+    let unresolved = false
+    for (const ooxmlId of group.ooxmlIds) {
+      const change = model.changes.find((item) => item.ooxmlId === ooxmlId)
+      if (change) changeIds.push(change.id)
+      else unresolved = true
+    }
+    if (unresolved || changeIds.length === 0) {
+      blocked.push({
+        slot: {
+          kind: 'tracked-reject',
+          key: group.key,
+          ooxmlIds: group.ooxmlIds,
+        },
+        reason:
+          'The tracked change this undo reverses is no longer in the document.',
+        label: 'a tracked change',
+      })
+      continue
+    }
+    rejections.push({ key: group.key, ooxmlIds: group.ooxmlIds, changeIds })
+  }
+
   return {
     operations: collectEditOperations(
       model,
@@ -302,6 +352,7 @@ export function planDocumentSave(
     covered,
     blocked,
     pending,
+    rejections,
   }
 }
 
@@ -346,6 +397,10 @@ export function splitDraftSlots(
   const insertIds = new Set(
     slots.flatMap((slot) => (slot.kind === 'insert' ? [slot.clientId] : [])),
   )
+  const rejections = {
+    kept: state.trackedRejections.filter((group) => !drop.has(group.key)),
+    taken: state.trackedRejections.filter((group) => drop.has(group.key)),
+  }
   return {
     remaining: {
       drafts: drafts.kept,
@@ -356,6 +411,7 @@ export function splitDraftSlots(
         (id) => !drop.has(`delete:${id}`),
       ),
       extraRuns: extraRuns.kept,
+      trackedRejections: rejections.kept,
       format: {
         paragraphStyles: paragraphStyles.kept,
         numbering: numbering.kept,
@@ -369,6 +425,7 @@ export function splitDraftSlots(
         drop.has(`delete:${id}`),
       ),
       extraRuns: extraRuns.taken,
+      trackedRejections: rejections.taken,
       format: {
         paragraphStyles: paragraphStyles.taken,
         numbering: numbering.taken,
@@ -402,7 +459,8 @@ export function hasDraftState(state: DraftState) {
     ).length > 0 ||
     state.format.emphasis.length > 0 ||
     Object.keys(state.format.paragraphStyles).length > 0 ||
-    Object.keys(state.format.numbering).length > 0
+    Object.keys(state.format.numbering).length > 0 ||
+    state.trackedRejections.length > 0
   )
 }
 
@@ -446,6 +504,10 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
         .find((item) => emphasisSlotKey(item) === slot.key)
       return JSON.stringify(match)
     }
+    case 'tracked-reject':
+      return JSON.stringify(
+        state.trackedRejections.find((group) => group.key === slot.key),
+      )
   }
 }
 
@@ -466,6 +528,8 @@ export function slotLabel(slot: DraftSlot): string {
       return 'list formatting'
     case 'emphasis':
       return 'formatting'
+    case 'tracked-reject':
+      return 'a tracked change'
   }
 }
 

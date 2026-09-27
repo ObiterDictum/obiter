@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentVersionLineage,
+} from '@obiter/contracts'
 import {
   lineageCoversCoveredSlots,
   paragraphMapFromLineage,
@@ -17,7 +20,8 @@ type DraftHistory = ReturnType<typeof useWorkspaceDraftHistory>
  * own recovery: a missing or incomplete lineage, a document that moved past the
  * committed version, or a reload that failed before the result model arrived.
  */
-export type BaselineBlockReason = 'lineage' | 'newer-version' | 'reload-failed'
+export type BaselineBlockReason =
+  'lineage' | 'newer-version' | 'reload-failed' | 'tracked-insert'
 
 /**
  * Owns the one record of where the history baseline has advanced to. A
@@ -46,6 +50,13 @@ export function useSaveBaseline({
   onBlocked: (reason: BaselineBlockReason | null) => void
 }) {
   const pending = useRef<SaveBaseline | null>(null)
+  // A tracked decision commits a version with no lineage. There is nothing to
+  // translate, but saves must still wait for the exact version's model so the
+  // next edit is not planned against the pre-decision run ids.
+  const decisionPending = useRef<{
+    versionId: string
+    versionNumber: number | undefined
+  } | null>(null)
   // Exposed so the workspace can refuse a second save until the model for the
   // committed version has actually reloaded.
   const [pendingVersion, setPendingVersion] = useState<string | null>(null)
@@ -70,6 +81,33 @@ export function useSaveBaseline({
   // save did not produce, is surfaced rather than leaving a permanent
   // "Saving…" with an enabled-but-inert Save button.
   useEffect(() => {
+    // A tracked decision carries no lineage to translate; the gate exists only
+    // so the next save plans against the reloaded model for that exact version.
+    const decision = decisionPending.current
+    if (decision) {
+      if (modelError) {
+        onBlockedRef.current('reload-failed')
+        return
+      }
+      if (!model) return
+      if (modelVersionId === decision.versionId) {
+        decisionPending.current = null
+        setPendingVersion(null)
+        onBlockedRef.current(null)
+        return
+      }
+      if (
+        modelVersionNumber !== undefined &&
+        decision.versionNumber !== undefined &&
+        modelVersionNumber < decision.versionNumber
+      ) {
+        return
+      }
+      decisionPending.current = null
+      setPendingVersion(null)
+      onBlockedRef.current('newer-version')
+      return
+    }
     const boundary = pending.current
     if (!boundary || !boundary.versionId) return
     if (modelError) {
@@ -118,7 +156,7 @@ export function useSaveBaseline({
       lineage?: SaveBaseline['lineage'],
       versionId?: string,
       versionNumber?: number,
-    ): { resolved: boolean } {
+    ): { resolved: boolean; reason?: BaselineBlockReason } {
       // A successful save ends the redo branch whether or not its identity can
       // be reconciled.
       history.discardRedo()
@@ -134,26 +172,63 @@ export function useSaveBaseline({
       // An unsupported or incomplete response is never guessed around: the
       // caller surfaces a recoverable blocked state instead of risking another
       // write or silently discarding the reversal.
-      if (
-        !lineage ||
-        !versionId ||
-        !lineageCoversCoveredSlots(lineage, boundary)
-      ) {
+      if (!lineage || !versionId) {
         pending.current = null
         setPendingVersion(null)
-        return { resolved: false }
+        return { resolved: false, reason: 'lineage' }
       }
-      history.translate((snapshot) => translateSnapshot(snapshot, boundary))
+      if (!lineageCoversCoveredSlots(lineage, boundary)) {
+        pending.current = null
+        setPendingVersion(null)
+        return { resolved: false, reason: blockReasonFor(lineage, covered) }
+      }
+      const { translated } = history.translate((snapshot) =>
+        translateSnapshot(snapshot, boundary),
+      )
+      if (!translated) {
+        // A snapshot could not be expressed against the saved document. Its
+        // reversal is unrepresentable, so the history is not silently dropped:
+        // the workspace enters the recoverable blocked state.
+        pending.current = null
+        setPendingVersion(null)
+        return { resolved: false, reason: 'lineage' }
+      }
       pending.current = boundary
       setPendingVersion(versionId)
       return { resolved: true }
     },
     clear() {
       pending.current = null
+      decisionPending.current = null
       setPendingVersion(null)
       setParagraphRemap(new Map())
+    },
+    markDecisionCommitted(versionId: string, versionNumber?: number) {
+      decisionPending.current = { versionId, versionNumber }
+      setPendingVersion(versionId)
     },
     pendingVersion,
     paragraphRemap,
   }
+}
+
+/**
+ * Why a boundary could not be reconciled. A covered paragraph insertion whose
+ * result paragraph carries no run is tracked: rejecting its `w:ins` restores
+ * the content but leaves an empty paragraph, and a deletion is refused while
+ * the paragraph still carries tracked changes. That is a distinct, honest
+ * boundary rather than a generic missing-address failure.
+ */
+function blockReasonFor(
+  lineage: DocumentVersionLineage,
+  covered: readonly DraftSlot[],
+): BaselineBlockReason {
+  const trackedInsert = covered.some((slot) => {
+    if (slot.kind !== 'insert') return false
+    const entry = lineage.paragraphs.find(
+      (paragraph) => paragraph.insertedByIntent === slot.clientId,
+    )
+    return entry !== undefined && entry.runs.length === 0
+  })
+  return trackedInsert ? 'tracked-insert' : 'lineage'
 }

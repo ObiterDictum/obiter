@@ -1,4 +1,5 @@
 import type {
+  DocumentLineageReversal,
   DocumentLineageSegment,
   DocumentLineageRun,
   DocumentModelWire,
@@ -43,6 +44,22 @@ export type LineageRecorder = {
   deletedParagraphs: Map<string, { insertedByOperation?: number }>
   /** Paragraphs this batch touched, in insertion order. */
   touched: Set<DocumentParagraphWire>
+  /**
+   * Tracked-change elements the batch created, each tagged with the accepted
+   * operation that created it and the base node it addresses. A tracked
+   * operation's reversal is a rejection of these persisted `w:id`s, never a
+   * positional run address.
+   */
+  trackedChanges: RecordedTrackedChange[]
+}
+
+/** One tracked-change element created while applying an accepted batch. */
+export type RecordedTrackedChange = {
+  operationIndex: number
+  elementName: 'ins' | 'del' | 'rPrChange' | 'pPrChange'
+  ooxmlId: string
+  fromParagraphId: string | null
+  fromRunId: string | null
 }
 
 export function createLineageRecorder(
@@ -64,6 +81,32 @@ export function createLineageRecorder(
     paragraphOrigin: new Map(),
     deletedParagraphs: new Map(),
     touched: new Set(),
+    trackedChanges: [],
+  }
+}
+
+/**
+ * Records the tracked-change elements one accepted operation created. A tracked
+ * operation produces one or more records (a replacement produces a `del` and
+ * an `ins`); they are reversed together as one unit.
+ */
+export function recordTrackedChanges(
+  recorder: LineageRecorder,
+  changes: readonly Pick<RecordedTrackedChange, 'elementName' | 'ooxmlId'>[],
+  context: {
+    operationIndex: number
+    fromParagraphId: string | null
+    fromRunId: string | null
+  },
+) {
+  for (const change of changes) {
+    recorder.trackedChanges.push({
+      operationIndex: context.operationIndex,
+      elementName: change.elementName,
+      ooxmlId: change.ooxmlId,
+      fromParagraphId: context.fromParagraphId,
+      fromRunId: context.fromRunId,
+    })
   }
 }
 
@@ -296,11 +339,37 @@ export function buildVersionLineage(input: {
     })
   }
 
+  // A tracked operation's reversal is a rejection of the persisted `w:id`s it
+  // created, grouped by the accepted operation so a replacement's `del`/`ins`
+  // pair is handled as one unit. An insertion created only an `ins`: its
+  // reversal is a plain paragraph deletion, not a rejection, so it is omitted.
+  const reversals: DocumentLineageReversal[] = []
+  const byOperation = new Map<number, RecordedTrackedChange[]>()
+  for (const change of recorder.trackedChanges) {
+    const group = byOperation.get(change.operationIndex) ?? []
+    group.push(change)
+    byOperation.set(change.operationIndex, group)
+  }
+  for (const [operation, group] of [...byOperation.entries()].sort(
+    (left, right) => left[0] - right[0],
+  )) {
+    if (group.every((change) => change.elementName === 'ins')) continue
+    const first = group[0]
+    if (!first) continue
+    reversals.push({
+      operation,
+      fromRunId: first.fromRunId,
+      fromParagraphId: first.fromParagraphId,
+      rejectOoxmlIds: [...new Set(group.map((change) => change.ooxmlId))],
+    })
+  }
+
   return {
     version: 1,
     baseVersionId: input.baseVersionId,
     versionId: input.versionId,
     acceptedOperations: [...recorder.accepted].sort((a, b) => a - b),
     paragraphs,
+    ...(reversals.length > 0 ? { reversals } : {}),
   }
 }

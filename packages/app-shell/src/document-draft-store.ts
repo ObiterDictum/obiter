@@ -73,6 +73,12 @@ const numberingDraftSchema = z
     ilvl: z.number().int().min(0).max(8).optional(),
   })
   .strict()
+const trackedRejectionSchema = z
+  .object({
+    key: z.string().min(1),
+    ooxmlIds: z.array(z.string().min(1)).min(1),
+  })
+  .strict()
 
 export const draftStateSchema = z
   .object({
@@ -87,6 +93,9 @@ export const draftStateSchema = z
         numbering: z.record(z.string(), numberingDraftSchema),
       })
       .strict(),
+    // A tracked-change rejection group introduced by E50 undo. Absent in older
+    // persisted drafts, which parse to no pending rejections.
+    trackedRejections: z.array(trackedRejectionSchema).optional().default([]),
   })
   .strict()
 

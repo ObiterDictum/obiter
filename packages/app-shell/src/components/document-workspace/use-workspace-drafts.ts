@@ -164,11 +164,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
 
   /**
    * Advances the history baseline after a successful save. The covered slots
-   * are cleared from live state exactly as before, and every history snapshot
-   * is re-expressed against the saved document: undo now reverses a saved edit
-   * instead of replaying it as fresh work. Structural reversals the reloaded
-   * model has not yet named are held as pending identities, which the planner
-   * neither sends nor blocks.
+   * are cleared from live state, and every history snapshot is re-expressed
+   * against the saved document: undo now reverses a saved edit instead of
+   * replaying it as fresh work.
    */
   function commitSaveBoundary(
     covered: readonly DraftSlot[],
@@ -179,7 +177,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     versionNumber?: number,
   ) {
     clearSlots(covered, sent)
-    const { resolved } = baseline.commit(
+    const { resolved, reason } = baseline.commit(
       covered,
       sent,
       fromModel,
@@ -187,9 +185,13 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       versionId,
       versionNumber,
     )
-    setBlockedReason(resolved ? null : 'lineage')
+    setBlockedReason(resolved ? null : (reason ?? 'lineage'))
   }
-
+  function resetHistoryAfterDecision() {
+    history.clear()
+    baseline.clear()
+    setBlockedReason(null)
+  }
   function resetDrafts() {
     setBundle({ state: emptyDraftState(), held: [] })
     history.clear()
@@ -466,6 +468,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     resetDrafts,
     clearSlots,
     commitSaveBoundary,
+    resetHistoryAfterDecision,
     holdSlot,
     held: bundle.held,
     discardHeld,
@@ -475,6 +478,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     blockedReason,
     paragraphRemap: baseline.paragraphRemap,
     boundaryPending: baseline.pendingVersion !== null,
+    markDecisionCommitted: baseline.markDecisionCommitted,
     staleDraft,
     discardStaleDraft,
     recoverable,

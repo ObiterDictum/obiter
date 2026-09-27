@@ -256,6 +256,8 @@ export function mountWorkspace(
     modelFor?: WorkspaceModelSource
     editAsync?: ReturnType<typeof vi.fn>
     mergeAsync?: ReturnType<typeof vi.fn>
+    /** Drives the tracked-change decision path a saved tracked undo uses. */
+    decideAsync?: ReturnType<typeof vi.fn>
     /** Simulates the reload query failing, so a pending baseline cannot resolve. */
     modelError?: () => boolean
   } = {},
@@ -301,7 +303,9 @@ export function mountWorkspace(
   hooks.useCollaborationMerge.mockReturnValue(
     idleMutation({ mutateAsync: options.mergeAsync ?? vi.fn() }),
   )
-  hooks.useTrackedChangeDecision.mockReturnValue(idleMutation())
+  hooks.useTrackedChangeDecision.mockReturnValue(
+    idleMutation({ mutateAsync: options.decideAsync ?? vi.fn() }),
+  )
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
 
   return render(

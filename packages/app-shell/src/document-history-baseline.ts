@@ -129,6 +129,14 @@ type SavedIdentities = {
   runAddresses: Map<string, RunAddress>
   /** Base run id -> the result run model id (only once the model is loaded). */
   runIds: Map<string, string>
+  /**
+   * Base run id -> persisted change ids whose rejection reverses a tracked
+   * operation on it. A tracked text replacement removes its run from the
+   * reparsed model, so this is the only identity its reversal can use.
+   */
+  runReversals: Map<string, string[]>
+  /** Base paragraph id -> persisted change ids whose rejection reverses it. */
+  paragraphReversals: Map<string, string[]>
 }
 
 /**
@@ -152,6 +160,8 @@ function emptyIdentities(): SavedIdentities {
     paragraphIds: new Map(),
     runAddresses: new Map(),
     runIds: new Map(),
+    runReversals: new Map(),
+    paragraphReversals: new Map(),
   }
 }
 
@@ -319,18 +329,39 @@ export function lineageCoversCoveredSlots(
       }
     }
   }
+  // A tracked operation has no result run address; its reversal is the
+  // rejection group the lineage carries. A run on a paragraph the same batch
+  // inserted is covered by that insert's deletion, so it needs no address.
+  const reversedRuns = new Set(
+    (lineage.reversals ?? []).flatMap((reversal) =>
+      reversal.fromRunId ? [reversal.fromRunId] : [],
+    ),
+  )
+  const reversedParagraphs = new Set(
+    (lineage.reversals ?? []).flatMap((reversal) =>
+      reversal.fromParagraphId ? [reversal.fromParagraphId] : [],
+    ),
+  )
+  const insertedRunIds = new Set(
+    baseline.sent.inserts.flatMap((insert) =>
+      (insert.runs ?? []).map((run) => run.id),
+    ),
+  )
   for (const slot of baseline.covered) {
     if (slot.kind === 'insert') {
-      if (
-        !lineage.paragraphs.some(
-          (entry) => entry.insertedByIntent === slot.clientId,
-        )
-      ) {
-        return false
-      }
+      const entry = lineage.paragraphs.find(
+        (paragraph) => paragraph.insertedByIntent === slot.clientId,
+      )
+      if (!entry) return false
+      // A tracked insertion's result paragraph carries no run (its content is
+      // wrapped in `w:ins`). Rejecting the change restores the content but
+      // leaves the paragraph shell, and deleting the shell is refused while it
+      // still carries the change. That boundary is surfaced, never guessed.
+      if (entry.runs.length === 0) return false
       continue
     }
     if (slot.kind === 'delete') {
+      if (reversedParagraphs.has(slot.paragraphId)) continue
       if (
         !lineage.paragraphs.some(
           (entry) => entry.fromParagraphId === slot.paragraphId,
@@ -341,6 +372,7 @@ export function lineageCoversCoveredSlots(
       continue
     }
     if (slot.kind === 'paragraph-style' || slot.kind === 'numbering') {
+      if (reversedParagraphs.has(slot.paragraphId)) continue
       // A style on a paragraph the same batch inserted is addressed by the
       // insert's intent id; every other paragraph must be in the map.
       if (paragraphIds.has(slot.paragraphId)) continue
@@ -358,14 +390,26 @@ export function lineageCoversCoveredSlots(
         (item) => emphasisSlotKey(item) === slot.key,
       )
       if (sent?.runId) {
-        if (!runAddresses.has(sent.runId)) return false
-      } else if (sent?.paragraphId && !paragraphIds.has(sent.paragraphId)) {
+        if (!runAddresses.has(sent.runId) && !reversedRuns.has(sent.runId)) {
+          return false
+        }
+      } else if (
+        sent?.paragraphId &&
+        !paragraphIds.has(sent.paragraphId) &&
+        !reversedParagraphs.has(sent.paragraphId)
+      ) {
         return false
       }
       continue
     }
     for (const runId of coveredRunIds(slot, baseline)) {
-      if (!runAddresses.has(runId)) return false
+      if (
+        !runAddresses.has(runId) &&
+        !reversedRuns.has(runId) &&
+        !insertedRunIds.has(runId)
+      ) {
+        return false
+      }
     }
   }
   return true
@@ -465,6 +509,18 @@ function lineageIdentities(
     }
   }
 
+  const runReversals = new Map<string, string[]>()
+  const paragraphReversals = new Map<string, string[]>()
+  for (const reversal of lineage.reversals ?? []) {
+    if (reversal.fromRunId) {
+      runReversals.set(reversal.fromRunId, [...reversal.rejectOoxmlIds])
+    } else if (reversal.fromParagraphId) {
+      paragraphReversals.set(reversal.fromParagraphId, [
+        ...reversal.rejectOoxmlIds,
+      ])
+    }
+  }
+
   return {
     inserted,
     insertedRuns,
@@ -473,6 +529,8 @@ function lineageIdentities(
     paragraphIds,
     runAddresses,
     runIds,
+    runReversals,
+    paragraphReversals,
   }
 }
 
@@ -531,10 +589,30 @@ export function translateSnapshot(
 ): DraftState | null {
   const next = structuredClone(snapshot)
   const identities = savedIdentities(baseline)
+  const insertedRunIds = new Set(
+    baseline.sent.inserts.flatMap((insert) =>
+      (insert.runs ?? []).map((run) => run.id),
+    ),
+  )
 
   for (const slot of baseline.covered) {
     switch (slot.kind) {
       case 'run-text': {
+        // A tracked replacement's run is absent from the reparsed model, so
+        // its reversal is the rejection group the lineage carries, never a run
+        // id for content the model does not have.
+        const reversal = identities.runReversals.get(slot.runId)
+        if (reversal) {
+          delete next.drafts[slot.runId]
+          addTrackedRejection(next, reversal)
+          break
+        }
+        // A run on a paragraph the same save inserted is removed with that
+        // paragraph's deletion; it is not separately addressable.
+        if (insertedRunIds.has(slot.runId)) {
+          delete next.drafts[slot.runId]
+          break
+        }
         // Never fall back to the base run id: it names unrelated content once
         // a save shifts run positions. The lineage address is the only reason
         // a reversal can be addressed before the model reloads.
@@ -558,6 +636,12 @@ export function translateSnapshot(
         break
       }
       case 'paragraph-style': {
+        const reversal = identities.paragraphReversals.get(slot.paragraphId)
+        if (reversal) {
+          delete next.format.paragraphStyles[slot.paragraphId]
+          addTrackedRejection(next, reversal)
+          break
+        }
         const targetParagraphId =
           identities.paragraphIds.get(slot.paragraphId) ?? slot.paragraphId
         const pre =
@@ -614,6 +698,16 @@ export function translateSnapshot(
         break
       }
       case 'delete': {
+        const reversal = identities.paragraphReversals.get(slot.paragraphId)
+        if (
+          reversal &&
+          !snapshot.deletedParagraphIds.includes(slot.paragraphId)
+        ) {
+          // A tracked deletion leaves the paragraph in the model with its runs
+          // hidden. Its reversal is the rejection group, not a restored copy.
+          addTrackedRejection(next, reversal)
+          break
+        }
         if (snapshot.deletedParagraphIds.includes(slot.paragraphId)) {
           // The save stored the deletion, so the mask is the baseline.
           next.deletedParagraphIds = next.deletedParagraphIds.filter(
@@ -654,6 +748,15 @@ export function translateSnapshot(
         )
         Object.assign(next, removeDraftSlots(next, [slot]))
         if (!sent) break
+        const sentReversal =
+          (sent.runId ? identities.runReversals.get(sent.runId) : undefined) ??
+          (sent.paragraphId
+            ? identities.paragraphReversals.get(sent.paragraphId)
+            : undefined)
+        if (sentReversal) {
+          addTrackedRejection(next, sentReversal)
+          break
+        }
         const inverse = sent.runId
           ? preEmphasisForRun(baseline.fromModel, sent.runId)
           : sent.paragraphId !== undefined &&
@@ -695,6 +798,11 @@ export function translateSnapshot(
         // Reverse a saved numbering change by restating the pre-save numbering
         // at the result paragraph, rather than merely dropping the slot.
         Object.assign(next, removeDraftSlots(next, [slot]))
+        const reversal = identities.paragraphReversals.get(slot.paragraphId)
+        if (reversal) {
+          addTrackedRejection(next, reversal)
+          break
+        }
         const paragraph = storyParagraph(baseline.fromModel, slot.paragraphId)
         if (!paragraph) break
         const targetParagraphId =
@@ -713,6 +821,11 @@ export function translateSnapshot(
         const lastOriginal = paragraph?.runs.at(-1)
         Object.assign(next, removeDraftSlots(next, [slot]))
         if (!lastOriginal) break
+        const reversal = identities.runReversals.get(lastOriginal.id)
+        if (reversal) {
+          addTrackedRejection(next, reversal)
+          break
+        }
         const lastAddress = identities.runAddresses.get(lastOriginal.id)
         const targetRunId =
           identities.runIds.get(lastOriginal.id) ??
@@ -734,6 +847,14 @@ export function translateSnapshot(
     }
   }
   return next
+}
+
+/** Adds a tracked-change rejection group once, keyed by its change ids. */
+function addTrackedRejection(state: DraftState, ooxmlIds: string[]) {
+  const key = `reject:${ooxmlIds.join(',')}`
+  if (!state.trackedRejections.some((group) => group.key === key)) {
+    state.trackedRejections.push({ key, ooxmlIds: [...ooxmlIds] })
+  }
 }
 
 /** The pre-save bold/italic/underline of a run, for a formatting reversal. */

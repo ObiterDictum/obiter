@@ -8,6 +8,7 @@ import {
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import {
   recordReplacedRun,
+  recordTrackedChanges,
   seedRunOrigins,
   touchParagraph,
   type LineageRecorder,
@@ -130,8 +131,11 @@ export function applyDocumentEdits(
           operation.from !== undefined &&
           operation.to !== undefined
         ) {
-          // Tracked range splits have no rPrChange writer yet.
-          if (trackedWriter) continue
+          // There is no tracked rPrChange writer for a range split. Applying it
+          // untracked would silently discard the requested tracking, and
+          // skipping it would report a saved formatting change that was never
+          // written. Refuse it so the client holds and surfaces the slot.
+          if (trackedWriter) throw new OoxmlError('model-node-not-editable')
           const ranges = rangeEmphasis.get(operation.paragraph) ?? []
           ranges.push({
             from: operation.from,
@@ -219,6 +223,20 @@ export function applyDocumentEdits(
     } else {
       throw new OoxmlError('invalid-document-edit')
     }
+
+    // A tracked operation names its reversal by the persisted `w:id`s it just
+    // created. Taking them per operation keeps each history step's reversal a
+    // unit: a replacement's `del`/`ins` pair is never split from its run.
+    if (trackedWriter && lineage) {
+      const created = trackedWriter.takeChanges()
+      if (created.length > 0) {
+        recordTrackedChanges(lineage, created, {
+          operationIndex,
+          fromParagraphId: operation.paragraph.wire.id,
+          fromRunId: trackedRunIdOf(operation),
+        })
+      }
+    }
   }
 
   for (const [paragraph, ranges] of rangeEmphasis) {
@@ -255,6 +273,16 @@ function runEmphasisFields(
       ? { smallCaps: operation.smallCaps }
       : {}),
   }
+}
+
+/** The base run a tracked operation's reversal is keyed to, when run-keyed. */
+function trackedRunIdOf(operation: PlannedOperation): string | null {
+  if (operation.type === 'replace_run_text') return operation.run.wire.id
+  if (operation.type === 'set_run_style') return operation.run.wire.id
+  if (operation.type === 'set_run_emphasis') {
+    return operation.run?.wire.id ?? null
+  }
+  return null
 }
 
 function planOperation(

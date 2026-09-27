@@ -747,4 +747,57 @@ describe('lineage-driven identity', () => {
       }),
     ).toBe(true)
   })
+
+  it('translates a tracked replacement into a rejection group, not a run id', () => {
+    const trackedLineage: DocumentVersionLineage = {
+      version: 1,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      acceptedOperations: [0],
+      paragraphs: [
+        {
+          fromParagraphId: 'para-000001',
+          toParagraphId: 'para-w14-00000001',
+          runs: [],
+        },
+      ],
+      reversals: [
+        {
+          operation: 0,
+          fromRunId: 'text-000001',
+          fromParagraphId: 'para-000001',
+          rejectOoxmlIds: ['0', '1'],
+        },
+      ],
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000001': 'Alpha changed' },
+    }
+    const snapshot: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000001': 'Alpha' },
+    }
+    const boundary: SaveBaseline = {
+      covered: [runTextSlot('text-000001')],
+      sent,
+      fromModel: baseModel,
+      lineage: trackedLineage,
+      versionId: 'ver_2',
+      toModel: resultModel,
+    }
+    // The covered run has no result address but a named rejection, so the
+    // boundary is accepted rather than refused.
+    expect(lineageCoversCoveredSlots(trackedLineage, boundary)).toBe(true)
+    const translated = translateSnapshot(snapshot, boundary)
+    // No run id is invented for content the model does not have; the reversal
+    // is the persisted change group.
+    expect(translated?.drafts['text-000001']).toBeUndefined()
+    expect(translated?.trackedRejections).toEqual([
+      { key: 'reject:0,1', ooxmlIds: ['0', '1'] },
+    ])
+    expect(
+      hasUnresolvedBaselineIdentities(translated ?? emptyDraftState()),
+    ).toBe(false)
+  })
 })

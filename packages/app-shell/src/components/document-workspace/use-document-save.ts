@@ -18,6 +18,7 @@ import {
 import {
   useCollaborationMerge,
   useEditDocument,
+  useTrackedChangeDecision,
   workspaceKeys,
 } from '../../document-workspace-api'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
@@ -28,6 +29,9 @@ import type { WorkspaceDrafts } from './use-workspace-drafts'
  * costs requests but never history; the cap keeps that bounded.
  */
 const MAX_ISOLATION_ATTEMPTS = 12
+
+/** The tracked-change decision route's own change-id cap. */
+const DOCUMENT_TRACKED_DECISION_MAX = 100
 
 export type SaveState =
   | { status: 'saved' }
@@ -44,6 +48,7 @@ const EMPTY_PLAN: SavePlan = {
   covered: [],
   blocked: [],
   pending: 0,
+  rejections: [],
 }
 
 /**
@@ -81,13 +86,14 @@ export function useDocumentSave({
   const queryClient = useQueryClient()
   const editDocument = useEditDocument(documentId, matterId)
   const mergeDocument = useCollaborationMerge(documentId, matterId)
+  const decideChange = useTrackedChangeDecision(documentId, matterId)
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
   const inFlight = useRef(false)
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
-  const dirty = plan.operations.length > 0
+  const dirty = plan.operations.length > 0 || plan.rejections.length > 0
   const saving = editDocument.isPending || mergeDocument.isPending
   const blocked = plan.blocked
   const held = drafts.held
@@ -259,6 +265,64 @@ export function useDocumentSave({
     if (inFlight.current) return
     const sent = drafts.state
     const current = planDocumentSave(model, sent)
+    // A tracked reversal is a decision version, not an edit. Send rejections
+    // only when no edit operations are pending; otherwise save the edits first
+    // and leave the rejection in state so neither is silently lost.
+    if (current.operations.length === 0 && current.rejections.length > 0) {
+      // Every pending group is one decision batch: the decision route is
+      // all-or-nothing against one base version, so sending the groups
+      // sequentially would commit the first and conflict the rest. One call
+      // makes a multi-operation history step an atomic unit, or blocks whole.
+      const changeIds = [
+        ...new Set(
+          current.rejections.flatMap((rejection) => rejection.changeIds),
+        ),
+      ]
+      if (changeIds.length > DOCUMENT_TRACKED_DECISION_MAX) {
+        setFailure(
+          'This undo reverses more tracked changes than one decision can carry. Reload and review them in Review \u25b8 Changes.',
+        )
+        return
+      }
+      inFlight.current = true
+      setFailure(null)
+      setNotice(null)
+      try {
+        const saved = await decideChange.mutateAsync({
+          baseVersionId,
+          action: 'reject',
+          changeIds,
+        })
+        // A decision version carries no lineage, and the rejected change id is
+        // consumed, so the pre-edit snapshots cannot be replayed safely. The
+        // rejection slots are cleared and Redo is deliberately unavailable
+        // rather than targeting an obsolete id.
+        drafts.clearSlots(
+          current.rejections.map((rejection) => ({
+            kind: 'tracked-reject' as const,
+            key: rejection.key,
+            ooxmlIds: rejection.ooxmlIds,
+          })),
+          sent,
+        )
+        drafts.resetHistoryAfterDecision()
+        // Hold saves until the decision version's model reloads, so the next
+        // edit is not planned against pre-decision run ids under the new base.
+        drafts.markDecisionCommitted(saved.versionId, saved.versionNumber)
+        onSaved(saved.versionId)
+        setFailure(null)
+        setStale(false)
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'conflict_detected') {
+          setStale(true)
+          return
+        }
+        setFailure(messageFor(error))
+      } finally {
+        inFlight.current = false
+      }
+      return
+    }
     if (current.operations.length === 0) return
     inFlight.current = true
     setFailure(null)
@@ -347,6 +411,8 @@ function blockedHistoryMessage(
       return 'Your change was saved, but the document moved to a newer version before the saved model could be loaded. Reloading is required to continue; it discards the in-memory undo history. Your saved change is not lost.'
     case 'reload-failed':
       return 'Your change was saved, but the saved document could not be reloaded, so the edit history cannot be reconciled. Retry the reload; the saved document is unchanged.'
+    case 'tracked-insert':
+      return 'Your change was saved as a tracked insertion. Reversing it here is not offered: rejecting the insertion would restore the text but leave an empty paragraph, and removing that paragraph is refused while it still carries the tracked change. Review it in Review \u25b8 Changes, then remove the empty paragraph.'
     default:
       return 'Your change was saved, but the edit history for it could not be reconciled. Reloading discards the in-memory history; the saved document is unchanged.'
   }

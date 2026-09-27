@@ -17,6 +17,7 @@ import type {
 } from '@obiter/contracts'
 import {
   applyDocumentEdits,
+  applyTrackedChangeDecisions,
   buildVersionLineage,
   canonicaliseParagraphIdentities,
   createLineageRecorder,
@@ -102,8 +103,42 @@ async function server(initial: readonly string[]) {
       return result
     },
   )
+  // A tracked-change rejection: the same all-or-nothing decision path the API
+  // uses, re-parsing the stored bytes and writing a new immutable version.
+  const decideAsync = vi.fn(
+    async (input: {
+      baseVersionId: string
+      action: 'accept' | 'reject'
+      changeIds: string[]
+    }) => {
+      // The real route refuses a stale base; enforce it so a sequential
+      // multi-group save cannot pass a test that should catch the conflict.
+      if (input.baseVersionId !== `ver_${String(version)}`) {
+        throw new ApiError(
+          'conflict_detected',
+          'The document has changed since review began.',
+          409,
+          'req_1',
+        )
+      }
+      const baseVersionId = input.baseVersionId
+      const document = await parseDocx(bytes)
+      applyTrackedChangeDecisions(document, input.changeIds, input.action)
+      bytes = await serialiseDocx(document)
+      version += 1
+      parsed = await parseDocx(bytes)
+      paragraphs = toPersisted(parsed.model)
+      return {
+        documentId: 'doc_1',
+        versionId: `ver_${String(version)}`,
+        versionNumber: version,
+        baseVersionId,
+      }
+    },
+  )
   return {
     editAsync,
+    decideAsync,
     apply,
     waitForSave: () => lastSave,
     get paragraphs() {
@@ -174,6 +209,24 @@ async function clickSaveAndSettle(target: SaveTarget, calls: number) {
       await Promise.resolve()
     })
   }
+}
+
+/** Saves a pending tracked reversal and waits for the decision request. */
+async function clickDecisionSave(
+  document: Awaited<ReturnType<typeof server>>,
+  calls: number,
+) {
+  fireEvent.click(saveButton())
+  await waitFor(() => expect(document.decideAsync).toHaveBeenCalledTimes(calls))
+  await act(async () => {
+    await Promise.resolve()
+  })
+}
+
+function enableTracking() {
+  openRibbonTab('Review')
+  fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+  openRibbonTab('Home')
 }
 
 describe('undo across a successful save', () => {
@@ -649,33 +702,277 @@ describe('undo across a successful save', () => {
     ])
   })
 
-  it('blocks a tracked save rather than retargeting a run positionally', async () => {
+  it('reverses a saved tracked text replacement by rejecting its change', async () => {
     const document = await server(['Hello', 'tail'])
     mountWorkspace({
       editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
       modelFor: document.modelFor,
     })
-    openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
-    openRibbonTab('Home')
+    enableTracking()
     selectBodyParagraph()
     fireEvent.change(field(), { target: { value: 'Hello world' } })
     await clickSaveAndSettle(document, 1)
 
-    // The tracked run reparses to a different run list, so the lineage carries
-    // no address for it. The boundary is refused and surfaced, never reported
-    // saved and never resent to a positional id.
-    await waitFor(() => expect(saveState()).toBe('blocked'))
+    // The tracked save succeeded and the run now lives in `w:del`/`w:ins`,
+    // absent from the paragraph model. The visible change is recorded.
+    await waitFor(() => expect(saveState()).toBe('saved'))
     expect(
-      screen.getByText(/edit history for it could not be reconciled/i),
-    ).toBeTruthy()
-    expect(saveButton()).toHaveProperty('disabled', true)
+      document
+        .modelFor()
+        .model.changes.map((change) => [change.kind, change.text]),
+    ).toEqual([
+      ['delete', 'Hello'],
+      ['insert', 'Hello world'],
+    ])
 
-    fireEvent.click(saveButton())
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    // Undo reverses the saved tracked edit against the saved document as a
+    // rejection, not as a text edit on a run the model does not have.
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    expect(document.decideAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'reject' }),
+    )
+
+    // A fresh reload shows the pre-edit text and no remaining changes. The
+    // rejected change id is consumed, so redo is not offered rather than
+    // targeting an obsolete id.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(persistedText(document.paragraphs)).toEqual(['Hello', 'tail'])
+    expect(document.modelFor().model.changes).toHaveLength(0)
+    expect(redoButton()).toHaveProperty('disabled', true)
+  })
+
+  it('does not report saved while a tracked rejection is pending', async () => {
+    const document = await server(['Hello'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+
+    fireEvent.click(undoButton())
+    // The reversal is real unsaved work, never silently reported as saved.
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    expect(saveButton()).toHaveProperty('disabled', false)
+  })
+
+  it('reverses a saved tracked paragraph deletion', async () => {
+    const document = await server(['Alpha', 'Beta'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    fireEvent.click(screen.getByText('Beta'))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    await clickSaveAndSettle(document, 1)
+
+    // A tracked deletion leaves the paragraph in the model with no runs.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(document.modelFor().model.changes[0]?.kind).toBe('delete')
+
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'Beta'])
+    expect(document.modelFor().model.changes).toHaveLength(0)
+  })
+
+  it('blocks a saved tracked insertion with the empty-paragraph counterexample', async () => {
+    const document = await server(['Alpha', 'Beta'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    fireEvent.click(screen.getByText('Alpha'))
+    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
+      target: { value: 'Mid' },
+    })
+    await clickSaveAndSettle(document, 1)
+
+    // A tracked insertion reparses to an empty paragraph carrying its `w:ins`.
+    // Rejecting the change restores the content but leaves the shell, and the
+    // document refuses to delete a paragraph that still carries tracked
+    // changes. The boundary is surfaced, never a refused delete or a silent
+    // "saved".
+    await waitFor(() => expect(saveState()).toBe('blocked'))
+    expect(screen.getByText(/tracked insertion/i)).toBeTruthy()
+    expect(saveButton()).toHaveProperty('disabled', true)
+    expect(document.decideAsync).toHaveBeenCalledTimes(0)
     expect(document.editAsync).toHaveBeenCalledTimes(1)
-    // The other paragraph is untouched by the blocked boundary.
-    expect(persistedText(document.paragraphs)[1]).toBe('tail')
+  })
+
+  it('reverses a saved tracked emphasis as a rejection', async () => {
+    const document = await server(['Hello'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    selectBodyParagraph()
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(document.modelFor().model.changes[0]?.elementName).toBe('rPrChange')
+
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(document.modelFor().model.changes).toHaveLength(0)
+  })
+
+  it("sends a replacement's del and ins changes as one rejection unit", async () => {
+    const document = await server(['Hello'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    const call = document.decideAsync.mock.calls[0]?.[0] as {
+      changeIds: string[]
+    }
+    // Both records of the one replacement are rejected together.
+    expect(call.changeIds).toHaveLength(2)
+  })
+
+  it('sends every group of a multi-operation undo as one atomic decision', async () => {
+    const document = await server(['Alpha', 'Beta'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    clickParagraph('para-000001')
+    fireEvent.change(field(), { target: { value: 'ALPHA' } })
+    clickParagraph('para-000002')
+    fireEvent.change(field(), { target: { value: 'BETA' } })
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+
+    // The oldest snapshot carries both reversal groups. One save must send one
+    // decision: two sequential calls would commit the first and conflict the
+    // second, leaving a partial reversal.
+    fireEvent.click(undoButton())
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    const call = document.decideAsync.mock.calls[0]?.[0] as {
+      changeIds: string[]
+    }
+    // Two replacements -> four records in one atomic decision.
+    expect(call.changeIds).toHaveLength(4)
+    expect(document.decideAsync).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'Beta'])
+    expect(document.modelFor().model.changes).toHaveLength(0)
+  })
+
+  it('holds saves until the decision version model reloads', async () => {
+    const document = await server(['Hello'])
+    let served = document.modelFor()
+    const editAsync = vi.fn(async (input: never) => {
+      const result = await document.editAsync(input)
+      served = document.modelFor()
+      return result
+    })
+    // The decision commits but the result model lags, as a real refetch does.
+    const decideAsync = vi.fn((input: never) => document.decideAsync(input))
+    mountWorkspace({ editAsync, decideAsync, modelFor: () => served })
+    enableTracking()
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(
+      { editAsync, waitForSave: document.waitForSave },
+      1,
+    )
+    served = document.modelFor()
+
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    // The new base is committed while the served model is still the old one:
+    // a save now would plan against pre-decision run ids, so it is held.
+    await waitFor(() => expect(saveState()).toBe('saving'))
+    expect(saveButton()).toHaveProperty('disabled', true)
+    fireEvent.click(saveButton())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(document.editAsync).toHaveBeenCalledTimes(1)
+
+    // Once the decision model is served, the gate clears and the next edit
+    // saves against the new base. The field change forces the render.
+    served = document.modelFor()
+    fireEvent.change(field(), { target: { value: 'Hello there' } })
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickSaveAndSettle(
+      { editAsync, waitForSave: document.waitForSave },
+      2,
+    )
+    expect(document.editAsync).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains a tracked rejection when the decision base is stale', async () => {
+    const document = await server(['Hello'])
+    let conflict = true
+    const decideAsync = vi.fn(async (input: never) => {
+      if (conflict) {
+        throw new ApiError(
+          'conflict_detected',
+          'The document moved.',
+          409,
+          'r1',
+        )
+      }
+      return document.decideAsync(input)
+    })
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(saveState()).toBe('stale'))
+    expect(decideAsync).toHaveBeenCalledTimes(1)
+    // The reversal is retained, not lost to the failed base.
+    conflict = false
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(decideAsync).toHaveBeenCalledTimes(2))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(persistedText(document.paragraphs)).toEqual(['Hello'])
   })
 
   it('blocks when a newer version replaces the expected reload', async () => {
