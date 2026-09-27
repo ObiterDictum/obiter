@@ -70,15 +70,19 @@ const LINE_SPACING = [
 export function HomeRibbon({
   canEdit,
   canUndo,
+  canRedo,
   format,
   onUndo,
+  onRedo,
   onInsertParagraph,
   onDeleteParagraph,
 }: {
   canEdit: boolean
   canUndo?: boolean
+  canRedo?: boolean
   format?: DocumentFormatToolbar
   onUndo?: () => void
+  onRedo?: () => void
   onInsertParagraph: () => void
   onDeleteParagraph: () => void
 }) {
@@ -273,7 +277,8 @@ export function HomeRibbon({
           />
           <IconButton
             label="Redo"
-            soon
+            disabled={!canEdit || !canRedo}
+            onClick={onRedo}
             icon={<ArrowClockwise size={16} aria-hidden />}
           />
         </ToolbarRow>

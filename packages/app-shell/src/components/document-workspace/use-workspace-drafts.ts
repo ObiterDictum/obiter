@@ -19,11 +19,7 @@ import {
   type HeldChange,
   type RecoverableDraft,
 } from '../../document-draft-store'
-import {
-  popWorkspaceDraft,
-  pushWorkspaceDraft,
-  type WorkspaceDraftSnapshot,
-} from '../../document-editor-history'
+import { useWorkspaceDraftHistory } from '../../document-editor-history'
 import type { FormatDrafts } from '../../document-format-edits'
 import {
   applyInsertText,
@@ -71,7 +67,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     state: emptyDraftState(),
     held: [],
   })
-  const [past, setPast] = useState<WorkspaceDraftSnapshot[]>([])
+  const history = useWorkspaceDraftHistory()
   const [persistence, setPersistence] = useState<DraftPersistence>('ok')
   const [restored, setRestored] = useState(false)
   const [staleDraft, setStaleDraft] = useState<string | null>(null)
@@ -177,12 +173,13 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   }, [storage, scope.documentId])
 
   function checkpoint() {
-    setPast((current) => pushWorkspaceDraft(current, bundle.state))
+    // Recording ends the redo branch: a new edit supersedes anything undone.
+    history.record(bundle.state)
   }
 
   function resetDrafts() {
     setBundle({ state: emptyDraftState(), held: [] })
-    setPast([])
+    history.clear()
     setRestored(false)
     setStaleDraft(null)
     setRecoverable([])
@@ -289,11 +286,17 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   }
 
   function undoDraft() {
-    const popped = popWorkspaceDraft(past)
-    if (!popped) return null
-    setPast(popped.history)
-    setState(() => popped.snapshot)
-    return popped.snapshot
+    const snapshot = history.stepBack(bundle.state)
+    if (!snapshot) return null
+    setState(() => snapshot)
+    return snapshot
+  }
+
+  function redoDraft() {
+    const snapshot = history.stepForward(bundle.state)
+    if (!snapshot) return null
+    setState(() => snapshot)
+    return snapshot
   }
 
   function commitEditor(result: EditorResult) {
@@ -431,7 +434,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setBundle((current) => {
       const next = update(current.state.format)
       if (next === current.state.format) return current
-      setPast((history) => pushWorkspaceDraft(history, current.state))
+      history.record(current.state)
       return { ...current, state: { ...current.state, format: next } }
     })
   }
@@ -464,6 +467,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     restoreRecoverable,
     discardRecoverable,
     undoDraft,
+    redoDraft,
     handleWordEdit,
     replaceDocumentRange,
     splitDocumentRange,
@@ -471,7 +475,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     insertText,
     insertAfter,
     deleteParagraph,
-    canUndo: past.length > 0,
+    canUndo: history.canUndo,
+    canRedo: history.canRedo,
   }
 }
 

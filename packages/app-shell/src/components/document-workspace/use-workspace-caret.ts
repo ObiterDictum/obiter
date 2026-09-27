@@ -394,37 +394,42 @@ export function useWorkspaceCaret({
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
-  function undoDocument() {
-    const beforeInserts = drafts.inserts
-    const restored = drafts.undoDraft()
+  /**
+   * Runs one history step and keeps the caret on a paragraph the restored
+   * state still renders: an insert the step removed falls back to the
+   * paragraph it was anchored after, and an insert the step restored takes the
+   * caret. A surviving insert keeps the caret and the editor clamps its offset.
+   */
+  function runHistoryStep(step: () => ReturnType<typeof drafts.undoDraft>) {
+    const before = drafts.inserts
+    const restored = step()
     if (!restored || !model) return
     setSelection(null)
     setSelectionRefusal(null)
-    // Undoing a split/insert removes the paragraph the caret was on. Move
-    // selection back to the paragraph the removed insert was anchored after
-    // so the user is not left with nothing selected.
-    const target = restoreCaret?.paragraphId ?? selectedParagraphId
-    if (!target) return
-    const removed = beforeInserts.find((item) => item.clientId === target)
-    // Only redirect when the insert the caret was on is actually gone after
-    // the undo. An insert that survived (e.g. undoing a text edit inside
-    // it) must keep the caret; the editor clamps the offset to its text.
-    if (!removed || restored.inserts.some((item) => item.clientId === target)) {
+    const anchor = restoreCaret?.paragraphId ?? selectedParagraphId
+    if (!anchor) return
+    const gone = before.find((item) => item.clientId === anchor)
+    if (gone && !restored.inserts.some((item) => item.clientId === anchor)) {
+      selectParagraph(
+        gone.afterParagraphId,
+        blockText(model, restored, gone.afterParagraphId).length,
+      )
       return
     }
-    selectParagraph(
-      removed.afterParagraphId,
-      blockText(
-        model,
-        {
-          drafts: restored.drafts,
-          inserts: restored.inserts,
-          deletedParagraphIds: restored.deletedParagraphIds,
-          extraRuns: restored.extraRuns,
-        },
-        removed.afterParagraphId,
-      ).length,
+    const added = restored.inserts.find(
+      (item) =>
+        item.afterParagraphId === anchor &&
+        !before.some((prior) => prior.clientId === item.clientId),
     )
+    if (added) selectParagraph(added.clientId, 0)
+  }
+
+  function undoDocument() {
+    runHistoryStep(drafts.undoDraft)
+  }
+
+  function redoDocument() {
+    runHistoryStep(drafts.redoDraft)
   }
 
   const cursor =
@@ -475,6 +480,7 @@ export function useWorkspaceCaret({
     onReplaceAll: find.onReplaceAll,
     insertAuthority,
     undoDocument,
+    redoDocument,
   }
 }
 
