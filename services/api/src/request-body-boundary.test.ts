@@ -17,6 +17,10 @@ const unboundedBodyPatterns = [
 const allowlistedPaths = new Set([
   'limited-request-body.ts',
   'request-body-limit.ts',
+  // Outbound-only, byte-capped upstream response reader. It never reads an
+  // incoming request body, but the pattern is generic, so it is a reviewed
+  // bounded exception alongside the request-body modules.
+  'bounded-upstream-body.ts',
 ])
 
 describe('request body architecture boundary', () => {

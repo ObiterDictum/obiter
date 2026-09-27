@@ -1513,3 +1513,54 @@ Findings: a CPU profile of a verification run against the confirmed `search_unav
 Decision: move the synchronous half of `getDocumentModel` onto a bounded pool of document-model worker threads (`document-model-pool.ts`, `document-model-worker.ts`) and keep storage reads and writes, authorisation, database work, findings, audit and failure reporting on the serving loop exactly as before. The pool runs at most two workers and, instead of an unbounded queue, a bounded waiting list: a caller whose workers are all busy parks in a FIFO of at most sixteen waiters, each holding only the payload its own in-flight request already read, and a caller beyond that bound is rejected at once, since an abandoned request's parked task is never cancelled. Each dispatched task has a ten-minute deadline, calibrated against the measured legitimate parse path with roughly three times the slowest observed legitimate load as headroom; a worker that never answers is terminated, its caller settles once, and the slot is replaced on the next dispatch. A second worker spawns only under real contention, and a synchronous `new Worker` failure is contained inside the pool, settling one waiting caller rather than the process. A worker that fails is dropped with its task rejected and replaced on the next dispatch; every failure surfaces as the existing curated `DocumentModelStoreError`, so run failure codes, audit rows and responses are unchanged. Both entry points terminate the pool inside their existing graceful drain. The task protocol is internal to `services/api`; no route, contract, migration, job semantic or deployment shape changed.
 
 Outcome: no API contract change, no migration, no new dependency, no queue system. Before the change, search-during-verification reproduction windows on the task-owned harness produced 6 to 9 `search_unavailable` responses per 60-second Node window with 3.5 to 4.7 second probe-measured stalls and health-canary p99 above 4 seconds, identically under the development watcher and the production launch (`node --import tsx`, `NODE_ENV=production`). After it, the same windows produce zero 503s, zero probe gaps above 500 ms (max 178 to 204 ms) and a health-canary p99 under 80 ms on both runtimes, with the main thread's profile showing 0.01 s of OOXML work against the worker's 11.4 s, and verification results byte-identical across runtimes and before/after (one canonical findings hash for all four probes). Peak resident memory under the workload rises by about 200 MB on Node (one to two worker isolates plus in-flight payload copies), bounded by the pool size; Bun is unchanged. Deliberately not done here: quote-fidelity preparation and the legislation title fold still run on the loop under their existing bounds, `document-presence.ts:126` still parses the package inline on every presence write and is a separate follow-up, `storedSearchTimeoutMs` stays at 2000 ms, the stall-aware timeout option was not taken because it would leave every other route blocked, worker `resourceLimits` are not set because Bun does not enforce them (so Node alone would gain a containment Bun lacks, and even on Node the limit does not cap native or ArrayBuffer growth), and the parser's pre-existing per-paragraph full-document scans, which make parse time quadratic in paragraph count, are a separate performance follow-up.
+
+### The public changelog bounds its GitHub traffic (27 September 2026)
+
+Findings: `GET /api/changelog` is anonymous, and every request called GitHub's
+releases endpoint and, on an empty or failed release result, its commits
+endpoint. There was no cache, no coalescing and no deadline, so repeated
+anonymous requests amplified traffic against a third party, an upstream stall
+was transferred to API request capacity, and a GitHub outage or rate limit
+produced one attempt per incoming request. Confirmed by source and by the
+change's fail-first tests.
+
+Decision: bound the route at the module that owns it. One application-owned
+cache slot holds the last validated body (the resource is fixed, so there is
+no key space to evict); concurrent cold or expired callers share one refresh;
+a failure sets a two-minute cooldown; a throttle sets a cooldown of at least a
+minute, extended by any longer valid `Retry-After` or `x-ratelimit-reset`
+value and capped at a day so a malformed or hostile header can neither retry
+immediately, overflow the clock nor park refreshes indefinitely; and each
+upstream request is aborted after five seconds, which also aborts the response
+body. Independently of those intervals, one rolling per-process budget allows
+at most thirty upstream HTTP requests in any hour, spent before each request so
+successes, failures, the commits fallback and throttled refreshes all draw on
+it. A refresh costs one request when releases is non-empty and two when the
+commits fallback runs, and the initial cold refresh counts like any other. A
+single upstream body is rejected unparsed past a 64 KiB cap, entry arrays past
+five entries, and fields past their documented size, and `html_url` is accepted
+only as an `https://github.com` link because it is rendered as an anchor href.
+A successful result is served for at most twenty-four hours after a failure,
+inclusively: at exactly the cap the cached body is still returned, and one
+millisecond later the route answers `503` with `github_unavailable`. A stale
+body inside the window is byte-identical to a fresh one, including its
+`source`, so consumers cannot distinguish them; that is the policy, not an
+oversight. Upstream bodies are validated against the expected shape before
+caching, so a malformed response cannot replace a good one. The releases-first,
+commits-fallback order and both response shapes are unchanged; only the
+`source` values already in use are returned.
+
+Outcome: no dependency, credential, shared cache, background poller or
+deployment change. The ceiling is thirty requests per rolling hour per API
+process, half of GitHub's 60-requests-per-hour unauthenticated allowance, which
+leaves headroom for the initial burst and for other callers. It is per process,
+so N replicas multiply it N times, and it does not account for any other client
+sharing the same egress IP; together those can still exhaust the shared
+unauthenticated allowance. In the healthy paths the route makes about six
+requests an hour when releases succeeds and about twelve when the commits
+fallback is used; under sustained failure, throttle or fallback the budget
+still holds at thirty. Deliberately not done here: the route is not
+rate-limited per caller, because the resource is fixed and the cache makes
+per-caller limiting unnecessary, and no staleness marker is added because the
+response contract is unchanged. No logging was added, so no request or
+upstream data can leak into a log line.
