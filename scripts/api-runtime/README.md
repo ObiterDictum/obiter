@@ -75,7 +75,8 @@ tenant can still read its own matter.
 
 `request limits` — a 24 MiB multipart body passes the size gate (the cap
 boundary is where the code says it is), 48 KiB JSON and 27 MiB multipart answer
-413, and malformed/truncated multipart do not take the server down.
+413, and an empty multipart boundary or a truncated multipart body answers 400
+`validation_failed` without writing a document row.
 
 `database` — six concurrent creates all commit and Postgres sees all six; a
 rejected write commits nothing; a failed upload leaves no document row.
@@ -111,10 +112,14 @@ exercised the ONNX model rather than the heuristics fallback.
 process exits 0, the drain log reports the pool closed, and the port is
 released.
 
-## Known pre-existing defect
+## Malformed multipart
 
-An empty multipart boundary and a truncated multipart body both answer **500**
-on Node and Bun. That is a defect in the upload boundary, tracked separately as
-board `P1.41`, not a runtime-migration regression. The harness asserts the
-server survives both and that the two runtimes agree; it does not pin a status
-the migration is not fixing.
+An empty multipart boundary, an absent boundary parameter and a truncated
+multipart body are client errors. The parse boundary in
+`services/api/src/limited-request-body.ts` (`readLimitedFormData`) returns the
+contract **400** `validation_failed` envelope, scoped to the `formData()` call
+alone so storage and handler failures keep their own responses. The harness
+asserts that status and envelope, that no document row is written, that no
+parser detail or request byte is echoed, and that the server answers a later
+valid request on both Node and Bun. This closes the pre-existing `P1.41` defect
+recorded here when both shapes answered 500 on both runtimes.

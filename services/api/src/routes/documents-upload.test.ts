@@ -344,6 +344,128 @@ describe('multipart document extraction', () => {
       error: { code: 'storage_unavailable' },
     })
   })
+
+  // P1.41: a complete HTTP request whose multipart body is malformed is a
+  // client error at the parse boundary, not an unhandled 500.
+  function recordingPool(statements: string[]): Pool {
+    const base = pool()
+    type MockQuery = (
+      sql: string,
+      params?: unknown[],
+    ) => Promise<{ rows: Record<string, unknown>[] }>
+    const inner = base.query as unknown as MockQuery
+    return {
+      ...base,
+      query: async (sql: string, params?: unknown[]) => {
+        statements.push(sql)
+        return inner(sql, params)
+      },
+      connect: async () => ({
+        query: async (sql: string, params?: unknown[]) => {
+          statements.push(sql)
+          return inner(sql, params)
+        },
+        release: () => undefined,
+      }),
+    } as unknown as Pool
+  }
+
+  function persistedNothing(statements: string[]) {
+    return !statements.some(
+      (sql) =>
+        sql.includes('insert into matter_documents') ||
+        sql.includes('insert into document_versions') ||
+        sql.includes('insert into audit_logs'),
+    )
+  }
+
+  it('answers 400 validation_failed for an empty multipart boundary without persisting anything', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const statements: string[] = []
+    const api = await app(
+      root,
+      createLocalStorage(root),
+      recordingPool(statements),
+    )
+    const body = 'this is not multipart at all, honest!'
+    const response = await api.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=',
+        'content-length': String(Buffer.byteLength(body)),
+      },
+      body,
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'validation_failed',
+        message: 'The uploaded form data could not be parsed.',
+      },
+    })
+    expect(persistedNothing(statements)).toBe(true)
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
+
+    // The connection and server remain usable for a valid upload.
+    const ok = await upload(
+      api,
+      'fixture.txt',
+      Buffer.from('Plain text'),
+      'txt',
+    )
+    expect(ok.status).toBe(201)
+  })
+
+  it('answers 400 validation_failed for a truncated multipart body without persisting anything', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const statements: string[] = []
+    const api = await app(
+      root,
+      createLocalStorage(root),
+      recordingPool(statements),
+    )
+    const boundary = '----obiter-truncated'
+    const body = `--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\n`
+    const response = await api.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+        'content-length': String(Buffer.byteLength(body)),
+      },
+      body,
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    expect(persistedNothing(statements)).toBe(true)
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
+  })
+
+  it('answers 400 validation_failed when a well-formed multipart body omits required fields', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const statements: string[] = []
+    const api = await app(
+      root,
+      createLocalStorage(root),
+      recordingPool(statements),
+    )
+    const form = new FormData()
+    form.set('padding', 'not a document')
+    const response = await api.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      body: form,
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    expect(persistedNothing(statements)).toBe(true)
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
+  })
 })
 
 // P2.24/P2.29: real-toolchain corpus must upload 201 + ready, while a genuine

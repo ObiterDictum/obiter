@@ -170,33 +170,15 @@ async function runRuntime({
 }
 
 /**
- * Where the two runtimes must agree. The malformed-multipart status is a
- * pre-existing defect (board P1.41) that this migration must not change, so
- * agreement is the assertion rather than a specific status code.
+ * Where the two runtimes must agree. Malformed multipart is pinned at 400
+ * validation_failed in checks-identity.mjs itself (P1.41), so agreement on a
+ * status is not enough and is no longer asserted here. The fields below are
+ * outcomes the contract fixes and the adapters must not differ on.
  */
 function parityFailures(results) {
   if (results.length < 2) return []
   const [first, second] = results
-  const observedFor = (result, checkPrefix) =>
-    result.checks.find((check) => check.name.startsWith(checkPrefix))?.observed
   const failures = []
-
-  // The malformed-multipart statuses are a pre-existing defect (board P1.41):
-  // agreement is the assertion, never a specific status.
-  const malformedA = observedFor(first, 'malformed and truncated multipart')
-  const malformedB = observedFor(second, 'malformed and truncated multipart')
-  if (
-    malformedA &&
-    malformedB &&
-    (malformedA.malformedBoundaryStatus !==
-      malformedB.malformedBoundaryStatus ||
-      malformedA.truncatedMultipartStatus !==
-        malformedB.truncatedMultipartStatus)
-  ) {
-    failures.push(
-      `malformed multipart differs: ${JSON.stringify(malformedA)} vs ${JSON.stringify(malformedB)}`,
-    )
-  }
 
   // One application behind two sockets: where a status is recorded for both
   // runtimes it must be identical, whether or not the value itself is the one

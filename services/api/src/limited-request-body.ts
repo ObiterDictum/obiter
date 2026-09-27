@@ -93,6 +93,17 @@ export function payloadTooLargeResponse(
   return c.json(body, 413)
 }
 
+function validationFailedResponse(c: Context, message: string): Response {
+  const body: ApiErrorResponse = {
+    error: {
+      code: 'validation_failed' satisfies ApiErrorCode,
+      message,
+      requestId: c.get('requestId' as never) as string,
+    },
+  }
+  return c.json(body, 400)
+}
+
 export async function readLimitedJsonValue(
   c: Context,
   maxBytes: number,
@@ -147,10 +158,25 @@ export async function readLimitedFormData(
     headers,
     body: bytes,
   })
-  // bun-types and @types/node disagree on the FormData identity; the value is
-  // the request's own form data either way.
-  const form = await request.formData()
-  return { ok: true, form: form as unknown as FormData }
+  let form: FormData
+  try {
+    // bun-types and @types/node disagree on the FormData identity; the value is
+    // the request's own form data either way.
+    form = (await request.formData()) as unknown as FormData
+  } catch {
+    // Scoped to the parse call alone. A complete HTTP request whose multipart
+    // body is malformed belongs to the client; storage and handler failures
+    // happen after this boundary and keep their own responses. The thrown
+    // message names parser internals, so it never reaches the response.
+    return {
+      ok: false,
+      response: validationFailedResponse(
+        c,
+        'The uploaded form data could not be parsed.',
+      ),
+    }
+  }
+  return { ok: true, form }
 }
 
 export async function readLimitedJsonBody(
