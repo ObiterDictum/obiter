@@ -3180,8 +3180,10 @@
                   <td class="id">GET /api/changelog</td>
                   <td class="id">changelog.ts</td>
                   <td>
-                    Public GitHub release notes. No session required. Must not
-                    expose matter or client data.
+                    Public GitHub release notes. No session required. Cached and
+                    coalesced, with a five-second upstream deadline and a
+                    failure cooldown, so anonymous requests cannot amplify
+                    GitHub traffic. Must not expose matter or client data.
                   </td>
                 </tr>
               </tbody>
