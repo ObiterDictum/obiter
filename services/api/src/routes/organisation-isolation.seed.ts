@@ -17,7 +17,6 @@ export type OrganisationIsolationSeed = {
   versionB: string
   shareA: string
   shareB: string
-  shareBToA: string
   runA: string
   runB: string
   auditA: string
@@ -273,24 +272,10 @@ export async function seedOrganisationIsolation(
   const suffix = randomUUID().replace(/-/g, '').slice(0, 12)
   const tenantA = await seedTenant(pool, suffix, 'a')
   const tenantB = await seedTenant(pool, suffix, 'b')
-  const shareBToA = `shr_iso_${suffix}_b2a`
-
-  // Probe: a share of B's matter to A's user. organisation_id on getMatter
-  // must still hide it; the access predicate alone would not.
-  await pool.query(
-    `insert into matter_shares (
-       id, organisation_id, matter_id, grantee_user_id, access_level,
-       created_by, created_at
-     )
-     values ($1, $2, $3, $4, 'view', $5, now())`,
-    [
-      shareBToA,
-      tenantB.orgId,
-      tenantB.matterId,
-      tenantA.userId,
-      tenantB.userId,
-    ],
-  )
+  // The seed used to add a B-matter-to-A-user share as an adversarial probe for
+  // the access predicate. Since 0027 the composite grantee foreign key rejects
+  // that row outright, so it cannot be seeded; the constraint test owns the
+  // rejection proof and the reads below prove organisation scoping without it.
 
   return {
     suffix,
@@ -306,7 +291,6 @@ export async function seedOrganisationIsolation(
     versionB: tenantB.versionId,
     shareA: tenantA.shareId,
     shareB: tenantB.shareId,
-    shareBToA,
     runA: tenantA.runId,
     runB: tenantB.runId,
     auditA: tenantA.auditId,
@@ -327,7 +311,7 @@ export async function cleanupOrganisationIsolation(
   const auditIds = [seed.auditA, seed.auditB]
   const inviteIds = [seed.inviteA, seed.inviteB]
   const commentIds = [seed.commentA, seed.commentB]
-  const shareIds = [seed.shareA, seed.shareB, seed.shareBToA]
+  const shareIds = [seed.shareA, seed.shareB]
   const runIds = [seed.runA, seed.runB]
   const artifactIds = [seed.artifactA, seed.artifactB]
   const versionIds = [seed.versionA, seed.versionB]
