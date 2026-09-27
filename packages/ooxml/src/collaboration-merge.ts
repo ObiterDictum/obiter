@@ -244,7 +244,10 @@ function operationConflicts(
   operation: DocumentEditOperation,
   changes: ChangedFootprints,
 ) {
-  if (operation.type === 'insert_paragraph_after') {
+  if (
+    operation.type === 'insert_paragraph_after' ||
+    operation.type === 'insert_paragraph_before'
+  ) {
     return !changes.paragraphIds.has(operation.paragraphId)
   }
   if (operation.type === 'delete_paragraph') return true

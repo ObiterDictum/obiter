@@ -105,6 +105,42 @@ const insertLineage: DocumentVersionLineage = {
   ],
 }
 
+// Authoritative lineage for saving a deletion of the first paragraph.
+const firstDeleteLineage: DocumentVersionLineage = {
+  version: 1,
+  baseVersionId: 'ver_1',
+  versionId: 'ver_2',
+  acceptedOperations: [0],
+  paragraphs: [
+    { fromParagraphId: 'para-000001', toParagraphId: null, runs: [] },
+    {
+      fromParagraphId: 'para-000002',
+      toParagraphId: 'para-w14-00000002',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'text-000002', fromOffset: 0, toOffset: 4 }],
+        },
+      ],
+    },
+    {
+      fromParagraphId: 'para-000003',
+      toParagraphId: 'para-w14-00000003',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'text-000003', fromOffset: 0, toOffset: 5 }],
+        },
+      ],
+    },
+  ],
+}
+
+const firstDeleteResult = model([
+  { id: 'para-w14-00000002', run: 'text-000002', text: 'Beta' },
+  { id: 'para-w14-00000003', run: 'text-000003', text: 'Gamma' },
+])
+
 // Authoritative lineage for saving a deletion of p2.
 const deleteLineage: DocumentVersionLineage = {
   version: 1,
@@ -428,5 +464,47 @@ describe('lineage-driven identity', () => {
       versionId: 'ver_2',
     })
     expect(translated?.drafts).toEqual({ 'text-000004': 'Gamma' })
+  })
+
+  it('restores a saved first-paragraph deletion before the first survivor', () => {
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      deletedParagraphIds: ['para-000001'],
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [deleteSlot('para-000001')],
+      sent,
+      fromModel: baseModel,
+      toModel: firstDeleteResult,
+      lineage: firstDeleteLineage,
+      versionId: 'ver_2',
+    })
+    expect(translated?.deletedParagraphIds).toEqual([])
+    expect(translated?.inserts).toHaveLength(1)
+    expect(translated?.inserts[0]?.beforeParagraphId).toBe('para-w14-00000002')
+    expect(translated?.inserts[0]?.afterParagraphId).toBe('para-w14-00000002')
+    expect(translated?.inserts[0]?.text).toBe('Alpha')
+    expect(translated?.inserts[0]?.runs?.[0]?.text).toBe('Alpha')
+  })
+
+  it('keeps the restored first paragraph style on the insert', () => {
+    const styled = model([
+      { id: 'para-000001', run: 'text-000001', text: 'Alpha' },
+      { id: 'para-000002', run: 'text-000002', text: 'Beta' },
+    ])
+    const first = styled.stories[0]?.paragraphs[0]
+    if (first) first.styleId = 'Heading1'
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [deleteSlot('para-000001')],
+      sent: { ...emptyDraftState(), deletedParagraphIds: ['para-000001'] },
+      fromModel: styled,
+      toModel: model([
+        { id: 'para-w14-00000002', run: 'text-000002', text: 'Beta' },
+      ]),
+      lineage: firstDeleteLineage,
+      versionId: 'ver_2',
+    })
+    const clientId = translated?.inserts[0]?.clientId ?? ''
+    expect(translated?.format.paragraphStyles[clientId]).toBe('Heading1')
   })
 })

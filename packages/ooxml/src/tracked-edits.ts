@@ -106,6 +106,7 @@ export function createTrackedEditWriter(
         operationIndex: number
         intentId?: string
       },
+      position?: 'after' | 'before',
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
@@ -121,6 +122,7 @@ export function createTrackedEditWriter(
           wrapRun: (run) =>
             `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
           paragraphFormat,
+          ...(position ? { position } : {}),
         },
         lineage,
       )

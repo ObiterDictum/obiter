@@ -49,6 +49,7 @@ export const localInsertSchema = z
   .object({
     clientId: z.string().min(1),
     afterParagraphId: z.string().min(1),
+    beforeParagraphId: z.string().min(1).optional(),
     text: z.string(),
     runs: z.array(documentTextRunWireSchema).optional(),
   })

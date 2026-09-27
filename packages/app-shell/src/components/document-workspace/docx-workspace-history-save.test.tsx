@@ -442,6 +442,38 @@ describe('undo across a successful save', () => {
     expect(document.editAsync).toHaveBeenCalledTimes(1)
   })
 
+  it('restores a saved first-paragraph deletion before the first survivor', async () => {
+    const document = await server(['Alpha', 'Beta'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000001')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    await clickSaveAndSettle(document, 1)
+    expect(persistedText(document.paragraphs)).toEqual(['Beta'])
+
+    fireEvent.click(undoButton())
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'Beta'])
+  })
+
+  it('restores a saved last-paragraph deletion after its neighbour', async () => {
+    const document = await server(['Alpha', 'Beta'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000002')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    await clickSaveAndSettle(document, 1)
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha'])
+
+    fireEvent.click(undoButton())
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'Beta'])
+  })
+
   it('clears history when a recoverable draft is adopted', () => {
     const other = {
       ...emptyDraftState(),

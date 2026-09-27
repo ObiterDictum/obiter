@@ -16,6 +16,13 @@ import {
 export type LocalInsert = {
   clientId: string
   afterParagraphId: string
+  /**
+   * When set, the insert is placed before this paragraph instead of after its
+   * anchor. A restored first paragraph has no preceding anchor, so it uses the
+   * surviving next paragraph and inserts ahead of it. `afterParagraphId` still
+   * carries the same target so reparenting and flow fallbacks stay valid.
+   */
+  beforeParagraphId?: string
   text: string
   runs?: DocumentTextRunWire[]
 }
@@ -107,11 +114,15 @@ export function removeInsert(
   return {
     inserts: inserts
       .filter((item) => item.clientId !== clientId)
-      .map((item) =>
-        item.afterParagraphId === clientId
-          ? { ...item, afterParagraphId: removed.afterParagraphId }
-          : item,
-      ),
+      .map((item) => {
+        if (item.afterParagraphId === clientId) {
+          return { ...item, afterParagraphId: removed.afterParagraphId }
+        }
+        if (item.beforeParagraphId === clientId) {
+          return { ...item, beforeParagraphId: removed.afterParagraphId }
+        }
+        return item
+      }),
     selectId: removed.afterParagraphId,
   }
 }
@@ -124,10 +135,17 @@ export function flowIds(
   omitHosts: ReadonlySet<string> = noOmitHosts,
 ): string[] {
   const byAfter = new Map<string, LocalInsert[]>()
+  const byBefore = new Map<string, LocalInsert[]>()
   for (const insert of inserts) {
-    const list = byAfter.get(insert.afterParagraphId) ?? []
-    list.push(insert)
-    byAfter.set(insert.afterParagraphId, list)
+    if (insert.beforeParagraphId) {
+      const list = byBefore.get(insert.beforeParagraphId) ?? []
+      list.push(insert)
+      byBefore.set(insert.beforeParagraphId, list)
+    } else {
+      const list = byAfter.get(insert.afterParagraphId) ?? []
+      list.push(insert)
+      byAfter.set(insert.afterParagraphId, list)
+    }
   }
   const ids: string[] = []
   const appendInserts = (id: string) => {
@@ -137,6 +155,10 @@ export function flowIds(
     }
   }
   for (const id of hostIds) {
+    for (const insert of byBefore.get(id) ?? []) {
+      ids.push(insert.clientId)
+      appendInserts(insert.clientId)
+    }
     if (!omitHosts.has(id)) ids.push(id)
     appendInserts(id)
   }
@@ -216,9 +238,11 @@ export function collectEditOperations(
     // separate set_paragraph_style addressed to the client id would be rejected
     // and would then fail every later save (E45).
     const style = format.paragraphStyles[insert.clientId]
+    const anchor = resolveInsertAnchor(insert, insertById, realIds)
+    const before = insert.beforeParagraphId !== undefined
     operations.push({
-      type: 'insert_paragraph_after',
-      paragraphId: resolveInsertAnchor(insert, insertById, realIds),
+      type: before ? 'insert_paragraph_before' : 'insert_paragraph_after',
+      paragraphId: anchor,
       // The opaque intent id is echoed back in the lineage so the client can
       // name the stored paragraph without matching insert order.
       intentId: insert.clientId,
@@ -410,14 +434,15 @@ export function resolveInsertAnchor(
   insertById: ReadonlyMap<string, LocalInsert>,
   realIds: ReadonlySet<string>,
 ): string {
-  let id = insert.afterParagraphId
+  const start = insert.beforeParagraphId ?? insert.afterParagraphId
+  let id = start
   const seen = new Set<string>()
   while (!realIds.has(id)) {
-    if (seen.has(id)) return insert.afterParagraphId
+    if (seen.has(id)) return start
     seen.add(id)
     const parent = insertById.get(id)
-    if (!parent) return insert.afterParagraphId
-    id = parent.afterParagraphId
+    if (!parent) return start
+    id = parent.beforeParagraphId ?? parent.afterParagraphId
   }
   return id
 }

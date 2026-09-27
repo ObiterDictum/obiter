@@ -27,6 +27,7 @@ export function insertParagraphAfter(
     prefix: string
     wrapRun?: (run: string) => string
     paragraphFormat?: ParagraphFormat
+    position?: 'after' | 'before'
   } = { prefix: 'w' },
   lineage?: {
     recorder: LineageRecorder
@@ -49,7 +50,8 @@ export function insertParagraphAfter(
     preservedXmlFragments: [],
   }
   const index = story.paragraphs.indexOf(anchor.wire)
-  story.paragraphs.splice(index + 1 + offset, 0, paragraph)
+  const at = xml.position === 'before' ? index + offset : index + 1 + offset
+  story.paragraphs.splice(at, 0, paragraph)
   const properties = insertParagraphPropertiesXml(
     xml.prefix,
     styleId,
@@ -61,9 +63,13 @@ export function insertParagraphAfter(
       return `<${xml.prefix}:r>${propertiesXml}${wordRunInnerTextXml(xml.prefix, run.text)}</${xml.prefix}:r>`
     })
     .join('')
+  const offsetPoint =
+    xml.position === 'before'
+      ? anchor.paragraphRange.start
+      : anchor.paragraphRange.end
   setOverlayReplacement(part.overlay, `${paragraphId}:insert`, {
-    start: anchor.paragraphRange.end,
-    end: anchor.paragraphRange.end,
+    start: offsetPoint,
+    end: offsetPoint,
     value: `<${xml.prefix}:p>${properties}${xml.wrapRun?.(runFragment) ?? runFragment}</${xml.prefix}:p>`,
   })
   part.dirty = true

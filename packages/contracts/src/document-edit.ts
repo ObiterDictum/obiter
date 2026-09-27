@@ -336,6 +336,46 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     }),
   z
     .object({
+      type: z.literal('insert_paragraph_before'),
+      /** The paragraph the restored content is placed before. */
+      paragraphId: editIdSchema,
+      intentId: editIdSchema.optional(),
+      text: editTextSchema.optional(),
+      runs: z
+        .array(editRunSchema)
+        .min(1)
+        .max(DOCUMENT_EDIT_RUN_MAX_COUNT)
+        .optional(),
+      styleId: styleIdSchema.optional(),
+      ...paragraphFormatFields,
+    })
+    .strict()
+    .superRefine((operation, context) => {
+      const hasText = operation.text !== undefined
+      const hasRuns = operation.runs !== undefined
+      if (hasText === hasRuns) {
+        context.addIssue({
+          code: 'custom',
+          path: hasText ? ['runs'] : ['text'],
+          message: 'insert_paragraph_before requires text or runs, not both.',
+        })
+        return
+      }
+      if (!operation.runs) return
+      const total = operation.runs.reduce(
+        (sum, run) => sum + run.text.length,
+        0,
+      )
+      if (total > DOCUMENT_EDIT_TEXT_MAX_LENGTH) {
+        context.addIssue({
+          code: 'custom',
+          path: ['runs'],
+          message: 'Inserted run text exceeds the document edit text limit.',
+        })
+      }
+    }),
+  z
+    .object({
       type: z.literal('delete_paragraph'),
       paragraphId: editIdSchema,
     })
@@ -344,7 +384,10 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
 export type DocumentEditOperation = z.infer<typeof documentEditOperationSchema>
 
 export function insertParagraphRuns(
-  operation: Extract<DocumentEditOperation, { type: 'insert_paragraph_after' }>,
+  operation: Extract<
+    DocumentEditOperation,
+    { type: 'insert_paragraph_after' | 'insert_paragraph_before' }
+  >,
 ): DocumentEditRun[] {
   return operation.runs ?? [{ text: operation.text ?? '' }]
 }

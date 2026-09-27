@@ -159,7 +159,12 @@ export function applyDocumentEdits(
           setParagraphFormat(document, operation.paragraph, operation)
         }
       }
-    } else if (operation.type === 'insert_paragraph_after') {
+    } else if (
+      operation.type === 'insert_paragraph_after' ||
+      operation.type === 'insert_paragraph_before'
+    ) {
+      const position =
+        operation.type === 'insert_paragraph_before' ? 'before' : 'after'
       const count = insertionCounts.get(operation.paragraphId) ?? 0
       if (trackedWriter) {
         trackedWriter.insertParagraphAfter(
@@ -173,11 +178,10 @@ export function applyDocumentEdits(
             ? {
                 recorder: lineage,
                 operationIndex,
-                ...(operation.intentId
-                  ? { intentId: operation.intentId }
-                  : {}),
+                ...(operation.intentId ? { intentId: operation.intentId } : {}),
               }
             : undefined,
+          position,
         )
       } else {
         insertParagraphAfter(
@@ -187,14 +191,12 @@ export function applyDocumentEdits(
           insertParagraphRuns(operation),
           operation.styleId,
           count,
-          { prefix: 'w', paragraphFormat: operation },
+          { prefix: 'w', paragraphFormat: operation, position },
           lineage
             ? {
                 recorder: lineage,
                 operationIndex,
-                ...(operation.intentId
-                  ? { intentId: operation.intentId }
-                  : {}),
+                ...(operation.intentId ? { intentId: operation.intentId } : {}),
               }
             : undefined,
         )
@@ -364,7 +366,13 @@ function validateStyle(
   ) {
     throw new OoxmlError('invalid-document-edit')
   }
-  if (operation.type !== 'insert_paragraph_after' || !operation.runs) return
+  if (
+    operation.type !== 'insert_paragraph_after' &&
+    operation.type !== 'insert_paragraph_before'
+  ) {
+    return
+  }
+  if (!operation.runs) return
   for (const run of operation.runs) {
     if (run.styleId && !styleIds.has(run.styleId)) {
       throw new OoxmlError('invalid-document-edit')

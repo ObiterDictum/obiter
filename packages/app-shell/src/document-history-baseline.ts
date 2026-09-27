@@ -83,6 +83,12 @@ type SavedIdentities = {
   insertedRuns: Map<string, string>
   /** Covered deleted paragraphId -> the surviving paragraph it re-inserts after. */
   restoredAnchors: Map<string, string>
+  /**
+   * Covered deleted paragraphId -> the surviving paragraph it re-inserts
+   * before, when the deletion removed the first paragraph and no preceding
+   * anchor survives.
+   */
+  restoredBeforeAnchors: Map<string, string>
   /** Base paragraph id -> result paragraph id (authoritative lineage only). */
   paragraphIds: Map<string, string>
   /** Base run id -> the result run that continues it. */
@@ -106,6 +112,7 @@ function emptyIdentities(): SavedIdentities {
     inserted: new Map(),
     insertedRuns: new Map(),
     restoredAnchors: new Map(),
+    restoredBeforeAnchors: new Map(),
     paragraphIds: new Map(),
     runIds: new Map(),
   }
@@ -153,11 +160,17 @@ export function remapDraftStateParagraphs(
   const remap = (id: string) => map.get(id) ?? id
   return {
     ...state,
-    inserts: state.inserts.map((insert) =>
-      map.has(insert.afterParagraphId)
-        ? { ...insert, afterParagraphId: remap(insert.afterParagraphId) }
-        : insert,
-    ),
+    inserts: state.inserts.map((insert) => ({
+      ...insert,
+      afterParagraphId:
+        map.get(insert.afterParagraphId) ?? insert.afterParagraphId,
+      ...(insert.beforeParagraphId
+        ? {
+            beforeParagraphId:
+              map.get(insert.beforeParagraphId) ?? insert.beforeParagraphId,
+          }
+        : {}),
+    })),
     deletedParagraphIds: state.deletedParagraphIds.map(remap),
     extraRuns: remapRecordKeys(state.extraRuns, remap),
     format: {
@@ -220,6 +233,7 @@ function lineageIdentities(
   const inserted = new Map<string, string>()
   const insertedRuns = new Map<string, string>()
   const restoredAnchors = new Map<string, string>()
+  const restoredBeforeAnchors = new Map<string, string>()
   const paragraphIds = new Map<string, string>()
   const runIds = new Map<string, string>()
 
@@ -267,11 +281,34 @@ function lineageIdentities(
       surviving,
       slot.paragraphId,
     )
-    if (!anchor) continue
-    restoredAnchors.set(slot.paragraphId, paragraphIds.get(anchor) ?? anchor)
+    if (anchor) {
+      restoredAnchors.set(slot.paragraphId, paragraphIds.get(anchor) ?? anchor)
+      continue
+    }
+    // A deletion that removed the first paragraph has no preceding anchor; it
+    // re-inserts before the first survivor instead, so the reversal is never
+    // silently dropped.
+    const next = nearestSurvivingFollowing(
+      fromOrder,
+      surviving,
+      slot.paragraphId,
+    )
+    if (next) {
+      restoredBeforeAnchors.set(
+        slot.paragraphId,
+        paragraphIds.get(next) ?? next,
+      )
+    }
   }
 
-  return { inserted, insertedRuns, restoredAnchors, paragraphIds, runIds }
+  return {
+    inserted,
+    insertedRuns,
+    restoredAnchors,
+    restoredBeforeAnchors,
+    paragraphIds,
+    runIds,
+  }
 }
 
 function firstRunId(model: DocumentModelWire, paragraphId: string) {
@@ -287,6 +324,20 @@ function nearestSurvivingPreceding(
   const index = order.indexOf(paragraphId)
   if (index <= 0) return null
   for (let at = index - 1; at >= 0; at -= 1) {
+    const id = order[at]
+    if (id && surviving.has(id)) return id
+  }
+  return null
+}
+
+function nearestSurvivingFollowing(
+  order: readonly string[],
+  surviving: ReadonlySet<string>,
+  paragraphId: string,
+) {
+  const index = order.indexOf(paragraphId)
+  if (index < 0) return null
+  for (let at = index + 1; at < order.length; at += 1) {
     const id = order[at]
     if (id && surviving.has(id)) return id
   }
@@ -410,11 +461,27 @@ export function translateSnapshot(
           break
         }
         // The snapshot predates the deletion: reverse it by re-inserting the
-        // paragraph the save removed, after its nearest surviving neighbour.
+        // paragraph the save removed, after its nearest surviving neighbour or,
+        // for a deleted first paragraph, before the first survivor.
         const anchor = identities.restoredAnchors.get(slot.paragraphId)
-        const restored = restoreInsert(baseline, slot.paragraphId, anchor)
+        const beforeAnchor = identities.restoredBeforeAnchors.get(
+          slot.paragraphId,
+        )
+        const restored = restoreInsert(
+          baseline,
+          slot.paragraphId,
+          anchor,
+          beforeAnchor,
+        )
         if (!restored) return null
         next.inserts.push(restored)
+        // The paragraph style rides on the insert so a restored paragraph keeps
+        // it, exactly as collectEditOperations folds a pending insert's style.
+        const style = storyParagraph(
+          baseline.fromModel,
+          slot.paragraphId,
+        )?.styleId
+        if (style) next.format.paragraphStyles[restored.clientId] = style
         break
       }
       case 'emphasis': {
@@ -514,12 +581,14 @@ function restoreInsert(
   baseline: SaveBaseline,
   paragraphId: string,
   anchor: string | undefined,
+  beforeAnchor: string | undefined,
 ): LocalInsert | null {
   const paragraph = storyParagraph(baseline.fromModel, paragraphId)
-  if (!paragraph || !anchor) return null
+  if (!paragraph || (!anchor && !beforeAnchor)) return null
   return {
     clientId: pendingDeletedParagraphId(paragraphId),
-    afterParagraphId: anchor,
+    afterParagraphId: anchor ?? (beforeAnchor as string),
+    ...(beforeAnchor ? { beforeParagraphId: beforeAnchor } : {}),
     text: paragraph.runs.map((run) => run.text).join(''),
     runs: paragraph.runs.map((run) => ({ ...run })),
   }
