@@ -36,6 +36,8 @@ export {
 } from './package-part'
 export { resolveRelationshipTarget } from './parts/rels'
 export * from './collaboration-merge'
+export * from './document-identity'
+export * from './document-lineage'
 export * from './equivalence'
 export * from './model'
 export * from './model-run-range-edits'

@@ -23,6 +23,10 @@ import {
 } from './model-property-edits'
 import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
 import {
+  recordDeletedParagraph,
+  type LineageRecorder,
+} from './document-lineage'
+import {
   appendPropertyChange,
   extractInsertedRunRpr,
   foldRprIntoInsertedRun,
@@ -97,6 +101,7 @@ export function createTrackedEditWriter(
       styleId: string | null | undefined,
       offset: number,
       paragraphFormat?: ParagraphFormat,
+      lineage?: { recorder: LineageRecorder; operationIndex: number },
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
@@ -105,10 +110,13 @@ export function createTrackedEditWriter(
         wrapRun: (run) =>
           `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
         paragraphFormat,
-      })
+      }, lineage)
     },
 
-    deleteParagraph(anchor: ParagraphAnchor) {
+    deleteParagraph(
+      anchor: ParagraphAnchor,
+      lineage?: { recorder: LineageRecorder; operationIndex: number },
+    ) {
       const part = requireEditablePart(document, anchor.partName)
       const source = part.overlay.source
       if (anchor.runs.length === 0) {
@@ -129,6 +137,13 @@ export function createTrackedEditWriter(
         )
         story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
         part.dirty = true
+        if (lineage) {
+          recordDeletedParagraph(
+            lineage.recorder,
+            anchor.wire,
+            lineage.operationIndex,
+          )
+        }
         return
       }
       for (const run of anchor.runs) {

@@ -9,6 +9,7 @@ import {
   type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
+import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import {
   applyEmphasisXml,
   runPieceXml,
@@ -58,6 +59,7 @@ export function applyRunEmphasisRanges(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
   ranges: readonly RunEmphasisRange[],
+  lineage?: LineageRecorder,
 ) {
   const part = requireEditablePart(document, paragraph.partName)
   const text = paragraph.runs.map((run) => run.wire.text).join('')
@@ -78,6 +80,7 @@ export function applyRunEmphasisRanges(
     runIndex: number
     xml: string
     wires: DocumentTextRunWire[]
+    originParts: Array<{ run: DocumentTextRunWire; from: number; to: number }>
     consumedKeys: readonly string[]
   }> = []
   let runStart = 0
@@ -122,6 +125,7 @@ export function applyRunEmphasisRanges(
   for (const item of pending.reverse()) {
     const run = paragraph.runs[item.runIndex]
     if (!run) throw new OoxmlError('invalid-document-edit')
+    if (lineage) recordSplitRun(lineage, run.wire, item.originParts)
     setOverlayReplacement(part.overlay, `${run.wire.id}:split`, {
       start: run.runRange.start,
       end: run.runRange.end,
@@ -145,6 +149,7 @@ function splitRun(
 ): {
   xml: string
   wires: DocumentTextRunWire[]
+  originParts: Array<{ run: DocumentTextRunWire; from: number; to: number }>
   consumedKeys: readonly string[]
 } {
   const view = materialise
@@ -197,6 +202,11 @@ function splitRun(
   return {
     xml: parts.map((part) => part.xml).join(''),
     wires,
+    originParts: parts.map((part, index) => ({
+      run: wires[index] as DocumentTextRunWire,
+      from: ordered[index] as number,
+      to: ordered[index + 1] as number,
+    })),
     consumedKeys: view.consumedKeys,
   }
 }

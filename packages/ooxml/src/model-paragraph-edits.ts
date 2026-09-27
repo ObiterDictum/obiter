@@ -6,6 +6,11 @@ import type {
 } from '@obiter/contracts'
 
 import type { OoxmlDocument, ParagraphAnchor } from './model'
+import {
+  recordInsertedParagraph,
+  recordDeletedParagraph,
+  type LineageRecorder,
+} from './document-lineage'
 import { requireEditablePart } from './model-edit-overlay'
 import type { ParagraphFormat } from './model-property-edits'
 import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
@@ -23,6 +28,7 @@ export function insertParagraphAfter(
     wrapRun?: (run: string) => string
     paragraphFormat?: ParagraphFormat
   } = { prefix: 'w' },
+  lineage?: { recorder: LineageRecorder; operationIndex: number },
 ) {
   const part = requireEditablePart(document, anchor.partName)
   const paragraphId = allocateModelId(document, 'para-edit')
@@ -57,12 +63,16 @@ export function insertParagraphAfter(
     value: `<${xml.prefix}:p>${properties}${xml.wrapRun?.(runFragment) ?? runFragment}</${xml.prefix}:p>`,
   })
   part.dirty = true
+  if (lineage) {
+    recordInsertedParagraph(lineage.recorder, paragraph, lineage.operationIndex)
+  }
 }
 
 export function deleteParagraph(
   document: OoxmlDocument,
   story: DocumentModelWire['stories'][number],
   anchor: ParagraphAnchor,
+  lineage?: { recorder: LineageRecorder; operationIndex: number },
 ) {
   const part = requireEditablePart(document, anchor.partName)
   setOverlayReplacement(part.overlay, `${anchor.wire.id}:delete`, {
@@ -72,6 +82,9 @@ export function deleteParagraph(
   })
   story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
   part.dirty = true
+  if (lineage) {
+    recordDeletedParagraph(lineage.recorder, anchor.wire, lineage.operationIndex)
+  }
 }
 
 export function allocateModelId(document: OoxmlDocument, prefix: string) {

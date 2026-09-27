@@ -6,6 +6,12 @@ import {
 // Range planning stays next to the other operation planners. Split if a third
 // addressing mode lands on this dispatcher.
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
+import {
+  recordReplacedRun,
+  seedRunOrigins,
+  touchParagraph,
+  type LineageRecorder,
+} from './document-lineage'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
 import {
   setParagraphNumbering,
@@ -35,6 +41,7 @@ export function applyDocumentEdits(
   document: OoxmlDocument,
   operations: readonly DocumentEditOperation[],
   tracking?: TrackedEditContext,
+  lineage?: LineageRecorder,
 ) {
   const parsed = documentEditOperationsSchema.safeParse(operations)
   if (!parsed.success) throw new OoxmlError('invalid-document-edit')
@@ -76,10 +83,12 @@ export function applyDocumentEdits(
   // boundaries from all of them must form one split per run; applying them one
   // at a time would let each split overwrite the previous run structure.
   const rangeEmphasis = new Map<ParagraphAnchor, RunEmphasisRange[]>()
-  for (const operation of planned) {
+  for (const [operationIndex, operation] of planned.entries()) {
     const deletedLater = deletedIds.has(operation.paragraph.wire.id)
+    if (lineage) touchParagraph(lineage, operation.paragraph.wire, operationIndex)
     if (operation.type === 'replace_run_text') {
       if (deletedLater) continue
+      if (lineage) seedRunOrigins(lineage, operation.run.wire)
       if (trackedWriter) {
         trackedWriter.replaceRunText(operation.run, operation.text)
       } else if (
@@ -87,6 +96,7 @@ export function applyDocumentEdits(
       ) {
         throw new OoxmlError('model-node-not-editable')
       }
+      if (lineage) recordReplacedRun(lineage, operation.run.wire)
     } else if (operation.type === 'set_run_style') {
       if (!deletedLater) {
         if (trackedWriter) {
@@ -132,8 +142,7 @@ export function applyDocumentEdits(
           throw new OoxmlError('invalid-document-edit')
         }
       }
-    } else if (operation.type === 'set_paragraph_numbering') {
-      if (!deletedLater) {
+    } else if (operation.type === 'set_paragraph_numbering') {      if (!deletedLater) {
         if (trackedWriter) {
           trackedWriter.setParagraphNumbering(operation.paragraph, operation)
         } else {
@@ -158,6 +167,7 @@ export function applyDocumentEdits(
           operation.styleId,
           count,
           operation,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
         )
       } else {
         insertParagraphAfter(
@@ -168,14 +178,23 @@ export function applyDocumentEdits(
           operation.styleId,
           count,
           { prefix: 'w', paragraphFormat: operation },
+          lineage ? { recorder: lineage, operationIndex } : undefined,
         )
       }
       insertionCounts.set(operation.paragraphId, count + 1)
     } else if (operation.type === 'delete_paragraph') {
       if (trackedWriter) {
-        trackedWriter.deleteParagraph(operation.paragraph)
+        trackedWriter.deleteParagraph(
+          operation.paragraph,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
+        )
       } else {
-        deleteParagraph(document, mainStory, operation.paragraph)
+        deleteParagraph(
+          document,
+          mainStory,
+          operation.paragraph,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
+        )
       }
     } else {
       throw new OoxmlError('invalid-document-edit')
@@ -183,7 +202,7 @@ export function applyDocumentEdits(
   }
 
   for (const [paragraph, ranges] of rangeEmphasis) {
-    applyRunEmphasisRanges(document, paragraph, ranges)
+    applyRunEmphasisRanges(document, paragraph, ranges, lineage)
   }
 }
 
