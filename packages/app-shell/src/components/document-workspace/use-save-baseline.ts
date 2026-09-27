@@ -25,18 +25,21 @@ export function useSaveBaseline({
   model,
   modelVersionId,
   resolveState,
-  onResolved,
 }: {
   history: DraftHistory
   model: DocumentModelWire | undefined
   modelVersionId: string | undefined
   resolveState: (resolve: (state: DraftState) => DraftState) => void
-  onResolved?: (paragraphs: Map<string, string>) => void
 }) {
   const pending = useRef<SaveBaseline | null>(null)
   // Exposed so the workspace can refuse a second save until the model for the
   // committed version has actually reloaded.
   const [pendingVersion, setPendingVersion] = useState<string | null>(null)
+  // The base-to-result paragraph map of the last resolved boundary, so the
+  // workspace can retarget live caret and draft paragraph ids.
+  const [paragraphRemap, setParagraphRemap] = useState<
+    ReadonlyMap<string, string>
+  >(new Map())
 
   // The reloaded `/model` names the paragraphs a save created or removed. The
   // boundary resolves against the exact result version the lineage describes;
@@ -57,7 +60,7 @@ export function useSaveBaseline({
           lineage,
         ),
       )
-      onResolved?.(paragraphMapFromLineage(lineage))
+      setParagraphRemap(paragraphMapFromLineage(lineage))
     } else {
       resolveState((state) => resolveBaselineIdentities(state, resolved))
     }
@@ -107,7 +110,9 @@ export function useSaveBaseline({
     clear() {
       pending.current = null
       setPendingVersion(null)
+      setParagraphRemap(new Map())
     },
     pendingVersion,
+    paragraphRemap,
   }
 }

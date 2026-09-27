@@ -9,10 +9,8 @@ import {
   listRecoverableDocumentDrafts,
   readDocumentDraft,
   rememberDocumentDraftUser,
-  releaseDocumentDraftWriterClaim,
   resolveDocumentDraftWriter,
   resumeDocumentDraftWrites,
-  touchDocumentDraftWriterClaim,
   writeDocumentDraft,
   type DraftScope,
   type HeldChange,
@@ -21,6 +19,7 @@ import {
 import { useWorkspaceDraftHistory } from '../../document-editor-history'
 import { holdSlotBundle, type DraftBundle } from './document-draft-holds'
 import { draftStorage, sessionDraftStorage } from './document-draft-storage'
+import { useDraftWriterClaim } from './use-draft-writer-claim'
 import { useSaveBaseline } from './use-save-baseline'
 import type { FormatDrafts } from '../../document-format-edits'
 import {
@@ -57,7 +56,6 @@ export type WorkspaceDraftScope = {
 }
 
 export type DraftPersistence = 'ok' | 'unavailable'
-
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
 export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
@@ -69,9 +67,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const [persistence, setPersistence] = useState<DraftPersistence>('ok')
   const [restored, setRestored] = useState(false)
   const [lineageUnresolved, setLineageUnresolved] = useState(false)
-  const [paragraphRemap, setParagraphRemap] = useState<
-    ReadonlyMap<string, string>
-  >(new Map())
   const [staleDraft, setStaleDraft] = useState<string | null>(null)
   const [recoverable, setRecoverable] = useState<RecoverableDraft[]>([])
   const [hydrated, setHydrated] = useState(false)
@@ -86,7 +81,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history,
     model: scope.model,
     modelVersionId: scope.baseVersionId,
-    onResolved: setParagraphRemap,
     resolveState: (resolve) =>
       setBundle((current) => ({ ...current, state: resolve(current.state) })),
   })
@@ -164,22 +158,12 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setPersistence(ok ? 'ok' : 'unavailable')
   }, [bundle, scope.baseVersionId, storage, hydrated])
 
-  useEffect(() => {
-    if (!storage) return
-    const writerId = storedScope().tabId
-    const tick = () =>
-      touchDocumentDraftWriterClaim(storage, writerId, instanceId.current)
-    tick()
-    const timer = window.setInterval(tick, 1000)
-    const release = () =>
-      releaseDocumentDraftWriterClaim(storage, writerId, instanceId.current)
-    window.addEventListener('pagehide', release)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('pagehide', release)
-      release()
-    }
-  }, [storage, scope.documentId])
+  useDraftWriterClaim({
+    storage,
+    documentId: scope.documentId,
+    writerId: () => storedScope().tabId,
+    instanceId: instanceId.current,
+  })
 
   function checkpoint() {
     // Recording ends the redo branch: a new edit supersedes anything undone.
@@ -220,7 +204,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setStaleDraft(null)
     setRecoverable([])
     setLineageUnresolved(false)
-    setParagraphRemap(new Map())
   }
 
   function setState(update: (current: DraftState) => DraftState) {
@@ -494,7 +477,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     persistence,
     restored,
     lineageUnresolved,
-    paragraphRemap,
+    paragraphRemap: baseline.paragraphRemap,
     boundaryPending: baseline.pendingVersion !== null,
     staleDraft,
     discardStaleDraft,

@@ -30,6 +30,17 @@ function field(): HTMLTextAreaElement {
   return editor
 }
 
+/** The authoritative lineage a text-only save returns: no structural slots. */
+function textEditLineage() {
+  return {
+    version: 1 as const,
+    baseVersionId: 'ver_1',
+    versionId: 'ver_2',
+    acceptedOperations: [0],
+    paragraphs: [],
+  }
+}
+
 function undoButton() {
   return screen.getByRole('button', { name: 'Undo' })
 }
@@ -447,7 +458,8 @@ describe('DocxWorkspace redo and save boundaries', () => {
       () =>
         new Promise((resolve) => {
           // The commit lands before the reloaded model does; the model then
-          // holds the version the request sent.
+          // holds the version the request sent. The response carries the
+          // authoritative lineage the API returns for the accepted batch.
           resolveFirst = () => {
             version = 2
             savedText = 'Hello first'
@@ -455,6 +467,7 @@ describe('DocxWorkspace redo and save boundaries', () => {
               documentId: 'doc_1',
               versionId: 'ver_2',
               versionNumber: 2,
+              lineage: textEditLineage(),
             })
           }
         }),
@@ -514,6 +527,7 @@ describe('DocxWorkspace redo and save boundaries', () => {
         documentId: 'doc_1',
         versionId: 'ver_2',
         versionNumber: 2,
+        lineage: textEditLineage(),
       })
     })
 

@@ -85,6 +85,7 @@ describe('planDocumentSave addressability', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'ins_1',
         text: 'New',
         styleId: 'Heading1',
       },
