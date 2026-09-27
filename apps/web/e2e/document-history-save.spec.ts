@@ -60,8 +60,9 @@ function verifyEmailInDb(email: string) {
 }
 
 async function createAccount(request: APIRequestContext) {
-  const runId =
-    Date.now().toString(36).slice(-6) + Math.random().toString(36).slice(2, 5)
+  // A UUID keeps the synthetic account id unique without an insecure PRNG,
+  // which CodeQL flags even in test fixtures.
+  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e50-${runId}@obiter.test`
   const password = `E50-${runId}-Aa1!`
   const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
