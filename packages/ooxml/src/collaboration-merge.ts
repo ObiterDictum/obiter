@@ -111,6 +111,23 @@ function sameSkeleton(base: MainStory, current: MainStory) {
   return true
 }
 
+/**
+ * Positional alignment for a base that predates persisted paragraph ids.
+ * Reconciliation is a conflict check, not identity translation: when the base
+ * carries no `w14:paraId`, the only link to a canonicalised current version is
+ * the verified run skeleton at the same index. History translation never uses
+ * this; it consumes the authoritative lineage.
+ */
+function positionallyAligned(base: MainStory, current: MainStory) {
+  return (
+    base.paragraphs.length === current.paragraphs.length &&
+    base.paragraphs.every((paragraph, index) => {
+      const compared = current.paragraphs[index]
+      return compared !== undefined && sameRunSkeleton(paragraph, compared)
+    })
+  )
+}
+
 function changedFootprints(
   base: OoxmlDocument,
   current: OoxmlDocument,
@@ -139,6 +156,7 @@ function changedFootprints(
   }
 
   const aligned = indexAligned(baseStory, currentStory)
+  const positional = !aligned && positionallyAligned(baseStory, currentStory)
   const baseById = new Map(
     baseStory.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
   )
@@ -149,12 +167,16 @@ function changedFootprints(
         : [],
     ),
   )
-  currentStory.paragraphs.forEach((currentParagraph) => {
-    const baseParagraph = currentParagraph.sourceParaId
+  currentStory.paragraphs.forEach((currentParagraph, currentIndex) => {
+    let baseParagraph = currentParagraph.sourceParaId
       ? baseByParaId.get(currentParagraph.sourceParaId)
-      : aligned
-        ? baseById.get(currentParagraph.id)
-        : undefined
+      : undefined
+    if (!baseParagraph && aligned) {
+      baseParagraph = baseById.get(currentParagraph.id)
+    }
+    if (!baseParagraph && positional) {
+      baseParagraph = baseStory.paragraphs[currentIndex]
+    }
     if (!baseParagraph) return
     const paragraphId = baseParagraph.id
     paragraphIds.add(paragraphId)

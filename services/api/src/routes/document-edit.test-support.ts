@@ -277,6 +277,7 @@ class EditTransaction {
                   operations_sha256: existing.metadata.operationsSha256 ?? null,
                   version_id: version.id,
                   version_number: version.version_number,
+                  lineage: version.lineage ?? null,
                 },
               ]
             : [],
@@ -297,6 +298,10 @@ class EditTransaction {
         contentSha256: String(parameters[12]),
         syncState: String(parameters[13]),
         createdBy: String(parameters[14]),
+        lineage:
+          parameters[15] === null || parameters[15] === undefined
+            ? null
+            : JSON.parse(String(parameters[15])),
       })
       return { rows: [this.stagedVersion] }
     }
@@ -452,6 +457,7 @@ function versionRow(
     contentSha256?: string
     syncState?: string
     createdBy?: string
+    lineage?: unknown
   } = {},
 ) {
   return {
@@ -475,5 +481,6 @@ function versionRow(
     created_by: options.createdBy ?? 'usr_owner',
     created_at: '2026-08-10T10:00:00.000Z',
     updated_at: '2026-08-10T10:00:00.000Z',
+    lineage: options.lineage ?? null,
   }
 }

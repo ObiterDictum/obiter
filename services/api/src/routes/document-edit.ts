@@ -68,6 +68,7 @@ export function createDocumentEditRoutes(pool: Pool, storage: StorageService) {
         documentId: resolved.document.id,
         versionId: result.versionId,
         versionNumber: result.versionNumber,
+        lineage: result.lineage,
       }),
       201,
     )

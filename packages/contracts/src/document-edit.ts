@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { isValidXmlText } from './xml-text'
+import { documentVersionLineageSchema } from './document-lineage'
 
 export const DOCUMENT_EDIT_ID_MAX_LENGTH = 255
 export const DOCUMENT_EDIT_TEXT_MAX_LENGTH = 1_000_000
@@ -366,6 +367,11 @@ export const documentEditResponseSchema = z
     documentId: editIdSchema,
     versionId: editIdSchema,
     versionNumber: z.number().int().positive(),
+    /**
+     * E50: how the accepted batch transformed the base version. Optional for
+     * compatibility with servers that predate cross-version lineage.
+     */
+    lineage: documentVersionLineageSchema.optional(),
   })
   .strict()
 export type DocumentEditResponse = z.infer<typeof documentEditResponseSchema>

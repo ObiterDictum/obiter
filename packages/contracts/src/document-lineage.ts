@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
-import { editIdSchema } from './document-edit'
+// Local id schema: importing document-edit's editIdSchema here would create an
+// import cycle once document-edit references this module for its response.
+const lineageIdSchema = z.string().min(1).max(255)
 
 /**
  * Authoritative cross-version edit lineage.
@@ -27,7 +29,7 @@ import { editIdSchema } from './document-edit'
 export const documentLineageSegmentSchema = z
   .object({
     /** Base run this content came from; null for inserted content. */
-    fromRunId: editIdSchema.nullable(),
+    fromRunId: lineageIdSchema.nullable(),
     /** Start offset in the base run's text (UTF-16 code units). */
     fromOffset: z.number().int().nonnegative(),
     /** End offset in the base run's text (UTF-16 code units, exclusive). */
@@ -66,9 +68,9 @@ export type DocumentLineageRun = z.infer<typeof documentLineageRunSchema>
 export const documentParagraphLineageSchema = z
   .object({
     /** Base paragraph id; null for a paragraph inserted by this edit. */
-    fromParagraphId: editIdSchema.nullable(),
+    fromParagraphId: lineageIdSchema.nullable(),
     /** Result paragraph id; null for a paragraph deleted by this edit. */
-    toParagraphId: editIdSchema.nullable(),
+    toParagraphId: lineageIdSchema.nullable(),
     /** Index in the accepted batch that inserted this paragraph. */
     insertedByOperation: z.number().int().nonnegative().optional(),
     /** Result runs, in paragraph order. Empty when the paragraph was deleted. */
@@ -101,8 +103,8 @@ export type DocumentParagraphLineage = z.infer<
 export const documentVersionLineageSchema = z
   .object({
     version: z.literal(1),
-    baseVersionId: editIdSchema,
-    versionId: editIdSchema,
+    baseVersionId: lineageIdSchema,
+    versionId: lineageIdSchema,
     /** Indexes in the submitted batch that were actually applied. */
     acceptedOperations: z.array(z.number().int().nonnegative()),
     /**

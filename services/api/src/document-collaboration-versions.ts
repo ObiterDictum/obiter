@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto'
 import type { Pool } from 'pg'
-import type { DocumentEditOperation } from '@obiter/contracts'
+import type {
+  DocumentEditOperation,
+  DocumentVersionLineage,
+} from '@obiter/contracts'
 import {
   OoxmlError,
   applyDocumentEdits,
+  buildVersionLineage,
+  canonicaliseParagraphIdentities,
+  createLineageRecorder,
   reconcileDocumentEdits,
   serialiseDocx,
 } from '@obiter/ooxml'
@@ -41,6 +47,7 @@ export type CollaborationMergeResult =
       baseVersionId: string
       versionId: string
       versionNumber: number
+      lineage?: DocumentVersionLineage
     }
   | { status: 'sync_id_conflict' }
   | {
@@ -84,6 +91,9 @@ export async function createCollaborationMergeVersion(
         baseVersionId: existing.base_version_id,
         versionId: existing.version_id,
         versionNumber: existing.version_number,
+        ...(existing.lineage
+          ? { lineage: existing.lineage as DocumentVersionLineage }
+          : {}),
       }
     }
 
@@ -120,6 +130,7 @@ export async function createCollaborationMergeVersion(
     }
 
     try {
+      const recorder = createLineageRecorder(currentDocument.model)
       applyDocumentEdits(
         currentDocument,
         input.operations,
@@ -129,53 +140,80 @@ export async function createCollaborationMergeVersion(
               date: (input.now?.() ?? new Date()).toISOString(),
             }
           : undefined,
+        recorder,
       )
+      const canonicalParagraphIds = canonicaliseParagraphIdentities(currentDocument)
+      // A merge that actually reconciled against a newer current version moves
+      // the base the client holds; its history cannot be translated from the
+      // current-to-result edits alone, so no lineage is claimed and the client
+      // must recover rather than guess.
+      const built = baseIsCurrent
+        ? buildVersionLineage({
+            recorder,
+            model: currentDocument.model,
+            canonicalParagraphIds,
+            baseVersionId: input.baseVersionId,
+            versionId: '',
+          })
+        : null
+      const { versionId: _versionId, ...lineageInput } = built ?? {
+        versionId: '',
+        version: 1 as const,
+        baseVersionId: input.baseVersionId,
+        acceptedOperations: [],
+        paragraphs: [],
+      }
+      const persistedLineage: Omit<DocumentVersionLineage, 'versionId'> | null =
+        built ? lineageInput : null
+      let mergedBytes: Uint8Array
+      try {
+        mergedBytes = await serialiseDocx(currentDocument)
+      } catch {
+        throw new DocumentEditStoreError()
+      }
+
+      commitStarted = true
+      const committed = await commitPreparedVersion(client, storage, {
+        organisationId: input.organisationId,
+        matterId: input.matterId,
+        documentId: input.documentId,
+        userId: input.userId,
+        requestId: input.requestId,
+        expectedCurrentVersionId: current.id,
+        parentVersion: current,
+        preparedBytes: mergedBytes,
+        lineage: persistedLineage,
+        audit: {
+          action: 'document.collaboration_merge',
+          metadata: (versionId) => ({
+            syncId: input.syncId,
+            baseVersionId: input.baseVersionId,
+            newVersionId: versionId,
+            operationCount: input.operations.length,
+            operationsSha256,
+            outcome: 'merged',
+          }),
+        },
+      })
+      if (committed.status === 'stale') {
+        return {
+          status: 'conflict',
+          currentVersionId: current.id,
+          currentVersionNumber: current.versionNumber,
+          operationIndexes: input.operations.map((_, index) => index),
+        }
+      }
+      return {
+        status: 'merged',
+        baseVersionId: input.baseVersionId,
+        versionId: committed.versionId,
+        versionNumber: committed.versionNumber,
+        ...(built
+          ? { lineage: { ...lineageInput, versionId: committed.versionId } }
+          : {}),      }
     } catch (error) {
       if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
       throw new DocumentEditStoreError()
-    }
-    let mergedBytes: Uint8Array
-    try {
-      mergedBytes = await serialiseDocx(currentDocument)
-    } catch {
-      throw new DocumentEditStoreError()
-    }
-
-    commitStarted = true
-    const committed = await commitPreparedVersion(client, storage, {
-      organisationId: input.organisationId,
-      matterId: input.matterId,
-      documentId: input.documentId,
-      userId: input.userId,
-      requestId: input.requestId,
-      expectedCurrentVersionId: current.id,
-      parentVersion: current,
-      preparedBytes: mergedBytes,
-      audit: {
-        action: 'document.collaboration_merge',
-        metadata: (versionId) => ({
-          syncId: input.syncId,
-          baseVersionId: input.baseVersionId,
-          newVersionId: versionId,
-          operationCount: input.operations.length,
-          operationsSha256,
-          outcome: 'merged',
-        }),
-      },
-    })
-    if (committed.status === 'stale') {
-      return {
-        status: 'conflict',
-        currentVersionId: current.id,
-        currentVersionNumber: current.versionNumber,
-        operationIndexes: input.operations.map((_, index) => index),
-      }
-    }
-    return {
-      status: 'merged',
-      baseVersionId: input.baseVersionId,
-      versionId: committed.versionId,
-      versionNumber: committed.versionNumber,
     }
   } catch (error) {
     if (!commitStarted) await rollback(client)

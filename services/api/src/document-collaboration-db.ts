@@ -5,6 +5,7 @@ type ExistingMergeRow = {
   operations_sha256: string | null
   version_id: string
   version_number: number
+  lineage: unknown
 }
 
 export async function findExistingCollaborationMerge(
@@ -22,7 +23,8 @@ export async function findExistingCollaborationMerge(
         audit.metadata_json ->> 'baseVersionId' as base_version_id,
         audit.metadata_json ->> 'operationsSha256' as operations_sha256,
         version.id as version_id,
-        version.version_number
+        version.version_number,
+        version.lineage as lineage
       from audit_logs audit
       join document_versions version
         on version.id = audit.metadata_json ->> 'newVersionId'
