@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg'
 import type { ApiErrorCode, UserRole } from '@obiter/contracts'
+import { appendAuditLog } from './database'
 
 export type InviteUnavailableCode = Extract<
   ApiErrorCode,
@@ -144,4 +145,48 @@ export async function moveUserAndDeleteEmptyOrganisation(
   await client.query(`delete from organisations where id = $1`, [
     input.fromOrganisationId,
   ])
+}
+
+/**
+ * Revokes every matter share held by a member who is leaving the organisation,
+ * writing the same audit row the matter-share revocation route writes. 0027's
+ * composite grantee key rejects the organisationId change while a share
+ * remains, so this runs in the caller's transaction before the user row is
+ * updated.
+ */
+export async function revokeMemberMatterShares(
+  client: PoolClient,
+  input: {
+    organisationId: string
+    userId: string
+    actorUserId: string
+    requestId: string
+  },
+) {
+  const revoked = await client.query<{
+    id: string
+    matter_id: string
+    grantee_user_id: string
+  }>(
+    `
+      delete from matter_shares
+      where grantee_user_id = $1 and organisation_id = $2
+      returning id, matter_id, grantee_user_id
+    `,
+    [input.userId, input.organisationId],
+  )
+  for (const share of revoked.rows) {
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.actorUserId,
+      entityType: 'matter_share',
+      entityId: share.id,
+      action: 'matter.share_revoke',
+      metadata: {
+        matterId: share.matter_id,
+        granteeUserId: share.grantee_user_id,
+      },
+      requestId: input.requestId,
+    })
+  }
 }

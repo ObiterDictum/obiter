@@ -730,7 +730,10 @@ restricted to image package paths. Responses are built only by
 and a non-executable Content-Security-Policy while preserving each part's
 `Content-Type` so the frontend can fetch blobs for `<img>` rendering. The route
 keeps an LRU cache of unzipped image parts for at most 16 immutable versions
-per API process and serves later image requests from that cache. The React page
+and 64 MiB of retained image bytes per API process, evicts the least recently
+used entry when either bound is crossed, and serves later image requests from
+that cache. A version whose image parts exceed the byte budget is served but
+not retained. The React page
 interprets preserved `w:tbl` fragments and drawing extents for display only:
 React tables and `<img>`, never HTML strings of OOXML. Binary media stays out
 of `model.json`. Page size, margins, fonts, run size, paragraph spacing, and
@@ -1510,3 +1513,104 @@ Findings: a CPU profile of a verification run against the confirmed `search_unav
 Decision: move the synchronous half of `getDocumentModel` onto a bounded pool of document-model worker threads (`document-model-pool.ts`, `document-model-worker.ts`) and keep storage reads and writes, authorisation, database work, findings, audit and failure reporting on the serving loop exactly as before. The pool runs at most two workers and, instead of an unbounded queue, a bounded waiting list: a caller whose workers are all busy parks in a FIFO of at most sixteen waiters, each holding only the payload its own in-flight request already read, and a caller beyond that bound is rejected at once, since an abandoned request's parked task is never cancelled. Each dispatched task has a ten-minute deadline, calibrated against the measured legitimate parse path with roughly three times the slowest observed legitimate load as headroom; a worker that never answers is terminated, its caller settles once, and the slot is replaced on the next dispatch. A second worker spawns only under real contention, and a synchronous `new Worker` failure is contained inside the pool, settling one waiting caller rather than the process. A worker that fails is dropped with its task rejected and replaced on the next dispatch; every failure surfaces as the existing curated `DocumentModelStoreError`, so run failure codes, audit rows and responses are unchanged. Both entry points terminate the pool inside their existing graceful drain. The task protocol is internal to `services/api`; no route, contract, migration, job semantic or deployment shape changed.
 
 Outcome: no API contract change, no migration, no new dependency, no queue system. Before the change, search-during-verification reproduction windows on the task-owned harness produced 6 to 9 `search_unavailable` responses per 60-second Node window with 3.5 to 4.7 second probe-measured stalls and health-canary p99 above 4 seconds, identically under the development watcher and the production launch (`node --import tsx`, `NODE_ENV=production`). After it, the same windows produce zero 503s, zero probe gaps above 500 ms (max 178 to 204 ms) and a health-canary p99 under 80 ms on both runtimes, with the main thread's profile showing 0.01 s of OOXML work against the worker's 11.4 s, and verification results byte-identical across runtimes and before/after (one canonical findings hash for all four probes). Peak resident memory under the workload rises by about 200 MB on Node (one to two worker isolates plus in-flight payload copies), bounded by the pool size; Bun is unchanged. Deliberately not done here: quote-fidelity preparation and the legislation title fold still run on the loop under their existing bounds, `document-presence.ts:126` still parses the package inline on every presence write and is a separate follow-up, `storedSearchTimeoutMs` stays at 2000 ms, the stall-aware timeout option was not taken because it would leave every other route blocked, worker `resourceLimits` are not set because Bun does not enforce them (so Node alone would gain a containment Bun lacks, and even on Node the limit does not cap native or ArrayBuffer growth), and the parser's pre-existing per-paragraph full-document scans, which make parse time quadratic in paragraph count, are a separate performance follow-up.
+
+### The public changelog bounds its GitHub traffic (27 September 2026)
+
+Findings: `GET /api/changelog` is anonymous, and every request called GitHub's
+releases endpoint and, on an empty or failed release result, its commits
+endpoint. There was no cache, no coalescing and no deadline, so repeated
+anonymous requests amplified traffic against a third party, an upstream stall
+was transferred to API request capacity, and a GitHub outage or rate limit
+produced one attempt per incoming request. Confirmed by source and by the
+change's fail-first tests.
+
+Decision: bound the route at the module that owns it. One application-owned
+cache slot holds the last validated body (the resource is fixed, so there is
+no key space to evict); concurrent cold or expired callers share one refresh;
+a failure sets a two-minute cooldown; a throttle sets a cooldown of at least a
+minute, extended by any longer valid `Retry-After` or `x-ratelimit-reset`
+value and capped at a day so a malformed or hostile header can neither retry
+immediately, overflow the clock nor park refreshes indefinitely; and each
+upstream request is aborted after five seconds, which also aborts the response
+body. Independently of those intervals, one rolling per-process budget allows
+at most thirty upstream HTTP requests in any hour, spent before each request so
+successes, failures, the commits fallback and throttled refreshes all draw on
+it. A refresh costs one request when releases is non-empty and two when the
+commits fallback runs, and the initial cold refresh counts like any other. A
+single upstream body is rejected unparsed past a 64 KiB cap, entry arrays past
+five entries, and fields past their documented size, and `html_url` is accepted
+only as an `https://github.com` link because it is rendered as an anchor href.
+A successful result is served for at most twenty-four hours after a failure,
+inclusively: at exactly the cap the cached body is still returned, and one
+millisecond later the route answers `503` with `github_unavailable`. A stale
+body inside the window is byte-identical to a fresh one, including its
+`source`, so consumers cannot distinguish them; that is the policy, not an
+oversight. Upstream bodies are validated against the expected shape before
+caching, so a malformed response cannot replace a good one. The releases-first,
+commits-fallback order and both response shapes are unchanged; only the
+`source` values already in use are returned.
+
+Outcome: no dependency, credential, shared cache, background poller or
+deployment change. The ceiling is thirty requests per rolling hour per API
+process, half of GitHub's 60-requests-per-hour unauthenticated allowance, which
+leaves headroom for the initial burst and for other callers. It is per process,
+so N replicas multiply it N times, and it does not account for any other client
+sharing the same egress IP; together those can still exhaust the shared
+unauthenticated allowance. In the healthy paths the route makes about six
+requests an hour when releases succeeds and about twelve when the commits
+fallback is used; under sustained failure, throttle or fallback the budget
+still holds at thirty. Deliberately not done here: the route is not
+rate-limited per caller, because the resource is fixed and the cache makes
+per-caller limiting unnecessary, and no staleness marker is added because the
+response contract is unchanged. No logging was added, so no request or
+upstream data can leak into a log line.
+
+### Matter-share grantees are organisation-scoped by the database (28 September 2026)
+
+Findings: 0013 scoped the matter side of `matter_shares` with a composite
+foreign key `(matter_id, organisation_id)` but tied `grantee_user_id` to
+`users(id)` alone. `grantMatterShare`
+(`services/api/src/routes/document-access.ts`) checks the grantee's organisation
+before inserting, so the invariant held on the route path, but the schema did
+not require it. That is defect pattern P3, a contract enforced on one path and
+not its sibling, and it is why the step-4 experiment on PR #137 was able to
+return organisation B's matter once an organisation predicate was dropped: the
+seeded share was honoured on access level alone.
+
+Decision: add `0027_matter_share_grantee_organisation.sql`. It adds the
+`users (id, "organisationId")` unique index a composite reference needs,
+replaces `matter_shares_grantee_fk` with
+`matter_shares_grantee_organisation_fk foreign key (grantee_user_id,
+organisation_id) references users (id, "organisationId") on delete cascade`,
+and keeps the application check as the first line of defence. Cascade is
+preserved, so deleting a user still removes their shares. `created_by` keeps its
+`users(id)` reference: it records who granted the share (historical
+authorship), not current membership, so the recipient's rule is deliberately not
+applied to it.
+
+The migration fails closed on pre-existing rows whose grantee is outside the
+share organisation. It raises a `foreign_key_violation`, names the offending
+shares and the audited revocation path, and rolls the whole file back rather
+than deleting or rewriting rows to make validation pass. The unique index is a
+plain `create unique index` and the constraint a plain `alter table`, so both
+run inside the migration runner's per-file transaction; that takes an `ACCESS
+EXCLUSIVE` lock on `users` and `matter_shares` and validates the new key with a
+full scan of `matter_shares`. That is acceptable at the current table size and
+is why `create index concurrently` is not used.
+
+Membership: a member removal (`DELETE
+/api/organisations/:organisationId/members/:userId`) now revokes the removed
+member's shares for that organisation in the same transaction, writing one
+`matter.share_revoke` audit row per share with the same metadata the
+share-revocation route writes, before the `organisationId` change the composite
+key would otherwise reject. Invite acceptance needs no revocation:
+`organisationHasBlockingWork` refuses to move a user out of an organisation
+that holds any matter row, so the vacated organisation cannot hold a share that
+names them. An organisation change is never cascaded into moving shares between
+organisations.
+
+Ordering: `0027` is independent of every other pending file. A fresh install
+applies it in filename order and an upgrade applies it whenever it becomes
+pending, so it is safe whichever of two concurrently proposed migrations lands
+first. The route-level sharing and access contracts are unchanged; the
+constraint is a backstop, not a replacement for the application checks.

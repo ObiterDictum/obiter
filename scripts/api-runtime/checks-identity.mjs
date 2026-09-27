@@ -14,7 +14,7 @@ import {
   rawRequest,
   signSessionCookie,
 } from './http.mjs'
-import { foreignReadyDocumentSql } from './fixtures.mjs'
+import { documentCountSql, foreignReadyDocumentSql } from './fixtures.mjs'
 
 /**
  * `auth.ts` sets `advanced.useSecureCookies: env.nodeEnv === 'production'`, and
@@ -296,10 +296,12 @@ export async function checkRequestLimits(ctx) {
     `status=${oversizedUpload.status} bytes=${oversized.byteLength}`,
   )
 
-  // The two malformed-multipart shapes answer 500 on both runtimes today. That
-  // is a pre-existing defect tracked separately (board P1.41); the harness
-  // asserts the server survives them and records the status for a parity
-  // comparison, rather than pinning a status the migration is not fixing.
+  // P1.41: a complete HTTP request whose multipart body is malformed is a
+  // client error at the parse boundary. Assert the status and the contract
+  // envelope, not just survival, and prove nothing persisted.
+  const documentsBeforeMalformed = ctx.querier.rows(
+    documentCountSql(ids.matterId),
+  )[0].count
   const malformed = await rawRequest({
     port,
     path: `/api/matters/${ids.matterId}/documents`,
@@ -313,6 +315,9 @@ export async function checkRequestLimits(ctx) {
     },
     body: Buffer.from('this is not multipart at all, honest!'),
   })
+  const truncatedBytes = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\n`,
+  )
   const truncated = await rawRequest({
     port,
     path: `/api/matters/${ids.matterId}/documents`,
@@ -320,20 +325,58 @@ export async function checkRequestLimits(ctx) {
     headers: {
       ...bearer(ids.sessionToken),
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(truncatedBytes.byteLength),
     },
-    body: Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\n`,
-    ),
+    body: truncatedBytes,
   })
+  const malformedBody = JSON.parse(malformed.body.toString('utf8') || '{}')
+  const truncatedBody = JSON.parse(truncated.body.toString('utf8') || '{}')
+  const documentsAfterMalformed = ctx.querier.rows(
+    documentCountSql(ids.matterId),
+  )[0].count
   const healthAfterMalformed = await getJson(`${origin}/api/health`)
+  const validAfterMalformed = await getJson(
+    `${origin}/api/me`,
+    ids.sessionToken,
+  )
+  const envelopeOk = (body) =>
+    body?.error?.code === 'validation_failed' &&
+    (body?.error?.requestId ?? '').startsWith('req_')
   recorder.record(
-    'malformed and truncated multipart do not take the server down',
-    healthAfterMalformed.status === 200,
-    `empty-boundary=${malformed.status} truncated=${truncated.status} health=${healthAfterMalformed.status}`,
+    'an empty multipart boundary is 400 validation_failed, not 500',
+    malformed.status === 400 && envelopeOk(malformedBody),
+    `status=${malformed.status} code=${malformedBody?.error?.code ?? 'none'}`,
     {
       malformedBoundaryStatus: malformed.status,
-      truncatedMultipartStatus: truncated.status,
+      malformedBoundaryCode: malformedBody?.error?.code ?? null,
     },
+  )
+  recorder.record(
+    'a truncated multipart body is 400 validation_failed, not 500',
+    truncated.status === 400 && envelopeOk(truncatedBody),
+    `status=${truncated.status} code=${truncatedBody?.error?.code ?? 'none'}`,
+    {
+      truncatedMultipartStatus: truncated.status,
+      truncatedMultipartCode: truncatedBody?.error?.code ?? null,
+    },
+  )
+  const malformedText = malformed.body.toString('utf8')
+  recorder.record(
+    'malformed multipart echoes no parser detail or request bytes',
+    !malformedText.includes('boundary') &&
+      !malformedText.includes('MIME') &&
+      !malformedText.includes('this is not multipart at all, honest!'),
+    `body=${malformedText.slice(0, 120)}`,
+  )
+  recorder.record(
+    'malformed multipart persists no document row',
+    documentsBeforeMalformed === documentsAfterMalformed,
+    `before=${documentsBeforeMalformed} after=${documentsAfterMalformed}`,
+  )
+  recorder.record(
+    'the server stays healthy and answers a later valid request',
+    healthAfterMalformed.status === 200 && validAfterMalformed.status === 200,
+    `health=${healthAfterMalformed.status} me=${validAfterMalformed.status}`,
   )
 
   const hugeHeader = await rawRequest({

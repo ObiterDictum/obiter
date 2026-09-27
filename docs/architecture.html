@@ -2571,7 +2571,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>24 migrations, 0001 to 0025, 0008 withdrawn</dd>
+                <dd>25 migrations, 0001 to 0027, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -2877,8 +2877,10 @@
                     Current ready DOCX image part for page rendering. Query
                     <code>part</code> is a package path such as
                     <code>word/media/image1.png</code>. Image parts are unzipped
-                    once per immutable version, kept in an LRU cache of 16
-                    versions per API process. Responses use
+                    once per immutable version, kept in an LRU cache bounded to
+                    16 versions and 64 MiB of retained image bytes per API
+                    process. A version whose image parts exceed the byte budget
+                    is served but not retained. Responses use
                     <code>Content-Disposition: attachment</code> and a
                     non-executable Content-Security-Policy; the frontend still
                     fetches bytes as a blob for <code>&lt;img&gt;</code>
@@ -3184,8 +3186,11 @@
                   <td class="id">GET /api/changelog</td>
                   <td class="id">changelog.ts</td>
                   <td>
-                    Public GitHub release notes. No session required. Must not
-                    expose matter or client data.
+                    Public GitHub release notes. No session required. Cached and
+                    coalesced, with a five-second upstream deadline, a failure
+                    cooldown and a rolling ceiling of thirty upstream requests
+                    an hour per process, so anonymous requests cannot amplify
+                    GitHub traffic. Must not expose matter or client data.
                   </td>
                 </tr>
               </tbody>
@@ -3753,7 +3758,7 @@
                   marker-end="url(#ah-t-entity-relationships)"
                 />
                 <text x="232.15" y="161.5" text-anchor="middle" class="e">
-                  grantee
+                  grantee + org
                 </text>
                 <path
                   d="M119.4,280 L108.1,231"
@@ -3914,9 +3919,14 @@
                   <td class="id">matter_shares</td>
                   <td>
                     Per-matter view or edit grants. Retained while a matter is
-                    soft-deleted and effective again if it is restored.
+                    soft-deleted and effective again if it is restored. The
+                    grantee is organisation-scoped by a composite foreign key
+                    (<code>grantee_user_id, organisation_id</code>), so a share
+                    cannot name a user who is not in the matter's organisation;
+                    <code>created_by</code> stays a plain user reference as
+                    historical authorship.
                   </td>
-                  <td class="id">0013</td>
+                  <td class="id">0013, 0027</td>
                 </tr>
                 <tr>
                   <td class="id">matter_documents</td>

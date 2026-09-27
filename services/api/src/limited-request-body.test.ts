@@ -101,3 +101,89 @@ describe('limited-request-body', () => {
     expect(parsed).toBe(false)
   })
 })
+
+describe('readLimitedFormData malformed multipart', () => {
+  function formApp() {
+    const app = new Hono<{ Variables: { requestId: string } }>()
+    app.use('*', async (c, next) => {
+      c.set('requestId', 'req_test')
+      await next()
+    })
+    app.post('/api/matters/mtr_1/documents', async (c) => {
+      const result = await readLimitedFormData(
+        c,
+        DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+      )
+      if (!result.ok) return result.response
+      return c.json({ names: [...result.form.keys()] })
+    })
+    return app
+  }
+
+  it('answers 400 validation_failed for an empty multipart boundary', async () => {
+    const response = await formApp().request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data; boundary=' },
+      body: 'this is not multipart at all, honest!',
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+  })
+
+  it('answers 400 validation_failed for a truncated multipart body', async () => {
+    const response = await formApp().request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data; boundary=----test' },
+      body: '------test\r\nContent-Disposition: form-data; name="filename"\r\n\r\n',
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+  })
+
+  it('answers 400 validation_failed when the boundary parameter is absent', async () => {
+    const response = await formApp().request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data' },
+      body: 'not multipart',
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+  })
+
+  it('parses a well-formed multipart body', async () => {
+    const boundary = '----obiter-valid'
+    const body =
+      `--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\nfixture.txt\r\n` +
+      `--${boundary}--\r\n`
+    const response = await formApp().request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      body,
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ names: ['filename'] })
+  })
+
+  it('keeps 413 ahead of parsing when the body declares itself oversized', async () => {
+    const response = await formApp().request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----test',
+        'content-length': String(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES + 1),
+      },
+      body: '----test\r\nContent-Disposition: form-data; name="file"\r\n\r\nx\r\n----test--\r\n',
+    })
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'payload_too_large' },
+    })
+  })
+})
