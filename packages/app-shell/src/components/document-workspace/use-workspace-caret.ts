@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { flowParagraphIds } from '../../document-edits'
 import { historyCaretPlacement } from '../../document-history-caret'
@@ -66,6 +66,34 @@ export function useWorkspaceCaret({
   const [selectionRefusal, setSelectionRefusal] =
     useState<SelectionRefusal | null>(null)
   const [verticalCaret] = useState(createVerticalCaretColumn)
+  // A save canonicalises paragraph ids. Retarget the caret and selection to the
+  // result ids the reloaded model uses, from the remap the drafts hook
+  // published when the boundary resolved. Run identifiers are unchanged.
+  useEffect(() => {
+    const map = drafts.paragraphRemap
+    if (map.size === 0) return
+    const remap = (id: string) => map.get(id) ?? id
+    setSelectedParagraphId((current) => (current ? remap(current) : current))
+    setRestoreCaret((current) =>
+      current
+        ? { ...current, paragraphId: remap(current.paragraphId) }
+        : current,
+    )
+    setSelection((current) =>
+      current
+        ? {
+            anchor: {
+              ...current.anchor,
+              paragraphId: remap(current.anchor.paragraphId),
+            },
+            focus: {
+              ...current.focus,
+              paragraphId: remap(current.focus.paragraphId),
+            },
+          }
+        : current,
+    )
+  }, [drafts.paragraphRemap])
   // Find owns its own query, hit set and navigation; it places the caret
   // through the same explicit placement the rest of the workspace uses.
   const find = useWorkspaceFind({

@@ -6,10 +6,14 @@ import {
   flowParagraphIds,
   insertPlainText,
   removeInsert,
+  runPropertiesFromFragments,
   type LocalInsert,
 } from './document-edits'
+import { mergeEmphasis } from './document-format-edits'
+import type { PendingEmphasis } from './document-format-types'
 import { documentStory } from './document-model-text'
 import {
+  emphasisSlotKey,
   isPendingBaselineId,
   PENDING_BASELINE_PREFIX,
   removeDraftSlots,
@@ -86,69 +90,120 @@ type SavedIdentities = {
 }
 
 /**
- * Matches the covered structural slots to the paragraphs the saved model
- * actually holds. The server re-parses identities from the stored package, so
- * the only reliable link is order: the paragraphs present after the save but
- * absent before it are the inserts, in request order. When the counts do not
- * line up (a concurrent change, or a model that has not loaded) the map is
- * partial and the caller falls back to placeholders.
+ * Identity comes only from the server's authoritative lineage. A response
+ * without one is not permission to guess: `useSaveBaseline` treats it as an
+ * unresolved boundary and refuses to translate or save. There is deliberately
+ * no set-difference fallback, because after a mid-document insert it names an
+ * unrelated paragraph and a reversal can delete it.
  */
 function savedIdentities(baseline: SaveBaseline): SavedIdentities {
-  const inserted = new Map<string, string>()
-  const insertedRuns = new Map<string, string>()
-  const restoredAnchors = new Map<string, string>()
-  const paragraphIds = new Map<string, string>()
-  const runIds = new Map<string, string>()
-  const { toModel, fromModel } = baseline
+  if (!baseline.lineage) return emptyIdentities()
+  return lineageIdentities(baseline.lineage, baseline.toModel, baseline)
+}
 
-  // The server's lineage is authoritative and is the only identity source when
-  // it is present. The diff below survives only for a server that predates it.
-  if (baseline.lineage && toModel) {
-    return lineageIdentities(baseline.lineage, toModel, baseline)
+function emptyIdentities(): SavedIdentities {
+  return {
+    inserted: new Map(),
+    insertedRuns: new Map(),
+    restoredAnchors: new Map(),
+    paragraphIds: new Map(),
+    runIds: new Map(),
   }
+}
 
-  const fromOrder = flowParagraphIds(fromModel, [], [])
-  // A restored paragraph re-inserts after its nearest neighbour the save did
-  // not delete. The covered deletes name those, so the anchor is known even
-  // before the saved model loads; no placeholder is needed for it.
-  const deleted = new Set(
-    baseline.covered.flatMap((slot) =>
-      slot.kind === 'delete' ? [slot.paragraphId] : [],
+/**
+ * The base-to-result paragraph map the lineage carries. Used to retarget live
+ * draft state and the caret after a save canonicalises paragraph identity.
+ */
+export function paragraphMapFromLineage(
+  lineage: DocumentVersionLineage,
+): Map<string, string> {
+  return new Map(
+    lineage.paragraphs.flatMap((entry) =>
+      entry.fromParagraphId && entry.toParagraphId
+        ? [[entry.fromParagraphId, entry.toParagraphId] as const]
+        : [],
     ),
   )
-  const surviving = new Set(fromOrder.filter((id) => !deleted.has(id)))
+}
+
+function remapRecordKeys<T>(
+  record: Record<string, T>,
+  remap: (id: string) => string,
+): Record<string, T> {
+  const next: Record<string, T> = {}
+  for (const [key, value] of Object.entries(record)) {
+    next[remap(key)] = value
+  }
+  return next
+}
+
+/**
+ * Retargets the paragraph identifiers a live draft state still holds after a
+ * save renamed them. Run identifiers are not canonicalised, so the text
+ * overrides are left alone; the paragraph-keyed maps and inserted anchors are
+ * rewritten to the result ids the reloaded model uses.
+ */
+export function remapDraftStateParagraphs(
+  state: DraftState,
+  lineage: DocumentVersionLineage,
+): DraftState {
+  const map = paragraphMapFromLineage(lineage)
+  if (map.size === 0) return state
+  const remap = (id: string) => map.get(id) ?? id
+  return {
+    ...state,
+    inserts: state.inserts.map((insert) =>
+      map.has(insert.afterParagraphId)
+        ? { ...insert, afterParagraphId: remap(insert.afterParagraphId) }
+        : insert,
+    ),
+    deletedParagraphIds: state.deletedParagraphIds.map(remap),
+    extraRuns: remapRecordKeys(state.extraRuns, remap),
+    format: {
+      ...state.format,
+      paragraphStyles: remapRecordKeys(state.format.paragraphStyles, remap),
+      numbering: remapRecordKeys(state.format.numbering, remap),
+      emphasis: state.format.emphasis.map((item) =>
+        item.paragraphId
+          ? { ...item, paragraphId: remap(item.paragraphId) }
+          : item,
+      ),
+    },
+  }
+}
+
+/**
+ * Whether a boundary carries the authoritative lineage it needs to translate
+ * safely. A response without one must be surfaced, never guessed around.
+ */
+export function hasAuthoritativeLineage(baseline: SaveBaseline): boolean {
+  return baseline.lineage !== undefined && baseline.versionId !== undefined
+}
+
+/**
+ * Whether the lineage names every covered insertion and deletion. A response
+ * that omits one is incomplete, so the caller must not translate it.
+ */
+export function lineageCoversCoveredSlots(
+  lineage: DocumentVersionLineage,
+  baseline: Pick<SaveBaseline, 'covered' | 'sent'>,
+): boolean {
   for (const slot of baseline.covered) {
-    if (slot.kind !== 'delete') continue
-    const anchor = nearestSurvivingPreceding(
-      fromOrder,
-      surviving,
-      slot.paragraphId,
-    )
-    if (anchor) restoredAnchors.set(slot.paragraphId, anchor)
+    if (slot.kind === 'insert') {
+      const mapped = lineage.paragraphs.some(
+        (entry) => entry.insertedByIntent === slot.clientId,
+      )
+      if (!mapped) return false
+    }
+    if (slot.kind === 'delete') {
+      const mapped = lineage.paragraphs.some(
+        (entry) => entry.fromParagraphId === slot.paragraphId,
+      )
+      if (!mapped) return false
+    }
   }
-
-  if (!toModel)
-    return { inserted, insertedRuns, restoredAnchors, paragraphIds, runIds }
-
-  const toOrder = flowParagraphIds(toModel, [], [])
-  const fromSet = new Set(fromOrder)
-  const added = toOrder.filter((id) => !fromSet.has(id))
-
-  const insertSlots = baseline.sent.inserts.filter((insert) =>
-    baseline.covered.some(
-      (slot) => slot.kind === 'insert' && slot.clientId === insert.clientId,
-    ),
-  )
-  if (insertSlots.length === added.length) {
-    insertSlots.forEach((insert, index) => {
-      const paragraphId = added[index]
-      if (!paragraphId) return
-      inserted.set(insert.clientId, paragraphId)
-      const run = firstRunId(toModel, paragraphId)
-      if (run) insertedRuns.set(insert.clientId, run)
-    })
-  }
-  return { inserted, insertedRuns, restoredAnchors, paragraphIds, runIds }
+  return true
 }
 
 /**
@@ -159,7 +214,7 @@ function savedIdentities(baseline: SaveBaseline): SavedIdentities {
  */
 function lineageIdentities(
   lineage: DocumentVersionLineage,
-  toModel: DocumentModelWire,
+  toModel: DocumentModelWire | undefined,
   baseline: SaveBaseline,
 ): SavedIdentities {
   const inserted = new Map<string, string>()
@@ -172,7 +227,7 @@ function lineageIdentities(
     if (entry.fromParagraphId && entry.toParagraphId) {
       paragraphIds.set(entry.fromParagraphId, entry.toParagraphId)
     }
-    if (!entry.toParagraphId) continue
+    if (!entry.toParagraphId || !toModel) continue
     const paragraph = storyParagraph(toModel, entry.toParagraphId)
     for (const run of entry.runs) {
       const resultRunId = paragraph?.runs[run.runIndex]?.id
@@ -185,22 +240,17 @@ function lineageIdentities(
     }
   }
 
-  const insertSlots = baseline.sent.inserts.filter((insert) =>
-    baseline.covered.some(
-      (slot) => slot.kind === 'insert' && slot.clientId === insert.clientId,
-    ),
-  )
-  const insertedParagraphs = lineage.paragraphs.filter(
-    (entry) => entry.fromParagraphId === null,
-  )
-  if (insertSlots.length === insertedParagraphs.length) {
-    insertSlots.forEach((insert, index) => {
-      const entry = insertedParagraphs[index]
-      if (!entry?.toParagraphId) return
-      inserted.set(insert.clientId, entry.toParagraphId)
-      const run = storyParagraph(toModel, entry.toParagraphId)?.runs[0]
-      if (run) insertedRuns.set(insert.clientId, run.id)
-    })
+  // Insertions are correlated by the opaque intent id the client sent, never
+  // by matching the insert lists. An inserted paragraph without one (an
+  // empty-paragraph fill) has no client insert slot to name.
+  for (const entry of lineage.paragraphs) {
+    if (entry.fromParagraphId !== null) continue
+    const intentId = entry.insertedByIntent
+    if (!intentId || !entry.toParagraphId) continue
+    inserted.set(intentId, entry.toParagraphId)
+    if (!toModel) continue
+    const run = storyParagraph(toModel, entry.toParagraphId)?.runs[0]
+    if (run) insertedRuns.set(intentId, run.id)
   }
 
   const fromOrder = flowParagraphIds(baseline.fromModel, [], [])
@@ -367,15 +417,92 @@ export function translateSnapshot(
         next.inserts.push(restored)
         break
       }
+      case 'emphasis': {
+        // Reverse the saved formatting by restating the pre-save properties at
+        // the result address, instead of merely dropping the slot (which left
+        // the saved formatting in place).
+        const sent = baseline.sent.format.emphasis.find(
+          (item) => emphasisSlotKey(item) === slot.key,
+        )
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        if (!sent) break
+        const inverse = sent.runId
+          ? preEmphasisForRun(baseline.fromModel, sent.runId)
+          : sent.paragraphId !== undefined &&
+              sent.from !== undefined &&
+              sent.to !== undefined
+            ? preEmphasisForRange(
+                baseline.fromModel,
+                sent.paragraphId,
+                sent.from,
+                sent.to,
+              )
+            : null
+        if (!inverse) break
+        const address: PendingEmphasis = sent.runId
+          ? { runId: identities.runIds.get(sent.runId) ?? sent.runId }
+          : {
+              paragraphId:
+                identities.paragraphIds.get(sent.paragraphId ?? '') ??
+                sent.paragraphId,
+              from: sent.from,
+              to: sent.to,
+            }
+        next.format.emphasis = mergeEmphasis(next.format.emphasis, {
+          ...address,
+          ...inverse,
+        })
+        break
+      }
       default: {
-        // Numbering, emphasis and appended runs: a snapshot that still holds
-        // the slot loses it to the new baseline. A snapshot that predates it
-        // simply does not reverse the formatting; it never replays it.
+        // Numbering and appended runs: a snapshot that still holds the slot
+        // loses it to the new baseline and never replays it.
         Object.assign(next, removeDraftSlots(next, [slot]))
       }
     }
   }
   return next
+}
+
+/** The pre-save bold/italic/underline of a run, for a formatting reversal. */
+function preEmphasisForRun(
+  model: DocumentModelWire,
+  runId: string,
+): PendingEmphasis | null {
+  for (const paragraph of documentStory(model)?.paragraphs ?? []) {
+    const run = paragraph.runs.find((item) => item.id === runId)
+    if (run) return emphasisOf(run.preservedXmlFragments)
+  }
+  return null
+}
+
+/** The pre-save formatting at the start of a range, for a range reversal. */
+function preEmphasisForRange(
+  model: DocumentModelWire,
+  paragraphId: string,
+  from: number,
+  to: number,
+): PendingEmphasis | null {
+  const paragraph = storyParagraph(model, paragraphId)
+  if (!paragraph) return null
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const end = cursor + run.text.length
+    if (from >= cursor && from < end && to > cursor) {
+      return emphasisOf(run.preservedXmlFragments)
+    }
+    cursor = end
+  }
+  return null
+}
+
+function emphasisOf(fragments: readonly string[]): PendingEmphasis {
+  const properties = runPropertiesFromFragments(fragments)
+  return {
+    bold: properties.bold,
+    italic: properties.italic,
+    underline: properties.underline,
+  }
 }
 
 /**

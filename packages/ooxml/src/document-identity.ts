@@ -46,6 +46,10 @@ export function canonicaliseParagraphIdentities(
 
   const namespaceParts = new Set<string>()
   for (const story of document.model.stories) {
+    // Only the main document story is editable by the supported actions, so
+    // only it needs persisted identity. Other parts keep their bytes and ids
+    // untouched, and their existing w14 values still seed the used set above.
+    if (story.kind !== 'document') continue
     for (const paragraph of story.paragraphs) {
       const existing = paragraph.sourceParaId
       const valid =
@@ -69,6 +73,7 @@ export function canonicaliseParagraphIdentities(
     ensureWord2010Namespace(part.overlay)
   }
   for (const story of document.model.stories) {
+    if (story.kind !== 'document') continue
     for (const paragraph of story.paragraphs) {
       const value = paragraph.sourceParaId
       if (!value) continue

@@ -33,7 +33,11 @@ export type LineageRecorder = {
   /** Base paragraph origin for every current paragraph touched by the batch. */
   paragraphOrigin: Map<
     DocumentParagraphWire,
-    { fromParagraphId: string | null; insertedByOperation?: number }
+    {
+      fromParagraphId: string | null
+      insertedByOperation?: number
+      insertedByIntent?: string
+    }
   >
   /** Base paragraphs deleted by the batch, keyed by base paragraph id. */
   deletedParagraphs: Map<string, { insertedByOperation?: number }>
@@ -100,11 +104,13 @@ export function recordInsertedParagraph(
   recorder: LineageRecorder,
   paragraph: DocumentParagraphWire,
   operationIndex: number,
+  intentId?: string,
 ) {
   recorder.touched.add(paragraph)
   recorder.paragraphOrigin.set(paragraph, {
     fromParagraphId: null,
     insertedByOperation: operationIndex,
+    ...(intentId ? { insertedByIntent: intentId } : {}),
   })
   for (const run of paragraph.runs) {
     recorder.runOrigins.set(run, [
@@ -236,8 +242,13 @@ export function buildVersionLineage(input: {
   for (const story of input.model.stories) {
     for (const paragraph of story.paragraphs) {
       const origin = recorder.paragraphOrigin.get(paragraph)
-      if (!origin) continue
       const toParagraphId = canonicalParagraphIds.get(paragraph) ?? paragraph.id
+      // A paragraph the batch touched, or one whose persisted id changed when
+      // the version was canonicalised, is part of the base-to-result map. The
+      // canonicalised-but-untouched entries are what let a restore anchor on a
+      // legacy paragraph resolve to its renamed result id.
+      const renamed = toParagraphId !== paragraph.id
+      if (!origin && !renamed) continue
       const runs: DocumentLineageRun[] = paragraph.runs.map(
         (run, runIndex) => ({
           runIndex,
@@ -247,10 +258,13 @@ export function buildVersionLineage(input: {
         }),
       )
       paragraphs.push({
-        fromParagraphId: origin.fromParagraphId,
+        fromParagraphId: origin ? origin.fromParagraphId : paragraph.id,
         toParagraphId,
-        ...(origin.insertedByOperation !== undefined
+        ...(origin?.insertedByOperation !== undefined
           ? { insertedByOperation: origin.insertedByOperation }
+          : {}),
+        ...(origin?.insertedByIntent
+          ? { insertedByIntent: origin.insertedByIntent }
           : {}),
         runs,
       })

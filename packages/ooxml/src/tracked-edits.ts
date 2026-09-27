@@ -101,7 +101,11 @@ export function createTrackedEditWriter(
       styleId: string | null | undefined,
       offset: number,
       paragraphFormat?: ParagraphFormat,
-      lineage?: { recorder: LineageRecorder; operationIndex: number },
+      lineage?: {
+        recorder: LineageRecorder
+        operationIndex: number
+        intentId?: string
+      },
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')

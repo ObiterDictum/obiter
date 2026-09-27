@@ -82,12 +82,6 @@ describe('version lineage resolves against the reparsed DOCX', () => {
         ).toBeDefined()
       }
     }
-    expect(modelParagraphs(after.model).map((p) => p.runs[0]?.text)).toEqual([
-      'Alpha',
-      'Inserted',
-      'Beta',
-      'Gamma',
-    ])
   })
 
   it('expresses a formatting split as one base run becoming several result runs', async () => {

@@ -73,6 +73,8 @@ export const documentParagraphLineageSchema = z
     toParagraphId: lineageIdSchema.nullable(),
     /** Index in the accepted batch that inserted this paragraph. */
     insertedByOperation: z.number().int().nonnegative().optional(),
+    /** Opaque intent id echoed from the insert operation, when supplied. */
+    insertedByIntent: lineageIdSchema.optional(),
     /** Result runs, in paragraph order. Empty when the paragraph was deleted. */
     runs: z.array(documentLineageRunSchema),
   })

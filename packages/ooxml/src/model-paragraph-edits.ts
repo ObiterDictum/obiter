@@ -28,7 +28,11 @@ export function insertParagraphAfter(
     wrapRun?: (run: string) => string
     paragraphFormat?: ParagraphFormat
   } = { prefix: 'w' },
-  lineage?: { recorder: LineageRecorder; operationIndex: number },
+  lineage?: {
+    recorder: LineageRecorder
+    operationIndex: number
+    intentId?: string
+  },
 ) {
   const part = requireEditablePart(document, anchor.partName)
   const paragraphId = allocateModelId(document, 'para-edit')
@@ -64,7 +68,12 @@ export function insertParagraphAfter(
   })
   part.dirty = true
   if (lineage) {
-    recordInsertedParagraph(lineage.recorder, paragraph, lineage.operationIndex)
+    recordInsertedParagraph(
+      lineage.recorder,
+      paragraph,
+      lineage.operationIndex,
+      lineage.intentId,
+    )
   }
 }
 

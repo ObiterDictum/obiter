@@ -169,7 +169,15 @@ export function applyDocumentEdits(
           operation.styleId,
           count,
           operation,
-          lineage ? { recorder: lineage, operationIndex } : undefined,
+          lineage
+            ? {
+                recorder: lineage,
+                operationIndex,
+                ...(operation.intentId
+                  ? { intentId: operation.intentId }
+                  : {}),
+              }
+            : undefined,
         )
       } else {
         insertParagraphAfter(
@@ -180,7 +188,15 @@ export function applyDocumentEdits(
           operation.styleId,
           count,
           { prefix: 'w', paragraphFormat: operation },
-          lineage ? { recorder: lineage, operationIndex } : undefined,
+          lineage
+            ? {
+                recorder: lineage,
+                operationIndex,
+                ...(operation.intentId
+                  ? { intentId: operation.intentId }
+                  : {}),
+              }
+            : undefined,
         )
       }
       insertionCounts.set(operation.paragraphId, count + 1)

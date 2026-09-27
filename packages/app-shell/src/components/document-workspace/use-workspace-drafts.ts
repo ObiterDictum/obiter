@@ -68,6 +68,10 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const history = useWorkspaceDraftHistory()
   const [persistence, setPersistence] = useState<DraftPersistence>('ok')
   const [restored, setRestored] = useState(false)
+  const [lineageUnresolved, setLineageUnresolved] = useState(false)
+  const [paragraphRemap, setParagraphRemap] = useState<
+    ReadonlyMap<string, string>
+  >(new Map())
   const [staleDraft, setStaleDraft] = useState<string | null>(null)
   const [recoverable, setRecoverable] = useState<RecoverableDraft[]>([])
   const [hydrated, setHydrated] = useState(false)
@@ -82,6 +86,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history,
     model: scope.model,
     modelVersionId: scope.baseVersionId,
+    onResolved: setParagraphRemap,
     resolveState: (resolve) =>
       setBundle((current) => ({ ...current, state: resolve(current.state) })),
   })
@@ -197,7 +202,14 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     versionId?: string,
   ) {
     clearSlots(covered, sent)
-    baseline.commit(covered, sent, fromModel, lineage, versionId)
+    const { resolved } = baseline.commit(
+      covered,
+      sent,
+      fromModel,
+      lineage,
+      versionId,
+    )
+    setLineageUnresolved(!resolved)
   }
 
   function resetDrafts() {
@@ -207,6 +219,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setRestored(false)
     setStaleDraft(null)
     setRecoverable([])
+    setLineageUnresolved(false)
+    setParagraphRemap(new Map())
   }
 
   function setState(update: (current: DraftState) => DraftState) {
@@ -479,6 +493,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardHeld,
     persistence,
     restored,
+    lineageUnresolved,
+    paragraphRemap,
+    boundaryPending: baseline.pendingVersion !== null,
     staleDraft,
     discardStaleDraft,
     recoverable,
@@ -493,7 +510,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     insertText,
     insertAfter,
     deleteParagraph,
-    canUndo: history.canUndo,
-    canRedo: history.canRedo,
+    canUndo: history.canUndo && !lineageUnresolved,
+    canRedo: history.canRedo && !lineageUnresolved,
   }
 }

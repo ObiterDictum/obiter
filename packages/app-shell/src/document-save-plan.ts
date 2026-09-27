@@ -463,7 +463,7 @@ export function slotLabel(slot: DraftSlot): string {
   }
 }
 
-function emphasisSlotKey(item: {
+export function emphasisSlotKey(item: {
   runId?: string
   paragraphId?: string
   from?: number

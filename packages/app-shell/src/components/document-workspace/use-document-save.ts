@@ -35,6 +35,7 @@ export type SaveState =
   | { status: 'saving' }
   | { status: 'failed' }
   | { status: 'stale' }
+  | { status: 'blocked' }
 
 export type DocumentSave = ReturnType<typeof useDocumentSave>
 
@@ -233,6 +234,14 @@ export function useDocumentSave({
 
   async function save() {
     if (!model) return
+    // A save whose lineage could not be reconciled leaves the history baseline
+    // unresolved. Writing again could duplicate the covered work or retarget a
+    // reversal, so the only safe action is to reload and discard.
+    if (drafts.lineageUnresolved) return
+    // A committed save whose result model has not reloaded yet is an unresolved
+    // baseline: a second save would address the pre-save model and duplicate or
+    // retarget the covered work.
+    if (drafts.boundaryPending) return
     // Ctrl+S bypasses the disabled Save button, so two saves could otherwise
     // run against one base version and duplicate every insert in the batch.
     if (inFlight.current) return
@@ -277,20 +286,24 @@ export function useDocumentSave({
     }
   }
 
-  const saveState: SaveState = stale
-    ? { status: 'stale' }
-    : saving
+  const saveState: SaveState = drafts.lineageUnresolved
+    ? { status: 'blocked' }
+    : drafts.boundaryPending
       ? { status: 'saving' }
-      : failure
-        ? { status: 'failed' }
-        : dirty ||
-            plan.pending > 0 ||
-            blocked.length > 0 ||
-            held.length > 0 ||
-            drafts.recoverable.length > 0 ||
-            Boolean(drafts.staleDraft)
-          ? { status: 'unsaved' }
-          : { status: 'saved' }
+      : stale
+        ? { status: 'stale' }
+        : saving
+          ? { status: 'saving' }
+          : failure
+            ? { status: 'failed' }
+            : dirty ||
+                plan.pending > 0 ||
+                blocked.length > 0 ||
+                held.length > 0 ||
+                drafts.recoverable.length > 0 ||
+                Boolean(drafts.staleDraft)
+              ? { status: 'unsaved' }
+              : { status: 'saved' }
 
   return {
     blocked,
@@ -299,6 +312,7 @@ export function useDocumentSave({
     saving,
     persistence: drafts.persistence,
     stale,
+    lineageUnresolved: drafts.lineageUnresolved,
     saveState,
     failure,
     notice,
@@ -307,6 +321,8 @@ export function useDocumentSave({
     reload: () => void reload(),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
+    blockedHistoryMessage:
+      'Your change was saved, but the edit history for it could not be reconciled. Reloading discards the in-memory history; the saved document is unchanged.',
   }
 }
 

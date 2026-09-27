@@ -63,6 +63,69 @@ function baseline(overrides: Partial<SaveBaseline>): SaveBaseline {
   }
 }
 
+// Authoritative lineage for saving an insert of 'Second' after p1.
+const insertLineage: DocumentVersionLineage = {
+  version: 1,
+  baseVersionId: 'ver_1',
+  versionId: 'ver_2',
+  acceptedOperations: [0],
+  paragraphs: [
+    {
+      fromParagraphId: 'p1',
+      toParagraphId: 'p1',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 5 }],
+        },
+      ],
+    },
+    {
+      fromParagraphId: null,
+      toParagraphId: 'p3',
+      insertedByOperation: 0,
+      insertedByIntent: 'i1',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: null, fromOffset: 0, toOffset: 0 }],
+        },
+      ],
+    },
+    {
+      fromParagraphId: 'p2',
+      toParagraphId: 'p2',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'r2', fromOffset: 0, toOffset: 4 }],
+        },
+      ],
+    },
+  ],
+}
+
+// Authoritative lineage for saving a deletion of p2.
+const deleteLineage: DocumentVersionLineage = {
+  version: 1,
+  baseVersionId: 'ver_1',
+  versionId: 'ver_2',
+  acceptedOperations: [0],
+  paragraphs: [
+    {
+      fromParagraphId: 'p1',
+      toParagraphId: 'p1',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 5 }],
+        },
+      ],
+    },
+    { fromParagraphId: 'p2', toParagraphId: null, runs: [] },
+  ],
+}
+
 function runTextSlot(runId: string): DraftSlot {
   return { kind: 'run-text', key: `run:${runId}`, runId }
 }
@@ -117,6 +180,8 @@ describe('translateSnapshot', () => {
       sent,
       fromModel,
       toModel: savedModel,
+      lineage: insertLineage,
+      versionId: 'ver_2',
     })
     expect(translated?.inserts).toEqual([])
     expect(translated?.deletedParagraphIds).toEqual(['p3'])
@@ -132,37 +197,47 @@ describe('translateSnapshot', () => {
         ...emptyDraftState(),
         inserts: [{ clientId: 'i1', afterParagraphId: 'p1', text: '' }],
       },
-      { covered: [insertSlot('i1')], sent, fromModel, toModel: savedModel },
+      {
+        covered: [insertSlot('i1')],
+        sent,
+        fromModel,
+        toModel: savedModel,
+        lineage: insertLineage,
+        versionId: 'ver_2',
+      },
     )
     expect(translated?.inserts).toEqual([])
     expect(translated?.drafts).toEqual({ r3: '' })
   })
 
-  it('holds a structural reversal as a pending identity until the model loads', () => {
+  it('holds an inserted run override as a pending identity until the model loads', () => {
     const sent: DraftState = {
       ...emptyDraftState(),
       inserts: [{ clientId: 'i1', afterParagraphId: 'p1', text: 'Second' }],
     }
-    const boundary = baseline({ covered: [insertSlot('i1')], sent })
-    const translated = translateSnapshot(emptyDraftState(), boundary)
-    const held = translated?.deletedParagraphIds[0] ?? ''
-    expect(isPendingBaselineId(held)).toBe(true)
+    const boundary = baseline({
+      covered: [insertSlot('i1')],
+      sent,
+      lineage: insertLineage,
+      versionId: 'ver_2',
+    })
+    const translated = translateSnapshot(
+      {
+        ...emptyDraftState(),
+        inserts: [{ clientId: 'i1', afterParagraphId: 'p1', text: '' }],
+      },
+      boundary,
+    )
+    // The paragraph id is authoritative from the lineage; only the result run
+    // id waits for the reloaded model, so it is held as a pending identity.
+    const heldRun = Object.keys(translated?.drafts ?? {})[0] ?? ''
+    expect(isPendingBaselineId(heldRun)).toBe(true)
 
-    // The planner neither sends nor blocks a pending identity.
-    const plan = planDocumentSave(fromModel, translated ?? emptyDraftState())
-    expect(plan.operations).toEqual([])
-    expect(plan.blocked).toEqual([])
-    expect(plan.pending).toBe(1)
-
-    // The reloaded model names it, and the deletion becomes addressable.
     const resolved = resolveBaselineIdentities(
       translated ?? emptyDraftState(),
       { ...boundary, toModel: savedModel },
     )
-    expect(resolved.deletedParagraphIds).toEqual(['p3'])
-    expect(planDocumentSave(savedModel, resolved).operations).toEqual([
-      { type: 'delete_paragraph', paragraphId: 'p3' },
-    ])
+    expect(resolved.drafts).toEqual({ r3: '' })
   })
 
   it('rebuilds a saved deletion as an insert after its surviving neighbour', () => {
@@ -175,6 +250,8 @@ describe('translateSnapshot', () => {
       sent,
       fromModel,
       toModel: model([{ id: 'p1', run: 'r1', text: 'Hello' }]),
+      lineage: deleteLineage,
+      versionId: 'ver_2',
     })
     expect(translated?.deletedParagraphIds).toEqual([])
     expect(translated?.inserts).toHaveLength(1)
@@ -281,6 +358,7 @@ describe('lineage-driven identity', () => {
         fromParagraphId: null,
         toParagraphId: 'para-w14-00000002',
         insertedByOperation: 0,
+        insertedByIntent: 'c1',
         runs: [
           {
             runIndex: 0,

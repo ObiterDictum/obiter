@@ -219,6 +219,9 @@ export function collectEditOperations(
     operations.push({
       type: 'insert_paragraph_after',
       paragraphId: resolveInsertAnchor(insert, insertById, realIds),
+      // The opaque intent id is echoed back in the lineage so the client can
+      // name the stored paragraph without matching insert order.
+      intentId: insert.clientId,
       ...insertPayload(insert),
       ...(style ? { styleId: style } : {}),
     })

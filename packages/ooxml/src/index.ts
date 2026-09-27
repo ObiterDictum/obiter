@@ -12,6 +12,7 @@ export {
 } from '@obiter/contracts'
 
 export { createBlankDocx } from './blank'
+export { createSyntheticDocx } from './synthetic-document'
 export {
   DEFAULT_OOXML_PACKAGE_LIMITS,
   OOXML_INFLATE_CONCURRENCY,

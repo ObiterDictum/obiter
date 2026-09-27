@@ -294,6 +294,12 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('insert_paragraph_after'),
       paragraphId: editIdSchema,
+      /**
+       * Opaque client correlation id. It is echoed back in the lineage so the
+       * client can name the stored paragraph without matching insert order.
+       * It is never a persisted document identity and is validated server-side.
+       */
+      intentId: editIdSchema.optional(),
       text: editTextSchema.optional(),
       runs: z
         .array(editRunSchema)
