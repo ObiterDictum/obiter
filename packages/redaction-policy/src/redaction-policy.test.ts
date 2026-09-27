@@ -5,6 +5,7 @@ import {
   mergeSpans,
   normalizePersonDetections,
   reassembleSpans,
+  reconcileRampartSpans,
   supplementSpans,
 } from './index'
 import type { RampartSpanInput } from './rampart-map'
@@ -382,5 +383,207 @@ describe('redaction policy', () => {
   it('returns empty arrays for empty input', () => {
     expect(supplementSpans('')).toEqual([])
     expect(chunkText('')).toEqual([])
+  })
+})
+
+/**
+ * P0.31: `reconcileRampartSpans` owns coverage and disposition *between*
+ * detections. URL is the only keep category the product can emit; GIVEN_NAME and
+ * SURNAME are redact. These exercise geometry directly, without the detector's
+ * premask and projection in the way.
+ */
+describe('reconcileRampartSpans (P0.31)', () => {
+  const text = 'alpha bravo charlie delta'
+  const at = (word: string, source = text) => {
+    const start = source.indexOf(word)
+    return { start, end: start + word.length, text: word }
+  }
+  const span = (
+    label: string,
+    range: { start: number; end: number; text: string },
+    score: number,
+  ): RampartSpanInput => ({ label, score, ...range })
+  const reconcile = (value: string, spans: RampartSpanInput[]) =>
+    reconcileRampartSpans(value, normalizePersonDetections(value, spans))
+
+  it('redacts a partial union whose preferred detection would keep', () => {
+    const spans = reconcile(text, [
+      span('URL', { start: 6, end: 17, text: 'bravo charl' }, 0.99),
+      span('GIVEN_NAME', at('charlie'), 0.5),
+    ])
+    expect(spans).toEqual([
+      expect.objectContaining({
+        start: 6,
+        end: 19,
+        text: 'bravo charlie',
+        // The winner's category and source stay; only the disposition moves.
+        category: 'url',
+        source: 'rampart_deterministic',
+        confidence: 'high',
+        suggestion: 'redact',
+      }),
+    ])
+  })
+
+  it('redacts containment in both directions and covers the container', () => {
+    const keepContainsRedact = reconcile(text, [
+      span('URL', at('bravo charlie'), 0.99),
+      span('GIVEN_NAME', at('charlie'), 0.5),
+    ])
+    const redactContainsKeep = reconcile(text, [
+      span('GIVEN_NAME', at('bravo charlie'), 0.5),
+      span('URL', at('charlie'), 0.99),
+    ])
+    for (const spans of [keepContainsRedact, redactContainsKeep]) {
+      expect(spans).toHaveLength(1)
+      expect(spans[0]).toMatchObject({
+        start: 6,
+        end: 19,
+        text: 'bravo charlie',
+        suggestion: 'redact',
+      })
+    }
+  })
+
+  it('redacts equal ranges independent of contributor order', () => {
+    const redact = span('GIVEN_NAME', at('charlie'), 0.5)
+    const keep = span('URL', at('charlie'), 0.99)
+    for (const spans of [
+      reconcile(text, [keep, redact]),
+      reconcile(text, [redact, keep]),
+    ]) {
+      expect(spans).toHaveLength(1)
+      expect(spans[0]).toMatchObject({
+        start: 12,
+        end: 19,
+        suggestion: 'redact',
+      })
+    }
+  })
+
+  it('carries a redact detection across a chained overlap in any input order', () => {
+    const chained = text.slice(0, 21)
+    const contributors = [
+      span('URL', { start: 0, end: 10, text: chained.slice(0, 10) }, 0.9),
+      span(
+        'GIVEN_NAME',
+        { start: 8, end: 15, text: chained.slice(8, 15) },
+        0.5,
+      ),
+      span('URL', { start: 13, end: 20, text: chained.slice(13, 20) }, 0.9),
+    ]
+    const permutations = [
+      contributors,
+      [...contributors].reverse(),
+      [contributors[1]!, contributors[2]!, contributors[0]!],
+    ]
+    const results = permutations.map((spans) => reconcile(chained, spans))
+    for (const result of results) expect(result).toEqual(results[0])
+    expect(results[0]).toEqual([
+      expect.objectContaining({
+        start: 0,
+        end: 20,
+        text: chained.slice(0, 20),
+        suggestion: 'redact',
+      }),
+    ])
+  })
+
+  it('keeps a keep-only union keeping and a redact-only union redacting', () => {
+    expect(
+      reconcile(text, [
+        span('URL', at('bravo charl'), 0.99),
+        span('URL', at('charlie'), 0.4),
+      ])[0],
+    ).toMatchObject({ end: 19, suggestion: 'keep' })
+    expect(
+      reconcile(text, [
+        span('GIVEN_NAME', at('bravo charl'), 0.99),
+        span('SURNAME', at('charlie'), 0.4),
+      ])[0],
+    ).toMatchObject({ end: 19, suggestion: 'redact' })
+  })
+
+  it('keeps offsets and text exact across an astral character', () => {
+    const value = 'a😀bravo charlie'
+    const emojiStart = value.indexOf('😀')
+    const bravoStart = value.indexOf('bravo')
+    const charlieStart = value.indexOf('charlie')
+    const spans = reconcile(value, [
+      span(
+        'URL',
+        {
+          start: emojiStart,
+          end: bravoStart + 5,
+          text: value.slice(emojiStart, bravoStart + 5),
+        },
+        0.99,
+      ),
+      span(
+        'GIVEN_NAME',
+        {
+          start: bravoStart,
+          end: charlieStart + 7,
+          text: value.slice(bravoStart, charlieStart + 7),
+        },
+        0.5,
+      ),
+    ])
+    expect(spans).toHaveLength(1)
+    expect(value.slice(spans[0]!.start, spans[0]!.end)).toBe(spans[0]!.text)
+    expect(spans[0]).toMatchObject({
+      start: emojiStart,
+      end: value.length,
+      suggestion: 'redact',
+    })
+  })
+
+  it('resolves an equal-score tie deterministically and still redacts', () => {
+    // Equal score and equal length: only the source tie-break decides which
+    // detection names the union. The deterministic source (URL) wins, but the
+    // redact-required contributor still owns the disposition.
+    const redact = span('GIVEN_NAME', at('charlie'), 0.9)
+    const keep = span('URL', at('charlie'), 0.9)
+    const forward = reconcile(text, [keep, redact])
+    const reverse = reconcile(text, [redact, keep])
+    expect(forward).toEqual(reverse)
+    expect(forward).toEqual([
+      expect.objectContaining({
+        start: 12,
+        end: 19,
+        text: 'charlie',
+        category: 'url',
+        source: 'rampart_deterministic',
+        suggestion: 'redact',
+      }),
+    ])
+  })
+
+  it('is order-independent when contributors have no usable score', () => {
+    // `NaN !== NaN`, so an unnormalised comparison would skip the length,
+    // source and category tie-breaks and let input order name the union. A
+    // non-finite score is normalised to 0.
+    const email = span('EMAIL', at('charlie'), Number.NaN)
+    const city = span('CITY', at('charlie'), Number.NaN)
+    const forward = reconcile(text, [email, city])
+    const reverse = reconcile(text, [city, email])
+    expect(forward).toEqual(reverse)
+    expect(forward).toEqual([
+      expect.objectContaining({
+        start: 12,
+        end: 19,
+        text: 'charlie',
+        category: 'email',
+        source: 'rampart_deterministic',
+        suggestion: 'redact',
+      }),
+    ])
+  })
+
+  it('fails loudly for an unknown label and returns nothing for no spans', () => {
+    expect(() => reconcile(text, [span('UNKNOWN', at('alpha'), 0.9)])).toThrow(
+      'Unrecognised Rampart label',
+    )
+    expect(reconcile(text, [])).toEqual([])
   })
 })
