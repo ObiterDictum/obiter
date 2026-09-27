@@ -70,6 +70,12 @@ export async function packageWithImage() {
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
 
+export async function packageWithImageBytes(byteLength: number, fill = 0) {
+  const zip = new JSZip()
+  zip.file(imagePartName, Buffer.alloc(byteLength, fill), { binary: true })
+  return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
+}
+
 export async function packageWithJpeg() {
   const zip = new JSZip()
   zip.file(jpegPartName, jpegBytes, { binary: true })

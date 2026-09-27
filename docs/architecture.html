@@ -2877,8 +2877,10 @@
                     Current ready DOCX image part for page rendering. Query
                     <code>part</code> is a package path such as
                     <code>word/media/image1.png</code>. Image parts are unzipped
-                    once per immutable version, kept in an LRU cache of 16
-                    versions per API process. Responses use
+                    once per immutable version, kept in an LRU cache bounded to
+                    16 versions and 64 MiB of retained image bytes per API
+                    process. A version whose image parts exceed the byte budget
+                    is served but not retained. Responses use
                     <code>Content-Disposition: attachment</code> and a
                     non-executable Content-Security-Policy; the frontend still
                     fetches bytes as a blob for <code>&lt;img&gt;</code>
