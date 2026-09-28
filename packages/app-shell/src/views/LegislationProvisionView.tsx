@@ -38,6 +38,7 @@ export function legislationProvisionQueryOptions(provisionPath: string) {
       if (!response.ok) {
         throw new Error('Legislation provision could not be loaded.')
       }
+      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:path returns LegislationProvisionResponse per the search API contract.
       return (await response.json()) as LegislationProvisionResponse
     },
   })

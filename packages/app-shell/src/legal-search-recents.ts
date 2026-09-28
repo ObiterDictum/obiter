@@ -20,7 +20,7 @@ export function getRecentLegalSearches(
   if (!storedSearches) return []
 
   try {
-    const parsedSearches = JSON.parse(storedSearches) as unknown
+    const parsedSearches: unknown = JSON.parse(storedSearches)
     if (!Array.isArray(parsedSearches)) return []
 
     return dedupeRecentLegalSearches(

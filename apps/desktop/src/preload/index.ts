@@ -10,7 +10,8 @@ import { contextBridge, ipcRenderer } from 'electron'
  * if set), but the renderer dev server proxies /api so the value is unused
  * there; dev-desktop keeps using relative /api paths through the proxy.
  */
-const apiOrigin = ipcRenderer.sendSync('obiter:get-api-origin') as string | null
+const rawApiOrigin: unknown = ipcRenderer.sendSync('obiter:get-api-origin')
+const apiOrigin = typeof rawApiOrigin === 'string' ? rawApiOrigin : null
 
 contextBridge.exposeInMainWorld('obiterDesktop', {
   platform: 'desktop' as const,

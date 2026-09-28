@@ -49,6 +49,7 @@ export function firstAttemptContractValid(
   )
   return (
     !structuralRetry &&
+    // SAFETY: the literal array enumerates exactly the RequestTelemetry role names compared against telemetry entries.
     ['writer', 'annotator', 'primary_judge', 'dispute_judge'].every((role) =>
       successfulRoles.has(role as RequestTelemetry['role']),
     ) &&
@@ -424,6 +425,7 @@ export async function main() {
 
 async function loadPricing(path: string): Promise<PricingTable> {
   try {
+    // SAFETY: the pricing file is the reviewed pricing-2026-07-21.json table; missing keys throw at charge time via pipelineWorstCaseGbp.
     return JSON.parse(await readFile(resolve(path), 'utf8')) as PricingTable
   } catch {
     throw new Error('Could not read smoke pricing configuration')

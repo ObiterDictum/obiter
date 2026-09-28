@@ -15,6 +15,7 @@ export function clickParagraph(paragraphId: string) {
     throw new Error(`no text root in ${paragraphId}`)
   }
   const node = firstText(textRoot)
+  // SAFETY: caretPositionFromPoint is a browser API absent from lib.dom; it is only read here (never called) and restored after the stubbed click below.
   const point = (
     document as Document & {
       caretPositionFromPoint?: unknown

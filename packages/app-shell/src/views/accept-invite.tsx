@@ -28,6 +28,7 @@ export function AcceptInviteRouteView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session, isPending, resendVerificationEmail } = useAuth()
+  // SAFETY: useSearch with strict:false is untyped; token is re-validated as a non-empty string by inviteTokenFromSearch before use.
   const search = useSearch({ strict: false }) as { token?: string }
   const token = inviteTokenFromSearch(search)
   const previewQuery = useQuery({

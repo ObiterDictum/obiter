@@ -163,6 +163,7 @@ export function readClaim(storage: DraftStorage | null, writerId: string) {
   try {
     const raw = storage.getItem(claimKey(writerId))
     if (!raw) return null
+    // SAFETY: storage holds only claims written by writeClaim in this module as { instanceId: string, at: number }; both fields are typeof-checked below and anything else returns null.
     const parsed = JSON.parse(raw) as { instanceId?: unknown; at?: unknown }
     if (
       typeof parsed.instanceId !== 'string' ||

@@ -120,6 +120,7 @@ export function canonicalJson(value: unknown): string {
       .map((entry) => canonicalJson(entry === undefined ? null : entry))
       .join(',')}]`
   if (value && typeof value === 'object') {
+    // SAFETY: the truthy typeof check narrows value to a non-null object; keys are enumerated via Object.keys below.
     const record = value as Record<string, unknown>
     return `{${Object.keys(record)
       .sort()
@@ -145,6 +146,7 @@ export function assertSelectionManifest(
 ): asserts value is SelectionManifest {
   if (!value || typeof value !== 'object')
     throw new Error('Selection manifest must be an object')
+  // SAFETY: the object check above narrows unknown to a non-null object; versioned approval fields are validated below.
   const manifest = value as Partial<SelectionManifest>
   if (
     manifest.version !== selectionManifestVersion ||
@@ -194,6 +196,7 @@ export function assertTournamentManifest(
 ): asserts value is TournamentManifest {
   if (!value || typeof value !== 'object')
     throw new Error('Tournament manifest must be an object')
+  // SAFETY: the object check above narrows unknown to a non-null object; version/candidates/hash are validated below.
   const manifest = value as Partial<TournamentManifest>
   if (
     manifest.version !== tournamentManifestVersion ||
@@ -321,6 +324,7 @@ export function finalizeTournament(tournament: unknown, finalization: unknown) {
   return {
     tournament: finalizedTournament,
     selection: {
+      // SAFETY: the value is the selectionManifestVersion constant itself, so the literal-type view holds by construction.
       version: selectionManifestVersion as typeof selectionManifestVersion,
       candidateId: selected.candidateId,
       writerId: selectedCandidate.writer,
@@ -400,6 +404,7 @@ export function assertPartitionManifest(
 ): asserts value is PartitionManifest {
   if (!value || typeof value !== 'object')
     throw new Error('External partition manifest is malformed')
+  // SAFETY: the object check above narrows unknown to a non-null object; stage/documents/hash are validated below.
   const manifest = value as Partial<PartitionManifest>
   if (
     !isStage(manifest.stage) ||
@@ -473,6 +478,7 @@ export function assertExternalPartitionRegistry(
 ): asserts value is ExternalPartitionRegistry {
   if (!value || typeof value !== 'object')
     throw new Error('External partition registry is malformed')
+  // SAFETY: the object check above narrows unknown to a non-null object; version/partitions are validated below.
   const registry = value as Partial<ExternalPartitionRegistry>
   if (
     registry.version !== partitionRegistryVersion ||
@@ -606,6 +612,7 @@ export function assertBlindReviewPackage(
 ): asserts value is BlindReviewPackage {
   if (!value || typeof value !== 'object')
     throw new Error('Blind review package is invalid')
+  // SAFETY: the object check above narrows unknown to a non-null object; version/blindId/documents are validated below.
   const review = value as Partial<BlindReviewPackage>
   if (
     review.version !== 'synthetic-v2-blind-review:v1' ||
@@ -637,6 +644,7 @@ function isCompletedScorecard(
   value: unknown,
 ): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  // SAFETY: the object/array checks above narrow value to a non-object-array record; numeric score fields are validated below.
   const scorecard = value as Record<string, unknown>
   return (
     typeof scorecard.annotation_accuracy === 'number' &&
@@ -652,6 +660,7 @@ function isTournamentFinalization(
   value: unknown,
 ): value is TournamentFinalization {
   if (!value || typeof value !== 'object') return false
+  // SAFETY: the object check above narrows unknown to a non-null object; manifest hash/approval fields are validated below.
   const finalization = value as Partial<TournamentFinalization>
   return (
     isHash(finalization.tournamentManifestHash) &&

@@ -153,6 +153,7 @@ export function parseJudgeVerdict(
   }
   if (!parsed || typeof parsed !== 'object')
     throw new Error(`Judge returned an invalid verdict for ${id}`)
+  // SAFETY: the object check above narrows unknown to a non-null object; required verdict fields are validated below.
   const verdict = parsed as Partial<JudgeVerdict>
   if (
     verdict.id !== id ||
@@ -177,6 +178,7 @@ export function parseJudgeVerdict(
     throw new Error(`Judge returned invalid reference spans for ${id}`)
   if (!verdict.obviousUnmarkedSpans.every(isObviousMiss))
     throw new Error(`Judge returned invalid unmarked-span evidence for ${id}`)
+  // SAFETY: the boolean/array/number/string checks above establish the complete JudgeVerdict shape; validateJudgeReference checks offsets below.
   const complete = verdict as JudgeVerdict
   if (document) validateJudgeReference(complete, document)
   return complete
@@ -195,6 +197,7 @@ export function parseIndependentJudgeReference(
   }
   if (!parsed || typeof parsed !== 'object')
     throw new Error(`Judge returned an invalid review for ${id}`)
+  // SAFETY: the object check above narrows unknown to a non-null object; required review fields are validated below.
   const review = parsed as Partial<IndependentJudgeReference>
   if (review.id !== id) throw new Error(`Judge review ID does not match ${id}`)
   if (
@@ -216,6 +219,7 @@ export function parseIndependentJudgeReference(
   for (const value of decisions) {
     if (!value || typeof value !== 'object')
       throw new Error(`Judge returned an invalid span decision for ${id}`)
+    // SAFETY: the object check above narrows the decision to a non-null object; index/action/category are validated below.
     const decision = value as Partial<ProposedSpanDecision>
     const original =
       typeof decision.index === 'number'
@@ -228,6 +232,7 @@ export function parseIndependentJudgeReference(
       ((decision.action === 'keep' || decision.action === 'remove') &&
         decision.correctedCategory !== null) ||
       (decision.action === 'recategorize' &&
+        // SAFETY: the recategorize branch requires a replacement category; includes validates membership in spanCategories.
         !spanCategories.includes(
           decision.correctedCategory as SyntheticSpan['category'],
         ))
@@ -252,6 +257,7 @@ export function parseIndependentJudgeReference(
     [...expected].some((assertionId) => !reported.has(assertionId))
   )
     throw new Error(`Judge omitted hard-negative evidence for ${id}`)
+  // SAFETY: decisions, missing-span quotes, hard-negative coverage, and scores are all validated above, establishing the full reference shape.
   return review as IndependentJudgeReference
 }
 
@@ -320,8 +326,10 @@ export function evaluateIndependentReference(
 function resolveQuoteOccurrence(text: string, value: unknown): SyntheticSpan {
   if (!value || typeof value !== 'object')
     throw new Error('Judge reference span is invalid')
+  // SAFETY: the object check above narrows unknown to a non-null object; category/quote/occurrence are validated below.
   const span = value as Partial<QuoteOccurrenceSpan>
   const { category, quote, occurrence } = span
+  // SAFETY: includes validates the candidate category against spanCategories; invalid values throw below.
   if (
     !spanCategories.includes(category as SyntheticSpan['category']) ||
     typeof quote !== 'string' ||
@@ -342,6 +350,7 @@ function resolveQuoteOccurrence(text: string, value: unknown): SyntheticSpan {
       `Judge reference quote occurrence ${occurrence} is out of range for ${exactMatchCount} exact source matches`,
     )
   }
+  // SAFETY: the includes check above establishes category is a member of spanCategories; start/quote come from the exact source match.
   return {
     category: category as SyntheticSpan['category'],
     start,
@@ -364,6 +373,7 @@ function occurrences(text: string, quote: string) {
 function isHardNegativeJudgeResult(
   value: unknown,
 ): value is HardNegativeJudgeResult {
+  // SAFETY: the Boolean/typeof checks narrow value to a non-null object; the property reads only assert the predicate's field view.
   return (
     Boolean(value) &&
     typeof value === 'object' &&
@@ -373,6 +383,7 @@ function isHardNegativeJudgeResult(
 }
 function isSyntheticSpan(value: unknown): value is SyntheticSpan {
   if (!value || typeof value !== 'object') return false
+  // SAFETY: the object check above narrows unknown to a non-null object; category/bounds/text are validated below.
   const span = value as SyntheticSpan
   return (
     spanCategories.includes(span.category) &&
@@ -384,6 +395,7 @@ function isSyntheticSpan(value: unknown): value is SyntheticSpan {
   )
 }
 function isObviousMiss(value: unknown) {
+  // SAFETY: the Boolean/typeof checks narrow value to a non-null object; the property reads only assert the miss field view.
   return (
     Boolean(value) &&
     typeof value === 'object' &&

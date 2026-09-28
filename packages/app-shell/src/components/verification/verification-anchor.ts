@@ -43,7 +43,7 @@ function textNodesIn(scope: Element): Text[] {
   })
   const nodes: Text[] = []
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    nodes.push(node as Text)
+    if (node instanceof Text) nodes.push(node)
   }
   return nodes
 }

@@ -55,11 +55,11 @@ export function useDocumentVerificationRuns(documentId: string) {
 export function useOrganisationVerificationRuns(enabled: boolean) {
   const query = useInfiniteQuery({
     queryKey: verificationRunsQueryKey,
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam }: { pageParam: string | null }) =>
       apiFetch<VerificationRunListResponse>(
         `/api/verification-runs${pageQuery(pageParam)}`,
       ),
-    initialPageParam: null as string | null,
+    initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor,
     enabled,
     staleTime: 15_000,
@@ -77,11 +77,11 @@ export function useOrganisationVerificationRuns(enabled: boolean) {
 export function useVerificationFindings(runId: string | null) {
   const query = useInfiniteQuery({
     queryKey: verificationFindingsQueryKey(runId ?? ''),
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam }: { pageParam: string | null }) =>
       apiFetch<VerificationFindingsResponse>(
         `/api/verification-runs/${runId}/findings${pageQuery(pageParam)}`,
       ),
-    initialPageParam: null as string | null,
+    initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor,
     enabled: runId != null,
   })

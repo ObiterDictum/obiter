@@ -91,11 +91,9 @@ export function AppSearchField() {
   }, [query, measureOverflow])
 
   useEffect(() => {
-    function onKey(event: Event) {
-      const keyEvent = event as globalThis.KeyboardEvent
-      if (!(keyEvent.metaKey || keyEvent.ctrlKey) || keyEvent.key !== 'k')
-        return
-      keyEvent.preventDefault()
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.key !== 'k') return
+      event.preventDefault()
       if (expanded) floatInputRef.current?.focus()
       else inputRef.current?.focus()
     }
@@ -113,7 +111,10 @@ export function AppSearchField() {
   useEffect(() => {
     if (!focused) return
     function onPointerDown(event: MouseEvent) {
-      if (!shellRef.current?.contains(event.target as Node)) {
+      if (
+        !(event.target instanceof Node) ||
+        !shellRef.current?.contains(event.target)
+      ) {
         setFocused(false)
         setOpenedExpanded(false)
       }

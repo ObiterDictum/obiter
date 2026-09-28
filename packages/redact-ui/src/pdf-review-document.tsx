@@ -126,7 +126,7 @@ function isRenderingCancelled(error: unknown) {
     typeof error === 'object' &&
     error !== null &&
     'name' in error &&
-    (error as { name: string }).name === 'RenderingCancelledException'
+    error.name === 'RenderingCancelledException'
   )
 }
 
@@ -196,7 +196,7 @@ function PdfPage({
           canvasContext: context,
           viewport: nextViewport,
           canvas,
-        }) as { cancel: () => void; promise: Promise<unknown> }
+        })
         renderTask = task
         await task.promise
         if (cancelled) return

@@ -30,6 +30,7 @@ export function readWorkspaceLastPlace(
   const raw = storage.getItem(LAST_PLACE_KEY)
   if (!raw) return null
   try {
+    // SAFETY: storage holds only places written by writeWorkspaceLastPlace in this module; path/label/kind are typeof-checked below and consumers fall through unknown kinds to a generic label.
     const parsed = JSON.parse(raw) as WorkspaceLastPlace
     if (
       typeof parsed.path !== 'string' ||

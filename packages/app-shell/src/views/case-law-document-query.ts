@@ -54,6 +54,7 @@ export function caseLawDocumentQueryOptions(caseId: string) {
         throw new Error('Case law document was not found.')
       }
 
+      // SAFETY: non-ok responses throw above; /api/search/documents/:id returns CaseLawDocumentResponse per the search API contract.
       return (await response.json()) as CaseLawDocumentResponse
     },
   })

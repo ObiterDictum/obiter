@@ -39,6 +39,7 @@ export function parseAnnotationResponse(
 ): SyntheticSpan[] {
   let payload: AnnotationPayload
   try {
+    // SAFETY: the payload shape (spans array, matching id) is validated below before any span is read.
     payload = JSON.parse(value) as AnnotationPayload
   } catch {
     throw new MarkerValidationError('Annotation response is not valid JSON')
@@ -53,7 +54,9 @@ export function parseAnnotationResponse(
   const spans = payload.spans.map((value): SyntheticSpan => {
     if (!value || typeof value !== 'object')
       throw new MarkerValidationError('Annotation span is not an object')
+    // SAFETY: the object check above narrows the span to a non-null object; category/token bounds are validated below.
     const { category, startToken, endToken } = value as AnnotationCandidate
+    // SAFETY: Number.isInteger checks establish numeric token indices; the comparisons below bound them to [0, tokens.length].
     if (
       typeof category !== 'string' ||
       !categories.has(category) ||
@@ -66,8 +69,11 @@ export function parseAnnotationResponse(
       throw new MarkerValidationError(
         'Annotation span requires category and a valid token range',
       )
+    // SAFETY: the range check above establishes startToken/endToken are integers with 0 <= start < end <= tokens.length.
     const first = tokens[startToken as number]!
+    // SAFETY: the same range check bounds endToken - 1 to a valid token index.
     const last = tokens[(endToken as number) - 1]!
+    // SAFETY: categories.has(category) above establishes membership in spanCategories; offsets come from validated token bounds.
     return {
       category: category as SyntheticSpan['category'],
       start: first.start,

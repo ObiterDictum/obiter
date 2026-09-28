@@ -204,12 +204,13 @@ async function main() {
 }
 
 async function readEvidence(path: string): Promise<PromotionEvidence> {
+  // SAFETY: readJson parses the promotion evidence file; assertCandidateEvidenceBinding validates its shape before use.
   return readJson(path, 'promotion evidence') as Promise<PromotionEvidence>
 }
 
 async function readJson(path: string, label: string) {
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as unknown
+    return JSON.parse(await readFile(path, 'utf8'))
   } catch {
     throw new Error(`${label} must be readable JSON`)
   }

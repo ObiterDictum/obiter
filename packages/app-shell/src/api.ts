@@ -93,6 +93,7 @@ export async function apiFetch<T>(
   })
 
   if (response.ok && (response.status === 204 || response.status === 205)) {
+    // SAFETY: 204/205 carry no body by HTTP semantics, so undefined is the only honest value; callers instantiate T as the empty-response type for such endpoints.
     return undefined as T
   }
 
@@ -124,6 +125,7 @@ export async function apiFetch<T>(
     )
   }
 
+  // SAFETY: non-ok responses throw above; each call site instantiates T with that endpoint's contract response type.
   return (await response.json()) as T
 }
 

@@ -1135,6 +1135,7 @@ export async function assembleTournamentCandidateRuns() {
       `tournament candidate run ${entry.candidateId}`,
     )
     const { artifactHash, ...unsigned } = run
+    // SAFETY: the !run.candidate/typeof checks narrow candidate to a non-null object; the optional-field views are compared against expected hashes below.
     if (
       run.version !== 'synthetic-v2-tournament-candidate-run:v1' ||
       artifactHash !== entry.artifactHash ||
@@ -1208,6 +1209,7 @@ export async function assembleTournamentCandidateRuns() {
   if (matchingCanaryReceiptHash !== first.canaryReceiptHash)
     throw new Error('Tournament candidate runs do not match the active canary')
   const ordered = reviewedCandidates.map((reviewed) => {
+    // SAFETY: candidate runs passed the object/hash validation above, so the candidateId view identifies the matching run.
     const run = runs.find(
       (candidate) =>
         (candidate.candidate as { candidateId?: string }).candidateId ===
@@ -1268,6 +1270,7 @@ function assertTournamentCandidateRunEvidence(
   candidateId: string,
   specs: DocumentSpec[],
 ) {
+  // SAFETY: the caller validated run.candidate as a non-null object; candidateId/blindId/specificationIds are checked against specs below.
   const output = run.candidate as {
     candidateId?: string
     blindId?: string
@@ -1570,6 +1573,7 @@ async function charged<T extends ChargedItem>(
   pricing: PricingTable,
   operation: () => Promise<T[]>,
 ): Promise<ChargedResult<T>> {
+  // SAFETY: adapter names are always constructed as `${provider}:${model}`, so splitting on ':' yields exactly two segments.
   const [provider, model] = name.split(':', 2) as [string, string]
   const rate = pricing[name] ?? pricing[model]
   if (!rate) throw new Error(`No reviewed pricing entry for ${name}`)
@@ -1816,6 +1820,7 @@ async function loadTournament() {
 }
 async function loadJson<T>(path: string, label: string) {
   try {
+    // SAFETY: callers validate the parsed shape immediately (assertSelectionManifest/assertTournamentManifest); invalid JSON throws below.
     return JSON.parse(await readFile(resolve(path), 'utf8')) as T
   } catch {
     throw new Error(`Could not read ${label}`)
