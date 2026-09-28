@@ -76,7 +76,8 @@ interface LegalSearchProxyRouteOptions {
    * The admission authority every provider-reaching path reserves against.
    * Omitted selects the process-local budget, which is correct only for a
    * single-process development server or a test; production passes the
-   * shared Postgres ledger so the window and in-flight bound are cluster-wide.
+   * shared Postgres ledger so the miss window and unexpired-lease bound are
+   * cluster-wide.
    */
   hydrationBudget?: LegalHydrationLedger
   /**

@@ -854,14 +854,18 @@ corpus or the indexer. Deduplication shares one in-flight result across
 subjects, so a concurrent caller for the same key is answered without a second
 upstream fetch and without consuming its own miss. The detached detail pass a
 foreground fetch starts is admitted as its own lease without charging the miss
-window again, so every provider request it makes is inside the in-flight bound
-rather than outside it. The MOJ rate limiter
+window again, so while that lease is unexpired every provider request it makes
+is inside the lease bound rather than outside it. The ledger counts unexpired
+leases, not every still-running operation: once a lease passes
+`LEGAL_SEARCH_HYDRATION_LEASE_MS` its operation drops out of the count, so a
+second operation can be admitted while the first still runs. Bounding every
+running operation would need lease renewal or cancellation, which is
+deliberately not implemented here. The MOJ rate limiter
 (`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) still bounds upstream
-HTTP attempts per replica. The gate bounds in-flight operations and
-per-subject misses in a rolling window; in the default single-process
-configuration it also bounds the number of retained per-subject windows.
-Admission state is cluster-visible by default; see the shared-ledger decision
-below.
+HTTP attempts per replica. The gate bounds unexpired leases and per-subject
+misses in a rolling window; in the default single-process configuration it
+also bounds the number of retained per-subject windows. Admission state is
+cluster-visible by default; see the shared-ledger decision below.
 Search and changelog must never return
 matter data, client documents, redaction source or output, session or
 organisation records, auth secrets, or Meilisearch admin keys. Production
@@ -901,25 +905,31 @@ a charged admission, counts the subject's misses in the rolling window before
 inserting the miss and the lease. The lock only makes check-and-record atomic;
 the window is the persisted rows, so it survives a restart and is shared by
 every replica. The in-flight count reads `expires_at > now()`, so a crashed
-replica's lease stops counting when it expires even if no sweep has run. A
-failed admission returns `unavailable`, the gate refuses the operation, and the
-route answers `503 storage_unavailable`: a database outage fails new hydration
-closed, while stored reads, which run on the corpus pool and never cross the
-admission boundary, keep serving.
+replica's lease, or an operation that outlives its lease, stops counting when
+the lease expires even if no sweep has run. The admission transaction sets
+transaction-local `lock_timeout` (2s) and `statement_timeout` (5s), so a wedged
+lock holder (a stalled event loop, a paused process, a partition after
+`begin`) makes admission fail closed within the bound instead of stalling
+every replica. A failed or timed-out admission returns `unavailable`, the gate
+refuses the operation, and the route answers `503 storage_unavailable` with no
+provider call and no corpus write: a database outage or a wedged lock fails
+new hydration closed, while stored reads, which run on the corpus pool and
+never cross the admission boundary, keep serving.
 
 Cross-replica same-key deduplication is deliberately not claimed. The
 in-process single-flight map remains an optimisation that avoids a duplicate
 fetch inside one process; it is not the source of global truth. Two replicas
 admitting one canonical key both take a lease and both charge a miss, which is
 why the canonical key is not persisted at all. The ledger stores an opaque
-lease id and the server-verified subject (a session id, or the
-`anonymous:shared` sentinel); no query text, canonical key or matter data
-reaches a row or a log line. The detached detail pass a foreground fetch starts
-is admitted as an uncharged lease, so every provider request, including Atom
-pagination and the detail fetches, sits inside the aggregate in-flight bound.
-The per-subject miss window and the in-flight bound are therefore cluster-wide;
-adding replicas no longer multiplies them. The MOJ HTTP-rate limiter remains
-per process, so it is a per-replica backstop rather than the cluster allowance.
+lease id and the server-verified subject (a better-auth user id, so one user
+shares one window across sessions, or the `anonymous:shared` sentinel); no
+query text, canonical key or matter data reaches a row or a log line. The
+detached detail pass a foreground fetch starts is admitted as an uncharged
+lease, so while that lease is unexpired every provider request, including Atom
+pagination and the detail fetches, is inside the lease bound. The per-subject
+miss window and the unexpired-lease bound are therefore cluster-wide; adding
+replicas no longer multiplies them. The MOJ HTTP-rate limiter remains per
+process, so it is a per-replica backstop rather than the cluster allowance.
 
 Deliberately not done here: a second datastore (Redis) for admission state; a
 cross-replica result cache; and a shared HTTP-request-per-window MOJ budget.

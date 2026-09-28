@@ -4,8 +4,29 @@ import type {
   LegalHydrationLedger,
 } from './legal-search-hydration-budget'
 
+/**
+ * How long an admission transaction waits for the single admission advisory
+ * lock before failing closed. Normal admissions hold the lock for single-digit
+ * milliseconds, so this is generous headroom; beyond it the holder is treated
+ * as wedged and admission returns `unavailable` rather than hanging every
+ * replica on one lock.
+ */
+export const DEFAULT_HYDRATION_ADMISSION_LOCK_TIMEOUT_MS = 2_000
+
+/**
+ * How long any one admission statement may run. It must not be shorter than the
+ * lock bound, so a blocked lock is reported as a lock timeout; it caps the
+ * sweep and count statements if the database is slow to execute them.
+ */
+export const DEFAULT_HYDRATION_ADMISSION_STATEMENT_TIMEOUT_MS = 5_000
+
 export interface PostgresLegalHydrationLedgerConfig {
-  /** Aggregate in-flight provider operations allowed across every replica. */
+  /**
+   * Unexpired in-flight leases allowed across every replica. This bounds the
+   * leases the ledger counts, not every still-running operation: an operation
+   * that outlives `leaseTtlMs` drops out of the count, so a second operation
+   * can be admitted while the first still runs.
+   */
   queueMax: number
   /** Distinct misses one subject may charge in the rolling window. */
   perClientMax: number
@@ -14,9 +35,14 @@ export interface PostgresLegalHydrationLedgerConfig {
   /**
    * How long an unreleased lease keeps its in-flight slot. It must exceed the
    * longest legitimate operation, so a slow-but-alive replica is not
-   * over-admitted; a crashed replica holds capacity for at most this long.
+   * over-admitted; a crashed replica holds capacity for at most this long, and
+   * so does an operation that outlives its lease.
    */
   leaseTtlMs: number
+  /** Bound on waiting for the admission advisory lock. */
+  lockTimeoutMs: number
+  /** Bound on any one statement in the admission transaction. */
+  statementTimeoutMs: number
 }
 
 /**
@@ -51,6 +77,11 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
         )
       }
     }
+    if (config.statementTimeoutMs < config.lockTimeoutMs) {
+      throw new Error(
+        'Postgres hydration ledger statementTimeoutMs must be at least lockTimeoutMs, so a blocked admission reports a lock timeout.',
+      )
+    }
   }
 
   async admit(
@@ -71,6 +102,18 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
 
     try {
       await client.query('begin')
+      // Bound the wait for the cluster-wide admission lock. Postgres defaults
+      // `lock_timeout` and `statement_timeout` to 0 (wait forever), so a
+      // wedged holder (stalled event loop, paused process, partition after
+      // `begin`) would stall every admission on every replica instead of
+      // failing closed. Both settings are transaction-local, so the pooled
+      // connection returns to its previous settings on commit or rollback.
+      await client.query(`select set_config('lock_timeout', $1, true)`, [
+        `${this.config.lockTimeoutMs}ms`,
+      ])
+      await client.query(`select set_config('statement_timeout', $1, true)`, [
+        `${this.config.statementTimeoutMs}ms`,
+      ])
       await client.query(
         `select pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`,
       )

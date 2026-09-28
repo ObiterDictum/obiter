@@ -12,8 +12,9 @@
 -- operational admission rows must not pollute.
 --
 -- Privacy: no query text, canonical key or matter data is stored. `subject`
--- is a server-verified session id or the `anonymous:shared` sentinel, and a
--- lease is named by an opaque id. A query's canonical key never reaches a row.
+-- is the server-verified better-auth user id (so one user shares one window
+-- across sessions) or the `anonymous:shared` sentinel, and a lease is named by
+-- an opaque id. A query's canonical key never reaches a row.
 
 create table if not exists legal_hydration_leases (
   id uuid primary key,
@@ -22,7 +23,9 @@ create table if not exists legal_hydration_leases (
   -- A live lease holds one in-flight slot. `expires_at` bounds a crashed
   -- holder: a replica that dies without completing stops counting once the
   -- lease passes, so it cannot hold capacity forever. Counts filter on
-  -- `expires_at > now()`, so the bound holds even before a sweep runs.
+  -- `expires_at > now()`, so the bound holds even before a sweep runs. The
+  -- same expiry applies to an operation that outlives its lease: the ledger
+  -- counts unexpired leases, not every still-running operation.
   expires_at timestamptz not null,
   constraint legal_hydration_leases_subject_not_blank_check check (
     length(btrim(subject)) > 0

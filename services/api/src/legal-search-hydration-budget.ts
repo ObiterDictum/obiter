@@ -253,7 +253,7 @@ interface LaunchedOperation<T> {
  * The in-process single-flight map is an optimisation: it saves a duplicate
  * provider fetch for two callers in this process. It is not the source of
  * global truth, and it does not deduplicate across replicas; that truth is
- * the ledger's shared window and in-flight bound.
+ * the ledger's shared miss window and unexpired-lease bound.
  */
 export class LegalSourceHydrationGate {
   private readonly operations = new Map<string, LaunchedOperation<unknown>>()

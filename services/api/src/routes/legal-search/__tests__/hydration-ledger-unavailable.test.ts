@@ -6,6 +6,7 @@ import { Pool } from 'pg'
 import type { ApiEnv } from '../../../env'
 import { PostgresLegalHydrationLedger } from '../../../legal-hydration-ledger'
 import { createTestApiEnv } from '../../../test-api-env'
+import { createTestPool } from '../../../test-database.test-support'
 
 // The admission ledger now lives on the application database. When that
 // database is unreachable, a new provider hydration must fail closed, but a
@@ -87,13 +88,15 @@ const storedProvider = {
 
 function probeApp(
   store: ReturnType<typeof createInMemoryLegalAuthoritySourceStore>,
-) {
-  const ledger = new PostgresLegalHydrationLedger(unavailablePool, {
+  ledger = new PostgresLegalHydrationLedger(unavailablePool, {
     queueMax: 24,
     perClientMax: 12,
     windowMs: 600_000,
     leaseTtlMs: 60_000,
-  })
+    lockTimeoutMs: 2_000,
+    statementTimeoutMs: 5_000,
+  }),
+) {
   const proxy = createLegalSearchProxyRoutes(env, store, {
     corpusWrites: store,
     hydrationBudget: ledger,
@@ -148,5 +151,47 @@ describe('hydration admission outage', () => {
       error: { code: 'storage_unavailable' },
     })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('fails a miss with 503 and no provider call while the admission lock is wedged', async () => {
+    const pool = createTestPool()
+    const holderPool = createTestPool()
+    const holder = await holderPool.connect()
+    try {
+      await holder.query('begin')
+      await holder.query(
+        `select pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`,
+      )
+
+      const ledger = new PostgresLegalHydrationLedger(pool, {
+        queueMax: 24,
+        perClientMax: 12,
+        windowMs: 600_000,
+        leaseTtlMs: 60_000,
+        lockTimeoutMs: 150,
+        statementTimeoutMs: 1_000,
+      })
+      const store = createInMemoryLegalAuthoritySourceStore()
+      searchClientMock.getDocument.mockResolvedValue(null)
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValue(new Error('no provider call expected'))
+      const { app } = probeApp(store, ledger)
+
+      const response = await app.request(
+        `/api/search/documents/${missingDocumentId}`,
+      )
+
+      expect(response.status).toBe(503)
+      expect(await response.json()).toMatchObject({
+        error: { code: 'storage_unavailable' },
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      await holder.query('rollback')
+      holder.release()
+      await holderPool.end()
+      await pool.end()
+    }
   })
 })

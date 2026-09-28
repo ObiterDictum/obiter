@@ -39,6 +39,8 @@ function ledger(
     perClientMax: number
     windowMs: number
     leaseTtlMs: number
+    lockTimeoutMs: number
+    statementTimeoutMs: number
   }> = {},
 ) {
   return new PostgresLegalHydrationLedger(pool, {
@@ -46,12 +48,14 @@ function ledger(
     perClientMax: 12,
     windowMs: 600_000,
     leaseTtlMs: 60_000,
+    lockTimeoutMs: 2_000,
+    statementTimeoutMs: 5_000,
     ...config,
   })
 }
 
 describe('shared Postgres hydration admission ledger', () => {
-  it('admits at most the aggregate in-flight bound across two processes', async () => {
+  it('admits at most one unexpired lease across two processes', async () => {
     const a = ledger(poolA, { queueMax: 1 })
     const b = ledger(poolB, { queueMax: 1 })
 
@@ -137,18 +141,86 @@ describe('shared Postgres hydration admission ledger', () => {
     )
   })
 
-  it('reclaims a crashed holder slot only when its lease expires', async () => {
+  it('bounds unexpired leases, not operations that outlive their lease', async () => {
     const a = ledger(poolA, { queueMax: 1, leaseTtlMs: 150 })
     const b = ledger(poolB, { queueMax: 1, leaseTtlMs: 150, perClientMax: 100 })
 
-    // Process A admits and then "dies": its lease is never completed.
+    // Process A is admitted and keeps running without completing. Its lease
+    // does not renew, exactly as a crashed replica's would not.
     expect((await a.admit('usr_a', 'key-a', true)).status).toBe('admitted')
     expect((await b.admit('usr_b', 'key-b', true)).status).toBe(
       'budget_exceeded',
     )
 
     await new Promise((resolve) => setTimeout(resolve, 350))
+    // The lease expired while A's operation still runs, so B is admitted. The
+    // ledger bounds unexpired leases, not every still-running operation; this
+    // pins the recorded limit so no claim can widen it by accident.
     expect((await b.admit('usr_b', 'key-b', true)).status).toBe('admitted')
+  })
+
+  it('bounds the wait on a wedged admission lock and commits no admission', async () => {
+    const short = ledger(poolA, {
+      lockTimeoutMs: 150,
+      statementTimeoutMs: 1_000,
+    })
+    const holder = await poolB.connect()
+    try {
+      await holder.query('begin')
+      await holder.query(
+        `select pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`,
+      )
+
+      const started = Date.now()
+      const result = await short.admit('usr_a', 'key-a', true)
+      const elapsed = Date.now() - started
+
+      expect(result.status).toBe('unavailable')
+      // Bounded by the configured 150ms lock timeout, not by the holder.
+      expect(elapsed).toBeGreaterThanOrEqual(100)
+      expect(elapsed).toBeLessThan(1_000)
+      // A timed-out admission rolled back: it commits neither a lease nor a
+      // charged miss.
+      const leases = await poolA.query<{ count: string }>(
+        'select count(*)::text as count from legal_hydration_leases',
+      )
+      const misses = await poolA.query<{ count: string }>(
+        'select count(*)::text as count from legal_hydration_misses',
+      )
+      expect(Number(leases.rows[0]?.count ?? '0')).toBe(0)
+      expect(Number(misses.rows[0]?.count ?? '0')).toBe(0)
+    } finally {
+      await holder.query('rollback')
+      holder.release()
+    }
+  })
+
+  it('recovers admission once the wedged lock holder releases', async () => {
+    const short = ledger(poolA, {
+      lockTimeoutMs: 150,
+      statementTimeoutMs: 1_000,
+    })
+    const holder = await poolB.connect()
+    try {
+      await holder.query('begin')
+      await holder.query(
+        `select pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`,
+      )
+      expect((await short.admit('usr_a', 'key-a', true)).status).toBe(
+        'unavailable',
+      )
+    } finally {
+      await holder.query('rollback')
+      holder.release()
+    }
+
+    // With the lock free, admission succeeds again: the timeout is a bound on
+    // waiting, not a latch that disables the ledger.
+    const recovered = await short.admit('usr_a', 'key-a', true)
+    expect(recovered.status).toBe('admitted')
+    if (recovered.status === 'admitted') {
+      await short.complete(recovered.leaseId)
+    }
   })
 
   it('fails closed when the admission database is unreachable', async () => {
