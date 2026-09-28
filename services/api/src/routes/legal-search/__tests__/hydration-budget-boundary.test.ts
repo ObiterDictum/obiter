@@ -309,16 +309,39 @@ describe('hydration budget shared boundary', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('does not fetch or persist a document for an anonymous caller', async () => {
+  it('meters anonymous document hydration on one shared bucket and never persists', async () => {
     searchClientMock.getDocument.mockRejectedValue(new Error('not found'))
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(asFetch(async () => new Response(detailHtml)))
     const { app, sourceStore } = probeApp(budget(), null)
     const upsertDocument = vi.spyOn(sourceStore, 'upsertDocument')
 
     const response = await app.request(`/api/search/documents/${documentIdA}`)
 
-    expect(response.status).toBe(404)
-    expect(fetchMock).not.toHaveBeenCalled()
+    // The public case-page contract is preserved: an anonymous miss still
+    // answers live, but it is charged and it never writes the corpus or index.
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(upsertDocument).not.toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('rejects anonymous document hydration once the shared bucket is spent', async () => {
+    searchClientMock.getDocument.mockRejectedValue(new Error('not found'))
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(asFetch(async () => new Response(detailHtml)))
+    const { app, sourceStore } = probeApp(budget({ perClientMax: 1 }), null)
+    const upsertDocument = vi.spyOn(sourceStore, 'upsertDocument')
+
+    const first = await app.request(`/api/search/documents/${documentIdA}`)
+    expect(first.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const second = await app.request(`/api/search/documents/${documentIdB}`)
+    expect(second.status).toBe(429)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(upsertDocument).not.toHaveBeenCalled()
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })

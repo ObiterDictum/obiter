@@ -11,6 +11,7 @@ import type { ApiEnv } from '../../env'
 import type { Pool } from 'pg'
 import { readLimitedJsonValue } from '../../limited-request-body'
 import {
+  ANONYMOUS_HYDRATION_SUBJECT,
   canonicalHydrationQueryKey,
   documentHydrationKey,
   LegalSearchHydrationBudget,
@@ -767,25 +768,15 @@ export function createLegalSearchProxyRoutes(
       return c.json({ document: sourceRecord.document })
     }
 
-    // Live provider access is an authenticated action (30-Aug decision): an
-    // anonymous caller is served stored and foreground records only. It cannot
-    // reach Find Case Law, so it cannot amplify upstream load or cause a
-    // corpus write. An authenticated caller's fetch crosses the same
-    // hydration gate as search, charged against the same per-user budget.
+    // The document-detail route stays anonymous (30-Aug decision), so an
+    // anonymous miss may still fetch the provider in a read-only process.
+    // It is charged to one shared per-process anonymous bucket, not a
+    // caller-supplied key, and it never persists: an anonymous request must not
+    // cause a corpus or index write. An authenticated caller charges its own
+    // budget and persists when this process owns a writer.
     const sessionUser = c.get('user') ?? null
-    if (!sessionUser) {
-      return c.json(
-        apiError(
-          'document_not_found',
-          'Document was not found in stored sources.',
-          requestId,
-        ),
-        404,
-      )
-    }
-
     const gatedLiveDocument = await hydrationGate.run(
-      sessionUser.id,
+      sessionUser?.id ?? ANONYMOUS_HYDRATION_SUBJECT,
       documentHydrationKey(parsed.data),
       () =>
         sourceRecord
@@ -808,6 +799,7 @@ export function createLegalSearchProxyRoutes(
       )
     }
     if (gatedLiveDocument.status === 'unauthenticated') {
+      // Defensive fail-closed: the subject above is always present.
       return c.json(
         apiError(
           'document_not_found',
@@ -841,12 +833,12 @@ export function createLegalSearchProxyRoutes(
           },
         })
       }
-      if (!corpusWrites) {
-        // Read-only corpus. The fetched document answers this request and is
-        // kept in the process-lifetime foreground cache (at most 100 records),
-        // so a later lookup in this process is served from memory. Nothing is
-        // persisted to Postgres and nothing is indexed; the cache is the only
-        // persistence in this mode and it ends with the process.
+      if (!corpusWrites || !sessionUser) {
+        // No writer, or an anonymous caller that must not write. The fetched
+        // document answers this request and is kept in the process-lifetime
+        // foreground cache (at most 100 records), so a later lookup in this
+        // process is served from memory. Nothing is persisted to Postgres and
+        // nothing is indexed.
         rememberForegroundSourceRecord(
           foregroundSourceRecords,
           toAuthoritySummary(liveDocument.document),

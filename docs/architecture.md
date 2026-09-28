@@ -837,9 +837,11 @@ Decision: keep these five routes anonymous. They exist to serve public
 judgment search of already stored authorities, GitHub-backed release notes,
 and a minimal liveness probe. Anonymous `POST /api/search/fetch` is stored-only: it
 must not queue hydration, call Find Case Law, or write Postgres or
-Meilisearch. Anonymous `GET /api/search/documents/:documentId` is likewise
-stored-only and foreground-cache-only: an anonymous miss returns 404 rather
-than fetching the provider or persisting the result. Authenticated callers may
+Meilisearch. Anonymous `GET /api/search/documents/:documentId` may still answer a
+miss from the provider in a read-only process, as it did before, but it is
+charged to one shared per-process anonymous bucket (a server constant, not a
+caller-supplied id or IP) and it never persists: an anonymous request causes no
+corpus or index write even when the process owns a writer. Authenticated callers may
 queue bounded background hydration, request foreground live results, and fetch
 a document on a miss, but every provider-reaching path crosses one in-process
 `LegalSourceHydrationGate`

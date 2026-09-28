@@ -50,6 +50,14 @@ export function documentHydrationKey(documentId: string) {
 }
 
 /**
+ * The shared per-process budget subject for anonymous provider access. It is a
+ * server constant, not a caller-supplied id or IP, so every anonymous caller
+ * draws on one bounded window instead of receiving an allowance each. User ids
+ * are prefixed `usr_`, so this cannot collide with a real subject.
+ */
+export const ANONYMOUS_HYDRATION_SUBJECT = 'anonymous'
+
+/**
  * In-process only. Each API replica has its own in-flight set and per-user
  * windows, so N processes behind ingress multiply the effective allowance.
  * Share this state when more than one process serves search.
