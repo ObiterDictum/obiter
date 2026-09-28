@@ -59,6 +59,42 @@ describe('LegalSearchHydrationBudget', () => {
     ).toBe('budget_exceeded')
   })
 
+  it('bounds the number of retained per-user windows with LRU eviction', () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 5,
+      windowMs: 600_000,
+      retainedUserWindowMax: 10,
+    })
+
+    for (let index = 0; index < 50; index += 1) {
+      const key = canonicalHydrationQueryKey({ query: `query-${index}` })
+      budget.tryBeginHydration(`usr_${index}`, key)
+      budget.completeHydration(key)
+    }
+
+    expect(budget.retainedUserMissWindows()).toBeLessThanOrEqual(10)
+  })
+
+  it('bounds the number of retained per-user windows when the window has not expired', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-30T12:00:00Z'))
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 5,
+      windowMs: 600_000,
+      retainedUserWindowMax: 3,
+    })
+
+    for (let index = 0; index < 20; index += 1) {
+      const key = canonicalHydrationQueryKey({ query: `query-${index}` })
+      budget.tryBeginHydration(`usr_${index}`, key)
+      budget.completeHydration(key)
+    }
+
+    expect(budget.retainedUserMissWindows()).toBeLessThanOrEqual(3)
+  })
+
   it('drops expired per-user miss windows instead of retaining empty keys', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-30T12:00:00Z'))

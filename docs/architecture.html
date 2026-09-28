@@ -3455,14 +3455,18 @@
             <code>GET /api/invites/preview</code>
             are deliberately public: search and changelog serve published
             authorities and release notes only; anonymous
-            <code>POST /api/search/fetch</code> is stored-only and does not
-            hydrate the provider; health is a minimal liveness probe; in
-            development it also exposes the API commit SHA and checkout root for
-            local provenance checks. Invite preview is gated by the secret
-            invite token and returns only organisation and inviter display
-            names. They must never return matter, client, redaction, or session
-            data, and production health must never expose environment, version,
-            or configuration detail.
+            <code>POST /api/search/fetch</code> and
+            <code>GET /api/search/documents/:documentId</code> are stored-only
+            and do not hydrate the provider; authenticated provider-reaching
+            paths (foreground live search, queued hydration and document
+            fetch-through) cross one in-process hydration gate charged to the
+            authenticated user, with a per-process, not cross-replica, bound;
+            health is a minimal liveness probe; in development it also exposes
+            the API commit SHA and checkout root for local provenance checks.
+            Invite preview is gated by the secret invite token and returns only
+            organisation and inviter display names. They must never return
+            matter, client, redaction, or session data, and production health
+            must never expose environment, version, or configuration detail.
           </div>
         </section>
 
@@ -4382,7 +4386,8 @@
                   <td>
                     Authenticated search hydration queue depth, per-user miss
                     budget, and rolling window. In-process only: each API
-                    replica has its own counters
+                    replica has its own gate, counters and upstream rate
+                    limiter, so replica count multiplies the effective allowance
                   </td>
                 </tr>
                 <tr>
@@ -4766,7 +4771,13 @@
             <li>
               <span
                 ><b>Provider fallback.</b> On a miss, Find Case Law is called in
-                the request path, then hydrated, stored and indexed.</span
+                the request path, then hydrated, stored and indexed. Every
+                provider-reaching path (foreground live, queued hydration and
+                the document-detail fetch-through) crosses one in-process
+                hydration gate that charges the authenticated user&apos;s budget
+                before the fetch and deduplicates equivalent work. An anonymous
+                document miss is stored-only and never reaches the
+                provider.</span
               >
             </li>
           </ol>

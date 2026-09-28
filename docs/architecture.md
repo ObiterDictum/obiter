@@ -837,11 +837,25 @@ Decision: keep these five routes anonymous. They exist to serve public
 judgment search of already stored authorities, GitHub-backed release notes,
 and a minimal liveness probe. Anonymous `POST /api/search/fetch` is stored-only: it
 must not queue hydration, call Find Case Law, or write Postgres or
-Meilisearch. Authenticated callers may queue bounded background hydration
-and request foreground live results subject to the existing MOJ rate
-limiter and per-user hydration budgets. Those budgets are per API process:
-replica count multiplies the effective queue and miss allowance until the
-counters are shared. Search and changelog must never return
+Meilisearch. Anonymous `GET /api/search/documents/:documentId` is likewise
+stored-only and foreground-cache-only: an anonymous miss returns 404 rather
+than fetching the provider or persisting the result. Authenticated callers may
+queue bounded background hydration, request foreground live results, and fetch
+a document on a miss, but every provider-reaching path crosses one in-process
+`LegalSourceHydrationGate`
+(`services/api/src/legal-search-hydration-budget.ts`). The gate reserves the
+authenticated user's budget before the operation runs, deduplicates equivalent
+in-flight work by a canonical key (a query key and a `document:` key never
+collide), and releases the reservation on success, error, rate limit or
+cancellation. A request the budget rejects never reaches the provider, the
+corpus or the indexer. The gate bounds in-flight operations, per-user misses in
+a rolling window and the number of retained per-user windows; the MOJ rate
+limiter (`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) bounds
+upstream HTTP attempts. Those bounds are per API process: replica count
+multiplies the effective queue, miss and upstream-attempt allowance until the
+counters and the gate share a cluster-visible store. No such store exists; a
+per-process bound is documented as such and is not a cross-replica guarantee.
+Search and changelog must never return
 matter data, client documents, redaction source or output, session or
 organisation records, auth secrets, or Meilisearch admin keys. Production
 health must return only `{ status: 'ok', service: 'obiter-api' }` and must never
