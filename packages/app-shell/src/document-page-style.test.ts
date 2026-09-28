@@ -136,6 +136,73 @@ describe('runFace', () => {
     )
   })
 
+  it('treats every strike off spelling as off', () => {
+    const paragraph = paragraphFace(
+      { id: 'p1', runs: [], preservedXmlFragments: [] },
+      [],
+    )
+    for (const value of ['0', 'false', 'off']) {
+      const face = runFace(
+        {
+          id: 'r1',
+          text: 'x',
+          preservedXmlFragments: [
+            `<w:rPr><w:strike w:val="${value}"/></w:rPr>`,
+          ],
+        },
+        paragraph,
+        [],
+      )
+      expect(face.strike).toBe(false)
+      expect(runCss(face).textDecoration).toBe('none')
+    }
+  })
+
+  it('ignores run properties that exist only inside a tracked rPrChange', () => {
+    const paragraph = paragraphFace(
+      { id: 'p1', runs: [], preservedXmlFragments: [] },
+      [],
+    )
+    const face = runFace(
+      {
+        id: 'r1',
+        text: 'x',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr></w:rPrChange></w:rPr>',
+        ],
+      },
+      paragraph,
+      [],
+    )
+    expect(face.strike).toBeUndefined()
+    expect(face.highlight).toBeUndefined()
+    expect(face.vertAlign).toBeUndefined()
+    expect(runCss(face).textDecoration).toBeUndefined()
+    expect(runCss(face).backgroundColor).toBeUndefined()
+    expect(runCss(face).verticalAlign).toBeUndefined()
+  })
+
+  it('lowercases highlight and vertical align values', () => {
+    const paragraph = paragraphFace(
+      { id: 'p1', runs: [], preservedXmlFragments: [] },
+      [],
+    )
+    const face = runFace(
+      {
+        id: 'r1',
+        text: 'x',
+        preservedXmlFragments: [
+          '<w:rPr><w:highlight w:val="DARKBLUE"/><w:vertAlign w:val="SUPERSCRIPT"/></w:rPr>',
+        ],
+      },
+      paragraph,
+      [],
+    )
+    expect(face.highlight).toBe('#000080')
+    expect(face.vertAlign).toBe('superscript')
+    expect(runCss(face).verticalAlign).toBe('super')
+  })
+
   it('leaves an explicit baseline unraised and maps a subscript down', () => {
     expect(runCss({ vertAlign: 'baseline' }).verticalAlign).toBeUndefined()
     expect(runCss({ vertAlign: 'subscript' }).verticalAlign).toBe('sub')

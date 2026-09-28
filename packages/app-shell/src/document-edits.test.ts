@@ -12,6 +12,7 @@ import {
   insertPlainText,
   isDraftDirty,
   removeInsert,
+  runPropertiesFromFragments,
 } from './document-edits'
 import { documentStory } from './document-model-text'
 import {
@@ -568,6 +569,38 @@ describe('removeInsert', () => {
         { clientId: 'c', afterParagraphId: 'a', text: '' },
       ],
       selectId: 'a',
+    })
+  })
+})
+
+describe('runPropertiesFromFragments', () => {
+  it('reads every off spelling of a flag as off', () => {
+    for (const value of ['0', 'false', 'off']) {
+      expect(
+        runPropertiesFromFragments([
+          `<w:rPr><w:strike w:val="${value}"/></w:rPr>`,
+        ]).strikethrough,
+      ).toBe(false)
+    }
+  })
+
+  it('matches case variants to the contract options paint uses', () => {
+    expect(
+      runPropertiesFromFragments([
+        '<w:rPr><w:highlight w:val="DARKBLUE"/><w:vertAlign w:val="SUPERSCRIPT"/></w:rPr>',
+      ]),
+    ).toMatchObject({ highlight: 'darkBlue', vertAlign: 'superscript' })
+  })
+
+  it('ignores properties that exist only inside a tracked rPrChange', () => {
+    expect(
+      runPropertiesFromFragments([
+        '<w:rPr><w:rPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr></w:rPrChange></w:rPr>',
+      ]),
+    ).toMatchObject({
+      strikethrough: null,
+      highlight: null,
+      vertAlign: null,
     })
   })
 })

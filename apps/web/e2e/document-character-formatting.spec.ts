@@ -184,6 +184,20 @@ async function saveAndWait(page: Page) {
   await expect(save(page)).toBeDisabled({ timeout: 30_000 })
 }
 
+/** The painted state each control's aria-pressed must agree with. */
+async function expectPressedAgreesWithPaint(page: Page, text: string) {
+  const style = await paintedStyle(page, text)
+  const pressed = async (name: string) =>
+    (await page.getByRole('button', { name }).getAttribute('aria-pressed')) ===
+    'true'
+  expect(await pressed('Strikethrough')).toBe(
+    style?.textDecoration.includes('line-through') ?? false,
+  )
+  expect(await pressed('Highlight')).toBe((style?.backgroundColor ?? '') !== '')
+  expect(await pressed('Superscript')).toBe(style?.verticalAlign === 'super')
+  expect(await pressed('Subscript')).toBe(style?.verticalAlign === 'sub')
+}
+
 async function enableTracking(page: Page) {
   await page.getByRole('tab', { name: 'Review' }).click()
   await page.getByRole('button', { name: 'Track changes off' }).click()
@@ -242,6 +256,7 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
     'line-through',
   )
   expect((await paintedStyle(page, SELECTED))?.backgroundColor).not.toBe('')
+  await expectPressedAgreesWithPaint(page, SELECTED)
 
   // Superscript and subscript are one slot: choosing subscript releases
   // superscript, and choosing superscript back restores it for the save.
@@ -255,6 +270,7 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
   )
   expect((await paintedStyle(page, SELECTED))?.verticalAlign).toBe('sub')
   await page.getByRole('button', { name: 'Superscript' }).click()
+  await expectPressedAgreesWithPaint(page, SELECTED)
   await shot(page, '01-character-formatting-applied')
 
   await saveAndWait(page)
@@ -293,6 +309,7 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
     expect(reloadedStyle?.verticalAlign).toBe('super')
     expect(reloadedStyle?.textDecoration).toContain('line-through')
     expect(reloadedStyle?.backgroundColor).not.toBe('')
+    await expectPressedAgreesWithPaint(reloaded, SELECTED)
     await shot(reloaded, '03-character-formatting-reopened')
   } finally {
     await fresh.close()

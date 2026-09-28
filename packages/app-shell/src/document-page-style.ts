@@ -12,6 +12,14 @@ import {
   xmlNumber,
   xmlTagAttrs,
 } from './document-page-units'
+import type { HighlightValue } from './document-format-types'
+import {
+  runFlag,
+  runHighlight,
+  runUnderline,
+  runVertAlign,
+  withoutTrackedRunProperties,
+} from './document-run-properties'
 
 export type RunFace = {
   fontFamily?: string
@@ -207,8 +215,12 @@ function styleChain(
 }
 
 function faceFromXml(xml: string): ParagraphFace {
-  const pPrBlock = xml.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/i)?.[0] ?? ''
-  const rest = xml.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/i, '')
+  // Tracked history lives in a nested `w:rPrChange/w:rPr`; drop it before
+  // reading the run so a foreign change cannot paint a value the current run
+  // no longer carries.
+  const current = withoutTrackedRunProperties(xml)
+  const pPrBlock = current.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/i)?.[0] ?? ''
+  const rest = current.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/i, '')
   const pPr = pPrBlock || rest
   const rPr = xmlInner(rest, 'rPr') ?? xmlInner(pPrBlock, 'rPr') ?? rest
   const jc = xmlAttr(xmlTagAttrs(pPr, 'jc'), 'val')?.toLowerCase()
@@ -250,12 +262,12 @@ function runFromXml(xml: string): RunFace {
       color && /^[0-9A-Fa-f]{6}$/.test(color) && color.toLowerCase() !== 'auto'
         ? `#${color}`
         : undefined,
-    bold: wordFlag(xml, 'b'),
-    italic: wordFlag(xml, 'i'),
-    underline: wordUnderline(xml),
-    strike: wordFlag(xml, 'strike'),
-    highlight: wordHighlight(xml),
-    vertAlign: wordVertAlign(xml),
+    bold: runFlag(xml, 'b') ?? undefined,
+    italic: runFlag(xml, 'i') ?? undefined,
+    underline: runUnderline(xml) ?? undefined,
+    strike: runFlag(xml, 'strike') ?? undefined,
+    highlight: highlightColour(runHighlight(xml)),
+    vertAlign: runVertAlign(xml) ?? undefined,
   })
 }
 
@@ -323,27 +335,9 @@ function wordFlag(xml: string, name: string): boolean | undefined {
   return true
 }
 
-function wordUnderline(xml: string): boolean | undefined {
-  const attrs = xmlTagAttrs(xml, 'u')
-  if (attrs === undefined) return undefined
-  const value = xmlAttr(attrs, 'val')?.toLowerCase()
-  if (value === 'none' || value === '0' || value === 'false') return false
-  return true
-}
-
-function wordHighlight(xml: string): string | undefined {
-  const attrs = xmlTagAttrs(xml, 'highlight')
-  if (attrs === undefined) return undefined
-  const value = xmlAttr(attrs, 'val')?.toLowerCase()
+function highlightColour(value: HighlightValue | null): string | undefined {
   if (!value || value === 'none') return undefined
-  return HIGHLIGHT_COLOUR[value]
-}
-
-function wordVertAlign(xml: string): RunFace['vertAlign'] {
-  const value = xmlAttr(xmlTagAttrs(xml, 'vertAlign'), 'val')?.toLowerCase()
-  if (value === 'superscript' || value === 'subscript') return value
-  if (value === 'baseline') return 'baseline'
-  return undefined
+  return HIGHLIGHT_COLOUR[value.toLowerCase()]
 }
 
 function omitUndefined<T extends object>(value: T): T {

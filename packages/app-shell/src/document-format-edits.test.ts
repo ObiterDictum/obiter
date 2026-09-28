@@ -672,6 +672,63 @@ describe('character formatting controls', () => {
       ]),
     ).toMatchObject({ strikethrough: false, highlight: null, vertAlign: null })
   })
+
+  it('reads every off spelling of a flag as off', () => {
+    for (const value of ['0', 'false', 'off']) {
+      const stored = modelWithRuns([
+        {
+          id: 'r1',
+          text: 'The Claimant',
+          preservedXmlFragments: [
+            `<w:rPr><w:strike w:val="${value}"/></w:rPr>`,
+          ],
+        },
+      ])
+      expect(
+        formatControlState(stored, emptyFormatDrafts, 'p1', [
+          { paragraphId: 'p1', from: 0, to: 4 },
+        ]).strikethrough,
+      ).toBe(false)
+    }
+  })
+
+  it('ignores properties that exist only inside a tracked rPrChange', () => {
+    const historical = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr></w:rPrChange></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(historical, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      strikethrough: false,
+      highlight: null,
+      vertAlign: 'baseline',
+    })
+  })
+
+  it('matches case variants to the same options paint uses', () => {
+    const stored = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:highlight w:val="DARKBLUE"/><w:vertAlign w:val="SUPERSCRIPT"/></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(stored, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({ highlight: 'darkBlue', vertAlign: 'superscript' })
+  })
 })
 
 describe('document-format-edits module size', () => {

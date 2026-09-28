@@ -265,4 +265,60 @@ describe('the character formatting controls', () => {
     expect(pressed('Superscript')).toBe('true')
     expect(pressed('Subscript')).toBe('false')
   })
+
+  it('keeps aria-pressed and painted state together for foreign spellings', async () => {
+    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
+    const stored = multiParagraphModel([
+      {
+        id: 'p1',
+        runs: [
+          {
+            id: 'p1-a',
+            text: 'Hello',
+            preservedXmlFragments: [
+              '<w:rPr><w:strike w:val="false"/><w:highlight w:val="DARKBLUE"/><w:vertAlign w:val="SUPERSCRIPT"/><w:rPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="subscript"/></w:rPr></w:rPrChange></w:rPr>',
+            ],
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+      paragraph('p2', 'tail'),
+    ])
+    mountWorkspace({ models: { doc_1: stored }, editAsync })
+    clickParagraph('p1')
+    nativeSelect(0, 5)
+
+    // The current rPr is strike off, dark blue and superscript; the tracked
+    // history must not press anything, and the aria state must match paint.
+    expect(pressed('Strikethrough')).toBe('false')
+    expect(pressed('Highlight')).toBe('true')
+    expect(pressed('Superscript')).toBe('true')
+    expect(pressed('Subscript')).toBe('false')
+    expect(spanOf('p1', 'Hello')?.style.textDecoration ?? '').not.toContain(
+      'line-through',
+    )
+    expect(spanOf('p1', 'Hello')?.style.backgroundColor).not.toBe('')
+    expect(spanOf('p1', 'Hello')?.style.verticalAlign).toBe('super')
+
+    // A pressed control releases on the next click, so the direction follows
+    // what is painted rather than pressing an already-on state.
+    fireEvent.click(control('Highlight'))
+    expect(pressed('Highlight')).toBe('false')
+    expect(spanOf('p1', 'Hello')?.style.backgroundColor).toBe('')
+    fireEvent.click(control('Superscript'))
+    expect(pressed('Superscript')).toBe('false')
+    expect(spanOf('p1', 'Hello')?.style.verticalAlign).toBe('')
+
+    await save(editAsync)
+    expect(emphasisOperations(editAsync)).toEqual([
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 0,
+        to: 5,
+        highlight: 'none',
+        vertAlign: 'baseline',
+      },
+    ])
+  })
 })
