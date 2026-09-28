@@ -66,26 +66,28 @@ export {
   selectParagraphExcerpts,
 } from '../legal-search-selection'
 
+export type LegalSearchFetchRequest = {
+  query: string
+  court?: string
+  dateFrom?: string
+  dateTo?: string
+  sourceType?: string
+  sourceFamily?: string
+  legalDomain?: string
+  provider?: string
+  topic?: string
+  asAtDate?: string
+  legislationVersion?: string
+  foregroundLiveResults: boolean
+}
+
 export function createLegalSearchFetchRequest(
   query: string,
   filters: LegalSearchRequestFilters,
   options: { foregroundLiveResults?: boolean } = {},
 ) {
   const trimmedQuery = query.trim()
-  const request: {
-    query: string
-    court?: string
-    dateFrom?: string
-    dateTo?: string
-    sourceType?: string
-    sourceFamily?: string
-    legalDomain?: string
-    provider?: string
-    topic?: string
-    asAtDate?: string
-    legislationVersion?: string
-    foregroundLiveResults: boolean
-  } = {
+  const request: LegalSearchFetchRequest = {
     query: trimmedQuery,
     foregroundLiveResults: options.foregroundLiveResults ?? true,
   }

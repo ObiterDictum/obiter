@@ -5,10 +5,7 @@ import type { DetectionMode } from '@obiter/contracts'
 
 type LimitedDetectionMode = Exclude<DetectionMode, 'model+supplement'>
 
-const warningCopy: Record<
-  LimitedDetectionMode,
-  { title: string; description: string }
-> = {
+const warningCopy = {
   'heuristics+supplement': {
     title: 'Model detection did not run',
     description:
@@ -19,7 +16,7 @@ const warningCopy: Record<
     description:
       'We cannot confirm whether model detection ran. Check the document manually for names, addresses and dates of birth before relying on this output.',
   },
-}
+} satisfies Record<LimitedDetectionMode, { title: string; description: string }>
 
 export function DetectionModeWarning({
   detectionMode,

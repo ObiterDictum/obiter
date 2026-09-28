@@ -1,3 +1,7 @@
+interface RecallFloorMap {
+  [query: string]: number
+}
+
 export const searchBenchmarkBaseline = {
   // Minimums are floors set to current observed behaviour. The PR that improves
   // a metric tightens its floor: #53 raises short-word precision from 0.2 to 1;
@@ -51,5 +55,5 @@ export const searchBenchmarkBaseline = {
     'recall-subject-remedy': 1,
     'recall-subject-self-incrimination': 1,
     'recall-subject-carlill': 0,
-  } as Record<string, number>,
+  } as RecallFloorMap,
 } as const

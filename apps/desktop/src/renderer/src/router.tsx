@@ -346,10 +346,14 @@ function DesktopSignUpRoute() {
   return <SignUpRouteView />
 }
 
+interface AcceptInviteSearch {
+  token: string
+}
+
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'invites/accept',
-  validateSearch: (search: Record<string, unknown>): { token: string } => ({
+  validateSearch: (search: Record<string, unknown>): AcceptInviteSearch => ({
     token: typeof search.token === 'string' ? search.token : '',
   }),
   loader: async ({ context, location }) => {

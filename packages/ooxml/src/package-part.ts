@@ -5,7 +5,11 @@ import {
 } from './package-limits-defaults'
 import { loadOoxmlZipEntries } from './package-loader'
 
-const IMAGE_CONTENT_TYPES: Readonly<Record<string, string>> = {
+interface ImageContentTypes {
+  readonly [extension: string]: string
+}
+
+const IMAGE_CONTENT_TYPES: ImageContentTypes = {
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',

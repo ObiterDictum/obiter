@@ -26,7 +26,11 @@ type Fixture = {
 type Counts = { expected: number; detected: number; matched: number }
 type ExpectedSpan = { category: SpanCategory; start: number; end: number }
 
-const CORPUS_LABEL_TO_CATEGORY: Readonly<Record<string, SpanCategory>> = {
+interface CorpusLabelCategories {
+  readonly [label: string]: SpanCategory
+}
+
+const CORPUS_LABEL_TO_CATEGORY: CorpusLabelCategories = {
   private_person: 'person_name',
   private_address: 'address',
   private_email: 'email',

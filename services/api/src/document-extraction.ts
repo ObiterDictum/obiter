@@ -513,7 +513,10 @@ export function decodeXmlText(value: string) {
   return value.replace(
     /&(lt|gt|amp|quot|apos|#\d+|#x[\da-f]+);/gi,
     (entity, code: string) => {
-      const named: Record<string, string> = {
+      interface XmlNamedEntities {
+        [code: string]: string
+      }
+      const named: XmlNamedEntities = {
         lt: '<',
         gt: '>',
         amp: '&',

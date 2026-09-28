@@ -228,15 +228,17 @@ export function parseLegalDocMlParagraphs(
   return paragraphs.length > 0 ? paragraphs : null
 }
 
+export interface LegalDocMlMetadata {
+  title: string | null
+  dateDecided: string | null
+  neutralCitation: string | null
+}
+
 /**
  * Metadata the judgment states about itself. The Atom entry already carries
  * these, so this exists to fill gaps rather than to override the feed.
  */
-export function extractLegalDocMlMetadata(xml: string): {
-  title: string | null
-  dateDecided: string | null
-  neutralCitation: string | null
-} {
+export function extractLegalDocMlMetadata(xml: string): LegalDocMlMetadata {
   let parsed: OrderedNode[]
   try {
     const result = parser.parse(xml)

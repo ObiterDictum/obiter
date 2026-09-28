@@ -685,6 +685,16 @@ export async function listDocumentIds(
   }
 }
 
+interface EngineSearchOptions {
+  filter?: string[]
+  sort?: string[]
+  attributesToRetrieve?: string[]
+  limit?: number
+  matchingStrategy?: 'all' | 'frequency'
+  rankingScoreThreshold?: number
+  showRankingScore?: boolean
+}
+
 export async function search(
   client: SearchClient,
   indexName: string,
@@ -698,15 +708,7 @@ export async function search(
   const filter = toMeiliFilters(filters)
 
   try {
-    const searchOptions: {
-      filter?: string[]
-      sort?: string[]
-      attributesToRetrieve?: string[]
-      limit?: number
-      matchingStrategy?: 'all' | 'frequency'
-      rankingScoreThreshold?: number
-      showRankingScore?: boolean
-    } = {
+    const searchOptions: EngineSearchOptions = {
       filter,
       sort: ['dateDecided:desc'],
       matchingStrategy:

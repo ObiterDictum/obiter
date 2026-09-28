@@ -137,6 +137,11 @@ export function scoreCase(
   }
 }
 
+export interface AbsentScoringSplit {
+  violatingIds: string[]
+  exemptLabelledCitingCount: number
+}
+
 /**
  * Splits an absent query's served hits into scoring ids and exempt citing
  * ids. Only hits the API explicitly labels `citing` are exempt: exact,
@@ -145,7 +150,7 @@ export function scoreCase(
  */
 export function splitAbsentScoringIds(
   hits: ReadonlyArray<{ id: string; citationMatch?: string | null }>,
-): { violatingIds: string[]; exemptLabelledCitingCount: number } {
+): AbsentScoringSplit {
   const violatingIds: string[] = []
   let exemptLabelledCitingCount = 0
   for (const hit of hits) {

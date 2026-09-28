@@ -779,6 +779,46 @@ export async function runPipeline(
   }
 }
 
+function acceptedTournamentCandidateArtifact(
+  candidateId: string,
+  blindId: string,
+  specs: readonly Pick<DocumentSpec, 'id' | 'seed'>[],
+  result: PipelineResult,
+) {
+  const artifact = {
+    version: 'synthetic-v2-tournament-candidate:v2',
+    candidateId,
+    blindId,
+    specs: specs.map(({ id, seed }) => ({ id, seed })),
+    documents: result.documents,
+    qa: [...result.qa],
+    metrics: scoreAdjudicatedDocuments(
+      result.documents,
+      result.qa,
+      result.finalPassAnnotations,
+      result.firstPassAnnotations,
+    ),
+    usage: result.usage,
+    spendGbp: result.actualGbp,
+    requestTelemetry: result.requestTelemetry,
+    documentStates: result.documentStates,
+    firstPassAnnotations: [...result.firstPassAnnotations],
+    finalPassAnnotations: [...result.finalPassAnnotations],
+  }
+  return artifact
+}
+
+function rejectedTournamentCandidateArtifact(
+  failedArtifact: ReturnType<typeof tournamentFailureArtifact>,
+) {
+  const artifact = {
+    ...failedArtifact,
+    status: 'rejected',
+    rejectionKind: 'candidate_quality',
+  }
+  return artifact
+}
+
 async function runTournament(pricing: PricingTable) {
   const specs = corpusStageSpecs('tournament')
   assertTournamentStratification(specs)
@@ -926,26 +966,12 @@ async function runTournament(pricing: PricingTable) {
       } else {
         if (result.documentStates.some((state) => state.status !== 'accepted'))
           throw new Error('Candidate has unresolved documents')
-        artifact = {
-          version: 'synthetic-v2-tournament-candidate:v2',
-          candidateId: candidate.id,
+        artifact = acceptedTournamentCandidateArtifact(
+          candidate.id,
           blindId,
-          specs: specs.map(({ id, seed }) => ({ id, seed })),
-          documents: result.documents,
-          qa: [...result.qa],
-          metrics: scoreAdjudicatedDocuments(
-            result.documents,
-            result.qa,
-            result.finalPassAnnotations,
-            result.firstPassAnnotations,
-          ),
-          usage: result.usage,
-          spendGbp: result.actualGbp,
-          requestTelemetry: result.requestTelemetry,
-          documentStates: result.documentStates,
-          firstPassAnnotations: [...result.firstPassAnnotations],
-          finalPassAnnotations: [...result.finalPassAnnotations],
-        }
+          specs,
+          result,
+        )
         blindPackage = blindReviewPackage(blindId, result.documents)
         finalStatus = 'pending_review'
       }
@@ -971,11 +997,7 @@ async function runTournament(pricing: PricingTable) {
       const candidateQualityRejection =
         isCandidateQualityRejection(accountedError)
       if (candidateQualityRejection) {
-        artifact = {
-          ...failedArtifact,
-          status: 'rejected',
-          rejectionKind: 'candidate_quality',
-        }
+        artifact = rejectedTournamentCandidateArtifact(failedArtifact)
         console.error(
           `[synthetic-v2] tournament candidate ${candidate.id} rejected after terminal document validation`,
         )

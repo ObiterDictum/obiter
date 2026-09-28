@@ -27,6 +27,9 @@ export default defineConfig({
     // dependencies. The remaining Pass C rules stay off until their own pass.
     'anti-slop/no-chained-type-assertions': 'error',
     'anti-slop/require-safety-comment-for-type-assertion': 'error',
+    // Pass E: keep the evidence a known value already carries instead of
+    // widening it to an anonymous or open-dictionary target.
+    'anti-slop/no-known-value-widening': 'error',
   },
   env: {
     builtin: true,
@@ -97,6 +100,7 @@ export default defineConfig({
       rules: {
         'anti-slop/no-chained-type-assertions': 'off',
         'anti-slop/require-safety-comment-for-type-assertion': 'off',
+        'anti-slop/no-known-value-widening': 'off',
       },
     },
   ],

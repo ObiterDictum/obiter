@@ -30,6 +30,15 @@ export class ApiError extends Error {
 
 const UNKNOWN_REQUEST_ID = 'req_unknown'
 
+async function readJsonOrNull(response: Response) {
+  try {
+    // SAFETY: response.json() yields an untyped body; callers validate it via safeParse before use.
+    return (await response.json()) as unknown
+  } catch {
+    return null
+  }
+}
+
 /**
  * Fetch a JSON endpoint with auth credentials and normalised errors.
  *
@@ -98,12 +107,7 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok) {
-    let parsed: unknown = null
-    try {
-      parsed = await response.json()
-    } catch {
-      parsed = null
-    }
+    const parsed = await readJsonOrNull(response)
 
     const result = apiErrorResponseSchema.safeParse(parsed)
     if (result.success) {
@@ -151,12 +155,7 @@ export async function apiFetchBlobResult(
   })
 
   if (!response.ok) {
-    let parsed: unknown = null
-    try {
-      parsed = await response.json()
-    } catch {
-      parsed = null
-    }
+    const parsed = await readJsonOrNull(response)
 
     const result = apiErrorResponseSchema.safeParse(parsed)
     if (result.success) {
