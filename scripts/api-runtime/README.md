@@ -32,6 +32,20 @@ Exit codes: `0` every check passed on every requested runtime; `1` a check
 failed or the two runtimes disagree where they must not; `2` a refusal or setup
 failure (bad database, no Bun, no database URL).
 
+## Proving the target is the one used
+
+`database-target.test.mjs` is the fail-first regression: a portless URL plus a
+conflicting ambient `PGPORT` must resolve to one explicit port for the real pg
+driver and the psql environment alike. For the process-level proof, run
+
+```sh
+node scripts/api-runtime/database-target-proof.mjs
+```
+
+It starts two controlled loopback listeners, sets ambient `PG*` variables at
+the wrong one, and shows the real psql fixtures path and the real Node API child
+dial the validated listener only. It touches no Postgres.
+
 ## Prerequisites
 
 - Postgres reachable at the URL, with `packages/database/migrations` applied.
@@ -53,14 +67,31 @@ failure (bad database, no Bun, no database URL).
   `obiter_api_runtime[_test]`, `obiter_api_ingress[_test]` and
   `obiter_lane_<name>_test` are accepted on loopback; a lane's development
   database (`obiter_lane_security`), the shared `obiter` and `obiter_corpus`,
-  the `postgres`/`template*` cluster databases, non-loopback hosts,
-  percent-encoded names and target-affecting query parameters (`host`, `port`,
-  `dbname`, `service`, credentials) are all refused. The validated URL is the
-  one handed to the API, the psql fixtures and the corpus boots, so there is no
-  separate check that the launch can drift away from. `--database-url` is
-  required; the harness never falls back to a lane `.env` or a default
-  database. `--allow-database` admits a deliberate non-owned database but cannot
-  override protection for a known shared, cluster or lane development one.
+  the `postgres`/`template*` cluster databases, non-loopback hosts, bracketed
+  IPv6 literals (`[::1]` is dialable by neither pg nor psql), percent-encoded
+  names and any query parameter at all are refused. The guard returns one
+  canonical target naming `host`, `port`, `database`, `user` and `password`
+  explicitly; that URL is the one handed to the API, the psql fixtures and the
+  corpus boots, and `childEnvironment` pins the same `PG*` values while any
+  inherited `PG*` the guard did not set is removed, so an ambient `PGHOST`,
+  `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGSERVICE`, `PGPASSFILE` or `PGSSLMODE`
+  cannot move a connection. `--database-url` is required; the harness never
+  falls back to a lane `.env` or a default database.
+- **Database URL semantics.** `--database-url` must be a `postgres://` or
+  `postgresql://` URL whose host is `localhost` or `127.0.0.1`, whose path is a
+  plain `[A-Za-z0-9_]+` database name, and which names both a user and a
+  password; the port is optional and defaults to 5432. Credentials are re-encoded
+  into the canonical URL. User and password are required rather than inherited
+  because pg would fall back to `PGUSER`/`PGPASSWORD` while psql could also read
+  `PGPASSFILE` or `~/.pgpass`, so the two could authenticate as different
+  principals. Any query parameter (including `sslmode`) is refused because it
+  reaches pg and psql differently.
+- **`--allow-database` is intent, not proof.** The override admits a
+  deliberate non-owned database when its name matches the URL exactly. An exact
+  match does not prove the database is disposable, and it cannot redirect the
+  resolved name or override protection for a known shared, cluster or lane
+  development database. Treat it as the escape hatch it is: a stale or typo'd
+  name can still point at valuable local data.
 - **Ports.** Each server gets an OS-allocated ephemeral port. The shared
   `3000`/`8787` and the lane ports `3001-3004`/`8788-8791` are refused.
 - **Corpus variables.** The corpus-mode boots point `CORPUS_DATABASE_URL` and

@@ -30,7 +30,7 @@ async function bootWith({
   runtime,
   worktreeRoot,
   bunBin,
-  databaseUrl,
+  target,
   storageRoot,
   rampartCacheDir,
   extraEnvironment,
@@ -44,7 +44,7 @@ async function bootWith({
     environment: {
       ...childEnvironment({
         port,
-        databaseUrl,
+        target,
         storageRoot,
         rampartCacheDir,
       }),
@@ -65,7 +65,7 @@ async function checkMode({
   runtime,
   worktreeRoot,
   bunBin,
-  databaseUrl,
+  target,
   storageRoot,
   rampartCacheDir,
   extraEnvironment,
@@ -76,7 +76,7 @@ async function checkMode({
     runtime,
     worktreeRoot,
     bunBin,
-    databaseUrl,
+    target,
     storageRoot,
     rampartCacheDir,
     extraEnvironment,
@@ -109,7 +109,7 @@ async function checkWriterWithoutReader({
   runtime,
   worktreeRoot,
   bunBin,
-  databaseUrl,
+  target,
   storageRoot,
   rampartCacheDir,
   recorder,
@@ -118,10 +118,10 @@ async function checkWriterWithoutReader({
     runtime,
     worktreeRoot,
     bunBin,
-    databaseUrl,
+    target,
     storageRoot,
     rampartCacheDir,
-    extraEnvironment: { CORPUS_WRITE_DATABASE_URL: databaseUrl },
+    extraEnvironment: { CORPUS_WRITE_DATABASE_URL: target.url },
   })
   try {
     const deadline = Date.now() + 30_000
@@ -150,7 +150,7 @@ export async function runCorpusModeChecks({
   runtime,
   worktreeRoot,
   bunBin,
-  databaseUrl,
+  target,
   storageRoot,
   rampartCacheDir,
   ids,
@@ -161,7 +161,7 @@ export async function runCorpusModeChecks({
     runtime,
     worktreeRoot,
     bunBin,
-    databaseUrl,
+    target,
     storageRoot,
     rampartCacheDir,
     ids,
@@ -172,15 +172,15 @@ export async function runCorpusModeChecks({
     ...shared,
     name: 'an explicit read-only corpus reports itself and serves',
     expectedCorpus: { colocated: false, readOnly: true },
-    extraEnvironment: { CORPUS_DATABASE_URL: databaseUrl },
+    extraEnvironment: { CORPUS_DATABASE_URL: target.url },
   })
   await checkMode({
     ...shared,
     name: 'a dedicated corpus writer reports itself and serves',
     expectedCorpus: { colocated: false, readOnly: false },
     extraEnvironment: {
-      CORPUS_DATABASE_URL: databaseUrl,
-      CORPUS_WRITE_DATABASE_URL: databaseUrl,
+      CORPUS_DATABASE_URL: target.url,
+      CORPUS_WRITE_DATABASE_URL: target.url,
     },
   })
   await checkWriterWithoutReader(shared)

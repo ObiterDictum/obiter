@@ -9,7 +9,15 @@
  * name is not proof a host is ours, and that the URL the guard validates is the
  * URL the launched API receives.
  *
- * The last test runs the real entry point with the process-spawning commands
+ * The regression this file exists for is the port split: pg resolves a missing
+ * port from the ambient PGPORT while psql is pinned to 5432, so a validated
+ * portless URL could send the API child's migrations to a cluster the guard
+ * never checked. `pgEffectiveParameters` runs the real `pg` client in a child
+ * of `services/api` (where the dependency resolves) so the assertion is the
+ * driver's own resolution, not a reimplementation. `psqlEnvironment` is the
+ * exact environment the fixtures are provisioned with.
+ *
+ * The last suite runs the real entry point with the process-spawning commands
  * (bun, node, psql, python3, git) replaced by canaries, so a rejected target
  * provably reaches none of them. The accepted-target control proves the canary
  * fires when the run does proceed, so the negative result is not vacuous.
@@ -19,11 +27,41 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'bun:test'
+import { psqlEnvironment } from '../load/psql.mjs'
 import { childEnvironment, parseArgs } from './config.mjs'
 import { resolveDatabaseTarget } from './database-target.mjs'
+import { childProcessEnvironment } from './lifecycle.mjs'
 
 const WORKTREE_ROOT = join(import.meta.dir, '..', '..')
 const databaseUrl = (name) => `postgres://obiter:obiter@localhost:5432/${name}`
+
+// The real `pg` client's resolved parameters for a connection string, printed
+// by a child of services/api so the workspace dependency resolves. `extraEnv`
+// emulates an ambient PG* variable reaching the driver.
+const PG_PARAMS_SCRIPT = `
+import pg from 'pg'
+const client = new pg.Client({ connectionString: process.argv[1] })
+const p = client.connectionParameters
+console.log(JSON.stringify({ host: p.host, port: p.port, database: p.database, user: p.user }))
+`
+function pgEffectiveParameters(url, extraEnv = {}) {
+  const result = spawnSync(
+    'node',
+    ['--input-type=module', '-e', PG_PARAMS_SCRIPT, url],
+    {
+      cwd: join(WORKTREE_ROOT, 'services', 'api'),
+      env: childProcessEnvironment(extraEnv, {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+      }),
+      encoding: 'utf8',
+    },
+  )
+  if (result.status !== 0) {
+    throw new Error(`pg parameter probe failed: ${result.stderr}`)
+  }
+  return JSON.parse(result.stdout.trim())
+}
 
 // Process-spawning commands replaced by canaries, so a rejected target can be
 // shown to reach none of them. Placed outside the suite because a `describe`
@@ -70,7 +108,24 @@ describe('refused targets', () => {
       'postgres://obiter:obiter@db.internal:5432/obiter_test',
       'database_not_loopback',
     ],
-    // A name is not proof of a loopback host: the query can move the driver.
+    [
+      'a URL with no user',
+      'postgres://localhost:5432/obiter_test',
+      'database_user_missing',
+    ],
+    [
+      'a URL with no password',
+      'postgres://obiter@localhost:5432/obiter_test',
+      'database_password_missing',
+    ],
+    // Bracketed IPv6 is accepted by WHATWG URL but dialable by neither pg nor
+    // psql, so it is refused rather than accepted and then unreachable.
+    [
+      'a bracketed IPv6 host',
+      'postgres://obiter:obiter@[::1]:5432/obiter_test',
+      'database_not_loopback',
+    ],
+    // Anything in the query reaches pg and psql differently, target key or not.
     [
       'a host query override',
       `${databaseUrl('obiter_test')}?host=db.internal`,
@@ -89,6 +144,11 @@ describe('refused targets', () => {
     [
       'a database query with no path database',
       'postgres://obiter:obiter@localhost:5432/?dbname=obiter_test',
+      'database_url_query_override',
+    ],
+    [
+      'an unrelated query parameter',
+      `${databaseUrl('obiter_test')}?sslmode=require`,
       'database_url_query_override',
     ],
     // psql reads the pathname literally; the API driver decodes it.
@@ -159,28 +219,42 @@ describe('accepted targets', () => {
     'obiter_api_ingress_test',
     'obiter_lane_security_test',
     'obiter_lane_search_test',
-  ])('accepts %s and returns the URL the API must receive', (name) => {
-    const url = databaseUrl(name)
-    expect(resolveDatabaseTarget({ databaseUrl: url })).toEqual({
+  ])('accepts %s and names every component the consumers use', (name) => {
+    expect(resolveDatabaseTarget({ databaseUrl: databaseUrl(name) })).toEqual({
       name,
-      url,
+      host: 'localhost',
+      port: '5432',
+      database: name,
+      user: 'obiter',
+      password: 'obiter',
+      url: databaseUrl(name),
     })
   })
 
-  it('accepts an unrelated query parameter that cannot move the target', () => {
-    expect(
-      resolveDatabaseTarget({
-        databaseUrl: `${databaseUrl('obiter_test')}?sslmode=require`,
-      }).name,
-    ).toBe('obiter_test')
+  it('serialises a portless URL into an explicit default port', () => {
+    const target = resolveDatabaseTarget({
+      databaseUrl: 'postgres://obiter:obiter@localhost/obiter_test',
+    })
+    expect(target.port).toBe('5432')
+    expect(target.url).toBe(
+      'postgres://obiter:obiter@localhost:5432/obiter_test',
+    )
   })
 
-  it('accepts an IPv6 loopback host', () => {
-    expect(
-      resolveDatabaseTarget({
-        databaseUrl: 'postgres://obiter:obiter@[::1]:5432/obiter_test',
-      }).name,
-    ).toBe('obiter_test')
+  it('keeps an explicit port and encodes credentials in the canonical URL', () => {
+    const target = resolveDatabaseTarget({
+      databaseUrl: 'postgres://obiter:pa%3Dss@127.0.0.1:5999/obiter_test',
+    })
+    expect(target).toMatchObject({
+      host: '127.0.0.1',
+      port: '5999',
+      database: 'obiter_test',
+      user: 'obiter',
+      password: 'pa=ss',
+    })
+    expect(target.url).toBe(
+      'postgres://obiter:pa%3Dss@127.0.0.1:5999/obiter_test',
+    )
   })
 })
 
@@ -196,6 +270,15 @@ describe('the --allow-database override', () => {
       refusal({
         databaseUrl: databaseUrl('other_test'),
         allowDatabase: 'different_test',
+      }).code,
+    ).toBe('database_not_owned')
+  })
+
+  it('can only confirm the URL name, so it cannot redirect an owned database', () => {
+    expect(
+      refusal({
+        databaseUrl: databaseUrl('obiter_test'),
+        allowDatabase: 'other_test',
       }).code,
     ).toBe('database_not_owned')
   })
@@ -219,7 +302,83 @@ describe('the --allow-database override', () => {
   })
 })
 
+describe('the canonical target is what pg and psql actually resolve', () => {
+  it('pins a portless URL to the default port even when PGPORT names another', () => {
+    const target = resolveDatabaseTarget({
+      databaseUrl: 'postgres://obiter:obiter@localhost/obiter_test',
+    })
+    // The regression: pre-fix, target.url was portless and pg dialled PGPORT.
+    expect(pgEffectiveParameters(target.url, { PGPORT: '59999' }).port).toBe(
+      5432,
+    )
+    expect(psqlEnvironment(target.url).PGPORT).toBe('5432')
+  })
+
+  it('keeps an explicit port against a conflicting PGPORT for both consumers', () => {
+    const target = resolveDatabaseTarget({
+      databaseUrl: 'postgres://obiter:obiter@localhost:5999/obiter_test',
+    })
+    expect(pgEffectiveParameters(target.url, { PGPORT: '5432' }).port).toBe(
+      5999,
+    )
+    expect(psqlEnvironment(target.url).PGPORT).toBe('5999')
+  })
+
+  it.each([
+    'postgres://obiter:obiter@localhost/obiter_test',
+    'postgres://obiter:obiter@127.0.0.1:5999/obiter_api_runtime_test',
+  ])('has pg and psql agree on host, port, database and user for %s', (url) => {
+    const target = resolveDatabaseTarget({ databaseUrl: url })
+    const pg = pgEffectiveParameters(target.url, {
+      PGPORT: '1234',
+      PGHOST: 'wrong.internal',
+      PGDATABASE: 'wrong',
+      PGUSER: 'wrong',
+    })
+    const psql = psqlEnvironment(target.url)
+    expect(pg.port).toBe(Number(target.port))
+    expect(pg.host).toBe(target.host)
+    expect(pg.database).toBe(target.database)
+    expect(pg.user).toBe(target.user)
+    expect(psql.PGPORT).toBe(target.port)
+    expect(psql.PGHOST).toBe(target.host)
+    expect(psql.PGDATABASE).toBe(target.database)
+    expect(psql.PGUSER).toBe(target.user)
+    expect(psql.PGPASSWORD).toBe(target.password)
+  })
+
+  it('does not let a conflicting ambient PG* move the fixtures', () => {
+    const target = resolveDatabaseTarget({
+      databaseUrl: 'postgres://obiter:obiter@localhost/obiter_test',
+    })
+    const environment = psqlEnvironment(target.url, {
+      PATH: '/bin',
+      HOME: '/tmp',
+      PGPORT: '59999',
+      PGHOST: 'wrong.internal',
+      PGDATABASE: 'wrong',
+      PGUSER: 'wrong',
+      PGPASSWORD: 'wrong',
+    })
+    expect(environment.PGPORT).toBe('5432')
+    expect(environment.PGHOST).toBe('localhost')
+    expect(environment.PGDATABASE).toBe('obiter_test')
+    expect(environment.PGUSER).toBe('obiter')
+    expect(environment.PGPASSWORD).toBe('obiter')
+  })
+})
+
 describe('argument parsing and launch propagation', () => {
+  it('splits --flag=value on the first "=" so credentials survive', () => {
+    const value = 'postgres://obiter:pa=ss@localhost:5432/obiter_test'
+    expect(parseArgs([`--database-url=${value}`]).databaseUrl).toBe(value)
+    expect(
+      resolveDatabaseTarget({
+        databaseUrl: 'postgres://obiter:pa%3Dss@localhost:5432/obiter_test',
+      }).password,
+    ).toBe('pa=ss')
+  })
+
   it('requires --database-url instead of falling back to the environment', () => {
     const previous = process.env.DATABASE_URL
     process.env.DATABASE_URL = databaseUrl('obiter_lane_security')
@@ -239,25 +398,64 @@ describe('argument parsing and launch propagation', () => {
     )
   })
 
-  it('gives the launched API the validated URL, not an ambient one', () => {
+  it('gives the launched API the validated URL and PG* values, not ambient ones', () => {
     const target = resolveDatabaseTarget({
       databaseUrl: databaseUrl('obiter_api_runtime_test'),
     })
-    // startServer merges `{ ...process.env, ...environment }`, so reproduce it
-    // with a conflicting ambient DATABASE_URL to prove the validated target wins.
-    const ambientEnv = { DATABASE_URL: databaseUrl('obiter_lane_security') }
-    const child = {
-      ...ambientEnv,
-      ...childEnvironment({
-        port: 43210,
-        databaseUrl: target.url,
-        storageRoot: '/tmp/obiter-api-runtime-test-storage',
-      }),
+    const environment = childEnvironment({
+      port: 43210,
+      target,
+      storageRoot: '/tmp/obiter-api-runtime-test-storage',
+    })
+    // startServer merges `{ ...process.env, ...environment }` via
+    // childProcessEnvironment, so reproduce it with conflicting ambient values.
+    const ambient = {
+      DATABASE_URL: databaseUrl('obiter_lane_security'),
+      PGHOST: 'wrong.internal',
+      PGPORT: '59999',
+      PGDATABASE: 'wrong',
+      PGUSER: 'wrong',
+      PGPASSWORD: 'wrong',
+      PGSERVICE: 'ambient-service',
+      PGHOSTADDR: '10.0.0.1',
+      PGPASSFILE: '/tmp/ambient.pgpass',
+      PGSSLMODE: 'require',
+      PATH: '/bin',
     }
+    const child = childProcessEnvironment(environment, ambient)
     expect(child.DATABASE_URL).toBe(target.url)
+    expect(child.PGHOST).toBe('localhost')
+    expect(child.PGPORT).toBe('5432')
+    expect(child.PGDATABASE).toBe('obiter_api_runtime_test')
+    expect(child.PGUSER).toBe('obiter')
+    expect(child.PGPASSWORD).toBe('obiter')
+    // Inherited libpq variables the guard did not set are removed outright.
+    for (const key of ['PGSERVICE', 'PGHOSTADDR', 'PGPASSFILE', 'PGSSLMODE']) {
+      expect(child[key]).toBeUndefined()
+    }
+    expect(child.PATH).toBe('/bin')
     // The compatibility corpus mode must not inherit an ambient corpus URL.
     expect(child.CORPUS_DATABASE_URL).toBe('')
     expect(child.CORPUS_WRITE_DATABASE_URL).toBe('')
+  })
+
+  it('points the corpus-mode boots at the same canonical target', () => {
+    const target = resolveDatabaseTarget({
+      databaseUrl: databaseUrl('obiter_api_runtime_test'),
+    })
+    const boot = {
+      ...childEnvironment({
+        port: 43211,
+        target,
+        storageRoot: '/tmp/obiter-api-runtime-test-storage',
+      }),
+      CORPUS_DATABASE_URL: target.url,
+      CORPUS_WRITE_DATABASE_URL: target.url,
+    }
+    expect(boot.CORPUS_DATABASE_URL).toBe(target.url)
+    expect(boot.CORPUS_WRITE_DATABASE_URL).toBe(target.url)
+    expect(boot.PGPORT).toBe(target.port)
+    expect(boot.PGDATABASE).toBe(target.database)
   })
 })
 
@@ -323,6 +521,16 @@ describe('refusal happens before any process, connection or mutation', () => {
       'an encoded name',
       databaseUrl('obiter%5Flane%5Fsecurity'),
       'database_name_encoded',
+    ],
+    [
+      'a URL with no user',
+      'postgres://localhost:5432/obiter_test',
+      'database_user_missing',
+    ],
+    [
+      'a bracketed IPv6 host',
+      'postgres://obiter:obiter@[::1]:5432/obiter_test',
+      'database_not_loopback',
     ],
   ])('refuses %s without spawning anything', async (_label, url, code) => {
     const result = runHarness(['--runtime', 'node', '--database-url', url])

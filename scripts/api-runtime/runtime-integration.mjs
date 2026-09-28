@@ -65,7 +65,7 @@ async function runRuntime({
   runtime,
   args,
   fixtures,
-  databaseUrl,
+  target,
   rampartCacheDir,
   scratchRoot,
 }) {
@@ -83,7 +83,7 @@ async function runRuntime({
     bunBin: args.bunBin,
     environment: childEnvironment({
       port,
-      databaseUrl,
+      target,
       storageRoot,
       rampartCacheDir,
     }),
@@ -92,7 +92,7 @@ async function runRuntime({
       : undefined,
   })
 
-  const querier = createQuerier({ databaseUrl })
+  const querier = createQuerier({ databaseUrl: target.url })
   const ctx = {
     server,
     runtime,
@@ -136,7 +136,7 @@ async function runRuntime({
       runtime,
       worktreeRoot: WORKTREE_ROOT,
       bunBin: args.bunBin,
-      databaseUrl,
+      target,
       storageRoot,
       rampartCacheDir,
       ids,
@@ -259,7 +259,7 @@ async function main() {
       runtime,
       args,
       fixtures,
-      databaseUrl: target.url,
+      target,
       rampartCacheDir,
       scratchRoot,
     })
