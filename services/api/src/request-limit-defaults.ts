@@ -12,3 +12,11 @@ export const DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX = 12
 
 /** Default hydration per-user window (10 minutes). */
 export const DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS = 600_000
+
+/**
+ * Default cap on retained per-user hydration windows. The window map is an
+ * in-process memory bound, not an identity control: eviction resets the
+ * least-recently-seen user's count, so the process-wide Moj rate limiter and
+ * `queueMax` remain the hard upstream bound.
+ */
+export const DEFAULT_LEGAL_SEARCH_HYDRATION_RETAINED_USER_WINDOWS = 4096

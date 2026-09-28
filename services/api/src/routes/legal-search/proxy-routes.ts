@@ -11,8 +11,11 @@ import type { ApiEnv } from '../../env'
 import type { Pool } from 'pg'
 import { readLimitedJsonValue } from '../../limited-request-body'
 import {
+  ANONYMOUS_HYDRATION_SUBJECT,
   canonicalHydrationQueryKey,
+  documentHydrationKey,
   LegalSearchHydrationBudget,
+  LegalSourceHydrationGate,
 } from '../../legal-search-hydration-budget'
 import {
   isSupportedFindCaseLawRequest,
@@ -143,6 +146,11 @@ export function createLegalSearchProxyRoutes(
       perClientMax: env.legalSearchHydrationPerClientMax,
       windowMs: env.legalSearchHydrationWindowMs,
     })
+  // Every provider-reaching product path goes through this one gate: the
+  // queued background job, the foreground live fetch and the document-detail
+  // fetch-through. It reserves the authenticated user's budget before the
+  // operation runs and shares one in-flight promise for equivalent work.
+  const hydrationGate = new LegalSourceHydrationGate(hydrationBudget)
   const searchClient = createClient(
     env.meilisearchHost,
     env.meilisearchSearchApiKey,
@@ -467,9 +475,16 @@ export function createLegalSearchProxyRoutes(
     // cannot arrive.
     if (!parsed.data.foregroundLiveResults && corpusWrites !== null) {
       const hydrationKey = canonicalHydrationQueryKey(parsed.data)
-      const enqueue = hydrationBudget.tryBeginHydration(
-        sessionUser.id,
-        hydrationKey,
+      const enqueue = hydrationGate.start(sessionUser.id, hydrationKey, () =>
+        hydrateMojAuthoritiesFromSearch(
+          env,
+          reads,
+          corpusWrites,
+          indexClient,
+          env.legalAuthoritiesIndex,
+          parsed.data,
+          mojRateLimiter,
+        ),
       )
       if (enqueue.status === 'budget_exceeded') {
         return c.json(
@@ -480,18 +495,6 @@ export function createLegalSearchProxyRoutes(
           ),
           429,
         )
-      }
-
-      if (enqueue.status === 'queued') {
-        void hydrateMojAuthoritiesFromSearch(
-          env,
-          reads,
-          corpusWrites,
-          indexClient,
-          env.legalAuthoritiesIndex,
-          parsed.data,
-          mojRateLimiter,
-        ).finally(() => hydrationBudget.completeHydration(hydrationKey))
       }
 
       // Deduped still has an in-flight job; keep hydrationQueued true so clients poll.
@@ -524,11 +527,98 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    const liveResult = await fetchMojAuthoritySummaries(
-      env,
-      parsed.data,
-      mojRateLimiter,
+    // Foreground live is a provider hydration like any other: reserve the
+    // authenticated user's budget before dispatching the fetch, share one
+    // in-flight fetch with equivalent concurrent requests, and persist only
+    // after the reservation succeeded. A rejected request returns before the
+    // operation runs, so it cannot reach the provider, the corpus or the
+    // indexer.
+    const hydrationKey = canonicalHydrationQueryKey(parsed.data)
+    const gatedLive = await hydrationGate.run(
+      sessionUser.id,
+      hydrationKey,
+      async () => {
+        const liveResult = await fetchMojAuthoritySummaries(
+          env,
+          parsed.data,
+          mojRateLimiter,
+        )
+        if (liveResult.status !== 'ok') return liveResult
+
+        for (const entry of liveResult.entries) {
+          const summary = atomEntryToAuthoritySummary(env, entry)
+          const provider = providerMetadataFromAtomEntry(entry)
+          // Never re-index a withdrawn judgment from live hydration: the
+          // checker owns the flag and only the manual runbook clears it.
+          const existing = await getLegalAuthoritySourceRecord(
+            reads,
+            summary.id,
+          )
+          if (existing?.withdrawn) continue
+          // The in-memory foreground record is what makes a live result usable
+          // for the rest of this request, whether or not it can be stored. It
+          // is a soft cache, not a substitute for the store: it lives for the
+          // life of the app instance, holds at most 100 public provider
+          // records, and evicts the least recently written on overflow.
+          rememberForegroundSourceRecord(
+            foregroundSourceRecords,
+            summary,
+            provider,
+          )
+          if (corpusWrites) {
+            await upsertLegalAuthoritySummary(corpusWrites, summary, provider)
+          }
+        }
+
+        if (corpusWrites) {
+          void hydrateAndIndexMojAuthorities(
+            env,
+            reads,
+            corpusWrites,
+            indexClient,
+            env.legalAuthoritiesIndex,
+            liveResult.entries,
+            mojRateLimiter,
+          )
+        }
+        return liveResult
+      },
     )
+
+    if (gatedLive.status === 'budget_exceeded') {
+      return c.json(
+        apiError(
+          'hydration_budget_exceeded',
+          'Search hydration budget exceeded. Try again later.',
+          requestId,
+        ),
+        429,
+      )
+    }
+    if (gatedLive.status === 'unauthenticated') {
+      // Anonymous callers returned above; this is a defensive fail-closed.
+      return c.json(
+        apiError(
+          'unauthenticated',
+          'Sign in is required to fetch live legal sources.',
+          requestId,
+        ),
+        401,
+      )
+    }
+
+    if (gatedLive.status === 'failed') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Find Case Law is unavailable.',
+          requestId,
+        ),
+        503,
+      )
+    }
+
+    const liveResult = gatedLive.value
 
     if (liveResult.status === 'rate_limited') {
       return c.json(
@@ -552,36 +642,6 @@ export function createLegalSearchProxyRoutes(
           requestId,
         ),
         503,
-      )
-    }
-
-    for (const entry of liveResult.entries) {
-      const summary = atomEntryToAuthoritySummary(env, entry)
-      const provider = providerMetadataFromAtomEntry(entry)
-      // Never re-index a withdrawn judgment from live hydration: the
-      // checker owns the flag and only the manual runbook clears it.
-      const existing = await getLegalAuthoritySourceRecord(reads, summary.id)
-      if (existing?.withdrawn) continue
-      // The in-memory foreground record is what makes a live result usable for
-      // the rest of this request, whether or not it can be stored. It is a
-      // soft cache, not a substitute for the store: it lives for the life of
-      // the app instance, holds at most 100 public provider records, and
-      // evicts the least recently written on overflow.
-      rememberForegroundSourceRecord(foregroundSourceRecords, summary, provider)
-      if (corpusWrites) {
-        await upsertLegalAuthoritySummary(corpusWrites, summary, provider)
-      }
-    }
-
-    if (corpusWrites) {
-      void hydrateAndIndexMojAuthorities(
-        env,
-        reads,
-        corpusWrites,
-        indexClient,
-        env.legalAuthoritiesIndex,
-        liveResult.entries,
-        mojRateLimiter,
       )
     }
 
@@ -709,13 +769,60 @@ export function createLegalSearchProxyRoutes(
       return c.json({ document: sourceRecord.document })
     }
 
-    const liveDocument = sourceRecord
-      ? await fetchMojAuthorityDocumentFromRecord(
-          env,
-          sourceRecord,
-          mojRateLimiter,
-        )
-      : await fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter)
+    // The document-detail route stays anonymous (30-Aug decision), so an
+    // anonymous miss may still fetch the provider in a read-only process.
+    // It is charged to one shared per-process anonymous bucket, not a
+    // caller-supplied key, and it never persists: an anonymous request must not
+    // cause a corpus or index write. An authenticated caller charges its own
+    // budget and persists when this process owns a writer.
+    const sessionUser = c.get('user') ?? null
+    const gatedLiveDocument = await hydrationGate.run(
+      sessionUser?.id ?? ANONYMOUS_HYDRATION_SUBJECT,
+      documentHydrationKey(parsed.data),
+      () =>
+        sourceRecord
+          ? fetchMojAuthorityDocumentFromRecord(
+              env,
+              sourceRecord,
+              mojRateLimiter,
+            )
+          : fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter),
+    )
+
+    if (gatedLiveDocument.status === 'budget_exceeded') {
+      return c.json(
+        apiError(
+          'hydration_budget_exceeded',
+          'Search hydration budget exceeded. Try again later.',
+          requestId,
+        ),
+        429,
+      )
+    }
+    if (gatedLiveDocument.status === 'unauthenticated') {
+      // Defensive fail-closed: the subject above is always present.
+      return c.json(
+        apiError(
+          'unauthenticated',
+          'Sign in is required to fetch live legal sources.',
+          requestId,
+        ),
+        401,
+      )
+    }
+
+    if (gatedLiveDocument.status === 'failed') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Find Case Law is unavailable.',
+          requestId,
+        ),
+        503,
+      )
+    }
+
+    const liveDocument = gatedLiveDocument.value
 
     if (liveDocument.status === 'ok') {
       // Re-check before caching: the row may have been marked withdrawn
@@ -738,12 +845,12 @@ export function createLegalSearchProxyRoutes(
           },
         })
       }
-      if (!corpusWrites) {
-        // Read-only corpus. The fetched document answers this request and is
-        // kept in the process-lifetime foreground cache (at most 100 records),
-        // so a later lookup in this process is served from memory. Nothing is
-        // persisted to Postgres and nothing is indexed; the cache is the only
-        // persistence in this mode and it ends with the process.
+      if (!corpusWrites || !sessionUser) {
+        // No writer, or an anonymous caller that must not write. The fetched
+        // document answers this request and is kept in the process-lifetime
+        // foreground cache (at most 100 records), so a later lookup in this
+        // process is served from memory. Nothing is persisted to Postgres and
+        // nothing is indexed.
         rememberForegroundSourceRecord(
           foregroundSourceRecords,
           toAuthoritySummary(liveDocument.document),
