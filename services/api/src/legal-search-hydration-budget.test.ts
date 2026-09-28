@@ -95,6 +95,42 @@ describe('LegalSearchHydrationBudget', () => {
     expect(budget.retainedUserMissWindows()).toBeLessThanOrEqual(3)
   })
 
+  it('resets a spent window when the retention cap evicts it', () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 1,
+      windowMs: 600_000,
+      retainedUserWindowMax: 2,
+    })
+    const victimKey = canonicalHydrationQueryKey({ query: 'victim' })
+    expect(budget.tryBeginHydration('usr_victim', victimKey)).toEqual({
+      status: 'queued',
+    })
+    budget.completeHydration(victimKey)
+    expect(
+      budget.tryBeginHydration(
+        'usr_victim',
+        canonicalHydrationQueryKey({ query: 'again' }),
+      ),
+    ).toEqual({ status: 'budget_exceeded' })
+
+    // Two more users plus a third push the victim's window off the LRU cap.
+    for (const name of ['a', 'b', 'c']) {
+      const key = canonicalHydrationQueryKey({ query: name })
+      budget.tryBeginHydration(`usr_${name}`, key)
+      budget.completeHydration(key)
+    }
+
+    // Pinned contract: eviction resets the count, so the per-user window is a
+    // fairness bound, not a hard identity bound.
+    expect(
+      budget.tryBeginHydration(
+        'usr_victim',
+        canonicalHydrationQueryKey({ query: 'fresh' }),
+      ),
+    ).toEqual({ status: 'queued' })
+  })
+
   it('drops expired per-user miss windows instead of retaining empty keys', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-30T12:00:00Z'))

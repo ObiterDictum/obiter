@@ -199,10 +199,14 @@ export class LegalSourceHydrationGate {
       return Promise.resolve({ status: 'budget_exceeded' })
     }
 
-    const promise = operation().finally(() => {
-      this.operations.delete(key)
-      this.budget.completeHydration(key)
-    })
+    // Defer the operation so a synchronous throw inside it becomes a rejected
+    // promise and the `finally` still releases the reservation.
+    const promise = Promise.resolve()
+      .then(operation)
+      .finally(() => {
+        this.operations.delete(key)
+        this.budget.completeHydration(key)
+      })
     this.operations.set(key, promise)
     return promise.then((value) => ({ status: 'ok' as const, value }))
   }
@@ -221,10 +225,14 @@ export class LegalSourceHydrationGate {
     }
     if (reservation.status === 'deduped') return { status: 'deduped' }
 
-    const promise = operation().finally(() => {
-      this.operations.delete(key)
-      this.budget.completeHydration(key)
-    })
+    // Defer the operation so a synchronous throw inside it becomes a rejected
+    // promise and the `finally` still releases the reservation.
+    const promise = Promise.resolve()
+      .then(operation)
+      .finally(() => {
+        this.operations.delete(key)
+        this.budget.completeHydration(key)
+      })
     this.operations.set(key, promise)
     // Background callers discard the value. Keep a handled copy so a rejection
     // cannot surface as an unhandled rejection; the operation reports its own

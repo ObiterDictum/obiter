@@ -608,16 +608,6 @@ export function createLegalSearchProxyRoutes(
     }
 
     const liveResult = gatedLive.value
-    if (!liveResult) {
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Find Case Law is unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
 
     if (liveResult.status === 'rate_limited') {
       return c.json(
@@ -802,11 +792,11 @@ export function createLegalSearchProxyRoutes(
       // Defensive fail-closed: the subject above is always present.
       return c.json(
         apiError(
-          'document_not_found',
-          'Document was not found in stored sources.',
+          'unauthenticated',
+          'Sign in is required to fetch live legal sources.',
           requestId,
         ),
-        404,
+        401,
       )
     }
 

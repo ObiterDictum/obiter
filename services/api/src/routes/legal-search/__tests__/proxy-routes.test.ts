@@ -4189,7 +4189,7 @@ describe('search hydration guards', () => {
     })
     const hydrateSpy = vi
       .spyOn(mojClient, 'hydrateMojAuthoritiesFromSearch')
-      .mockResolvedValue(null)
+      .mockResolvedValue({ status: 'unavailable' })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const app = createAuthenticatedProxyApp(undefined, undefined, null)
 

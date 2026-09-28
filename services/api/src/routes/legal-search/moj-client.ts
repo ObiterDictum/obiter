@@ -38,11 +38,8 @@ export {
 
 const storedSearchTimeoutMs = 350
 
-/** The successful summary fetch, shared with a foreground caller that joins it. */
-type MojSummaryOk = Extract<
-  Awaited<ReturnType<typeof fetchMojAuthoritySummaries>>,
-  { status: 'ok' }
->
+/** The provider summary result, shared with a foreground caller that joins it. */
+type MojSummaryResult = Awaited<ReturnType<typeof fetchMojAuthoritySummaries>>
 
 /** The index client hydration needs: a document write and a document delete. */
 type HydrationIndexClient = Parameters<typeof indexDocuments>[0] &
@@ -220,14 +217,14 @@ export async function hydrateMojAuthoritiesFromSearch(
   indexName: string,
   request: LegalFetchRequest,
   rateLimiter: MojRateLimiter,
-): Promise<MojSummaryOk | null> {
+): Promise<MojSummaryResult> {
   try {
     const mojResult = await fetchMojAuthoritySummaries(
       env,
       request,
       rateLimiter,
     )
-    if (mojResult.status !== 'ok') return null
+    if (mojResult.status !== 'ok') return mojResult
 
     for (const entry of mojResult.entries) {
       // Background hydration must not resurrect withdrawals: skip rows the
@@ -256,7 +253,7 @@ export async function hydrateMojAuthoritiesFromSearch(
     return mojResult
   } catch {
     // Search has already returned from Obiter-owned sources; provider hydration is best effort.
-    return null
+    return { status: 'unavailable' }
   }
 }
 

@@ -363,4 +363,101 @@ describe('hydration budget shared boundary', () => {
     expect(upsertDocument).not.toHaveBeenCalled()
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
+
+  it('lets foreground live join an in-flight background hydration without a second fetch', async () => {
+    let signalFirstFetch: (() => void) | undefined
+    const firstFetch = new Promise<void>((resolve) => {
+      signalFirstFetch = resolve
+    })
+    let releaseProvider: ((value: Response) => void) | undefined
+    const providerGate = new Promise<Response>((resolve) => {
+      releaseProvider = resolve
+    })
+    let fetchCount = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      asFetch(async () => {
+        fetchCount += 1
+        signalFirstFetch?.()
+        return providerGate
+      }),
+    )
+    let searchCount = 0
+    const empty = {
+      hits: [],
+      query: 'query',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    }
+    searchClientMock.search.mockImplementation(async () => {
+      searchCount += 1
+      if (searchCount === 2) await firstFetch
+      return empty
+    })
+    const { app } = probeApp(budget(), { id: 'usr_a' })
+
+    const background = app.request(
+      '/api/search/fetch',
+      fetchSearchRequest('Potanina', false),
+    )
+    const foreground = app.request(
+      '/api/search/fetch',
+      fetchSearchRequest('Potanina', true),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    releaseProvider?.(summaryFeed())
+    const [backgroundResponse, foregroundResponse] = await Promise.all([
+      background,
+      foreground,
+    ])
+
+    expect(backgroundResponse.status).toBe(200)
+    expect(await backgroundResponse.json()).toMatchObject({
+      outcome: 'hydration_queued',
+    })
+    expect(foregroundResponse.status).toBe(200)
+    expect(await foregroundResponse.json()).toMatchObject({
+      diagnostics: { liveProviderSearched: true },
+    })
+    expect(fetchCount).toBe(1)
+  })
+
+  it('preserves the upstream rate-limit shape through the gate', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      asFetch(
+        async () =>
+          new Response('', {
+            status: 429,
+            headers: { 'retry-after': '120' },
+          }),
+      ),
+    )
+    const { app } = probeApp(budget(), { id: 'usr_a' })
+
+    const response = await app.request(
+      '/api/search/fetch',
+      fetchSearchRequest('alpha', true),
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ retryAfter: '120' })
+  })
+
+  it('preserves the upstream rate-limit shape on the document route', async () => {
+    searchClientMock.getDocument.mockRejectedValue(new Error('not found'))
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      asFetch(
+        async () =>
+          new Response('', {
+            status: 429,
+            headers: { 'retry-after': '60' },
+          }),
+      ),
+    )
+    const { app } = probeApp(budget(), { id: 'usr_a' })
+
+    const response = await app.request(`/api/search/documents/${documentIdA}`)
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ retryAfter: '60' })
+  })
 })
