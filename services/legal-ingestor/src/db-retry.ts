@@ -27,7 +27,7 @@ function sqlStateOf(error: unknown): string | null {
     return null
   }
 
-  const code = (error as { code?: unknown }).code
+  const code: unknown = error.code
   return typeof code === 'string' ? code : null
 }
 

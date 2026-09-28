@@ -77,6 +77,7 @@ export function sameRunProperties(
   a: RunEditProperties,
   b: RunEditProperties,
 ): boolean {
+  // SAFETY: Object.keys of a RunEditProperties value yields its own property names, which are exactly the keys of RunEditProperties.
   return (Object.keys(a) as Array<keyof RunEditProperties>).every(
     (key) => a[key] === b[key],
   )
@@ -416,17 +417,13 @@ function isEditColour(value: string) {
 function isHighlight(
   value: string,
 ): value is (typeof documentEditHighlightSchema.options)[number] {
-  return (documentEditHighlightSchema.options as readonly string[]).includes(
-    value,
-  )
+  return documentEditHighlightSchema.options.some((option) => option === value)
 }
 
 function isVertAlign(
   value: string,
 ): value is (typeof documentEditVertAlignSchema.options)[number] {
-  return (documentEditVertAlignSchema.options as readonly string[]).includes(
-    value,
-  )
+  return documentEditVertAlignSchema.options.some((option) => option === value)
 }
 
 export function resolveInsertAnchor(

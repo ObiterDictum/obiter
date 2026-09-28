@@ -1,11 +1,11 @@
 import type { RedactionSpan, SpanCategory } from './types'
 import { suggestedAction } from './merge'
 
-const confidenceRank: Record<RedactionSpan['confidence'], number> = {
+const confidenceRank = {
   high: 2,
   medium: 1,
   low: 0,
-}
+} satisfies Record<RedactionSpan['confidence'], number>
 
 // Detection here is deterministic UK patterns only. These patterns are a
 // high-precision stopgap: precision is weighted over recall because a false

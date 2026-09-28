@@ -28,7 +28,9 @@ type PlacedFinding = {
 }
 
 /** Worst outcome first, so one marker for one place never understates it. */
-const stateRank: Record<VerificationFindingView['state'], number> = {
+type FindingStateRank = { [K in VerificationFindingView['state']]: number }
+
+const stateRank: FindingStateRank = {
   flagged: 0,
   review_required: 1,
   not_checked: 2,

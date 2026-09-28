@@ -326,6 +326,17 @@ function parseClmlWithStack(
     }
   }
 
+  /** Provision-level tags narrow by comparison, so no assertion is needed. */
+  function provisionKindFor(tag: string): LegislationProvisionKind | null {
+    return tag === 'P1' ||
+      tag === 'P2' ||
+      tag === 'P3' ||
+      tag === 'P4' ||
+      tag === 'P5'
+      ? tag
+      : null
+  }
+
   /** Nearest open frame that is or will be a row (container or provision). */
   const currentAddressable = (): ClmlFrame | null => {
     for (let i = stack.length - 1; i >= 0; i -= 1) {
@@ -411,11 +422,7 @@ function parseClmlWithStack(
           if (labelPath) {
             stack.push({
               tag,
-              kind:
-                containerKindFor(tag) ??
-                (provisionTags.has(tag)
-                  ? (tag as LegislationProvisionKind)
-                  : null),
+              kind: containerKindFor(tag) ?? provisionKindFor(tag),
               isProvision: provisionTags.has(tag),
               labelPath,
               parentLabelPath: nearestAddressableLabelPath(),

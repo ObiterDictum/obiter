@@ -83,6 +83,8 @@ export function payloadTooLargeResponse(
   c: Context,
   limitKind: 'json' | 'upload',
 ): Response {
+  // SAFETY: the '*' middleware in app.ts sets `requestId` to a `req_<uuid>` string before
+  // handlers run, and AppVariables types it as string, so both the key lookup and the string hold.
   const body: ApiErrorResponse = {
     error: {
       code: 'payload_too_large' satisfies ApiErrorCode,
@@ -94,6 +96,8 @@ export function payloadTooLargeResponse(
 }
 
 function validationFailedResponse(c: Context, message: string): Response {
+  // SAFETY: the '*' middleware in app.ts sets `requestId` to a `req_<uuid>` string before
+  // handlers run, and AppVariables types it as string, so both the key lookup and the string hold.
   const body: ApiErrorResponse = {
     error: {
       code: 'validation_failed' satisfies ApiErrorCode,
@@ -125,10 +129,8 @@ export async function readLimitedJsonValue(
   if (bytes.byteLength === 0) return { ok: true, value: null }
 
   try {
-    return {
-      ok: true,
-      value: JSON.parse(new TextDecoder().decode(bytes)) as unknown,
-    }
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    return { ok: true, value: parsed }
   } catch {
     return { ok: true, value: null }
   }
@@ -160,9 +162,9 @@ export async function readLimitedFormData(
   })
   let form: FormData
   try {
-    // bun-types and @types/node disagree on the FormData identity; the value is
-    // the request's own form data either way.
-    form = (await request.formData()) as unknown as FormData
+    // SAFETY: bun-types and @types/node disagree on the FormData identity, but the value is
+    // this request's own form data either way, so reading it as FormData is sound.
+    form = (await request.formData()) as FormData
   } catch {
     // Scoped to the parse call alone. A complete HTTP request whose multipart
     // body is malformed belongs to the client; storage and handler failures
@@ -179,6 +181,10 @@ export async function readLimitedFormData(
   return { ok: true, form }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export async function readLimitedJsonBody(
   c: Context,
   maxBytes: number,
@@ -186,7 +192,5 @@ export async function readLimitedJsonBody(
   const parsed = await readLimitedJsonValue(c, maxBytes)
   if (!parsed.ok) return parsed.response
   const value = parsed.value
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
+  return isRecord(value) ? value : null
 }

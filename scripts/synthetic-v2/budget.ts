@@ -65,6 +65,7 @@ export async function readLedger(
   capGbp = 30,
 ): Promise<SpendLedger> {
   try {
+    // SAFETY: the ledger file is written only by writeLedger in this module with the SpendLedger shape; reconcileSpend validates reservations before use.
     return JSON.parse(await readFile(path, 'utf8')) as SpendLedger
   } catch (error) {
     if (isMissingFile(error)) return { capGbp, entries: [] }

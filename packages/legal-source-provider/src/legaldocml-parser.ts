@@ -44,7 +44,22 @@ const parser = new XMLParser({
 
 function childrenOf(node: OrderedNode, tag: string): OrderedNode[] {
   const value = node[tag]
-  return Array.isArray(value) ? (value as OrderedNode[]) : []
+  return Array.isArray(value) ? value : []
+}
+
+/**
+ * Attribute map off a preserveOrder node. The parser runs with
+ * parseAttributeValue: false, so attributes are strings; anything else is
+ * dropped rather than propagated.
+ */
+function attributeMap(node: OrderedNode): Record<string, string> {
+  const raw = node[attributeKey]
+  if (typeof raw !== 'object' || raw === null) return {}
+  const entries: [string, string][] = []
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string') entries.push([key, value])
+  }
+  return Object.fromEntries(entries)
 }
 
 /** Children of the first direct `tag` child, without descending further. */
@@ -133,7 +148,9 @@ export function parseLegalDocMlParagraphs(
 ): LegalParagraph[] | null {
   let parsed: OrderedNode[]
   try {
-    parsed = parser.parse(xml) as OrderedNode[]
+    const result = parser.parse(xml)
+    if (!Array.isArray(result)) return null
+    parsed = result
   } catch {
     return null
   }
@@ -177,7 +194,7 @@ export function parseLegalDocMlParagraphs(
         const text = normalise(collectText(children, skipNum))
         if (!text) continue
 
-        const attributes = (node[attributeKey] ?? {}) as Record<string, string>
+        const attributes = attributeMap(node)
         paragraphs.push({
           id: `${documentId}-p${paragraphs.length + 1}`,
           documentId,
@@ -211,18 +228,23 @@ export function parseLegalDocMlParagraphs(
   return paragraphs.length > 0 ? paragraphs : null
 }
 
+export interface LegalDocMlMetadata {
+  title: string | null
+  dateDecided: string | null
+  neutralCitation: string | null
+}
+
 /**
  * Metadata the judgment states about itself. The Atom entry already carries
  * these, so this exists to fill gaps rather than to override the feed.
  */
-export function extractLegalDocMlMetadata(xml: string): {
-  title: string | null
-  dateDecided: string | null
-  neutralCitation: string | null
-} {
+export function extractLegalDocMlMetadata(xml: string): LegalDocMlMetadata {
   let parsed: OrderedNode[]
   try {
-    parsed = parser.parse(xml) as OrderedNode[]
+    const result = parser.parse(xml)
+    if (!Array.isArray(result))
+      return { title: null, dateDecided: null, neutralCitation: null }
+    parsed = result
   } catch {
     return { title: null, dateDecided: null, neutralCitation: null }
   }
@@ -231,8 +253,7 @@ export function extractLegalDocMlMetadata(xml: string): {
   const attributesOf = (nodes: OrderedNode[] | null, tag: string) => {
     if (!nodes) return undefined
     for (const node of nodes) {
-      if (tag in node)
-        return (node[attributeKey] ?? {}) as Record<string, string>
+      if (tag in node) return attributeMap(node)
     }
     return undefined
   }

@@ -11,7 +11,7 @@ export async function mapWithConcurrency<Item, Result>(
 ): Promise<Result[]> {
   if (items.length === 0) return []
   const limit = Math.max(1, concurrency)
-  const results = Array.from({ length: items.length }) as Result[]
+  const results: Result[] = []
   let nextIndex = 0
 
   async function worker() {

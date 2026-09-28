@@ -1,3 +1,7 @@
+interface RecallFloorMap {
+  [query: string]: number
+}
+
 export const searchBenchmarkBaseline = {
   // Minimums are floors set to current observed behaviour. The PR that improves
   // a metric tightens its floor: #53 raises short-word precision from 0.2 to 1;
@@ -33,6 +37,7 @@ export const searchBenchmarkBaseline = {
   expectedRecallQueryCount: 19,
   minimumRecall: 0.8333,
   minimumPrecision: 1,
+  // SAFETY: every value in the literal below is a numeric recall floor, so widening the inferred literal types to a string-keyed numeric record for per-query lookup in recall.ts is sound; established by inspection of those entries.
   minimumRecallByQuery: {
     // Per-query floors; a drop names its query in the failure string.
     'recall-cite-uksc-2024-3': 1,
@@ -50,5 +55,5 @@ export const searchBenchmarkBaseline = {
     'recall-subject-remedy': 1,
     'recall-subject-self-incrimination': 1,
     'recall-subject-carlill': 0,
-  } as Record<string, number>,
+  } as RecallFloorMap,
 } as const

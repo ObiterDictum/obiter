@@ -23,6 +23,7 @@ export function changelogQueryOptions() {
           source: 'github_unavailable',
         } satisfies ChangelogResponse
       }
+      // SAFETY: non-ok responses take the fallback return above; /api/changelog returns ChangelogResponse per the API contract.
       return (await response.json()) as ChangelogResponse
     },
     staleTime: 1000 * 60 * 10,

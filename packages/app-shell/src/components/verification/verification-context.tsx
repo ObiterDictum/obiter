@@ -219,13 +219,11 @@ export function VerificationWorkspaceProvider({
     mappable,
     run: latest,
     runsPending: runs.isPending,
-    runsError: runs.isError ? (runs.error as Error) : null,
+    runsError: runs.isError ? runs.error : null,
     documentLost: document.isError,
     findings,
     findingsPending: findingsQuery.isPending,
-    findingsError: findingsQuery.isError
-      ? (findingsQuery.error as Error)
-      : null,
+    findingsError: findingsQuery.isError ? findingsQuery.error : null,
     retryFindings,
     hasNextPage: findingsQuery.hasNextPage,
     loadingMore: findingsQuery.isFetchingNextPage,
@@ -264,7 +262,7 @@ export function VerificationWorkspaceProvider({
       create.mutate(version.id)
     },
     startPending: create.isPending,
-    startError: create.error ? (create.error as Error) : null,
+    startError: create.error ? create.error : null,
     registerMarker: (findingId, element) => {
       if (element) markers.current.set(findingId, element)
       else markers.current.delete(findingId)

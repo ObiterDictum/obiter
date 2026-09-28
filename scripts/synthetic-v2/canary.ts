@@ -11,7 +11,7 @@ export const tournamentCanaryContractVersion =
 // Comment-only or formatting changes may repin this hash without invalidating
 // paid receipts. Qualification changes require a version bump and a repin.
 export const tournamentCanaryContractSourceHash =
-  '3238a14bc2608db6dab6abfb66885a94a2cbca02db34fdc8ecac2370c432f1ab'
+  'b59b6c98e13409aabe179b0631de4d11257c0f33ab5e88932282f3cb3349a76d'
 
 export type CanarySmokeProfile = 'connectivity' | 'tournament-canary'
 
@@ -40,6 +40,7 @@ export function canaryReceiptEligibility(
       if (expected) reasons.push(`${expected.id}: result was not recorded`)
       continue
     }
+    // SAFETY: the typeof check above narrows value to a non-null object; the optional-field view is validated field-by-field below.
     const result =
       value && typeof value === 'object'
         ? (value as {

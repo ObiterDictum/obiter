@@ -109,8 +109,23 @@ function ctmIsIdentity(matrix: Matrix) {
   )
 }
 
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** Read a numeric operator argument; pdf.js emits a number for these ops. */
+function numericArgument(
+  args: unknown[] | undefined,
+  index: number,
+): number | null {
+  return asNumber(args?.[index])
+}
+
 function asMatrix(value: unknown): Matrix | null {
   // pdf.js passes matrices as arrays or as array-like objects.
+  // SAFETY: pdf.js supplies matrices as arrays or array-like objects; every
+  // entry is re-validated with Number.isFinite below, so the element type only
+  // affects how the value is read.
   const source = value as ArrayLike<number> | undefined
   if (!source || typeof source !== 'object') return null
   const out: number[] = []
@@ -119,6 +134,7 @@ function asMatrix(value: unknown): Matrix | null {
     if (typeof entry !== 'number' || !Number.isFinite(entry)) return null
     out.push(entry)
   }
+  // SAFETY: the loop above pushed exactly six finite numbers.
   return out as Matrix
 }
 
@@ -200,6 +216,8 @@ export function laidCharsFromOperatorList(input: {
         textMatrix = multiply(translation(shift, 0), textMatrix)
         continue
       }
+      // SAFETY: a showText array holds pdf.js glyph records; unicode, width
+      // and isSpace are all read defensively below.
       const glyph = entry as Glyph
       const unicode = glyph.unicode ?? ''
       const advanceWidth =
@@ -277,6 +295,8 @@ export function laidCharsFromOperatorList(input: {
   const { fnArray, argsArray } = operatorList
   for (let index = 0; index < fnArray.length; index += 1) {
     const fn = fnArray[index]
+    // SAFETY: pdf.js emits each operator's arguments as an array, or omits
+    // them entirely; every read below tolerates an undefined entry.
     const args = argsArray[index] as unknown[] | undefined
 
     switch (fn) {
@@ -343,30 +363,30 @@ export function laidCharsFromOperatorList(input: {
         break
       }
       case ops.setCharSpacing:
-        state.charSpacing = (args?.[0] as number) ?? 0
+        state.charSpacing = numericArgument(args, 0) ?? 0
         break
       case ops.setWordSpacing:
-        state.wordSpacing = (args?.[0] as number) ?? 0
+        state.wordSpacing = numericArgument(args, 0) ?? 0
         break
       case ops.setHScale:
         // Tz is a percentage.
-        state.hScale = ((args?.[0] as number) ?? 100) / 100
+        state.hScale = (numericArgument(args, 0) ?? 100) / 100
         break
       case ops.setTextRise:
-        state.rise = (args?.[0] as number) ?? 0
+        state.rise = numericArgument(args, 0) ?? 0
         break
       case ops.setLeading:
-        state.leading = (args?.[0] as number) ?? 0
+        state.leading = numericArgument(args, 0) ?? 0
         break
       case ops.setLeadingMoveText: {
-        const tx = (args?.[0] as number) ?? 0
-        const ty = (args?.[1] as number) ?? 0
+        const tx = numericArgument(args, 0) ?? 0
+        const ty = numericArgument(args, 1) ?? 0
         state.leading = -ty
         moveLine(tx, ty)
         break
       }
       case ops.moveText:
-        moveLine((args?.[0] as number) ?? 0, (args?.[1] as number) ?? 0)
+        moveLine(numericArgument(args, 0) ?? 0, numericArgument(args, 1) ?? 0)
         break
       case ops.setTextMatrix: {
         const matrix = asMatrix(args?.length === 1 ? args[0] : args)
@@ -388,8 +408,8 @@ export function laidCharsFromOperatorList(input: {
         show(args?.[0])
         break
       case ops.nextLineSetSpacingShowText:
-        state.wordSpacing = (args?.[0] as number) ?? state.wordSpacing
-        state.charSpacing = (args?.[1] as number) ?? state.charSpacing
+        state.wordSpacing = numericArgument(args, 0) ?? state.wordSpacing
+        state.charSpacing = numericArgument(args, 1) ?? state.charSpacing
         moveLine(0, -state.leading)
         show(args?.[2])
         break

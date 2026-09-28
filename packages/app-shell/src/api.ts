@@ -30,6 +30,15 @@ export class ApiError extends Error {
 
 const UNKNOWN_REQUEST_ID = 'req_unknown'
 
+async function readJsonOrNull(response: Response) {
+  try {
+    // SAFETY: response.json() yields an untyped body; callers validate it via safeParse before use.
+    return (await response.json()) as unknown
+  } catch {
+    return null
+  }
+}
+
 /**
  * Fetch a JSON endpoint with auth credentials and normalised errors.
  *
@@ -93,16 +102,12 @@ export async function apiFetch<T>(
   })
 
   if (response.ok && (response.status === 204 || response.status === 205)) {
+    // SAFETY: 204/205 carry no body by HTTP semantics, so undefined is the only honest value; callers instantiate T as the empty-response type for such endpoints.
     return undefined as T
   }
 
   if (!response.ok) {
-    let parsed: unknown = null
-    try {
-      parsed = await response.json()
-    } catch {
-      parsed = null
-    }
+    const parsed = await readJsonOrNull(response)
 
     const result = apiErrorResponseSchema.safeParse(parsed)
     if (result.success) {
@@ -124,6 +129,7 @@ export async function apiFetch<T>(
     )
   }
 
+  // SAFETY: non-ok responses throw above; each call site instantiates T with that endpoint's contract response type.
   return (await response.json()) as T
 }
 
@@ -149,12 +155,7 @@ export async function apiFetchBlobResult(
   })
 
   if (!response.ok) {
-    let parsed: unknown = null
-    try {
-      parsed = await response.json()
-    } catch {
-      parsed = null
-    }
+    const parsed = await readJsonOrNull(response)
 
     const result = apiErrorResponseSchema.safeParse(parsed)
     if (result.success) {

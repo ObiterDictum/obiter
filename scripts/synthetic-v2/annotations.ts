@@ -39,6 +39,7 @@ export function parseAnnotationResponse(
 ): SyntheticSpan[] {
   let payload: AnnotationPayload
   try {
+    // SAFETY: the payload shape (spans array, matching id) is validated below before any span is read.
     payload = JSON.parse(value) as AnnotationPayload
   } catch {
     throw new MarkerValidationError('Annotation response is not valid JSON')
@@ -53,7 +54,9 @@ export function parseAnnotationResponse(
   const spans = payload.spans.map((value): SyntheticSpan => {
     if (!value || typeof value !== 'object')
       throw new MarkerValidationError('Annotation span is not an object')
+    // SAFETY: the object check above narrows the span to a non-null object; category/token bounds are validated below.
     const { category, startToken, endToken } = value as AnnotationCandidate
+    // SAFETY: Number.isInteger checks establish numeric token indices; the comparisons below bound them to [0, tokens.length].
     if (
       typeof category !== 'string' ||
       !categories.has(category) ||
@@ -66,8 +69,11 @@ export function parseAnnotationResponse(
       throw new MarkerValidationError(
         'Annotation span requires category and a valid token range',
       )
+    // SAFETY: the range check above establishes startToken/endToken are integers with 0 <= start < end <= tokens.length.
     const first = tokens[startToken as number]!
+    // SAFETY: the same range check bounds endToken - 1 to a valid token index.
     const last = tokens[(endToken as number) - 1]!
+    // SAFETY: categories.has(category) above establishes membership in spanCategories; offsets come from validated token bounds.
     return {
       category: category as SyntheticSpan['category'],
       start: first.start,
@@ -91,12 +97,16 @@ export function parseAnnotationResponse(
   return canonical
 }
 
-export const personCategoryPriority: Partial<
-  Record<SyntheticSpan['category'], number>
-> = {
+export const personCategoryPriority = {
   person_private: 1,
   person_professional: 2,
   person_protected: 3,
+} satisfies Partial<Record<SyntheticSpan['category'], number>>
+
+/** Rank of a person-role category, or undefined when the category is not a person role. */
+function personPriority(category: SyntheticSpan['category']) {
+  // SAFETY: personCategoryPriority only ranks the three person roles; any other category has no rank and reads as undefined.
+  return personCategoryPriority[category as keyof typeof personCategoryPriority]
 }
 
 /**
@@ -124,17 +134,14 @@ function canonicalizePersonOverlaps(spans: SyntheticSpan[]) {
       previous.text === span.text
     if (exactDuplicate) continue
     const bothPeople =
-      personCategoryPriority[previous.category] !== undefined &&
-      personCategoryPriority[span.category] !== undefined
+      personPriority(previous.category) !== undefined &&
+      personPriority(span.category) !== undefined
     const nested = span.end <= previous.end
     if (!nested || !bothPeople) {
       canonical.push(span)
       continue
     }
-    if (
-      personCategoryPriority[span.category]! >
-      personCategoryPriority[previous.category]!
-    )
+    if (personPriority(span.category)! > personPriority(previous.category)!)
       canonical[canonical.length - 1] = {
         ...previous,
         category: span.category,

@@ -24,6 +24,15 @@ function maskEmail(email: string) {
   return `${localPart.slice(0, 2)}***@${domain}`
 }
 
+/** Resend error-shape probe: only a numeric statusCode is logged, anything else is absent. */
+function errorStatusCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('statusCode' in error)) {
+    return undefined
+  }
+  const statusCode: unknown = error.statusCode
+  return typeof statusCode === 'number' ? statusCode : undefined
+}
+
 /**
  * Shared email sender for all auth-flow emails (magic link, verification,
  * password reset). With OBITER_RESEND_API_KEY configured it sends via
@@ -71,7 +80,7 @@ export async function sendEmail(
     console.error(`[resend] ${options.logLabel} email delivery failed`, {
       email: maskEmail(options.email),
       from: env.emailFrom,
-      statusCode: (result.error as { statusCode?: number }).statusCode,
+      statusCode: errorStatusCode(result.error),
       message: result.error.message,
       name: result.error.name,
     })
@@ -289,11 +298,13 @@ export function emailAndPasswordOptions(env: ApiEnv) {
  * workspace name — a forged over-long or invisible name can sit in the
  * column but never becomes a tenant name.
  */
-export function userAdditionalFields(): {
+export type UserAdditionalFields = {
   organisationId: { type: 'string'; required: false; input: false }
   role: { type: ['owner', 'admin', 'member']; required: false; input: false }
   pendingOrganisationName: { type: 'string'; required: false }
-} {
+}
+
+export function userAdditionalFields(): UserAdditionalFields {
   return {
     organisationId: {
       type: 'string',
