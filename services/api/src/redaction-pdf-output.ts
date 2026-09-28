@@ -107,6 +107,9 @@ export async function buildRedactedPdf(
       const height = Math.max(1, Math.ceil(viewport.height))
       const canvas = createCanvas(width, height)
       const context = canvas.getContext('2d')
+      // SAFETY: the canvas comes from @napi-rs/canvas, the implementation handed to
+      // createIsomorphicCanvasFactory above, so its context satisfies unpdf's render surface;
+      // the never-casts bridge the two libraries' nominal typings only.
       await page.render({
         canvasContext: context as never,
         viewport,

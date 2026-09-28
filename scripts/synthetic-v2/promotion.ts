@@ -236,6 +236,7 @@ function auditsById(audits: AuditRecord[], documentIds: Set<string>) {
 
 function isJudgeVerdict(value: unknown): value is JudgeVerdict {
   if (!value || typeof value !== 'object') return false
+  // SAFETY: the object check above narrows unknown to a non-null object; the Partial view is validated field-by-field below.
   const verdict = value as Partial<JudgeVerdict>
   return (
     typeof verdict.id === 'string' &&

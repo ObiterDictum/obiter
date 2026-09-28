@@ -60,10 +60,8 @@ function errorResponse(
   return c.json(body, status)
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
 }
 
 function requiredString(value: unknown): string | null {
@@ -114,7 +112,7 @@ export function createDocumentsRoutes(
     if (body instanceof Response) return body
     const upload = form?.get('file')
     const file = upload instanceof File ? upload : null
-    const bodyRecord = body ? asRecord(body) : null
+    const bodyRecord = body && isRecord(body) ? body : null
     const filename =
       file?.name ||
       requiredString(form?.get('filename')) ||

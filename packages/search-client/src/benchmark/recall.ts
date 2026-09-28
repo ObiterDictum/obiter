@@ -1,4 +1,4 @@
-import { search, type LegalSearchFilters } from '../index'
+import { search } from '../index'
 import type { MeiliSearch } from 'meilisearch'
 import { searchBenchmarkBaseline } from './baseline'
 import type { SearchRecallQuery } from './cases'
@@ -28,10 +28,10 @@ export async function runRecallQuery(
   indexedIds: Set<string>,
 ): Promise<RecallQueryResult> {
   const result = await search(
-    client as Parameters<typeof search>[0],
+    client,
     indexName,
     testCase.query,
-    testCase.filters ?? ({} as LegalSearchFilters),
+    testCase.filters ?? {},
     { includeSnippets: false, limit: recallTopK },
   )
   const returnedIds = result.hits.map((hit) => hit.id)

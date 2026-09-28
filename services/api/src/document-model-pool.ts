@@ -100,6 +100,8 @@ function spawnDocumentModelWorker(): Worker {
   // Node needs the loader because the workspace packages ship TypeScript
   // source only. The same rule as the two server entry points, applied to
   // their workers.
+  // SAFETY: the cast only adds an optional Bun property for runtime detection; on Node the
+  // property is absent and the worker gets the tsx loader, on Bun it gets native TS support.
   const options =
     typeof (globalThis as { Bun?: unknown }).Bun === 'undefined'
       ? { execArgv: ['--import', tsxLoaderPath()] }

@@ -86,6 +86,10 @@ function iso(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
 }
@@ -138,10 +142,7 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     if (user instanceof Response) return user
 
     const value: unknown = await c.req.json().catch(() => null)
-    const rawName =
-      typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? (value as Record<string, unknown>).name
-        : undefined
+    const rawName = isRecord(value) ? value.name : undefined
 
     const parsed = parseOrganisationName(rawName)
     if (!parsed.ok) {
@@ -186,10 +187,7 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     if (denied) return denied
 
     const value: unknown = await c.req.json().catch(() => null)
-    const rawName =
-      typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? (value as Record<string, unknown>).name
-        : undefined
+    const rawName = isRecord(value) ? value.name : undefined
     const parsed = parseOrganisationName(rawName)
     if (!parsed.ok) {
       return errorResponse(c, 'validation_failed', parsed.message, 400)

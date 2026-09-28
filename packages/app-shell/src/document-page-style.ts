@@ -287,6 +287,7 @@ function wordUnderline(xml: string): boolean | undefined {
 }
 
 function omitUndefined<T extends object>(value: T): T {
+  // SAFETY: Object.entries yields T's own keys and the filter only drops undefined-valued entries, so the rebuilt object still matches T.
   return Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== undefined),
   ) as T

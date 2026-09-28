@@ -63,15 +63,19 @@ const runtimeGlobals = new Set([
 
 const installFlag = Symbol.for('obiter.testDomInstalled')
 
+// SAFETY: globalThis is a non-null object at runtime, so a string-keyed view only enables reads and writes the install loop already performs; the flag read below compares against `true` and the write stores `true`.
+const hostGlobals = globalThis as Record<PropertyKey, unknown>
+
 async function install(): Promise<void> {
-  if ((globalThis as Record<PropertyKey, unknown>)[installFlag] === true) return
+  if (hostGlobals[installFlag] === true) return
 
   const dom = new JSDOM('<!doctype html><html><body></body></html>', {
     url: 'http://localhost:3000',
     pretendToBeVisual: true,
   })
   const window = dom.window
-  const source = window as unknown as Record<string, unknown>
+  // SAFETY: jsdom installs every DOM global (Node, Element, Document, Event) as an own property of its window, including non-enumerable ones, so the copy loop below must read through a string-keyed view; the intersection keeps the declared window type while only adding keyed reads, and values are copied verbatim.
+  const source = window as typeof window & Record<string, unknown>
 
   for (const key of Object.getOwnPropertyNames(source)) {
     if (runtimeGlobals.has(key)) continue
@@ -114,7 +118,7 @@ async function install(): Promise<void> {
     }
   }
 
-  ;(globalThis as Record<PropertyKey, unknown>)[installFlag] = true
+  hostGlobals[installFlag] = true
 }
 
 await install()
@@ -126,8 +130,12 @@ await install()
  */
 function describeValue(value: unknown): string {
   if (typeof Node !== 'undefined' && value instanceof Node) {
-    if (value.nodeType === 1) {
-      const element = value as Element
+    if (
+      value.nodeType === 1 &&
+      typeof Element !== 'undefined' &&
+      value instanceof Element
+    ) {
+      const element = value
       const id = element.id ? `#${element.id}` : ''
       const role = element.getAttribute('role')
       const text = (element.textContent ?? '').replace(/\s+/g, ' ').slice(0, 80)

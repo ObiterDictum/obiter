@@ -211,8 +211,7 @@ export function normalizePersonDetections<T extends RampartSpanInput>(
     const start = trimLeadingTitles(text, span.start, span.end)
     const trimmed = text.slice(start, span.end)
     if (isDeniedPersonName(trimmed)) continue
-    // The spread preserves every property of T; only `start` and `text` change,
-    // and `RampartSpanInput` declares both, so the narrowing is sound.
+    // SAFETY: the spread preserves every property of T and only `start` and `text` change, both declared on the RampartSpanInput bound established by the generic constraint above, so the result is still a T.
     kept.push({ ...span, start, text: trimmed } as T)
   }
   return kept

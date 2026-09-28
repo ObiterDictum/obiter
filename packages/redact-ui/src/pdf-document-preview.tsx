@@ -97,7 +97,7 @@ function PdfPreviewPage({
         canvasContext: context,
         viewport,
         canvas,
-      }) as { cancel: () => void; promise: Promise<unknown> }
+      })
       renderTask = task
       try {
         await task.promise

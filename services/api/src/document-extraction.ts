@@ -325,7 +325,10 @@ function operatorListUsesType3Font(
     )
   }
   for (let index = 0; index < operatorList.fnArray.length; index += 1) {
-    const args = operatorList.argsArray[index] as unknown[] | undefined
+    const rawArgs: unknown = operatorList.argsArray[index]
+    const args: unknown[] | undefined = Array.isArray(rawArgs)
+      ? rawArgs
+      : undefined
     if (operatorList.fnArray[index] === ops.setFont) {
       if (isType3(args?.[0])) return true
       continue
@@ -335,8 +338,10 @@ function operatorListUsesType3Font(
     // font set only through the graphics state would be replayed instead of
     // rejected even though the glyph replay cannot read its metrics.
     if (operatorList.fnArray[index] !== ops.setGState) continue
-    if (!Array.isArray(args?.[0])) continue
-    for (const entry of args[0] as unknown[]) {
+    const gstate: unknown = args?.[0]
+    if (!Array.isArray(gstate)) continue
+    for (const rawEntry of gstate) {
+      const entry: unknown = rawEntry
       if (
         Array.isArray(entry) &&
         entry[0] === 'Font' &&
@@ -355,7 +360,9 @@ let cachedOps: PdfOps | null | undefined
 async function loadPdfOps(): Promise<PdfOps | null> {
   if (cachedOps !== undefined) return cachedOps
   try {
-    const module = (await import('unpdf/pdfjs')) as unknown as {
+    // SAFETY: unpdf re-exports the pdf.js OPS enum from its bundled build without types; only
+    // the optional OPS member is read, and a missing enum yields null exactly as a failed import.
+    const module = (await import('unpdf/pdfjs')) as {
       OPS?: PdfOps
     }
     cachedOps = module.OPS ?? null
@@ -506,14 +513,14 @@ export function decodeXmlText(value: string) {
   return value.replace(
     /&(lt|gt|amp|quot|apos|#\d+|#x[\da-f]+);/gi,
     (entity, code: string) => {
-      const named = {
+      const named: Record<string, string> = {
         lt: '<',
         gt: '>',
         amp: '&',
         quot: '"',
         apos: "'",
-      } as const
-      const namedValue = named[code.toLowerCase() as keyof typeof named]
+      }
+      const namedValue = named[code.toLowerCase()]
       if (namedValue) return namedValue
       const numeric = code.toLowerCase().startsWith('#x')
         ? Number.parseInt(code.slice(2), 16)

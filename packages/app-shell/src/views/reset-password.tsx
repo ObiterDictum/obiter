@@ -13,6 +13,7 @@ import { useForceNightTheme } from './sign-in'
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
   const { resetPassword } = useAuth()
+  // SAFETY: useSearch with strict:false is untyped; token and error are typeof-narrowed at each use below.
   const search = useSearch({ strict: false }) as {
     token?: string
     error?: string

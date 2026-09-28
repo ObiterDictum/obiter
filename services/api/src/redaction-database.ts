@@ -136,6 +136,9 @@ function parseSpans(value: unknown): RedactionSpan[] {
   return parsed.map((span): RedactionSpan => {
     if (typeof span !== 'object' || span === null)
       throw new Error('Stored redaction span is invalid.')
+    // SAFETY: span passed the non-null object guard above; every field read from item is
+    // validated below (safeParse for category/source/confidence/suggestion, typeof for
+    // id/start/end/text), so a wrong shape throws instead of propagating.
     const item = span as Record<string, unknown>
     const category = spanCategorySchema.safeParse(item.category)
     const source = spanSourceSchema.safeParse(item.source)
@@ -174,6 +177,8 @@ function parseDecisions(value: unknown): Decisions {
   for (const [spanId, value] of Object.entries(parsed)) {
     if (typeof value !== 'object' || value === null)
       throw new Error('Stored redaction decision is invalid.')
+    // SAFETY: value passed the non-null object guard above; the decision is safeParsed and
+    // decidedBy/decidedAt are typeof-checked below, so a wrong shape throws instead of propagating.
     const item = value as Record<string, unknown>
     const decision = spanDecisionSchema.safeParse(item.decision)
     if (
@@ -231,6 +236,8 @@ export function computeSummary(
   spans: RedactionSpan[],
   decisions: Decisions,
 ): RunSummary {
+  // SAFETY: entries are built from spanCategorySchema.options, so the result carries exactly
+  // one zero count per span category.
   const byCategory = Object.fromEntries(
     spanCategorySchema.options.map((category) => [category, 0]),
   ) as Record<RedactionSpan['category'], number>

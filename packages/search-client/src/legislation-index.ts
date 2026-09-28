@@ -158,6 +158,7 @@ export function isLegislationProvisionDocument(
   value: unknown,
 ): value is LegislationProvisionDocument {
   if (typeof value !== 'object' || value === null) return false
+  // SAFETY: the non-null object check above makes string-keyed reads sound; every field is individually type-checked below, so the record view grants no unchecked trust.
   const record = value as Record<string, unknown>
   // hasUnappliedEffects is required boolean, fail-closed: a row without it
   // is withheld/dropped, never served as current text. effectsCheckedAt is
@@ -302,7 +303,7 @@ export async function searchLegislation(
   const hits: LegislationSearchHit[] = []
   for (const hit of result.hits) {
     if (!isLegislationProvisionDocument(hit)) continue
-    const score = (hit as { _rankingScore?: unknown })._rankingScore
+    const score = '_rankingScore' in hit ? hit._rankingScore : undefined
     hits.push(
       typeof score === 'number' && Number.isFinite(score)
         ? { ...hit, engineRankingScore: score }
