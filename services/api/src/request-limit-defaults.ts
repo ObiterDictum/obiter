@@ -14,6 +14,13 @@ export const DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX = 12
 export const DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS = 600_000
 
 /**
+ * Default legal hydration lease lifetime (5 minutes). It is the ceiling on how
+ * long a crashed replica can hold one in-flight slot, and the floor on how
+ * long a legitimate operation may run before its lease is reclaimed.
+ */
+export const DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS = 300_000
+
+/**
  * Default cap on retained per-user hydration windows. The window map is an
  * in-process memory bound, not an identity control: eviction resets the
  * least-recently-seen user's count, so the process-wide Moj rate limiter and
