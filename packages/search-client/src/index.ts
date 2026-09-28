@@ -1207,7 +1207,11 @@ function validationFailure(
   documents: unknown[],
   messages: string[],
 ): SearchIndexDocumentsResult {
-  const recordId = (documents[0] as { id?: unknown } | undefined)?.id
+  const first = documents[0]
+  const recordId =
+    typeof first === 'object' && first !== null && 'id' in first
+      ? first.id
+      : undefined
 
   return {
     indexedCount: 0,
@@ -1364,7 +1368,8 @@ function isUnsupportedSettingError(error: unknown) {
   return (
     error instanceof Error &&
     'response' in error &&
-    (error.response as Response | undefined)?.status === 404
+    error.response instanceof Response &&
+    error.response.status === 404
   )
 }
 
@@ -1539,19 +1544,16 @@ function isIndexAlreadyExistsError(error: unknown): boolean {
     return false
   }
 
-  if (
-    'code' in error &&
-    (error as { code?: unknown }).code === 'index_already_exists'
-  ) {
+  if ('code' in error && error.code === 'index_already_exists') {
     return true
   }
 
-  const cause = (error as { cause?: unknown }).cause
+  const cause = 'cause' in error ? error.cause : undefined
   if (
     typeof cause === 'object' &&
     cause !== null &&
     'code' in cause &&
-    (cause as { code?: unknown }).code === 'index_already_exists'
+    cause.code === 'index_already_exists'
   ) {
     return true
   }

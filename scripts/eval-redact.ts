@@ -72,6 +72,7 @@ async function main() {
   }
   let fixtures: Fixture[]
   try {
+    // SAFETY: the corpus file is written by generateSyntheticData with validated offsets; unknown labels throw at the category mapping below.
     fixtures = readFileSync(
       resolve('data/evals/redact/synthetic_validation.jsonl'),
       'utf8',

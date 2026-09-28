@@ -58,6 +58,7 @@ export function stripMarkers(markedText: string): {
     const start = text.length
     text += value
     const end = text.length
+    // SAFETY: labels.has(category) above establishes it is one of spanCategories, so the narrowed view matches SyntheticSpan.
     spans.push({
       category: category as SyntheticSpan['category'],
       start,

@@ -33,6 +33,7 @@ export const searchBenchmarkBaseline = {
   expectedRecallQueryCount: 19,
   minimumRecall: 0.8333,
   minimumPrecision: 1,
+  // SAFETY: every value in the literal below is a numeric recall floor, so widening the inferred literal types to a string-keyed numeric record for per-query lookup in recall.ts is sound; established by inspection of those entries.
   minimumRecallByQuery: {
     // Per-query floors; a drop names its query in the failure string.
     'recall-cite-uksc-2024-3': 1,

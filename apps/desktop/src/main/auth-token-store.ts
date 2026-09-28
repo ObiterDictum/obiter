@@ -48,7 +48,11 @@ export class DesktopAuthTokenStore {
         const encrypted = await readFile(this.tokenPath)
         this.memoryToken = this.encryptionStorage.decryptString(encrypted)
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        const code =
+          typeof error === 'object' && error !== null && 'code' in error
+            ? error.code
+            : undefined
+        if (code !== 'ENOENT') {
           this.warn('[obiter] Unable to read the desktop auth token.')
         }
       }

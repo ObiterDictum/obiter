@@ -69,6 +69,7 @@ export async function assertSafeOutputRoot(
       `Synthetic output root is missing readable sentinel ${rootSentinelFile}`,
     )
   }
+  // SAFETY: the typeof check above narrows sentinel to a non-null object; the optional-kind view is compared against kind below.
   if (
     !sentinel ||
     typeof sentinel !== 'object' ||
@@ -143,6 +144,7 @@ export function assertReleaseManifestBinding(
 ): asserts value is ReleaseManifest {
   if (!value || typeof value !== 'object')
     throw new Error('Dataset manifest must be an object')
+  // SAFETY: the object check above narrows unknown to a non-null object; versioned fields are validated below.
   const manifest = value as Partial<ReleaseManifest>
   if (
     manifest.version !== 'synthetic-v2-release:v2' ||
@@ -294,6 +296,7 @@ async function readDocuments(path: string) {
   if (!lines.length) throw new Error('Dataset documents must not be empty')
   return lines.map((json, index) => {
     try {
+      // SAFETY: lines come from documents.jsonl written by writeDatasetFiles from SyntheticDocument records; the manifest hash binding is checked before use.
       return { document: JSON.parse(json) as SyntheticDocument, json }
     } catch {
       throw new Error(`Dataset document JSON is invalid at line ${index + 1}`)
@@ -303,7 +306,7 @@ async function readDocuments(path: string) {
 
 async function readJson(path: string, label: string) {
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as unknown
+    return JSON.parse(await readFile(path, 'utf8'))
   } catch {
     throw new Error(`Synthetic ${label} must be readable JSON`)
   }

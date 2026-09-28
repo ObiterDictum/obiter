@@ -38,9 +38,12 @@ export function readWithdrawalCandidate(
   // confirming: the safe direction is to wait for fresh evidence, and the
   // audit rows still record what was observed.
   if (typeof providerJson !== 'object' || providerJson === null) return null
-  const raw = (providerJson as { withdrawalCandidate?: unknown })
-    .withdrawalCandidate
+  const raw =
+    'withdrawalCandidate' in providerJson
+      ? providerJson.withdrawalCandidate
+      : undefined
   if (typeof raw !== 'object' || raw === null) return null
+  // SAFETY: raw passed the non-null object check above; each field is type-checked immediately below, so the record view only enables reads.
   const { firstSeenAt, runId, checkedUris } = raw as Record<string, unknown>
   if (
     typeof firstSeenAt !== 'string' ||
@@ -54,8 +57,10 @@ export function readWithdrawalCandidate(
 
 export function readWithdrawnInfo(providerJson: unknown): WithdrawnInfo | null {
   if (typeof providerJson !== 'object' || providerJson === null) return null
-  const raw = (providerJson as { withdrawn?: unknown }).withdrawn
+  const raw =
+    'withdrawn' in providerJson ? providerJson.withdrawn : undefined
   if (typeof raw !== 'object' || raw === null) return null
+  // SAFETY: raw passed the non-null object check above; each field is type-checked immediately below, so the record view only enables reads.
   const { at, checkedUris, runIds } = raw as Record<string, unknown>
   if (
     typeof at !== 'string' ||

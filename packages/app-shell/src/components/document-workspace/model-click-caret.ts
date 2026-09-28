@@ -10,6 +10,7 @@ export function caretFromPoint(
   clientX: number,
   clientY: number,
 ): { node: Node; offset: number } | undefined {
+  // SAFETY: lib.dom lacks the vendor caretPositionFromPoint/caretRangeFromPoint APIs; each is existence-checked before use, so an absent method is skipped rather than called.
   const doc = document as Document & {
     caretPositionFromPoint?: (
       x: number,

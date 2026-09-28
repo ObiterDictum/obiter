@@ -31,11 +31,6 @@ interface RouteVariables {
 
 type RouteContext = Context<{ Variables: RouteVariables }>
 
-const updatableMatterStatuses = new Set<UpdatableMatterStatus>([
-  'active',
-  'archived',
-])
-
 function errorResponse(
   c: RouteContext,
   code: ApiErrorCode,
@@ -56,10 +51,8 @@ function includeDeletedRequested(c: RouteContext) {
   }
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
 }
 
 function stringValue(value: unknown): string | undefined {
@@ -79,10 +72,7 @@ function stringArray(value: unknown): string[] | undefined {
 function updatableMatterStatus(
   value: unknown,
 ): UpdatableMatterStatus | undefined {
-  return typeof value === 'string' &&
-    updatableMatterStatuses.has(value as UpdatableMatterStatus)
-    ? (value as UpdatableMatterStatus)
-    : undefined
+  return value === 'active' || value === 'archived' ? value : undefined
 }
 
 export function createMattersRoutes(pool: Pool) {
@@ -92,7 +82,8 @@ export function createMattersRoutes(pool: Pool) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const body = asRecord(await c.req.json().catch(() => null))
+    const bodyJson: unknown = await c.req.json().catch(() => null)
+    const body = isRecord(bodyJson) ? bodyJson : null
     const name = stringValue(body?.name)
     const description = nullableStringValue(body?.description)
     const primaryJurisdiction = stringValue(body?.primaryJurisdiction)
@@ -188,7 +179,8 @@ export function createMattersRoutes(pool: Pool) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const body = asRecord(await c.req.json().catch(() => null))
+    const bodyJson: unknown = await c.req.json().catch(() => null)
+    const body = isRecord(bodyJson) ? bodyJson : null
     const name = stringValue(body?.name)
     const description = nullableStringValue(body?.description)
     const primaryJurisdiction = stringValue(body?.primaryJurisdiction)

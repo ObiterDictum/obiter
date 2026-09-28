@@ -40,6 +40,7 @@ export function canaryReceiptEligibility(
       if (expected) reasons.push(`${expected.id}: result was not recorded`)
       continue
     }
+    // SAFETY: the typeof check above narrows value to a non-null object; the optional-field view is validated field-by-field below.
     const result =
       value && typeof value === 'object'
         ? (value as {

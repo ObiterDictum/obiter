@@ -49,12 +49,14 @@ async function providerHttpError(provider: string, response: Response) {
   } catch {
     return new ProviderHttpError(provider, response.status)
   }
+  // SAFETY: the 'error' in body check establishes the key exists on this response object; the shape is validated below.
   const error =
     body && typeof body === 'object' && 'error' in body
       ? (body as { error?: unknown }).error
       : body
   if (!error || typeof error !== 'object')
     return new ProviderHttpError(provider, response.status)
+  // SAFETY: the object check above narrows error to a non-null object; type/code/param are filtered by string/regex checks below.
   const detail = error as { type?: unknown; code?: unknown; param?: unknown }
   const safeParts = [detail.type, detail.code, detail.param]
     .filter(
@@ -735,6 +737,7 @@ export function createJudgeAdapter(
 
 export function parseJudgeProvider(value: string | undefined, name: string) {
   if (value && judgeProviders.some((provider) => provider === value))
+    // SAFETY: the some() membership test establishes value equals one of the judgeProviders literals.
     return value as JudgeProvider
   throw new ProviderConfigurationError(
     `${name} must be one of: ${judgeProviders.join(', ')}`,
@@ -1137,6 +1140,7 @@ type AnthropicToolResponse = {
 function parseAnthropicToolResponse(value: unknown, provider: string) {
   if (!value || typeof value !== 'object')
     throw new Error(`${provider} returned invalid JSON`)
+  // SAFETY: the object check above narrows unknown to a non-null object; model/usage/tool input are validated below.
   const body = value as AnthropicToolResponse
   const tool = body.content?.find(
     (entry) =>
@@ -1187,6 +1191,7 @@ function parseOpenAICompatibleResponse(
 ): { text: string; model: string; usage: Usage; finishReason?: string } {
   if (!value || typeof value !== 'object')
     throw new Error(`${provider} returned invalid JSON`)
+  // SAFETY: the object check above narrows unknown to a non-null object; choices/model/usage are validated below.
   const body = value as OpenAICompatibleResponse
   const message = body.choices?.[0]?.message
   const toolCalls = message?.tool_calls
@@ -1227,6 +1232,7 @@ function parseOpenAICompatibleResponse(
 
 function openAiBillingEvidence(value: unknown) {
   if (!value || typeof value !== 'object') return {}
+  // SAFETY: the object check above narrows unknown to a non-null object; model/usage are guarded by typeof/isTokenCount below.
   const body = value as OpenAICompatibleResponse
   const inputTokens = body.usage?.prompt_tokens ?? body.usage?.input_tokens
   const outputTokens =
@@ -1242,6 +1248,7 @@ function openAiBillingEvidence(value: unknown) {
 
 function anthropicBillingEvidence(value: unknown) {
   if (!value || typeof value !== 'object') return {}
+  // SAFETY: the object check above narrows unknown to a non-null object; model/usage are guarded by typeof/isTokenCount below.
   const body = value as AnthropicToolResponse
   const inputTokens = body.usage?.input_tokens
   const outputTokens = body.usage?.output_tokens
@@ -1273,6 +1280,7 @@ function openAiText(value: unknown) {
   if (!Array.isArray(value)) return undefined
   const text = value
     .flatMap((part) =>
+      // SAFETY: the 'text' in part check establishes the key exists; only string parts survive the filter below.
       part && typeof part === 'object' && 'text' in part
         ? [(part as { text?: unknown }).text]
         : [],
@@ -1338,6 +1346,7 @@ async function generateConcurrent<T extends { id: string }, Result>(
 
 export function requestTelemetryFromResult(value: unknown): RequestTelemetry[] {
   if (!value || typeof value !== 'object') return []
+  // SAFETY: the object check above narrows unknown to a non-null object; telemetry entries pass isRequestTelemetry before use.
   const result = value as { telemetry?: unknown; retryTelemetry?: unknown }
   const retries = Array.isArray(result.retryTelemetry)
     ? result.retryTelemetry.filter(isRequestTelemetry)

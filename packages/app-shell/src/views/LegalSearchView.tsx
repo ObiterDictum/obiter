@@ -108,6 +108,7 @@ export function createLegalSearchFetchRequest(
   for (const [key, value] of Object.entries(optionalFilters)) {
     const trimmedValue = value?.trim()
     if (trimmedValue) {
+      // SAFETY: key comes from Object.entries of optionalFilters itself, so it is always one of its keys, and request declares the same optional fields.
       request[key as keyof typeof optionalFilters] = trimmedValue
     }
   }
@@ -462,6 +463,7 @@ export function LegalSearchView() {
         return
       }
 
+      // SAFETY: non-ok responses return early above; /api/search/fetch returns LegalSearchFetchResponse per the search API contract.
       const body = (await response.json()) as LegalSearchFetchResponse
       if (searchRequestId.current !== requestId) return
       if (abortController.current === requestAbortController)
@@ -807,6 +809,7 @@ async function readSearchErrorMessage(response: Response): Promise<string> {
     .json()
     .then(
       (body: unknown) =>
+        // SAFETY: body is only probed for error.code via optional chaining and compared to a literal; any other shape falls through to the generic message.
         (body as { error?: { code?: unknown } } | null)?.error?.code,
     )
     .catch(() => undefined)

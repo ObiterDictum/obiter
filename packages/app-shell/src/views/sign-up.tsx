@@ -22,6 +22,7 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
 export function SignUpRouteView() {
   const navigate = useNavigate()
   const { signUpWithEmail, resendVerificationEmail } = useAuth()
+  // SAFETY: useSearch with strict:false is untyped; token is re-validated as a non-empty string by inviteTokenFromSearch before use.
   const search = useSearch({ strict: false }) as { token?: string }
   const token = inviteTokenFromSearch(search)
   const [name, setName] = useState('')

@@ -38,6 +38,8 @@ interface BunGlobal {
 const bun = requireBun()
 
 function requireBun(): BunGlobal {
+  // SAFETY: the cast only adds an optional Bun property for runtime detection; when it is
+  // absent the throw below reports the Bun-only entry point instead of proceeding untyped.
   const runtime = (globalThis as { Bun?: BunGlobal }).Bun
   if (!runtime) {
     throw new Error(
