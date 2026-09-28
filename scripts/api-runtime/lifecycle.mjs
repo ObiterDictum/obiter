@@ -58,6 +58,22 @@ export function assertUsablePort(port) {
   }
 }
 
+/**
+ * The environment a child gets: the explicit values win, and inherited libpq
+ * `PG*` variables are removed. `childEnvironment` already names host, port,
+ * database, user and password, but a variable it does not set (`PGSERVICE`,
+ * `PGSERVICEFILE`, `PGHOSTADDR`, `PGPASSFILE`, `PGSSLMODE`, `PGOPTIONS`) would
+ * otherwise ride the developer's shell or a lane `.env` into the API child and
+ * alter a connection the guard validated.
+ */
+export function childProcessEnvironment(environment, baseEnv = process.env) {
+  const inherited = {}
+  for (const [key, value] of Object.entries(baseEnv)) {
+    if (!key.startsWith('PG')) inherited[key] = value
+  }
+  return { ...inherited, ...environment }
+}
+
 export function startServer({
   runtime,
   worktreeRoot,
@@ -90,7 +106,7 @@ export function startServer({
 
   const child = spawn(command, args, {
     cwd: runtime === 'bun' ? worktreeRoot : `${worktreeRoot}/services/api`,
-    env: { ...process.env, ...environment },
+    env: childProcessEnvironment(environment),
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 

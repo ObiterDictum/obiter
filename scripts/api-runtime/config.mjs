@@ -37,7 +37,13 @@ export function parseArgs(argv) {
     help: false,
   }
   for (let index = 0; index < argv.length; index += 1) {
-    const [flag, inline] = argv[index].split('=')
+    // Split on the first "=" only: a URL or credential may itself contain "=",
+    // and truncating at the second one would silently change the target.
+    const separator = argv[index].indexOf('=')
+    const flag =
+      separator === -1 ? argv[index] : argv[index].slice(0, separator)
+    const inline =
+      separator === -1 ? undefined : argv[index].slice(separator + 1)
     const value = () => inline ?? argv[++index]
     switch (flag) {
       case '--runtime':
@@ -90,17 +96,29 @@ export function resolveRuntimes(runtime) {
   return runtime === 'both' ? ['node', 'bun'] : [runtime]
 }
 
-/** Production-shaped config, all of it overridden explicitly for the run. */
+/**
+ * Production-shaped config, all of it overridden explicitly for the run.
+ *
+ * `target` is the resolved database target, never a raw URL. Both the URL and
+ * the `PG*` variables carry the same explicit host, port, database, user and
+ * password, so the pg driver inside the API child cannot fall back to an
+ * ambient `PGPORT`/`PGUSER`/`PGPASSWORD` when the URL omitted one of them.
+ */
 export function childEnvironment({
   port,
-  databaseUrl,
+  target,
   storageRoot,
   rampartCacheDir,
 }) {
   return {
     NODE_ENV: 'production',
     PORT: String(port),
-    DATABASE_URL: databaseUrl,
+    DATABASE_URL: target.url,
+    PGHOST: target.host,
+    PGPORT: target.port,
+    PGDATABASE: target.database,
+    PGUSER: target.user,
+    PGPASSWORD: target.password,
     BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
     OBITER_WEB_ORIGIN: `http://127.0.0.1:${port}`,

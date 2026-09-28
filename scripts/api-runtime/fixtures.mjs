@@ -1,6 +1,6 @@
 /*
- * Task-owned fixtures for the API runtime harness, and the guards that keep
- * them out of every other database.
+ * Task-owned fixtures for the API runtime harness. The database-target guard
+ * that keeps them out of every other database lives in `database-target.mjs`.
  *
  * The sessions are ordinary `sessions` rows written with psql and validated by
  * better-auth on each request — not an auth bypass. Every route that mints a
@@ -10,57 +10,11 @@
  * ties the database psql writes to the database the API reads.
  */
 import { randomBytes } from 'node:crypto'
+import { FixtureRefusal } from './database-target.mjs'
+
+export { FixtureRefusal }
 
 const TAG_PATTERN = /^[a-z0-9]{4,32}$/
-
-/** Databases this harness may write fixtures into. */
-const OWNED_DATABASES = [
-  /^obiter_test$/,
-  /^obiter_api_runtime(_test)?$/,
-  /^obiter_api_ingress(_test)?$/,
-  /^obiter_lane_[a-z0-9_]+(_test)?$/,
-]
-
-export class FixtureRefusal extends Error {
-  constructor(code, message) {
-    super(message)
-    this.name = 'FixtureRefusal'
-    this.code = code
-  }
-}
-
-/**
- * Refuse every database that is not this task's, an ephemeral CI database, or a
- * lane's own. The shared product database is named `obiter`, which matches none
- * of the patterns, so pointing the harness at it fails before any write.
- */
-export function assertOwnedDatabase({ databaseUrl, allowDatabase = null }) {
-  let parsed
-  try {
-    parsed = new URL(databaseUrl)
-  } catch {
-    throw new FixtureRefusal(
-      'database_url_unparseable',
-      `--database-url is not a URL, so the target database cannot be named.`,
-    )
-  }
-  const host = parsed.hostname.replace(/^\[|\]$/g, '')
-  if (host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
-    throw new FixtureRefusal(
-      'database_not_loopback',
-      `Refusing ${host}: fixtures are only written to a loopback database this task owns.`,
-    )
-  }
-  const name = parsed.pathname.replace(/^\//, '')
-  if (allowDatabase === name) return name
-  if (OWNED_DATABASES.some((pattern) => pattern.test(name))) return name
-  throw new FixtureRefusal(
-    'database_not_owned',
-    `Refusing to write fixtures into "${name}". This harness owns only ` +
-      'obiter_api_runtime, obiter_test and obiter_lane_* databases. Pass ' +
-      '--allow-database=<name> only if that is deliberate.',
-  )
-}
 
 export function newRunTag() {
   return randomBytes(8).toString('hex')
