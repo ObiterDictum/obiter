@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { documentPrintPageRule } from '../../document-print'
 import { A4_HEIGHT_PX, A4_WIDTH_PX } from '../../document-page-units'
 
 export function DocumentDesk({ children }: { children: ReactNode }) {
@@ -31,6 +32,7 @@ export function DocumentPage({
   const scale = zoom / 100
   return (
     <div
+      data-document-sheet-frame
       className="relative"
       style={{
         width: width * scale,
@@ -38,6 +40,7 @@ export function DocumentPage({
       }}
     >
       <article
+        data-document-sheet
         aria-label="Document page"
         className="absolute top-0 left-0 flex flex-col overflow-clip bg-white text-black shadow-[0_12px_40px_rgba(0,0,0,0.38)] ring-1 ring-black/10"
         style={{
@@ -54,5 +57,22 @@ export function DocumentPage({
         {children}
       </article>
     </div>
+  )
+}
+
+/**
+ * The `@page` rule for the document being printed. It lives in the workspace
+ * because the paper size is the document's own section page box, not a fixed A4.
+ */
+export function DocumentPrintStyle({
+  box,
+}: {
+  box?: { widthPx: number; heightPx: number }
+}) {
+  if (!box) return null
+  return (
+    <style data-document-print media="print">
+      {documentPrintPageRule(box)}
+    </style>
   )
 }

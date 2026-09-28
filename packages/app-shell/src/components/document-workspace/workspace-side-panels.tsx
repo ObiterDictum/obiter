@@ -46,7 +46,10 @@ export function WorkspaceSidePanels({
   return (
     <>
       {commentsOpen ? (
-        <div className="w-full rounded-md bg-surface p-4 lg:w-80">
+        <div
+          data-print-hide
+          className="w-full rounded-md bg-surface p-4 lg:w-80"
+        >
           <DocumentCommentsPanel
             comments={comments}
             selectedParagraphId={selectedParagraphId}
@@ -60,7 +63,10 @@ export function WorkspaceSidePanels({
         </div>
       ) : null}
       {changesOpen ? (
-        <div className="w-full rounded-md bg-surface p-4 lg:w-80">
+        <div
+          data-print-hide
+          className="w-full rounded-md bg-surface p-4 lg:w-80"
+        >
           <DocumentChangesPanel
             changes={changes}
             pending={changesPending}
@@ -70,7 +76,10 @@ export function WorkspaceSidePanels({
         </div>
       ) : null}
       {authoritiesOpen ? (
-        <div className="w-full rounded-md bg-surface p-4 lg:w-80">
+        <div
+          data-print-hide
+          className="w-full rounded-md bg-surface p-4 lg:w-80"
+        >
           <DocumentAuthoritiesPanel
             citations={authorities}
             onSelect={onSelectAuthority}

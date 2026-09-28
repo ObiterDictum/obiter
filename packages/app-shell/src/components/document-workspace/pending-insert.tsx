@@ -144,9 +144,20 @@ export function PendingInsert({
           event.stopPropagation()
           onSelect()
         }}
-        className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none"
+        className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none print:hidden"
         style={{ lineHeight: '1.15', minHeight: '1.15em' }}
       />
+      {/* Print never reaches a form control reliably, so the inserted text is
+          also painted as static content. Hidden on screen, where the textarea
+          above is the editable surface. */}
+      <div
+        data-pending-insert-print
+        aria-hidden="true"
+        className="hidden min-w-0 whitespace-pre-wrap print:block"
+        style={{ lineHeight: '1.15', minHeight: '1.15em' }}
+      >
+        {text.length > 0 ? text : '\u00a0'}
+      </div>
     </div>
   )
 }

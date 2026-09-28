@@ -25,6 +25,7 @@
 @import 'tailwindcss' source(none);
 @import './tokens.css';
 @import './fonts.css';
+@import './print.css';
 
 @theme inline {
   /* Surfaces + text */
