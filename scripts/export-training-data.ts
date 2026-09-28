@@ -23,7 +23,7 @@ type Category =
   | 'case_reference'
   | 'organisation_name'
 
-const mapping: Record<Category, string | null> = {
+const mapping = {
   person_name: 'GIVEN_NAME',
   email: 'EMAIL',
   phone: 'PHONE',
@@ -39,7 +39,7 @@ const mapping: Record<Category, string | null> = {
   national_insurance: 'national_insurance',
   case_reference: 'case_reference',
   organisation_name: null,
-}
+} satisfies Record<Category, string | null>
 
 export interface InputRun {
   id: string

@@ -123,13 +123,19 @@ export function resolveFloat(
   }
 }
 
+export type LineInset = {
+  padLeftPx: number
+  padRightPx: number
+  skipTo?: number
+}
+
 export function lineInset(
   pageY: number,
   linePx: number,
   column: ColumnFrame,
   frame: ContentFrame,
   floats: PageFloat[],
-): { padLeftPx: number; padRightPx: number; skipTo?: number } {
+): LineInset {
   const colLeft = frame.left + column.left
   const colRight = colLeft + column.widthPx
   let left = colLeft

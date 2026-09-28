@@ -106,10 +106,12 @@ export function footerLetterhead(
   }
 }
 
-export function marginBandHeights(model: DocumentModelWire): {
+export type MarginBandHeights = {
   headerPx: number
   footerPx: number
-} {
+}
+
+export function marginBandHeights(model: DocumentModelWire): MarginBandHeights {
   const box = documentPageBox(model)
   let headerPx = 0
   let footerPx = 0

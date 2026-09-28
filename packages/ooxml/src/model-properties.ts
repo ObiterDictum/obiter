@@ -110,7 +110,11 @@ export function writePropertyChildren(
 // after the last of its pPr predecessors, and a missing b/i/u after the
 // last of its rPr predecessors, so both the untracked overlay writes and
 // the tracked patch functions share one ordering policy.
-export const PROPERTY_CHILD_PREDECESSORS: Record<string, readonly string[]> = {
+export interface PropertyChildPredecessors {
+  [localName: string]: readonly string[]
+}
+
+export const PROPERTY_CHILD_PREDECESSORS: PropertyChildPredecessors = {
   numPr: [
     'pStyle',
     'keepNext',

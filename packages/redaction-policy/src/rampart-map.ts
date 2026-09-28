@@ -15,10 +15,15 @@ export interface RampartOutput {
   spans: RampartSpanInput[]
 }
 
-const labelMap: Record<
-  string,
-  { category: SpanCategory; source: SpanSource; dateOfBirth?: boolean }
-> = {
+interface RampartLabelMap {
+  [label: string]: {
+    category: SpanCategory
+    source: SpanSource
+    dateOfBirth?: boolean
+  }
+}
+
+const labelMap: RampartLabelMap = {
   GIVEN_NAME: { category: 'person_name', source: 'rampart_model' },
   SURNAME: { category: 'person_name', source: 'rampart_model' },
   PHONE: { category: 'phone', source: 'rampart_model' },

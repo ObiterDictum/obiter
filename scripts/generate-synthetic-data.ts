@@ -148,12 +148,12 @@ function documentFor(index: number) {
   text += '. Password: '
   text = append(text, 'secret', `SyntheticPass${index}!`, spans)
   text += `. In Smith v Jones [2023] EWHC 1234 (QB), the court held that CPR 3.1(2)(a) applies. ${person} repeats the evidence above.\n`
-  const roleMap: Record<string, string> = {
+  const roleMap = {
     [person]: roles[index % 4],
     [opposing]: 'party',
     'Mr Justice Holroyd': 'judge',
     'Priya Sharma': 'counsel',
-  }
+  } satisfies Record<string, string>
   return {
     text,
     spans,

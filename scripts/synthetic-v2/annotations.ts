@@ -97,12 +97,16 @@ export function parseAnnotationResponse(
   return canonical
 }
 
-export const personCategoryPriority: Partial<
-  Record<SyntheticSpan['category'], number>
-> = {
+export const personCategoryPriority = {
   person_private: 1,
   person_professional: 2,
   person_protected: 3,
+} satisfies Partial<Record<SyntheticSpan['category'], number>>
+
+/** Rank of a person-role category, or undefined when the category is not a person role. */
+function personPriority(category: SyntheticSpan['category']) {
+  // SAFETY: personCategoryPriority only ranks the three person roles; any other category has no rank and reads as undefined.
+  return personCategoryPriority[category as keyof typeof personCategoryPriority]
 }
 
 /**
@@ -130,17 +134,14 @@ function canonicalizePersonOverlaps(spans: SyntheticSpan[]) {
       previous.text === span.text
     if (exactDuplicate) continue
     const bothPeople =
-      personCategoryPriority[previous.category] !== undefined &&
-      personCategoryPriority[span.category] !== undefined
+      personPriority(previous.category) !== undefined &&
+      personPriority(span.category) !== undefined
     const nested = span.end <= previous.end
     if (!nested || !bothPeople) {
       canonical.push(span)
       continue
     }
-    if (
-      personCategoryPriority[span.category]! >
-      personCategoryPriority[previous.category]!
-    )
+    if (personPriority(span.category)! > personPriority(previous.category)!)
       canonical[canonical.length - 1] = {
         ...previous,
         category: span.category,

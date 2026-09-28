@@ -134,6 +134,12 @@ export function applyRunEmphasisRanges(
 
 type LocalRange = { from: number; to: number; emphasis: RunEmphasis }
 
+interface SplitRunResult {
+  xml: string
+  wires: DocumentTextRunWire[]
+  consumedKeys: readonly string[]
+}
+
 function splitRun(
   overlay: XmlOverlay,
   run: TextRunAnchor,
@@ -142,11 +148,7 @@ function splitRun(
   local: readonly LocalRange[],
   materialise: boolean,
   nextId: () => string,
-): {
-  xml: string
-  wires: DocumentTextRunWire[]
-  consumedKeys: readonly string[]
-} {
+): SplitRunResult {
   const view = materialise
     ? effectiveView(overlay, run, paragraph)
     : sourceView(overlay.source, run, paragraph, runStart)

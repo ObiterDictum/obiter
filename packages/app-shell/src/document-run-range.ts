@@ -43,11 +43,16 @@ export function replaceRunRange(
   return next
 }
 
+export type SplitRunsResult = {
+  left: DocumentTextRunWire[]
+  right: DocumentTextRunWire[]
+}
+
 export function splitRuns(
   runs: DocumentTextRunWire[],
   offset: number,
   newId: string,
-): { left: DocumentTextRunWire[]; right: DocumentTextRunWire[] } {
+): SplitRunsResult {
   let cursor = 0
   const left: DocumentTextRunWire[] = []
   const right: DocumentTextRunWire[] = []
@@ -80,10 +85,14 @@ export function splitRuns(
   return { left, right }
 }
 
+export interface StringMap<T> {
+  [key: string]: T
+}
+
 export function omitKey<T>(
   record: Record<string, T>,
   key: string,
-): Record<string, T> {
+): StringMap<T> {
   if (!(key in record)) return record
   const next = { ...record }
   delete next[key]

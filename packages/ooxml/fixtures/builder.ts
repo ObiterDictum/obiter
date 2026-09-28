@@ -35,7 +35,7 @@ export async function buildOoxmlFixture(name: OoxmlFixtureName) {
     ? sourceDocumentXml
     : sourceDocumentXml.replace(/ w14:(?:paraId|textId)="[^"]+"/gu, '')
 
-  const xmlParts: Readonly<Record<string, string>> = {
+  const xmlParts = {
     '[Content_Types].xml': contentTypesXml,
     '_rels/.rels': rootRelationshipsXml,
     'word/document.xml': fixedDocumentXml,
@@ -57,7 +57,7 @@ export async function buildOoxmlFixture(name: OoxmlFixtureName) {
     'word/_rels/endnotes.xml.rels': relationshipsXml(...IMAGE_RELATIONSHIP),
     'word/_rels/comments.xml.rels': relationshipsXml(...IMAGE_RELATIONSHIP),
     ...opaqueXmlParts,
-  }
+  } satisfies Readonly<Record<string, string>>
 
   for (const [partName, source] of Object.entries(xmlParts)) {
     zip.file(partName, source, { date: FIXED_DATE })

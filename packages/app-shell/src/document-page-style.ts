@@ -38,7 +38,10 @@ export type ParagraphFace = {
 
 const DEFAULT_FONT = 'Calibri, "Segoe UI", "Liberation Sans", sans-serif'
 const DEFAULT_SIZE_PX = halfPointToPx(22)
-const THEME_FONT: Record<string, string> = {
+interface ThemeFont {
+  [key: string]: string
+}
+const THEME_FONT: ThemeFont = {
   minorhansi: 'Calibri',
   minorascii: 'Calibri',
   majorhansi: 'Cambria',

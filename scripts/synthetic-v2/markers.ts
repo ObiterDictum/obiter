@@ -12,11 +12,13 @@ export class MarkerValidationError extends Error {
   }
 }
 
-/** Converts XML PII tags into plain text and exact UTF-16 offsets. */
-export function stripMarkers(markedText: string): {
+export interface StrippedMarkers {
   text: string
   spans: SyntheticSpan[]
-} {
+}
+
+/** Converts XML PII tags into plain text and exact UTF-16 offsets. */
+export function stripMarkers(markedText: string): StrippedMarkers {
   let sourceIndex = 0
   let text = ''
   const spans: SyntheticSpan[] = []

@@ -38,6 +38,13 @@ type DraftState = Pick<
  * repaginates exactly once and a render that arrives unchanged resolves to the
  * previous pages.
  */
+export type WorkspaceDerivations = {
+  painted: DocumentModelWire | undefined
+  pages: LaidOutPage[]
+  authorities: AuthorityHit[]
+  imageUrls: Record<string, string>
+}
+
 export function useWorkspaceDerivations({
   documentId,
   model,
@@ -46,12 +53,7 @@ export function useWorkspaceDerivations({
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
-}): {
-  painted: DocumentModelWire | undefined
-  pages: LaidOutPage[]
-  authorities: AuthorityHit[]
-  imageUrls: Record<string, string>
-} {
+}): WorkspaceDerivations {
   const painted = useMemo(
     () => (model ? formattedModel(model, drafts.format) : undefined),
     [model, drafts.format],

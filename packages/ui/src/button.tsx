@@ -22,19 +22,19 @@ export interface ButtonProps {
   'data-testid'?: string
 }
 
-const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
+const variantClasses = {
   primary: 'bg-brand text-brand-fg hover:bg-brand-pressed shadow-sm',
   secondary:
     'bg-surface text-ink border border-line hover:border-line-strong hover:bg-raised',
   ghost: 'bg-transparent text-ink hover:bg-surface',
   danger: 'bg-danger text-danger-fg hover:brightness-95 shadow-sm',
-}
+} satisfies Record<NonNullable<ButtonProps['variant']>, string>
 
-const sizeClasses: Record<NonNullable<ButtonProps['size']>, string> = {
+const sizeClasses = {
   sm: 'h-8 px-3 text-sm gap-1.5',
   md: 'h-10 px-4 text-sm gap-2',
   lg: 'h-12 px-6 text-base gap-2.5',
-}
+} satisfies Record<NonNullable<ButtonProps['size']>, string>
 
 /**
  * Button — the single interactive element style. Calm, tactile, keyboard-first.

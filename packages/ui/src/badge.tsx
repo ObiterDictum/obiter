@@ -10,14 +10,14 @@ export interface BadgeProps {
   className?: string
 }
 
-const toneClasses: Record<BadgeTone, string> = {
+const toneClasses = {
   neutral: 'bg-surface text-muted border-line',
   brand: 'bg-brand text-brand-fg border-transparent',
   info: 'bg-info text-info-fg border-transparent',
   success: 'bg-success text-success-fg border-transparent',
   warning: 'bg-warning text-warning-fg border-transparent',
   danger: 'bg-danger text-danger-fg border-transparent',
-}
+} satisfies Record<BadgeTone, string>
 
 /** Badge — a compact status/label pill. Use tones for semantic meaning only. */
 export function Badge({ tone = 'neutral', children, className }: BadgeProps) {

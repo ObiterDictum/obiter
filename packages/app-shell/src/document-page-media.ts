@@ -150,7 +150,12 @@ function colourLuminance(hex: string): number {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
 }
 
-export function drawingBoxSize(xml: string): { width: number; height: number } {
+export type DrawingBoxSize = {
+  width: number
+  height: number
+}
+
+export function drawingBoxSize(xml: string): DrawingBoxSize {
   const extent = xml.match(
     /<(?:wp:extent|a:ext)\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"|<(?:wp:extent|a:ext)\b[^>]*cy="(\d+)"[^>]*cx="(\d+)"/i,
   )

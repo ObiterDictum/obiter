@@ -32,7 +32,7 @@ import { DetectionRetryWarning } from './detection-retry-warning'
 import { FinalizeDialog } from './finalize-dialog'
 import type { RedactionRun } from './types'
 
-const categoryClasses: Record<SpanCategory, string> = {
+const categoryClasses = {
   person_name: 'bg-span-person-name text-span-person-name-fg',
   email: 'bg-span-email text-span-email-fg',
   phone: 'bg-span-phone text-span-phone-fg',
@@ -49,17 +49,17 @@ const categoryClasses: Record<SpanCategory, string> = {
   case_reference: 'bg-span-case-reference text-span-case-reference-fg',
   organisation_name: 'bg-span-organisation-name text-span-organisation-name-fg',
   secret: 'bg-span-secret text-span-secret-fg',
-}
-const sourceClasses: Record<SpanSource, string> = {
+} satisfies Record<SpanCategory, string>
+const sourceClasses = {
   rampart_model: 'border-solid',
   rampart_deterministic: 'border-dotted',
   uk_supplement: 'border-dashed',
-}
-const sourceLabel: Record<SpanSource, string> = {
+} satisfies Record<SpanSource, string>
+const sourceLabel = {
   rampart_model: 'Rampart model',
   rampart_deterministic: 'Rampart deterministic',
   uk_supplement: 'UK supplement',
-}
+} satisfies Record<SpanSource, string>
 const decisions: Array<{
   value: SpanDecision
   label: string
@@ -216,14 +216,14 @@ async function shareOrDownload(blob: Blob, filename: string) {
   downloadBlob(blob, filename)
 }
 
-const downgradeCopy: Record<string, string> = {
+const downgradeCopy = {
   tracked_change:
     'Part of this document holds redacted text inside a tracked change, which redaction does not cover. Accept or reject the tracked changes and finalize again. Do not serve this file without checking it first.',
   residual_text:
     'Some redacted text could not be removed from the document safely. Do not serve this file without checking it first.',
   burn_failed:
     'The formatted document could not be produced, so a plain-text file was provided instead. Do not serve this file without checking it first.',
-}
+} satisfies Record<string, string>
 
 function OutputDowngradeWarning({ run }: { run: RedactionRun }) {
   const downgrade = run.summary.outputDowngrade

@@ -7,7 +7,9 @@ import { SecuritySection } from './settings-security'
 const SECTIONS = ['account', 'security', 'organisation'] as const
 export type SettingsSection = (typeof SECTIONS)[number]
 
-const SECTION_LABELS: Record<SettingsSection, string> = {
+type SectionLabels = { [K in SettingsSection]: string }
+
+const SECTION_LABELS: SectionLabels = {
   account: 'Account',
   security: 'Security',
   organisation: 'Organisation',

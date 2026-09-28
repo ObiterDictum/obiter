@@ -18,6 +18,20 @@ export type WrappedLine = {
   to: number
 }
 
+export type TakeFragmentResult = {
+  /** Display code units placed, so the block slice is `[offset, offset + shown)`. */
+  shown: number
+  /** Code units consumed, so the next fragment resumes at `offset + consumed`. */
+  consumed: number
+  heightPx: number
+  padLeftPx: number
+  padRightPx: number
+  lines: number
+  /** Every row of the text is placed, the trailing empty one included. */
+  complete: boolean
+  skipTo?: number
+}
+
 export function takeFragment(input: {
   text: string
   offset: number
@@ -30,19 +44,7 @@ export function takeFragment(input: {
   column: ColumnFrame
   frame: ContentFrame
   floats: PageFloat[]
-}): {
-  /** Display code units placed, so the block slice is `[offset, offset + shown)`. */
-  shown: number
-  /** Code units consumed, so the next fragment resumes at `offset + consumed`. */
-  consumed: number
-  heightPx: number
-  padLeftPx: number
-  padRightPx: number
-  lines: number
-  /** Every row of the text is placed, the trailing empty one included. */
-  complete: boolean
-  skipTo?: number
-} {
+}): TakeFragmentResult {
   if (!input.text) {
     return {
       shown: 0,
