@@ -19,6 +19,17 @@ This skill complements `production-pr-review` and `production-pr-author`:
 - Use `production-pr-review` thinking to validate whether feedback is correct and whether additional related issues exist.
 - Use `production-pr-author` standards when updating PR bodies and writing reviewer-facing summaries.
 
+## Audience
+
+Reviews replies and the top-level response comment address the reviewer and the PR
+author. Write for that reader.
+
+- Never address the owner (Karl) by name, and never write owner-directed
+  explanation such as "for Karl" or "in plain language for Karl". It belongs in the
+  local status summary for the user, never in anything posted to the PR.
+- Keep replies technical and evidence-based: finding status, what changed, the
+  commit, the verification that proves it, and any remaining limitation.
+
 ## When To Use
 
 Use this skill when the user asks to:
