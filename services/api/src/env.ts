@@ -12,6 +12,7 @@ import type { RedactionDetectionConfig } from './redaction-detection'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
   DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS,
   DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
@@ -77,6 +78,7 @@ export interface ApiEnv {
   legalSearchHydrationQueueMax: number
   legalSearchHydrationPerClientMax: number
   legalSearchHydrationWindowMs: number
+  legalSearchHydrationLeaseMs: number
   port: number
   nodeEnv: NodeEnv
   // The .env this process actually read, or null when it read none. Reported by
@@ -471,6 +473,10 @@ export function readApiEnv(): ApiEnv {
     legalSearchHydrationWindowMs: readPositiveInteger(
       'LEGAL_SEARCH_HYDRATION_WINDOW_MS',
       String(DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS),
+    ),
+    legalSearchHydrationLeaseMs: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_LEASE_MS',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS),
     ),
     port: readPort(),
     nodeEnv,

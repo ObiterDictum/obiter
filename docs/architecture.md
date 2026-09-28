@@ -839,7 +839,7 @@ and a minimal liveness probe. Anonymous `POST /api/search/fetch` is stored-only:
 must not queue hydration, call Find Case Law, or write Postgres or
 Meilisearch. Anonymous `GET /api/search/documents/:documentId` may still answer a
 miss from the provider in a read-only process, as it did before, but it is
-charged to one shared per-process anonymous bucket (a server constant, not a
+charged to one shared anonymous bucket (a server constant, not a
 caller-supplied id or IP) and it never persists: an anonymous request causes no
 corpus or index write even when the process owns a writer. Authenticated callers may
 queue bounded background hydration, request foreground live results, and fetch
@@ -853,14 +853,15 @@ cancellation. A request the budget rejects never reaches the provider, the
 corpus or the indexer. Deduplication shares one in-flight result across
 subjects, so a concurrent caller for the same key is answered without a second
 upstream fetch and without consuming its own miss. The detached detail pass a
-foreground fetch starts is bounded by the process-wide MOJ limiter, not by
-`queueMax`. The gate bounds in-flight operations, per-user misses in
-a rolling window and the number of retained per-user windows; the MOJ rate
-limiter (`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) bounds
-upstream HTTP attempts. Those bounds are per API process: replica count
-multiplies the effective queue, miss and upstream-attempt allowance until the
-counters and the gate share a cluster-visible store. No such store exists; a
-per-process bound is documented as such and is not a cross-replica guarantee.
+foreground fetch starts is admitted as its own lease without charging the miss
+window again, so every provider request it makes is inside the in-flight bound
+rather than outside it. The MOJ rate limiter
+(`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) still bounds upstream
+HTTP attempts per replica. The gate bounds in-flight operations and
+per-subject misses in a rolling window; in the default single-process
+configuration it also bounds the number of retained per-subject windows.
+Admission state is cluster-visible by default; see the shared-ledger decision
+below.
 Search and changelog must never return
 matter data, client documents, redaction source or output, session or
 organisation records, auth secrets, or Meilisearch admin keys. Production
@@ -872,6 +873,58 @@ fields are not exposed outside development. Adding an auth requirement is a
 product change and must fail `allows anonymous callers on deliberately public
 routes` in `services/api/src/routes/public-access.test.ts` rather than landing
 silently.
+
+### Hydration admission is a cluster-wide Postgres ledger (29 September 2026)
+
+Context: the per-process gate above bounded each API process separately, so N
+replicas gave N per-subject windows, N anonymous buckets and N in-flight
+queues on one shared egress IP. Its `LegalSearchHydrationBudget` was an
+in-memory map, and an advisory lock alone would not help: a lock serialises
+writers without persisting a window, so it neither survives a restart nor
+holds any state to share.
+
+Decision: admission state lives in the application database (`DATABASE_URL`),
+in `legal_hydration_leases` and `legal_hydration_misses` (migration
+`0028_legal_hydration_ledger.sql`), reached through
+`PostgresLegalHydrationLedger` (`services/api/src/legal-hydration-ledger.ts`).
+The application database is the boundary every API process already migrates at
+boot and may write. It is deliberately not the legal corpus: a lane is
+configured with `CORPUS_DATABASE_URL` alone and therefore has no corpus writer,
+and licensed source material must not accumulate operational rows. The corpus
+read-only mode is the reason the ledger cannot live there, not a limitation to
+work around.
+
+One transaction per admission takes
+`pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`, sweeps expired
+leases and out-of-window misses, counts live leases against `queueMax`, and, for
+a charged admission, counts the subject's misses in the rolling window before
+inserting the miss and the lease. The lock only makes check-and-record atomic;
+the window is the persisted rows, so it survives a restart and is shared by
+every replica. The in-flight count reads `expires_at > now()`, so a crashed
+replica's lease stops counting when it expires even if no sweep has run. A
+failed admission returns `unavailable`, the gate refuses the operation, and the
+route answers `503 storage_unavailable`: a database outage fails new hydration
+closed, while stored reads, which run on the corpus pool and never cross the
+admission boundary, keep serving.
+
+Cross-replica same-key deduplication is deliberately not claimed. The
+in-process single-flight map remains an optimisation that avoids a duplicate
+fetch inside one process; it is not the source of global truth. Two replicas
+admitting one canonical key both take a lease and both charge a miss, which is
+why the canonical key is not persisted at all. The ledger stores an opaque
+lease id and the server-verified subject (a session id, or the
+`anonymous:shared` sentinel); no query text, canonical key or matter data
+reaches a row or a log line. The detached detail pass a foreground fetch starts
+is admitted as an uncharged lease, so every provider request, including Atom
+pagination and the detail fetches, sits inside the aggregate in-flight bound.
+The per-subject miss window and the in-flight bound are therefore cluster-wide;
+adding replicas no longer multiplies them. The MOJ HTTP-rate limiter remains
+per process, so it is a per-replica backstop rather than the cluster allowance.
+
+Deliberately not done here: a second datastore (Redis) for admission state; a
+cross-replica result cache; and a shared HTTP-request-per-window MOJ budget.
+The lease lifetime (`LEGAL_SEARCH_HYDRATION_LEASE_MS`, default five minutes) is
+the ceiling on how long a crashed replica can hold a slot.
 
 ### Document edit operations: property families without a second compatibility path (31 August 2026)
 

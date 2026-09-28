@@ -2,6 +2,7 @@ import { createClient, getIndexStatus } from '@obiter/search-client'
 import { createApiApp, type ApiApp, type ApiRuntimeKind } from './app'
 import { createDatabasePools, type DatabasePools } from './database-pools'
 import { readApiEnv, type ApiEnv } from './env'
+import { PostgresLegalHydrationLedger } from './legal-hydration-ledger'
 import { runMigrations } from './migrate'
 import { warmRedactionDetector } from './redaction-detection'
 
@@ -56,6 +57,18 @@ export async function createApiRuntime(
     )
   }
 
+  // Cluster-visible hydration admission on the application database. Every
+  // replica migrates and may write this database, so the per-subject window
+  // and in-flight bound are shared rather than multiplied by the replica
+  // count. It is deliberately not the legal corpus: a lane has no corpus
+  // writer, and licensed source material must not carry operational rows.
+  const hydrationLedger = new PostgresLegalHydrationLedger(pools.application, {
+    queueMax: env.legalSearchHydrationQueueMax,
+    perClientMax: env.legalSearchHydrationPerClientMax,
+    windowMs: env.legalSearchHydrationWindowMs,
+    leaseTtlMs: env.legalSearchHydrationLeaseMs,
+  })
+
   // The application pool and the corpus access the process was configured for
   // reach the app through the same boundary. A lane with `CORPUS_DATABASE_URL`
   // and no writer credential gets `corpus.write === null`, so no route can
@@ -63,6 +76,7 @@ export async function createApiRuntime(
   const app = createApiApp(env, pools.application, {
     runtime,
     corpus: pools.corpus,
+    hydrationLedger,
   })
 
   reportIndexStatus(env)
