@@ -11,7 +11,7 @@ export const tournamentCanaryContractVersion =
 // Comment-only or formatting changes may repin this hash without invalidating
 // paid receipts. Qualification changes require a version bump and a repin.
 export const tournamentCanaryContractSourceHash =
-  '3238a14bc2608db6dab6abfb66885a94a2cbca02db34fdc8ecac2370c432f1ab'
+  'e158d2c3481f1b4f5a27ea97feb722b534b7e33402e7334878f61a0ba175ce35'
 
 export type CanarySmokeProfile = 'connectivity' | 'tournament-canary'
 
