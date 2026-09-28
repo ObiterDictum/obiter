@@ -20,6 +20,9 @@ export type RunFace = {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strike?: boolean
+  highlight?: string
+  vertAlign?: 'superscript' | 'subscript' | 'baseline'
 }
 
 export type ParagraphFace = {
@@ -46,6 +49,26 @@ const THEME_FONT: ThemeFont = {
   minorascii: 'Calibri',
   majorhansi: 'Cambria',
   majorascii: 'Cambria',
+}
+
+// Word's closed highlight palette, so a DOCX authored in Word paints the same
+// colour here. The editor's own Highlight control only ever writes `yellow`.
+const HIGHLIGHT_COLOUR: ThemeFont = {
+  yellow: '#FFFF00',
+  green: '#00FF00',
+  cyan: '#00FFFF',
+  magenta: '#FF00FF',
+  blue: '#0000FF',
+  red: '#FF0000',
+  darkblue: '#000080',
+  darkcyan: '#008080',
+  darkgreen: '#008000',
+  darkmagenta: '#800080',
+  darkred: '#800000',
+  darkyellow: '#808000',
+  darkgray: '#808080',
+  lightgray: '#C0C0C0',
+  black: '#000000',
 }
 
 export function documentDefaultFace(styles: DocumentStyleWire[]): RunFace {
@@ -132,20 +155,36 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
 }
 
 export function runCss(face: RunFace): CSSProperties {
+  const superscript = face.vertAlign === 'superscript'
+  const subscript = face.vertAlign === 'subscript'
   return omitUndefined({
     fontFamily: face.fontFamily,
-    fontSize: face.fontSizePx,
+    fontSize:
+      (superscript || subscript) && face.fontSizePx !== undefined
+        ? face.fontSizePx * 0.65
+        : face.fontSizePx,
     color: face.color,
+    backgroundColor: face.highlight,
     fontWeight: face.bold === undefined ? undefined : face.bold ? 700 : 400,
     fontStyle:
       face.italic === undefined ? undefined : face.italic ? 'italic' : 'normal',
-    textDecoration:
-      face.underline === undefined
-        ? undefined
-        : face.underline
-          ? 'underline'
-          : 'none',
+    textDecoration: runTextDecoration(face),
+    verticalAlign: superscript ? 'super' : subscript ? 'sub' : undefined,
   })
+}
+
+/**
+ * Underline and strikethrough are independent decorations. An explicit `false`
+ * on either clears that line (overriding an inherited style) without dropping
+ * the other, which a single boolean could not express.
+ */
+function runTextDecoration(face: RunFace): CSSProperties['textDecoration'] {
+  const lines: string[] = []
+  if (face.underline === true) lines.push('underline')
+  if (face.strike === true) lines.push('line-through')
+  if (lines.length > 0) return lines.join(' ')
+  if (face.underline === false || face.strike === false) return 'none'
+  return undefined
 }
 
 function styleChain(
@@ -214,6 +253,9 @@ function runFromXml(xml: string): RunFace {
     bold: wordFlag(xml, 'b'),
     italic: wordFlag(xml, 'i'),
     underline: wordUnderline(xml),
+    strike: wordFlag(xml, 'strike'),
+    highlight: wordHighlight(xml),
+    vertAlign: wordVertAlign(xml),
   })
 }
 
@@ -287,6 +329,21 @@ function wordUnderline(xml: string): boolean | undefined {
   const value = xmlAttr(attrs, 'val')?.toLowerCase()
   if (value === 'none' || value === '0' || value === 'false') return false
   return true
+}
+
+function wordHighlight(xml: string): string | undefined {
+  const attrs = xmlTagAttrs(xml, 'highlight')
+  if (attrs === undefined) return undefined
+  const value = xmlAttr(attrs, 'val')?.toLowerCase()
+  if (!value || value === 'none') return undefined
+  return HIGHLIGHT_COLOUR[value]
+}
+
+function wordVertAlign(xml: string): RunFace['vertAlign'] {
+  const value = xmlAttr(xmlTagAttrs(xml, 'vertAlign'), 'val')?.toLowerCase()
+  if (value === 'superscript' || value === 'subscript') return value
+  if (value === 'baseline') return 'baseline'
+  return undefined
 }
 
 function omitUndefined<T extends object>(value: T): T {

@@ -1,6 +1,8 @@
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
+import {
+  documentEditHighlightSchema,
+  documentEditVertAlignSchema,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
 } from '@obiter/contracts'
 import { documentStory, effectiveParagraph } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
@@ -10,7 +12,11 @@ import {
   paragraphStyleOptions,
   projectRangeEmphasis,
 } from './document-format-paint'
-import type { FormatDrafts } from './document-format-types'
+import type {
+  FormatDrafts,
+  HighlightValue,
+  VertAlignValue,
+} from './document-format-types'
 import type { ExtraRuns } from './document-word-edits'
 
 export function selectedParagraph(
@@ -22,12 +28,44 @@ export function selectedParagraph(
     (item) => item.id === paragraphId,
   )
 }
-export function runFlagOn(xml: string, flag: 'bold' | 'italic' | 'underline') {
+export function runFlagOn(
+  xml: string,
+  flag: 'bold' | 'italic' | 'underline' | 'strikethrough',
+) {
   if (flag === 'underline') {
     return /<w:u\b(?![^>]*w:val="none")/i.test(xml)
   }
+  if (flag === 'strikethrough') {
+    return /<w:strike\b(?![^>]*w:val="0")/i.test(xml)
+  }
   const name = flag === 'bold' ? 'b' : 'i'
   return new RegExp(`<w:${name}\\b(?![^>]*w:val="0")`, 'i').test(xml)
+}
+
+/** The value of a `w:<localName w:val="...">` child, if the run sets one. */
+function runValElement(xml: string, localName: string): string | null {
+  const match = xml.match(
+    new RegExp(`<w:${localName}\\b[^>]*\\bw:val="([^"]+)"`, 'i'),
+  )
+  return match?.[1] ?? null
+}
+
+function isHighlightOption(value: string): value is HighlightValue {
+  return documentEditHighlightSchema.options.some((option) => option === value)
+}
+
+function isVertAlignOption(value: string): value is VertAlignValue {
+  return documentEditVertAlignSchema.options.some((option) => option === value)
+}
+
+function highlightOf(xml: string): HighlightValue | null {
+  const value = runValElement(xml, 'highlight')
+  return value && isHighlightOption(value) ? value : null
+}
+
+function vertAlignOf(xml: string): VertAlignValue {
+  const value = runValElement(xml, 'vertAlign')
+  return value && isVertAlignOption(value) ? value : 'baseline'
 }
 
 function runsCoveringRange(
@@ -57,7 +95,7 @@ function runsCoveringRange(
 
 function flagOnCoveredRuns(
   runs: DocumentParagraphWire['runs'],
-  flag: 'bold' | 'italic' | 'underline',
+  flag: 'bold' | 'italic' | 'underline' | 'strikethrough',
 ) {
   // The covered runs come from the projected effective paragraph, so their
   // XML already carries every pending answer in application order: run-level
@@ -68,6 +106,22 @@ function flagOnCoveredRuns(
     runs.length > 0 &&
     runs.every((run) => runFlagOn(run.preservedXmlFragments.join(''), flag))
   )
+}
+
+/**
+ * The value every covered run agrees on, or `null` when they disagree or none
+ * is covered. A value control (highlight, vertical align) uses this so a mixed
+ * selection reads unpressed and one click makes it uniform.
+ */
+function uniformCoveredValue<T>(
+  runs: DocumentParagraphWire['runs'],
+  read: (xml: string) => T,
+): T | null {
+  if (runs.length === 0) return null
+  const first = read(runs[0]?.preservedXmlFragments.join('') ?? '')
+  return runs.every((run) => read(run.preservedXmlFragments.join('')) === first)
+    ? first
+    : null
 }
 
 // e40-selection-format-state: pressed flags follow the covered runs, not runs[0]
@@ -172,6 +226,9 @@ export function formatControlState(
     bold: flagOnCoveredRuns(covered, 'bold'),
     italic: flagOnCoveredRuns(covered, 'italic'),
     underline: flagOnCoveredRuns(covered, 'underline'),
+    strikethrough: flagOnCoveredRuns(covered, 'strikethrough'),
+    highlight: uniformCoveredValue(covered, highlightOf),
+    vertAlign: uniformCoveredValue(covered, vertAlignOf),
     canIndent,
     canOutdent: Boolean(numPr?.numId),
     canContinue: Boolean(previousNum?.numId),

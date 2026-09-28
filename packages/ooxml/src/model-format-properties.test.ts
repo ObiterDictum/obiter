@@ -140,6 +140,41 @@ describe('run and paragraph property families', () => {
     expect(xml).toContain('w:val="right"')
     expect(xml).toContain('w:before="240"')
   })
+
+  it('round-trips a partial range highlight, strikethrough and vertical align', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const paragraph = mainParagraphs(document)[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+    const text = paragraph.runs.map((run) => run.text).join('')
+    if (text.length < 3) throw new Error('Fixture paragraph is too short.')
+
+    applyDocumentEdits(document, [
+      documentEditOperationSchema.parse({
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: 1,
+        to: 3,
+        highlight: 'yellow',
+        strikethrough: true,
+        vertAlign: 'subscript',
+      }),
+    ])
+    const reparsed = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )[0]
+    const runs = reparsed?.runs ?? []
+    const covered = runs.filter((run) =>
+      run.preservedXmlFragments.join('').includes('yellow'),
+    )
+    expect(runs.length).toBeGreaterThan(1)
+    expect(covered).toHaveLength(1)
+    const xml = covered[0]?.preservedXmlFragments.join('') ?? ''
+    expect(xml).toMatch(/<w:strike\b/)
+    expect(xml).toContain('<w:highlight w:val="yellow"/>')
+    expect(xml).toContain('<w:vertAlign w:val="subscript"/>')
+  })
 })
 
 function mainParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {

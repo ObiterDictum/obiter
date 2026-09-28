@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { paragraphFace, runFace } from './document-page-style'
+import { paragraphFace, runCss, runFace } from './document-page-style'
 
 describe('paragraphFace', () => {
   it('applies Normal font, size, alignment and spacing from styles and pPr', () => {
@@ -94,5 +94,51 @@ describe('runFace', () => {
     expect(face.bold).toBe(true)
     expect(face.color).toBe('#1F4E79')
     expect(face.fontSizePx).toBeCloseTo(14.666, 2)
+  })
+
+  it('reads strike, highlight and vertical align from the run XML', () => {
+    const paragraph = paragraphFace(
+      { id: 'p1', runs: [], preservedXmlFragments: [] },
+      [],
+    )
+    const face = runFace(
+      {
+        id: 'r1',
+        text: 'x',
+        preservedXmlFragments: [
+          '<w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr>',
+        ],
+      },
+      paragraph,
+      [],
+    )
+    expect(face.strike).toBe(true)
+    expect(face.highlight).toBe('#FFFF00')
+    expect(face.vertAlign).toBe('superscript')
+    const css = runCss(face)
+    expect(css.textDecoration).toContain('line-through')
+    expect(css.backgroundColor).toBe('#FFFF00')
+    expect(css.verticalAlign).toBe('super')
+  })
+
+  it('renders underline and strikethrough together and clears each independently', () => {
+    expect(runCss({ underline: true, strike: true }).textDecoration).toBe(
+      'underline line-through',
+    )
+    expect(runCss({ underline: true, strike: false }).textDecoration).toBe(
+      'underline',
+    )
+    expect(runCss({ underline: false, strike: true }).textDecoration).toBe(
+      'line-through',
+    )
+    expect(runCss({ underline: false, strike: false }).textDecoration).toBe(
+      'none',
+    )
+  })
+
+  it('leaves an explicit baseline unraised and maps a subscript down', () => {
+    expect(runCss({ vertAlign: 'baseline' }).verticalAlign).toBeUndefined()
+    expect(runCss({ vertAlign: 'subscript' }).verticalAlign).toBe('sub')
+    expect(runCss({ highlight: undefined }).backgroundColor).toBeUndefined()
   })
 })

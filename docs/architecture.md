@@ -1116,6 +1116,37 @@ unchanged.
 Rejected: a parallel range operation type; renaming `set_run_emphasis`;
 attaching a character range to `runId`.
 
+### Home character formatting: strikethrough, highlight, vertical align (28 September 2026)
+
+Context: the Home ribbon painted Bold, Italic and Underline and disabled
+Strikethrough, Highlight, Superscript and Subscript as placeholders. The edit
+contract, the OOXML writer and the saved-history reader already carried
+`strikethrough`, `highlight` and `vertAlign`, but the client formatting draft
+(`PendingEmphasis`), the control-state projection, the save plan and the paint
+projection only restated bold/italic/underline. Enabling the buttons without
+those would have painted a change no save carried.
+
+Decision: extend the existing one formatting owner. `PendingEmphasis` and the
+paint projection carry the three properties; `collectFormatOperations`
+whitelists them for both the run and range forms; `formatControlState` reads
+them from the same effective, painted paragraph as the existing flags; the
+saved-history `emphasisOf` reader includes them so an Undo across a save
+reverses them. No second formatting owner and no new operation type.
+
+Semantics: highlight is a value control with a default (`yellow`) and a
+release (`none`); superscript and subscript are mutually exclusive because
+they share one `vertAlign` slot, and a second click returns to `baseline`. A
+mixed or partial selection reads unpressed and one click makes it uniform,
+matching Bold. Font family, size, colour and clear formatting keep their
+placeholders; they are not properties the ribbon writes in this change.
+
+Tracked changes: a range `set_run_emphasis` is already refused server-side; the
+Home controls hold and surface that refusal rather than dropping the
+formatting. Whole-run emphasis under tracking is unchanged.
+
+Rejected: a per-control formatting store; a colour picker for highlight; new
+`set_run_emphasis` operation types for the new properties.
+
 ### Document edit operation batches: one coordinate space (14 September 2026)
 
 Context: `replace_run_text` updates a run's model text but not its source

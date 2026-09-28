@@ -1,4 +1,8 @@
 import type { ListKind } from '../../document-list-toggle'
+import type {
+  HighlightValue,
+  VertAlignValue,
+} from '../../document-format-types'
 
 export type DocumentFormatToolbar = {
   paragraphStyleId: string
@@ -6,6 +10,9 @@ export type DocumentFormatToolbar = {
   bold: boolean
   italic: boolean
   underline: boolean
+  strikethrough: boolean
+  highlight: HighlightValue | null
+  vertAlign: VertAlignValue | null
   canIndent: boolean
   canOutdent: boolean
   canContinue: boolean
@@ -18,6 +25,10 @@ export type DocumentFormatToolbar = {
   onToggleBold: () => void
   onToggleItalic: () => void
   onToggleUnderline: () => void
+  onToggleStrikethrough: () => void
+  onToggleHighlight: () => void
+  onToggleSuperscript: () => void
+  onToggleSubscript: () => void
   onIndent: () => void
   onOutdent: () => void
   onContinueList: () => void
