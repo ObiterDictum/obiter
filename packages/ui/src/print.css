@@ -1,0 +1,75 @@
+/*
+ * Print rules for the document workspace.
+ *
+ * Printing goes through the browser's or Electron's own print dialog, over the
+ * pages the workspace has already painted. Those pages carry the unsaved text,
+ * formatting, pending inserts, deletions and tracked-change marks the user can
+ * see, so the printed sheet matches the screen. Nothing here saves, mutates or
+ * clears a draft.
+ *
+ * The chrome suppression is scoped with `:has()` to routes that actually render
+ * a document desk, so printing any other screen is left alone.
+ */
+@media print {
+  body:has([data-document-desk]) * {
+    visibility: hidden !important;
+  }
+
+  body:has([data-document-desk]) [data-document-desk],
+  body:has([data-document-desk]) [data-document-desk] * {
+    visibility: visible !important;
+  }
+
+  /* Private UI that lives inside the desk: comments, changes and authority
+     panels, verification markers. */
+  [data-print-hide],
+  [data-verification-layer] {
+    display: none !important;
+  }
+
+  /* Seat the desk at the page origin so the hidden chrome above it leaves no
+     gap. */
+  body:has([data-document-desk]) [data-document-desk] {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* One pre-paginated sheet per printed page, at true size regardless of the
+     on-screen zoom. The engine already broke the pages, so the sheet must not
+     re-break, and the on-screen gap between sheets is not paper. */
+  body:has([data-document-desk])
+    [data-document-desk]
+    div:has(> [data-document-sheet-frame]) {
+    gap: 0 !important;
+  }
+
+  [data-document-sheet-frame] {
+    width: auto !important;
+    min-height: 0 !important;
+    break-after: page;
+  }
+
+  [data-document-sheet-frame]:last-child {
+    break-after: auto;
+  }
+
+  [data-document-sheet] {
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  /* A screen selection is not ink. The text stays; only the highlight goes. */
+  [data-selected-text] {
+    background-color: transparent !important;
+  }
+
+  [data-document-desk] textarea::selection {
+    background: transparent !important;
+  }
+}

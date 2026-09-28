@@ -135,6 +135,34 @@ describe('document workspace keys', () => {
     expect(save).toHaveBeenCalledTimes(1)
   })
 
+  it('routes print from Ctrl/Cmd+P and from inside a document field', () => {
+    const print = vi.fn()
+    const fromPage = event('p')
+    handleDocumentWorkspaceKeys(fromPage, { save: vi.fn(), print })
+    expect(fromPage.preventDefault).toHaveBeenCalled()
+    expect(print).toHaveBeenCalledTimes(1)
+
+    // Ctrl+P inside the find or comments field is still a print request, not a
+    // text-editing command, so it must not be treated as a foreign field.
+    const fromField = event('p', {
+      target: document.createElement('textarea'),
+    })
+    handleDocumentWorkspaceKeys(fromField, { save: vi.fn(), print })
+    expect(print).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves Ctrl/Cmd+Shift+P and Alt+P to the platform', () => {
+    const print = vi.fn()
+    const shiftP = event('p', { shiftKey: true })
+    handleDocumentWorkspaceKeys(shiftP, { save: vi.fn(), print })
+    handleDocumentWorkspaceKeys(event('p', { altKey: true }), {
+      save: vi.fn(),
+      print,
+    })
+    expect(shiftP.preventDefault).not.toHaveBeenCalled()
+    expect(print).not.toHaveBeenCalled()
+  })
+
   it('still routes undo from a paragraph editor field', () => {
     const undo = vi.fn()
     const editor = document.createElement('textarea')

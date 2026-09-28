@@ -1,4 +1,4 @@
-const PX_PER_INCH = 96
+export const PX_PER_INCH = 96
 const TWIPS_PER_INCH = 1440
 const EMU_PER_PX = 9525
 const HALF_POINTS_PER_PIXEL = 1.5

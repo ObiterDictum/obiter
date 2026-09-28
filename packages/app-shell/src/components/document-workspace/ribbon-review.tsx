@@ -135,6 +135,7 @@ export function ReviewRibbon({
   onToggleChanges,
   onToggleTrackChanges,
   onExportText,
+  onPrint,
 }: {
   canEdit: boolean
   trackChanges: boolean
@@ -147,6 +148,7 @@ export function ReviewRibbon({
   onToggleChanges: () => void
   onToggleTrackChanges: () => void
   onExportText: () => void
+  onPrint?: () => void
 }) {
   return (
     <div
@@ -229,7 +231,7 @@ export function ReviewRibbon({
           />
           <IconButton
             label="Print"
-            soon
+            onClick={onPrint}
             icon={<Printer size={16} aria-hidden />}
           />
         </ToolbarRow>

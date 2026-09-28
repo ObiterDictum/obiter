@@ -353,6 +353,6 @@ export function openRibbonTab(
   fireEvent.click(screen.getByRole('tab', { name }))
 }
 
-export function selectBodyParagraph() {
-  fireEvent.click(screen.getByText('Hello'))
+export function selectBodyParagraph(text = 'Hello') {
+  fireEvent.click(screen.getByText(text))
 }

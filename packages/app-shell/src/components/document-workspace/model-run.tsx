@@ -201,6 +201,7 @@ const selectedStyle = { backgroundColor: SELECTION_PAINT }
 function PresenceCaret({ userId }: { userId: string }) {
   return (
     <span
+      data-print-hide
       className="absolute top-0 -left-px h-full w-px bg-[#4a6f8a]"
       title={userId}
       aria-hidden="true"
