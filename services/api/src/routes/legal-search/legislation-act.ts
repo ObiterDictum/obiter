@@ -70,14 +70,16 @@ function rowWithheld(row: StoredLegislationActProvision): boolean {
  * through label-path prefixes. DocOrder order preserved because children
  * are appended in row order and rows arrive in doc order.
  */
-function buildContentsTree(
-  documentIdentity: string,
-  rows: StoredLegislationActProvision[],
-): {
+interface LegislationActContentsTree {
   roots: LegislationActContentsNode[]
   totalCount: number
   withheldCount: number
-} {
+}
+
+function buildContentsTree(
+  documentIdentity: string,
+  rows: StoredLegislationActProvision[],
+): LegislationActContentsTree {
   const nodes = new Map<string, LegislationActContentsNode>()
   for (const row of rows) {
     nodes.set(row.labelPath, {

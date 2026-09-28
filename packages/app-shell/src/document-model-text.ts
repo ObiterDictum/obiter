@@ -95,10 +95,13 @@ export function spliceRunSlice(
   return runText.slice(0, fromInRun) + slice + runText.slice(toInRun)
 }
 
-export function textDiff(
-  previous: string,
-  next: string,
-): { from: number; to: number; insert: string } {
+export type TextDiff = {
+  from: number
+  to: number
+  insert: string
+}
+
+export function textDiff(previous: string, next: string): TextDiff {
   let start = 0
   const limit = Math.min(previous.length, next.length)
   while (start < limit && previous[start] === next[start]) start += 1

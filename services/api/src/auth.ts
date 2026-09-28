@@ -298,11 +298,13 @@ export function emailAndPasswordOptions(env: ApiEnv) {
  * workspace name — a forged over-long or invisible name can sit in the
  * column but never becomes a tenant name.
  */
-export function userAdditionalFields(): {
+export type UserAdditionalFields = {
   organisationId: { type: 'string'; required: false; input: false }
   role: { type: ['owner', 'admin', 'member']; required: false; input: false }
   pendingOrganisationName: { type: 'string'; required: false }
-} {
+}
+
+export function userAdditionalFields(): UserAdditionalFields {
   return {
     organisationId: {
       type: 'string',

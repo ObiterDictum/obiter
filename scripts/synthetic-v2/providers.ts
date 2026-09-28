@@ -1184,11 +1184,17 @@ type OpenAICompatibleResponse = {
     }
   }>
 }
+type ParsedOpenAICompatibleResponse = {
+  text: string
+  model: string
+  usage: Usage
+  finishReason?: string
+}
 function parseOpenAICompatibleResponse(
   value: unknown,
   provider: string,
   expectedToolName?: string,
-): { text: string; model: string; usage: Usage; finishReason?: string } {
+): ParsedOpenAICompatibleResponse {
   if (!value || typeof value !== 'object')
     throw new Error(`${provider} returned invalid JSON`)
   // SAFETY: the object check above narrows unknown to a non-null object; choices/model/usage are validated below.

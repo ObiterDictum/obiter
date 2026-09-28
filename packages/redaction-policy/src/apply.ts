@@ -10,7 +10,9 @@ export class RedactionSpanIntegrityError extends Error {
   }
 }
 
-export type TokenMap = Record<string, string>
+export interface TokenMap {
+  [token: string]: string
+}
 
 type OutputSpan = RedactionSpan & { replacement: string }
 

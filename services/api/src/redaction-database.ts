@@ -242,7 +242,15 @@ export function computeSummary(
     spanCategorySchema.options.map((category) => [category, 0]),
   ) as Record<RedactionSpan['category'], number>
   const bySource = { rampartModel: 0, rampartDeterministic: 0, ukSupplement: 0 }
-  const byDecision: Record<SpanDecision | 'undecided', number> = {
+  type DecisionCounts = {
+    accept: number
+    reject: number
+    override_redact: number
+    override_keep: number
+    pseudonymise: number
+    undecided: number
+  }
+  const byDecision: DecisionCounts = {
     accept: 0,
     reject: 0,
     override_redact: 0,

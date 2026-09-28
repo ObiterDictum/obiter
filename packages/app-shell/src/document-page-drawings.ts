@@ -239,10 +239,12 @@ function cssPtPx(style: string, name: string): number | undefined {
   return Math.max(1, Math.round((value * 96) / 72))
 }
 
-function sceneBounds(parts: DrawingPart[]): {
+type SceneSize = {
   widthPx: number
   heightPx: number
-} {
+}
+
+function sceneBounds(parts: DrawingPart[]): SceneSize {
   return {
     widthPx: Math.max(1, ...parts.map((part) => part.leftPx + part.widthPx)),
     heightPx: Math.max(1, ...parts.map((part) => part.topPx + part.heightPx)),

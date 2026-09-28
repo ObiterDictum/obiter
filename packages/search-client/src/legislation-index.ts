@@ -274,18 +274,20 @@ type ProvisionSearchClient = {
   }
 }
 
+interface LegislationEngineSearchOptions {
+  limit?: number
+  rankingScoreThreshold?: number
+  matchingStrategy: 'all' | 'frequency'
+  showRankingScore: boolean
+}
+
 export async function searchLegislation(
   client: ProvisionSearchClient,
   indexName: string,
   query: string,
   options: LegislationSearchOptions = {},
 ): Promise<LegislationSearchResult> {
-  const searchOptions: {
-    limit?: number
-    rankingScoreThreshold?: number
-    matchingStrategy: 'all' | 'frequency'
-    showRankingScore: boolean
-  } = {
+  const searchOptions: LegislationEngineSearchOptions = {
     matchingStrategy: legislationSearchIndexSettings.matchingStrategy,
     showRankingScore: true,
   }

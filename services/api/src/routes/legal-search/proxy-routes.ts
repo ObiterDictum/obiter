@@ -1351,6 +1351,14 @@ function sourceMatchesFilters(
 
 type StoredIndexStatus = 'ok' | 'unavailable'
 
+interface StoredSearchOptions {
+  includeSnippets: boolean
+  includeParagraphs: boolean
+  limit?: number
+  exactPhrase?: string
+  rankingScoreThreshold?: number | null
+}
+
 interface StoredAuthoritiesResult {
   hits: LegalSearchHit[]
   query: string
@@ -1381,13 +1389,10 @@ async function searchStoredAuthorities(
     // extraction over a 100-hit pool costs ~1s of normalising (measured
     // 890ms vs 1634ms for Arch Insurance). Served hits get snippets lazily
     // from toSummaryHit, so the pool pays for text transfer and parse only.
-    const searchOptions: {
-      includeSnippets: boolean
-      includeParagraphs: boolean
-      limit?: number
-      exactPhrase?: string
-      rankingScoreThreshold?: number | null
-    } = { includeSnippets: false, includeParagraphs: true }
+    const searchOptions: StoredSearchOptions = {
+      includeSnippets: false,
+      includeParagraphs: true,
+    }
     if (typeof options.limit === 'number') {
       searchOptions.limit = options.limit
     }
