@@ -326,7 +326,9 @@ function operatorListUsesType3Font(
   }
   for (let index = 0; index < operatorList.fnArray.length; index += 1) {
     const rawArgs: unknown = operatorList.argsArray[index]
-    const args: unknown[] | undefined = Array.isArray(rawArgs) ? rawArgs : undefined
+    const args: unknown[] | undefined = Array.isArray(rawArgs)
+      ? rawArgs
+      : undefined
     if (operatorList.fnArray[index] === ops.setFont) {
       if (isType3(args?.[0])) return true
       continue

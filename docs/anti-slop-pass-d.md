@@ -24,17 +24,17 @@ Test doubles and fixtures cast deliberately (`as unknown as Pool`, typed
 Counts are oxlint findings; "prod" is the scope this pass enforces (test files
 excluded by the override).
 
-| Rule | prod | test | Decision |
-| --- | ---: | ---: | --- |
-| `require-safety-comment-for-type-assertion` | 190 | 758 | Adopt (this pass) |
-| `no-chained-type-assertions` | 7 | 180 | Adopt (this pass) |
-| `no-unsafe-dictionary-type` | 56 | 64 | Adopt in Pass E (prod) |
-| `no-unknown-parameters` | 197 | 72 | Adopt in Pass E (prod) |
-| `no-known-value-widening` | 65 | 6 | Adopt in Pass F |
-| `no-runtime-typeof` | 385 | 44 | Skip: bans correct defensive narrowing; needs boundary parsing first |
-| `no-conditional-empty-object-spread` | 107 | 9 | Skip: `suggestion` severity, style only |
-| `no-shape-in-symbol-names` | 80 | 19 | Skip: `shape` is the CRDT domain term |
-| `no-module-mocking` | 0 | 0 | Skip: fires zero times; `TESTING.md` allows mocking external boundaries |
+| Rule                                        | prod | test | Decision                                                                |
+| ------------------------------------------- | ---: | ---: | ----------------------------------------------------------------------- |
+| `require-safety-comment-for-type-assertion` |  190 |  758 | Adopt (this pass)                                                       |
+| `no-chained-type-assertions`                |    7 |  180 | Adopt (this pass)                                                       |
+| `no-unsafe-dictionary-type`                 |   56 |   64 | Adopt in Pass E (prod)                                                  |
+| `no-unknown-parameters`                     |  197 |   72 | Adopt in Pass E (prod)                                                  |
+| `no-known-value-widening`                   |   65 |    6 | Adopt in Pass F                                                         |
+| `no-runtime-typeof`                         |  385 |   44 | Skip: bans correct defensive narrowing; needs boundary parsing first    |
+| `no-conditional-empty-object-spread`        |  107 |    9 | Skip: `suggestion` severity, style only                                 |
+| `no-shape-in-symbol-names`                  |   80 |   19 | Skip: `shape` is the CRDT domain term                                   |
+| `no-module-mocking`                         |    0 |    0 | Skip: fires zero times; `TESTING.md` allows mocking external boundaries |
 
 The counts in `anti-slop-pass-c-triage.md` are stale. They were taken on the
 Pass B tip with 465 lintable files; the tree has since grown and most buckets

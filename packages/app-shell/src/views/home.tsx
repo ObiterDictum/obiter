@@ -25,10 +25,7 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query'
 import { changelogQueryOptions } from '../changelog'
-import {
-  matterDocumentsQueryOptions,
-  type DocumentStatus,
-} from '../documents'
+import { matterDocumentsQueryOptions, type DocumentStatus } from '../documents'
 import { useMattersList, type MatterRecord } from '../matters'
 import { useCurrentUser } from '../current-user'
 import {

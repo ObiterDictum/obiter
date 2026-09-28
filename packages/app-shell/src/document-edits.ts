@@ -390,17 +390,13 @@ function isEditColour(value: string) {
 function isHighlight(
   value: string,
 ): value is (typeof documentEditHighlightSchema.options)[number] {
-  return documentEditHighlightSchema.options.some(
-    (option) => option === value,
-  )
+  return documentEditHighlightSchema.options.some((option) => option === value)
 }
 
 function isVertAlign(
   value: string,
 ): value is (typeof documentEditVertAlignSchema.options)[number] {
-  return documentEditVertAlignSchema.options.some(
-    (option) => option === value,
-  )
+  return documentEditVertAlignSchema.options.some((option) => option === value)
 }
 
 export function resolveInsertAnchor(

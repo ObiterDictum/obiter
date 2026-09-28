@@ -118,7 +118,7 @@ async function install(): Promise<void> {
     }
   }
 
-  ;(hostGlobals)[installFlag] = true
+  hostGlobals[installFlag] = true
 }
 
 await install()

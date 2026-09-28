@@ -57,8 +57,7 @@ export function readWithdrawalCandidate(
 
 export function readWithdrawnInfo(providerJson: unknown): WithdrawnInfo | null {
   if (typeof providerJson !== 'object' || providerJson === null) return null
-  const raw =
-    'withdrawn' in providerJson ? providerJson.withdrawn : undefined
+  const raw = 'withdrawn' in providerJson ? providerJson.withdrawn : undefined
   if (typeof raw !== 'object' || raw === null) return null
   // SAFETY: raw passed the non-null object check above; each field is type-checked immediately below, so the record view only enables reads.
   const { at, checkedUris, runIds } = raw as Record<string, unknown>

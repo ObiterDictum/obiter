@@ -114,7 +114,10 @@ function asNumber(value: unknown): number | null {
 }
 
 /** Read a numeric operator argument; pdf.js emits a number for these ops. */
-function numericArgument(args: unknown[] | undefined, index: number): number | null {
+function numericArgument(
+  args: unknown[] | undefined,
+  index: number,
+): number | null {
   return asNumber(args?.[index])
 }
 
