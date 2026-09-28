@@ -2,14 +2,15 @@
 
 Commit-pinned evidence for the repair of PR #241 (`e50-save-history-correctness`).
 
-- Product commit served by both e2e targets: `8fe0745ed4856e2172ce9e9f02cc9ab166e8d837`
-  (`Make tracked-insert undo and merge saves keep history usable`), parent merge
-  `8ba54c9` (merge of `origin/dev` `cd92cd6`).
-- e2e spec and this evidence directory are committed in the following commit;
-  they contain no product code, so the served product behaviour is `8fe0745`.
+- Product commit served by both e2e targets:
+  `724898cf88df09fc54172be475a0f061e1384657` — the repair commit `8fe0745`
+  (`Make tracked-insert undo and merge saves keep history usable`) plus a merge
+  of `origin/dev` `53538ff`, a runtime-harness guard that changes no product
+  code.
 - Assessed head before the repair: `d2f5bb2cffab3b7e48b4496950176b7f84d3d659`.
-- Base branch `dev`: `cd92cd679197f8887333a426090e83f7704ca254`; merge-base
-  `64a08f386699174afc37d8dc79daf41960e4c5d4`.
+- Base branch `dev` at the first merge: `cd92cd679197f8887333a426090e83f7704ca254`;
+  merge-base `64a08f386699174afc37d8dc79daf41960e4c5d4`. The final head also
+  merges `53538ff`.
 
 ## Journey sources
 
