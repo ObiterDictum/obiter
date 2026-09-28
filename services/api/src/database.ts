@@ -112,6 +112,8 @@ export interface DocumentVersionRecord {
   createdBy: string
   createdAt: string
   updatedAt: string
+  /** E50 cross-version edit lineage; null for uploads and legacy versions. */
+  lineage: unknown
 }
 
 export interface MatterDocumentRecord {
@@ -183,6 +185,7 @@ export interface InsertDocumentVersionInput {
   contentSha256: string
   syncState: SyncState
   createdBy: string
+  lineage?: unknown
 }
 
 type Queryable = Pick<Pool | PoolClient, 'query'>
@@ -519,6 +522,7 @@ type DocumentVersionRow = {
   created_by: string
   created_at: Date | string
   updated_at: Date | string
+  lineage: unknown
 }
 
 type MatterDocumentRow = {
@@ -594,6 +598,7 @@ function mapVersion(row: DocumentVersionRow): DocumentVersionRecord {
     createdBy: row.created_by,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
+    lineage: row.lineage,
   }
 }
 
@@ -626,7 +631,8 @@ const documentColumns = `
 const versionColumns = `
   id, organisation_id, matter_id, matter_document_id, filename, file_type,
   size_bytes, object_key, text_object_key, document_status, failure_reason,
-  version_number, content_sha256, sync_state, created_by, created_at, updated_at
+  version_number, content_sha256, sync_state, created_by, created_at, updated_at,
+  lineage
 `
 
 export async function createMatter(
@@ -1031,11 +1037,12 @@ export async function insertDocumentVersion(
       insert into document_versions (
         id, organisation_id, matter_id, matter_document_id, filename, file_type,
         size_bytes, object_key, text_object_key, document_status, failure_reason,
-        version_number, content_sha256, sync_state, created_by, created_at, updated_at
+        version_number, content_sha256, sync_state, created_by, lineage,
+        created_at, updated_at
       )
       values (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, now(), now()
+        $12, $13, $14, $15, $16, now(), now()
       )
       returning ${versionColumns}
     `,
@@ -1055,6 +1062,7 @@ export async function insertDocumentVersion(
       input.contentSha256,
       input.syncState,
       input.createdBy,
+      input.lineage == null ? null : JSON.stringify(input.lineage),
     ],
   )
   return mapVersion(result.rows[0])

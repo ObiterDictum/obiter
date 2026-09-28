@@ -194,6 +194,9 @@ export type SaveWorkspaceOptions = {
  * workspace without restating the fixtures.
  */
 export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
+  // A successful save advances the served model version, so the workspace's
+  // version-matched reload gate resolves exactly as it does against the API.
+  let currentVersionId = options.versionId ?? 'ver_1'
   hooks.useCurrentUser.mockReturnValue({
     data: {
       user: {
@@ -210,7 +213,7 @@ export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
     isError: false,
     data: {
       documentId: id,
-      versionId: options.versionId ?? 'ver_1',
+      versionId: currentVersionId,
       versionNumber: 1,
       model: model(options.body ?? 'Hello'),
     },
@@ -227,13 +230,99 @@ export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
   hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
   hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
   hooks.useEditDocument.mockReturnValue(
-    idleMutation({ mutateAsync: options.editAsync ?? vi.fn() }),
+    idleMutation({
+      mutateAsync: async (input: unknown) => {
+        const result = await (options.editAsync ?? vi.fn())(input)
+        return withSyntheticLineage(result, input)
+      },
+    }),
   )
   hooks.useCollaborationMerge.mockReturnValue(
-    idleMutation({ mutateAsync: options.mergeAsync ?? vi.fn() }),
+    idleMutation({
+      mutateAsync: async (input: unknown) => {
+        const result = await (options.mergeAsync ?? vi.fn())(input)
+        return withSyntheticLineage(result, input)
+      },
+    }),
   )
   hooks.useTrackedChangeDecision.mockReturnValue(idleMutation())
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
+
+  /**
+   * The harness stands in for a save-harness operation, not for identity
+   * resolution: a server that commits always returns a lineage covering the
+   * batch. Identity correctness is proved against the real pipeline in the
+   * lineage tests, so this only reflects the response shape the API produces.
+   */
+  function withSyntheticLineage(result: unknown, input: unknown) {
+    if (!result || typeof result !== 'object') return result
+    // SAFETY: the guard above proves `result` is a non-null object; the cast
+    // only names the two optional fields this harness reads.
+    const record = result as { versionId?: unknown; lineage?: unknown }
+    if (typeof record.versionId !== 'string') return result
+    currentVersionId = record.versionId
+    if (record.lineage) return result
+    // SAFETY: the harness receives the request body its caller passes; only
+    // these optional fields are read, and a missing body is treated as empty.
+    const request = (input ?? {}) as {
+      baseVersionId?: string
+      operations?: Array<{
+        type?: string
+        intentId?: string
+        paragraphId?: string
+      }>
+    }
+    const paragraphs: Array<{
+      fromParagraphId: string | null
+      toParagraphId: string | null
+      insertedByIntent?: string
+      runs: unknown[]
+    }> = []
+    // The harness model is the fixed `p1`/`r1` document, so the base story
+    // entry always maps back to itself. This is the run address a covered
+    // run-keyed reversal resolves through; without it the boundary is refused.
+    paragraphs.push({
+      fromParagraphId: 'p1',
+      toParagraphId: 'p1',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 0 }],
+        },
+      ],
+    })
+    for (const operation of request.operations ?? []) {
+      if (operation.type === 'insert_paragraph_after') {
+        paragraphs.push({
+          fromParagraphId: null,
+          toParagraphId: `para-w14-test-${String(operation.intentId ?? 'x')}`,
+          ...(operation.intentId
+            ? { insertedByIntent: operation.intentId }
+            : {}),
+          runs: [],
+        })
+      } else if (
+        operation.type === 'delete_paragraph' &&
+        operation.paragraphId
+      ) {
+        paragraphs.push({
+          fromParagraphId: operation.paragraphId,
+          toParagraphId: null,
+          runs: [],
+        })
+      }
+    }
+    return {
+      ...record,
+      lineage: {
+        version: 1,
+        baseVersionId: request.baseVersionId ?? 'ver_1',
+        versionId: record.versionId,
+        acceptedOperations: (request.operations ?? []).map((_, index) => index),
+        paragraphs,
+      },
+    }
+  }
 }
 
 export function mountSaveWorkspace(options: SaveWorkspaceOptions) {

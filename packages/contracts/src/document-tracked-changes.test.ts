@@ -70,4 +70,60 @@ describe('tracked change contracts', () => {
       }).success,
     ).toBe(false)
   })
+
+  it('accepts exactly one hundred ids and refuses more', () => {
+    const ids = (count: number) =>
+      Array.from({ length: count }, (_, index) => `change-${String(index)}`)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        action: 'reject',
+        changeIds: ids(100),
+      }).success,
+    ).toBe(true)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        action: 'reject',
+        changeIds: ids(101),
+      }).success,
+    ).toBe(false)
+  })
+
+  it('binds shell removal to a rejection and bounds it too', () => {
+    const ids = (count: number) =>
+      Array.from({ length: count }, (_, index) => `para-${String(index)}`)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        action: 'reject',
+        changeIds: ['change-1'],
+        removeParagraphIds: ids(100),
+      }).success,
+    ).toBe(true)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        action: 'accept',
+        changeIds: ['change-1'],
+        removeParagraphIds: ['para-1'],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        action: 'reject',
+        changeIds: ['change-1'],
+        removeParagraphIds: ids(101),
+      }).success,
+    ).toBe(false)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        action: 'reject',
+        changeIds: ['change-1'],
+        removeParagraphIds: ['para-1', 'para-1'],
+      }).success,
+    ).toBe(false)
+  })
 })

@@ -65,22 +65,34 @@ describe('document workspace keys', () => {
     expect(undo).not.toHaveBeenCalled()
   })
 
-  it('ignores Alt and AltGr combinations for redo', () => {
+  it('ignores Alt and AltGr combinations for save, undo and redo', () => {
+    const save = vi.fn()
+    const undo = vi.fn()
     const redo = vi.fn()
-    const handlers = { save: vi.fn(), redo }
+    const handlers = { save, undo, redo }
 
-    // AltGr reports as Ctrl+Alt on Windows, so an Alt-combined Y or Shift+Z
-    // is a character shortcut, not a redo request.
+    // AltGr reports as Ctrl+Alt on Windows, so any Alt-combined chord is a
+    // character shortcut for the layout, not a document command.
+    const altSave = event('s', { altKey: true })
+    handleDocumentWorkspaceKeys(altSave, handlers)
+    handleDocumentWorkspaceKeys(event('z', { altKey: true }), handlers)
     handleDocumentWorkspaceKeys(event('y', { altKey: true }), handlers)
     handleDocumentWorkspaceKeys(
       event('z', { altKey: true, shiftKey: true }),
       handlers,
     )
+    expect(save).not.toHaveBeenCalled()
+    expect(undo).not.toHaveBeenCalled()
     expect(redo).not.toHaveBeenCalled()
+    expect(altSave.preventDefault).not.toHaveBeenCalled()
 
     // The intended bindings still route.
+    handleDocumentWorkspaceKeys(event('s'), handlers)
+    handleDocumentWorkspaceKeys(event('z'), handlers)
     handleDocumentWorkspaceKeys(event('y'), handlers)
     handleDocumentWorkspaceKeys(event('z', { shiftKey: true }), handlers)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(undo).toHaveBeenCalledTimes(1)
     expect(redo).toHaveBeenCalledTimes(2)
   })
 

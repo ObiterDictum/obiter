@@ -8,13 +8,50 @@ import type { FormatDrafts } from './document-format-edits'
 import { documentStory } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
 
-/** The draft state that a save request is derived from. */
+/**
+ * The draft state that a save request is derived from.
+ */
 export type DraftState = {
   drafts: Record<string, string>
   inserts: LocalInsert[]
   deletedParagraphIds: string[]
   extraRuns: ExtraRuns
   format: FormatDrafts
+  /**
+   * Tracked changes a saved edit left behind, grouped by the history step that
+   * created them. A tracked text replacement removes its run from the reparsed
+   * model, so its reversal is a tracked-change rejection addressed by persisted
+   * `w:id`, never a run id. Each group is rejected as one unit.
+   */
+  trackedRejections: TrackedRejection[]
+}
+
+/** One history step's tracked changes, rejected together. */
+export type TrackedRejection = {
+  /** Stable key for clearing/looking up this group. */
+  key: string
+  /** Persisted OOXML change ids (`w:id`) to reject as a unit. */
+  ooxmlIds: string[]
+  /**
+   * Persisted paragraph ids (`para-w14-<value>`) whose empty tracked-insert
+   * shell this rejection removes in the same decision. A tracked paragraph
+   * insertion wraps its content in `w:ins`, so rejecting it alone would leave
+   * an empty paragraph behind.
+   */
+  removeParagraphIds?: string[]
+}
+
+/**
+ * A structural reversal a save boundary has not been able to address yet,
+ * because the reloaded model has not named the paragraph it created or removed.
+ * It is not user work: the planner never sends it and never reports it blocked,
+ * and the boundary resolves it to a real identity when the model arrives. See
+ * `document-history-baseline.ts`.
+ */
+export const PENDING_BASELINE_PREFIX = 'pending-baseline:'
+
+export function isPendingBaselineId(id: string) {
+  return id.startsWith(PENDING_BASELINE_PREFIX)
 }
 
 /**
@@ -30,6 +67,7 @@ export function emptyDraftState(): DraftState {
     deletedParagraphIds: [],
     extraRuns: {},
     format: { emphasis: [], paragraphStyles: {}, numbering: {} },
+    trackedRejections: [],
   }
 }
 
@@ -45,6 +83,7 @@ export type DraftSlot =
   | { kind: 'paragraph-style'; key: string; paragraphId: string }
   | { kind: 'numbering'; key: string; paragraphId: string }
   | { kind: 'emphasis'; key: string }
+  | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 
 export type BlockedDraft = {
   slot: DraftSlot
@@ -62,6 +101,23 @@ export type SavePlan = {
   covered: DraftSlot[]
   /** Slots that cannot be addressed against this model, so they are not sent. */
   blocked: BlockedDraft[]
+  /**
+   * Pending-baseline reversals that no model names yet. They are not sent and
+   * not blocked, but they are unsaved work, so the workspace must not report
+   * itself saved while one exists.
+   */
+  pending: number
+  /**
+   * Tracked-change decisions to send, one per history step. Each carries the
+   * current version's wire change ids resolved from the persisted `w:id`s, and
+   * any empty tracked-insert shells to remove in the same decision.
+   */
+  rejections: Array<{
+    key: string
+    ooxmlIds: string[]
+    changeIds: string[]
+    removeParagraphIds?: string[]
+  }>
 }
 
 /**
@@ -94,8 +150,13 @@ export function planDocumentSave(
   const covered: DraftSlot[] = []
   const blocked: BlockedDraft[] = []
   const keep = emptyDraftState()
+  let pending = 0
 
   for (const [runId, text] of Object.entries(state.drafts)) {
+    if (isPendingBaselineId(runId)) {
+      pending += 1
+      continue
+    }
     if (!runIds.has(runId)) {
       if (text.trim().length === 0) continue
       blocked.push({
@@ -157,6 +218,10 @@ export function planDocumentSave(
   }
 
   for (const paragraphId of state.deletedParagraphIds) {
+    if (isPendingBaselineId(paragraphId)) {
+      pending += 1
+      continue
+    }
     if (!paragraphIds.has(paragraphId)) {
       blocked.push({
         slot: { kind: 'delete', key: `delete:${paragraphId}`, paragraphId },
@@ -232,6 +297,12 @@ export function planDocumentSave(
   }
 
   state.format.emphasis.forEach((item) => {
+    // A run-keyed reversal the save boundary has not named yet is pending: it
+    // is neither sent nor blocked, and it keeps the document unsaved.
+    if (item.runId !== undefined && isPendingBaselineId(item.runId)) {
+      pending += 1
+      return
+    }
     const addressable =
       item.runId !== undefined
         ? runIds.has(item.runId)
@@ -254,6 +325,41 @@ export function planDocumentSave(
     })
   })
 
+  // A tracked reversal is a decision, not an edit operation. Its persisted
+  // `w:id`s are resolved against the loaded model's change list; a change the
+  // model no longer names blocks honestly rather than targeting a stale id.
+  const rejections: SavePlan['rejections'] = []
+  for (const group of state.trackedRejections) {
+    const changeIds: string[] = []
+    let unresolved = false
+    for (const ooxmlId of group.ooxmlIds) {
+      const change = model.changes.find((item) => item.ooxmlId === ooxmlId)
+      if (change) changeIds.push(change.id)
+      else unresolved = true
+    }
+    if (unresolved || changeIds.length === 0) {
+      blocked.push({
+        slot: {
+          kind: 'tracked-reject',
+          key: group.key,
+          ooxmlIds: group.ooxmlIds,
+        },
+        reason:
+          'The tracked change this undo reverses is no longer in the document.',
+        label: 'a tracked change',
+      })
+      continue
+    }
+    rejections.push({
+      key: group.key,
+      ooxmlIds: group.ooxmlIds,
+      changeIds,
+      ...(group.removeParagraphIds?.length
+        ? { removeParagraphIds: [...group.removeParagraphIds] }
+        : {}),
+    })
+  }
+
   return {
     operations: collectEditOperations(
       model,
@@ -265,6 +371,8 @@ export function planDocumentSave(
     ),
     covered,
     blocked,
+    pending,
+    rejections,
   }
 }
 
@@ -314,6 +422,10 @@ export function splitDraftSlots(
   const insertIds = new Set(
     slots.flatMap((slot) => (slot.kind === 'insert' ? [slot.clientId] : [])),
   )
+  const rejections = {
+    kept: state.trackedRejections.filter((group) => !drop.has(group.key)),
+    taken: state.trackedRejections.filter((group) => drop.has(group.key)),
+  }
   return {
     remaining: {
       drafts: drafts.kept,
@@ -324,6 +436,7 @@ export function splitDraftSlots(
         (id) => !drop.has(`delete:${id}`),
       ),
       extraRuns: extraRuns.kept,
+      trackedRejections: rejections.kept,
       format: {
         paragraphStyles: paragraphStyles.kept,
         numbering: numbering.kept,
@@ -337,6 +450,7 @@ export function splitDraftSlots(
         drop.has(`delete:${id}`),
       ),
       extraRuns: extraRuns.taken,
+      trackedRejections: rejections.taken,
       format: {
         paragraphStyles: paragraphStyles.taken,
         numbering: numbering.taken,
@@ -375,7 +489,8 @@ export function hasDraftState(state: DraftState) {
     ).length > 0 ||
     state.format.emphasis.length > 0 ||
     Object.keys(state.format.paragraphStyles).length > 0 ||
-    Object.keys(state.format.numbering).length > 0
+    Object.keys(state.format.numbering).length > 0 ||
+    state.trackedRejections.length > 0
   )
 }
 
@@ -419,6 +534,10 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
         .find((item) => emphasisSlotKey(item) === slot.key)
       return JSON.stringify(match)
     }
+    case 'tracked-reject':
+      return JSON.stringify(
+        state.trackedRejections.find((group) => group.key === slot.key),
+      )
   }
 }
 
@@ -439,10 +558,12 @@ export function slotLabel(slot: DraftSlot): string {
       return 'list formatting'
     case 'emphasis':
       return 'formatting'
+    case 'tracked-reject':
+      return 'a tracked change'
   }
 }
 
-function emphasisSlotKey(item: {
+export function emphasisSlotKey(item: {
   runId?: string
   paragraphId?: string
   from?: number

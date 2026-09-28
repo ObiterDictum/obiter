@@ -94,6 +94,17 @@ export function DocumentSaveBanners({
           />
         </Banner>
       ) : null}
+      {save.lineageUnresolved ? (
+        <Banner tone="warning" body={save.blockedHistoryMessage}>
+          <DiscardWorkDialog
+            triggerLabel="Reload"
+            title="Reload the document?"
+            body="The server copy is unchanged. Reloading discards the in-memory undo history that could not be reconciled, along with any held rejected changes and parked drafts for this document in this browser, so editing can continue safely."
+            confirmLabel="Reload"
+            onConfirm={save.reload}
+          />
+        </Banner>
+      ) : null}
       {save.persistence === 'unavailable' && hasUnsavedWork(save, drafts) ? (
         <Banner
           tone="warning"
@@ -147,6 +158,8 @@ function saveStatusLabel(state: SaveState) {
       return 'Save failed: your work is not on the server'
     case 'stale':
       return 'The document changed on the server; reload before saving'
+    case 'blocked':
+      return 'Saved, but the edit history needs a reload'
   }
 }
 

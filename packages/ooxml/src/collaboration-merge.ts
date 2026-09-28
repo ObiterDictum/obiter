@@ -1,10 +1,11 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
-import type {
-  OoxmlDocument,
-  ParagraphAnchor,
-  TextRunAnchor,
-  XmlElementRange,
+import {
+  OoxmlError,
+  type OoxmlDocument,
+  type ParagraphAnchor,
+  type TextRunAnchor,
+  type XmlElementRange,
 } from './model'
 
 export type DocumentEditReconciliation =
@@ -38,6 +39,115 @@ export function reconcileDocumentEdits(
 }
 
 type MainStory = OoxmlDocument['model']['stories'][number]
+
+/**
+ * The base-to-current correspondence of a reconciled merge: which current
+ * paragraph continues each base paragraph, and which current run continues
+ * each base run. Paragraphs are matched by persisted `w14:paraId` (or the
+ * verified positional alignment for a legacy base); runs by their index in a
+ * matched paragraph, which the merge's own conflict check requires to be
+ * skeleton-stable. This is the base side of the merge lineage, never a
+ * positional guess at reversal targets.
+ */
+export type MergeAlignment = {
+  baseToCurrentParagraph: Map<string, string>
+  baseToCurrentRun: Map<string, string>
+}
+
+export function alignMergeDocuments(
+  base: OoxmlDocument,
+  current: OoxmlDocument,
+): MergeAlignment {
+  const alignment: MergeAlignment = {
+    baseToCurrentParagraph: new Map(),
+    baseToCurrentRun: new Map(),
+  }
+  const baseStory = mainStory(base)
+  const currentStory = mainStory(current)
+  if (!baseStory || !currentStory) return alignment
+  const aligned = indexAligned(baseStory, currentStory)
+  const positional = !aligned && positionallyAligned(baseStory, currentStory)
+  const currentById = new Map(
+    currentStory.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+  )
+  const currentByParaId = new Map(
+    currentStory.paragraphs.flatMap((paragraph) =>
+      paragraph.sourceParaId
+        ? [[paragraph.sourceParaId, paragraph] as const]
+        : [],
+    ),
+  )
+  baseStory.paragraphs.forEach((baseParagraph, index) => {
+    let currentParagraph = baseParagraph.sourceParaId
+      ? currentByParaId.get(baseParagraph.sourceParaId)
+      : undefined
+    if (!currentParagraph && aligned) {
+      currentParagraph = currentById.get(baseParagraph.id)
+    }
+    if (!currentParagraph && positional) {
+      currentParagraph = currentStory.paragraphs[index]
+    }
+    if (!currentParagraph) return
+    alignment.baseToCurrentParagraph.set(baseParagraph.id, currentParagraph.id)
+    baseParagraph.runs.forEach((baseRun, runIndex) => {
+      const currentRun = currentParagraph?.runs[runIndex]
+      if (currentRun) {
+        alignment.baseToCurrentRun.set(baseRun.id, currentRun.id)
+      }
+    })
+  })
+  return alignment
+}
+
+/**
+ * Rewrites a client's operations from its base addresses to the current
+ * version's addresses. A reconciled merge applies the batch to the newer
+ * current document, where a collaborator's insert or edit has reallocated
+ * positional run ids; applying the base ids directly would write an unrelated
+ * run. An address the alignment does not name is refused rather than left to
+ * collide with whatever current id happens to share it.
+ */
+export function remapMergeOperations(
+  operations: readonly DocumentEditOperation[],
+  alignment: MergeAlignment,
+): DocumentEditOperation[] {
+  const paragraph = (id: string) => {
+    const mapped = alignment.baseToCurrentParagraph.get(id)
+    if (!mapped) throw new OoxmlError('invalid-document-edit')
+    return mapped
+  }
+  const run = (id: string) => {
+    const mapped = alignment.baseToCurrentRun.get(id)
+    if (!mapped) throw new OoxmlError('invalid-document-edit')
+    return mapped
+  }
+  return operations.map((operation) => {
+    switch (operation.type) {
+      case 'replace_run_text':
+      case 'set_run_style':
+        return { ...operation, runId: run(operation.runId) }
+      case 'set_run_emphasis':
+        return {
+          ...operation,
+          ...(operation.runId !== undefined
+            ? { runId: run(operation.runId) }
+            : {}),
+          ...(operation.paragraphId !== undefined
+            ? { paragraphId: paragraph(operation.paragraphId) }
+            : {}),
+        }
+      case 'set_paragraph_style':
+      case 'set_paragraph_numbering':
+      case 'set_paragraph_format':
+      case 'delete_paragraph':
+      case 'insert_paragraph_after':
+      case 'insert_paragraph_before':
+        return { ...operation, paragraphId: paragraph(operation.paragraphId) }
+      default:
+        return operation
+    }
+  })
+}
 
 type ChangedFootprints = {
   paragraphStyles: ReadonlySet<string>
@@ -111,6 +221,23 @@ function sameSkeleton(base: MainStory, current: MainStory) {
   return true
 }
 
+/**
+ * Positional alignment for a base that predates persisted paragraph ids.
+ * Reconciliation is a conflict check, not identity translation: when the base
+ * carries no `w14:paraId`, the only link to a canonicalised current version is
+ * the verified run skeleton at the same index. History translation never uses
+ * this; it consumes the authoritative lineage.
+ */
+function positionallyAligned(base: MainStory, current: MainStory) {
+  return (
+    base.paragraphs.length === current.paragraphs.length &&
+    base.paragraphs.every((paragraph, index) => {
+      const compared = current.paragraphs[index]
+      return compared !== undefined && sameRunSkeleton(paragraph, compared)
+    })
+  )
+}
+
 function changedFootprints(
   base: OoxmlDocument,
   current: OoxmlDocument,
@@ -139,6 +266,7 @@ function changedFootprints(
   }
 
   const aligned = indexAligned(baseStory, currentStory)
+  const positional = !aligned && positionallyAligned(baseStory, currentStory)
   const baseById = new Map(
     baseStory.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
   )
@@ -149,12 +277,16 @@ function changedFootprints(
         : [],
     ),
   )
-  currentStory.paragraphs.forEach((currentParagraph) => {
-    const baseParagraph = currentParagraph.sourceParaId
+  currentStory.paragraphs.forEach((currentParagraph, currentIndex) => {
+    let baseParagraph = currentParagraph.sourceParaId
       ? baseByParaId.get(currentParagraph.sourceParaId)
-      : aligned
-        ? baseById.get(currentParagraph.id)
-        : undefined
+      : undefined
+    if (!baseParagraph && aligned) {
+      baseParagraph = baseById.get(currentParagraph.id)
+    }
+    if (!baseParagraph && positional) {
+      baseParagraph = baseStory.paragraphs[currentIndex]
+    }
     if (!baseParagraph) return
     const paragraphId = baseParagraph.id
     paragraphIds.add(paragraphId)
@@ -222,7 +354,10 @@ function operationConflicts(
   operation: DocumentEditOperation,
   changes: ChangedFootprints,
 ) {
-  if (operation.type === 'insert_paragraph_after') {
+  if (
+    operation.type === 'insert_paragraph_after' ||
+    operation.type === 'insert_paragraph_before'
+  ) {
     return !changes.paragraphIds.has(operation.paragraphId)
   }
   if (operation.type === 'delete_paragraph') return true

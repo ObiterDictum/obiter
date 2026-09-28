@@ -33,20 +33,30 @@ export function historyCaretPlacement({
     restored.inserts,
     restored.deletedParagraphIds,
   )
+  const beforeOrder = flowParagraphIds(
+    model,
+    before.inserts,
+    before.deletedParagraphIds,
+  )
   const survives = order.includes(anchor)
   const gone = before.inserts.find((item) => item.clientId === anchor)
   if (gone && !survives) {
-    return {
-      paragraphId: gone.afterParagraphId,
-      offset: blockText(model, restored, gone.afterParagraphId).length,
-    }
+    // The step removed the insert the caret was inside. Seat it on the insert's
+    // anchor when that anchor survived, otherwise on the nearest surviving
+    // neighbour: the anchor itself can be gone when the same step also removed
+    // the paragraph the insert was placed after.
+    const fallback = order.includes(gone.afterParagraphId)
+      ? gone.afterParagraphId
+      : nearestSurvivingParagraph(beforeOrder, gone.afterParagraphId, order)
+    return fallback
+      ? {
+          paragraphId: fallback,
+          offset: blockText(model, restored, fallback).length,
+        }
+      : null
   }
   if (!survives) {
-    const fallback = nearestSurvivingParagraph(
-      flowParagraphIds(model, before.inserts, before.deletedParagraphIds),
-      anchor,
-      order,
-    )
+    const fallback = nearestSurvivingParagraph(beforeOrder, anchor, order)
     return fallback
       ? {
           paragraphId: fallback,

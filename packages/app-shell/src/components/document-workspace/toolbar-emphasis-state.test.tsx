@@ -377,6 +377,7 @@ describe('toolbar state reads the effective paragraph', () => {
     expect(operations).toContainEqual({
       type: 'insert_paragraph_after',
       paragraphId: 'p1',
+      intentId: expect.any(String),
       runs: [{ text: 'New line' }],
     })
     expect(operations.some((op) => op.type === 'set_run_emphasis')).toBe(false)

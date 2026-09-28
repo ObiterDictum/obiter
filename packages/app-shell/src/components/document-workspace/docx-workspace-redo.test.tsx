@@ -8,6 +8,7 @@ import '@obiter/test-dom'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import type { DocumentModelWire } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {
   mountWorkspace,
@@ -27,6 +28,31 @@ function field(): HTMLTextAreaElement {
     throw new Error('Paragraph field is missing.')
   }
   return editor
+}
+
+/**
+ * The authoritative lineage a text-only save of `r1` in `p1` returns: no
+ * structural slots, but the run keeps its result address.
+ */
+function textEditLineage() {
+  return {
+    version: 1 as const,
+    baseVersionId: 'ver_1',
+    versionId: 'ver_2',
+    acceptedOperations: [0],
+    paragraphs: [
+      {
+        fromParagraphId: 'p1',
+        toParagraphId: 'p1',
+        runs: [
+          {
+            runIndex: 0,
+            segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 0 }],
+          },
+        ],
+      },
+    ],
+  }
 }
 
 function undoButton() {
@@ -54,6 +80,17 @@ function twoParagraphs() {
   return multiParagraphModel([
     paragraph('p1', 'Hello'),
     paragraph('p2', 'tail'),
+  ])
+}
+
+/** The default one-paragraph fixture with the run id the workspace types into. */
+function helloModel(text: string): DocumentModelWire {
+  return multiParagraphModel([
+    {
+      id: 'p1',
+      runs: [{ id: 'r1', text, preservedXmlFragments: [] }],
+      preservedXmlFragments: [],
+    },
   ])
 }
 
@@ -428,14 +465,35 @@ describe('DocxWorkspace redo and save boundaries', () => {
   })
 
   it('keeps an edit made while a save was in flight and its undo history', async () => {
-    let resolveFirst: (value: unknown) => void = () => undefined
+    let version = 1
+    let savedText = 'Hello'
+    let resolveFirst: () => void = () => undefined
     const editAsync = vi.fn().mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          resolveFirst = resolve
+          // The commit lands before the reloaded model does; the model then
+          // holds the version the request sent. The response carries the
+          // authoritative lineage the API returns for the accepted batch.
+          resolveFirst = () => {
+            version = 2
+            savedText = 'Hello first'
+            resolve({
+              documentId: 'doc_1',
+              versionId: 'ver_2',
+              versionNumber: 2,
+              lineage: textEditLineage(),
+            })
+          }
         }),
     )
-    mountWorkspace({ editAsync })
+    mountWorkspace({
+      editAsync,
+      modelFor: () => ({
+        versionId: `ver_${String(version)}`,
+        versionNumber: version,
+        model: helloModel(savedText),
+      }),
+    })
     selectBodyParagraph()
 
     fireEvent.change(field(), { target: { value: 'Hello first' } })
@@ -447,11 +505,7 @@ describe('DocxWorkspace redo and save boundaries', () => {
     // just recorded.
     fireEvent.change(field(), { target: { value: 'Hello second' } })
     await act(async () => {
-      resolveFirst({
-        documentId: 'doc_1',
-        versionId: 'ver_2',
-        versionNumber: 2,
-      })
+      resolveFirst()
     })
 
     expect(field().value).toBe('Hello second')
@@ -487,6 +541,7 @@ describe('DocxWorkspace redo and save boundaries', () => {
         documentId: 'doc_1',
         versionId: 'ver_2',
         versionNumber: 2,
+        lineage: textEditLineage(),
       })
     })
 

@@ -193,11 +193,20 @@ describe('POST /api/documents/:id/edit', () => {
       documentId: string
       versionId: string
       versionNumber: number
+      lineage?: unknown
     }
     expect(body).toEqual({
       documentId: 'doc_1',
       versionId: expect.stringMatching(/^ver_/u),
       versionNumber: 2,
+      lineage: expect.any(Object),
+    })
+    // The lineage names the source and result versions and the accepted batch.
+    expect(body.lineage).toMatchObject({
+      version: 1,
+      baseVersionId: 'ver_1',
+      versionId: body.versionId,
+      acceptedOperations: [0],
     })
     expect(database.currentVersionId).toBe(body.versionId)
     expect(database.versions.size).toBe(2)
