@@ -39,8 +39,8 @@ import {
   prefetchDetectionModel,
   resolveRuntimes,
 } from './config.mjs'
+import { resolveDatabaseTarget } from './database-target.mjs'
 import {
-  assertOwnedDatabase,
   fixtureIds,
   newRunTag,
   proveSession,
@@ -65,7 +65,7 @@ async function runRuntime({
   runtime,
   args,
   fixtures,
-  databaseUrl,
+  target,
   rampartCacheDir,
   scratchRoot,
 }) {
@@ -83,7 +83,7 @@ async function runRuntime({
     bunBin: args.bunBin,
     environment: childEnvironment({
       port,
-      databaseUrl,
+      target,
       storageRoot,
       rampartCacheDir,
     }),
@@ -92,7 +92,7 @@ async function runRuntime({
       : undefined,
   })
 
-  const querier = createQuerier({ databaseUrl })
+  const querier = createQuerier({ databaseUrl: target.url })
   const ctx = {
     server,
     runtime,
@@ -136,7 +136,7 @@ async function runRuntime({
       runtime,
       worktreeRoot: WORKTREE_ROOT,
       bunBin: args.bunBin,
-      databaseUrl,
+      target,
       storageRoot,
       rampartCacheDir,
       ids,
@@ -224,7 +224,7 @@ async function main() {
     return
   }
 
-  const databaseName = assertOwnedDatabase({
+  const target = resolveDatabaseTarget({
     databaseUrl: args.databaseUrl,
     allowDatabase: args.allowDatabase,
   })
@@ -244,7 +244,7 @@ async function main() {
   })
 
   console.log(
-    `API runtime integration: database=${databaseName} runtimes=${runtimes.join(',')} head=${head}`,
+    `API runtime integration: database=${target.name} runtimes=${runtimes.join(',')} head=${head}`,
   )
 
   const fixtures = await buildFixtures({
@@ -259,7 +259,7 @@ async function main() {
       runtime,
       args,
       fixtures,
-      databaseUrl: args.databaseUrl,
+      target,
       rampartCacheDir,
       scratchRoot,
     })
@@ -281,7 +281,7 @@ async function main() {
   if (args.jsonOut) {
     const summary = {
       head,
-      database: databaseName,
+      database: target.name,
       runtimes,
       results: results.map((result) => ({
         runtime: result.runtime,

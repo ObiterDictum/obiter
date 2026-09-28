@@ -37,8 +37,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { resolveDatabaseTarget } from '../api-runtime/database-target.mjs'
 import {
-  assertOwnedDatabase,
   fixtureIds,
   newRunTag,
   provisionSql,
@@ -363,8 +363,8 @@ async function main() {
       // The schema exists only after the API has booted and migrated, so the
       // fixtures are written from inside the checks, after the first health
       // check, not before the stack is up.
-      assertOwnedDatabase({ databaseUrl })
-      createQuerier({ databaseUrl }).exec(provisionSql(ids))
+      const target = resolveDatabaseTarget({ databaseUrl })
+      createQuerier({ databaseUrl: target.url }).exec(provisionSql(ids))
     }
 
     const proxyPorts = { apiPort: API_PORT, originPort: ORIGIN_PORT }
