@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import {
+  ANONYMOUS_HYDRATION_SUBJECT,
   canonicalHydrationQueryKey,
+  documentHydrationKey,
   LegalSearchHydrationBudget,
+  LegalSourceHydrationGate,
 } from './legal-search-hydration-budget'
 
 describe('LegalSearchHydrationBudget', () => {
@@ -59,6 +62,78 @@ describe('LegalSearchHydrationBudget', () => {
     ).toBe('budget_exceeded')
   })
 
+  it('bounds the number of retained per-user windows with LRU eviction', () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 5,
+      windowMs: 600_000,
+      retainedUserWindowMax: 10,
+    })
+
+    for (let index = 0; index < 50; index += 1) {
+      const key = canonicalHydrationQueryKey({ query: `query-${index}` })
+      budget.tryBeginHydration(`usr_${index}`, key)
+      budget.completeHydration(key)
+    }
+
+    expect(budget.retainedUserMissWindows()).toBeLessThanOrEqual(10)
+  })
+
+  it('bounds the number of retained per-user windows when the window has not expired', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-30T12:00:00Z'))
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 5,
+      windowMs: 600_000,
+      retainedUserWindowMax: 3,
+    })
+
+    for (let index = 0; index < 20; index += 1) {
+      const key = canonicalHydrationQueryKey({ query: `query-${index}` })
+      budget.tryBeginHydration(`usr_${index}`, key)
+      budget.completeHydration(key)
+    }
+
+    expect(budget.retainedUserMissWindows()).toBeLessThanOrEqual(3)
+  })
+
+  it('resets a spent window when the retention cap evicts it', () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 1,
+      windowMs: 600_000,
+      retainedUserWindowMax: 2,
+    })
+    const victimKey = canonicalHydrationQueryKey({ query: 'victim' })
+    expect(budget.tryBeginHydration('usr_victim', victimKey)).toEqual({
+      status: 'queued',
+    })
+    budget.completeHydration(victimKey)
+    expect(
+      budget.tryBeginHydration(
+        'usr_victim',
+        canonicalHydrationQueryKey({ query: 'again' }),
+      ),
+    ).toEqual({ status: 'budget_exceeded' })
+
+    // Two more users plus a third push the victim's window off the LRU cap.
+    for (const name of ['a', 'b', 'c']) {
+      const key = canonicalHydrationQueryKey({ query: name })
+      budget.tryBeginHydration(`usr_${name}`, key)
+      budget.completeHydration(key)
+    }
+
+    // Pinned contract: eviction resets the count, so the per-user window is a
+    // fairness bound, not a hard identity bound.
+    expect(
+      budget.tryBeginHydration(
+        'usr_victim',
+        canonicalHydrationQueryKey({ query: 'fresh' }),
+      ),
+    ).toEqual({ status: 'queued' })
+  })
+
   it('drops expired per-user miss windows instead of retaining empty keys', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-30T12:00:00Z'))
@@ -80,6 +155,51 @@ describe('LegalSearchHydrationBudget', () => {
       status: 'queued',
     })
     expect(budget.retainedUserMissWindows()).toBe(1)
+  })
+
+  it('keeps the anonymous subject isolated from real user windows', () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 1,
+      windowMs: 600_000,
+    })
+    const anonymousKey = documentHydrationKey('doc-a')
+    expect(
+      budget.tryBeginHydration(ANONYMOUS_HYDRATION_SUBJECT, anonymousKey),
+    ).toEqual({ status: 'queued' })
+    budget.completeHydration(anonymousKey)
+
+    // A synthetic session id must get its own window, not share the anonymous
+    // bucket. The colon in the sentinel is outside the id alphabet.
+    const userKey = documentHydrationKey('doc-b')
+    expect(budget.tryBeginHydration('usr_real', userKey)).toEqual({
+      status: 'queued',
+    })
+    budget.completeHydration(userKey)
+    expect(
+      budget.tryBeginHydration(
+        ANONYMOUS_HYDRATION_SUBJECT,
+        documentHydrationKey('doc-c'),
+      ),
+    ).toEqual({ status: 'budget_exceeded' })
+  })
+
+  it('releases the reservation when the operation throws synchronously', async () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 1,
+      perClientMax: 2,
+      windowMs: 600_000,
+    })
+    const gate = new LegalSourceHydrationGate(budget)
+
+    const thrown = await gate.run('usr_a', 'query-a', () => {
+      throw new Error('synchronous provider failure')
+    })
+    expect(thrown).toEqual({ status: 'failed' })
+
+    // The queue slot was released, so the next operation still reserves.
+    const next = await gate.run('usr_a', 'query-b', async () => 'ok')
+    expect(next).toEqual({ status: 'ok', value: 'ok' })
   })
 
   afterEach(() => {
