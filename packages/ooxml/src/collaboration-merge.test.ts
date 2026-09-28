@@ -4,10 +4,17 @@ import type { DocumentEditOperation } from '@obiter/contracts'
 
 import { buildOoxmlFixture } from '../fixtures/builder'
 import {
+  alignMergeDocuments,
   applyDocumentEdits,
+  buildVersionLineage,
+  canonicaliseParagraphIdentities,
   compareXmlSemantics,
+  createLineageRecorder,
+  createSyntheticDocx,
   parseDocx,
   reconcileDocumentEdits,
+  remapMergeOperations,
+  retargetLineageToBaseVersion,
   serialiseDocx,
 } from './index'
 
@@ -550,12 +557,101 @@ describe('bounded collaboration reconciliation', () => {
       ),
     ).toEqual({ mergeable: false, operationIndexes: [0] })
   })
+
+  it('retargets a reconciled merge lineage onto the client base', async () => {
+    const base = await parseDocx(source)
+    const [first, second] = firstTwoRuns(base)
+    // A collaborator changed the first run; the client edits the second over
+    // the newer current version.
+    const current = await editedSource([
+      {
+        type: 'replace_run_text',
+        runId: first.id,
+        text: 'Collaborator revision',
+      },
+    ])
+    const recorder = createLineageRecorder(current.model)
+    applyDocumentEdits(
+      current,
+      [{ type: 'replace_run_text', runId: second.id, text: 'Client revision' }],
+      undefined,
+      recorder,
+    )
+    const canonical = canonicaliseParagraphIdentities(current)
+    const currentLineage = buildVersionLineage({
+      recorder,
+      model: current.model,
+      canonicalParagraphIds: canonical,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+    })
+    const alignment = alignMergeDocuments(base, current)
+    const lineage = retargetLineageToBaseVersion({
+      lineage: currentLineage,
+      currentToBaseParagraph: invert(alignment.baseToCurrentParagraph),
+      currentToBaseRun: invert(alignment.baseToCurrentRun),
+      baseVersionId: 'ver_1',
+    })
+    expect(lineage.baseVersionId).toBe('ver_1')
+    const address = lineage.paragraphs
+      .flatMap((paragraph) =>
+        paragraph.runs.flatMap((run) =>
+          run.segments.map((segment) => ({ paragraph, run, segment })),
+        ),
+      )
+      .find(({ segment }) => segment.fromRunId === second.id)
+    // The client's base run resolves to a real result paragraph address, so a
+    // reversal can be translated rather than dropped.
+    expect(address?.paragraph.toParagraphId).toMatch(/^para-w14-/u)
+    expect(address?.run.runIndex).toBeGreaterThanOrEqual(0)
+  })
+
+  it('rewrites base addresses to current before applying a merge batch', async () => {
+    // A legacy base (positional paragraph ids) reconciled onto a canonicalised
+    // current version: the same paragraphs now carry `w14:paraId` ids, so the
+    // client's base paragraph id must be rewritten before it is applied.
+    const seededBytes = await createSyntheticDocx(['Alpha', 'Beta'])
+    const base = await parseDocx(seededBytes)
+    const currentDoc = await parseDocx(seededBytes)
+    canonicaliseParagraphIdentities(currentDoc)
+    const alphaRun = mainParagraphs(currentDoc)[0]?.runs[0]
+    if (!alphaRun) throw new Error('Alpha run is missing.')
+    applyDocumentEdits(currentDoc, [
+      { type: 'replace_run_text', runId: alphaRun.id, text: 'Alpha revised' },
+    ])
+    const current = await parseDocx(await serialiseDocx(currentDoc))
+    const baseBetaParagraph = mainParagraphs(base)[1]
+    if (!baseBetaParagraph) throw new Error('Beta paragraph is missing.')
+    const operation: DocumentEditOperation = {
+      type: 'set_paragraph_style',
+      paragraphId: baseBetaParagraph.id,
+      styleId: null,
+    }
+    expect(reconcileDocumentEdits(base, current, [operation], false)).toEqual({
+      mergeable: true,
+    })
+    // The base address does not exist in the current version.
+    expect(() => applyDocumentEdits(current, [operation])).toThrow()
+    const alignment = alignMergeDocuments(base, current)
+    expect(alignment.baseToCurrentParagraph.get(baseBetaParagraph.id)).toMatch(
+      /^para-w14-/u,
+    )
+    applyDocumentEdits(current, remapMergeOperations([operation], alignment))
+    const merged = mainParagraphs(await parseDocx(await serialiseDocx(current)))
+    expect(
+      merged.map((paragraph) => paragraph.runs.map((run) => run.text).join('')),
+    ).toEqual(['Alpha revised', 'Beta'])
+  })
 })
 
 async function editedSource(operations: readonly DocumentEditOperation[]) {
   const document = await parseDocx(source)
   applyDocumentEdits(document, operations)
   return parseDocx(await serialiseDocx(document))
+}
+
+function invert(map: ReadonlyMap<string, string>) {
+  return new Map([...map].map(([from, to]) => [to, from] as const))
 }
 
 function firstTwoRuns(document: Awaited<ReturnType<typeof parseDocx>>) {

@@ -7,10 +7,43 @@ import {
   downloadBlob,
   fetchDocumentExport,
   mountWorkspace,
+  multiParagraphModel,
   openRibbonTab,
+  paragraph,
   selectBodyParagraph,
   staleConflict,
 } from './docx-workspace-harness'
+
+/** The authoritative lineage a text-only save returns: no structural slots. */
+/**
+ * A text-only save of `r1` in `p1`: the run keeps its result address, which
+ * the workspace resolves the reversal through.
+ */
+function textEditLineage(baseVersionId: string, versionId: string) {
+  return {
+    version: 1 as const,
+    baseVersionId,
+    versionId,
+    acceptedOperations: [0],
+    paragraphs: [
+      {
+        fromParagraphId: 'p1',
+        toParagraphId: 'p1',
+        runs: [
+          {
+            runIndex: 0,
+            // The two mounted fixtures address the same single run under
+            // different ids (`r1` and `p1-r`).
+            segments: [
+              { fromRunId: 'r1', fromOffset: 0, toOffset: 0 },
+              { fromRunId: 'p1-r', fromOffset: 0, toOffset: 0 },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+}
 
 describe('DocxWorkspace ribbon', () => {
   it('keeps the ribbon outside the scrolling document desk', () => {
@@ -175,6 +208,7 @@ describe('DocxWorkspace save', () => {
       versionId: 'ver_2',
       versionNumber: 2,
       outcome: 'merged',
+      lineage: textEditLineage('ver_1', 'ver_2'),
     })
     mountWorkspace({ editAsync, mergeAsync })
     openRibbonTab('Review')
@@ -218,19 +252,25 @@ describe('DocxWorkspace save', () => {
   })
 
   it('advances the save base to the version returned by the previous save', async () => {
-    const editAsync = vi
-      .fn()
-      .mockResolvedValueOnce({
+    let current = 1
+    const editAsync = vi.fn(async (_input: { baseVersionId?: string }) => {
+      const base = `ver_${String(current)}`
+      current += 1
+      return {
         documentId: 'doc_1',
-        versionId: 'ver_2',
-        versionNumber: 2,
-      })
-      .mockResolvedValueOnce({
-        documentId: 'doc_1',
-        versionId: 'ver_3',
-        versionNumber: 3,
-      })
-    mountWorkspace({ editAsync })
+        versionId: `ver_${String(current)}`,
+        versionNumber: current,
+        lineage: textEditLineage(base, `ver_${String(current)}`),
+      }
+    })
+    mountWorkspace({
+      editAsync,
+      modelFor: () => ({
+        versionId: `ver_${String(current)}`,
+        versionNumber: current,
+        model: multiParagraphModel([paragraph('p1', 'Hello')]),
+      }),
+    })
     openRibbonTab('Review')
     selectBodyParagraph()
 

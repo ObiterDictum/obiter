@@ -181,7 +181,7 @@ export function applyFragmentReplacements(
   replacements: readonly OverlayReplacement[],
 ) {
   const ordered = [...replacements].sort(
-    (left, right) => left.start - right.start,
+    (left, right) => left.start - right.start || left.end - right.end,
   )
   let result = ''
   let cursor = 0
@@ -198,7 +198,7 @@ export function applyFragmentReplacements(
 
 export function serialiseOverlay(overlay: XmlOverlay) {
   const replacements = [...overlay.replacements.values()].sort(
-    (left, right) => left.start - right.start,
+    (left, right) => left.start - right.start || left.end - right.end,
   )
   let cursor = 0
   let result = ''

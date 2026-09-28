@@ -78,6 +78,7 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'local_1',
         text: 'Next',
       },
     ])
@@ -170,11 +171,13 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'I1',
         text: 'First',
       },
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'I2',
         text: 'Second',
       },
     ])
@@ -237,11 +240,13 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: paragraph.id,
+        intentId: 'I1',
         runs: [{ text: 'First' }],
       },
       {
         type: 'insert_paragraph_after',
         paragraphId: paragraph.id,
+        intentId: 'I2',
         runs: [{ text: 'Second' }],
       },
     ])
@@ -275,6 +280,7 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'local_1',
         text: 'Next',
       },
       { type: 'delete_paragraph', paragraphId: 'p1' },
@@ -308,6 +314,7 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'local_1',
         runs: [
           { text: 'Plain ' },
           { text: 'bold', styleId: 'Heading1Char', bold: true },
@@ -343,6 +350,7 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'local_ns',
         runs: [
           {
             text: 'Formatted',
@@ -383,6 +391,7 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'local_legacy',
         runs: [{ text: 'bold', bold: true }],
       },
     ])
@@ -458,6 +467,7 @@ describe('paragraph split order', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'ins1',
         runs: [{ text: 'after' }],
       },
     ])

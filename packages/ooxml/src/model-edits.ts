@@ -6,6 +6,13 @@ import {
 // Range planning stays next to the other operation planners. Split if a third
 // addressing mode lands on this dispatcher.
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
+import {
+  recordReplacedRun,
+  recordTrackedChanges,
+  seedRunOrigins,
+  touchParagraph,
+  type LineageRecorder,
+} from './document-lineage'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
 import {
   setParagraphNumbering,
@@ -35,6 +42,7 @@ export function applyDocumentEdits(
   document: OoxmlDocument,
   operations: readonly DocumentEditOperation[],
   tracking?: TrackedEditContext,
+  lineage?: LineageRecorder,
 ) {
   const parsed = documentEditOperationsSchema.safeParse(operations)
   if (!parsed.success) throw new OoxmlError('invalid-document-edit')
@@ -76,10 +84,13 @@ export function applyDocumentEdits(
   // boundaries from all of them must form one split per run; applying them one
   // at a time would let each split overwrite the previous run structure.
   const rangeEmphasis = new Map<ParagraphAnchor, RunEmphasisRange[]>()
-  for (const operation of planned) {
+  for (const [operationIndex, operation] of planned.entries()) {
     const deletedLater = deletedIds.has(operation.paragraph.wire.id)
+    if (lineage)
+      touchParagraph(lineage, operation.paragraph.wire, operationIndex)
     if (operation.type === 'replace_run_text') {
       if (deletedLater) continue
+      if (lineage) seedRunOrigins(lineage, operation.run.wire)
       if (trackedWriter) {
         trackedWriter.replaceRunText(operation.run, operation.text)
       } else if (
@@ -87,6 +98,7 @@ export function applyDocumentEdits(
       ) {
         throw new OoxmlError('model-node-not-editable')
       }
+      if (lineage) recordReplacedRun(lineage, operation.run.wire)
     } else if (operation.type === 'set_run_style') {
       if (!deletedLater) {
         if (trackedWriter) {
@@ -119,8 +131,11 @@ export function applyDocumentEdits(
           operation.from !== undefined &&
           operation.to !== undefined
         ) {
-          // Tracked range splits have no rPrChange writer yet.
-          if (trackedWriter) continue
+          // There is no tracked rPrChange writer for a range split. Applying it
+          // untracked would silently discard the requested tracking, and
+          // skipping it would report a saved formatting change that was never
+          // written. Refuse it so the client holds and surfaces the slot.
+          if (trackedWriter) throw new OoxmlError('model-node-not-editable')
           const ranges = rangeEmphasis.get(operation.paragraph) ?? []
           ranges.push({
             from: operation.from,
@@ -148,7 +163,12 @@ export function applyDocumentEdits(
           setParagraphFormat(document, operation.paragraph, operation)
         }
       }
-    } else if (operation.type === 'insert_paragraph_after') {
+    } else if (
+      operation.type === 'insert_paragraph_after' ||
+      operation.type === 'insert_paragraph_before'
+    ) {
+      const position =
+        operation.type === 'insert_paragraph_before' ? 'before' : 'after'
       const count = insertionCounts.get(operation.paragraphId) ?? 0
       if (trackedWriter) {
         trackedWriter.insertParagraphAfter(
@@ -158,6 +178,14 @@ export function applyDocumentEdits(
           operation.styleId,
           count,
           operation,
+          lineage
+            ? {
+                recorder: lineage,
+                operationIndex,
+                ...(operation.intentId ? { intentId: operation.intentId } : {}),
+              }
+            : undefined,
+          position,
         )
       } else {
         insertParagraphAfter(
@@ -167,23 +195,52 @@ export function applyDocumentEdits(
           insertParagraphRuns(operation),
           operation.styleId,
           count,
-          { prefix: 'w', paragraphFormat: operation },
+          { prefix: 'w', paragraphFormat: operation, position },
+          lineage
+            ? {
+                recorder: lineage,
+                operationIndex,
+                ...(operation.intentId ? { intentId: operation.intentId } : {}),
+              }
+            : undefined,
         )
       }
       insertionCounts.set(operation.paragraphId, count + 1)
     } else if (operation.type === 'delete_paragraph') {
       if (trackedWriter) {
-        trackedWriter.deleteParagraph(operation.paragraph)
+        trackedWriter.deleteParagraph(
+          operation.paragraph,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
+        )
       } else {
-        deleteParagraph(document, mainStory, operation.paragraph)
+        deleteParagraph(
+          document,
+          mainStory,
+          operation.paragraph,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
+        )
       }
     } else {
       throw new OoxmlError('invalid-document-edit')
     }
+
+    // A tracked operation names its reversal by the persisted `w:id`s it just
+    // created. Taking them per operation keeps each history step's reversal a
+    // unit: a replacement's `del`/`ins` pair is never split from its run.
+    if (trackedWriter && lineage) {
+      const created = trackedWriter.takeChanges()
+      if (created.length > 0) {
+        recordTrackedChanges(lineage, created, {
+          operationIndex,
+          fromParagraphId: operation.paragraph.wire.id,
+          fromRunId: trackedRunIdOf(operation),
+        })
+      }
+    }
   }
 
   for (const [paragraph, ranges] of rangeEmphasis) {
-    applyRunEmphasisRanges(document, paragraph, ranges)
+    applyRunEmphasisRanges(document, paragraph, ranges, lineage)
   }
 }
 
@@ -216,6 +273,16 @@ function runEmphasisFields(
       ? { smallCaps: operation.smallCaps }
       : {}),
   }
+}
+
+/** The base run a tracked operation's reversal is keyed to, when run-keyed. */
+function trackedRunIdOf(operation: PlannedOperation): string | null {
+  if (operation.type === 'replace_run_text') return operation.run.wire.id
+  if (operation.type === 'set_run_style') return operation.run.wire.id
+  if (operation.type === 'set_run_emphasis') {
+    return operation.run?.wire.id ?? null
+  }
+  return null
 }
 
 function planOperation(
@@ -327,7 +394,13 @@ function validateStyle(
   ) {
     throw new OoxmlError('invalid-document-edit')
   }
-  if (operation.type !== 'insert_paragraph_after' || !operation.runs) return
+  if (
+    operation.type !== 'insert_paragraph_after' &&
+    operation.type !== 'insert_paragraph_before'
+  ) {
+    return
+  }
+  if (!operation.runs) return
   for (const run of operation.runs) {
     if (run.styleId && !styleIds.has(run.styleId)) {
       throw new OoxmlError('invalid-document-edit')

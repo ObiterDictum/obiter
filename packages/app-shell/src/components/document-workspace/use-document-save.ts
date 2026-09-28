@@ -1,6 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentPresence,
+  DocumentVersionLineage,
+} from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {
   planDocumentSave,
@@ -14,6 +18,7 @@ import {
 import {
   useCollaborationMerge,
   useEditDocument,
+  useTrackedChangeDecision,
   workspaceKeys,
 } from '../../document-workspace-api'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
@@ -25,16 +30,26 @@ import type { WorkspaceDrafts } from './use-workspace-drafts'
  */
 const MAX_ISOLATION_ATTEMPTS = 12
 
+/** The tracked-change decision route's own change-id cap. */
+const DOCUMENT_TRACKED_DECISION_MAX = 100
+
 export type SaveState =
   | { status: 'saved' }
   | { status: 'unsaved' }
   | { status: 'saving' }
   | { status: 'failed' }
   | { status: 'stale' }
+  | { status: 'blocked' }
 
 export type DocumentSave = ReturnType<typeof useDocumentSave>
 
-const EMPTY_PLAN: SavePlan = { operations: [], covered: [], blocked: [] }
+const EMPTY_PLAN: SavePlan = {
+  operations: [],
+  covered: [],
+  blocked: [],
+  pending: 0,
+  rejections: [],
+}
 
 /**
  * The save state machine for the DOCX workspace.
@@ -71,14 +86,16 @@ export function useDocumentSave({
   const queryClient = useQueryClient()
   const editDocument = useEditDocument(documentId, matterId)
   const mergeDocument = useCollaborationMerge(documentId, matterId)
+  const decideChange = useTrackedChangeDecision(documentId, matterId)
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
   const inFlight = useRef(false)
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
-  const dirty = plan.operations.length > 0
-  const saving = editDocument.isPending || mergeDocument.isPending
+  const dirty = plan.operations.length > 0 || plan.rejections.length > 0
+  const saving =
+    editDocument.isPending || mergeDocument.isPending || decideChange.isPending
   const blocked = plan.blocked
   const held = drafts.held
 
@@ -106,7 +123,12 @@ export function useDocumentSave({
         operations,
         trackChanges,
       })
-      return { versionId: saved.versionId, merged: remoteChange }
+      return {
+        versionId: saved.versionId,
+        versionNumber: saved.versionNumber,
+        merged: remoteChange,
+        lineage: saved.lineage,
+      }
     }
     try {
       const saved = await editDocument.mutateAsync({
@@ -114,7 +136,12 @@ export function useDocumentSave({
         operations,
         trackChanges,
       })
-      return { versionId: saved.versionId, merged: false }
+      return {
+        versionId: saved.versionId,
+        versionNumber: saved.versionNumber,
+        merged: false,
+        lineage: saved.lineage,
+      }
     } catch (error) {
       if (!(error instanceof ApiError) || error.code !== 'conflict_detected') {
         throw error
@@ -125,7 +152,12 @@ export function useDocumentSave({
         operations,
         trackChanges,
       })
-      return { versionId: saved.versionId, merged: true }
+      return {
+        versionId: saved.versionId,
+        versionNumber: saved.versionNumber,
+        merged: true,
+        lineage: saved.lineage,
+      }
     }
   }
 
@@ -133,17 +165,24 @@ export function useDocumentSave({
     covered: readonly DraftSlot[],
     sent: DraftState,
     versionId: string,
+    versionNumber: number | undefined,
     merged: boolean,
+    lineage?: DocumentVersionLineage,
   ) {
     onSaved(versionId)
-    // Only the slots this request covered, and only if they still hold what it
-    // sent: anything blocked, held, or edited while the request was in flight
-    // stays unsaved and must keep saying so.
-    drafts.clearSlots(covered, sent)
-    // The save is a new baseline, so the redo branch it covered is obsolete:
-    // replaying a snapshot still holding a saved slot would resend it. Undo
-    // history and unsaved edits made during the request are untouched.
-    drafts.discardRedo()
+    // Advances the history baseline as well as clearing the covered slots: a
+    // snapshot taken while they were pending can never be replayed, and undo
+    // still reverses a saved edit against the document the save produced. The
+    // server's lineage is the authoritative identity for that translation.
+    if (model)
+      drafts.commitSaveBoundary(
+        covered,
+        sent,
+        model,
+        lineage,
+        versionId,
+        versionNumber,
+      )
     setFailure(null)
     setStale(false)
     if (merged) {
@@ -186,7 +225,14 @@ export function useDocumentSave({
           'The server rejected this change.',
           sent,
         )
-        commit(attempt.covered, without, result.versionId, result.merged)
+        commit(
+          attempt.covered,
+          without,
+          result.versionId,
+          result.versionNumber,
+          result.merged,
+          result.lineage,
+        )
         return true
       } catch (error) {
         if (error instanceof ApiError && error.code === 'conflict_detected') {
@@ -207,18 +253,102 @@ export function useDocumentSave({
 
   async function save() {
     if (!model) return
+    // A save whose lineage could not be reconciled leaves the history baseline
+    // unresolved. Writing again could duplicate the covered work or retarget a
+    // reversal, so the only safe action is to reload and discard.
+    if (drafts.lineageUnresolved) return
+    // A committed save whose result model has not reloaded yet is an unresolved
+    // baseline: a second save would address the pre-save model and duplicate or
+    // retarget the covered work.
+    if (drafts.boundaryPending) return
     // Ctrl+S bypasses the disabled Save button, so two saves could otherwise
     // run against one base version and duplicate every insert in the batch.
     if (inFlight.current) return
     const sent = drafts.state
     const current = planDocumentSave(model, sent)
+    // A tracked reversal is a decision version, not an edit. Send rejections
+    // only when no edit operations are pending; otherwise save the edits first
+    // and leave the rejection in state so neither is silently lost.
+    if (current.operations.length === 0 && current.rejections.length > 0) {
+      // Every pending group is one decision batch: the decision route is
+      // all-or-nothing against one base version, so sending the groups
+      // sequentially would commit the first and conflict the rest. One call
+      // makes a multi-operation history step an atomic unit, or blocks whole.
+      const changeIds = [
+        ...new Set(
+          current.rejections.flatMap((rejection) => rejection.changeIds),
+        ),
+      ]
+      const removeParagraphIds = [
+        ...new Set(
+          current.rejections.flatMap(
+            (rejection) => rejection.removeParagraphIds ?? [],
+          ),
+        ),
+      ]
+      if (
+        changeIds.length > DOCUMENT_TRACKED_DECISION_MAX ||
+        removeParagraphIds.length > DOCUMENT_TRACKED_DECISION_MAX
+      ) {
+        setFailure(
+          'This undo reverses more tracked changes than one decision can carry. Reload and review them in Review \u25b8 Changes.',
+        )
+        return
+      }
+      inFlight.current = true
+      setFailure(null)
+      setNotice(null)
+      try {
+        const saved = await decideChange.mutateAsync({
+          baseVersionId,
+          action: 'reject',
+          changeIds,
+          ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
+        })
+        // A decision version carries no lineage, and the rejected change id is
+        // consumed, so the pre-edit snapshots cannot be replayed safely. The
+        // rejection slots are cleared and Redo is deliberately unavailable
+        // rather than targeting an obsolete id.
+        drafts.clearSlots(
+          current.rejections.map((rejection) => ({
+            kind: 'tracked-reject' as const,
+            key: rejection.key,
+            ooxmlIds: rejection.ooxmlIds,
+          })),
+          sent,
+        )
+        drafts.resetHistoryAfterDecision()
+        // Hold saves until the decision version's model reloads, so the next
+        // edit is not planned against pre-decision run ids under the new base.
+        drafts.markDecisionCommitted(saved.versionId, saved.versionNumber)
+        onSaved(saved.versionId)
+        setFailure(null)
+        setStale(false)
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'conflict_detected') {
+          setStale(true)
+          return
+        }
+        setFailure(messageFor(error))
+      } finally {
+        inFlight.current = false
+      }
+      return
+    }
     if (current.operations.length === 0) return
     inFlight.current = true
     setFailure(null)
     setNotice(null)
     try {
       const result = await sendBatch(current.operations)
-      commit(current.covered, sent, result.versionId, result.merged)
+      commit(
+        current.covered,
+        sent,
+        result.versionId,
+        result.versionNumber,
+        result.merged,
+        result.lineage,
+      )
     } catch (error) {
       if (error instanceof ApiError && error.code === 'conflict_detected') {
         setStale(true)
@@ -245,19 +375,24 @@ export function useDocumentSave({
     }
   }
 
-  const saveState: SaveState = stale
-    ? { status: 'stale' }
-    : saving
+  const saveState: SaveState = drafts.lineageUnresolved
+    ? { status: 'blocked' }
+    : drafts.boundaryPending
       ? { status: 'saving' }
-      : failure
-        ? { status: 'failed' }
-        : dirty ||
-            blocked.length > 0 ||
-            held.length > 0 ||
-            drafts.recoverable.length > 0 ||
-            Boolean(drafts.staleDraft)
-          ? { status: 'unsaved' }
-          : { status: 'saved' }
+      : stale
+        ? { status: 'stale' }
+        : saving
+          ? { status: 'saving' }
+          : failure
+            ? { status: 'failed' }
+            : dirty ||
+                plan.pending > 0 ||
+                blocked.length > 0 ||
+                held.length > 0 ||
+                drafts.recoverable.length > 0 ||
+                Boolean(drafts.staleDraft)
+              ? { status: 'unsaved' }
+              : { status: 'saved' }
 
   return {
     blocked,
@@ -266,6 +401,7 @@ export function useDocumentSave({
     saving,
     persistence: drafts.persistence,
     stale,
+    lineageUnresolved: drafts.lineageUnresolved,
     saveState,
     failure,
     notice,
@@ -274,6 +410,21 @@ export function useDocumentSave({
     reload: () => void reload(),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
+    blockedHistoryMessage: blockedHistoryMessage(drafts.blockedReason),
+  }
+}
+
+/** One sentence naming why a committed save's history cannot be reconciled. */
+function blockedHistoryMessage(
+  reason: import('./use-save-baseline').BaselineBlockReason | null,
+) {
+  switch (reason) {
+    case 'newer-version':
+      return 'Your change was saved, but the document moved to a newer version before the saved model could be loaded. Reloading is required to continue; it discards the in-memory undo history. Your saved change is not lost.'
+    case 'reload-failed':
+      return 'Your change was saved, but the saved document could not be reloaded, so the edit history cannot be reconciled. Retry the reload; the saved document is unchanged.'
+    default:
+      return 'Your change was saved, but the edit history for it could not be reconciled against the saved version. Reloading is required to continue; it discards the in-memory undo history, any held rejected changes and parked drafts. The saved document is unchanged.'
   }
 }
 

@@ -5,6 +5,7 @@ export * from './api-error'
 export * from './document-collaboration'
 export * from './document-comments'
 export * from './document-edit'
+export * from './document-lineage'
 export * from './document-model'
 export * from './document-tracked-changes'
 // Citation honesty shapes for legal search (additive, optional at the boundary).

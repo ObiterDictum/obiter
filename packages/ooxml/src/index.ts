@@ -12,6 +12,7 @@ export {
 } from '@obiter/contracts'
 
 export { createBlankDocx } from './blank'
+export { createSyntheticDocx } from './synthetic-document'
 export {
   DEFAULT_OOXML_PACKAGE_LIMITS,
   OOXML_INFLATE_CONCURRENCY,
@@ -36,6 +37,8 @@ export {
 } from './package-part'
 export { resolveRelationshipTarget } from './parts/rels'
 export * from './collaboration-merge'
+export * from './document-identity'
+export * from './document-lineage'
 export * from './equivalence'
 export * from './model'
 export * from './model-run-range-edits'

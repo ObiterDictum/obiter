@@ -20,6 +20,17 @@ export const documentTrackedChangeDecisionRequestSchema = z
     baseVersionId: editIdSchema,
     action: z.enum(['accept', 'reject']),
     changeIds: z.array(z.string().min(1)).min(1).max(100),
+    /**
+     * Persisted paragraph ids (`para-w14-<value>`) whose empty tracked-change
+     * shell this decision removes. A tracked paragraph insertion wraps its
+     * content in `w:ins`, so rejecting that change restores the pre-insertion
+     * content but leaves an empty paragraph behind. Removing the shell in the
+     * same authorized, version-checked decision is what makes the reversal
+     * atomic; a separate delete would be refused while the change is pending.
+     * Only valid with `action: 'reject'`, and the server verifies each id is an
+     * empty shell whose content is entirely one of the rejected insertions.
+     */
+    removeParagraphIds: z.array(editIdSchema).min(1).max(100).optional(),
   })
   .strict()
   .superRefine((request, context) => {
@@ -28,6 +39,24 @@ export const documentTrackedChangeDecisionRequestSchema = z
         code: 'custom',
         path: ['changeIds'],
         message: 'Tracked change identifiers must be unique.',
+      })
+    }
+    if (request.removeParagraphIds && request.action !== 'reject') {
+      context.addIssue({
+        code: 'custom',
+        path: ['removeParagraphIds'],
+        message: 'A paragraph shell can only be removed by a rejection.',
+      })
+    }
+    if (
+      request.removeParagraphIds &&
+      new Set(request.removeParagraphIds).size !==
+        request.removeParagraphIds.length
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['removeParagraphIds'],
+        message: 'Removed paragraph identifiers must be unique.',
       })
     }
   })

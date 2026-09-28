@@ -151,6 +151,7 @@ describe('workspace draft history', () => {
       deletedParagraphIds: [],
       extraRuns: {},
       format: emptyFormatDrafts,
+      trackedRejections: [],
     }
     const second = { ...first, drafts: { r1: 'B' } }
     const stacked = pushWorkspaceDraft(pushWorkspaceDraft([], first), second)
@@ -180,6 +181,7 @@ describe('workspace draft history', () => {
       deletedParagraphIds: [],
       extraRuns: {},
       format: emptyFormatDrafts,
+      trackedRejections: [],
     }
     const history = pushWorkspaceDraft([], snapshot)
     snapshot.drafts.r1 = 'mutated'

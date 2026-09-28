@@ -18,6 +18,7 @@ export function DocumentWorkspaceToolbar({
   kind,
   dirty,
   saving,
+  blocked,
   trackChanges,
   zoom,
   commentsOpen,
@@ -49,6 +50,8 @@ export function DocumentWorkspaceToolbar({
   kind: 'docx' | 'pdf'
   dirty: boolean
   saving: boolean
+  /** The committed save's history could not be reconciled; saving is refused. */
+  blocked?: boolean
   trackChanges: boolean
   zoom: number
   commentsOpen: boolean
@@ -195,7 +198,7 @@ export function DocumentWorkspaceToolbar({
           <Button
             size="sm"
             aria-label="Save"
-            disabled={!dirty || saving}
+            disabled={!dirty || saving || blocked}
             loading={saving}
             onClick={onSave}
             iconStart={<FloppyDisk size={16} aria-hidden />}

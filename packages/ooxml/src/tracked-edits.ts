@@ -23,6 +23,10 @@ import {
 } from './model-property-edits'
 import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
 import {
+  recordDeletedParagraph,
+  type LineageRecorder,
+} from './document-lineage'
+import {
   appendPropertyChange,
   extractInsertedRunRpr,
   foldRprIntoInsertedRun,
@@ -41,6 +45,17 @@ export type TrackedEditContext = {
   date: string
 }
 
+/**
+ * A tracked-change element the writer just created, addressed by the persisted
+ * OOXML change id (`w:id`). It is the only cross-version identity for content
+ * that serialization wraps in `w:ins`/`w:del` and the parser therefore excludes
+ * from the paragraph model.
+ */
+export type TrackedChangeCreated = {
+  elementName: 'ins' | 'del' | 'rPrChange' | 'pPrChange'
+  ooxmlId: string
+}
+
 export function createTrackedEditWriter(
   document: OoxmlDocument,
   context: TrackedEditContext,
@@ -54,9 +69,14 @@ export function createTrackedEditWriter(
     throw new OoxmlError('invalid-document-edit')
   }
   let nextChangeId = allocateFirstChangeId(document)
-  const attributes = (prefix: string) => {
+  let created: TrackedChangeCreated[] = []
+  const attributes = (
+    prefix: string,
+    elementName: TrackedChangeCreated['elementName'],
+  ) => {
     const id = String(nextChangeId)
     nextChangeId += 1
+    created.push({ elementName, ooxmlId: id })
     return `${prefix}:id="${id}" ${prefix}:author="${escapeXmlAttribute(context.author)}" ${prefix}:date="${escapeXmlAttribute(context.date)}"`
   }
 
@@ -84,7 +104,7 @@ export function createTrackedEditWriter(
       setOverlayReplacement(part.overlay, `${anchor.wire.id}:tracked-text`, {
         start: anchor.runRange.start,
         end: anchor.runRange.end,
-        value: `<${prefix}:del ${attributes(prefix)}>${oldRun}</${prefix}:del><${prefix}:ins ${attributes(prefix)}>${newRun}</${prefix}:ins>`,
+        value: `<${prefix}:del ${attributes(prefix, 'del')}>${oldRun}</${prefix}:del><${prefix}:ins ${attributes(prefix, 'ins')}>${newRun}</${prefix}:ins>`,
       })
       anchor.wire.text = text
       part.dirty = true
@@ -97,18 +117,37 @@ export function createTrackedEditWriter(
       styleId: string | null | undefined,
       offset: number,
       paragraphFormat?: ParagraphFormat,
+      lineage?: {
+        recorder: LineageRecorder
+        operationIndex: number
+        intentId?: string
+      },
+      position?: 'after' | 'before',
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
-      insertParagraphAfter(document, story, anchor, runs, styleId, offset, {
-        prefix,
-        wrapRun: (run) =>
-          `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
-        paragraphFormat,
-      })
+      insertParagraphAfter(
+        document,
+        story,
+        anchor,
+        runs,
+        styleId,
+        offset,
+        {
+          prefix,
+          wrapRun: (run) =>
+            `<${prefix}:ins ${attributes(prefix, 'ins')}>${run}</${prefix}:ins>`,
+          paragraphFormat,
+          ...(position ? { position } : {}),
+        },
+        lineage,
+      )
     },
 
-    deleteParagraph(anchor: ParagraphAnchor) {
+    deleteParagraph(
+      anchor: ParagraphAnchor,
+      lineage?: { recorder: LineageRecorder; operationIndex: number },
+    ) {
       const part = requireEditablePart(document, anchor.partName)
       const source = part.overlay.source
       if (anchor.runs.length === 0) {
@@ -124,11 +163,18 @@ export function createTrackedEditWriter(
             source,
             anchor,
             prefix,
-            attributes(prefix),
+            attributes(prefix, 'del'),
           ),
         )
         story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
         part.dirty = true
+        if (lineage) {
+          recordDeletedParagraph(
+            lineage.recorder,
+            anchor.wire,
+            lineage.operationIndex,
+          )
+        }
         return
       }
       for (const run of anchor.runs) {
@@ -141,7 +187,7 @@ export function createTrackedEditWriter(
         setOverlayReplacement(part.overlay, `${run.wire.id}:tracked-delete`, {
           start: run.runRange.start,
           end: run.runRange.end,
-          value: `<${prefix}:del ${attributes(prefix)}>${deletedRun}</${prefix}:del>`,
+          value: `<${prefix}:del ${attributes(prefix, 'del')}>${deletedRun}</${prefix}:del>`,
         })
       }
       part.dirty = true
@@ -159,7 +205,7 @@ export function createTrackedEditWriter(
         styleName: 'rStyle',
         prefix,
         styleId,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'rPrChange'),
         wire: anchor.wire,
       })
     },
@@ -176,7 +222,7 @@ export function createTrackedEditWriter(
         styleName: 'pStyle',
         prefix,
         styleId,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'pPrChange'),
         wire: anchor.wire,
       })
     },
@@ -191,7 +237,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.runPropertiesRange,
         propertiesName: 'rPr',
         prefix,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'rPrChange'),
         patch: (current) => patchRunEmphasisXml(current, emphasis),
       })
     },
@@ -209,7 +255,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.paragraphPropertiesRange,
         propertiesName: 'pPr',
         prefix,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'pPrChange'),
         patch: (current) => patchParagraphNumberingXml(current, numbering),
       })
     },
@@ -224,9 +270,19 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.paragraphPropertiesRange,
         propertiesName: 'pPr',
         prefix,
-        attributes: attributes(prefix),
+        attributes: attributes(prefix, 'pPrChange'),
         patch: (current) => patchParagraphFormatXml(current, format),
       })
+    },
+
+    /**
+     * The changes created since the previous call, in order. The lineage uses
+     * them to name a reversal by persisted `w:id`, not by run position.
+     */
+    takeChanges() {
+      const next = created
+      created = []
+      return next
     },
   }
 }
@@ -357,14 +413,20 @@ function isCanonicalIsoTimestamp(value: string) {
   return !Number.isNaN(timestamp) && new Date(timestamp).toISOString() === value
 }
 
+/**
+ * The next tracked-change id is one past the highest id already in the
+ * document, never the lowest free one. A decided change's id is therefore not
+ * reused by a later edit, so a stale rejection group can never name a different
+ * change it happens to share an id with.
+ */
 function allocateFirstChangeId(document: OoxmlDocument) {
-  const used = new Set(
-    [...document.trackedChanges.values()]
-      .map(({ wire }) => wire.ooxmlId)
-      .filter((id): id is string => id !== undefined && /^[+-]?\d+$/u.test(id))
-      .map((id) => BigInt(id).toString()),
-  )
-  let candidate = 0
-  while (used.has(String(candidate))) candidate += 1
-  return candidate
+  let next = 0
+  for (const { wire } of document.trackedChanges.values()) {
+    const id = wire.ooxmlId
+    if (id === undefined || !/^\d+$/u.test(id)) continue
+    const value = Number(id)
+    if (!Number.isSafeInteger(value)) continue
+    if (value >= next) next = value + 1
+  }
+  return next
 }

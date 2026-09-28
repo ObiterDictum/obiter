@@ -101,7 +101,7 @@ describe('set_run_emphasis paragraph range', () => {
     expect(reparsed.runs.map(runBold)).toEqual([false, true, false])
   })
 
-  it('keeps a tracked text replacement when a range emphasis cannot be recorded', async () => {
+  it('refuses a range emphasis under tracking instead of silently dropping it', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
     )
@@ -109,26 +109,26 @@ describe('set_run_emphasis paragraph range', () => {
     const run = paragraph?.runs[0]
     if (!paragraph || !run) throw new Error('Fixture run is missing.')
 
-    applyDocumentEdits(
-      document,
-      [
-        { type: 'replace_run_text', runId: run.id, text: 'Typed words here' },
-        {
-          type: 'set_run_emphasis',
-          paragraphId: paragraph.id,
-          from: 6,
-          to: 11,
-          bold: true,
-        },
-      ],
-      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
-    )
-    const xml = await zipText(
-      await serialiseDocx(document),
-      'word/document.xml',
-    )
-    expect(xml).toContain('Typed words here')
-    expect(xml).not.toContain('>words</w:t>')
+    // There is no tracked rPrChange writer for a range split. Applying it
+    // untracked would discard the requested tracking, and skipping it would
+    // report a saved formatting change that was never written. The batch is
+    // refused so the client holds and surfaces the slot while the rest saves.
+    expect(() =>
+      applyDocumentEdits(
+        document,
+        [
+          { type: 'replace_run_text', runId: run.id, text: 'Typed words here' },
+          {
+            type: 'set_run_emphasis',
+            paragraphId: paragraph.id,
+            from: 6,
+            to: 11,
+            bold: true,
+          },
+        ],
+        { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+      ),
+    ).toThrow('The document node cannot be edited.')
   })
 
   it('still records whole-run emphasis under tracking', async () => {

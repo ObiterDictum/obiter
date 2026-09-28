@@ -104,4 +104,20 @@ describe('history caret placement', () => {
       }),
     ).toBeNull()
   })
+
+  it('falls back to a surviving neighbour when the insert anchor is removed too', () => {
+    // The step removed the insert and the stored paragraph it was placed after,
+    // so the insert's own anchor cannot hold the caret either.
+    expect(
+      historyCaretPlacement({
+        model: body,
+        before: {
+          inserts: [{ clientId: 'i1', afterParagraphId: 'p2', text: 'draft' }],
+          deletedParagraphIds: [],
+        },
+        restored: state({ deletedParagraphIds: ['p2'] }),
+        anchor: 'i1',
+      }),
+    ).toEqual({ paragraphId: 'p1', offset: 'Hello'.length })
+  })
 })

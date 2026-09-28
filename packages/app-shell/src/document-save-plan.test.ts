@@ -85,6 +85,7 @@ describe('planDocumentSave addressability', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
+        intentId: 'ins_1',
         text: 'New',
         styleId: 'Heading1',
       },
@@ -245,5 +246,80 @@ describe('draft slot removal', () => {
     const { remaining, removed } = splitDraftSlots(reordered, [holdSecond])
     expect(remaining.format.emphasis).toEqual([first])
     expect(removed.format.emphasis).toEqual([second])
+  })
+
+  it('resolves a tracked rejection group to the current change ids', () => {
+    const source = {
+      ...model(['p1'], ['r1']),
+      changes: [
+        {
+          id: 'change-000001',
+          ooxmlId: '0',
+          kind: 'delete' as const,
+          elementName: 'del' as const,
+          storyPartName: 'word/document.xml',
+          text: 'Hello',
+        },
+        {
+          id: 'change-000002',
+          ooxmlId: '1',
+          kind: 'insert' as const,
+          elementName: 'ins' as const,
+          storyPartName: 'word/document.xml',
+          text: 'Jello',
+        },
+      ],
+    }
+    const state: DraftState = {
+      ...emptyDraftState(),
+      trackedRejections: [{ key: 'reject:0,1', ooxmlIds: ['0', '1'] }],
+    }
+    const plan = planDocumentSave(source, state)
+    expect(plan.rejections).toEqual([
+      {
+        key: 'reject:0,1',
+        ooxmlIds: ['0', '1'],
+        changeIds: ['change-000001', 'change-000002'],
+      },
+    ])
+    expect(plan.operations).toEqual([])
+    expect(plan.blocked).toEqual([])
+  })
+
+  it('blocks a tracked rejection the model no longer names', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      trackedRejections: [{ key: 'reject:9', ooxmlIds: ['9'] }],
+    }
+    const plan = planDocumentSave(model(['p1'], ['r1']), state)
+    expect(plan.rejections).toEqual([])
+    expect(plan.blocked).toEqual([
+      {
+        slot: { kind: 'tracked-reject', key: 'reject:9', ooxmlIds: ['9'] },
+        reason:
+          'The tracked change this undo reverses is no longer in the document.',
+        label: 'a tracked change',
+      },
+    ])
+  })
+
+  it('removes a tracked rejection group by key and never splits it', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      trackedRejections: [
+        { key: 'reject:0,1', ooxmlIds: ['0', '1'] },
+        { key: 'reject:2', ooxmlIds: ['2'] },
+      ],
+    }
+    const { remaining, removed } = splitDraftSlots(state, [
+      { kind: 'tracked-reject', key: 'reject:0,1', ooxmlIds: ['0', '1'] },
+    ])
+    expect(remaining.trackedRejections).toEqual([
+      { key: 'reject:2', ooxmlIds: ['2'] },
+    ])
+    expect(removed.trackedRejections).toEqual([
+      { key: 'reject:0,1', ooxmlIds: ['0', '1'] },
+    ])
+    expect(hasDraftState(remaining)).toBe(true)
   })
 })

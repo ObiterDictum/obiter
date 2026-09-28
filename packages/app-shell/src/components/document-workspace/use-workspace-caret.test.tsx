@@ -15,6 +15,7 @@ function useCaretHarness(documentId: string) {
     userId: 'usr_1',
     documentId,
     baseVersionId: 'ver_1',
+    model: undefined,
   })
   return useWorkspaceCaret({ documentId, model: undefined, drafts })
 }

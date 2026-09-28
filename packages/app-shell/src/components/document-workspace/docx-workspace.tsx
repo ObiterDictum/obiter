@@ -72,11 +72,15 @@ export function DocxWorkspace({
   const createComment = useCreateDocumentComment(documentId)
   const resolveComment = useResolveDocumentComment(documentId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
+  const model = modelQuery.data?.model
   const drafts = useWorkspaceDrafts({
     organisationId: me?.organisation?.id ?? 'no-organisation',
     userId: me?.user.id ?? 'anonymous',
     documentId,
     baseVersionId: modelQuery.data?.versionId,
+    baseVersionNumber: modelQuery.data?.versionNumber,
+    modelError: modelQuery.isError,
+    model,
   })
 
   const [zoom, setZoom] = useState(100)
@@ -87,7 +91,6 @@ export function DocxWorkspace({
   const [trackChanges, setTrackChanges] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
 
-  const model = modelQuery.data?.model
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
   const save = useDocumentSave({
@@ -211,6 +214,7 @@ export function DocxWorkspace({
         kind="docx"
         dirty={save.dirty}
         saving={save.saving}
+        blocked={save.saveState.status === 'blocked'}
         trackChanges={trackChanges}
         zoom={zoom}
         commentsOpen={commentsOpen}
@@ -318,7 +322,7 @@ export function DocxWorkspace({
     >
       {modelQuery.isLoading ? (
         <LoadingBlock label="Loading document model" />
-      ) : modelQuery.isError ? (
+      ) : modelQuery.isError && !model ? (
         <QueryError
           error={modelQuery.error}
           fallback="The document model could not be loaded."
@@ -443,11 +447,16 @@ export function DocxWorkspace({
                 changesPending={decideChange.isPending || save.saving}
                 changesError={mutationError(decideChange.error)}
                 onDecideChange={(action, changeId) => {
-                  decideChange.mutate({
-                    baseVersionId,
-                    action,
-                    changeIds: [changeId],
-                  })
+                  decideChange.mutate(
+                    { baseVersionId, action, changeIds: [changeId] },
+                    {
+                      onSuccess: (data) =>
+                        drafts.resetHistoryAfterDecision(
+                          data.versionId,
+                          data.versionNumber,
+                        ),
+                    },
+                  )
                 }}
                 authorities={authorities}
                 onSelectAuthority={(paragraphId) =>

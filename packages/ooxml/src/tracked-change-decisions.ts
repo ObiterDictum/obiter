@@ -8,14 +8,44 @@ export function applyTrackedChangeDecisions(
   document: OoxmlDocument,
   changeIds: readonly string[],
   action: DocumentTrackedChangeDecisionRequest['action'],
+  removeParagraphIds: readonly string[] = [],
 ) {
   const requested = resolveTargets(document, changeIds)
+  const removals =
+    action === 'reject'
+      ? resolveRemovalParagraphs(document, requested, removeParagraphIds)
+      : []
   const absorbed =
     action === 'accept' ? absorbParagraphMarkSiblings(document, requested) : []
   const pending = uniqueChanges([...requested, ...absorbed]).filter(
-    (target) => !target.absorbed,
+    (target) =>
+      !target.absorbed &&
+      !removals.some(
+        (removal) =>
+          removal.partName === target.partName &&
+          target.range.start >= removal.start &&
+          target.range.end <= removal.end,
+      ),
   )
   validateTargets(pending, action)
+
+  // Remove the shells first: each covers a whole paragraph, and any change
+  // inside it is dropped from `pending`, so the two overlays never overlap.
+  for (const removal of removals) {
+    const part = requireEditablePart(document, removal.partName)
+    setOverlayReplacement(
+      part.overlay,
+      `${removal.anchor.wire.id}:decision-remove`,
+      { start: removal.start, end: removal.end, value: '' },
+    )
+    part.dirty = true
+    const story = document.model.stories.find((item) =>
+      item.paragraphs.includes(removal.anchor.wire),
+    )
+    if (story) {
+      story.paragraphs.splice(story.paragraphs.indexOf(removal.anchor.wire), 1)
+    }
+  }
 
   for (const target of pending) {
     const part = requireEditablePart(document, target.partName)
@@ -55,6 +85,61 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
     }
   }
   return [...targets.values()]
+}
+
+/**
+ * Resolves the empty shells a rejection removes. A removal is only valid when
+ * it is one requested `w:ins` target's own paragraph: the paragraph parses
+ * with no visible run (its content is entirely tracked-insert), and every
+ * requested target inside it is that insertion. That refuses a decision that
+ * would delete a paragraph carrying any untracked content.
+ */
+function resolveRemovalParagraphs(
+  document: OoxmlDocument,
+  requested: readonly TrackedChangeNode[],
+  removeParagraphIds: readonly string[],
+) {
+  if (removeParagraphIds.length === 0) return []
+  if (
+    removeParagraphIds.length > 100 ||
+    new Set(removeParagraphIds).size !== removeParagraphIds.length
+  ) {
+    throw invalidDecision()
+  }
+  const removals: Array<{
+    anchor: NonNullable<ReturnType<typeof anchorFor>>
+    partName: string
+    start: number
+    end: number
+  }> = []
+  for (const paragraphId of removeParagraphIds) {
+    const anchor = anchorFor(document, paragraphId)
+    if (!anchor) throw invalidDecision()
+    // A shell whose visible content is entirely tracked-insert parses to no
+    // runs. Anything else would mean deleting untracked content.
+    if (anchor.runs.length > 0) throw invalidDecision()
+    const inside = requested.filter(
+      (target) =>
+        target.partName === anchor.partName &&
+        target.range.start >= anchor.paragraphRange.start &&
+        target.range.end <= anchor.paragraphRange.end,
+    )
+    if (inside.length === 0) throw invalidDecision()
+    if (!inside.every((target) => target.wire.kind === 'insert')) {
+      throw invalidDecision()
+    }
+    removals.push({
+      anchor,
+      partName: anchor.partName,
+      start: anchor.paragraphRange.start,
+      end: anchor.paragraphRange.end,
+    })
+  }
+  return removals
+}
+
+function anchorFor(document: OoxmlDocument, paragraphId: string) {
+  return document.paragraphAnchors.get(paragraphId)
 }
 
 function validateTargets(
