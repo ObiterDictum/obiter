@@ -143,6 +143,7 @@ function flag(name: string) {
 
 function parseJson<T>(value: string, context: string): T {
   try {
+    // SAFETY: callers validate the parsed shape immediately (parseTrainingDocument checks isRecord/text/id); invalid JSON throws below.
     return JSON.parse(value) as T
   } catch {
     throw new Error(`Invalid JSON in ${context}`)

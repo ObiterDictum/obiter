@@ -25,11 +25,7 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query'
 import { changelogQueryOptions } from '../changelog'
-import {
-  matterDocumentsQueryOptions,
-  type DocumentStatus,
-  type MatterDocumentRecord,
-} from '../documents'
+import { matterDocumentsQueryOptions, type DocumentStatus } from '../documents'
 import { useMattersList, type MatterRecord } from '../matters'
 import { useCurrentUser } from '../current-user'
 import {
@@ -190,8 +186,7 @@ function OrganisationHome({
   const documentsInPlay = useMemo(() => {
     const items: DocumentInPlay[] = []
     matterSlice.forEach((matter, index) => {
-      const docs = (documentQueries[index]?.data ??
-        []) as MatterDocumentRecord[]
+      const docs = documentQueries[index]?.data ?? []
       for (const doc of docs) {
         const status = doc.currentVersion?.documentStatus
         if (!isDocumentInPlay(status) || !status) continue

@@ -38,12 +38,12 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
-const toneAccent: Record<ToastTone, string> = {
+const toneAccent = {
   info: 'before:bg-info',
   success: 'before:bg-success',
   warning: 'before:bg-warning',
   danger: 'before:bg-danger',
-}
+} satisfies Record<ToastTone, string>
 
 const DEFAULT_TIMEOUT = 5000
 

@@ -38,7 +38,10 @@ export type ParagraphFace = {
 
 const DEFAULT_FONT = 'Calibri, "Segoe UI", "Liberation Sans", sans-serif'
 const DEFAULT_SIZE_PX = halfPointToPx(22)
-const THEME_FONT: Record<string, string> = {
+interface ThemeFont {
+  [key: string]: string
+}
+const THEME_FONT: ThemeFont = {
   minorhansi: 'Calibri',
   minorascii: 'Calibri',
   majorhansi: 'Cambria',
@@ -287,6 +290,7 @@ function wordUnderline(xml: string): boolean | undefined {
 }
 
 function omitUndefined<T extends object>(value: T): T {
+  // SAFETY: Object.entries yields T's own keys and the filter only drops undefined-valued entries, so the rebuilt object still matches T.
   return Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== undefined),
   ) as T

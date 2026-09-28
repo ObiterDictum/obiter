@@ -30,6 +30,7 @@ export function readDesktopBridge(): DesktopBridge | undefined {
     return undefined
   }
 
+  // SAFETY: window.obiterDesktop is set only by the desktop preload (apps/desktop/src/preload) matching DesktopBridge; web and SSR have no bridge, so the read is undefined and returned as-is.
   const bridge = (
     window as Window &
       typeof globalThis & {

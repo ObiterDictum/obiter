@@ -9,13 +9,18 @@ import {
 
 const MATTER_DOCUMENTS_UPLOAD_PATH = /^\/api\/matters\/[^/]+\/documents$/
 
+interface RequestBodyLimit {
+  maxBytes: number
+  limitKind: 'json' | 'upload'
+}
+
 function requestBodyMaxBytes(
   method: string,
   path: string,
   contentType: string | undefined,
   limits: ApiRequestLimits,
   authenticated: boolean,
-): { maxBytes: number; limitKind: 'json' | 'upload' } {
+): RequestBodyLimit {
   if (
     authenticated &&
     method === 'POST' &&

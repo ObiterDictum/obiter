@@ -5,11 +5,11 @@ import { cn } from './lib/cn'
 
 type Size = 'sm' | 'md' | 'lg'
 
-const sizeClasses: Record<Size, string> = {
+const sizeClasses = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
-}
+} satisfies Record<Size, string>
 
 /**
  * Dialog — a styled compound over Base UI Dialog. Focus trap, escape, and

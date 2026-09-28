@@ -386,9 +386,8 @@ export async function fetchLegislationSearch(
     (group): group is Record<string, unknown> =>
       isRecord(group) && group.key === 'legislation',
   )
-  const rawHits = Array.isArray(legislationGroup?.hits)
-    ? (legislationGroup.hits as unknown[])
-    : []
+  const hitsValue = legislationGroup?.hits
+  const rawHits = Array.isArray(hitsValue) ? hitsValue : []
   const hits = rawHits.map((hit, index) => {
     if (
       !isRecord(hit) ||

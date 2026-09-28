@@ -153,6 +153,7 @@ export function legislationActQueryOptions(identity: string) {
       if (!response.ok) {
         throw new Error('Legislation Act could not be loaded.')
       }
+      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:identity returns LegislationActResponse per the search API contract.
       return (await response.json()) as LegislationActResponse
     },
   })

@@ -131,11 +131,16 @@ function paintRangeEmphasis(
 }
 
 /** Expands a range so neither edge falls inside a surrogate pair. */
+export type EmphasisRange = {
+  from: number
+  to: number
+}
+
 export function snapEmphasisRange(
   text: string,
   from: number,
   to: number,
-): { from: number; to: number } {
+): EmphasisRange {
   const start = snapRangeStart(text, Math.min(from, to))
   const end = snapRangeEnd(text, Math.max(from, to))
   return { from: start, to: Math.max(start, end) }

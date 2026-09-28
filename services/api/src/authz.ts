@@ -128,7 +128,9 @@ export async function requireOwnerRole(
   return user
 }
 
-const ROLE_RANK: Record<UserRole, number> = { member: 0, admin: 1, owner: 2 }
+type RoleRank = { member: number; admin: number; owner: number }
+
+const ROLE_RANK: RoleRank = { member: 0, admin: 1, owner: 2 }
 
 /**
  * An actor may grant at most the role they themselves hold. Owner is a strict

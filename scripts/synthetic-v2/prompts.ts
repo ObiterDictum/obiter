@@ -17,8 +17,12 @@ Use person_private for clients, parties, witnesses, and ordinary private people;
 
 Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. Token ranges are authoritative and exact text and offsets are computed locally. Exhaustively label every in-scope category that actually appears in the whole document. If a generation requirement is absent from the source, omit it rather than inventing it; downstream QA will reject the draft. Never return two spans for the same person mention: choose exactly one of person_protected, person_professional, or person_private, in that precedence when more than one could apply. Use the full natural name mention rather than a nested surname span. Keep organisation names outside address spans, and do not separately label substrings inside emails, URLs, identifiers, or secrets. Before responding, silently verify that every token range is valid, every span selects the intended source substring, and ranges do not overlap.`
 
+interface CategoryRequirements {
+  [category: string]: string
+}
+
 function categoryInstruction(category: string) {
-  const requirements: Record<string, string> = {
+  const requirements: CategoryRequirements = {
     person_private:
       'a private person named at least three times using natural name variants',
     person_protected:

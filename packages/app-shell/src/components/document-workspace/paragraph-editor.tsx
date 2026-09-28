@@ -158,6 +158,7 @@ export function ParagraphEditor({
       }}
       onBeforeInput={(event) => {
         if (!selection?.active) return
+        // SAFETY: onBeforeInput fires only for DOM beforeinput events whose nativeEvent is an InputEvent; inputType and data fall back to empty when absent, so a non-conforming event returns early below.
         const input = event.nativeEvent as InputEvent
         const inputType = input.inputType ?? ''
         // The composition's own text is not the commit and must not be

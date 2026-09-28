@@ -276,6 +276,11 @@ export function removeDraftSlots(
   return splitDraftSlots(state, slots).remaining
 }
 
+export type SplitDraftSlotsResult = {
+  remaining: DraftState
+  removed: DraftState
+}
+
 /**
  * Splits the named slots out of a draft state. The removed fragment is what a
  * held change is: work the server would not accept, kept aside so it is neither
@@ -284,7 +289,7 @@ export function removeDraftSlots(
 export function splitDraftSlots(
   state: DraftState,
   slots: readonly DraftSlot[],
-): { remaining: DraftState; removed: DraftState } {
+): SplitDraftSlotsResult {
   const drop = new Set(slots.map((slot) => slot.key))
   const drafts = splitKeys(state.drafts, drop, (key) => `run:${key}`)
   const extraRuns = splitKeys(state.extraRuns, drop, (key) => `extra:${key}`)
@@ -341,11 +346,16 @@ export function splitDraftSlots(
   }
 }
 
+export interface SplitKeysResult<T> {
+  kept: Record<string, T>
+  taken: Record<string, T>
+}
+
 function splitKeys<T>(
   record: Record<string, T>,
   drop: ReadonlySet<string>,
   key: (name: string) => string,
-): { kept: Record<string, T>; taken: Record<string, T> } {
+): SplitKeysResult<T> {
   const kept: Record<string, T> = {}
   const taken: Record<string, T> = {}
   for (const [name, value] of Object.entries(record)) {

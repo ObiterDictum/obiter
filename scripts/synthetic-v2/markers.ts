@@ -12,11 +12,13 @@ export class MarkerValidationError extends Error {
   }
 }
 
-/** Converts XML PII tags into plain text and exact UTF-16 offsets. */
-export function stripMarkers(markedText: string): {
+export interface StrippedMarkers {
   text: string
   spans: SyntheticSpan[]
-} {
+}
+
+/** Converts XML PII tags into plain text and exact UTF-16 offsets. */
+export function stripMarkers(markedText: string): StrippedMarkers {
   let sourceIndex = 0
   let text = ''
   const spans: SyntheticSpan[] = []
@@ -58,6 +60,7 @@ export function stripMarkers(markedText: string): {
     const start = text.length
     text += value
     const end = text.length
+    // SAFETY: labels.has(category) above establishes it is one of spanCategories, so the narrowed view matches SyntheticSpan.
     spans.push({
       category: category as SyntheticSpan['category'],
       start,

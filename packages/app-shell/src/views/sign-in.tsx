@@ -24,6 +24,7 @@ export function SignInRouteView({
   const navigate = useNavigate()
   const { signInWithEmail, requestMagicLink, resendVerificationEmail } =
     useAuth()
+  // SAFETY: useSearch with strict:false is untyped; token is typeof-narrowed into inviteToken below and reset is compared against a literal.
   const search = useSearch({ strict: false }) as {
     reset?: string
     token?: string
