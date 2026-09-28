@@ -325,3 +325,111 @@ test('undo of a saved tracked edit rejects the change and persists the reversal'
     await fresh.close()
   }
 })
+
+test('undo of a saved tracked insertion removes the paragraph atomically', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E50 tracked insert ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  await enableTracking(page)
+  await focusParagraph(page, HEADING)
+  const before = await settledParagraphCount(page)
+
+  await page.getByRole('button', { name: 'Insert paragraph' }).click()
+  const pending = page.getByLabel('Pending paragraph text', { exact: true })
+  await expect(pending).toBeVisible({ timeout: 10_000 })
+  await pending.pressSequentially('X')
+  await saveAndWait(page)
+
+  // The saved tracked insertion leaves the editor usable: the workspace does
+  // not block, and Undo is offered before it is pressed.
+  await expect(save(page)).toBeDisabled()
+  await expect(undo(page)).toBeEnabled()
+  await shot(page, '12-tracked-insert-saved')
+
+  // Undo turns the insertion into one pending decision; Redo cancels it back
+  // to the saved state.
+  await undo(page).click()
+  await expect(save(page)).toBeEnabled()
+  await page.getByRole('button', { name: 'Redo' }).click()
+  await expect(save(page)).toBeDisabled()
+  await undo(page).click()
+  await expect(save(page)).toBeEnabled()
+  await shot(page, '13-tracked-insert-undone')
+  // Saving the decision rejects the change and removes the shell in one
+  // version, so the rendered paragraph count drops back to the original.
+  await saveAndWaitForDecision(page)
+  await expect
+    .poll(() => uniqueParagraphCount(page), { message: 'shell removed' })
+    .toBe(before)
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    // The shell paragraph is gone and no empty paragraph remains.
+    await expect.poll(() => uniqueParagraphCount(reloaded)).toBe(before)
+    await shot(reloaded, '14-tracked-insert-reopened')
+  } finally {
+    await fresh.close()
+  }
+})
+
+test('undo after a reconciled merge save keeps the history usable', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E50 merge ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  // A colleague commits a newer version first, so this page's save must be
+  // reconciled onto it instead of overwriting it.
+  const colleagueContext = await browser.newContext()
+  const colleague = await colleagueContext.newPage()
+  try {
+    await openFixtureDocument(colleague, email, password, matter)
+    await caretAtEnd(colleague, "KING'S BENCH DIVISION")
+    await colleague.keyboard.type('Q')
+    await saveAndWait(colleague)
+  } finally {
+    await colleagueContext.close()
+  }
+
+  await caretAtEnd(page, HEADING)
+  await page.keyboard.type('Z')
+  await saveAndWait(page)
+  await expect(page.getByText(/new version to avoid overwriting/)).toBeVisible({
+    timeout: 15_000,
+  })
+  await shot(page, '15-merge-saved')
+
+  // Undo the local typing against the merged document, Redo it, then undo it
+  // again and persist. The reconciled merge must not have ended the session.
+  await undo(page).click()
+  await expect(editor(page)).not.toHaveValue(/Z/)
+  await page.getByRole('button', { name: 'Redo' }).click()
+  await expect(editor(page)).toHaveValue(/Z/)
+  await undo(page).click()
+  await expect(editor(page)).not.toHaveValue(/Z/)
+  await saveAndWait(page)
+  await shot(page, '16-merge-undone')
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await focusParagraph(reloaded, "KING'S BENCH DIVISION")
+    await expect(editor(reloaded)).toHaveValue(/Q/)
+    await focusParagraph(reloaded, HEADING)
+    await expect(editor(reloaded)).not.toHaveValue(/Z/)
+    await shot(reloaded, '17-merge-reopened')
+  } finally {
+    await fresh.close()
+  }
+})
