@@ -32,7 +32,8 @@ import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
-import { DocumentDesk, DocumentPage } from './document-page'
+import { DocumentDesk, DocumentPage, DocumentPrintStyle } from './document-page'
+import { useDocumentPrint } from './use-document-print'
 import {
   ConflictBanner,
   LoadingBlock,
@@ -90,6 +91,7 @@ export function DocxWorkspace({
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const [trackChanges, setTrackChanges] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
+  const { printBanner, printDocument } = useDocumentPrint()
 
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
@@ -206,7 +208,8 @@ export function DocxWorkspace({
     }
   }
 
-  const transientBanner = save.notice ?? banner
+  // Print reports only refusal or absence; printing itself saves nothing.
+  const transientBanner = printBanner ?? save.notice ?? banner
 
   const ribbon = (
     <WorkspaceRibbon>
@@ -236,6 +239,7 @@ export function DocxWorkspace({
         onExportText={() => {
           void exportDocx()
         }}
+        onPrint={printDocument}
         onSave={save.save}
         onUndo={undoDocument}
         onRedo={redoDocument}
@@ -316,6 +320,7 @@ export function DocxWorkspace({
           save: save.save,
           undo: undoDocument,
           redo: redoDocument,
+          print: printDocument,
           focusFind: () => document.getElementById('document-find')?.focus(),
         })
       }
@@ -329,6 +334,7 @@ export function DocxWorkspace({
         />
       ) : model ? (
         <>
+          <DocumentPrintStyle box={pages[0]?.box} />
           {ribbon}
           <DocumentDesk>
             <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6 lg:flex-row">

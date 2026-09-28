@@ -23,6 +23,7 @@ export function handleDocumentWorkspaceKeys(
     undo?: () => void
     redo?: () => void
     focusFind?: () => void
+    print?: () => void
   },
 ) {
   const key = event.key.toLowerCase()
@@ -38,6 +39,14 @@ export function handleDocumentWorkspaceKeys(
   if (key === 's') {
     event.preventDefault()
     handlers.save()
+    return
+  }
+  // Ctrl/Cmd+P is the platform print chord. Route it through the same handler
+  // as the ribbon control so both print the painted document; Shift+P stays a
+  // browser chord and is not claimed here.
+  if (key === 'p' && !event.shiftKey && handlers.print) {
+    event.preventDefault()
+    handlers.print()
     return
   }
   if (!inForeignField && key === 'z' && handlers.undo && !event.shiftKey) {

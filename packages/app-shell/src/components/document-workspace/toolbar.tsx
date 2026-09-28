@@ -35,6 +35,7 @@ export function DocumentWorkspaceToolbar({
   onToggleTrackChanges,
   onZoom,
   onExportText,
+  onPrint,
   onDownload,
   onSave,
   onUndo,
@@ -68,6 +69,7 @@ export function DocumentWorkspaceToolbar({
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
+  onPrint?: () => void
   onDownload?: () => void
   onSave: () => void
   onUndo?: () => void
@@ -189,6 +191,7 @@ export function DocumentWorkspaceToolbar({
             onToggleChanges={onToggleChanges}
             onToggleTrackChanges={onToggleTrackChanges}
             onExportText={onExportText}
+            onPrint={onPrint}
           />
         </TabsContent>
         <TabsContent value="view" className="min-w-0 flex-1 pt-0">
