@@ -67,8 +67,26 @@ and treating dynamic JSON as a dictionary until its fields are checked.
 Adopting them would force worse types (`any`) or churn correct code, so they
 stay off.
 
-## Remaining passes
+## Test-file scope (final)
 
-- **Pass E - value evidence (this change):** `no-known-value-widening`.
-- **Pass F - tests:** per-rule decision whether test-file casts get real SAFETY
-  comments or stay excluded.
+The assertion and value-evidence rules stay out of test files. Test doubles cast
+deliberately to stand in for untyped dependencies, and test quality is governed
+by `TESTING.md` (no tautologies, mock only external boundaries) and the review
+roster, not by a `SAFETY:` comment on every fixture cast. Production and tooling
+code are fully in scope.
+
+## Programme status
+
+Adopted:
+
+- Pass A/B: `no-reflect-apply`, `no-object-parameters`,
+  `no-unknown-type-aliases`, `no-widen-then-assert`, `no-reflect-get`,
+  `no-unknown-returns`
+- Pass D (`#247`): `no-chained-type-assertions`,
+  `require-safety-comment-for-type-assertion`
+- Pass E (`#248`): `no-known-value-widening`
+
+Not adopted: `no-runtime-typeof`, `no-conditional-empty-object-spread`,
+`no-shape-in-symbol-names`, `no-module-mocking`, `no-unsafe-dictionary-type`,
+`no-unknown-parameters`. Reasons are in this file and in
+`anti-slop-pass-c-triage.md`.
