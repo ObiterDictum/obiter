@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { PoolClient } from 'pg'
+import type { DocumentVersionLineage } from '@obiter/contracts'
 import {
   appendAuditLog,
   createDocumentObjectKey,
@@ -60,6 +61,8 @@ type PreparedVersionCommitInput = DocumentVersionScope & {
   expectedCurrentVersionId: string
   parentVersion: LockedDocumentVersion
   preparedBytes: Uint8Array
+  /** E50 lineage for the resulting version, minus the id commit assigns. */
+  lineage?: Omit<DocumentVersionLineage, 'versionId'> | null
   audit: PreparedVersionAudit
 }
 
@@ -186,6 +189,7 @@ export async function commitPreparedVersion(
         .digest('hex'),
       syncState: 'synced',
       createdBy: input.userId,
+      lineage: input.lineage ? { ...input.lineage, versionId } : null,
     })
 
     const pointer = await client.query<{ id: string }>(

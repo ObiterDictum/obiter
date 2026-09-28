@@ -193,6 +193,7 @@ export function createDocumentCollaborationRoutes(
       versionId: result.versionId,
       versionNumber: result.versionNumber,
       outcome: result.status,
+      lineage: result.lineage,
     })
     return c.json(response, result.status === 'merged' ? 201 : 200)
   })

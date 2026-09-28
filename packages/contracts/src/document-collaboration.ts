@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { apiErrorResponseSchema } from './api-error'
+import { documentVersionLineageSchema } from './document-lineage'
 import {
   DOCUMENT_EDIT_OPERATION_MAX_COUNT,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
@@ -70,6 +71,8 @@ export const documentCollaborationMergeResponseSchema = z
     versionId: documentEditResponseSchema.shape.versionId,
     versionNumber: documentEditResponseSchema.shape.versionNumber,
     outcome: z.enum(['merged', 'already_applied']),
+    /** E50 lineage for a merge that edited the version the client holds. */
+    lineage: documentVersionLineageSchema.optional(),
   })
   .strict()
 export type DocumentCollaborationMergeResponse = z.infer<

@@ -31,6 +31,7 @@ import {
   type SelectionRefusal,
 } from './document-selection-notices'
 import { useWorkspaceFind } from './use-workspace-find'
+import { useCaretLineageRemap } from './caret-lineage'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 
 type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
@@ -66,6 +67,12 @@ export function useWorkspaceCaret({
   const [selectionRefusal, setSelectionRefusal] =
     useState<SelectionRefusal | null>(null)
   const [verticalCaret] = useState(createVerticalCaretColumn)
+  useCaretLineageRemap({
+    paragraphRemap: drafts.paragraphRemap,
+    setSelectedParagraphId,
+    setRestoreCaret,
+    setSelection,
+  })
   // Find owns its own query, hit set and navigation; it places the caret
   // through the same explicit placement the rest of the workspace uses.
   const find = useWorkspaceFind({

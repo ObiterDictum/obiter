@@ -184,6 +184,16 @@ describe('collaboration merges', () => {
     expect(first.status).toBe(201)
     expect(second.status).toBe(201)
     expect(body).toMatchObject({ versionNumber: 3, outcome: 'merged' })
+    // A true reconciled merge is bound to the client's base version and names
+    // the base run the client edited, so the client's history can be
+    // translated against the merged result rather than blocked.
+    expect(body.lineage?.baseVersionId).toBe('ver_1')
+    expect(body.lineage?.acceptedOperations).toEqual([0])
+    const mapped = body.lineage?.paragraphs
+      .flatMap((paragraph) => paragraph.runs)
+      .flatMap((run) => run.segments)
+      .some((segment) => segment.fromRunId === secondRun.id)
+    expect(mapped).toBe(true)
     expect(database.versions.size).toBe(3)
     const version = database.versions.get(body.versionId)
     const bytes = route.storage.binary.get(version?.object_key ?? '')

@@ -2,11 +2,15 @@ import type { Pool } from 'pg'
 import type {
   DocumentEditOperation,
   DocumentTrackedChangeDecisionRequest,
+  DocumentVersionLineage,
 } from '@obiter/contracts'
 import {
   OoxmlError,
   applyDocumentEdits,
   applyTrackedChangeDecisions,
+  buildVersionLineage,
+  canonicaliseParagraphIdentities,
+  createLineageRecorder,
   parseDocx,
   serialiseDocx,
 } from '@obiter/ooxml'
@@ -42,6 +46,7 @@ type EditedVersionInput = VersionMutationInput & {
 type TrackedChangeDecisionVersionInput = VersionMutationInput & {
   action: DocumentTrackedChangeDecisionRequest['action']
   changeIds: readonly string[]
+  removeParagraphIds?: readonly string[]
 }
 
 type MutationAudit = {
@@ -55,7 +60,12 @@ type MutationAudit = {
 }
 
 export type CreateEditedVersionResult =
-  | { status: 'created'; versionId: string; versionNumber: number }
+  | {
+      status: 'created'
+      versionId: string
+      versionNumber: number
+      lineage?: DocumentVersionLineage
+    }
   | { status: 'stale' }
   | { status: 'not_found' }
 
@@ -78,7 +88,32 @@ export async function createEditedVersion(
   storage: StorageService,
   input: EditedVersionInput,
 ): Promise<CreateEditedVersionResult> {
-  const editedBytes = await prepareSource(storage, input, (document) => {
+  const { editedBytes, lineage } = await prepareEditedSource(storage, input)
+  return createPreparedVersion(
+    pool,
+    storage,
+    input,
+    editedBytes,
+    {
+      action: 'document.edit',
+      metadata: (versionId) => ({
+        baseVersionId: input.baseVersionId,
+        newVersionId: versionId,
+        operationCount: input.operations.length,
+      }),
+    },
+    lineage,
+  )
+}
+
+async function prepareEditedSource(
+  storage: StorageService,
+  input: EditedVersionInput,
+) {
+  validateBaseVersion(input)
+  const document = await readSourceDocument(storage, input.baseVersion)
+  const recorder = createLineageRecorder(document.model)
+  try {
     applyDocumentEdits(
       document,
       input.operations,
@@ -88,16 +123,31 @@ export async function createEditedVersion(
             date: (input.now?.() ?? new Date()).toISOString(),
           }
         : undefined,
+      recorder,
     )
+  } catch (error) {
+    if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
+    throw new DocumentEditStoreError()
+  }
+  const canonicalParagraphIds = canonicaliseParagraphIdentities(document)
+  let editedBytes: Uint8Array
+  try {
+    editedBytes = await serialiseDocx(document)
+  } catch {
+    throw new DocumentEditStoreError()
+  }
+  const built = buildVersionLineage({
+    recorder,
+    model: document.model,
+    canonicalParagraphIds,
+    baseVersionId: input.baseVersionId,
+    versionId: '',
+    // Tracked wrappers reparse to a different run list, so no run address in a
+    // tracked version is trustworthy. The client blocks a run-keyed reversal.
+    runAddressesReliable: !input.trackChanges,
   })
-  return createPreparedVersion(pool, storage, input, editedBytes, {
-    action: 'document.edit',
-    metadata: (versionId) => ({
-      baseVersionId: input.baseVersionId,
-      newVersionId: versionId,
-      operationCount: input.operations.length,
-    }),
-  })
+  const { versionId: _versionId, ...lineage } = built
+  return { editedBytes, lineage }
 }
 
 export async function createTrackedChangeDecisionVersion(
@@ -111,6 +161,7 @@ export async function createTrackedChangeDecisionVersion(
       document,
       input.changeIds,
       input.action,
+      input.removeParagraphIds ?? [],
     )
   })
   return createPreparedVersion(pool, storage, input, editedBytes, {
@@ -124,6 +175,9 @@ export async function createTrackedChangeDecisionVersion(
       newVersionId: versionId,
       action: input.action,
       changeIds: resolvedChangeIds,
+      ...(input.removeParagraphIds?.length
+        ? { removedParagraphIds: [...input.removeParagraphIds] }
+        : {}),
     }),
   })
 }
@@ -192,6 +246,7 @@ async function createPreparedVersion(
   input: VersionMutationInput,
   editedBytes: Uint8Array,
   audit: MutationAudit,
+  lineage?: Omit<DocumentVersionLineage, 'versionId'> | null,
 ): Promise<CreateEditedVersionResult> {
   let client
   try {
@@ -224,7 +279,7 @@ async function createPreparedVersion(
     }
 
     commitStarted = true
-    return await commitPreparedVersion(client, storage, {
+    const result = await commitPreparedVersion(client, storage, {
       organisationId: input.organisationId,
       matterId: input.matterId,
       documentId: input.documentId,
@@ -233,8 +288,16 @@ async function createPreparedVersion(
       expectedCurrentVersionId: locked.current.id,
       parentVersion: locked.current,
       preparedBytes: editedBytes,
+      lineage: lineage ?? null,
       audit,
     })
+    if (result.status === 'created' && lineage) {
+      return {
+        ...result,
+        lineage: { ...lineage, versionId: result.versionId },
+      }
+    }
+    return result
   } catch (error) {
     if (!commitStarted) await rollback(client)
     if (error instanceof DocumentEditStoreError) throw error

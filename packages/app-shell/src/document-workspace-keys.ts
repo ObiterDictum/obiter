@@ -27,6 +27,10 @@ export function handleDocumentWorkspaceKeys(
 ) {
   const key = event.key.toLowerCase()
   if (!(event.metaKey || event.ctrlKey)) return
+  // AltGr reports as Ctrl+Alt on Windows, so any Alt-combined chord is a
+  // character shortcut for the layout, never a document command. One guard
+  // here covers save, undo, redo and find rather than each branch separately.
+  if (event.altKey) return
   // The find box and the comments box are inputs inside the workspace
   // section. Do not swallow their native Ctrl+Z/Ctrl+F so field text can be
   // undone; only document save is still routed from those fields.
@@ -44,11 +48,8 @@ export function handleDocumentWorkspaceKeys(
   // Ctrl/Cmd+Shift+Z is redo everywhere; Ctrl/Cmd+Y is the Windows and Linux
   // binding. As with save and find elsewhere here, either modifier routes the
   // same shortcut, so the platform decides the habit rather than a detection.
-  // An Alt/AltGr combination is a character shortcut, not redo: AltGr reports
-  // as Ctrl+Alt on Windows, where Ctrl+Alt+Y must stay with the layout.
   if (
     !inForeignField &&
-    !event.altKey &&
     handlers.redo &&
     ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey))
   ) {

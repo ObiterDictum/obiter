@@ -7,6 +7,7 @@ import {
 } from './comment-anchors'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
+import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import { patchRunEmphasisXml, type RunEmphasis } from './model-property-edits'
 import { setOverlayReplacement } from './parts/overlay'
 import { replaceTextRunAtAnchor, wordRunInnerTextXml } from './text-run-edit'
@@ -117,6 +118,7 @@ export function applyRunTextReplacementRange(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
   replacements: readonly RunTextReplacement[],
+  lineage?: LineageRecorder,
 ) {
   const part = requireEditablePart(document, paragraph.partName)
   const source = part.overlay.source
@@ -165,6 +167,7 @@ export function applyRunTextReplacementRange(
     runIndex: number
     xml: string
     wires: DocumentTextRunWire[]
+    originParts: Array<{ run: DocumentTextRunWire; from: number; to: number }>
   }> = []
   let runStart = 0
   paragraph.runs.forEach((run, runIndex) => {
@@ -200,6 +203,7 @@ export function applyRunTextReplacementRange(
   for (const item of pending.reverse()) {
     const run = paragraph.runs[item.runIndex]
     if (!run) throw new OoxmlError('invalid-document-edit')
+    if (lineage) recordSplitRun(lineage, run.wire, item.originParts)
     setOverlayReplacement(part.overlay, `${run.wire.id}:redact`, {
       start: run.runRange.start,
       end: run.runRange.end,
@@ -261,5 +265,16 @@ function splitReplacedRun(
     text: part.text,
     preservedXmlFragments: [...fragments],
   }))
-  return { xml: parts.map((part) => part.xml).join(''), wires }
+  return {
+    xml: parts.map((part) => part.xml).join(''),
+    wires,
+    // SAFETY: `wires` is built one per `parts` entry, and `ordered` is the
+    // sorted split bounds with one more entry than `parts`, so `index` and
+    // `index + 1` are in range for every part.
+    originParts: parts.map((part, index) => ({
+      run: wires[index] as DocumentTextRunWire,
+      from: ordered[index] as number,
+      to: ordered[index + 1] as number,
+    })),
+  }
 }

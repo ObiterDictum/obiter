@@ -49,6 +49,7 @@ export const localInsertSchema = z
   .object({
     clientId: z.string().min(1),
     afterParagraphId: z.string().min(1),
+    beforeParagraphId: z.string().min(1).optional(),
     text: z.string(),
     runs: z.array(documentTextRunWireSchema).optional(),
   })
@@ -72,7 +73,13 @@ const numberingDraftSchema = z
     ilvl: z.number().int().min(0).max(8).optional(),
   })
   .strict()
-
+const trackedRejectionSchema = z
+  .object({
+    key: z.string().min(1),
+    ooxmlIds: z.array(z.string().min(1)).min(1),
+    removeParagraphIds: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .strict()
 export const draftStateSchema = z
   .object({
     drafts: z.record(z.string(), z.string()),
@@ -86,6 +93,9 @@ export const draftStateSchema = z
         numbering: z.record(z.string(), numberingDraftSchema),
       })
       .strict(),
+    // A tracked-change rejection group introduced by E50 undo. Absent in older
+    // persisted drafts, which parse to no pending rejections.
+    trackedRejections: z.array(trackedRejectionSchema).optional().default([]),
   })
   .strict()
 

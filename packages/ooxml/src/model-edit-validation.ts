@@ -24,6 +24,7 @@ export type PlannedOperation =
           | 'set_paragraph_numbering'
           | 'set_paragraph_format'
           | 'insert_paragraph_after'
+          | 'insert_paragraph_before'
           | 'delete_paragraph'
       }
     > & { paragraph: ParagraphAnchor })
@@ -45,7 +46,9 @@ export function validatePlannedOperations(
     deletedIds.add(operation.paragraph.wire.id)
   }
   const insertCount = planned.filter(
-    (operation) => operation.type === 'insert_paragraph_after',
+    (operation) =>
+      operation.type === 'insert_paragraph_after' ||
+      operation.type === 'insert_paragraph_before',
   ).length
   if (!tracking && paragraphCount - deletedIds.size + insertCount < 1) {
     throw new OoxmlError('model-node-not-editable')

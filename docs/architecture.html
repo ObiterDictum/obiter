@@ -2894,15 +2894,23 @@
                     Typed edits, optionally recorded as tracked changes, saved
                     as a locked immutable version N+1.
                     <code>insert_paragraph_after</code> carries either flat
-                    <code>text</code> or bounded styled <code>runs</code>. Run
-                    character formatting is additive on
-                    <code>set_run_emphasis</code> and those runs.
+                    <code>text</code> or bounded styled <code>runs</code>;
+                    <code>insert_paragraph_before</code> restores a deleted
+                    first paragraph. An <code>intentId</code> on an insertion is
+                    echoed back in the response lineage for correlation; it is
+                    not a persisted identity. Run character formatting is
+                    additive on <code>set_run_emphasis</code> and those runs.
                     <code>set_run_emphasis</code> is addressed by
                     <code>runId</code> or by <code>paragraphId</code> plus
                     <code>from</code>/<code>to</code>, not both. A tracked range
-                    split is skipped until an <code>rPrChange</code> writer
-                    exists. Paragraph layout uses
-                    <code>set_paragraph_format</code>. Tables, images, notes,
+                    split is refused (<code>model-node-not-editable</code>)
+                    until an <code>rPrChange</code> writer exists; the client
+                    holds and surfaces the slot rather than dropping the
+                    formatting. Paragraph layout uses
+                    <code>set_paragraph_format</code>. The response carries the
+                    <code>lineage</code> for the accepted batch, including the
+                    mapping from the client's base ids to the persisted
+                    <code>w14:paraId</code> identities. Tables, images, notes,
                     headers, and breaks have no wire schema yet.
                   </td>
                 </tr>
@@ -2915,7 +2923,11 @@
                   <td class="id">document-collaboration.ts</td>
                   <td>
                     No-store polling, ephemeral typed cursors, and bounded OT
-                    merges into locked immutable versions
+                    merges into locked immutable versions. A reconciled merge
+                    applies the client's batch to the newer current version and
+                    returns a lineage re-expressed against the client's base
+                    version (persisted paragraph ids, then run skeleton), so its
+                    history stays translatable.
                   </td>
                 </tr>
                 <tr>
@@ -2933,7 +2945,11 @@
                   <td class="id">tracked-changes.ts</td>
                   <td>
                     Edit-level accept or reject saved as a locked immutable
-                    version N+1
+                    version N+1. A rejection may also name
+                    <code>removeParagraphIds</code>: empty tracked-insertion
+                    shells removed in the same transaction, so rejecting a
+                    tracked paragraph insertion restores the pre-insertion
+                    document atomically instead of leaving an empty paragraph.
                   </td>
                 </tr>
                 <tr>
@@ -3937,9 +3953,14 @@
                   <td class="id">document_versions</td>
                   <td>
                     Immutable versions, with source and extracted-text object
-                    keys
+                    keys. 0026 adds <code>lineage</code> jsonb: the
+                    authoritative mapping an accepted edit produced from its
+                    base version, written in the same transaction as the version
+                    so an idempotent replay returns the same mapping. Null for
+                    uploads and versions created before 0026; no historical
+                    rewrite or backfill.
                   </td>
-                  <td class="id">0002</td>
+                  <td class="id">0002, 0026</td>
                 </tr>
                 <tr>
                   <td class="id">document_comments</td>
@@ -6237,7 +6258,27 @@
                 in it is never logged, and a payload that fails validation or
                 names another scope is dropped rather than applied. See
                 <code>document-draft-store.ts</code> and
-                <code>document-save-plan.ts</code>.</span
+                <code>document-save-plan.ts</code>. A successful save is also
+                the undo/redo baseline:
+                <code>document-history-baseline.ts</code>
+                consumes the server's authoritative <code>lineage</code> — the
+                per-paragraph and per-run transformation an accepted batch
+                produced — to re-express every history snapshot against the
+                saved document, so a covered slot can never be replayed as fresh
+                work. A reconciled collaboration merge re-expresses that lineage
+                against the client's base version, so an ordinary merged save
+                does not end the undo session. A tracked paragraph insertion
+                carries its reversal on its paragraph entry (<code
+                  >trackedInsertChangeIds</code
+                >
+                plus the shell's <code>toParagraphId</code>); the client sends
+                both in one version-checked decision. Paragraph identity is
+                persisted as <code>w14:paraId</code> only in the newly saved
+                version, so a legacy document gains stable identity on its first
+                save. A response without a complete lineage is never guessed
+                around: <code>use-save-baseline.ts</code> is the one owner of
+                that boundary and surfaces a recoverable blocked state instead
+                of reporting success.</span
               >
             </li>
             <li>
