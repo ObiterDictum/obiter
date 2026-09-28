@@ -52,10 +52,11 @@ export function documentHydrationKey(documentId: string) {
 /**
  * The shared per-process budget subject for anonymous provider access. It is a
  * server constant, not a caller-supplied id or IP, so every anonymous caller
- * draws on one bounded window instead of receiving an allowance each. User ids
- * are prefixed `usr_`, so this cannot collide with a real subject.
+ * draws on one bounded window instead of receiving an allowance each. The
+ * colon keeps it outside the id alphabet a session user id can use, so it can
+ * never merge with a real user's window.
  */
-export const ANONYMOUS_HYDRATION_SUBJECT = 'anonymous'
+export const ANONYMOUS_HYDRATION_SUBJECT = 'anonymous:shared'
 
 /**
  * In-process only. Each API replica has its own in-flight set and per-user
@@ -150,6 +151,7 @@ export type HydrationGateRunResult<T> =
   | { status: 'deduped'; value: T }
   | { status: 'budget_exceeded' }
   | { status: 'unauthenticated' }
+  | { status: 'failed' }
 
 export type HydrationGateStartResult =
   | { status: 'started' }
@@ -183,10 +185,10 @@ export class LegalSourceHydrationGate {
     if (existing) {
       // SAFETY: the operations map only holds promises created below for this
       // key, and every caller for one key uses the same operation type.
-      return existing.then((value) => ({
-        status: 'deduped' as const,
-        value: value as T,
-      }))
+      return existing.then(
+        (value) => ({ status: 'deduped' as const, value: value as T }),
+        () => ({ status: 'failed' as const }),
+      )
     }
 
     const reservation = this.budget.tryBeginHydration(userId, key)
@@ -208,7 +210,13 @@ export class LegalSourceHydrationGate {
         this.budget.completeHydration(key)
       })
     this.operations.set(key, promise)
-    return promise.then((value) => ({ status: 'ok' as const, value }))
+    return promise.then(
+      (value) => ({ status: 'ok' as const, value }),
+      // The operation failed after the reservation was made. The `finally`
+      // above already released the slot and the attempt stays counted; the
+      // caller sees a typed failure rather than a bare rejection.
+      () => ({ status: 'failed' as const }),
+    )
   }
 
   start<T>(

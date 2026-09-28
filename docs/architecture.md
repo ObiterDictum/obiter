@@ -850,7 +850,11 @@ authenticated user's budget before the operation runs, deduplicates equivalent
 in-flight work by a canonical key (a query key and a `document:` key never
 collide), and releases the reservation on success, error, rate limit or
 cancellation. A request the budget rejects never reaches the provider, the
-corpus or the indexer. The gate bounds in-flight operations, per-user misses in
+corpus or the indexer. Deduplication shares one in-flight result across
+subjects, so a concurrent caller for the same key is answered without a second
+upstream fetch and without consuming its own miss. The detached detail pass a
+foreground fetch starts is bounded by the process-wide MOJ limiter, not by
+`queueMax`. The gate bounds in-flight operations, per-user misses in
 a rolling window and the number of retained per-user windows; the MOJ rate
 limiter (`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) bounds
 upstream HTTP attempts. Those bounds are per API process: replica count

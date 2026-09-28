@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import {
+  ANONYMOUS_HYDRATION_SUBJECT,
   canonicalHydrationQueryKey,
+  documentHydrationKey,
   LegalSearchHydrationBudget,
+  LegalSourceHydrationGate,
 } from './legal-search-hydration-budget'
 
 describe('LegalSearchHydrationBudget', () => {
@@ -152,6 +155,51 @@ describe('LegalSearchHydrationBudget', () => {
       status: 'queued',
     })
     expect(budget.retainedUserMissWindows()).toBe(1)
+  })
+
+  it('keeps the anonymous subject isolated from real user windows', () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 100,
+      perClientMax: 1,
+      windowMs: 600_000,
+    })
+    const anonymousKey = documentHydrationKey('doc-a')
+    expect(
+      budget.tryBeginHydration(ANONYMOUS_HYDRATION_SUBJECT, anonymousKey),
+    ).toEqual({ status: 'queued' })
+    budget.completeHydration(anonymousKey)
+
+    // A synthetic session id must get its own window, not share the anonymous
+    // bucket. The colon in the sentinel is outside the id alphabet.
+    const userKey = documentHydrationKey('doc-b')
+    expect(budget.tryBeginHydration('usr_real', userKey)).toEqual({
+      status: 'queued',
+    })
+    budget.completeHydration(userKey)
+    expect(
+      budget.tryBeginHydration(
+        ANONYMOUS_HYDRATION_SUBJECT,
+        documentHydrationKey('doc-c'),
+      ),
+    ).toEqual({ status: 'budget_exceeded' })
+  })
+
+  it('releases the reservation when the operation throws synchronously', async () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 1,
+      perClientMax: 2,
+      windowMs: 600_000,
+    })
+    const gate = new LegalSourceHydrationGate(budget)
+
+    const thrown = await gate.run('usr_a', 'query-a', () => {
+      throw new Error('synchronous provider failure')
+    })
+    expect(thrown).toEqual({ status: 'failed' })
+
+    // The queue slot was released, so the next operation still reserves.
+    const next = await gate.run('usr_a', 'query-b', async () => 'ok')
+    expect(next).toEqual({ status: 'ok', value: 'ok' })
   })
 
   afterEach(() => {

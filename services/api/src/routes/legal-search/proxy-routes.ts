@@ -607,6 +607,17 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
+    if (gatedLive.status === 'failed') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Find Case Law is unavailable.',
+          requestId,
+        ),
+        503,
+      )
+    }
+
     const liveResult = gatedLive.value
 
     if (liveResult.status === 'rate_limited') {
@@ -797,6 +808,17 @@ export function createLegalSearchProxyRoutes(
           requestId,
         ),
         401,
+      )
+    }
+
+    if (gatedLiveDocument.status === 'failed') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Find Case Law is unavailable.',
+          requestId,
+        ),
+        503,
       )
     }
 
