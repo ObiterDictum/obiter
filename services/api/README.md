@@ -32,7 +32,8 @@ Production may also provide:
 - `OBITER_MARKETING_ORIGIN` when the marketing site calls this API from a separate origin such as `https://obiter.tech`
 - `OBITER_DESKTOP_ORIGIN` when the desktop app uses a non-default auth callback origin
 - `MOJ_FIND_CASE_LAW_BASE_URL` to override the public Find Case Law upstream
-- `MOJ_FIND_CASE_LAW_RATE_LIMIT` to tune the public upstream fetch limiter (one window per API process; not cluster-wide)
+- `MOJ_FIND_CASE_LAW_RATE_LIMIT` to tune the per-process upstream fetch limiter. It is a backstop, not the cluster authority: in production every API replica also charges a shared rolling window on `DATABASE_URL` before each upstream HTTP attempt, so N replicas share one allowance instead of multiplying it.
+- `MOJ_FIND_CASE_LAW_REQUEST_BUDGET` to set that shared window's maximum: upstream HTTP attempts allowed across all API replicas in any rolling five minutes (default 1000). It is enforced by `legal_moj_request_charges` on the application database. The default is a conservative operator assumption carried over from the old per-replica cap, not a verified provider allowance, and it bounds API replicas only: bulk ingestion runs with its own corpus-writer connection and does not reach this ledger. Confirm the provider's published allowance before treating the default as the production budget.
 - `JSON_BODY_MAX_BYTES` to cap JSON request bodies (default 48 KiB)
 - `DOCUMENT_UPLOAD_MAX_BYTES` to cap multipart document and redact uploads (default 25 MiB)
 - `OOXML_MAX_ENTRIES`, `OOXML_MAX_UNCOMPRESSED_BYTES`, `OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES`, `OOXML_MAX_COMPRESSION_RATIO`, and `OOXML_INFLATE_CONCURRENCY` to bound DOCX/ZIP expansion

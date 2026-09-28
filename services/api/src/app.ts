@@ -23,6 +23,7 @@ import {
   createPostgresLegalAuthorityWriteStore,
 } from './routes/legal-search/proxy-routes'
 import type { LegalHydrationLedger } from './legal-search-hydration-budget'
+import type { MojRequestBudget } from '@obiter/legal-source-provider'
 import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
@@ -82,6 +83,12 @@ interface ApiAppOptions {
    * directly omits it and gets the process-local fallback.
    */
   hydrationLedger?: LegalHydrationLedger
+  /**
+   * The cluster-visible Find Case Law request budget. `createApiRuntime`
+   * builds the Postgres budget on the application pool; a test that builds
+   * the app directly omits it and gets the process-local limiter alone.
+   */
+  mojRequestBudget?: MojRequestBudget
 }
 
 interface DevelopmentApiProvenance {
@@ -332,6 +339,7 @@ export function createApiApp(
           ? createPostgresLegalAuthorityWriteStore(corpusAccess.write)
           : null,
         hydrationBudget: options.hydrationLedger,
+        mojRequestBudget: options.mojRequestBudget,
         legislation: {
           pool: corpusAccess.read,
           indexName: env.legislationProvisionsIndex,
