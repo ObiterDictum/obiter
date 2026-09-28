@@ -77,9 +77,9 @@ const trackedRejectionSchema = z
   .object({
     key: z.string().min(1),
     ooxmlIds: z.array(z.string().min(1)).min(1),
+    removeParagraphIds: z.array(z.string().min(1)).min(1).optional(),
   })
   .strict()
-
 export const draftStateSchema = z
   .object({
     drafts: z.record(z.string(), z.string()),

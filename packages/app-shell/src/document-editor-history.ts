@@ -60,7 +60,7 @@ export function useWorkspaceDraftHistory() {
     rewrite: (
       snapshot: WorkspaceDraftSnapshot,
     ) => WorkspaceDraftSnapshot | null,
-  ): { translated: boolean } {
+  ) {
     let translated = true
     const map = (stack: WorkspaceDraftSnapshot[]) =>
       stack.flatMap((snapshot) => {

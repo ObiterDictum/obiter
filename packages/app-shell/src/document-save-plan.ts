@@ -32,6 +32,13 @@ export type TrackedRejection = {
   key: string
   /** Persisted OOXML change ids (`w:id`) to reject as a unit. */
   ooxmlIds: string[]
+  /**
+   * Persisted paragraph ids (`para-w14-<value>`) whose empty tracked-insert
+   * shell this rejection removes in the same decision. A tracked paragraph
+   * insertion wraps its content in `w:ins`, so rejecting it alone would leave
+   * an empty paragraph behind.
+   */
+  removeParagraphIds?: string[]
 }
 
 /**
@@ -102,9 +109,15 @@ export type SavePlan = {
   pending: number
   /**
    * Tracked-change decisions to send, one per history step. Each carries the
-   * current version's wire change ids resolved from the persisted `w:id`s.
+   * current version's wire change ids resolved from the persisted `w:id`s, and
+   * any empty tracked-insert shells to remove in the same decision.
    */
-  rejections: Array<{ key: string; ooxmlIds: string[]; changeIds: string[] }>
+  rejections: Array<{
+    key: string
+    ooxmlIds: string[]
+    changeIds: string[]
+    removeParagraphIds?: string[]
+  }>
 }
 
 /**
@@ -337,7 +350,14 @@ export function planDocumentSave(
       })
       continue
     }
-    rejections.push({ key: group.key, ooxmlIds: group.ooxmlIds, changeIds })
+    rejections.push({
+      key: group.key,
+      ooxmlIds: group.ooxmlIds,
+      changeIds,
+      ...(group.removeParagraphIds?.length
+        ? { removeParagraphIds: [...group.removeParagraphIds] }
+        : {}),
+    })
   }
 
   return {

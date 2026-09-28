@@ -256,10 +256,14 @@ export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
    */
   function withSyntheticLineage(result: unknown, input: unknown) {
     if (!result || typeof result !== 'object') return result
+    // SAFETY: the guard above proves `result` is a non-null object; the cast
+    // only names the two optional fields this harness reads.
     const record = result as { versionId?: unknown; lineage?: unknown }
     if (typeof record.versionId !== 'string') return result
     currentVersionId = record.versionId
     if (record.lineage) return result
+    // SAFETY: the harness receives the request body its caller passes; only
+    // these optional fields are read, and a missing body is treated as empty.
     const request = (input ?? {}) as {
       baseVersionId?: string
       operations?: Array<{

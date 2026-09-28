@@ -149,9 +149,9 @@ describe('typed tracked changes', () => {
     expect(
       generated.map(({ elementName, ooxmlId }) => [elementName, ooxmlId]),
     ).toEqual([
-      ['del', '0'],
-      ['ins', '1'],
-      ['ins', '2'],
+      ['del', '16'],
+      ['ins', '17'],
+      ['ins', '18'],
     ])
     expect(generated.every(({ date }) => date === changeContext.date)).toBe(
       true,

@@ -6,11 +6,14 @@ import type {
 } from '@obiter/contracts'
 import {
   OoxmlError,
+  alignMergeDocuments,
   applyDocumentEdits,
   buildVersionLineage,
   canonicaliseParagraphIdentities,
   createLineageRecorder,
   reconcileDocumentEdits,
+  remapMergeOperations,
+  retargetLineageToBaseVersion,
   serialiseDocx,
 } from '@obiter/ooxml'
 import { findExistingCollaborationMerge } from './document-collaboration-db'
@@ -92,7 +95,13 @@ export async function createCollaborationMergeVersion(
         versionId: existing.version_id,
         versionNumber: existing.version_number,
         ...(existing.lineage
-          ? { lineage: existing.lineage as DocumentVersionLineage }
+          ? {
+              // SAFETY: the column is a JSONB object written only by
+              // `commitPreparedVersion` from a validated lineage, and the
+              // database CHECK constrains it to an object; the stored value is
+              // the same schema this cast names.
+              lineage: existing.lineage as DocumentVersionLineage,
+            }
           : {}),
       }
     }
@@ -113,6 +122,9 @@ export async function createCollaborationMergeVersion(
     const baseDocument = baseIsCurrent
       ? currentDocument
       : await readSourceDocument(storage, base)
+    const alignment = baseIsCurrent
+      ? null
+      : alignMergeDocuments(baseDocument, currentDocument)
     const reconciliation = reconcileDocumentEdits(
       baseDocument,
       currentDocument,
@@ -133,7 +145,13 @@ export async function createCollaborationMergeVersion(
       const recorder = createLineageRecorder(currentDocument.model)
       applyDocumentEdits(
         currentDocument,
-        input.operations,
+        // The client addresses its base version; the current version has
+        // reallocated positional ids, so the batch is rewritten to current
+        // addresses before it is applied. Applying base ids directly could
+        // write a run a collaborator inserted there.
+        alignment
+          ? remapMergeOperations(input.operations, alignment)
+          : input.operations,
         input.trackChanges
           ? {
               author: input.userName?.trim() || input.userId,
@@ -144,30 +162,31 @@ export async function createCollaborationMergeVersion(
       )
       const canonicalParagraphIds =
         canonicaliseParagraphIdentities(currentDocument)
-      // A merge that actually reconciled against a newer current version moves
-      // the base the client holds; its history cannot be translated from the
-      // current-to-result edits alone, so no lineage is claimed and the client
-      // must recover rather than guess.
-      const built = baseIsCurrent
-        ? buildVersionLineage({
-            recorder,
-            model: currentDocument.model,
-            canonicalParagraphIds,
-            baseVersionId: input.baseVersionId,
-            versionId: '',
-            // Same tracked-run caveat as the direct edit path.
-            runAddressesReliable: !input.trackChanges,
-          })
-        : null
-      const { versionId: _versionId, ...lineageInput } = built ?? {
-        versionId: '',
-        version: 1 as const,
+      const currentLineage = buildVersionLineage({
+        recorder,
+        model: currentDocument.model,
+        canonicalParagraphIds,
         baseVersionId: input.baseVersionId,
-        acceptedOperations: [],
-        paragraphs: [],
-      }
-      const persistedLineage: Omit<DocumentVersionLineage, 'versionId'> | null =
-        built ? lineageInput : null
+        versionId: '',
+        // Same tracked-run caveat as the direct edit path.
+        runAddressesReliable: !input.trackChanges,
+      })
+      // A merge that reconciled the client's operations onto a newer current
+      // version records its lineage against that current version. Re-express
+      // it against the client's base so the client's history stays
+      // translatable; the correspondence comes from persisted paragraph ids
+      // and the verified run skeleton, never from positions or text.
+      const built = alignment
+        ? retargetLineageToBaseVersion({
+            lineage: currentLineage,
+            currentToBaseParagraph: invertMap(alignment.baseToCurrentParagraph),
+            currentToBaseRun: invertMap(alignment.baseToCurrentRun),
+            baseVersionId: input.baseVersionId,
+          })
+        : currentLineage
+      const { versionId: _versionId, ...lineageInput } = built
+      const persistedLineage: Omit<DocumentVersionLineage, 'versionId'> =
+        lineageInput
       let mergedBytes: Uint8Array
       try {
         mergedBytes = await serialiseDocx(currentDocument)
@@ -211,9 +230,7 @@ export async function createCollaborationMergeVersion(
         baseVersionId: input.baseVersionId,
         versionId: committed.versionId,
         versionNumber: committed.versionNumber,
-        ...(built
-          ? { lineage: { ...lineageInput, versionId: committed.versionId } }
-          : {}),
+        lineage: { ...lineageInput, versionId: committed.versionId },
       }
     } catch (error) {
       if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
@@ -235,6 +252,10 @@ export async function createCollaborationMergeVersion(
 
 function hashOperations(operations: readonly DocumentEditOperation[]) {
   return createHash('sha256').update(canonicalJson(operations)).digest('hex')
+}
+
+function invertMap(map: ReadonlyMap<string, string>) {
+  return new Map([...map].map(([from, to]) => [to, from] as const))
 }
 
 function canonicalJson(value: unknown): string {

@@ -129,19 +129,93 @@ describe('tracked reversal lineage', () => {
     expect(shape(reverted).map((item) => item.text)).toEqual(['Alpha', 'Beta'])
   })
 
-  it('emits no reversal for a tracked paragraph insertion', async () => {
+  it('reverses a tracked paragraph insertion by rejecting its change and removing the shell', async () => {
     const document = await load(`<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>`)
     const first = paragraphs(document)[0]
     if (!first) throw new Error('para')
     const { lineage } = applyTracked(document, [
-      { type: 'insert_paragraph_after', paragraphId: first.id, text: 'Mid' },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: first.id,
+        intentId: 'ins-1',
+        text: 'Mid',
+      },
     ])
-    // The inserted paragraph is present but empty after reparse; deleting it is
-    // the reversal, so no change rejection is recorded.
+    // The inserted paragraph's content is wrapped in `w:ins`, so its result
+    // paragraph parses to no run. The reversal is carried on the paragraph
+    // entry: reject the `ins` and remove that shell in one decision.
     expect(lineage.reversals).toBeUndefined()
+    const entry = lineage.paragraphs.find(
+      (paragraph) => paragraph.insertedByIntent === 'ins-1',
+    )
+    expect(entry?.trackedInsertChangeIds).toHaveLength(1)
+    expect(entry?.toParagraphId).toMatch(/^para-w14-/u)
+    expect(entry?.runs).toEqual([])
+
     const saved = await reload(document)
     expect(shape(saved).map((item) => item.text)).toEqual(['Alpha', ''])
     expect(saved.model.changes[0]?.elementName).toBe('ins')
+
+    const insert = saved.model.changes.find(
+      (change) => change.elementName === 'ins',
+    )
+    if (!insert || !entry?.toParagraphId) throw new Error('insert')
+    applyTrackedChangeDecisions(saved, [insert.id], 'reject', [
+      entry.toParagraphId,
+    ])
+    const reverted = await reload(saved)
+    // One atomic decision restored the pre-insertion document exactly.
+    expect(shape(reverted).map((item) => item.text)).toEqual(['Alpha'])
+    expect(reverted.model.changes).toHaveLength(0)
+  })
+
+  it('refuses to remove a paragraph the rejected change does not live in', async () => {
+    const document = await load(
+      `<w:p><w:r><w:t>Alpha</w:t></w:r></w:p><w:p><w:r><w:t>Beta</w:t></w:r></w:p>`,
+    )
+    const second = paragraphs(document)[1]
+    if (!second) throw new Error('para')
+    applyTracked(document, [
+      {
+        type: 'replace_run_text',
+        runId: second.runs[0]?.id ?? '',
+        text: 'BETA',
+      },
+    ])
+    const saved = await reload(document)
+    const change = saved.model.changes[0]
+    const alpha = shape(saved)[0]?.id
+    if (!change || !alpha) throw new Error('change')
+    // The change is on Beta; removing Alpha's paragraph would delete untracked
+    // content, so the removal is refused rather than obeyed.
+    expect(() =>
+      applyTrackedChangeDecisions(saved, [change.id], 'reject', [alpha]),
+    ).toThrow()
+  })
+
+  it('refuses more than one hundred change ids', async () => {
+    const document = await load(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`)
+    const ids = Array.from({ length: 101 }, (_, index) => String(index))
+    expect(() => applyTrackedChangeDecisions(document, ids, 'reject')).toThrow()
+  })
+
+  it('refuses more than one hundred shell removals', async () => {
+    const document = await load(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`)
+    const run = paragraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('run')
+    applyTracked(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'Jello' },
+    ])
+    const saved = await reload(document)
+    const change = saved.model.changes[0]
+    if (!change) throw new Error('change')
+    const removals = Array.from(
+      { length: 101 },
+      (_, index) => `para-${String(index)}`,
+    )
+    expect(() =>
+      applyTrackedChangeDecisions(saved, [change.id], 'reject', removals),
+    ).toThrow()
   })
 
   it('reverses only the operation group the undo names', async () => {

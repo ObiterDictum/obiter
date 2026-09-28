@@ -46,6 +46,7 @@ type EditedVersionInput = VersionMutationInput & {
 type TrackedChangeDecisionVersionInput = VersionMutationInput & {
   action: DocumentTrackedChangeDecisionRequest['action']
   changeIds: readonly string[]
+  removeParagraphIds?: readonly string[]
 }
 
 type MutationAudit = {
@@ -160,6 +161,7 @@ export async function createTrackedChangeDecisionVersion(
       document,
       input.changeIds,
       input.action,
+      input.removeParagraphIds ?? [],
     )
   })
   return createPreparedVersion(pool, storage, input, editedBytes, {
@@ -173,6 +175,9 @@ export async function createTrackedChangeDecisionVersion(
       newVersionId: versionId,
       action: input.action,
       changeIds: resolvedChangeIds,
+      ...(input.removeParagraphIds?.length
+        ? { removedParagraphIds: [...input.removeParagraphIds] }
+        : {}),
     }),
   })
 }

@@ -291,6 +291,30 @@ export function buildVersionLineage(input: {
   const runAddressesReliable = input.runAddressesReliable ?? true
   const paragraphs: DocumentParagraphLineage[] = []
 
+  // Group the tracked-change elements the batch created by the accepted
+  // operation that created them. An ins-only group is a tracked paragraph
+  // insertion: its content lives inside `w:ins`, so rejecting the group empties
+  // the paragraph and the same decision must remove the shell.
+  const byOperation = new Map<number, RecordedTrackedChange[]>()
+  for (const change of recorder.trackedChanges) {
+    const group = byOperation.get(change.operationIndex) ?? []
+    group.push(change)
+    byOperation.set(change.operationIndex, group)
+  }
+  const insertionChangeIds = new Map<string, string[]>()
+  for (const [operation, group] of byOperation) {
+    if (!group.every((change) => change.elementName === 'ins')) continue
+    const inserted = [...recorder.paragraphOrigin.entries()].find(
+      ([, origin]) =>
+        origin.fromParagraphId === null &&
+        origin.insertedByOperation === operation,
+    )
+    if (!inserted) continue
+    insertionChangeIds.set(inserted[0].id, [
+      ...new Set(group.map((change) => change.ooxmlId)),
+    ])
+  }
+
   for (const story of input.model.stories) {
     // The main story is the editable one. Its paragraphs are all part of the
     // map, untouched ones included, so a run that only shifted position when
@@ -314,6 +338,7 @@ export function buildVersionLineage(input: {
             ],
           }))
         : []
+      const trackedInsertChangeIds = insertionChangeIds.get(paragraph.id)
       paragraphs.push({
         fromParagraphId: origin ? origin.fromParagraphId : paragraph.id,
         toParagraphId,
@@ -323,6 +348,7 @@ export function buildVersionLineage(input: {
         ...(origin?.insertedByIntent
           ? { insertedByIntent: origin.insertedByIntent }
           : {}),
+        ...(trackedInsertChangeIds ? { trackedInsertChangeIds } : {}),
         runs,
       })
     }
@@ -341,15 +367,12 @@ export function buildVersionLineage(input: {
 
   // A tracked operation's reversal is a rejection of the persisted `w:id`s it
   // created, grouped by the accepted operation so a replacement's `del`/`ins`
-  // pair is handled as one unit. An insertion created only an `ins`: its
-  // reversal is a plain paragraph deletion, not a rejection, so it is omitted.
+  // pair is handled as one unit. An insertion that created only an `ins` and
+  // no paragraph is a run insertion into an existing paragraph; removing the
+  // paragraph is not part of its reversal. A tracked paragraph insertion is
+  // carried on its paragraph entry (`trackedInsertChangeIds`), so its shell can
+  // be removed in the same decision.
   const reversals: DocumentLineageReversal[] = []
-  const byOperation = new Map<number, RecordedTrackedChange[]>()
-  for (const change of recorder.trackedChanges) {
-    const group = byOperation.get(change.operationIndex) ?? []
-    group.push(change)
-    byOperation.set(change.operationIndex, group)
-  }
   for (const [operation, group] of [...byOperation.entries()].sort(
     (left, right) => left[0] - right[0],
   )) {
@@ -371,5 +394,84 @@ export function buildVersionLineage(input: {
     acceptedOperations: [...recorder.accepted].sort((a, b) => a - b),
     paragraphs,
     ...(reversals.length > 0 ? { reversals } : {}),
+  }
+}
+
+/**
+ * Re-expresses a lineage recorded against the *current* version as one whose
+ * base side is the *client's* base version. A reconciled collaboration merge
+ * applies the client's operations to a newer current version, so the recorder
+ * names current runs and paragraphs. The caller supplies the current-to-base
+ * correspondence computed from the two parsed versions (persisted paragraph
+ * ids, then run skeleton), and never a positional or text guess.
+ *
+ * Content that exists only in the current version (a collaborator's paragraph
+ * or run within a touched paragraph) has no base origin, so it is dropped from
+ * the map rather than claimed as the client's. The client's covered slots
+ * never reference it: the merge refuses an operation that conflicts with it.
+ */
+export function retargetLineageToBaseVersion(input: {
+  lineage: DocumentVersionLineage
+  currentToBaseParagraph: ReadonlyMap<string, string>
+  currentToBaseRun: ReadonlyMap<string, string>
+  baseVersionId: string
+}): DocumentVersionLineage {
+  const { currentToBaseParagraph, currentToBaseRun } = input
+  const paragraphs: DocumentParagraphLineage[] = []
+  for (const entry of input.lineage.paragraphs) {
+    const entryFromParagraphId = entry.fromParagraphId
+    const insertedByThisBatch = entryFromParagraphId === null
+    const mappedFromParagraphId =
+      entryFromParagraphId === null
+        ? null
+        : currentToBaseParagraph.get(entryFromParagraphId)
+    if (!insertedByThisBatch && mappedFromParagraphId === undefined) {
+      continue
+    }
+    const runs: DocumentLineageRun[] = []
+    for (const run of entry.runs) {
+      const segments: DocumentLineageSegment[] = []
+      for (const segment of run.segments) {
+        if (segment.fromRunId === null) {
+          segments.push(segment)
+          continue
+        }
+        const baseRunId = currentToBaseRun.get(segment.fromRunId)
+        if (baseRunId) segments.push({ ...segment, fromRunId: baseRunId })
+      }
+      if (segments.length > 0) runs.push({ runIndex: run.runIndex, segments })
+    }
+    paragraphs.push({
+      ...entry,
+      fromParagraphId: mappedFromParagraphId ?? null,
+      runs,
+    })
+  }
+
+  const reversals = input.lineage.reversals?.flatMap((reversal) => {
+    const fromRunId = reversal.fromRunId
+      ? (currentToBaseRun.get(reversal.fromRunId) ?? null)
+      : null
+    const fromParagraphId = reversal.fromParagraphId
+      ? (currentToBaseParagraph.get(reversal.fromParagraphId) ?? null)
+      : null
+    // A reversal whose addresses do not exist in the base cannot be offered to
+    // the client; the boundary then blocks honestly rather than retargeting.
+    if (reversal.fromRunId && !fromRunId) return []
+    if (reversal.fromParagraphId && !fromParagraphId) return []
+    return [
+      {
+        ...reversal,
+        fromRunId,
+        fromParagraphId,
+      },
+    ]
+  })
+
+  return {
+    ...input.lineage,
+    baseVersionId: input.baseVersionId,
+    paragraphs,
+    ...(reversals && reversals.length > 0 ? { reversals } : {}),
   }
 }

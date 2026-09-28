@@ -748,6 +748,48 @@ describe('lineage-driven identity', () => {
     ).toBe(true)
   })
 
+  it('translates a tracked insertion into a rejection plus shell removal', () => {
+    const trackedInsertLineage: DocumentVersionLineage = {
+      version: 1,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      acceptedOperations: [0],
+      paragraphs: [
+        {
+          fromParagraphId: null,
+          toParagraphId: 'para-w14-00000002',
+          insertedByOperation: 0,
+          insertedByIntent: 'i1',
+          trackedInsertChangeIds: ['0'],
+          runs: [],
+        },
+      ],
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      inserts: [{ clientId: 'i1', afterParagraphId: 'p1', text: 'Inserted' }],
+    }
+    const boundary: SaveBaseline = {
+      covered: [insertSlot('i1')],
+      sent,
+      fromModel,
+      lineage: trackedInsertLineage,
+      versionId: 'ver_2',
+    }
+    // The covered insertion parses to no run, but its reversal is named, so
+    // the boundary is accepted rather than blocked.
+    expect(lineageCoversCoveredSlots(trackedInsertLineage, boundary)).toBe(true)
+    const translated = translateSnapshot(emptyDraftState(), boundary)
+    expect(translated?.deletedParagraphIds).toEqual([])
+    expect(translated?.trackedRejections).toEqual([
+      {
+        key: 'reject:0',
+        ooxmlIds: ['0'],
+        removeParagraphIds: ['para-w14-00000002'],
+      },
+    ])
+  })
+
   it('translates a tracked replacement into a rejection group, not a run id', () => {
     const trackedLineage: DocumentVersionLineage = {
       version: 1,

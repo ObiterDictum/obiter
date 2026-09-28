@@ -413,14 +413,20 @@ function isCanonicalIsoTimestamp(value: string) {
   return !Number.isNaN(timestamp) && new Date(timestamp).toISOString() === value
 }
 
+/**
+ * The next tracked-change id is one past the highest id already in the
+ * document, never the lowest free one. A decided change's id is therefore not
+ * reused by a later edit, so a stale rejection group can never name a different
+ * change it happens to share an id with.
+ */
 function allocateFirstChangeId(document: OoxmlDocument) {
-  const used = new Set(
-    [...document.trackedChanges.values()]
-      .map(({ wire }) => wire.ooxmlId)
-      .filter((id): id is string => id !== undefined && /^[+-]?\d+$/u.test(id))
-      .map((id) => BigInt(id).toString()),
-  )
-  let candidate = 0
-  while (used.has(String(candidate))) candidate += 1
-  return candidate
+  let next = 0
+  for (const { wire } of document.trackedChanges.values()) {
+    const id = wire.ooxmlId
+    if (id === undefined || !/^\d+$/u.test(id)) continue
+    const value = Number(id)
+    if (!Number.isSafeInteger(value)) continue
+    if (value >= next) next = value + 1
+  }
+  return next
 }

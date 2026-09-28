@@ -447,11 +447,16 @@ export function DocxWorkspace({
                 changesPending={decideChange.isPending || save.saving}
                 changesError={mutationError(decideChange.error)}
                 onDecideChange={(action, changeId) => {
-                  decideChange.mutate({
-                    baseVersionId,
-                    action,
-                    changeIds: [changeId],
-                  })
+                  decideChange.mutate(
+                    { baseVersionId, action, changeIds: [changeId] },
+                    {
+                      onSuccess: (data) =>
+                        drafts.resetHistoryAfterDecision(
+                          data.versionId,
+                          data.versionNumber,
+                        ),
+                    },
+                  )
                 }}
                 authorities={authorities}
                 onSelectAuthority={(paragraphId) =>

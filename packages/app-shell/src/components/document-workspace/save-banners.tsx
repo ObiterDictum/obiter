@@ -99,7 +99,7 @@ export function DocumentSaveBanners({
           <DiscardWorkDialog
             triggerLabel="Reload"
             title="Reload the document?"
-            body="The saved document is unchanged. Reloading discards the in-memory undo history that could not be reconciled, so editing can continue safely."
+            body="The server copy is unchanged. Reloading discards the in-memory undo history that could not be reconciled, along with any held rejected changes and parked drafts for this document in this browser, so editing can continue safely."
             confirmLabel="Reload"
             onConfirm={save.reload}
           />

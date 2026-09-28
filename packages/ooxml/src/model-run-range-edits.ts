@@ -268,6 +268,9 @@ function splitReplacedRun(
   return {
     xml: parts.map((part) => part.xml).join(''),
     wires,
+    // SAFETY: `wires` is built one per `parts` entry, and `ordered` is the
+    // sorted split bounds with one more entry than `parts`, so `index` and
+    // `index + 1` are in range for every part.
     originParts: parts.map((part, index) => ({
       run: wires[index] as DocumentTextRunWire,
       from: ordered[index] as number,

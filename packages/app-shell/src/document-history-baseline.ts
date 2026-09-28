@@ -137,6 +137,15 @@ type SavedIdentities = {
   runReversals: Map<string, string[]>
   /** Base paragraph id -> persisted change ids whose rejection reverses it. */
   paragraphReversals: Map<string, string[]>
+  /**
+   * Insert clientId -> the tracked insertion's reversal. The content lives in
+   * `w:ins`, so rejecting its change ids restores the pre-insertion content and
+   * the shell paragraph is removed in the same decision.
+   */
+  insertReversals: Map<
+    string,
+    { ooxmlIds: string[]; removeParagraphId: string }
+  >
 }
 
 /**
@@ -162,6 +171,7 @@ function emptyIdentities(): SavedIdentities {
     runIds: new Map(),
     runReversals: new Map(),
     paragraphReversals: new Map(),
+    insertReversals: new Map(),
   }
 }
 
@@ -184,7 +194,7 @@ export function paragraphMapFromLineage(
 function remapRecordKeys<T>(
   record: Record<string, T>,
   remap: (id: string) => string,
-): Record<string, T> {
+) {
   const next: Record<string, T> = {}
   for (const [key, value] of Object.entries(record)) {
     next[remap(key)] = value
@@ -199,10 +209,7 @@ function remapRecordKeys<T>(
  * not name is surfaced as unresolved, never silently retargeted at whatever
  * run inherited its positional id.
  */
-export function remapLiveDraftState(
-  state: DraftState,
-  baseline: SaveBaseline,
-): { state: DraftState; unresolved: boolean } {
+export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
   const toModel = baseline.toModel
   if (!toModel) return { state, unresolved: false }
   const identities = savedIdentities(baseline)
@@ -353,10 +360,15 @@ export function lineageCoversCoveredSlots(
         (paragraph) => paragraph.insertedByIntent === slot.clientId,
       )
       if (!entry) return false
-      // A tracked insertion's result paragraph carries no run (its content is
-      // wrapped in `w:ins`). Rejecting the change restores the content but
-      // leaves the paragraph shell, and deleting the shell is refused while it
-      // still carries the change. That boundary is surfaced, never guessed.
+      // A tracked insertion carries its own reversal: rejecting the `w:ins`
+      // ids and removing the shell paragraph in one decision. Its result
+      // paragraph has no run address, but that does not make it uncoverable.
+      if (entry.trackedInsertChangeIds?.length && entry.toParagraphId) {
+        continue
+      }
+      // An untracked insertion's result paragraph must carry a run; a tracked
+      // insertion with no reversal recorded is a boundary that cannot be
+      // reconciled, and is surfaced rather than guessed.
       if (entry.runs.length === 0) return false
       continue
     }
@@ -521,6 +533,27 @@ function lineageIdentities(
     }
   }
 
+  // A tracked paragraph insertion carries its own reversal: rejecting the
+  // `w:ins` ids empties the paragraph, and removing the shell named by the
+  // result paragraph id completes the undo in the same decision.
+  const insertReversals = new Map<
+    string,
+    { ooxmlIds: string[]; removeParagraphId: string }
+  >()
+  for (const entry of lineage.paragraphs) {
+    if (
+      !entry.insertedByIntent ||
+      !entry.toParagraphId ||
+      !entry.trackedInsertChangeIds?.length
+    ) {
+      continue
+    }
+    insertReversals.set(entry.insertedByIntent, {
+      ooxmlIds: [...entry.trackedInsertChangeIds],
+      removeParagraphId: entry.toParagraphId,
+    })
+  }
+
   return {
     inserted,
     insertedRuns,
@@ -531,6 +564,7 @@ function lineageIdentities(
     runIds,
     runReversals,
     paragraphReversals,
+    insertReversals,
   }
 }
 
@@ -666,6 +700,20 @@ export function translateSnapshot(
         break
       }
       case 'insert': {
+        // A tracked paragraph insertion is one atomic edit: its content lives
+        // inside `w:ins`, so no intermediate snapshot of it (an empty shell,
+        // or a later edit within it) is separately representable. Every
+        // snapshot of the insertion collapses to the same reversal: reject the
+        // change and remove the shell, in one decision.
+        const reversal = identities.insertReversals.get(slot.clientId)
+        if (reversal) {
+          next.inserts =
+            removeInsert(next.inserts, slot.clientId)?.inserts ?? next.inserts
+          addTrackedRejection(next, reversal.ooxmlIds, [
+            reversal.removeParagraphId,
+          ])
+          break
+        }
         const insert = snapshot.inserts.find(
           (item) => item.clientId === slot.clientId,
         )
@@ -689,7 +737,8 @@ export function translateSnapshot(
         } else {
           // The snapshot predates the insert, so it describes the document
           // without the paragraph the save stored. That is a deletion of the
-          // stored paragraph.
+          // stored paragraph; a tracked insertion took the reversal branch
+          // above and never reaches here.
           next.deletedParagraphIds.push(
             identities.inserted.get(slot.clientId) ??
               pendingDeleteId(slot.clientId),
@@ -850,10 +899,27 @@ export function translateSnapshot(
 }
 
 /** Adds a tracked-change rejection group once, keyed by its change ids. */
-function addTrackedRejection(state: DraftState, ooxmlIds: string[]) {
+function addTrackedRejection(
+  state: DraftState,
+  ooxmlIds: string[],
+  removeParagraphIds?: string[],
+) {
   const key = `reject:${ooxmlIds.join(',')}`
   if (!state.trackedRejections.some((group) => group.key === key)) {
-    state.trackedRejections.push({ key, ooxmlIds: [...ooxmlIds] })
+    state.trackedRejections.push({
+      key,
+      ooxmlIds: [...ooxmlIds],
+      ...(removeParagraphIds?.length
+        ? { removeParagraphIds: [...removeParagraphIds] }
+        : {}),
+    })
+    return
+  }
+  // A later translation of the same change may add the shell removal.
+  if (!removeParagraphIds?.length) return
+  const existing = state.trackedRejections.find((group) => group.key === key)
+  if (existing && !existing.removeParagraphIds?.length) {
+    existing.removeParagraphIds = [...removeParagraphIds]
   }
 }
 
@@ -913,6 +979,8 @@ function restoreInsert(
   if (!paragraph || (!anchor && !beforeAnchor)) return null
   return {
     clientId: pendingDeletedParagraphId(paragraphId),
+    // SAFETY: the guard above returns unless `anchor` or `beforeAnchor` is set,
+    // so a missing anchor here means `beforeAnchor` is a string.
     afterParagraphId: anchor ?? (beforeAnchor as string),
     ...(beforeAnchor ? { beforeParagraphId: beforeAnchor } : {}),
     text: paragraph.runs.map((run) => run.text).join(''),

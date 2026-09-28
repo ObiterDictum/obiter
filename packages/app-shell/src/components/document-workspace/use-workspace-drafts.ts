@@ -187,10 +187,11 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     )
     setBlockedReason(resolved ? null : (reason ?? 'lineage'))
   }
-  function resetHistoryAfterDecision() {
+  function resetHistoryAfterDecision(id?: string, version?: number) {
     history.clear()
     baseline.clear()
     setBlockedReason(null)
+    if (id) baseline.markDecisionCommitted(id, version)
   }
   function resetDrafts() {
     setBundle({ state: emptyDraftState(), held: [] })
@@ -201,7 +202,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setRecoverable([])
     setBlockedReason(null)
   }
-
   function setState(update: (current: DraftState) => DraftState) {
     setBundle((current) => ({ ...current, state: update(current.state) }))
   }

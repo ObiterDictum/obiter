@@ -75,6 +75,15 @@ export const documentParagraphLineageSchema = z
     insertedByOperation: z.number().int().nonnegative().optional(),
     /** Opaque intent id echoed from the insert operation, when supplied. */
     insertedByIntent: lineageIdSchema.optional(),
+    /**
+     * Persisted OOXML change ids (`w:id`) created for a tracked paragraph
+     * insertion. The inserted content lives inside `w:ins`, so rejecting these
+     * ids restores the pre-insertion content but leaves the paragraph shell.
+     * The shell is named by `toParagraphId` and removed in the same decision,
+     * which is what makes a saved tracked insertion undoable atomically.
+     * Present only when the insertion's content is entirely tracked.
+     */
+    trackedInsertChangeIds: z.array(lineageIdSchema).min(1).optional(),
     /** Result runs, in paragraph order. Empty when the paragraph was deleted. */
     runs: z.array(documentLineageRunSchema),
   })
@@ -145,8 +154,11 @@ export const documentVersionLineageSchema = z
     acceptedOperations: z.array(z.number().int().nonnegative()),
     /**
      * Paragraphs the edit transformed: base paragraphs it touched (including
-     * deleted ones) and paragraphs it inserted. Untouched paragraphs are
-     * omitted; the caller does not need a full-document map.
+     * deleted ones) and paragraphs it inserted. The main document story also
+     * carries every untouched paragraph, so a run that only shifted position
+     * when an earlier paragraph was inserted or split still has a result
+     * address; other stories omit untouched paragraphs. The caller needs the
+     * result side of the map, never a positional guess.
      */
     paragraphs: z.array(documentParagraphLineageSchema),
     /**

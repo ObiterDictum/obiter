@@ -2903,8 +2903,10 @@
                     <code>set_run_emphasis</code> is addressed by
                     <code>runId</code> or by <code>paragraphId</code> plus
                     <code>from</code>/<code>to</code>, not both. A tracked range
-                    split is skipped until an <code>rPrChange</code> writer
-                    exists. Paragraph layout uses
+                    split is refused (<code>model-node-not-editable</code>)
+                    until an <code>rPrChange</code> writer exists; the client
+                    holds and surfaces the slot rather than dropping the
+                    formatting. Paragraph layout uses
                     <code>set_paragraph_format</code>. The response carries the
                     <code>lineage</code> for the accepted batch, including the
                     mapping from the client's base ids to the persisted
@@ -2921,7 +2923,11 @@
                   <td class="id">document-collaboration.ts</td>
                   <td>
                     No-store polling, ephemeral typed cursors, and bounded OT
-                    merges into locked immutable versions
+                    merges into locked immutable versions. A reconciled merge
+                    applies the client's batch to the newer current version and
+                    returns a lineage re-expressed against the client's base
+                    version (persisted paragraph ids, then run skeleton), so its
+                    history stays translatable.
                   </td>
                 </tr>
                 <tr>
@@ -2939,7 +2945,11 @@
                   <td class="id">tracked-changes.ts</td>
                   <td>
                     Edit-level accept or reject saved as a locked immutable
-                    version N+1
+                    version N+1. A rejection may also name
+                    <code>removeParagraphIds</code>: empty tracked-insertion
+                    shells removed in the same transaction, so rejecting a
+                    tracked paragraph insertion restores the pre-insertion
+                    document atomically instead of leaving an empty paragraph.
                   </td>
                 </tr>
                 <tr>
@@ -6241,13 +6251,20 @@
                 per-paragraph and per-run transformation an accepted batch
                 produced — to re-express every history snapshot against the
                 saved document, so a covered slot can never be replayed as fresh
-                work. Paragraph identity is persisted as
-                <code>w14:paraId</code> only in the newly saved version, so a
-                legacy document gains stable identity on its first save. A
-                response without a complete lineage is never guessed around:
-                <code>use-save-baseline.ts</code> is the one owner of that
-                boundary and surfaces a recoverable blocked state instead of
-                reporting success.</span
+                work. A reconciled collaboration merge re-expresses that lineage
+                against the client's base version, so an ordinary merged save
+                does not end the undo session. A tracked paragraph insertion
+                carries its reversal on its paragraph entry (<code
+                  >trackedInsertChangeIds</code
+                >
+                plus the shell's <code>toParagraphId</code>); the client sends
+                both in one version-checked decision. Paragraph identity is
+                persisted as <code>w14:paraId</code> only in the newly saved
+                version, so a legacy document gains stable identity on its first
+                save. A response without a complete lineage is never guessed
+                around: <code>use-save-baseline.ts</code> is the one owner of
+                that boundary and surfaces a recoverable blocked state instead
+                of reporting success.</span
               >
             </li>
             <li>

@@ -110,6 +110,7 @@ async function server(initial: readonly string[]) {
       baseVersionId: string
       action: 'accept' | 'reject'
       changeIds: string[]
+      removeParagraphIds?: string[]
     }) => {
       // The real route refuses a stale base; enforce it so a sequential
       // multi-group save cannot pass a test that should catch the conflict.
@@ -123,7 +124,12 @@ async function server(initial: readonly string[]) {
       }
       const baseVersionId = input.baseVersionId
       const document = await parseDocx(bytes)
-      applyTrackedChangeDecisions(document, input.changeIds, input.action)
+      applyTrackedChangeDecisions(
+        document,
+        input.changeIds,
+        input.action,
+        input.removeParagraphIds ?? [],
+      )
       bytes = await serialiseDocx(document)
       version += 1
       parsed = await parseDocx(bytes)
@@ -787,7 +793,7 @@ describe('undo across a successful save', () => {
     expect(document.modelFor().model.changes).toHaveLength(0)
   })
 
-  it('blocks a saved tracked insertion with the empty-paragraph counterexample', async () => {
+  it('reverses a saved tracked insertion by rejecting it and removing the shell', async () => {
     const document = await server(['Alpha', 'Beta'])
     mountWorkspace({
       editAsync: document.editAsync,
@@ -803,15 +809,27 @@ describe('undo across a successful save', () => {
     await clickSaveAndSettle(document, 1)
 
     // A tracked insertion reparses to an empty paragraph carrying its `w:ins`.
-    // Rejecting the change restores the content but leaves the shell, and the
-    // document refuses to delete a paragraph that still carries tracked
-    // changes. The boundary is surfaced, never a refused delete or a silent
-    // "saved".
-    await waitFor(() => expect(saveState()).toBe('blocked'))
-    expect(screen.getByText(/tracked insertion/i)).toBeTruthy()
-    expect(saveButton()).toHaveProperty('disabled', true)
+    // The lineage names that shell's reversal, so the save does not block: the
+    // editor stays usable and undo removes the paragraph in one decision.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(undoButton()).toHaveProperty('disabled', false)
     expect(document.decideAsync).toHaveBeenCalledTimes(0)
-    expect(document.editAsync).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickDecisionSave(document, 1)
+    expect(document.decideAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'reject',
+        removeParagraphIds: expect.arrayContaining([
+          expect.stringMatching(/^para-w14-/u),
+        ]),
+      }),
+    )
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    // One atomic decision restored the pre-insertion document exactly.
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'Beta'])
+    expect(document.modelFor().model.changes).toHaveLength(0)
   })
 
   it('reverses a saved tracked emphasis as a rejection', async () => {
