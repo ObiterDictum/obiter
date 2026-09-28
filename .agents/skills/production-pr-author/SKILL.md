@@ -11,6 +11,16 @@ Write PR titles and descriptions that let another engineer review the change saf
 
 Do not write marketing copy, vague confidence language, or AI-flavored filler. Be precise, honest, and maintainable.
 
+## Audience
+
+The PR body addresses another engineer reviewing the change. Write for that reader.
+
+- Never address the owner (Karl) by name, and never write owner-directed
+  explanation such as "for Karl" or "in plain language for Karl". The PR body is a
+  permanent, public artefact, and owner-directed prose in it is inappropriate.
+- If a plain-language, non-engineer explanation is useful, give it in the local
+  chat reply or summary you return to the user, not in the PR body or comments.
+
 ## Subagent Model Policy
 
 Keep the work in two halves:
