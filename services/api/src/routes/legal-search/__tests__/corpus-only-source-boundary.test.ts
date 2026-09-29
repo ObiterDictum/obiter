@@ -69,7 +69,10 @@ const providerFetchSpecifiers = [
   'legal-search/moj-client',
 ]
 
-const tnaHost = 'nationalarchives.gov.uk'
+const tnaHostLabel = 'nationalarchives.gov.uk'
+/** Matched as a regex, not a URL substring: this scans file text for an
+ * upstream host literal, it does not sanitise a URL. */
+const tnaHostPattern = new RegExp(tnaHostLabel.replace(/\./g, '\\.'))
 
 /**
  * The base URL default is a config value, not a call site. It is allowed only
@@ -115,8 +118,8 @@ function sourceOffences(file: string, source: string): string[] {
   for (const specifier of providerFetchSpecifiers) {
     if (source.includes(specifier)) offences.push(`${specifier} (specifier)`)
   }
-  if (!hostAllowedFiles.has(file) && source.includes(tnaHost)) {
-    offences.push(`${tnaHost} (host)`)
+  if (!hostAllowedFiles.has(file) && tnaHostPattern.test(source)) {
+    offences.push(`${tnaHostLabel} (host)`)
   }
   return offences
 }
