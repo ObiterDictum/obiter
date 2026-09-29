@@ -356,7 +356,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     expect(JSON.parse(String(request?.body))).toEqual({
       query: '',
-      foregroundLiveResults: false,
       court: 'uksc',
     })
     expect(container.textContent).toContain(
@@ -993,7 +992,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(JSON.parse(String(request?.body))).toMatchObject({
       query: 'Miah',
       court: 'ewhc/admin',
-      foregroundLiveResults: true,
     })
   })
 
@@ -1057,7 +1055,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     expect(JSON.parse(String(request?.body))).toEqual({
       query: '',
-      foregroundLiveResults: false,
       court: 'uksc',
       dateTo: '2024-12-31',
     })

@@ -37,7 +37,7 @@ Target module layout:
 
 - `index.ts`: public route exports
 - `proxy-routes.ts`: `POST /api/search/fetch` and `GET /api/search/documents/:documentId`
-- `moj-client.ts`: Find Case Law fetch, detail retrieval, hydration, and indexing orchestration
+- `stored-document.ts`: stored full-text read from the derived index. The API is corpus-only; Find Case Law fetch, detail retrieval, hydration and indexing live in the explicit indexing service, not the request path.
 - `atom-parser.ts`: Atom entry parsing and Atom helper functions
 - `html-parser.ts`: judgment HTML parsing, paragraph extraction, document parsing, text decoding, and hashing
 - `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms, foreground record cache helper
@@ -123,7 +123,7 @@ The active refactor must avoid choices that make later case law, legislation, in
 
 Current provider scope:
 
-- Implemented case-law ingestion and hydration uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The route module is still named `moj-client.ts` and the environment variables are still named `MOJ_FIND_CASE_LAW_*`, but the configured endpoint is The National Archives Find Case Law service.
+- Implemented case-law ingestion and hydration uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The ingestor is the only caller; the API route module was renamed from `moj-client.ts` to `stored-document.ts` when the request path became corpus-only, and the environment variables are still named `MOJ_FIND_CASE_LAW_*`.
 - This gives Search broad coverage across the supported Find Case Law court and tribunal collections, subject to provider availability, parser support, and licensing constraints.
 - `legislation.gov.uk` is not implemented yet. Legislation requires a separate provider adapter, schema, storage model, version/provision handling, and search semantics; do not treat the current judgment path as legislation ingestion.
 - The current product behavior is stored Obiter legal sources first, then safe Find Case Law fallback/hydration for case-law misses. Future legislation search should be added source-by-source without weakening this case-law path.

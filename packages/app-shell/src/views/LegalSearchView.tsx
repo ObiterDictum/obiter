@@ -78,18 +78,15 @@ export type LegalSearchFetchRequest = {
   topic?: string
   asAtDate?: string
   legislationVersion?: string
-  foregroundLiveResults: boolean
 }
 
 export function createLegalSearchFetchRequest(
   query: string,
   filters: LegalSearchRequestFilters,
-  options: { foregroundLiveResults?: boolean } = {},
 ) {
   const trimmedQuery = query.trim()
   const request: LegalSearchFetchRequest = {
     query: trimmedQuery,
-    foregroundLiveResults: options.foregroundLiveResults ?? true,
   }
   const court = filters.court.trim()
   const dateFrom = filters.dateFrom.trim()
@@ -445,9 +442,7 @@ export function LegalSearchView() {
         headers: { 'content-type': 'application/json' },
         signal: requestAbortController.signal,
         body: JSON.stringify(
-          createLegalSearchFetchRequest(trimmedQuery, searchFilters, {
-            foregroundLiveResults: !storedOnlyBrowse,
-          }),
+          createLegalSearchFetchRequest(trimmedQuery, searchFilters),
         ),
       })
 

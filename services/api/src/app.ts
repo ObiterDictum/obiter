@@ -20,10 +20,7 @@ import { createLegalSearchRoutes } from './routes/legal-search/search-routes'
 import {
   createLegalSearchProxyRoutes,
   createPostgresLegalAuthorityReadStore,
-  createPostgresLegalAuthorityWriteStore,
 } from './routes/legal-search/proxy-routes'
-import type { LegalHydrationLedger } from './legal-search-hydration-budget'
-import type { MojRequestBudget } from '@obiter/legal-source-provider'
 import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
@@ -77,18 +74,6 @@ interface ApiAppOptions {
    * reachable from this app.
    */
   corpus?: CorpusAccess
-  /**
-   * The cluster-visible admission authority. `createApiRuntime` builds the
-   * Postgres ledger on the application pool; a test that builds the app
-   * directly omits it and gets the process-local fallback.
-   */
-  hydrationLedger?: LegalHydrationLedger
-  /**
-   * The cluster-visible Find Case Law request budget. `createApiRuntime`
-   * builds the Postgres budget on the application pool; a test that builds
-   * the app directly omits it and gets the process-local limiter alone.
-   */
-  mojRequestBudget?: MojRequestBudget
 }
 
 interface DevelopmentApiProvenance {
@@ -331,15 +316,6 @@ export function createApiApp(
       env,
       createPostgresLegalAuthorityReadStore(corpusAccess.read),
       {
-        // The write half is handed over only when this process has a corpus
-        // writer. A read-only process is never given one, so no route can
-        // attempt a corpus write and then have to swallow the failure, and a
-        // writer request never falls back to the application pool.
-        corpusWrites: corpusAccess.write
-          ? createPostgresLegalAuthorityWriteStore(corpusAccess.write)
-          : null,
-        hydrationBudget: options.hydrationLedger,
-        mojRequestBudget: options.mojRequestBudget,
         legislation: {
           pool: corpusAccess.read,
           indexName: env.legislationProvisionsIndex,

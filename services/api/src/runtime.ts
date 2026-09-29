@@ -1,19 +1,7 @@
 import { createClient, getIndexStatus } from '@obiter/search-client'
-import { mojRequestWindowMs } from '@obiter/legal-source-provider'
 import { createApiApp, type ApiApp, type ApiRuntimeKind } from './app'
 import { createDatabasePools, type DatabasePools } from './database-pools'
 import { readApiEnv, type ApiEnv } from './env'
-import {
-  DEFAULT_HYDRATION_ADMISSION_LOCK_TIMEOUT_MS,
-  DEFAULT_HYDRATION_ADMISSION_STATEMENT_TIMEOUT_MS,
-  PostgresLegalHydrationLedger,
-} from './legal-hydration-ledger'
-import {
-  DEFAULT_MOJ_REQUEST_CONNECT_TIMEOUT_MS,
-  DEFAULT_MOJ_REQUEST_LOCK_TIMEOUT_MS,
-  DEFAULT_MOJ_REQUEST_STATEMENT_TIMEOUT_MS,
-  PostgresMojRequestBudget,
-} from './moj-request-budget'
 import { runMigrations } from './migrate'
 import { warmRedactionDetector } from './redaction-detection'
 
@@ -68,35 +56,12 @@ export async function createApiRuntime(
     )
   }
 
-  // Cluster-visible hydration admission on the application database. Every
-  // replica migrates and may write this database, so the per-subject miss
-  // window and the unexpired-lease bound are shared rather than multiplied by
-  // the replica count. It is deliberately not the legal corpus: a lane has no
-  // corpus writer, and licensed source material must not carry operational
-  // rows.
-  const hydrationLedger = new PostgresLegalHydrationLedger(pools.application, {
-    queueMax: env.legalSearchHydrationQueueMax,
-    perClientMax: env.legalSearchHydrationPerClientMax,
-    windowMs: env.legalSearchHydrationWindowMs,
-    leaseTtlMs: env.legalSearchHydrationLeaseMs,
-    lockTimeoutMs: DEFAULT_HYDRATION_ADMISSION_LOCK_TIMEOUT_MS,
-    statementTimeoutMs: DEFAULT_HYDRATION_ADMISSION_STATEMENT_TIMEOUT_MS,
-  })
-
-  // Cluster-visible Find Case Law HTTP request budget on the same application
-  // database. Every replica charges the same rolling five-minute window
-  // immediately before dispatching an upstream attempt, so N replicas share
-  // one allowance on one egress IP instead of multiplying it. Bulk ingestion
-  // runs with its own corpus-writer connection and does not reach this
-  // ledger, so this bounds API replicas, not the ingestor.
-  const mojRequestBudget = new PostgresMojRequestBudget(pools.application, {
-    limit: env.mojFindCaseLawRequestBudget,
-    windowMs: mojRequestWindowMs,
-    connectTimeoutMs: DEFAULT_MOJ_REQUEST_CONNECT_TIMEOUT_MS,
-    lockTimeoutMs: DEFAULT_MOJ_REQUEST_LOCK_TIMEOUT_MS,
-    statementTimeoutMs: DEFAULT_MOJ_REQUEST_STATEMENT_TIMEOUT_MS,
-  })
-
+  // The API is corpus-only: no request path reaches Find Case Law, so the
+  // runtime builds neither the hydration admission ledger nor the shared Find
+  // Case Law request budget. Those modules and migrations 0028/0029 are
+  // retained unchanged for an explicit indexing run to reuse; the API never
+  // constructs them, so a request cannot reach a provider or its meter.
+  //
   // The application pool and the corpus access the process was configured for
   // reach the app through the same boundary. A lane with `CORPUS_DATABASE_URL`
   // and no writer credential gets `corpus.write === null`, so no route can
@@ -104,8 +69,6 @@ export async function createApiRuntime(
   const app = createApiApp(env, pools.application, {
     runtime,
     corpus: pools.corpus,
-    hydrationLedger,
-    mojRequestBudget,
   })
 
   reportIndexStatus(env)

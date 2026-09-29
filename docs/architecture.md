@@ -868,6 +868,15 @@ unexpired leases and per-subject misses in a rolling window; in the default
 single-process configuration it
 also bounds the number of retained per-subject windows. Admission state is
 cluster-visible by default; see the shared-ledger decision below.
+
+**Superseded for the API by the corpus-only decision (30 September 2026,
+below).** `services/api` no longer constructs the hydration gate, the shared
+hydration ledger or the shared request budget, and no request path reaches
+Find Case Law. The 30-August statement that anonymous `POST /api/search/fetch`
+is stored-only now holds for every caller, and the anonymous document route no
+longer answers a miss from the provider. The gate, ledger and budget remain in
+the tree, unreferenced by a request path, for an explicit indexing run.
+
 Search and changelog must never return
 matter data, client documents, redaction source or output, session or
 organisation records, auth secrets, or Meilisearch admin keys. Production
@@ -881,6 +890,10 @@ routes` in `services/api/src/routes/public-access.test.ts` rather than landing
 silently.
 
 ### Hydration admission is a cluster-wide Postgres ledger (29 September 2026)
+
+**Retained but unused by the API since the corpus-only decision (30 September
+2026, below).** No request path constructs this ledger; it remains because the
+code and migration are shared with the explicit indexing boundary.
 
 Context: the per-process gate above bounded each API process separately, so N
 replicas gave N per-subject windows, N anonymous buckets and N in-flight
@@ -942,6 +955,10 @@ the Find Case Law request-budget decision below.
 
 ### Find Case Law HTTP attempts draw on one cluster-wide budget (29 September 2026)
 
+**Retained but unused by the API since the corpus-only decision (30 September
+2026, below).** No request path constructs this budget; it remains, with the
+provider package's `MojRequestBudget` seam, for the explicit indexing boundary.
+
 Context: every Find Case Law path behind the hydration gate could still reach
 the provider once per HTTP attempt, and admission bounded operations rather
 than attempts. One search walk can spend one Atom-page charge per page, then
@@ -1000,6 +1017,63 @@ hydration ledger already bounds per-subject misses and in-flight work); and
 wiring bulk ingestion and the withdrawal checker to an operational ledger,
 which needs a new credential and deployment decision because their database
 connection is the corpus writer.
+
+### The user-facing API is corpus-only (30 September 2026)
+
+Context: the API's search and document routes reached Find Case Law directly
+(foreground live results, queued background hydration, a detached detail pass
+and document-detail fetch-through), bounded by the hydration ledger and the
+shared request budget. That made the provider a runtime dependency of a
+user-facing request and, because the ingestor sits outside the shared window,
+left the production-wide provider budget unresolved. Product decision: the
+user-facing API must never contact the National Archives. National Archives
+access is permitted only during an explicit document-indexing run.
+
+Decision: `services/api` is corpus-only. `POST /api/search/fetch` and
+`GET /api/search/documents/:documentId` read Obiter-owned records in Postgres
+and the derived Meilisearch index and nothing else. There is no provider
+client, no hydration gate, no request budget and no corpus write on a request
+path: the route module imports no provider fetch function, `runtime.ts`
+constructs neither `PostgresMojRequestBudget` nor
+`PostgresLegalHydrationLedger`, and a structural test scans the non-test API
+source for the provider fetch names so a future call fails the suite. A miss
+answers honestly under the existing contract: search returns its stored-only
+empty (`no_match`, or `recognised_not_held` for a recognised citation) with
+`diagnostics.liveProviderSearched: false` and `hydrationQueued: false`; a
+document miss returns `404 document_not_found` with "Document is not held in
+the local corpus". Neither claims a job was queued, because nothing will run.
+A provider outage cannot turn a miss into `503 storage_unavailable`. Stored
+documents stay readable: every stored read path is unchanged.
+
+Callers: `foregroundLiveResults` is accepted and ignored so an older client is
+not rejected; the app shell no longer sends it. The API never produces the
+`hydration_queued` transport outcome; the UI's bounded recheck is retained
+defensively and never fires. The document route serves full text from the
+index or the stored `document_json`; a summary-only row (a PDF-only judgment)
+answers 404 rather than being completed from the provider.
+
+Retained deliberately: migrations `0028_legal_hydration_ledger.sql` and
+`0029_moj_request_budget.sql`, `moj-request-budget.ts`,
+`legal-hydration-ledger.ts`, `legal-search-hydration-budget.ts` and the
+provider package's `MojRequestBudget` seam are unchanged and currently
+unreferenced by a request path. They are the accounting and admission
+machinery an explicit indexing run needs; this change does not delete them and
+does not delete a migration. `source-store.ts`'s write store is likewise
+retained, unbound from any request path.
+
+Not done here: wiring bulk ingestion and the withdrawal checker to a shared
+operational ledger; and any deployment change. The production egress topology
+is unverified from this repository, so this change claims only that the API no
+longer contributes upstream traffic, not that production is fully covered.
+
+Withdrawal check: `services/legal-ingestor` `withdrawal:check` re-fetches stored
+URIs from Find Case Law. No unit, timer, cron entry or container schedules it
+in this repository or on the inspectable host, and this decision does not
+authorise it as a standalone polling job. The licence obligation to remove
+material no longer published (TNA licence clause (a)(iii)) is therefore
+unresolved: the decision is whether withdrawal detection folds into an explicit
+indexing run or is handled another way. No withdrawal safeguard is removed by
+this change.
 
 ### Document edit operations: property families without a second compatibility path (31 August 2026)
 
@@ -1645,7 +1719,7 @@ The seam also narrows the withdrawal/indexing race. Corpus upserts now return wh
 
 Outcome: no migration, no new dependency, no deployed resource. Under `NODE_ENV=test` the corpus is required to resolve to the same `*_test` database, and a corpus URL resolving anywhere else refuses startup, because several database-backed suites seed and delete corpora rows. `/api/health` reports `corpus.colocated` and `corpus.readOnly`: booleans derived from configuration, with no host, port, database name or credential. Deliberately not done here: no shared corpus database, no reader role, no credential, no migration move, no index rebuild and no disk reclaimed. Each of those is a separate, separately authorised change.
 
-Corpus writers are not all under `services/api`. Postgres writers: `services/legal-ingestor` (`bulk-ingest` writes `legal_source_documents`, `legislation-ingest` writes `legislation_documents` and `legislation_provisions`, `withdrawal-check` marks `provider_json.withdrawn`) through its own `DATABASE_URL`, and API hydration (`services/api/src/routes/legal-search/moj-client.ts` via the proxy routes) through the runtime seam. Meilisearch-only writers and rebuilders: `rebuild-search-index.ts` and `rebuild-legislation-index.ts` derive the product indexes from Postgres and never write Postgres, and the hydration path adds to and removes from the derived index. Corpus readers: the proxy, search and verification read paths, `check-search-parity.ts` (read-only, it reports drift and never writes), and the `scripts/search-corpus-relevance` and `scripts/legislation-relevance` harnesses, which re-check expectations against Postgres without mutating it. `rebuild-search-index.ts`, `rebuild-legislation-index.ts` and `check-search-parity.ts` already take an explicit `--database-url`, so an operator points them at whichever database holds the corpus rather than the runtime seam reaching into a CLI. At cutover the shared corpus would have one privileged writer, the ingestor pointed at it explicitly, while every lane process is read-only through the seam; that deployment does not exist and this change does not create it.
+Corpus writers are not all under `services/api`. Postgres writers: `services/legal-ingestor` (`bulk-ingest` writes `legal_source_documents`, `legislation-ingest` writes `legislation_documents` and `legislation_provisions`, `withdrawal-check` marks `provider_json.withdrawn`) through its own `DATABASE_URL`. The corpus-only API writes no corpus row on a request path: its former provider-hydration writer (`services/api/src/routes/legal-search/moj-client.ts`, now `stored-document.ts` for reads only) was unbound from the request path. Meilisearch-only writers and rebuilders: `rebuild-search-index.ts` and `rebuild-legislation-index.ts` derive the product indexes from Postgres and never write Postgres; the API makes no index write on a request path, and its former hydration indexer is retained unbound. Corpus readers: the proxy, search and verification read paths, `check-search-parity.ts` (read-only, it reports drift and never writes), and the `scripts/search-corpus-relevance` and `scripts/legislation-relevance` harnesses, which re-check expectations against Postgres without mutating it. `rebuild-search-index.ts`, `rebuild-legislation-index.ts` and `check-search-parity.ts` already take an explicit `--database-url`, so an operator points them at whichever database holds the corpus rather than the runtime seam reaching into a CLI. At cutover the shared corpus would have one privileged writer, the ingestor pointed at it explicitly, while every lane process is read-only through the seam; that deployment does not exist and this change does not create it.
 
 ### A dedicated corpus writer seam, and the missing legislation constraint (20 September 2026)
 

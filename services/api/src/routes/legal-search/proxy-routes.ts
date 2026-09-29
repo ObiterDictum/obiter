@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import {
   createClient,
   normalizeExactMatchValue,
-  rankLegalSearchHitsByExactMatch,
   search,
   type LegalSearchFilters,
   type LegalSearchHit,
@@ -10,22 +9,11 @@ import {
 import type { ApiEnv } from '../../env'
 import type { Pool } from 'pg'
 import { readLimitedJsonValue } from '../../limited-request-body'
-import { composeMojRequestBudget } from '../../moj-request-budget'
-import {
-  ANONYMOUS_HYDRATION_SUBJECT,
-  canonicalHydrationQueryKey,
-  documentHydrationKey,
-  LegalSearchHydrationBudget,
-  LegalSourceHydrationGate,
-  type LegalHydrationLedger,
-} from '../../legal-search-hydration-budget'
 import {
   isSupportedFindCaseLawRequest,
-  createMojRateLimiter,
   legalDocumentIdSchema,
   legalFetchRequestSchema,
   type LegalFetchRequest,
-  type MojRequestBudget,
   extractNeutralCitation,
 } from '@obiter/legal-source-provider'
 import {
@@ -42,10 +30,7 @@ import {
 } from './response-utils'
 import {
   createInMemoryLegalAuthoritySourceStore,
-  rememberForegroundSourceRecord,
-  toAuthoritySummary,
   type LegalAuthorityReadStore,
-  type LegalAuthorityWriteStore,
   type StoredLegalAuthorityRecord,
 } from './source-store'
 import { resolveLegislationActPage } from './legislation-act'
@@ -54,19 +39,7 @@ import {
   resolveLegislationProvisionPage,
   type LegislationFetchResult,
 } from './legislation-serve'
-import {
-  fetchMojAuthorityDocumentById,
-  fetchMojAuthorityDocumentFromRecord,
-  fetchMojAuthoritySummaries,
-  getStoredAuthorityDocument,
-  hydrateMojAuthoritiesFromSearch,
-  hydrateAndIndexMojAuthorities,
-  indexFetchedAuthoritiesAfterWrite,
-  atomEntryToAuthoritySummary,
-  providerMetadataFromAtomEntry,
-  upsertLegalAuthoritySummary,
-  upsertLegalAuthorityDocument,
-} from './moj-client'
+import { getStoredAuthorityDocument } from './stored-document'
 
 interface LegalSearchProxyRouteVariables {
   requestId: string
@@ -74,28 +47,6 @@ interface LegalSearchProxyRouteVariables {
 }
 
 interface LegalSearchProxyRouteOptions {
-  /**
-   * The admission authority every provider-reaching path reserves against.
-   * Omitted selects the process-local budget, which is correct only for a
-   * single-process development server or a test; production passes the
-   * shared Postgres ledger so the miss window and unexpired-lease bound are
-   * cluster-wide.
-   */
-  hydrationBudget?: LegalHydrationLedger
-  /**
-   * The cluster-visible Find Case Law request budget. `createApiRuntime`
-   * builds the Postgres budget on the application pool; omitted in a
-   * single-process development server or a test, which then draws on the
-   * process-local limiter alone.
-   */
-  mojRequestBudget?: MojRequestBudget
-  /**
-   * Corpus writes. Omitted or null selects read-only: hydration answers this
-   * request from the provider and nothing is persisted or indexed. A caller
-   * that owns the corpus hands over the write half explicitly, so a read-only
-   * process is never given one to attempt.
-   */
-  corpusWrites?: LegalAuthorityWriteStore | null
   /**
    * Stage 1 legislation serving. Absent in tests that predate it, in which
    * case fetch stays judgment-only and no legislation group is served.
@@ -148,27 +99,11 @@ export function createLegalSearchProxyRoutes(
   reads: LegalAuthorityReadStore = createInMemoryLegalAuthoritySourceStore(),
   options: LegalSearchProxyRouteOptions = {},
 ) {
-  // Writes are a separate binding that a read-only process never receives, and
-  // every write path below goes through this one variable. There is therefore
-  // no route that can attempt a corpus write while the process is configured
-  // not to persist, which is what would otherwise leave a permission error to
-  // be swallowed as control flow.
-  const corpusWrites = options.corpusWrites ?? null
-  const corpusReadOnly = corpusWrites === null
+  // Corpus-only boundary: these routes read Obiter-owned records and the
+  // derived index only. They never construct a Find Case Law client, never
+  // queue hydration, and never retry an upstream request. National Archives
+  // access belongs to an explicit indexing run, not to a user request.
   const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
-  const hydrationBudget =
-    options.hydrationBudget ??
-    new LegalSearchHydrationBudget({
-      queueMax: env.legalSearchHydrationQueueMax,
-      perClientMax: env.legalSearchHydrationPerClientMax,
-      windowMs: env.legalSearchHydrationWindowMs,
-    })
-  // Every provider-reaching product path goes through this one gate: the
-  // queued background job, the foreground live fetch, the detached detail pass
-  // and the document-detail fetch-through. It reserves admission before the
-  // operation runs and shares one in-flight promise for equivalent work
-  // within this process.
-  const hydrationGate = new LegalSourceHydrationGate(hydrationBudget)
   const searchClient = createClient(
     env.meilisearchHost,
     env.meilisearchSearchApiKey,
@@ -177,20 +112,6 @@ export function createLegalSearchProxyRoutes(
     env.meilisearchHost,
     env.meilisearchAdminApiKey,
   )
-  const mojRateLimiter = createMojRateLimiter(env.mojFindCaseLawRateLimit)
-  // One budget every provider-reaching path charges immediately before each
-  // upstream attempt. The process limiter is the backstop; the shared ledger,
-  // when configured, is the cluster-wide authority. Both are charged per
-  // attempt, so an operation that paginates or fetches details spends many
-  // charges.
-  const mojRequestBudget = composeMojRequestBudget(
-    options.mojRequestBudget,
-    mojRateLimiter,
-  )
-  // Process-lifetime soft cache of public provider records, capped at 100 by
-  // `rememberForegroundSourceRecord`. It is the only persistence in read-only
-  // mode and it holds no matter data, only the fetched judgment record.
-  const foregroundSourceRecords = new Map<string, StoredLegalAuthorityRecord>()
 
   app.post('/api/search/fetch', async (c) => {
     const requestId = c.get('requestId')
@@ -396,170 +317,59 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    const sessionUser = c.get('user') ?? null
-
-    if (!sessionUser) {
-      // Anonymous stays stored-only (30-Aug decision): no live call. A
-      // recognised citation with no exact stored hit is honestly not held —
-      // but stored judgments that cite it are still served, labelled by
-      // their citationMatch, so the answer reads as not-held-with-citing
-      // rather than a silent no-match. Candidates prove the citation with
-      // full paragraph text (hydrated where the index serves summaries)
-      // against a bounded phrase, so keyword neighbours stay excluded even
-      // when scattered terms co-occur.
-      //
-      // The ranked search above carries the relevance floor, which starves
-      // exact-phrase citation lookups once sort is applied (measured: the
-      // [2003] UKHL 1 phrase matches ten citing judgments unfiltered and
-      // zero with the floor). The citing lookup below repeats the same
-      // phrase without the floor; matchingStrategy is untouched, and the
-      // floor still gates every ranked result. Precision comes from the
-      // phrase plus the bounded-phrase body check, not the score.
-      const citingLookup =
-        exactLookup && recognisedCitation
-          ? await searchStoredAuthorities(
-              searchClient,
-              env.legalAuthoritiesIndex,
-              parsed.data.query,
-              filters,
-              {
-                exactPhrase: recognisedCitation,
-                rankingScoreThreshold: null,
-              },
-            )
-          : null
-      if (citingLookup?.storedIndexStatus === 'unavailable') {
-        return c.json(searchIndexUnavailable(requestId), 503)
-      }
-      const visibleCitingHits = citingLookup
-        ? await excludeWithdrawnIndexHits(reads, citingLookup.hits)
-        : []
-      const citingSummaries = await citingStoredSummariesForCitation(
-        reads,
-        visibleCitingHits,
-        parsed.data.query,
-        recognisedCitation,
-      )
-      if (exactLookup && citingSummaries.length > 0) {
-        const { citation, citationDiagnostics } = citationFieldsWithLegislation(
-          exactLookup,
-          citingSummaries,
-          legislation,
-        )
-        return c.json(
-          toFetchResponse(
-            citingSummaries,
-            parsed.data.query,
-            true,
-            0,
-            0,
-            false,
-            {
-              citation,
-              ...legislationFetchExtras(exactLookup, legislation),
-              diagnostics: {
-                exactLookupSearched: true,
-                storedIndexSearched: true,
-                liveProviderSearched: false,
-                storedOnlyBrowse,
-                ...citationDiagnostics,
-                ...legislationDiagnosticsFor(legislation),
-              },
-            },
-          ),
-        )
-      }
-      // Anonymous stays stored-only (30-Aug decision): a recognised citation
-      // with no exact stored hit and no stored citing case is honestly not
-      // held, not a silent no-match.
-      const { citation, citationDiagnostics } = citationFieldsWithLegislation(
-        exactLookup,
-        [],
-        legislation,
-      )
-      return c.json(
-        toFetchResponse([], parsed.data.query, true, 0, 0, false, {
-          outcome:
-            legislationEmptyOutcome(legislation) ??
-            (exactLookup ? 'recognised_not_held' : 'no_match'),
-          citation,
-          ...legislationFetchExtras(exactLookup, legislation),
-          diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
-            storedIndexSearched: true,
-            liveProviderSearched: false,
-            storedOnlyBrowse,
-            ...citationDiagnostics,
-            ...legislationDiagnosticsFor(legislation),
-          },
-        }),
-      )
-    }
-
-    // A read-only corpus has no write path, so there is no background job to
-    // queue and nothing for a client to poll for. Falling through to the live
-    // provider answers this request instead of promising a later one that
-    // cannot arrive.
-    if (!parsed.data.foregroundLiveResults && corpusWrites !== null) {
-      const hydrationKey = canonicalHydrationQueryKey(parsed.data)
-      const enqueue = await hydrationGate.start(
-        sessionUser.id,
-        hydrationKey,
-        () =>
-          hydrateMojAuthoritiesFromSearch(
-            env,
-            reads,
-            corpusWrites,
-            indexClient,
+    // Corpus-only: there is no live call. A
+    // recognised citation with no exact stored hit is honestly not held —
+    // but stored judgments that cite it are still served, labelled by
+    // their citationMatch, so the answer reads as not-held-with-citing
+    // rather than a silent no-match. Candidates prove the citation with
+    // full paragraph text (hydrated where the index serves summaries)
+    // against a bounded phrase, so keyword neighbours stay excluded even
+    // when scattered terms co-occur.
+    //
+    // The ranked search above carries the relevance floor, which starves
+    // exact-phrase citation lookups once sort is applied (measured: the
+    // [2003] UKHL 1 phrase matches ten citing judgments unfiltered and
+    // zero with the floor). The citing lookup below repeats the same
+    // phrase without the floor; matchingStrategy is untouched, and the
+    // floor still gates every ranked result. Precision comes from the
+    // phrase plus the bounded-phrase body check, not the score.
+    const citingLookup =
+      exactLookup && recognisedCitation
+        ? await searchStoredAuthorities(
+            searchClient,
             env.legalAuthoritiesIndex,
-            parsed.data,
-            mojRequestBudget,
-          ),
-      )
-      if (enqueue.status === 'budget_exceeded') {
-        return c.json(
-          apiError(
-            'hydration_budget_exceeded',
-            'Search hydration budget exceeded. Try again later.',
-            requestId,
-          ),
-          429,
-        )
-      }
-      if (enqueue.status === 'unavailable') {
-        // The shared admission ledger could not answer, so no job was queued
-        // and no provider work was dispatched. Fail closed rather than admit
-        // unmetered hydration.
-        return c.json(
-          apiError(
-            'storage_unavailable',
-            'Legal source hydration is temporarily unavailable.',
-            requestId,
-          ),
-          503,
-        )
-      }
-
-      // Deduped still has an in-flight job; keep hydrationQueued true so clients poll.
-      // The transport lifecycle and the legislation diagnostic are separate
-      // fields here. A job is genuinely pending, so the top-level outcome must
-      // stay hydration_queued or the client stops polling, spends the
-      // hydration budget and silently discards whatever the job later indexes.
-      // The legislation verdict rides diagnostics and drives the copy while
-      // the poll runs; once the job lands, the stored search above serves the
-      // hydrated judgments before this branch is reached.
+            parsed.data.query,
+            filters,
+            {
+              exactPhrase: recognisedCitation,
+              rankingScoreThreshold: null,
+            },
+          )
+        : null
+    if (citingLookup?.storedIndexStatus === 'unavailable') {
+      return c.json(searchIndexUnavailable(requestId), 503)
+    }
+    const visibleCitingHits = citingLookup
+      ? await excludeWithdrawnIndexHits(reads, citingLookup.hits)
+      : []
+    const citingSummaries = await citingStoredSummariesForCitation(
+      reads,
+      visibleCitingHits,
+      parsed.data.query,
+      recognisedCitation,
+    )
+    if (exactLookup && citingSummaries.length > 0) {
       const { citation, citationDiagnostics } = citationFieldsWithLegislation(
         exactLookup,
-        [],
+        citingSummaries,
         legislation,
       )
       return c.json(
-        toFetchResponse([], parsed.data.query, false, 0, 0, true, {
-          outcome: 'hydration_queued',
+        toFetchResponse(citingSummaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
+            exactLookupSearched: true,
             storedIndexSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
@@ -569,222 +379,30 @@ export function createLegalSearchProxyRoutes(
         }),
       )
     }
-
-    // Foreground live is a provider hydration like any other: reserve the
-    // authenticated user's budget before dispatching the fetch, share one
-    // in-flight fetch with equivalent concurrent requests, and persist only
-    // after the reservation succeeded. A rejected request returns before the
-    // operation runs, so it cannot reach the provider, the corpus or the
-    // indexer.
-    const hydrationKey = canonicalHydrationQueryKey(parsed.data)
-    const gatedLive = await hydrationGate.run(
-      sessionUser.id,
-      hydrationKey,
-      async () => {
-        const liveResult = await fetchMojAuthoritySummaries(
-          env,
-          parsed.data,
-          mojRequestBudget,
-        )
-        if (liveResult.status !== 'ok') return liveResult
-
-        for (const entry of liveResult.entries) {
-          const summary = atomEntryToAuthoritySummary(env, entry)
-          const provider = providerMetadataFromAtomEntry(entry)
-          // Never re-index a withdrawn judgment from live hydration: the
-          // checker owns the flag and only the manual runbook clears it.
-          const existing = await getLegalAuthoritySourceRecord(
-            reads,
-            summary.id,
-          )
-          if (existing?.withdrawn) continue
-          // The in-memory foreground record is what makes a live result usable
-          // for the rest of this request, whether or not it can be stored. It
-          // is a soft cache, not a substitute for the store: it lives for the
-          // life of the app instance, holds at most 100 public provider
-          // records, and evicts the least recently written on overflow.
-          rememberForegroundSourceRecord(
-            foregroundSourceRecords,
-            summary,
-            provider,
-          )
-          if (corpusWrites) {
-            await upsertLegalAuthoritySummary(corpusWrites, summary, provider)
-          }
-        }
-
-        return liveResult
-      },
-    )
-
-    if (gatedLive.status === 'budget_exceeded') {
-      return c.json(
-        apiError(
-          'hydration_budget_exceeded',
-          'Search hydration budget exceeded. Try again later.',
-          requestId,
-        ),
-        429,
-      )
-    }
-    if (gatedLive.status === 'unavailable') {
-      // No provider fetch was dispatched. Fail closed rather than serving an
-      // unmetered live result while the shared admission ledger is down.
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Legal source hydration is temporarily unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
-    if (gatedLive.status === 'unauthenticated') {
-      // Anonymous callers returned above; this is a defensive fail-closed.
-      return c.json(
-        apiError(
-          'unauthenticated',
-          'Sign in is required to fetch live legal sources.',
-          requestId,
-        ),
-        401,
-      )
-    }
-
-    if (gatedLive.status === 'failed') {
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Find Case Law is unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
-
-    const liveResult = gatedLive.value
-
-    if (liveResult.status === 'rate_limited') {
-      return c.json(
-        {
-          ...apiError(
-            'storage_unavailable',
-            'Find Case Law is rate limited.',
-            requestId,
-          ),
-          retryAfter: liveResult.retryAfter,
-        },
-        503,
-      )
-    }
-
-    if (liveResult.status === 'unavailable') {
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Find Case Law is unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
-
-    // The detail pass a live fetch starts is detached so the response is not
-    // held open for up to five detail fetches, but it still reaches the
-    // provider. Admit it as its own in-flight lease, without charging the
-    // subject's miss window a second time, so the shared bound covers it
-    // rather than leaving a detached provider path outside the accounting.
-    if (corpusWrites !== null) {
-      const detailEntries = liveResult.entries
-      void hydrationGate
-        .start(
-          sessionUser.id,
-          detachedDetailHydrationKey(detailEntries),
-          () =>
-            hydrateAndIndexMojAuthorities(
-              env,
-              reads,
-              corpusWrites,
-              indexClient,
-              env.legalAuthoritiesIndex,
-              detailEntries,
-              mojRequestBudget,
-            ),
-          { chargeMiss: false },
-        )
-        .then((admitted) => {
-          if (admitted.status === 'started' || admitted.status === 'deduped') {
-            return
-          }
-          // Best-effort downstream work: a rejected or unavailable lease
-          // drops the detail pass rather than running it unmetered. The
-          // foreground answer already returned its live summaries.
-          console.warn('Detached hydration detail pass was not admitted', {
-            requestId,
-            status: admitted.status,
-          })
-        })
-        .catch(() => {})
-    }
-
-    const rankedLiveDocuments = rankLegalSearchHitsByExactMatch(
-      liveResult.documents,
-      parsed.data.query,
-    )
-    const liveSummaries = rankedLiveDocuments.map((hit, index) =>
-      toSummaryHit(hit, parsed.data.query, {
-        retrievalPath: 'live_provider',
-        retrievalRank: index + 1,
-        recognisedCitation,
-      }),
-    )
+    // Corpus-only: a recognised citation
+    // with no exact stored hit and no stored citing case is honestly not
+    // held, not a silent no-match.
     const { citation, citationDiagnostics } = citationFieldsWithLegislation(
       exactLookup,
-      liveSummaries,
+      [],
       legislation,
     )
-
-    // Foreground live was actually consulted, so an empty live set is an
-    // answer, not a queue position: hydrationQueued stays true only while
-    // there are live hits still being indexed in the background. A query
-    // with nothing live and nothing stored is no_match (or
-    // recognised_not_held for a citation), never hydration_queued, so it
-    // cannot poll forever. The background path below keeps hydration_queued
-    // because it has not consulted live yet; the UI bounds that poll.
-    const liveHasHits = liveSummaries.length > 0
     return c.json(
-      toFetchResponse(
-        liveSummaries,
-        parsed.data.query,
-        false,
-        0,
-        liveResult.skippedCount,
-        // Read-only corpus: the hits answered this request and nothing is
-        // being indexed behind it, so there is no pending job to poll for.
-        corpusReadOnly ? false : liveHasHits,
-        {
-          // A recognised citation live finds nothing for is not a silent
-          // no-match; live hits without the exact judgment stay results
-          // labelled by their citationMatch, with status not_held. A
-          // legislation verdict rides the same empty answer: the judgment
-          // half must not overwrite it with a generic no_match.
-          outcome: liveHasHits
-            ? undefined
-            : (legislationEmptyOutcome(legislation) ??
-              (exactLookup ? 'recognised_not_held' : 'no_match')),
-          citation,
-          ...legislationFetchExtras(exactLookup, legislation),
-          diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
-            storedIndexSearched: true,
-            liveProviderSearched: true,
-            storedOnlyBrowse,
-            liveResultsNotPersisted: corpusReadOnly,
-            ...citationDiagnostics,
-            ...legislationDiagnosticsFor(legislation),
-          },
+      toFetchResponse([], parsed.data.query, true, 0, 0, false, {
+        outcome:
+          legislationEmptyOutcome(legislation) ??
+          (exactLookup ? 'recognised_not_held' : 'no_match'),
+        citation,
+        ...legislationFetchExtras(exactLookup, legislation),
+        diagnostics: {
+          exactLookupSearched: Boolean(exactLookup),
+          storedIndexSearched: true,
+          liveProviderSearched: false,
+          storedOnlyBrowse,
+          ...citationDiagnostics,
+          ...legislationDiagnosticsFor(legislation),
         },
-      ),
+      }),
     )
   })
 
@@ -843,192 +461,17 @@ export function createLegalSearchProxyRoutes(
       return c.json({ document })
     }
 
-    const foregroundSourceRecord = foregroundSourceRecords.get(parsed.data)
-    const sourceRecord = storedSourceRecord ?? foregroundSourceRecord ?? null
-    const sourceRecordIsForegroundOnly =
-      !storedSourceRecord && Boolean(foregroundSourceRecord)
-    if (sourceRecord?.document) {
-      return c.json({ document: sourceRecord.document })
+    if (storedSourceRecord?.document) {
+      return c.json({ document: storedSourceRecord.document })
     }
 
-    // The document-detail route stays anonymous (30-Aug decision), so an
-    // anonymous miss may still fetch the provider in a read-only process.
-    // It is charged to one shared per-process anonymous bucket, not a
-    // caller-supplied key, and it never persists: an anonymous request must not
-    // cause a corpus or index write. An authenticated caller charges its own
-    // budget and persists when this process owns a writer.
-    const sessionUser = c.get('user') ?? null
-    const gatedLiveDocument = await hydrationGate.run(
-      sessionUser?.id ?? ANONYMOUS_HYDRATION_SUBJECT,
-      documentHydrationKey(parsed.data),
-      () =>
-        sourceRecord
-          ? fetchMojAuthorityDocumentFromRecord(
-              env,
-              sourceRecord,
-              mojRequestBudget,
-            )
-          : fetchMojAuthorityDocumentById(env, parsed.data, mojRequestBudget),
-    )
-
-    if (gatedLiveDocument.status === 'budget_exceeded') {
-      return c.json(
-        apiError(
-          'hydration_budget_exceeded',
-          'Search hydration budget exceeded. Try again later.',
-          requestId,
-        ),
-        429,
-      )
-    }
-    if (gatedLiveDocument.status === 'unauthenticated') {
-      // Defensive fail-closed: the subject above is always present.
-      return c.json(
-        apiError(
-          'unauthenticated',
-          'Sign in is required to fetch live legal sources.',
-          requestId,
-        ),
-        401,
-      )
-    }
-
-    if (gatedLiveDocument.status === 'unavailable') {
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Legal source hydration is temporarily unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
-    if (gatedLiveDocument.status === 'failed') {
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Find Case Law is unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
-
-    const liveDocument = gatedLiveDocument.value
-
-    if (liveDocument.status === 'ok') {
-      // Re-check before caching: the row may have been marked withdrawn
-      // between the route-entry lookup and the live fetch. A withdrawn row
-      // answers with the banner, never with fresh full text.
-      const currentRecord = await getLegalAuthoritySourceRecord(
-        reads,
-        liveDocument.document.id,
-      )
-      if (currentRecord?.withdrawn) {
-        const { paragraphs: _paragraphs, ...metadata } = currentRecord.summary
-        return c.json({
-          document: metadata,
-          withdrawn: {
-            withdrawn: true,
-            withdrawnAt: currentRecord.withdrawn.at,
-            officialUrl: currentRecord.summary.sourceUrl,
-            message:
-              'This judgment was withdrawn upstream by Find Case Law and is no longer published. Showing stored metadata only.',
-          },
-        })
-      }
-      if (!corpusWrites || !sessionUser) {
-        // No writer, or an anonymous caller that must not write. The fetched
-        // document answers this request and is kept in the process-lifetime
-        // foreground cache (at most 100 records), so a later lookup in this
-        // process is served from memory. Nothing is persisted to Postgres and
-        // nothing is indexed.
-        rememberForegroundSourceRecord(
-          foregroundSourceRecords,
-          toAuthoritySummary(liveDocument.document),
-          liveDocument.provider,
-          liveDocument.document,
-        )
-        return c.json({ document: liveDocument.document })
-      }
-
-      const written = await upsertLegalAuthorityDocument(
-        corpusWrites,
-        liveDocument.document,
-        liveDocument.provider,
-      )
-      if (!written) {
-        // Not stored, so not indexed either: an index entry with no stored row
-        // is invisible to every Postgres-backed check until the next rebuild,
-        // and the rebuild is what drops it.
-        if (!sourceRecordIsForegroundOnly) {
-          return c.json(
-            apiError(
-              'storage_unavailable',
-              'Legal source storage is unavailable.',
-              requestId,
-            ),
-            503,
-          )
-        }
-        rememberForegroundSourceRecord(
-          foregroundSourceRecords,
-          toAuthoritySummary(liveDocument.document),
-          liveDocument.provider,
-          liveDocument.document,
-        )
-        return c.json({ document: liveDocument.document })
-      }
-
-      rememberForegroundSourceRecord(
-        foregroundSourceRecords,
-        toAuthoritySummary(liveDocument.document),
-        liveDocument.provider,
-        liveDocument.document,
-      )
-      // The write reported the merged row's withdrawal state, and the helper
-      // re-reads the record after indexing so a withdrawal whose index delete
-      // landed between the write and the index call does not survive.
-      if (written.indexable) {
-        void indexFetchedAuthoritiesAfterWrite(
-          reads,
-          indexClient,
-          env.legalAuthoritiesIndex,
-          [liveDocument.document],
-        )
-      }
-      return c.json({ document: liveDocument.document })
-    }
-
-    if (liveDocument.status === 'rate_limited') {
-      return c.json(
-        {
-          ...apiError(
-            'storage_unavailable',
-            'Find Case Law is rate limited.',
-            requestId,
-          ),
-          retryAfter: liveDocument.retryAfter,
-        },
-        503,
-      )
-    }
-
-    if (liveDocument.status === 'unavailable') {
-      return c.json(
-        apiError(
-          'storage_unavailable',
-          'Find Case Law is unavailable.',
-          requestId,
-        ),
-        503,
-      )
-    }
-
+    // Corpus-only: there is no provider fallback. A stored summary with no
+    // full text (a PDF-only judgment) is not readable here, and no request
+    // may complete it from Find Case Law.
     return c.json(
       apiError(
         'document_not_found',
-        'Document was not found in stored or live sources.',
+        'Document is not held in the local corpus.',
         requestId,
       ),
       404,
@@ -1123,18 +566,6 @@ function isSupportedFetchSearchMode(request: LegalFetchRequest) {
 
 function isStoredOnlyBrowse(request: LegalFetchRequest) {
   return !request.query.trim() && Boolean(request.court)
-}
-
-/**
- * The in-process single-flight key for the detached detail pass a foreground
- * live fetch starts. It names provider document URIs (public judgment
- * identifiers), never query text or matter data, and lives only in memory.
- */
-function detachedDetailHydrationKey(entries: Array<{ uri: string }>) {
-  return `detail:${entries
-    .map((entry) => entry.uri)
-    .sort()
-    .join('|')}`
 }
 
 function isImplementedFetchSourceType(request: LegalFetchRequest) {
