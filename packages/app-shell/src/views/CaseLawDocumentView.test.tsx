@@ -162,4 +162,33 @@ describe('CaseLawDocumentView', () => {
       ).toBe(true)
     })
   })
+
+  it('renders stored metadata with the full-text-unavailable state for a summary-only row', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          document: {
+            id: 'uksc-2024-3',
+            title: 'Potanina v Potanin',
+            neutralCitation: '[2024] UKSC 3',
+            court: 'uksc',
+            dateDecided: '2024-01-31',
+            sourceUrl: 'https://example.org/uksc/2024/3',
+          },
+        }),
+      ),
+    )
+    renderView()
+
+    expect(
+      (await screen.findAllByText('Potanina v Potanin')).length,
+    ).toBeGreaterThan(0)
+    expect(await screen.findByText('Full text unavailable')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'The authority metadata is cached, but no paragraph text is stored for this case yet.',
+      ),
+    ).toBeTruthy()
+  })
 })

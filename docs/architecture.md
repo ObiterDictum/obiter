@@ -1035,8 +1035,10 @@ and the derived Meilisearch index and nothing else. There is no provider
 client, no hydration gate, no request budget and no corpus write on a request
 path: the route module imports no provider fetch function, `runtime.ts`
 constructs neither `PostgresMojRequestBudget` nor
-`PostgresLegalHydrationLedger`, and a structural test scans the non-test API
-source for the provider fetch names so a future call fails the suite. A miss
+`PostgresLegalHydrationLedger`, and a structural test scans every non-test API
+source file (all source extensions, the whole package tree) plus the static
+import graph from both production entry points for the provider fetch names and
+the National Archives host, so a future call fails the suite. A miss
 answers honestly under the existing contract: search returns its stored-only
 empty (`no_match`, or `recognised_not_held` for a recognised citation) with
 `diagnostics.liveProviderSearched: false` and `hydrationQueued: false`; a
@@ -1046,11 +1048,14 @@ A provider outage cannot turn a miss into `503 storage_unavailable`. Stored
 documents stay readable: every stored read path is unchanged.
 
 Callers: `foregroundLiveResults` is accepted and ignored so an older client is
-not rejected; the app shell no longer sends it. The API never produces the
+not rejected; a request that sends `true` is answered with
+`diagnostics.foregroundLiveIgnored: true` so the client can tell the flag had
+no effect, and the app shell no longer sends it. The API never produces the
 `hydration_queued` transport outcome; the UI's bounded recheck is retained
 defensively and never fires. The document route serves full text from the
 index or the stored `document_json`; a summary-only row (a PDF-only judgment)
-answers 404 rather than being completed from the provider.
+serves its stored metadata, which the case view renders with its full-text
+unavailable state, rather than being completed from the provider.
 
 Retained deliberately: migrations `0028_legal_hydration_ledger.sql` and
 `0029_moj_request_budget.sql`, `moj-request-budget.ts`,

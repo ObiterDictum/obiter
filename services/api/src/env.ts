@@ -44,11 +44,11 @@ export interface ApiEnv {
   /** Legal-corpus reads. Null means no separate corpus target was configured,
    * so the corpus is `databaseUrl`: the compatibility seam. */
   corpusDatabaseUrl: string | null
-  /** Legal-corpus writes for provider fetch-through hydration. Null means no
+  /** Legal-corpus writes for the explicit indexing run. Null means no
    * corpus write path: either the compatibility seam, where writes use
-   * `databaseUrl`, or an explicitly configured read-only corpus. Only a
-   * process given this variable can persist hydration, which is how the
-   * writer capability is scoped to `obiter-live` without a hostname check. */
+   * `databaseUrl`, or an explicitly configured read-only corpus. No user
+   * request path writes the corpus; the writer capability exists for bulk
+   * ingestion. */
   corpusWriteDatabaseUrl: string | null
   authSecret: string
   authBaseUrl: string
@@ -66,9 +66,9 @@ export interface ApiEnv {
   mojFindCaseLawRateLimit: number
   /**
    * Cluster-wide Find Case Law HTTP attempts allowed across every API replica
-   * in the rolling five-minute window. Enforced on the application database by
-   * `legal_moj_request_charges`; the per-process `mojFindCaseLawRateLimit`
-   * remains a backstop that can only tighten it.
+   * in the rolling five-minute window. Retained for the explicit indexing run's
+   * admission machinery: no user request path constructs the budget, so the
+   * user-facing API neither charges nor enforces it.
    */
   mojFindCaseLawRequestBudget: number
   rampartModel: string

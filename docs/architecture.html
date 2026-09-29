@@ -4361,15 +4361,15 @@
                 <tr>
                   <td class="id">CORPUS_WRITE_DATABASE_URL</td>
                   <td>
-                    Optional. A corpus writer for provider fetch-through
-                    hydration. It requires <code>CORPUS_DATABASE_URL</code>; a
-                    writer with no explicit reader refuses startup, because
-                    reads and writes must not silently target unrelated
-                    databases. The corpus-only API does not use it; retained for
-                    the indexing service. Only the process that persists
-                    ingestion should receive it, and the credential belongs in a
-                    service-private environment file or systemd credential,
-                    never in <code>.env</code> where lane setup copies it. Under
+                    Optional. A corpus writer for the explicit indexing run. It
+                    requires <code>CORPUS_DATABASE_URL</code>; a writer with no
+                    explicit reader refuses startup, because reads and writes
+                    must not silently target unrelated databases. The
+                    corpus-only API does not use it; retained for the indexing
+                    service. Only the process that persists ingestion should
+                    receive it, and the credential belongs in a service-private
+                    environment file or systemd credential, never in
+                    <code>.env</code> where lane setup copies it. Under
                     <code>NODE_ENV=test</code> it must resolve to
                     <code>TEST_DATABASE_URL</code>
                   </td>
@@ -4821,9 +4821,14 @@
                 (<code>no_match</code>, or <code>recognised_not_held</code> for
                 a recognised citation) with <code>hydrationQueued: false</code>,
                 and a document miss returns <code>404 document_not_found</code>.
-                Find Case Law is never contacted, no hydration is queued and no
-                corpus or index write happens. National Archives access belongs
-                to an explicit indexing run, not to a request.</span
+                A stored summary with no full text serves its metadata, which
+                the case view renders with its full-text-unavailable state; a
+                request that sends the deprecated
+                <code>foregroundLiveResults: true</code> is answered with
+                <code>foregroundLiveIgnored: true</code>. Find Case Law is never
+                contacted, no hydration is queued and no corpus or index write
+                happens. National Archives access belongs to an explicit
+                indexing run, not to a request.</span
               >
             </li>
           </ol>

@@ -125,11 +125,10 @@ export function toFetchResponse(
       storedIndexSearched?: boolean
       liveProviderSearched?: boolean
       storedOnlyBrowse?: boolean
-      /** True when the corpus is read-only in this process, so live provider
-       * results answered the request without being stored or indexed. Nothing
-       * is queued behind the response: a later lookup asks the provider
-       * again, and the answer never becomes a stored one. */
-      liveResultsNotPersisted?: boolean
+      /** True when an older client requested foreground live results but the
+       * corpus-only API served stored records only. Says the flag was accepted
+       * and ignored: the response never claims a live provider was consulted. */
+      foregroundLiveIgnored?: boolean
       citationRecognised?: boolean
       citationStatus?: LegalSearchCitationStatus
       legislationSearched?: boolean

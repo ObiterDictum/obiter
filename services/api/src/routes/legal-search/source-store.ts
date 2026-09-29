@@ -110,8 +110,6 @@ export interface LegalAuthorityWriteStore {
 export interface LegalAuthoritySourceStore
   extends LegalAuthorityReadStore, LegalAuthorityWriteStore {}
 
-const foregroundSourceRecordLimit = 100
-
 export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceStore {
   const records = new Map<string, StoredLegalAuthorityRecord>()
 
@@ -472,28 +470,5 @@ export function toAuthoritySummary(document: LegalAuthority): LegalAuthority {
     dateDecided: document.dateDecided,
     sourceType: document.sourceType,
     sourceUrl: document.sourceUrl,
-  }
-}
-
-export function rememberForegroundSourceRecord(
-  records: Map<string, StoredLegalAuthorityRecord>,
-  summary: LegalAuthority,
-  provider: ProviderSourceMetadata,
-  document?: LegalAuthority,
-) {
-  const existing = records.get(summary.id)
-  records.delete(summary.id)
-  records.set(summary.id, {
-    summary,
-    document: document ?? existing?.document,
-    provider: {
-      ...existing?.provider,
-      ...provider,
-    },
-  })
-
-  const oldestRecordId = records.keys().next().value
-  if (records.size > foregroundSourceRecordLimit && oldestRecordId) {
-    records.delete(oldestRecordId)
   }
 }

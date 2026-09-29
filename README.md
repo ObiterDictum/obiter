@@ -56,7 +56,6 @@ The current product slice is concentrated on Search, stored case pages, the auth
 
 Search is the most developed product slice:
 
-- `GET /api/search` searches Obiter-owned legal-source records.
 - `POST /api/search/fetch` searches the stored corpus and never contacts Find Case Law.
 - `GET /api/search/documents/:documentId` retrieves stored judgments.
 - `/search` provides the shared Search UI.

@@ -1793,7 +1793,7 @@ describe('corpus-only provider boundary', () => {
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
-  it('ignores foregroundLiveResults and never contacts the provider', async () => {
+  it('accepts foregroundLiveResults but reports it as ignored', async () => {
     emptySearch()
     const app = createAuthenticatedProxyApp()
 
@@ -1807,9 +1807,27 @@ describe('corpus-only provider boundary', () => {
     expect(await response.json()).toMatchObject({
       hydrationQueued: false,
       outcome: 'no_match',
-      diagnostics: { liveProviderSearched: false },
+      diagnostics: {
+        liveProviderSearched: false,
+        foregroundLiveIgnored: true,
+      },
     })
     expect(upstreamCalls).toEqual([])
+  })
+
+  it('omits foregroundLiveIgnored when the client did not request live results', async () => {
+    emptySearch()
+    const app = createAuthenticatedProxyApp()
+
+    const response = await fetchSearch(app, {
+      query: 'Potanina',
+      court: 'uksc',
+    })
+    const body = (await response.json()) as {
+      diagnostics?: { foregroundLiveIgnored?: boolean }
+    }
+
+    expect(body.diagnostics?.foregroundLiveIgnored).toBeUndefined()
   })
 
   it('serves an anonymous miss from the corpus without contacting the provider', async () => {
@@ -1856,6 +1874,28 @@ describe('corpus-only provider boundary', () => {
       error: {
         code: 'document_not_found',
         message: 'Document is not held in the local corpus.',
+      },
+    })
+    expect(upstreamCalls).toEqual([])
+  })
+
+  it('serves a stored summary-only record without contacting the provider', async () => {
+    // A PDF-only judgment has a stored summary and no full text. It is held
+    // locally, so the route serves the metadata instead of a not-found or a
+    // provider fetch.
+    searchClientMock.getDocument.mockResolvedValueOnce(null)
+    const store = createInMemoryLegalAuthoritySourceStore()
+    await store.upsertSummary(hit, providerMetadata)
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      document: {
+        id: 'uksc-2024-3',
+        title: 'Potanina v Potanin',
+        sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
       },
     })
     expect(upstreamCalls).toEqual([])

@@ -27,7 +27,10 @@ export const legalFetchRequestSchema = z.object({
   legislationVersion: z.string().trim().min(1).max(80).optional(),
   // Deprecated and ignored. The API is corpus-only: it never contacts Find
   // Case Law, so requesting foreground live results changes nothing. Accepted
-  // so an older desktop or web client that still sends it is not rejected.
+  // so an older desktop or web client that still sends it is not rejected; a
+  // request that sends `true` is answered with
+  // `diagnostics.foregroundLiveIgnored: true` so the client can tell the flag
+  // had no effect.
   foregroundLiveResults: z.boolean().optional(),
 })
 

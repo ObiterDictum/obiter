@@ -141,10 +141,6 @@ export function getLegalSearchEmptyFeedback(input: {
   outcome?: LegalSearchOutcome
   hydrationQueued?: boolean
   browse?: { courtLabel: string }
-  /** Response diagnostics.liveProviderSearched; undefined (pre-diagnostics
-   * responses) reads as not-consulted so copy never claims more than the
-   * response supports. */
-  liveProviderSearched?: boolean
   /** 1-based count of queued polls so far, for the progress line. */
   hydrationAttempt?: number
   /** True once the bounded recheck gives up waiting. */
@@ -168,7 +164,6 @@ export function getLegalSearchEmptyFeedback(input: {
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
-  const liveSearched = input.liveProviderSearched === true
 
   // A held Act whose schedule citation names no schedule. A corrective, not a
   // not-held verdict: it must show the parser-compatible example with its Act
@@ -220,9 +215,7 @@ export function getLegalSearchEmptyFeedback(input: {
     return {
       eyebrow: 'Citation not held',
       title: 'No judgment held for this citation',
-      body: liveSearched
-        ? `No stored or provider source holds "${input.query}" as a judgment. Check the citation or search party names instead.`
-        : `No stored legal source holds "${input.query}" as a judgment. Providers were not consulted for this search. Check the citation or search party names instead.`,
+      body: `No stored legal source holds "${input.query}" as a judgment. Providers were not consulted for this search. Check the citation or search party names instead.`,
     }
   }
 
@@ -261,9 +254,7 @@ export function getLegalSearchEmptyFeedback(input: {
   return {
     eyebrow: 'No indexed match',
     title: 'No sources found',
-    body: liveSearched
-      ? `Stored legal sources and Find Case Law did not match "${input.query}" with the selected filters.`
-      : `Stored legal sources did not match "${input.query}" with the selected filters. Providers were not consulted for this search.`,
+    body: `Stored legal sources did not match "${input.query}" with the selected filters. Providers were not consulted for this search.`,
   }
 }
 
@@ -482,13 +473,10 @@ export function LegalSearchView() {
         keepSearchInputFocused()
         return
       }
-      // Empty: carry liveProviderSearched so no_match copy never claims a
-      // provider was consulted when the API stayed stored-only, and
-      // legislationNote so an unheld Act is named rather than reported as a
-      // missing judgment. A queued outcome rechecks on a bound (timer-driven
-      // from this handler, not a fetching effect) and expires plainly at the
-      // bound instead of spinning forever.
-      const liveProviderSearched = body.diagnostics?.liveProviderSearched
+      // Empty: carry legislationNote so an unheld Act is named rather than
+      // reported as a missing judgment. A queued outcome rechecks on a bound
+      // (timer-driven from this handler, not a fetching effect) and expires
+      // plainly at the bound instead of spinning forever.
       const legislationNote = body.diagnostics?.legislationNote
       const legislationNotHeld = body.diagnostics?.legislationNotHeld === true
       const legislationTitleUnresolved =
@@ -511,7 +499,6 @@ export function LegalSearchView() {
           outcome,
           hydrationQueued: body.hydrationQueued,
           browse,
-          liveProviderSearched,
           legislationNote,
           legislationNotHeld,
           legislationTitleUnresolved,
@@ -537,7 +524,6 @@ export function LegalSearchView() {
         outcome,
         hydrationQueued: body.hydrationQueued,
         browse,
-        liveProviderSearched,
         legislationNote,
         legislationNotHeld,
         legislationTitleUnresolved,
@@ -673,7 +659,8 @@ export function LegalSearchView() {
               Search judgments
             </h2>
             <p className="text-sm leading-relaxed text-muted">
-              Search stored judgments and Find Case Law across UK courts. Recent
+              Search the stored judgment corpus across UK courts. Obiter holds
+              the records ingested so far, not every published judgment. Recent
               queries stay in the sidebar.
             </p>
           </div>
@@ -724,7 +711,6 @@ export function LegalSearchView() {
                     outcome: state.outcome,
                     hydrationQueued: state.hydrationQueued,
                     browse: state.browse,
-                    liveProviderSearched: state.liveProviderSearched,
                     legislationNote: state.legislationNote,
                     legislationNotHeld: state.legislationNotHeld,
                     legislationTitleUnresolved:
@@ -792,12 +778,14 @@ export function LegalSearchView() {
 /**
  * Names the failure the API reported so the error panel never shows a
  * generic message for a specific outage. The error code is read from the
- * body, not the status alone: 503 covers both the search index and Find
- * Case Law, and only the code says which one is down.
+ * body, not the status alone: a 503 can name the search index or the
+ * legal-source store, and only the code says which one is down. A 503 with
+ * no recognised code is an infrastructure outage, and is reported as one
+ * rather than blamed on a provider the corpus-only API never calls.
  */
 async function readSearchErrorMessage(response: Response): Promise<string> {
   if (response.status === 429) {
-    return 'Search is busy fetching new results. Try again shortly.'
+    return 'Search is busy. Try again shortly.'
   }
   if (response.status !== 503) {
     return 'Search could not complete the request.'
@@ -810,9 +798,13 @@ async function readSearchErrorMessage(response: Response): Promise<string> {
         (body as { error?: { code?: unknown } } | null)?.error?.code,
     )
     .catch(() => undefined)
-  return code === 'search_unavailable'
-    ? 'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.'
-    : 'Find Case Law is currently unreachable. Cached results may still be available through standard search.'
+  if (code === 'search_unavailable') {
+    return 'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.'
+  }
+  if (code === 'storage_unavailable') {
+    return 'Legal search is temporarily unavailable because the legal-source store cannot be reached. Try again later.'
+  }
+  return 'Legal search is temporarily unavailable. Try again later.'
 }
 
 function isTextEntryTarget(target: EventTarget | null) {

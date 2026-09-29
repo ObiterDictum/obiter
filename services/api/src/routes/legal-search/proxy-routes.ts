@@ -43,7 +43,6 @@ import { getStoredAuthorityDocument } from './stored-document'
 
 interface LegalSearchProxyRouteVariables {
   requestId: string
-  user: { id: string } | null
 }
 
 interface LegalSearchProxyRouteOptions {
@@ -135,6 +134,12 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
+    // The request flag is retained so an older desktop or web client is not
+    // rejected, but the API is corpus-only: no live provider search runs. The
+    // diagnostic below says so explicitly instead of leaving the client to
+    // infer it from liveProviderSearched.
+    const foregroundLiveRequested = parsed.data.foregroundLiveResults === true
+
     if (!isImplementedFetchSourceType(parsed.data)) {
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
@@ -142,6 +147,7 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             storedIndexSearched: false,
             liveProviderSearched: false,
+            foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse: false,
           },
         }),
@@ -224,6 +230,7 @@ export function createLegalSearchProxyRoutes(
             exactLookupSearched: true,
             storedIndexSearched: true,
             liveProviderSearched: false,
+            foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
             ...legislationDiagnosticsFor(legislation),
@@ -286,6 +293,7 @@ export function createLegalSearchProxyRoutes(
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: false,
+            foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
             ...legislationDiagnosticsFor(legislation),
@@ -309,6 +317,7 @@ export function createLegalSearchProxyRoutes(
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: false,
+            foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
             ...legislationDiagnosticsFor(legislation),
@@ -372,6 +381,7 @@ export function createLegalSearchProxyRoutes(
             exactLookupSearched: true,
             storedIndexSearched: true,
             liveProviderSearched: false,
+            foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
             ...legislationDiagnosticsFor(legislation),
@@ -398,6 +408,7 @@ export function createLegalSearchProxyRoutes(
           exactLookupSearched: Boolean(exactLookup),
           storedIndexSearched: true,
           liveProviderSearched: false,
+          foregroundLiveIgnored: foregroundLiveRequested || undefined,
           storedOnlyBrowse,
           ...citationDiagnostics,
           ...legislationDiagnosticsFor(legislation),
@@ -466,8 +477,14 @@ export function createLegalSearchProxyRoutes(
     }
 
     // Corpus-only: there is no provider fallback. A stored summary with no
-    // full text (a PDF-only judgment) is not readable here, and no request
-    // may complete it from Find Case Law.
+    // full text (a PDF-only judgment) is still held locally, so serve its
+    // metadata rather than answering not-found or reaching Find Case Law.
+    // The case view renders the stored metadata alongside its "full text
+    // unavailable" state, so nothing is invented and nothing is fetched.
+    if (storedSourceRecord?.summary) {
+      return c.json({ document: storedSourceRecord.summary })
+    }
+
     return c.json(
       apiError(
         'document_not_found',
