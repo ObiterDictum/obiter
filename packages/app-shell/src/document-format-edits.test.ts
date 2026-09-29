@@ -713,6 +713,44 @@ describe('character formatting controls', () => {
     })
   })
 
+  it('keeps current properties after a self-closing tracked change', () => {
+    const stored = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1"/><w:b/><w:rPrChange w:id="2"><w:rPr><w:strike/></w:rPr></w:rPrChange></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(stored, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({ bold: true, strikethrough: false })
+  })
+
+  it('pairs a nested tracked change with its own close', () => {
+    const stored = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1"><w:rPr><w:b/><w:rPrChange w:id="2"><w:rPr><w:i/></w:rPr></w:rPrChange><w:strike/></w:rPr></w:rPrChange><w:u w:val="single"/></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(stored, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      bold: false,
+      underline: true,
+      strikethrough: false,
+    })
+  })
+
   it('matches case variants to the same options paint uses', () => {
     const stored = modelWithRuns([
       {

@@ -603,4 +603,53 @@ describe('runPropertiesFromFragments', () => {
       vertAlign: null,
     })
   })
+
+  it('keeps current properties after a self-closing tracked change', () => {
+    expect(
+      runPropertiesFromFragments([
+        '<w:rPr><w:rPrChange w:id="1"/><w:b/><w:rPrChange w:id="2"><w:rPr><w:i/></w:rPr></w:rPrChange></w:rPr>',
+      ]),
+    ).toMatchObject({ bold: true, italic: null, strikethrough: null })
+  })
+
+  it('pairs a nested tracked change with its own close', () => {
+    expect(
+      runPropertiesFromFragments([
+        '<w:rPr><w:rPrChange w:id="1"><w:rPr><w:b/><w:rPrChange w:id="2"><w:rPr><w:i/></w:rPr></w:rPrChange><w:strike/></w:rPr></w:rPrChange><w:u w:val="single"/></w:rPr>',
+      ]),
+    ).toMatchObject({
+      bold: null,
+      underline: true,
+      strikethrough: null,
+    })
+  })
+
+  it('reads attributes across a > inside a change attribute', () => {
+    expect(
+      runPropertiesFromFragments([
+        '<w:rPr><w:rPrChange w:id="1" w:author="a>b"><w:rPr><w:strike/></w:rPr></w:rPrChange><w:b w:note="a>b" w:val="0"/></w:rPr>',
+      ]),
+    ).toMatchObject({ bold: false, strikethrough: null })
+  })
+
+  it('does not read an attribute whose name only ends in val', () => {
+    for (const attrs of ['w:interval="0"', 'x:val="0"']) {
+      expect(
+        runPropertiesFromFragments([`<w:rPr><w:strike ${attrs}/></w:rPr>`])
+          .strikethrough,
+      ).toBe(true)
+    }
+    expect(
+      runPropertiesFromFragments(['<w:rPr><w:strike w:val="off"/></w:rPr>'])
+        .strikethrough,
+    ).toBe(false)
+  })
+
+  it('does not leak history out of an unclosed tracked change', () => {
+    expect(
+      runPropertiesFromFragments([
+        '<w:rPr><w:b/><w:rPrChange w:id="1"><w:rPr><w:strike/></w:rPr>',
+      ]),
+    ).toMatchObject({ bold: true, strikethrough: null })
+  })
 })

@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import { mockSession } from './shell-harness'
 
 /*
  * E53 browser journey: Strikethrough, Highlight, Superscript and Subscript
@@ -175,6 +176,7 @@ async function paintedStyle(page: Page, text: string) {
       textDecoration: match.style.textDecoration,
       backgroundColor: match.style.backgroundColor,
       verticalAlign: match.style.verticalAlign,
+      fontWeight: match.style.fontWeight,
     }
   }, text)
 }
@@ -343,4 +345,279 @@ test('refuses partial character formatting under track changes', async ({
     ).toBeDisabled()
   }
   await shot(page, '04-tracked-range-refusal')
+})
+
+/*
+ * Tracked property history must never paint as current state. The story
+ * parser drops a paragraph `w:pPr` that carries a `w:pPrChange`, so the
+ * product-reachable path for this leak is a style's sourceFragment — the
+ * journey therefore mocks the wire model with the real fragments rather than
+ * uploading a DOCX whose pPr the parser would discard.
+ *
+ * `Normal` carries two kinds of history: a `w:pPrChange` holding the old
+ * paragraph mark's strike/highlight/subscript, and a self-closing
+ * `w:rPrChange` immediately before the current `w:b`. Before the repair the
+ * first seeded every run with dead properties and the second swallowed the
+ * bold flag entirely.
+ */
+const TRACKED_MATTER_ID = 'mtr_tracked_format'
+const TRACKED_DOC_ID = 'doc_tracked_format'
+const TRACKED_FILENAME = 'tracked-format.docx'
+const TRACKED_TEXT = 'Plain body run stays plain'
+const TRACKED_SELECTED = 'Plain'
+
+const TRACKED_STYLE_XML =
+  '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">' +
+  '<w:name w:val="Normal"/>' +
+  '<w:pPr><w:pPrChange w:id="7" w:author="Historic" w:date="2026-01-01T00:00:00Z">' +
+  '<w:pPr><w:rPr><w:strike/><w:highlight w:val="yellow"/>' +
+  '<w:vertAlign w:val="subscript"/></w:rPr></w:pPr></w:pPrChange></w:pPr>' +
+  '<w:rPr><w:rPrChange w:id="8" w:author="Historic" ' +
+  'w:date="2026-01-01T00:00:00Z"/><w:b/></w:rPr>' +
+  '</w:style>'
+
+function trackedRun(id: string, text: string, fragments: string[] = []) {
+  return { id, text, preservedXmlFragments: fragments }
+}
+
+/** The wire model; `saved` answers the refetch after the edit lands. */
+function trackedModel(saved: boolean) {
+  return {
+    documentId: TRACKED_DOC_ID,
+    versionId: saved ? 'ver_2' : 'ver_1',
+    versionNumber: saved ? 2 : 1,
+    model: {
+      version: 1,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: saved
+                ? [
+                    trackedRun('p1-r1', TRACKED_SELECTED, [
+                      '<w:rPr><w:b/><w:strike/></w:rPr>',
+                    ]),
+                    trackedRun('p1-r2', TRACKED_TEXT.slice(5), [
+                      '<w:rPr><w:b/></w:rPr>',
+                    ]),
+                  ]
+                : [trackedRun('p1-r', TRACKED_TEXT)],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+      styles: [{ styleId: 'Normal', sourceFragment: TRACKED_STYLE_XML }],
+      numbering: [],
+      relationships: [],
+      preservedXmlFragments: [],
+      changes: [],
+    },
+  }
+}
+
+async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
+  let saved = false
+  const matter = {
+    id: TRACKED_MATTER_ID,
+    organisationId: 'org_shell_test',
+    name: 'Tracked Format Matter',
+    description: null,
+    primaryJurisdiction: 'england-and-wales',
+    secondaryJurisdictions: [],
+    legalDomains: [],
+    clientReference: '',
+    status: 'active',
+    createdBy: 'usr_shell_test',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    deletedAt: null,
+    deletedBy: null,
+  }
+  const version = (number: number) => ({
+    id: `ver_${String(number)}`,
+    organisationId: 'org_shell_test',
+    matterId: TRACKED_MATTER_ID,
+    matterDocumentId: TRACKED_DOC_ID,
+    filename: TRACKED_FILENAME,
+    fileType: 'docx',
+    sizeBytes: '1024',
+    objectKey: `objects/${TRACKED_DOC_ID}/ver_${String(number)}`,
+    textObjectKey: null,
+    documentStatus: 'ready',
+    failureReason: null,
+    versionNumber: number,
+    contentSha256: 'a'.repeat(64),
+    syncState: 'synced',
+    createdBy: 'usr_shell_test',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  })
+  await mockSession(page)
+  await page.route('**/api/matters', (route) =>
+    route.fulfill({ json: { matters: [matter] } }),
+  )
+  await page.route(`**/api/matters/${TRACKED_MATTER_ID}`, (route) =>
+    route.fulfill({ json: { matter } }),
+  )
+  await page.route(`**/api/matters/${TRACKED_MATTER_ID}/documents`, (route) =>
+    route.fulfill({
+      json: {
+        documents: [
+          {
+            id: TRACKED_DOC_ID,
+            organisationId: 'org_shell_test',
+            matterId: TRACKED_MATTER_ID,
+            currentVersionId: `ver_${saved ? '2' : '1'}`,
+            logicalKey: TRACKED_FILENAME,
+            createdBy: 'usr_shell_test',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            deletedAt: null,
+            deletedBy: null,
+            currentVersion: version(saved ? 2 : 1),
+          },
+        ],
+      },
+    }),
+  )
+  await page.route(`**/api/documents/${TRACKED_DOC_ID}/model`, (route) =>
+    route.fulfill({ json: trackedModel(saved) }),
+  )
+  await page.route(`**/api/documents/${TRACKED_DOC_ID}/edit`, (route) => {
+    const body = route.request().postDataJSON()
+    if (isEditBody(body)) editBodies.push(body)
+    saved = true
+    return route.fulfill({
+      json: {
+        documentId: TRACKED_DOC_ID,
+        versionId: 'ver_2',
+        versionNumber: 2,
+      },
+    })
+  })
+  await page.route(`**/api/documents/${TRACKED_DOC_ID}/comments`, (route) =>
+    route.fulfill({ json: { comments: [] } }),
+  )
+  await page.route(
+    `**/api/documents/${TRACKED_DOC_ID}/tracked-changes`,
+    (route) => route.fulfill({ json: { changes: [] } }),
+  )
+  await page.route(
+    `**/api/documents/${TRACKED_DOC_ID}/collaboration/sync*`,
+    (route) =>
+      route.fulfill({
+        json: {
+          changed: false,
+          participants: [],
+          currentVersionId: `ver_${saved ? '2' : '1'}`,
+        },
+      }),
+  )
+  await page.route(
+    `**/api/documents/${TRACKED_DOC_ID}/collaboration/presence`,
+    (route) => route.fulfill({ json: {} }),
+  )
+}
+
+/**
+ * Client-side navigation, as in the print journey: the route loaders guard
+ * during SSR where the mocked session does not apply, so the document is
+ * reached through the app shell. Calling it a second time re-reads the model
+ * the way a reload would.
+ */
+async function openTrackedDocument(page: Page) {
+  await page.goto('/search')
+  const modes = page.getByRole('navigation', { name: 'Modes' })
+  await expect(modes).toBeVisible()
+  await modes.getByRole('link', { name: 'Matters' }).first().click()
+  await page
+    .getByRole('main')
+    .getByRole('link', { name: /Tracked Format Matter/ })
+    .click()
+  await page.getByRole('button', { name: /tracked-format\.docx/ }).click()
+  await expect(page.locator('[data-document-desk]')).toBeVisible()
+}
+
+test('tracked property history never paints, presses or saves as current', async ({
+  page,
+}) => {
+  const editBodies: EditBody[] = []
+  await mockTrackedWorkspace(page, editBodies)
+  await openTrackedDocument(page)
+
+  // The historical paragraph mark seeds nothing: no strike, no highlight, no
+  // subscript. The self-closing rPrChange left the current bold alone. The
+  // painted run spans exist once the paragraph holds the caret.
+  await focusParagraph(page, TRACKED_TEXT)
+  const before = await paintedStyle(page, TRACKED_TEXT)
+  expect(before?.textDecoration ?? '').not.toContain('line-through')
+  expect(before?.backgroundColor ?? '').toBe('')
+  expect(before?.verticalAlign ?? '').toBe('')
+  expect(before?.fontWeight).toBe('700')
+
+  await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
+  for (const label of [
+    'Bold',
+    'Strikethrough',
+    'Highlight',
+    'Superscript',
+    'Subscript',
+  ]) {
+    await expect(
+      page.getByRole('button', { name: label, exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false')
+  }
+
+  await page.getByRole('button', { name: 'Strikethrough' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Strikethrough' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  expect(
+    (await paintedStyle(page, TRACKED_SELECTED))?.textDecoration,
+  ).toContain('line-through')
+
+  // Undo agrees with paint and controls: the toggle reverses, not the history.
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Strikethrough' }),
+  ).toHaveAttribute('aria-pressed', 'false')
+  expect(
+    (await paintedStyle(page, TRACKED_TEXT))?.textDecoration ?? '',
+  ).not.toContain('line-through')
+
+  await page.getByRole('button', { name: 'Strikethrough' }).click()
+  await saveAndWait(page)
+
+  // Only the current change was saved; history never entered the baseline.
+  const operations = editBodies.flatMap((body) => body.operations ?? [])
+  expect(operations).toContainEqual(
+    expect.objectContaining({ type: 'set_run_emphasis', strikethrough: true }),
+  )
+  for (const operation of operations) {
+    expect(operation.highlight ?? 'none').toBe('none')
+    expect(operation.vertAlign ?? 'baseline').toBe('baseline')
+  }
+
+  // Reopening re-reads the stored model: strike and bold still agree.
+  await openTrackedDocument(page)
+  await focusParagraph(page, TRACKED_TEXT)
+  const reopened = await paintedStyle(page, TRACKED_SELECTED)
+  expect(reopened?.textDecoration).toContain('line-through')
+  expect(reopened?.fontWeight).toBe('700')
+  await selectFirst(page, TRACKED_SELECTED, TRACKED_SELECTED.length)
+  await expect(
+    page.getByRole('button', { name: 'Strikethrough' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Subscript', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false')
 })

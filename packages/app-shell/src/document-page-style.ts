@@ -18,7 +18,7 @@ import {
   runHighlight,
   runUnderline,
   runVertAlign,
-  withoutTrackedRunProperties,
+  withoutTrackedParagraphProperties,
 } from './document-run-properties'
 
 export type RunFace = {
@@ -215,10 +215,11 @@ function styleChain(
 }
 
 function faceFromXml(xml: string): ParagraphFace {
-  // Tracked history lives in a nested `w:rPrChange/w:rPr`; drop it before
-  // reading the run so a foreign change cannot paint a value the current run
-  // no longer carries.
-  const current = withoutTrackedRunProperties(xml)
+  // Tracked history lives in nested `w:rPrChange`/`w:pPrChange` elements —
+  // including the previous paragraph mark's `w:rPr` inside `w:pPrChange` — so
+  // drop it before reading or a foreign change paints a value the current
+  // paragraph no longer carries.
+  const current = withoutTrackedParagraphProperties(xml)
   const pPrBlock = current.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/i)?.[0] ?? ''
   const rest = current.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/i, '')
   const pPr = pPrBlock || rest

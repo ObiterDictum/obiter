@@ -321,4 +321,51 @@ describe('the character formatting controls', () => {
       },
     ])
   })
+
+  it('does not paint a tracked paragraph mark change onto the runs', async () => {
+    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
+    const stored = multiParagraphModel([
+      {
+        id: 'p1',
+        runs: [
+          { id: 'p1-a', text: 'Hello', preservedXmlFragments: ['<w:rPr/>'] },
+        ],
+        preservedXmlFragments: [
+          '<w:pPr><w:pPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:pPr><w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="subscript"/></w:rPr></w:pPr></w:pPrChange></w:pPr>',
+        ],
+      },
+      paragraph('p2', 'tail'),
+    ])
+    mountWorkspace({ models: { doc_1: stored }, editAsync })
+    clickParagraph('p1')
+    nativeSelect(0, 5)
+
+    // The historical mark properties paint nothing, so every character
+    // control starts unpressed and the first click turns the flag on.
+    expect(spanOf('p1', 'Hello')?.style.textDecoration ?? '').not.toContain(
+      'line-through',
+    )
+    expect(spanOf('p1', 'Hello')?.style.backgroundColor).toBe('')
+    expect(spanOf('p1', 'Hello')?.style.verticalAlign).toBe('')
+    expect(pressed('Strikethrough')).toBe('false')
+    expect(pressed('Highlight')).toBe('false')
+    expect(pressed('Subscript')).toBe('false')
+
+    fireEvent.click(control('Strikethrough'))
+    expect(pressed('Strikethrough')).toBe('true')
+    expect(spanOf('p1', 'Hello')?.style.textDecoration).toContain(
+      'line-through',
+    )
+
+    await save(editAsync)
+    expect(emphasisOperations(editAsync)).toEqual([
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 0,
+        to: 5,
+        strikethrough: true,
+      },
+    ])
+  })
 })

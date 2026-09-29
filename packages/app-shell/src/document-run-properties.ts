@@ -2,6 +2,7 @@ import {
   documentEditHighlightSchema,
   documentEditVertAlignSchema,
 } from '@obiter/contracts'
+import { findXmlTagEnd } from '@obiter/ooxml'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 
 /**
@@ -20,26 +21,131 @@ import type { HighlightValue, VertAlignValue } from './document-format-types'
  *   may spell these differently from the contract.
  */
 
-const RUN_PROPERTIES_CHANGE_OPEN = /<([A-Za-z_][\w.-]*):rPrChange\b/u
+const RUN_HISTORY_ELEMENTS = new Set(['rPrChange'])
+const PARAGRAPH_HISTORY_ELEMENTS = new Set(['rPrChange', 'pPrChange'])
 
 /**
  * The run properties with any tracked history removed. A tracked change
  * stores a nested historical `w:rPr` under `w:rPrChange`, so the current
- * properties are read after that element is spliced out by its own matching
- * close. A tag-strip regex is lossy (the CodeQL incomplete-sanitization flag)
- * and would stop at a `>` inside an attribute.
+ * properties are read after that element is spliced out.
  */
 export function withoutTrackedRunProperties(xml: string): string {
-  let rest = xml
+  return withoutTrackedHistory(xml, RUN_HISTORY_ELEMENTS)
+}
+
+/**
+ * The same read for paragraph-level fragments: a `w:pPrChange` holds the
+ * previous `w:pPr` — including the paragraph-mark `w:rPr` — so it is history
+ * exactly as `w:rPrChange` is for a run.
+ */
+export function withoutTrackedParagraphProperties(xml: string): string {
+  return withoutTrackedHistory(xml, PARAGRAPH_HISTORY_ELEMENTS)
+}
+
+type ScannedTag = {
+  qualifiedName: string
+  localName: string
+  close: boolean
+  selfClosing: boolean
+}
+
+/**
+ * Splice the tracked-change elements out of a fragment by scanning tags
+ * quote-aware rather than pairing by indexOf — a `/>` open drops only its own
+ * tag, a paired open drops to its own depth-matched close, and an unclosed
+ * change consumes the fragment's tail because everything after its open is
+ * inside the element. A `>` inside an attribute value never ends a tag. A
+ * tag-strip regex would be the incomplete-sanitization shape CodeQL flags, so
+ * the scan is index-based on the shared `findXmlTagEnd` lexer. Malformed tags
+ * that never close keep the remainder verbatim: their extent is unknowable.
+ */
+function withoutTrackedHistory(
+  xml: string,
+  names: ReadonlySet<string>,
+): string {
+  let result = ''
+  let kept = 0
+  let scan = 0
   for (;;) {
-    const open = RUN_PROPERTIES_CHANGE_OPEN.exec(rest)
-    const prefix = open?.[1]
-    if (!prefix) return rest
-    const closeAt = rest.indexOf(`</${prefix}:rPrChange`, open.index)
-    if (closeAt === -1) return rest
-    const closeEnd = rest.indexOf('>', closeAt)
-    if (closeEnd === -1) return rest
-    rest = `${rest.slice(0, open.index)}${rest.slice(closeEnd + 1)}`
+    const opening = xml.indexOf('<', scan)
+    if (opening === -1) return result + xml.slice(kept)
+    const end = tagEnd(xml, opening)
+    if (end === undefined) return result + xml.slice(kept)
+    const tag = scanTag(xml, opening, end)
+    if (!tag || tag.close || !names.has(tag.localName)) {
+      scan = end
+      continue
+    }
+    result += xml.slice(kept, opening)
+    kept = scan = tag.selfClosing
+      ? end
+      : changeElementEnd(xml, end, tag.qualifiedName)
+  }
+}
+
+/**
+ * The position one past the matching close of the element whose open tag ends
+ * at `openEnd`, or the fragment's end when the element never closes — an
+ * unclosed change wraps the rest of the fragment, which is all history.
+ */
+function changeElementEnd(
+  xml: string,
+  openEnd: number,
+  qualifiedName: string,
+): number {
+  let depth = 1
+  let cursor = openEnd
+  for (;;) {
+    const opening = xml.indexOf('<', cursor)
+    if (opening === -1) return xml.length
+    const end = tagEnd(xml, opening)
+    if (end === undefined) return xml.length
+    const tag = scanTag(xml, opening, end)
+    if (tag?.qualifiedName === qualifiedName) {
+      if (tag.close) {
+        depth -= 1
+        if (depth === 0) return end
+      } else if (!tag.selfClosing) {
+        depth += 1
+      }
+    }
+    cursor = end
+  }
+}
+
+/** The tag or construct opening at `index` ends here; undefined when unclosed. */
+function tagEnd(xml: string, index: number): number | undefined {
+  if (xml.startsWith('<!--', index)) return markerEnd(xml, '-->', index + 4)
+  if (xml.startsWith('<![CDATA[', index))
+    return markerEnd(xml, ']]>', index + 9)
+  if (xml.startsWith('<?', index)) return markerEnd(xml, '?>', index + 2)
+  try {
+    return findXmlTagEnd(xml, index + 1)
+  } catch {
+    return undefined
+  }
+}
+
+function markerEnd(xml: string, marker: string, from: number) {
+  const index = xml.indexOf(marker, from)
+  return index === -1 ? undefined : index + marker.length
+}
+
+function scanTag(
+  xml: string,
+  opening: number,
+  end: number,
+): ScannedTag | undefined {
+  const body = xml.slice(opening + 1, end - 1)
+  if (body.startsWith('!') || body.startsWith('?')) return undefined
+  const close = body.startsWith('/')
+  const name = /^[^\s/>]+/u.exec(close ? body.slice(1) : body)?.[0]
+  if (!name) return undefined
+  return {
+    qualifiedName: name,
+    localName: name.slice(name.indexOf(':') + 1),
+    close,
+    selfClosing: !close && /\/\s*$/u.test(body),
   }
 }
 
@@ -47,18 +153,32 @@ function xmlPrefix(xml: string): string {
   return xml.match(/<([A-Za-z_][\w.-]*):/u)?.[1] ?? 'w'
 }
 
+/**
+ * An attribute's value, matched only at an attribute boundary so a name that
+ * merely ends in `val` (`w:interval`, `x:val`) cannot answer for `w:val`.
+ */
 function wordAttr(attrs: string | undefined, name: string, prefix: string) {
-  return attrs?.match(new RegExp(`(?:${prefix}:)?${name}="([^"]+)"`, 'i'))?.[1]
+  return attrs?.match(
+    new RegExp(`(?:^|\\s)(?:${prefix}:)?${name}="([^"]+)"`, 'i'),
+  )?.[1]
 }
 
+/**
+ * The attributes of the first `<prefix:localName>` tag. The tag end is scanned
+ * quote-aware because `>` is legal inside an attribute value; an unclosed tag
+ * reads as absent.
+ */
 function tagAttrs(
   xml: string,
   prefix: string,
   localName: string,
 ): string | undefined {
-  return xml.match(
-    new RegExp(`<${prefix}:${localName}\\b([^>]*)\\/?>`, 'i'),
-  )?.[1]
+  const open = new RegExp(`<${prefix}:${localName}(?=[\\s/>])`, 'i').exec(xml)
+  if (!open) return undefined
+  const end = tagEnd(xml, open.index)
+  return end === undefined
+    ? undefined
+    : xml.slice(open.index + open[0].length, end - 1)
 }
 
 function lowercaseValue(
