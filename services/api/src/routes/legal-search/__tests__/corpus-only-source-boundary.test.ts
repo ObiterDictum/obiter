@@ -70,9 +70,9 @@ const providerFetchSpecifiers = [
 ]
 
 const tnaHostLabel = 'nationalarchives.gov.uk'
-/** Matched as a regex, not a URL substring: this scans file text for an
- * upstream host literal, it does not sanitise a URL. */
-const tnaHostPattern = new RegExp(tnaHostLabel.replace(/\./g, '\\.'))
+/** Matched as a literal, fully escaped regex over file text: this scans source
+ * files for an upstream host literal, it does not sanitise a URL. */
+const tnaHostPattern = /nationalarchives\.gov\.uk/
 
 /**
  * The base URL default is a config value, not a call site. It is allowed only
