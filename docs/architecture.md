@@ -861,9 +861,11 @@ leases, not every still-running operation: once a lease passes
 second operation can be admitted while the first still runs. Bounding every
 running operation would need lease renewal or cancellation, which is
 deliberately not implemented here. The MOJ rate limiter
-(`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) still bounds upstream
-HTTP attempts per replica. The gate bounds unexpired leases and per-subject
-misses in a rolling window; in the default single-process configuration it
+(`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) remains a per-process
+backstop; the cluster-wide upstream HTTP allowance is a separate shared budget
+(see the Find Case Law request-budget decision below). The gate bounds
+unexpired leases and per-subject misses in a rolling window; in the default
+single-process configuration it
 also bounds the number of retained per-subject windows. Admission state is
 cluster-visible by default; see the shared-ledger decision below.
 Search and changelog must never return
@@ -932,9 +934,72 @@ replicas no longer multiplies them. The MOJ HTTP-rate limiter remains per
 process, so it is a per-replica backstop rather than the cluster allowance.
 
 Deliberately not done here: a second datastore (Redis) for admission state; a
-cross-replica result cache; and a shared HTTP-request-per-window MOJ budget.
-The lease lifetime (`LEGAL_SEARCH_HYDRATION_LEASE_MS`, default five minutes) is
-the ceiling on how long a crashed replica can hold a slot.
+cross-replica result cache. The lease lifetime
+(`LEGAL_SEARCH_HYDRATION_LEASE_MS`, default five minutes) is
+the ceiling on how long a crashed replica can hold a slot. The shared upstream
+HTTP request budget that was also deferred here is implemented separately; see
+the Find Case Law request-budget decision below.
+
+### Find Case Law HTTP attempts draw on one cluster-wide budget (29 September 2026)
+
+Context: every Find Case Law path behind the hydration gate could still reach
+the provider once per HTTP attempt, and admission bounded operations rather
+than attempts. One search walk can spend one Atom-page charge per page, then
+one LegalDocML charge per detail fetch and, when the XML path fails, a second
+HTML charge for the same judgment; a document-detail miss spends one; the
+withdrawal and bulk-ingestion walks spend one per URI. The per-process
+`MOJ_FIND_CASE_LAW_RATE_LIMIT` window is copied into every API process, so N
+replicas on one egress IP gave N allowances, and the balance of the provider's
+real published allowance was never established from this repository.
+
+Decision: charge one shared rolling window immediately before each actual
+upstream HTTP attempt, on the application database (`DATABASE_URL`), in
+`legal_moj_request_charges` (migration `0029_moj_request_budget.sql`). The
+window is a count of persisted rows inside one transaction under
+`pg_advisory_xact_lock(hashtext('legal_moj_request_budget'))`; the lock only
+makes check-and-record atomic, the rows are the window, so it survives a
+restart and is shared across replicas. The database clock is the authority for
+both the write and the count, so replica clock skew cannot widen the window.
+The charge is the provider package's one seam (`MojRequestBudget.charge`), so
+the accounting is per attempt and every caller — Atom pagination, LegalDocML,
+HTML fallback, detail and document fetches, retries — draws on it without a
+second code path. An attempt is charged even when the network call then fails;
+a URI refused by the SSRF/origin guard before dispatch is not charged.
+
+Fail-closed: the charge transaction sets transaction-local `lock_timeout`
+(2s) and `statement_timeout` (5s). A database outage, a wedged lock holder or
+a timed-out statement returns `unavailable`, the provider dispatches nothing,
+and a provider-reaching route answers `503 storage_unavailable`. A queued
+background hydration is the one exception: it is best effort, so a budget it
+cannot charge makes no upstream attempt and the request keeps its
+`hydration_queued` transport outcome, degrading to the stored result the poll
+returns exactly as a provider outage does. Foreground live search and
+document-detail fetches fail closed with 503. A full window
+returns `rate_limited` with the wait until the oldest in-window charge frees a
+slot, derived from the database clock, so the caller has a meaningful
+retry-after rather than a fixed guess. A charge row is a timestamp and nothing
+else: no URL, query text, subject, user identity or matter data is persisted,
+so the ledger cannot reconstruct what was fetched or by whom.
+
+Ownership boundary: the shared budget covers the API replicas, which share the
+application database every API process already migrates at boot. It does not
+cover `services/legal-ingestor`, whose `DATABASE_URL` is its own corpus-writer
+connection and which therefore cannot reach the application ledger; wire it to
+an operational connection without a new ownership/deployment decision and its
+Find Case Law traffic stays outside the shared window. `MOJ_FIND_CASE_LAW_REQUEST_BUDGET`
+(default 1000 attempts per rolling five minutes) is an operator assumption,
+not a verified provider allowance: it preserves the previously used per-replica
+cap as a cluster maximum, so it can only reduce upstream traffic, but whether
+1000 is the provider's true allowance remains unproven here. The per-process
+limiter is kept and composed before the shared charge, so it can only tighten
+the window, never widen it, and a request it refuses never spends a shared
+slot.
+
+Deliberately not done here: a Redis counter; a per-subject HTTP budget (the
+hydration ledger already bounds per-subject misses and in-flight work); and
+wiring bulk ingestion and the withdrawal checker to an operational ledger,
+which needs a new credential and deployment decision because their database
+connection is the corpus writer.
 
 ### Document edit operations: property families without a second compatibility path (31 August 2026)
 
