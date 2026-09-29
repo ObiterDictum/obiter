@@ -226,6 +226,31 @@ function emphasisXml(fragments: readonly string[], emphasis: PendingEmphasis) {
   if (emphasis.underline === false)
     next = upsert(next, 'u', '<w:u w:val="none"/>')
   if (emphasis.underline === null) next = strip(next, 'u')
+  if (emphasis.strikethrough === true)
+    next = upsert(next, 'strike', '<w:strike/>')
+  if (emphasis.strikethrough === false)
+    next = upsert(next, 'strike', '<w:strike w:val="0"/>')
+  if (emphasis.strikethrough === null) next = strip(next, 'strike')
+  if (emphasis.highlight !== undefined) {
+    next =
+      emphasis.highlight === null
+        ? strip(next, 'highlight')
+        : upsert(
+            next,
+            'highlight',
+            `<w:highlight w:val="${emphasis.highlight}"/>`,
+          )
+  }
+  if (emphasis.vertAlign !== undefined) {
+    next =
+      emphasis.vertAlign === null
+        ? strip(next, 'vertAlign')
+        : upsert(
+            next,
+            'vertAlign',
+            `<w:vertAlign w:val="${emphasis.vertAlign}"/>`,
+          )
+  }
   return next
 }
 

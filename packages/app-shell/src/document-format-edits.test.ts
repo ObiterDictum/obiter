@@ -122,6 +122,26 @@ describe('tracked emphasis from the client path', () => {
     toolbar.onToggleBold()
     expect(format.emphasis).toEqual([{ runId: 'r1', bold: true }])
   })
+
+  it('refuses the character formatting controls on a tracked partial selection', () => {
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      model,
+      format,
+      'p1',
+      (update) => {
+        format = update(format)
+      },
+      { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 1, to: 4 }] },
+      true,
+    )
+    expect(toolbar.emphasisUnavailable).toMatch(/tracked change/i)
+    toolbar.onToggleStrikethrough()
+    toolbar.onToggleHighlight()
+    toolbar.onToggleSuperscript()
+    toolbar.onToggleSubscript()
+    expect(format.emphasis).toEqual([])
+  })
 })
 
 describe('document format drafts', () => {
@@ -505,6 +525,250 @@ describe('formatControlState from the selection', () => {
   })
 })
 
+describe('character formatting controls', () => {
+  it('collects highlight, strikethrough and vertical align for a run and a range', () => {
+    expect(
+      collectFormatOperations(
+        model,
+        {
+          emphasis: [
+            {
+              runId: 'r1',
+              strikethrough: true,
+              highlight: 'yellow',
+              vertAlign: 'superscript',
+            },
+            {
+              paragraphId: 'p1',
+              from: 1,
+              to: 3,
+              highlight: 'none',
+              vertAlign: 'baseline',
+            },
+          ],
+          paragraphStyles: {},
+          numbering: {},
+        },
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'set_run_emphasis',
+        runId: 'r1',
+        strikethrough: true,
+        highlight: 'yellow',
+        vertAlign: 'superscript',
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 1,
+        to: 3,
+        highlight: 'none',
+        vertAlign: 'baseline',
+      },
+    ])
+  })
+
+  it('paints strike, highlight and vertical align onto the draft model', () => {
+    const painted = formattedModel(model, {
+      emphasis: [
+        {
+          runId: 'r1',
+          strikethrough: true,
+          highlight: 'yellow',
+          vertAlign: 'subscript',
+        },
+      ],
+      paragraphStyles: {},
+      numbering: {},
+    })
+    const fragments = (
+      painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
+    ).join('')
+    expect(fragments).toContain('<w:strike/>')
+    expect(fragments).toContain('<w:highlight w:val="yellow"/>')
+    expect(fragments).toContain('<w:vertAlign w:val="subscript"/>')
+  })
+
+  it('strips a released highlight and returns vertical align to baseline', () => {
+    const painted = formattedModel(
+      modelWithRuns([
+        {
+          id: 'r1',
+          text: 'The Claimant',
+          preservedXmlFragments: [
+            '<w:rPr><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr>',
+          ],
+        },
+      ]),
+      {
+        emphasis: [
+          {
+            runId: 'r1',
+            highlight: 'none',
+            vertAlign: 'baseline',
+          },
+        ],
+        paragraphStyles: {},
+        numbering: {},
+      },
+    )
+    const fragments = (
+      painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
+    ).join('')
+    expect(fragments).toContain('<w:highlight w:val="none"/>')
+    expect(fragments).toContain('<w:vertAlign w:val="baseline"/>')
+  })
+
+  it('reports pressed flags and values from the covered runs', () => {
+    const formatted = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(formatted, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      strikethrough: true,
+      highlight: 'yellow',
+      vertAlign: 'superscript',
+    })
+
+    const plain = modelWithRuns([
+      { id: 'r1', text: 'The Claimant', preservedXmlFragments: plainXml },
+    ])
+    expect(
+      formatControlState(plain, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      strikethrough: false,
+      highlight: null,
+      vertAlign: 'baseline',
+    })
+  })
+
+  it('reports mixed highlight and vertical align as untouched', () => {
+    const mixed = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The ',
+        preservedXmlFragments: [
+          '<w:rPr><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr>',
+        ],
+      },
+      { id: 'r2', text: 'Claimant', preservedXmlFragments: plainXml },
+    ])
+    expect(
+      formatControlState(mixed, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 11 },
+      ]),
+    ).toMatchObject({ strikethrough: false, highlight: null, vertAlign: null })
+  })
+
+  it('reads every off spelling of a flag as off', () => {
+    for (const value of ['0', 'false', 'off']) {
+      const stored = modelWithRuns([
+        {
+          id: 'r1',
+          text: 'The Claimant',
+          preservedXmlFragments: [
+            `<w:rPr><w:strike w:val="${value}"/></w:rPr>`,
+          ],
+        },
+      ])
+      expect(
+        formatControlState(stored, emptyFormatDrafts, 'p1', [
+          { paragraphId: 'p1', from: 0, to: 4 },
+        ]).strikethrough,
+      ).toBe(false)
+    }
+  })
+
+  it('ignores properties that exist only inside a tracked rPrChange', () => {
+    const historical = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/></w:rPr></w:rPrChange></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(historical, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      strikethrough: false,
+      highlight: null,
+      vertAlign: 'baseline',
+    })
+  })
+
+  it('keeps current properties after a self-closing tracked change', () => {
+    const stored = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1"/><w:b/><w:rPrChange w:id="2"><w:rPr><w:strike/></w:rPr></w:rPrChange></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(stored, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({ bold: true, strikethrough: false })
+  })
+
+  it('pairs a nested tracked change with its own close', () => {
+    const stored = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1"><w:rPr><w:b/><w:rPrChange w:id="2"><w:rPr><w:i/></w:rPr></w:rPrChange><w:strike/></w:rPr></w:rPrChange><w:u w:val="single"/></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(stored, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      bold: false,
+      underline: true,
+      strikethrough: false,
+    })
+  })
+
+  it('matches case variants to the same options paint uses', () => {
+    const stored = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:highlight w:val="DARKBLUE"/><w:vertAlign w:val="SUPERSCRIPT"/></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(stored, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({ highlight: 'darkBlue', vertAlign: 'superscript' })
+  })
+})
+
 describe('document-format-edits module size', () => {
   it('stays within the source line ceiling', () => {
     const files = [
@@ -521,6 +785,7 @@ describe('document-format-edits module size', () => {
       './document-word-edits.ts',
       './components/document-workspace/model-view.tsx',
       './components/document-workspace/toolbar-emphasis-state.test.tsx',
+      './components/document-workspace/toolbar-character-formatting.test.tsx',
       './components/document-workspace/model-page-blocks.tsx',
       './components/document-workspace/model-paragraph.tsx',
       './components/document-workspace/model-run.tsx',

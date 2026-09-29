@@ -923,7 +923,7 @@ function addTrackedRejection(
   }
 }
 
-/** The pre-save bold/italic/underline of a run, for a formatting reversal. */
+/** The pre-save character formatting of a run, for a formatting reversal. */
 function preEmphasisForRun(
   model: DocumentModelWire,
   runId: string,
@@ -961,6 +961,9 @@ function emphasisOf(fragments: readonly string[]): PendingEmphasis {
     bold: properties.bold,
     italic: properties.italic,
     underline: properties.underline,
+    strikethrough: properties.strikethrough,
+    highlight: properties.highlight,
+    vertAlign: properties.vertAlign,
   }
 }
 

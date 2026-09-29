@@ -530,6 +530,35 @@ describe('undo across a successful save', () => {
     expect(document.editAsync).toHaveBeenCalledTimes(1)
   })
 
+  it('reverses a saved highlight, strikethrough and vertical align after Undo', async () => {
+    const document = await server(['Hello', 'tail'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    fireEvent.click(screen.getByText('Hello'))
+    nativeSelect(0, 2)
+    fireEvent.click(screen.getByRole('button', { name: 'Strikethrough' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Highlight' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Superscript' }))
+    expect(
+      paintedDecorations().some((style) => style.verticalAlign === 'super'),
+    ).toBe(true)
+    await clickSaveAndSettle(document, 1)
+
+    // Undo across the save reverses the formatting against the saved document:
+    // the pre-save run had none of these properties, and a reversal that only
+    // restated bold/italic/underline would leave them painted.
+    fireEvent.click(undoButton())
+    const after = paintedDecorations()
+    expect(after.some((style) => style.verticalAlign !== '')).toBe(false)
+    expect(after.some((style) => style.backgroundColor !== '')).toBe(false)
+    expect(
+      after.some((style) => style.textDecoration.includes('line-through')),
+    ).toBe(false)
+    expect(document.editAsync).toHaveBeenCalledTimes(1)
+  })
+
   it('restores a saved first-paragraph deletion before the first survivor', async () => {
     const document = await server(['Alpha', 'Beta'])
     mountWorkspace({
@@ -1127,4 +1156,11 @@ function paintedBold(paragraphText: string): boolean {
   return [...spans].some(
     (span) => span instanceof HTMLElement && span.style.fontWeight === '700',
   )
+}
+
+/** The inline style of every painted run span in the body. */
+function paintedDecorations(): CSSStyleDeclaration[] {
+  return [...document.querySelectorAll('[data-caret-run-overlay] span')]
+    .filter((span): span is HTMLElement => span instanceof HTMLElement)
+    .map((span) => span.style)
 }

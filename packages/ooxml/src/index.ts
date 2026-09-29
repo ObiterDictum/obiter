@@ -36,6 +36,7 @@ export {
   requestedImagePartName,
 } from './package-part'
 export { resolveRelationshipTarget } from './parts/rels'
+export { findXmlTagEnd } from './xml-lexemes'
 export * from './collaboration-merge'
 export * from './document-identity'
 export * from './document-lineage'

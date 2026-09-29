@@ -12,6 +12,14 @@ import {
   xmlNumber,
   xmlTagAttrs,
 } from './document-page-units'
+import type { HighlightValue } from './document-format-types'
+import {
+  runFlag,
+  runHighlight,
+  runUnderline,
+  runVertAlign,
+  withoutTrackedParagraphProperties,
+} from './document-run-properties'
 
 export type RunFace = {
   fontFamily?: string
@@ -20,6 +28,9 @@ export type RunFace = {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strike?: boolean
+  highlight?: string
+  vertAlign?: 'superscript' | 'subscript' | 'baseline'
 }
 
 export type ParagraphFace = {
@@ -46,6 +57,26 @@ const THEME_FONT: ThemeFont = {
   minorascii: 'Calibri',
   majorhansi: 'Cambria',
   majorascii: 'Cambria',
+}
+
+// Word's closed highlight palette, so a DOCX authored in Word paints the same
+// colour here. The editor's own Highlight control only ever writes `yellow`.
+const HIGHLIGHT_COLOUR: ThemeFont = {
+  yellow: '#FFFF00',
+  green: '#00FF00',
+  cyan: '#00FFFF',
+  magenta: '#FF00FF',
+  blue: '#0000FF',
+  red: '#FF0000',
+  darkblue: '#000080',
+  darkcyan: '#008080',
+  darkgreen: '#008000',
+  darkmagenta: '#800080',
+  darkred: '#800000',
+  darkyellow: '#808000',
+  darkgray: '#808080',
+  lightgray: '#C0C0C0',
+  black: '#000000',
 }
 
 export function documentDefaultFace(styles: DocumentStyleWire[]): RunFace {
@@ -132,20 +163,36 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
 }
 
 export function runCss(face: RunFace): CSSProperties {
+  const superscript = face.vertAlign === 'superscript'
+  const subscript = face.vertAlign === 'subscript'
   return omitUndefined({
     fontFamily: face.fontFamily,
-    fontSize: face.fontSizePx,
+    fontSize:
+      (superscript || subscript) && face.fontSizePx !== undefined
+        ? face.fontSizePx * 0.65
+        : face.fontSizePx,
     color: face.color,
+    backgroundColor: face.highlight,
     fontWeight: face.bold === undefined ? undefined : face.bold ? 700 : 400,
     fontStyle:
       face.italic === undefined ? undefined : face.italic ? 'italic' : 'normal',
-    textDecoration:
-      face.underline === undefined
-        ? undefined
-        : face.underline
-          ? 'underline'
-          : 'none',
+    textDecoration: runTextDecoration(face),
+    verticalAlign: superscript ? 'super' : subscript ? 'sub' : undefined,
   })
+}
+
+/**
+ * Underline and strikethrough are independent decorations. An explicit `false`
+ * on either clears that line (overriding an inherited style) without dropping
+ * the other, which a single boolean could not express.
+ */
+function runTextDecoration(face: RunFace): CSSProperties['textDecoration'] {
+  const lines: string[] = []
+  if (face.underline === true) lines.push('underline')
+  if (face.strike === true) lines.push('line-through')
+  if (lines.length > 0) return lines.join(' ')
+  if (face.underline === false || face.strike === false) return 'none'
+  return undefined
 }
 
 function styleChain(
@@ -168,8 +215,13 @@ function styleChain(
 }
 
 function faceFromXml(xml: string): ParagraphFace {
-  const pPrBlock = xml.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/i)?.[0] ?? ''
-  const rest = xml.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/i, '')
+  // Tracked history lives in nested `w:rPrChange`/`w:pPrChange` elements —
+  // including the previous paragraph mark's `w:rPr` inside `w:pPrChange` — so
+  // drop it before reading or a foreign change paints a value the current
+  // paragraph no longer carries.
+  const current = withoutTrackedParagraphProperties(xml)
+  const pPrBlock = current.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/i)?.[0] ?? ''
+  const rest = current.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/i, '')
   const pPr = pPrBlock || rest
   const rPr = xmlInner(rest, 'rPr') ?? xmlInner(pPrBlock, 'rPr') ?? rest
   const jc = xmlAttr(xmlTagAttrs(pPr, 'jc'), 'val')?.toLowerCase()
@@ -211,9 +263,12 @@ function runFromXml(xml: string): RunFace {
       color && /^[0-9A-Fa-f]{6}$/.test(color) && color.toLowerCase() !== 'auto'
         ? `#${color}`
         : undefined,
-    bold: wordFlag(xml, 'b'),
-    italic: wordFlag(xml, 'i'),
-    underline: wordUnderline(xml),
+    bold: runFlag(xml, 'b') ?? undefined,
+    italic: runFlag(xml, 'i') ?? undefined,
+    underline: runUnderline(xml) ?? undefined,
+    strike: runFlag(xml, 'strike') ?? undefined,
+    highlight: highlightColour(runHighlight(xml)),
+    vertAlign: runVertAlign(xml) ?? undefined,
   })
 }
 
@@ -281,12 +336,9 @@ function wordFlag(xml: string, name: string): boolean | undefined {
   return true
 }
 
-function wordUnderline(xml: string): boolean | undefined {
-  const attrs = xmlTagAttrs(xml, 'u')
-  if (attrs === undefined) return undefined
-  const value = xmlAttr(attrs, 'val')?.toLowerCase()
-  if (value === 'none' || value === '0' || value === 'false') return false
-  return true
+function highlightColour(value: HighlightValue | null): string | undefined {
+  if (!value || value === 'none') return undefined
+  return HIGHLIGHT_COLOUR[value.toLowerCase()]
 }
 
 function omitUndefined<T extends object>(value: T): T {
