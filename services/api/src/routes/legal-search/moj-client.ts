@@ -10,7 +10,7 @@ import {
   fetchMojAuthoritySummaries,
   providerMetadataFromAtomEntry,
   type AtomEntry,
-  type MojRateLimiter,
+  type MojRequestBudget,
   type ProviderSourceMetadata,
 } from '@obiter/legal-source-provider'
 import type { ApiEnv } from '../../env'
@@ -216,14 +216,10 @@ export async function hydrateMojAuthoritiesFromSearch(
   indexClient: HydrationIndexClient,
   indexName: string,
   request: LegalFetchRequest,
-  rateLimiter: MojRateLimiter,
+  budget: MojRequestBudget,
 ): Promise<MojSummaryResult> {
   try {
-    const mojResult = await fetchMojAuthoritySummaries(
-      env,
-      request,
-      rateLimiter,
-    )
+    const mojResult = await fetchMojAuthoritySummaries(env, request, budget)
     if (mojResult.status !== 'ok') return mojResult
 
     for (const entry of mojResult.entries) {
@@ -246,7 +242,7 @@ export async function hydrateMojAuthoritiesFromSearch(
       indexClient,
       indexName,
       mojResult.entries,
-      rateLimiter,
+      budget,
     )
     // Returned so a foreground request that deduplicates onto this background
     // job can answer with the same live records instead of fetching again.
@@ -264,14 +260,14 @@ export async function hydrateAndIndexMojAuthorities(
   indexClient: HydrationIndexClient,
   indexName: string,
   entries: AtomEntry[],
-  rateLimiter: MojRateLimiter,
+  budget: MojRequestBudget,
 ) {
   if (entries.length === 0) return
 
   try {
     const detailTasks = entries
       .slice(0, 5)
-      .map(async (entry) => fetchMojAuthorityDetail(env, entry, rateLimiter))
+      .map(async (entry) => fetchMojAuthorityDetail(env, entry, budget))
     const detailResults = await Promise.all(detailTasks)
     const documents: LegalAuthority[] = []
     for (const result of detailResults) {

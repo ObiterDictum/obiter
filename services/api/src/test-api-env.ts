@@ -40,6 +40,7 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     legislationProvisionsIndex: 'legislation_provisions',
     mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
     mojFindCaseLawRateLimit: 1000,
+    mojFindCaseLawRequestBudget: 1000,
     rampartModel: 'qarlus/rampart',
     rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
     rampartCacheDir: '/tmp/rampart-cache',

@@ -10,6 +10,7 @@ import {
 import type { ApiEnv } from '../../env'
 import type { Pool } from 'pg'
 import { readLimitedJsonValue } from '../../limited-request-body'
+import { composeMojRequestBudget } from '../../moj-request-budget'
 import {
   ANONYMOUS_HYDRATION_SUBJECT,
   canonicalHydrationQueryKey,
@@ -24,6 +25,7 @@ import {
   legalDocumentIdSchema,
   legalFetchRequestSchema,
   type LegalFetchRequest,
+  type MojRequestBudget,
   extractNeutralCitation,
 } from '@obiter/legal-source-provider'
 import {
@@ -80,6 +82,13 @@ interface LegalSearchProxyRouteOptions {
    * cluster-wide.
    */
   hydrationBudget?: LegalHydrationLedger
+  /**
+   * The cluster-visible Find Case Law request budget. `createApiRuntime`
+   * builds the Postgres budget on the application pool; omitted in a
+   * single-process development server or a test, which then draws on the
+   * process-local limiter alone.
+   */
+  mojRequestBudget?: MojRequestBudget
   /**
    * Corpus writes. Omitted or null selects read-only: hydration answers this
    * request from the provider and nothing is persisted or indexed. A caller
@@ -169,6 +178,15 @@ export function createLegalSearchProxyRoutes(
     env.meilisearchAdminApiKey,
   )
   const mojRateLimiter = createMojRateLimiter(env.mojFindCaseLawRateLimit)
+  // One budget every provider-reaching path charges immediately before each
+  // upstream attempt. The process limiter is the backstop; the shared ledger,
+  // when configured, is the cluster-wide authority. Both are charged per
+  // attempt, so an operation that paginates or fetches details spends many
+  // charges.
+  const mojRequestBudget = composeMojRequestBudget(
+    options.mojRequestBudget,
+    mojRateLimiter,
+  )
   // Process-lifetime soft cache of public provider records, capped at 100 by
   // `rememberForegroundSourceRecord`. It is the only persistence in read-only
   // mode and it holds no matter data, only the fetched judgment record.
@@ -495,7 +513,7 @@ export function createLegalSearchProxyRoutes(
             indexClient,
             env.legalAuthoritiesIndex,
             parsed.data,
-            mojRateLimiter,
+            mojRequestBudget,
           ),
       )
       if (enqueue.status === 'budget_exceeded') {
@@ -566,7 +584,7 @@ export function createLegalSearchProxyRoutes(
         const liveResult = await fetchMojAuthoritySummaries(
           env,
           parsed.data,
-          mojRateLimiter,
+          mojRequestBudget,
         )
         if (liveResult.status !== 'ok') return liveResult
 
@@ -690,7 +708,7 @@ export function createLegalSearchProxyRoutes(
               indexClient,
               env.legalAuthoritiesIndex,
               detailEntries,
-              mojRateLimiter,
+              mojRequestBudget,
             ),
           { chargeMiss: false },
         )
@@ -848,9 +866,9 @@ export function createLegalSearchProxyRoutes(
           ? fetchMojAuthorityDocumentFromRecord(
               env,
               sourceRecord,
-              mojRateLimiter,
+              mojRequestBudget,
             )
-          : fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter),
+          : fetchMojAuthorityDocumentById(env, parsed.data, mojRequestBudget),
     )
 
     if (gatedLiveDocument.status === 'budget_exceeded') {
