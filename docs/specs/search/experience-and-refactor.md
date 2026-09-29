@@ -42,7 +42,7 @@ Target module layout:
 - `stored-document.ts`: stored full-text read from the derived index. The API is corpus-only; Find Case Law fetch, detail retrieval, hydration and indexing live in the explicit indexing service, not the request path.
 - `atom-parser.ts`: Atom entry parsing and Atom helper functions
 - `html-parser.ts`: judgment HTML parsing, paragraph extraction, document parsing, text decoding, and hashing
-- `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms, foreground record cache helper
+- `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms
 - `court-utils.ts`: court mappings, court normalization, citation/path court derivation, search text normalization, document matching
 - `rate-limiter.ts`: `createMojRateLimiter`
 - `fetch-schema.ts`: fetch request schema, document id schema, route-facing types
@@ -63,7 +63,7 @@ Search should be prepared to become an API-key-protected public legal-source API
 
 Separate these surfaces:
 
-- App Search endpoint: product UX orchestration for `/search`, including stored search, optional foreground Find Case Law behavior, background hydration, demo status flags, and UI-oriented response shaping.
+- App Search endpoint: product UX orchestration for `/search`, including stored search, corpus-only response shaping, demo status flags, and UI-oriented response shaping.
 - Stable legal-source API: versioned, stored-source-first retrieval surface intended for SDKs, MCP servers, integrations, and third-party app search.
 - Provider ingestion/hydration: internal source acquisition and indexing workflows. External callers must not depend on provider-specific behavior such as Find Case Law Atom shapes, provider rate limits, or background indexing details.
 

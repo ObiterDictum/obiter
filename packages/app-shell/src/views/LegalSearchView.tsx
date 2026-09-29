@@ -208,9 +208,9 @@ export function getLegalSearchEmptyFeedback(input: {
   }
 
   // Honest empty for a well-formed citation no source holds. Names the
-  // citation so the failure reads as not-held rather than not-searched.
-  // Signed-out (or otherwise stored-only) searches must not claim a
-  // provider was consulted: the API gates live on session.
+  // citation so the failure reads as not-held rather than not-searched. A
+  // stored-only search must not claim a provider was consulted, and the
+  // corpus-only API never consults one.
   if (outcome === 'recognised_not_held') {
     return {
       eyebrow: 'Citation not held',

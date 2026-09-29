@@ -44,9 +44,9 @@ const transpiler = new Bun.Transpiler({ loader: 'tsx' })
 
 /**
  * The provider fetch seam. One exported function in
- * `@obiter/legal-source-provider` per upstream call shape; a new fetch helper
- * would have to avoid all of these names, which the host and specifier scans
- * below then catch.
+ * `@obiter/legal-source-provider` per upstream call shape. These names catch
+ * the cheap reintroduction; the host and specifier scans below catch other
+ * shapes, within the limits stated at the top of this file.
  */
 const providerFetchNames = [
   'fetchMojAuthoritySummaries',
