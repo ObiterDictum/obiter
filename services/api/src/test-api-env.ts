@@ -2,6 +2,7 @@ import type { ApiEnv } from './env'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
   DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS,
   DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
@@ -55,6 +56,7 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     legalSearchHydrationPerClientMax:
       DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
     legalSearchHydrationWindowMs: DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+    legalSearchHydrationLeaseMs: DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS,
     port: 8787,
     nodeEnv: 'test',
     localEnvFile: null,

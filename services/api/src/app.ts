@@ -22,6 +22,7 @@ import {
   createPostgresLegalAuthorityReadStore,
   createPostgresLegalAuthorityWriteStore,
 } from './routes/legal-search/proxy-routes'
+import type { LegalHydrationLedger } from './legal-search-hydration-budget'
 import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
@@ -75,6 +76,12 @@ interface ApiAppOptions {
    * reachable from this app.
    */
   corpus?: CorpusAccess
+  /**
+   * The cluster-visible admission authority. `createApiRuntime` builds the
+   * Postgres ledger on the application pool; a test that builds the app
+   * directly omits it and gets the process-local fallback.
+   */
+  hydrationLedger?: LegalHydrationLedger
 }
 
 interface DevelopmentApiProvenance {
@@ -324,6 +331,7 @@ export function createApiApp(
         corpusWrites: corpusAccess.write
           ? createPostgresLegalAuthorityWriteStore(corpusAccess.write)
           : null,
+        hydrationBudget: options.hydrationLedger,
         legislation: {
           pool: corpusAccess.read,
           indexName: env.legislationProvisionsIndex,

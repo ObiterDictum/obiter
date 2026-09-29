@@ -2571,7 +2571,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>25 migrations, 0001 to 0027, 0008 withdrawn</dd>
+                <dd>27 migrations, 0001 to 0028, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3477,8 +3477,12 @@
             read-only miss live but is charged to one shared anonymous bucket
             and never writes; authenticated provider-reaching paths (foreground
             live search, queued hydration and document fetch-through) cross one
-            in-process hydration gate charged to the authenticated user, with a
-            per-process, not cross-replica, bound; health is a minimal liveness
+            hydration gate admitted through a cluster-wide Postgres ledger on
+            the application database, so the per-subject miss window and the
+            unexpired-lease bound are shared by every replica rather than
+            multiplied. The ledger counts unexpired leases, not every
+            still-running operation: an operation that outlives its lease drops
+            out of the count while it still runs; health is a minimal liveness
             probe; in development it also exposes the API commit SHA and
             checkout root for local provenance checks. Invite preview is gated
             by the secret invite token and returns only organisation and inviter
@@ -3986,6 +3990,21 @@
                 </tr>
                 <tr>
                   <td class="id">
+                    legal_hydration_leases · legal_hydration_misses
+                  </td>
+                  <td>
+                    Cluster-visible provider-admission state on the application
+                    database: one lease per admitted operation (an unexpired
+                    lease holds a slot for at most
+                    <code>LEGAL_SEARCH_HYDRATION_LEASE_MS</code>, so the bound
+                    is over unexpired leases, not still-running work) and one
+                    row per charged subject miss. Opaque lease ids and
+                    server-verified user ids only; no query text or matter data.
+                  </td>
+                  <td class="id">0028</td>
+                </tr>
+                <tr>
+                  <td class="id">
                     legislation_documents · legislation_provisions ·
                     legislation_ingest_progress
                   </td>
@@ -4404,13 +4423,20 @@
                   <td class="id">
                     LEGAL_SEARCH_HYDRATION_QUEUE_MAX ·
                     LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX ·
-                    LEGAL_SEARCH_HYDRATION_WINDOW_MS
+                    LEGAL_SEARCH_HYDRATION_WINDOW_MS ·
+                    LEGAL_SEARCH_HYDRATION_LEASE_MS
                   </td>
                   <td>
-                    Authenticated search hydration queue depth, per-user miss
-                    budget, and rolling window. In-process only: each API
-                    replica has its own gate, counters and upstream rate
-                    limiter, so replica count multiplies the effective allowance
+                    Authenticated search hydration unexpired-lease bound,
+                    per-subject miss budget, rolling window, and lease lifetime.
+                    Enforced by the shared Postgres admission ledger on the
+                    application database, so every API replica shares one miss
+                    window and one unexpired-lease bound. The ledger counts
+                    unexpired leases, not every still-running operation. The
+                    admission transaction bounds its lock wait with
+                    transaction-local timeouts, so a wedged holder fails
+                    admission closed. The per-process MOJ rate limiter still
+                    bounds upstream HTTP attempts per replica
                   </td>
                 </tr>
                 <tr>
@@ -4795,13 +4821,15 @@
               <span
                 ><b>Provider fallback.</b> On a miss, Find Case Law is called in
                 the request path, then hydrated, stored and indexed. Every
-                provider-reaching path (foreground live, queued hydration and
-                the document-detail fetch-through) crosses one in-process
-                hydration gate that charges the authenticated user&apos;s budget
-                before the fetch and deduplicates equivalent work. An anonymous
-                document miss may still answer live, but it is charged to one
-                shared anonymous bucket and never writes the corpus or
-                index.</span
+                provider-reaching path (foreground live, queued hydration, the
+                detached detail pass and the document-detail fetch-through)
+                crosses one hydration gate admitted through a cluster-wide
+                Postgres ledger on the application database, which bounds
+                unexpired leases and charges the subject&apos;s rolling miss
+                window before the fetch and deduplicates equivalent work within
+                one process. An anonymous document miss may still answer live,
+                but it is charged to one shared anonymous bucket and never
+                writes the corpus or index.</span
               >
             </li>
           </ol>

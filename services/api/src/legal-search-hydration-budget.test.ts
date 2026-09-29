@@ -202,6 +202,59 @@ describe('LegalSearchHydrationBudget', () => {
     expect(next).toEqual({ status: 'ok', value: 'ok' })
   })
 
+  it('rejects a non-positive window or retention cap', () => {
+    expect(() => new LegalSearchHydrationBudget({ windowMs: 0 })).toThrow()
+    expect(
+      () => new LegalSearchHydrationBudget({ retainedUserWindowMax: 0 }),
+    ).toThrow()
+  })
+
+  it('takes an uncharged lease without spending the miss window', async () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 1,
+      perClientMax: 1,
+      windowMs: 600_000,
+    })
+
+    const charged = await budget.admit('usr_a', 'query', true)
+    expect(charged.status).toBe('admitted')
+    // Downstream work still needs an in-flight slot, so it is refused while
+    // the charged request holds the only one.
+    expect((await budget.admit('usr_a', 'detail', false)).status).toBe(
+      'budget_exceeded',
+    )
+
+    if (charged.status === 'admitted') await budget.complete(charged.leaseId)
+    const detail = await budget.admit('usr_a', 'detail', false)
+    expect(detail.status).toBe('admitted')
+    if (detail.status === 'admitted') await budget.complete(detail.leaseId)
+
+    // The uncharged lease did not spend the window: it still holds exactly
+    // the one charged miss.
+    expect((await budget.admit('usr_a', 'query-2', true)).status).toBe(
+      'budget_exceeded',
+    )
+  })
+
+  it('returns unavailable without running the operation when the ledger cannot answer', async () => {
+    const unavailable = {
+      async admit() {
+        return { status: 'unavailable' as const }
+      },
+      async complete() {},
+    }
+    const gate = new LegalSourceHydrationGate(unavailable)
+    let ran = false
+
+    const result = await gate.run('usr_a', 'query', async () => {
+      ran = true
+      return 'ok'
+    })
+
+    expect(result).toEqual({ status: 'unavailable' })
+    expect(ran).toBe(false)
+  })
+
   afterEach(() => {
     vi.useRealTimers()
   })

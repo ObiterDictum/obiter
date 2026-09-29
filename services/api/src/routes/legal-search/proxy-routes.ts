@@ -16,6 +16,7 @@ import {
   documentHydrationKey,
   LegalSearchHydrationBudget,
   LegalSourceHydrationGate,
+  type LegalHydrationLedger,
 } from '../../legal-search-hydration-budget'
 import {
   isSupportedFindCaseLawRequest,
@@ -71,7 +72,14 @@ interface LegalSearchProxyRouteVariables {
 }
 
 interface LegalSearchProxyRouteOptions {
-  hydrationBudget?: LegalSearchHydrationBudget
+  /**
+   * The admission authority every provider-reaching path reserves against.
+   * Omitted selects the process-local budget, which is correct only for a
+   * single-process development server or a test; production passes the
+   * shared Postgres ledger so the miss window and unexpired-lease bound are
+   * cluster-wide.
+   */
+  hydrationBudget?: LegalHydrationLedger
   /**
    * Corpus writes. Omitted or null selects read-only: hydration answers this
    * request from the provider and nothing is persisted or indexed. A caller
@@ -147,9 +155,10 @@ export function createLegalSearchProxyRoutes(
       windowMs: env.legalSearchHydrationWindowMs,
     })
   // Every provider-reaching product path goes through this one gate: the
-  // queued background job, the foreground live fetch and the document-detail
-  // fetch-through. It reserves the authenticated user's budget before the
-  // operation runs and shares one in-flight promise for equivalent work.
+  // queued background job, the foreground live fetch, the detached detail pass
+  // and the document-detail fetch-through. It reserves admission before the
+  // operation runs and shares one in-flight promise for equivalent work
+  // within this process.
   const hydrationGate = new LegalSourceHydrationGate(hydrationBudget)
   const searchClient = createClient(
     env.meilisearchHost,
@@ -475,16 +484,19 @@ export function createLegalSearchProxyRoutes(
     // cannot arrive.
     if (!parsed.data.foregroundLiveResults && corpusWrites !== null) {
       const hydrationKey = canonicalHydrationQueryKey(parsed.data)
-      const enqueue = hydrationGate.start(sessionUser.id, hydrationKey, () =>
-        hydrateMojAuthoritiesFromSearch(
-          env,
-          reads,
-          corpusWrites,
-          indexClient,
-          env.legalAuthoritiesIndex,
-          parsed.data,
-          mojRateLimiter,
-        ),
+      const enqueue = await hydrationGate.start(
+        sessionUser.id,
+        hydrationKey,
+        () =>
+          hydrateMojAuthoritiesFromSearch(
+            env,
+            reads,
+            corpusWrites,
+            indexClient,
+            env.legalAuthoritiesIndex,
+            parsed.data,
+            mojRateLimiter,
+          ),
       )
       if (enqueue.status === 'budget_exceeded') {
         return c.json(
@@ -494,6 +506,19 @@ export function createLegalSearchProxyRoutes(
             requestId,
           ),
           429,
+        )
+      }
+      if (enqueue.status === 'unavailable') {
+        // The shared admission ledger could not answer, so no job was queued
+        // and no provider work was dispatched. Fail closed rather than admit
+        // unmetered hydration.
+        return c.json(
+          apiError(
+            'storage_unavailable',
+            'Legal source hydration is temporarily unavailable.',
+            requestId,
+          ),
+          503,
         )
       }
 
@@ -570,17 +595,6 @@ export function createLegalSearchProxyRoutes(
           }
         }
 
-        if (corpusWrites) {
-          void hydrateAndIndexMojAuthorities(
-            env,
-            reads,
-            corpusWrites,
-            indexClient,
-            env.legalAuthoritiesIndex,
-            liveResult.entries,
-            mojRateLimiter,
-          )
-        }
         return liveResult
       },
     )
@@ -593,6 +607,18 @@ export function createLegalSearchProxyRoutes(
           requestId,
         ),
         429,
+      )
+    }
+    if (gatedLive.status === 'unavailable') {
+      // No provider fetch was dispatched. Fail closed rather than serving an
+      // unmetered live result while the shared admission ledger is down.
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Legal source hydration is temporarily unavailable.',
+          requestId,
+        ),
+        503,
       )
     }
     if (gatedLive.status === 'unauthenticated') {
@@ -643,6 +669,44 @@ export function createLegalSearchProxyRoutes(
         ),
         503,
       )
+    }
+
+    // The detail pass a live fetch starts is detached so the response is not
+    // held open for up to five detail fetches, but it still reaches the
+    // provider. Admit it as its own in-flight lease, without charging the
+    // subject's miss window a second time, so the shared bound covers it
+    // rather than leaving a detached provider path outside the accounting.
+    if (corpusWrites !== null) {
+      const detailEntries = liveResult.entries
+      void hydrationGate
+        .start(
+          sessionUser.id,
+          detachedDetailHydrationKey(detailEntries),
+          () =>
+            hydrateAndIndexMojAuthorities(
+              env,
+              reads,
+              corpusWrites,
+              indexClient,
+              env.legalAuthoritiesIndex,
+              detailEntries,
+              mojRateLimiter,
+            ),
+          { chargeMiss: false },
+        )
+        .then((admitted) => {
+          if (admitted.status === 'started' || admitted.status === 'deduped') {
+            return
+          }
+          // Best-effort downstream work: a rejected or unavailable lease
+          // drops the detail pass rather than running it unmetered. The
+          // foreground answer already returned its live summaries.
+          console.warn('Detached hydration detail pass was not admitted', {
+            requestId,
+            status: admitted.status,
+          })
+        })
+        .catch(() => {})
     }
 
     const rankedLiveDocuments = rankLegalSearchHitsByExactMatch(
@@ -811,6 +875,16 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
+    if (gatedLiveDocument.status === 'unavailable') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Legal source hydration is temporarily unavailable.',
+          requestId,
+        ),
+        503,
+      )
+    }
     if (gatedLiveDocument.status === 'failed') {
       return c.json(
         apiError(
@@ -1031,6 +1105,18 @@ function isSupportedFetchSearchMode(request: LegalFetchRequest) {
 
 function isStoredOnlyBrowse(request: LegalFetchRequest) {
   return !request.query.trim() && Boolean(request.court)
+}
+
+/**
+ * The in-process single-flight key for the detached detail pass a foreground
+ * live fetch starts. It names provider document URIs (public judgment
+ * identifiers), never query text or matter data, and lives only in memory.
+ */
+function detachedDetailHydrationKey(entries: Array<{ uri: string }>) {
+  return `detail:${entries
+    .map((entry) => entry.uri)
+    .sort()
+    .join('|')}`
 }
 
 function isImplementedFetchSourceType(request: LegalFetchRequest) {
