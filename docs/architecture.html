@@ -2571,7 +2571,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>27 migrations, 0001 to 0028, 0008 withdrawn</dd>
+                <dd>28 migrations, 0001 to 0029, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -4004,6 +4004,21 @@
                   <td class="id">0028</td>
                 </tr>
                 <tr>
+                  <td class="id">legal_moj_request_charges</td>
+                  <td>
+                    Cluster-visible Find Case Law request budget on the
+                    application database: one row per upstream HTTP attempt,
+                    charged immediately before dispatch by every API replica.
+                    The rolling five-minute window is the count of live rows, so
+                    one operation may spend many charges and N replicas share
+                    one allowance instead of multiplying it. A row is a
+                    timestamp and nothing else: no URL, query text, subject or
+                    matter data. Bulk ingestion runs with its own corpus-writer
+                    connection and does not reach this ledger.
+                  </td>
+                  <td class="id">0029</td>
+                </tr>
+                <tr>
                   <td class="id">
                     legislation_documents · legislation_provisions ·
                     legislation_ingest_progress
@@ -4395,9 +4410,19 @@
                 </tr>
                 <tr>
                   <td class="id">
-                    MOJ_FIND_CASE_LAW_BASE_URL · MOJ_FIND_CASE_LAW_RATE_LIMIT
+                    MOJ_FIND_CASE_LAW_BASE_URL · MOJ_FIND_CASE_LAW_RATE_LIMIT ·
+                    MOJ_FIND_CASE_LAW_REQUEST_BUDGET
                   </td>
-                  <td>Provider endpoint and throttle</td>
+                  <td>
+                    Provider endpoint, per-process fetch backstop, and the
+                    cluster-wide rolling five-minute request budget (<code
+                      >legal_moj_request_charges</code
+                    >
+                    on the application database). It is charged before each
+                    upstream HTTP attempt, so one operation may spend many
+                    charges. The default is an operator assumption, not a
+                    verified provider allowance
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -4435,8 +4460,9 @@
                     unexpired leases, not every still-running operation. The
                     admission transaction bounds its lock wait with
                     transaction-local timeouts, so a wedged holder fails
-                    admission closed. The per-process MOJ rate limiter still
-                    bounds upstream HTTP attempts per replica
+                    admission closed. The per-process MOJ rate limiter is a
+                    backstop composed before the cluster-wide request budget, so
+                    it can only tighten the shared window, never widen it
                   </td>
                 </tr>
                 <tr>

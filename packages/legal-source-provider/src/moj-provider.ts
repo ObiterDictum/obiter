@@ -24,6 +24,7 @@ import {
   extractNeutralCitationFromHtml,
   parseJudgmentParagraphs,
 } from './html-parser'
+import type { MojRequestBudget } from './rate-limiter'
 import type { createMojRateLimiter } from './rate-limiter'
 import type { LegalFetchRequest } from './fetch-schema'
 import { providerDocumentUrl, resolveProviderUrl } from './fetch-safety'
@@ -136,7 +137,7 @@ const searchPathAtomLimits: AtomFetchLimits = { maxEntries: 10, maxPages: 10 }
 export async function fetchMojAuthoritySummaries(
   env: FindCaseLawEnv,
   request: LegalFetchRequest,
-  rateLimiter: MojRateLimiter,
+  budget: MojRequestBudget,
   limits: AtomFetchLimits = searchPathAtomLimits,
 ): Promise<
   | {
@@ -169,11 +170,12 @@ export async function fetchMojAuthoritySummaries(
     visitedUrls.add(pageUrl)
     pageCount += 1
 
-    const atomLimit = rateLimiter.take()
-    if (!atomLimit.allowed) {
+    const charged = await budget.charge()
+    if (charged.status === 'unavailable') return { status: 'unavailable' }
+    if (charged.status === 'rate_limited') {
       return {
         status: 'rate_limited',
-        retryAfter: atomLimit.retryAfterSeconds.toString(),
+        retryAfter: charged.retryAfterSeconds.toString(),
       }
     }
 
@@ -258,15 +260,28 @@ async function fetchLegalDocMlParagraphs(
   entry: AtomEntry,
   documentId: string,
   fetchImpl: typeof fetch,
+  budget: MojRequestBudget,
 ): Promise<
   | { status: 'ok'; paragraphs: LegalParagraph[] }
   | { status: 'fallback'; reason: LegalDocMlFallbackReason }
   | { status: 'rate_limited'; retryAfter: string | null }
+  | { status: 'unavailable' }
 > {
   if (!entry.xmlUri) return { status: 'fallback', reason: 'no_xml_uri' }
 
   const xmlUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, entry.xmlUri)
   if (!xmlUrl) return { status: 'fallback', reason: 'xml_off_origin' }
+
+  // Charged after the off-origin guard and immediately before the attempt: a
+  // URI we refuse to fetch must not spend a slot.
+  const charged = await budget.charge()
+  if (charged.status === 'unavailable') return { status: 'unavailable' }
+  if (charged.status === 'rate_limited') {
+    return {
+      status: 'rate_limited',
+      retryAfter: charged.retryAfterSeconds.toString(),
+    }
+  }
 
   let response: Response
   try {
@@ -296,7 +311,7 @@ async function fetchLegalDocMlParagraphs(
 export async function fetchMojAuthorityDetail(
   env: FindCaseLawEnv,
   entry: AtomEntry,
-  rateLimiter: MojRateLimiter,
+  budget: MojRequestBudget,
   options: DetailFetchOptions = {},
 ): Promise<ProviderDocumentResult> {
   const documentId = documentIdFromUri(entry.uri)
@@ -306,21 +321,15 @@ export async function fetchMojAuthorityDetail(
   let legalDocMlParagraphs: LegalParagraph[] | undefined
 
   if (options.preferLegalDocMl) {
-    const xmlLimit = rateLimiter.take()
-    if (!xmlLimit.allowed) {
-      return {
-        status: 'rate_limited',
-        retryAfter: xmlLimit.retryAfterSeconds.toString(),
-      }
-    }
-
     const xmlResult = await fetchLegalDocMlParagraphs(
       env,
       entry,
       documentId,
       fetchImpl,
+      budget,
     )
     if (xmlResult.status === 'rate_limited') return xmlResult
+    if (xmlResult.status === 'unavailable') return { status: 'unavailable' }
     if (xmlResult.status === 'ok') {
       legalDocMlParagraphs = xmlResult.paragraphs
       parser = legalDocMlParser
@@ -359,12 +368,12 @@ export async function fetchMojAuthorityDetail(
     }
   }
 
-  const detailLimit = rateLimiter.take()
-
-  if (!detailLimit.allowed) {
+  const charged = await budget.charge()
+  if (charged.status === 'unavailable') return { status: 'unavailable' }
+  if (charged.status === 'rate_limited') {
     return {
       status: 'rate_limited',
-      retryAfter: detailLimit.retryAfterSeconds.toString(),
+      retryAfter: charged.retryAfterSeconds.toString(),
     }
   }
 
@@ -410,7 +419,7 @@ export async function fetchMojAuthorityDetail(
 export async function fetchMojAuthorityDocumentFromRecord(
   env: FindCaseLawEnv,
   record: ProviderDocumentSource,
-  rateLimiter: MojRateLimiter,
+  budget: MojRequestBudget,
 ): Promise<ProviderDocumentResult> {
   const sourceUris = [record.provider.sourceUri, record.provider.xmlUri].filter(
     (uri): uri is string => Boolean(uri),
@@ -421,18 +430,18 @@ export async function fetchMojAuthorityDocumentFromRecord(
   const failures: ProviderSkipReason[] = []
 
   for (const sourceUri of sourceUris) {
-    const limit = rateLimiter.take()
-    if (!limit.allowed) {
-      return {
-        status: 'rate_limited',
-        retryAfter: limit.retryAfterSeconds.toString(),
-      }
-    }
-
     const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, sourceUri)
     if (!detailUrl) {
       failures.push('off_origin')
       continue
+    }
+    const charged = await budget.charge()
+    if (charged.status === 'unavailable') return { status: 'unavailable' }
+    if (charged.status === 'rate_limited') {
+      return {
+        status: 'rate_limited',
+        retryAfter: charged.retryAfterSeconds.toString(),
+      }
     }
     const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
     const detailFailure = detailFailureFromResponse(detailResponse)
@@ -478,21 +487,23 @@ export async function fetchMojAuthorityDocumentFromRecord(
 export async function fetchMojAuthorityDocumentById(
   env: FindCaseLawEnv,
   documentId: string,
-  rateLimiter: MojRateLimiter,
+  budget: MojRequestBudget,
 ): Promise<ProviderDocumentResult> {
   const uri = documentUriFromId(documentId)
   if (!uri) return { status: 'skipped', reason: 'unparsable' }
 
-  const limit = rateLimiter.take()
-  if (!limit.allowed) {
+  const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, uri)
+  if (!detailUrl) return { status: 'skipped', reason: 'off_origin' }
+
+  const charged = await budget.charge()
+  if (charged.status === 'unavailable') return { status: 'unavailable' }
+  if (charged.status === 'rate_limited') {
     return {
       status: 'rate_limited',
-      retryAfter: limit.retryAfterSeconds.toString(),
+      retryAfter: charged.retryAfterSeconds.toString(),
     }
   }
 
-  const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, uri)
-  if (!detailUrl) return { status: 'skipped', reason: 'off_origin' }
   const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
   const detailFailure = detailFailureFromResponse(detailResponse)
   if (detailFailure) return detailFailure

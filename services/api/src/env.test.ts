@@ -14,6 +14,7 @@ import {
   DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+  DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET,
 } from './request-limit-defaults'
 
 const originalEnv = { ...process.env }
@@ -233,6 +234,9 @@ describe('readApiEnv', () => {
     )
     expect(env.legalSearchHydrationWindowMs).toBe(
       DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+    )
+    expect(env.mojFindCaseLawRequestBudget).toBe(
+      DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET,
     )
     expect(env.nodeEnv).toBe('development')
   })
@@ -509,6 +513,7 @@ describe('readApiEnv', () => {
       'must be a positive integer',
     ],
     ['LEGAL_SEARCH_HYDRATION_WINDOW_MS', '0', 'must be a positive integer'],
+    ['MOJ_FIND_CASE_LAW_REQUEST_BUDGET', '0', 'must be a positive integer'],
   ])('rejects invalid %s configuration', (key, value, reason) => {
     seedDevelopmentEnv()
     process.env[key] = value

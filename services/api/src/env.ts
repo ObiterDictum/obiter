@@ -16,6 +16,7 @@ import {
   DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
   DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+  DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET,
 } from './request-limit-defaults'
 import {
   OOXML_INFLATE_CONCURRENCY,
@@ -63,6 +64,13 @@ export interface ApiEnv {
   legislationProvisionsIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
+  /**
+   * Cluster-wide Find Case Law HTTP attempts allowed across every API replica
+   * in the rolling five-minute window. Enforced on the application database by
+   * `legal_moj_request_charges`; the per-process `mojFindCaseLawRateLimit`
+   * remains a backstop that can only tighten it.
+   */
+  mojFindCaseLawRequestBudget: number
   rampartModel: string
   rampartRevision: string
   rampartCacheDir: string
@@ -428,6 +436,10 @@ export function readApiEnv(): ApiEnv {
     mojFindCaseLawRateLimit: readPositiveInteger(
       'MOJ_FIND_CASE_LAW_RATE_LIMIT',
       '1000',
+    ),
+    mojFindCaseLawRequestBudget: readPositiveInteger(
+      'MOJ_FIND_CASE_LAW_REQUEST_BUDGET',
+      String(DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET),
     ),
     rampartModel: rampart.model,
     rampartRevision: rampart.revision,

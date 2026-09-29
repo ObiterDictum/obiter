@@ -59,7 +59,8 @@ export {
   extractJudgmentDateFromHtml,
 } from './html-parser'
 
-export { createMojRateLimiter } from './rate-limiter'
+export type { MojRequestBudget, MojRequestCharge } from './rate-limiter'
+export { createMojRateLimiter, mojRequestWindowMs } from './rate-limiter'
 
 export type { WithdrawalCandidate, WithdrawnInfo } from './withdrawal'
 export { readWithdrawalCandidate, readWithdrawnInfo } from './withdrawal'

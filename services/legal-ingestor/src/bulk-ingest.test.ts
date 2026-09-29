@@ -93,7 +93,10 @@ function deps(
   const base: IngestDeps = {
     pool,
     baseUrl: 'https://caselaw.nationalarchives.gov.uk',
-    limiter: { take: () => ({ allowed: true as const, retryAfterSeconds: 0 }) },
+    limiter: {
+      take: () => ({ allowed: true as const, retryAfterSeconds: 0 }),
+      charge: async () => ({ status: 'allowed' as const }),
+    },
     gapMs: 0,
     sleep,
     fetchImpl: (async () => {
