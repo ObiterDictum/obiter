@@ -1,8 +1,14 @@
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
+import {
+  type DocumentModelWire,
+  type DocumentParagraphWire,
 } from '@obiter/contracts'
 import { documentStory, effectiveParagraph } from './document-model-text'
+import {
+  runFlag,
+  runHighlight,
+  runUnderline,
+  runVertAlign,
+} from './document-run-properties'
 import { paragraphNumPr } from './document-page-lists'
 import { paragraphListKind, pickNumberingId } from './document-list-toggle'
 import {
@@ -22,12 +28,13 @@ export function selectedParagraph(
     (item) => item.id === paragraphId,
   )
 }
-export function runFlagOn(xml: string, flag: 'bold' | 'italic' | 'underline') {
-  if (flag === 'underline') {
-    return /<w:u\b(?![^>]*w:val="none")/i.test(xml)
-  }
-  const name = flag === 'bold' ? 'b' : 'i'
-  return new RegExp(`<w:${name}\\b(?![^>]*w:val="0")`, 'i').test(xml)
+export function runFlagOn(
+  xml: string,
+  flag: 'bold' | 'italic' | 'underline' | 'strikethrough',
+) {
+  if (flag === 'underline') return runUnderline(xml) ?? false
+  const name = flag === 'strikethrough' ? 'strike' : flag === 'bold' ? 'b' : 'i'
+  return runFlag(xml, name) ?? false
 }
 
 function runsCoveringRange(
@@ -57,7 +64,7 @@ function runsCoveringRange(
 
 function flagOnCoveredRuns(
   runs: DocumentParagraphWire['runs'],
-  flag: 'bold' | 'italic' | 'underline',
+  flag: 'bold' | 'italic' | 'underline' | 'strikethrough',
 ) {
   // The covered runs come from the projected effective paragraph, so their
   // XML already carries every pending answer in application order: run-level
@@ -68,6 +75,22 @@ function flagOnCoveredRuns(
     runs.length > 0 &&
     runs.every((run) => runFlagOn(run.preservedXmlFragments.join(''), flag))
   )
+}
+
+/**
+ * The value every covered run agrees on, or `null` when they disagree or none
+ * is covered. A value control (highlight, vertical align) uses this so a mixed
+ * selection reads unpressed and one click makes it uniform.
+ */
+function uniformCoveredValue<T>(
+  runs: DocumentParagraphWire['runs'],
+  read: (xml: string) => T,
+): T | null {
+  if (runs.length === 0) return null
+  const first = read(runs[0]?.preservedXmlFragments.join('') ?? '')
+  return runs.every((run) => read(run.preservedXmlFragments.join('')) === first)
+    ? first
+    : null
 }
 
 // e40-selection-format-state: pressed flags follow the covered runs, not runs[0]
@@ -172,6 +195,12 @@ export function formatControlState(
     bold: flagOnCoveredRuns(covered, 'bold'),
     italic: flagOnCoveredRuns(covered, 'italic'),
     underline: flagOnCoveredRuns(covered, 'underline'),
+    strikethrough: flagOnCoveredRuns(covered, 'strikethrough'),
+    highlight: uniformCoveredValue(covered, runHighlight),
+    vertAlign: uniformCoveredValue(
+      covered,
+      (xml) => runVertAlign(xml) ?? 'baseline',
+    ),
     canIndent,
     canOutdent: Boolean(numPr?.numId),
     canContinue: Boolean(previousNum?.numId),

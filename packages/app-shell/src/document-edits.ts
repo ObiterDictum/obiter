@@ -1,12 +1,18 @@
 import {
   DOCUMENT_EDIT_COLOUR_PATTERN,
-  documentEditHighlightSchema,
-  documentEditVertAlignSchema,
   type DocumentEditOperation,
   type DocumentModelWire,
   type DocumentTextRunWire,
 } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
+import type { HighlightValue, VertAlignValue } from './document-format-types'
+import {
+  runFlag,
+  runHighlight,
+  runUnderline,
+  runVertAlign,
+  withoutTrackedRunProperties,
+} from './document-run-properties'
 import {
   collectFormatOperations,
   emptyFormatDrafts,
@@ -41,27 +47,27 @@ export type RunEditProperties = {
   fontFamily: string | null
   fontSize: number | null
   colour: string | null
-  highlight: (typeof documentEditHighlightSchema.options)[number] | null
+  highlight: HighlightValue | null
   strikethrough: boolean | null
-  vertAlign: (typeof documentEditVertAlignSchema.options)[number] | null
+  vertAlign: VertAlignValue | null
   smallCaps: boolean | null
 }
 
 export function runPropertiesFromFragments(
   fragments: readonly string[],
 ): RunEditProperties {
-  const xml = fragments.join('')
+  const xml = withoutTrackedRunProperties(fragments.join(''))
   return {
-    bold: toggleValue(xml, 'b'),
-    italic: toggleValue(xml, 'i'),
-    underline: underlineValue(xml),
+    bold: runFlag(xml, 'b'),
+    italic: runFlag(xml, 'i'),
+    underline: runUnderline(xml),
     fontFamily: fontFamilyValue(xml),
     fontSize: fontSizeValue(xml),
     colour: colourValue(xml),
-    highlight: highlightValue(xml),
-    strikethrough: toggleValue(xml, 'strike'),
-    vertAlign: vertAlignValue(xml),
-    smallCaps: toggleValue(xml, 'smallCaps'),
+    highlight: runHighlight(xml),
+    strikethrough: runFlag(xml, 'strike'),
+    vertAlign: runVertAlign(xml),
+    smallCaps: runFlag(xml, 'smallCaps'),
   }
 }
 
@@ -363,20 +369,6 @@ function wordAttr(attrs: string | undefined, name: string, prefix: string) {
   return attrs?.match(new RegExp(`(?:${prefix}:)?${name}="([^"]+)"`, 'i'))?.[1]
 }
 
-function toggleValue(xml: string, localName: string): boolean | null {
-  const tag = wordTag(xml, localName)
-  if (!tag) return null
-  const value = wordAttr(tag[1], 'val', xmlPrefix(xml))?.toLowerCase()
-  return value !== '0' && value !== 'false' && value !== 'off'
-}
-
-function underlineValue(xml: string): boolean | null {
-  const tag = wordTag(xml, 'u')
-  if (!tag) return null
-  const value = wordAttr(tag[1], 'val', xmlPrefix(xml))?.toLowerCase()
-  return value !== 'none' && value !== '0' && value !== 'false'
-}
-
 function fontFamilyValue(xml: string): string | null {
   const attrs = wordTag(xml, 'rFonts')?.[1]
   const prefix = xmlPrefix(xml)
@@ -396,34 +388,8 @@ function colourValue(xml: string): string | null {
   return value && isEditColour(value) ? value : null
 }
 
-function highlightValue(
-  xml: string,
-): (typeof documentEditHighlightSchema.options)[number] | null {
-  const value = wordAttr(wordTag(xml, 'highlight')?.[1], 'val', xmlPrefix(xml))
-  return value && isHighlight(value) ? value : null
-}
-
-function vertAlignValue(
-  xml: string,
-): (typeof documentEditVertAlignSchema.options)[number] | null {
-  const value = wordAttr(wordTag(xml, 'vertAlign')?.[1], 'val', xmlPrefix(xml))
-  return value && isVertAlign(value) ? value : null
-}
-
 function isEditColour(value: string) {
   return DOCUMENT_EDIT_COLOUR_PATTERN.test(value)
-}
-
-function isHighlight(
-  value: string,
-): value is (typeof documentEditHighlightSchema.options)[number] {
-  return documentEditHighlightSchema.options.some((option) => option === value)
-}
-
-function isVertAlign(
-  value: string,
-): value is (typeof documentEditVertAlignSchema.options)[number] {
-  return documentEditVertAlignSchema.options.some((option) => option === value)
 }
 
 export function resolveInsertAnchor(

@@ -6,6 +6,7 @@ import type {
 } from '@obiter/contracts'
 import { documentStory } from './document-model-text'
 import { twipToPx, xmlAttr, xmlTagAttrs } from './document-page-units'
+import { withoutTrackedParagraphProperties } from './document-run-properties'
 
 export type ListMarker = {
   text: string
@@ -87,7 +88,12 @@ export function paragraphNumPr(
 function numPrFromXml(
   xml: string,
 ): { numId: string; ilvl: number } | undefined {
-  const block = xml.match(/<w:numPr\b[\s\S]*?<\/w:numPr>/i)?.[0]
+  // A tracked pPrChange stores the previous numbering inside itself; the same
+  // current-versus-history read as the face so a foreign change cannot paint
+  // a marker the paragraph no longer has.
+  const block = withoutTrackedParagraphProperties(xml).match(
+    /<w:numPr\b[\s\S]*?<\/w:numPr>/i,
+  )?.[0]
   if (!block) return undefined
   const numId = xmlAttr(xmlTagAttrs(block, 'numId'), 'val')
   if (!numId || numId === '0') return undefined
