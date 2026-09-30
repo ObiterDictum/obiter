@@ -137,6 +137,9 @@ export function toFetchResponse(
       /** True when the judgment half failed: the exact-lookup leg rejected,
        * or the stored index outage left no judgment result. */
       judgmentSearchFailed?: boolean
+      /** True only when the legislation half completed successfully: it ran
+       * and neither its store nor its keyword engine failed. Not set merely
+       * because it was attempted; a failed half rides legislationSearchFailed. */
       legislationSearched?: boolean
       legislationGroupServed?: boolean
       /** True when the legislation half recognised the citation but held no

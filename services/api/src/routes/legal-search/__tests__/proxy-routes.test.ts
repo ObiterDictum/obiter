@@ -269,6 +269,74 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('P1.35 a malformed stored Act row is observable, not swallowed', async () => {
+    // The catch around createActDirectory/classifyLegislationCitation must
+    // leave an operational trace: at base the throw reached settleSearchHalf
+    // and was logged there. Only the error message is logged, never the query
+    // or legal text, and the note never claims a store outage.
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    const malformedActs = [
+      {
+        identity: 'ukpga/1998/42',
+        actType: 'ukpga',
+        year: 1998,
+        number: 42,
+        title: null,
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/1998/42',
+        extent: 'E+W',
+      },
+    ]
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Human Rights Act 1998',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: {
+          query: vi.fn(async (text: string) =>
+            text.includes('from legislation_documents order')
+              ? { rows: malformedActs }
+              : { rows: [] },
+          ),
+        } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Human Rights Act 1998' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    const logged = consoleError.mock.calls
+      .map((call) =>
+        call
+          .map((argument) =>
+            typeof argument === 'string' ? argument : JSON.stringify(argument),
+          )
+          .join(' '),
+      )
+      .join('\n')
+    consoleError.mockRestore()
+
+    // The client response stays honest: a half that failed is not a verdict.
+    expect(response.status).toBe(503)
+    const body = (await response.json()) as {
+      error?: { code?: string }
+      diagnostics?: unknown
+    }
+    expect(body.error?.code).toBe('search_incomplete')
+    expect(body.diagnostics).toBeUndefined()
+    // The failure is observable server-side, and the query never leaks.
+    expect(logged).toContain('classification')
+    expect(logged).not.toContain('Human Rights Act 1998')
+  })
+
   it('P1.35 a rejected legislation keyword index is never legislationSearched', async () => {
     // searchKeywordProvisions catches an engine rejection to empty hits and
     // reported searched:true. That is a failed leg, not a zero-hit search.
@@ -401,6 +469,144 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(body.error?.code).toBe('search_unavailable')
     expect(body.outcome).toBeUndefined()
     expect(body.citation).toBeUndefined()
+  })
+
+  it('P1.35 a failed judgment half never asserts a not_held citation verdict', async () => {
+    // Reviewer's case: a recognised citation whose judgment exact lookup
+    // cannot answer (the judgment engine rejects) while the legislation
+    // keyword index succeeds and serves a provision. The legislation hit is
+    // kept, but the response must not assert a judgment-corpus verdict or
+    // claim either judgment leg completed.
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    const directoryActs = [
+      {
+        identity: 'ukpga/2010/15',
+        actType: 'ukpga',
+        year: 2010,
+        number: 15,
+        title: 'Equality Act 2010',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+        extent: 'E+W+S',
+      },
+    ]
+    const provisionHit = {
+      id: 'ukpga-2010-15-section-13',
+      provisionRef: 'ukpga/2010/15/section/13',
+      documentIdentity: 'ukpga/2010/15',
+      actType: 'ukpga',
+      year: 2010,
+      number: 15,
+      label: 's. 13',
+      labelPath: 'section/13',
+      title: 'Equality Act 2010',
+      extent: 'E+W+S',
+      text: 'Direct discrimination.',
+      sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+      hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
+    }
+    searchClientMock.index.mockReturnValue({
+      search: vi.fn(async () => ({
+        hits: [provisionHit],
+        query: '[2024] UKSC 3',
+        estimatedTotalHits: 1,
+        processingTimeMs: 1,
+      })),
+    })
+    // A variable, not a fresh literal: the real serve reads `.index()` off the
+    // client, while the default mock client deliberately carries only an id.
+    const provisionSearchClient = {
+      id: 'meili-client',
+      index: searchClientMock.index,
+    }
+    searchClientMock.createClient.mockReturnValue(provisionSearchClient)
+    // Judgment engine down: the exact leg reports unavailable and the stored
+    // and citing lookups never run.
+    searchClientMock.search.mockRejectedValue(new Error('judgment index down'))
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: {
+          query: vi.fn(async (text: string) =>
+            text.includes('from legislation_documents order')
+              ? { rows: directoryActs }
+              : { rows: [] },
+          ),
+        } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2024] UKSC 3' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      outcome: string
+      citation?: { recognised: boolean; status: string }
+      groups?: Array<{ hits: Array<{ id: string }> }>
+      diagnostics: Record<string, unknown>
+    }
+    // The legislation answer survives the judgment failure.
+    expect(body.outcome).toBe('results')
+    expect(body.groups?.[0]?.hits[0]?.id).toBe(provisionHit.id)
+    expect(body.diagnostics.judgmentSearchFailed).toBe(true)
+    // Recognition is not erased by the incomplete verification...
+    expect(body.diagnostics.citationRecognised).toBe(true)
+    expect(body.citation?.recognised).toBe(true)
+    // ...but a corpus that never answered cannot be asserted not held, and a
+    // failed leg cannot claim its exact lookup or index search completed.
+    expect(body.citation?.status).toBe('unverified')
+    expect(body.diagnostics.citationStatus).toBe('unverified')
+    expect(body.diagnostics.exactLookupSearched).toBe(false)
+    expect(body.diagnostics.storedIndexSearched).toBe(false)
+  })
+
+  it('P1.35 control: skipped legs report neither searched nor failed', async () => {
+    // A judgment-only caller opts out of the legislation half, and a
+    // non-citation query has no exact lookup to run. Neither a skipped leg
+    // nor the completed judgment leg may be reported as a failed half, and
+    // a skipped exact lookup must not read as searched.
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', sourceType: 'judgment' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      outcome: string
+      citation?: { recognised: boolean; status: string }
+      diagnostics: Record<string, unknown>
+    }
+    expect(body.outcome).toBe('no_match')
+    expect(body.diagnostics.legislationSearched).toBeUndefined()
+    expect(body.diagnostics.legislationSearchFailed).toBeUndefined()
+    expect(body.diagnostics.judgmentSearchFailed).toBeUndefined()
+    expect(body.diagnostics.exactLookupSearched).toBe(false)
+    expect(body.diagnostics.storedIndexSearched).toBe(true)
+    expect(body.citation).toMatchObject({
+      recognised: false,
+      status: 'not_citation',
+    })
+    expect(legislationServeMock.resolveLegislationFetch).not.toHaveBeenCalled()
   })
 
   it('returns cached results without calling Find Case Law', async () => {

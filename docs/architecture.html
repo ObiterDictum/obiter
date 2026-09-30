@@ -4876,8 +4876,12 @@
                 >judgmentSearchFailed</code
               >
               or <code>legislationSearchFailed</code>); with no usable hit at
-              all, fetch answers <code>503 search_incomplete</code>. A completed
-              zero-hit search still answers <code>no_match</code>.
+              all, fetch answers <code>503 search_incomplete</code>. A
+              recognised citation in a partial response reports
+              <code>citationStatus: unverified</code> rather than
+              <code>not_held</code>: recognition is kept, but the judgment
+              corpus that never answered cannot establish a negative. A
+              completed zero-hit search still answers <code>no_match</code>.
             </p>
           </div>
         </section>

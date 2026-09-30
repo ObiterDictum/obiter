@@ -112,8 +112,10 @@ export interface LegalSearchFetchResponse {
     citationRecognised?: boolean
     citationStatus?: LegalSearchCitationStatus
     storedIndexStatus?: 'ok' | 'unavailable'
-    /** Response diagnostics.legislationSearched: whether the legislation
-     * half ran a search rather than being skipped. */
+    /** Response diagnostics.legislationSearched: true only when the
+     * legislation half completed successfully — it ran and neither its store
+     * nor its keyword engine failed — not merely when it was attempted. A
+     * failed half is named by legislationSearchFailed instead. */
     legislationSearched?: boolean
     /** True when the legislation half failed: its store or keyword engine
      * did not answer. Never set from a completed zero-hit search. */

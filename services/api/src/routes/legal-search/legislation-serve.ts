@@ -265,11 +265,19 @@ export async function resolveLegislationFetch(
   try {
     const directory = createActDirectory(acts)
     outcome = classifyLegislationCitation(query, directory)
-  } catch {
+  } catch (error: unknown) {
+    // A malformed stored Act row or a classification defect is a code/data
+    // failure, not a store outage: at base this throw reached settleSearchHalf
+    // and was logged there, so it must keep an operational trace. Only the
+    // error message is logged — never the query or any legal text.
+    console.error(
+      'Legislation classification failed — serving an incomplete half.',
+      { reason: error instanceof Error ? error.message : String(error) },
+    )
     return {
       ...emptyResult,
       failed: true,
-      note: 'Legislation store unavailable.',
+      note: 'Legislation search failed.',
     }
   }
 

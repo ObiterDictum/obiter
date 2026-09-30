@@ -239,6 +239,12 @@ export function createLegalSearchProxyRoutes(
     // hit branch below raises it only for a rejected exact half; the stored
     // and citing lookups raise it after their own engine calls.
     let judgmentSearchFailed = judgmentExactFailed
+    // A judgment leg that failed or was skipped cannot be reported as searched,
+    // and a citation verdict it would have established is not established. The
+    // exact lookup completes only when it ran and the engine answered; the
+    // stored-index flag is derived from the main search's own status below.
+    const exactLookupCompleted =
+      exactLookup !== null && !judgmentExactFailed && !exactIndexUnavailable
 
     if (exactStoredAuthority?.hit) {
       const summaries = [
@@ -252,13 +258,14 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         summaries,
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: true,
+            exactLookupSearched: exactLookupCompleted,
             storedIndexSearched: true,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
@@ -290,6 +297,9 @@ export function createLegalSearchProxyRoutes(
 
     const cachedIndexUnavailable =
       exactIndexUnavailable || cached?.storedIndexStatus === 'unavailable'
+    // Whether the main stored judgment index search actually answered. A leg
+    // that failed is never reported as searched.
+    const storedIndexCompleted = cached?.storedIndexStatus === 'ok'
     // The derived index lags the checker: filter Meili hits against the
     // Postgres withdrawn flag before responding, so a stale indexed copy of
     // a withdrawn judgment never serves. Unknown (lookup miss/timeout)
@@ -326,14 +336,15 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         summaries,
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
-            storedIndexSearched: true,
+            exactLookupSearched: exactLookupCompleted,
+            storedIndexSearched: storedIndexCompleted,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
@@ -352,6 +363,7 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         [],
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
@@ -359,8 +371,8 @@ export function createLegalSearchProxyRoutes(
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
-            storedIndexSearched: true,
+            exactLookupSearched: exactLookupCompleted,
+            storedIndexSearched: storedIndexCompleted,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
@@ -424,14 +436,15 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         citingSummaries,
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse(citingSummaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: true,
-            storedIndexSearched: true,
+            exactLookupSearched: exactLookupCompleted,
+            storedIndexSearched: storedIndexCompleted,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
@@ -461,6 +474,7 @@ export function createLegalSearchProxyRoutes(
       exactLookup,
       [],
       legislation,
+      !judgmentSearchFailed,
     )
     return c.json(
       toFetchResponse([], parsed.data.query, true, 0, 0, false, {
@@ -470,8 +484,8 @@ export function createLegalSearchProxyRoutes(
         citation,
         ...legislationFetchExtras(exactLookup, legislation),
         diagnostics: {
-          exactLookupSearched: Boolean(exactLookup),
-          storedIndexSearched: true,
+          exactLookupSearched: exactLookupCompleted,
+          storedIndexSearched: storedIndexCompleted,
           liveProviderSearched: false,
           foregroundLiveIgnored: foregroundLiveRequested || undefined,
           storedOnlyBrowse,
@@ -791,8 +805,9 @@ function citationFieldsWithLegislation(
   exactLookup: ExactLookup | null,
   servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
   legislation: LegislationFetchResult | null,
+  judgmentComplete: boolean,
 ) {
-  const base = citationFields(exactLookup, servedHits)
+  const base = citationFields(exactLookup, servedHits, judgmentComplete)
   if (exactLookup || !legislation) return base
   if (legislation.citationHeldExact) {
     return {
@@ -1073,12 +1088,17 @@ function bodyCitesRecognisedCitation(
 function citationFields(
   exactLookup: ExactLookup | null,
   servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
+  judgmentComplete = true,
 ) {
   const status: LegalSearchCitationStatus = !exactLookup
     ? 'not_citation'
     : servedHits.some((hit) => hit.citationMatch === 'exact')
       ? 'held_exact'
-      : 'not_held'
+      : judgmentComplete
+        ? 'not_held'
+        : // The citation was recognised but a judgment leg failed: no verdict
+          // is established, so the response never asserts a negative.
+          'unverified'
   return {
     citation: { recognised: exactLookup !== null, status },
     citationDiagnostics: {
