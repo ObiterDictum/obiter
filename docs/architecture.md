@@ -250,6 +250,17 @@ run. Joined `FOR UPDATE` across tables is avoided. Matter-share revocation uses
 the matter-first prefix, so a revocation that wins the matter lock cannot be
 bypassed by a stale pre-lock authorization decision.
 
+Document and comment writes take that same matter-first prefix. The edit,
+collaboration merge (including an `already_applied` replay), tracked-change
+decision, comment create and comment resolve transactions lock the matter row
+and re-evaluate edit-level access in `services/api/src/matter-lock.ts` before
+they lock the document. The route-level resolver still rejects early, but it is
+not authoritative: a share revoked or downgraded while a write is queued
+serialises on the matter lock, so the write returns the concealed document 404
+and leaves no version, current-version pointer change, comment row, audit row or
+candidate object. A write that takes the matter lock first commits, and
+revocation then proceeds.
+
 Direct reads and lists exclude deleted runs. The sole deleted-run exception is
 `GET /api/redaction-runs/:runId/audit`: after the live resolver misses, the route
 uses a narrow organisation-scoped deleted-row resolver available only to

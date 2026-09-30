@@ -3436,11 +3436,18 @@
             on the query being written correctly. Matter-derived resource
             resolvers require view access for reads and edit access for writes,
             with no administrator override. Write transactions repeat the edit
-            predicate while locking the resource. Route modules are prohibited
-            from querying matter-derived tables directly, so a new route must
-            use an access-enforcing resolver. Denial is a uniform 404. Web uses
-            cookie sessions; desktop uses the bearer plugin. Linked redaction
-            runs inherit live matter view/edit access; standalone runs use their
+            predicate while locking the resource. Document edit, collaboration
+            merge (including an <code>already_applied</code> replay),
+            tracked-change decision, comment create and comment resolve lock the
+            matter row and re-evaluate edit access before locking the document,
+            so a revoked or downgraded share that wins the matter lock cannot be
+            outrun by an earlier authorization decision. A denied write returns
+            the concealed document 404 and leaves no version, pointer change,
+            comment or audit row. Route modules are prohibited from querying
+            matter-derived tables directly, so a new route must use an
+            access-enforcing resolver. Denial is a uniform 404. Web uses cookie
+            sessions; desktop uses the bearer plugin. Linked redaction runs
+            inherit live matter view/edit access; standalone runs use their
             creator for ordinary access, with no administrator override.
             Transactional linked lifecycle mutations lock matter, document, and
             redaction run lineage in deterministic id order, matching the

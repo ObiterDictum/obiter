@@ -136,7 +136,10 @@ export class EditDatabase extends SharedTestDatabase {
   }
 
   private client(sharedClient: PoolClient) {
-    return new EditTransaction(this, sharedClient, this.editOptions)
+    return new EditTransaction(this, sharedClient, {
+      ...this.editOptions,
+      access: this.options.access,
+    })
   }
 }
 
@@ -145,6 +148,7 @@ class EditTransaction {
   private stagedVersion: VersionRow | null = null
   private stagedPointer: string | null = null
   private readonly stagedAudits: Audit[] = []
+  private matterLockChecked = false
   private lockChecked = false
 
   constructor(
@@ -180,6 +184,21 @@ class EditTransaction {
       return { rows: [] }
     }
 
+    if (sql.includes('select matter.id from matters')) {
+      this.recordQuery(sql)
+      requireSql(sql, 'for update')
+      if (this.lockChecked) {
+        throw new Error(
+          'The matter lock must be taken before the document lock.',
+        )
+      }
+      this.matterLockChecked = true
+      const access =
+        this.options.access === undefined ? 'view' : this.options.access
+      return {
+        rows: access === 'owner' || access === 'edit' ? [{ id: 'mtr_1' }] : [],
+      }
+    }
     if (sql.includes('left join document_versions current')) {
       this.recordQuery(sql)
       requireSql(sql, 'for update of document')
@@ -352,8 +371,10 @@ class EditTransaction {
   }
 
   private requireLockedWrite() {
-    if (!this.lockChecked || !this.releaseLock) {
-      throw new Error('Transaction writes require the locked base recheck.')
+    if (!this.matterLockChecked || !this.lockChecked || !this.releaseLock) {
+      throw new Error(
+        'Transaction writes require the locked matter and base recheck.',
+      )
     }
   }
 

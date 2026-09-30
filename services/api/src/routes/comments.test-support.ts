@@ -146,6 +146,14 @@ export class TestDatabase extends SharedTestDatabase {
           }
           return { rows: [] }
         }
+        if (sql.includes('select matter.id from matters')) {
+          this.queries.push(sql)
+          const access = this.commentOptions.access ?? 'edit'
+          return {
+            rows:
+              access === 'owner' || access === 'edit' ? [{ id: 'mtr_1' }] : [],
+          }
+        }
         if (sql.includes('join document_versions version')) {
           this.queries.push(sql)
           const [documentId, matterId, organisationId, versionId] =

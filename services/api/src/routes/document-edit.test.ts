@@ -308,13 +308,17 @@ describe('POST /api/documents/:id/edit', () => {
     )
 
     expect(response.status).toBe(201)
+    const matterLockIndex = database.queries.findIndex((sql) =>
+      sql.includes('select matter.id from matters'),
+    )
     const lockIndex = database.queries.findIndex((sql) =>
       sql.includes('for update of document'),
     )
     const pointerIndex = database.queries.findIndex((sql) =>
       sql.includes('update matter_documents'),
     )
-    expect(lockIndex).toBeGreaterThan(-1)
+    expect(matterLockIndex).toBeGreaterThan(-1)
+    expect(lockIndex).toBeGreaterThan(matterLockIndex)
     expect(pointerIndex).toBeGreaterThan(lockIndex)
     expect(database.queries[pointerIndex]).toContain('current_version_id = $4')
   })
