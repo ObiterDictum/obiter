@@ -260,7 +260,7 @@ describe('createApiApp', () => {
     }
   })
 
-  it('does not persist a live judgment when no corpus writer is configured', async () => {
+  it('never fetches a live judgment when the corpus has no writer', async () => {
     const auth = {
       api: { getSession: async () => null },
       handler: async () => new Response(null, { status: 404 }),
@@ -270,14 +270,13 @@ describe('createApiApp', () => {
     const appPool = createPool(appQuery)
     const corpusPool = createPool(corpusQuery)
     searchClientMock.getDocument.mockResolvedValue(null)
+    const upstreamCalls: string[] = []
     vi.stubGlobal(
       'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            '<html><body><h1>Potanina v Potanin</h1><h2><span>Neutral Citation Number</span>[2024] UKSC 3</h2><article><div class="judgment-header__date">Date: 31/01/2024</div><p>This judgment paragraph is long enough to be indexed as a stored authority body.</p></article></body></html>',
-          ),
-      ),
+      vi.fn(async (input: unknown) => {
+        upstreamCalls.push(String(input))
+        return new Response('<html><body></body></html>')
+      }),
     )
 
     try {
@@ -286,14 +285,15 @@ describe('createApiApp', () => {
         corpus: { read: corpusPool, write: null },
       }).request('/api/search/documents/uksc-2024-3')
 
-      expect(response.status).toBe(200)
+      // Corpus-only: the API answers a miss honestly and never reaches Find
+      // Case Law, whatever the corpus write capability is.
+      expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({
-        document: { neutralCitation: '[2024] UKSC 3', court: 'uksc' },
+        error: { code: 'document_not_found' },
       })
-      // A null writer is the whole capability model: the fetched document
-      // answers this request only. Neither the application pool nor the
-      // read-only corpus pool is ever asked to store it, and nothing is
-      // indexed from an unpersisted row.
+      expect(upstreamCalls).toEqual([])
+      // Neither pool is ever asked to store a fetched document, and nothing is
+      // indexed.
       expect(appQuery).not.toHaveBeenCalled()
       expect(corpusQuery).not.toHaveBeenCalledWith(
         expect.stringContaining('insert into legal_source_documents'),

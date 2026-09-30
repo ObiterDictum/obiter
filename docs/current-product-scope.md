@@ -10,7 +10,7 @@ Status is tracked in three tiers. "Implemented" means a user action reaches the 
 
 ### Implemented end-to-end (API + UI)
 
-- Search: the legal source search surface. It searches Obiter-owned stored legal sources first and queues Find Case Law hydration in the background on misses. (App shell rebuild M3 confirmed `/search` and `/case/:slug` render on the `--obiter-*` design tokens and `@obiter/ui` components exclusively — no legacy styling remains. The restyle itself shipped in PR #24; M3 is the verification and dead-CSS removal pass.)
+- Search: the legal source search surface. It searches Obiter-owned stored legal sources only; the user-facing API is corpus-only and never contacts Find Case Law, answering a miss honestly under the stored-only contract. (App shell rebuild M3 confirmed `/search` and `/case/:slug` render on the `--obiter-*` design tokens and `@obiter/ui` components exclusively — no legacy styling remains. The restyle itself shipped in PR #24; M3 is the verification and dead-CSS removal pass.)
 
 Search owns:
 
@@ -117,4 +117,4 @@ The current implementation is the first slice of that surface: case law search a
 
 ## Implementation Boundary
 
-The current case law implementation keeps a PostgreSQL source record for fetched judgments, including provider metadata, content hash, source/XML/PDF URIs, raw Atom entry metadata, and hydrated document payloads when available. Meilisearch is a derived index for fast lexical retrieval, not the source of record. Find Case Law calls are queued as background hydration after Obiter-owned storage misses so the user-visible search path is not blocked on the external provider.
+The current case law implementation keeps a PostgreSQL source record for fetched judgments, including provider metadata, content hash, source/XML/PDF URIs, raw Atom entry metadata, and hydrated document payloads when available. Meilisearch is a derived index for fast lexical retrieval, not the source of record. The user-facing API is corpus-only: it never contacts Find Case Law. National Archives calls happen only during an explicit indexing run, which writes the stored records this index derives from.

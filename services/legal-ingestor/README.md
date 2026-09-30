@@ -125,13 +125,20 @@ rule exists to stop. Production also requires `MEILISEARCH_HOST`,
 
 then `bun run rebuild:search-index` from the repo root.
 
-## Withdrawals (deferred)
+## Withdrawals (implemented, not scheduled, not authorised as a poll)
 
-Corrections are handled (see above). True withdrawals — a judgment removed
-or replaced upstream — are not: nothing deletes today. Follow-up is a pass
-that re-fetches stored ids and marks `provider_json.withdrawn` with an audit
-log instead of deleting, then excludes withdrawn rows from publication via
-the rebuild. Tracked as `TODO(withdrawals)` in `src/bulk-ingest.ts`.
+`withdrawal:check` re-fetches stored document URIs from Find Case Law and, on a
+two-observation confirmation at least 24h apart, marks `provider_json.withdrawn`
+with an audit trail and removes the derived index copy. It never deletes the
+stored row. It is a real Archives-polling job. No systemd unit, timer, cron
+entry or container schedules it, and the corpus-only API decision
+(`docs/architecture.md`, 30 September 2026) does not authorise a standalone
+Archives poll: National Archives access is permitted only during an explicit
+indexing run. The unresolved product/licence decision is whether withdrawal
+detection folds into that indexing run or is handled another way. Until it is
+made, do not schedule this command. This is the TNA licence clause (a)(iii)
+obligation to remove material no longer published; it is not solved by
+leaving the command unscheduled.
 
 ## Licensing provenance
 

@@ -19,7 +19,7 @@ This repository is the product monorepo for the Obiter web app, desktop app, API
 
 Obiter is being built around a small set of durable legal workflows:
 
-- **Search**: source-grounded search across stored legal-source records, with Find Case Law discovery and hydration for UK judgments.
+- **Search**: source-grounded search across stored legal-source records, with Find Case Law ingestion for UK judgments performed only by an explicit indexing run.
 - **Matters**: private workspaces for legal documents, matter context, review state, deadlines, and generated artifacts.
 - **Redaction**: reviewable and auditable protection of sensitive material before documents enter AI-assisted workflows.
 - **Verification**: citation, quotation, and proposition checking against source evidence.
@@ -56,13 +56,12 @@ The current product slice is concentrated on Search, stored case pages, the auth
 
 Search is the most developed product slice:
 
-- `GET /api/search` searches Obiter-owned legal-source records.
-- `POST /api/search/fetch` handles Find Case Law fetch-on-cache-miss.
+- `POST /api/search/fetch` searches the stored corpus and never contacts Find Case Law.
 - `GET /api/search/documents/:documentId` retrieves stored judgments.
 - `/search` provides the shared Search UI.
 - `/cases/:caseId` opens stored judgment pages.
 
-PostgreSQL is the source-of-record direction for fetched legal-source metadata and hydrated document payloads. Meilisearch is a derived index for fast lexical retrieval. Find Case Law calls are queued as background hydration after Obiter-owned storage misses so the visible search path is not blocked on the external provider.
+PostgreSQL is the source-of-record direction for fetched legal-source metadata and hydrated document payloads. Meilisearch is a derived index for fast lexical retrieval. The user-facing API is corpus-only: it never contacts Find Case Law, and a miss answers honestly under the stored-only contract. National Archives calls happen only during an explicit indexing run in `services/legal-ingestor`, which writes the stored records this index derives from.
 
 ## Working In The Repo
 

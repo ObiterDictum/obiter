@@ -6,6 +6,8 @@ This slice improves the existing Search experience for the current demo priority
 
 The immediate goal is not to build Matter Workspace, hosted storage, offline sync, Redaction, Verification, or Research. Those remain product goals, but they are not the next build step.
 
+> **Status: corpus-only API.** The user-facing API never contacts Find Case Law on a request path; National Archives access happens only during an explicit indexing run in `services/legal-ingestor`. Any remaining mention of live provider fallback, foreground live results, hydration or provider fetch-through below describes the earlier plan or a future developer-API target, not current request behaviour. See `docs/architecture.md` for the corpus-only decision.
+
 ## Decisions
 
 - Phase 0.3 and Phase 0.4 are paused for this demo slice.
@@ -37,10 +39,10 @@ Target module layout:
 
 - `index.ts`: public route exports
 - `proxy-routes.ts`: `POST /api/search/fetch` and `GET /api/search/documents/:documentId`
-- `moj-client.ts`: Find Case Law fetch, detail retrieval, hydration, and indexing orchestration
+- `stored-document.ts`: stored full-text read from the derived index. The API is corpus-only; Find Case Law fetch, detail retrieval, hydration and indexing live in the explicit indexing service, not the request path.
 - `atom-parser.ts`: Atom entry parsing and Atom helper functions
 - `html-parser.ts`: judgment HTML parsing, paragraph extraction, document parsing, text decoding, and hashing
-- `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms, foreground record cache helper
+- `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms
 - `court-utils.ts`: court mappings, court normalization, citation/path court derivation, search text normalization, document matching
 - `rate-limiter.ts`: `createMojRateLimiter`
 - `fetch-schema.ts`: fetch request schema, document id schema, route-facing types
@@ -61,7 +63,7 @@ Search should be prepared to become an API-key-protected public legal-source API
 
 Separate these surfaces:
 
-- App Search endpoint: product UX orchestration for `/search`, including stored search, optional foreground Find Case Law behavior, background hydration, demo status flags, and UI-oriented response shaping.
+- App Search endpoint: product UX orchestration for `/search`, including stored search, corpus-only response shaping, demo status flags, and UI-oriented response shaping.
 - Stable legal-source API: versioned, stored-source-first retrieval surface intended for SDKs, MCP servers, integrations, and third-party app search.
 - Provider ingestion/hydration: internal source acquisition and indexing workflows. External callers must not depend on provider-specific behavior such as Find Case Law Atom shapes, provider rate limits, or background indexing details.
 
@@ -123,10 +125,10 @@ The active refactor must avoid choices that make later case law, legislation, in
 
 Current provider scope:
 
-- Implemented case-law ingestion and hydration uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The route module is still named `moj-client.ts` and the environment variables are still named `MOJ_FIND_CASE_LAW_*`, but the configured endpoint is The National Archives Find Case Law service.
+- Implemented case-law ingestion uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The ingestor is the only caller; the API route module was renamed from `moj-client.ts` to `stored-document.ts` when the request path became corpus-only, and the environment variables are still named `MOJ_FIND_CASE_LAW_*`.
 - This gives Search broad coverage across the supported Find Case Law court and tribunal collections, subject to provider availability, parser support, and licensing constraints.
 - `legislation.gov.uk` is not implemented yet. Legislation requires a separate provider adapter, schema, storage model, version/provision handling, and search semantics; do not treat the current judgment path as legislation ingestion.
-- The current product behavior is stored Obiter legal sources first, then safe Find Case Law fallback/hydration for case-law misses. Future legislation search should be added source-by-source without weakening this case-law path.
+- The current product behaviour is stored Obiter legal sources only: the user-facing API never contacts Find Case Law, so a case-law miss is answered honestly as not held. Future legislation search should be added source-by-source without weakening this stored-only path.
 
 One Search surface must support:
 
@@ -136,8 +138,8 @@ One Search surface must support:
 - keyword lookup over stored source metadata
 - keyword lookup over judgment body text
 - court, jurisdiction, source type, and date filters
-- stored-source-first behavior before live provider calls
-- Find Case Law fallback on stored misses where the request is safe and supported
+- stored-source-only behaviour: a request path never contacts a live provider
+- an honest not-held answer on stored misses, never a provider fallback
 
 Future-compatible Search requests should be able to grow toward:
 
@@ -175,12 +177,12 @@ Search results should be discriminated by source type and share a stable envelop
 
 Judgment results should point to judgment paragraphs. Legislation results should point to provisions, headings, schedules, or versioned document records. International-law results should point to articles, rules, annexes, paragraphs, decisions, or other source-specific evidence units. Search should return the legal source as the primary result, not detached evidence fragments with no parent document context.
 
-The current layered behavior must be preserved:
+The current layered behavior is stored-only:
 
 1. Search the stored Meilisearch index first.
 2. If that misses or times out, search the PostgreSQL legal source store.
-3. If stored sources miss, either queue Find Case Law hydration or return live foreground results when the request allows it.
-4. Store provider metadata and hydrate/index detail pages in the background where possible.
+3. If stored sources miss, answer honestly (`no_match`, or `recognised_not_held` for a recognised citation). The request path never queues Find Case Law hydration and never returns live foreground results; National Archives access happens only during an explicit indexing run.
+4. Provider metadata is written and detail pages hydrated/indexed only by the indexing run, never on a request path.
 
 Stored Meilisearch search must include body text. The current `@obiter/search-client` searchable attributes include:
 
@@ -414,8 +416,8 @@ Rules:
 - Exact neutral citation matches rank ahead of title, paragraph, and partial keyword matches.
 - Citation formatting variants should normalize where practical, including extra whitespace and slash/dash court filter differences.
 - If an exact citation exists in stored sources, return it directly as the first result.
-- If stored sources miss and foreground live lookup is enabled, Find Case Law results should still return the matching case directly when the provider exposes it.
-- A citation search should not leave the user with only a queued hydration state when the matching live case can be returned safely in the foreground.
+- If stored sources miss, return the honest not-held answer; the API does not consult Find Case Law, so a citation miss is never silently upgraded to a live result.
+- A citation search never queues hydration or returns a live foreground result.
 - Opening the result should go straight to the canonical `/case/:caseSlug` URL when the result payload includes one. `/cases/:caseId` remains as an internal-id compatibility route and redirects to the canonical route when the document is known.
 
 Example:
@@ -451,11 +453,11 @@ Court shortcuts update the court filter. If a non-empty query is already present
 If the query is empty, a court shortcut should run a bounded stored-source browse:
 
 - return the latest 10 stored judgments for that court
-- do not call Find Case Law with an unbounded or synthetic broad query
+- the request path never contacts Find Case Law, for an empty or a non-empty query
 - label the result state as recent cases for that court
 - omit snippets unless a safe stored paragraph match is available
 
-This requires an explicit API path or schema branch for filter-only stored search. Do not loosen the Find Case Law fetch path to accept empty queries.
+This requires an explicit API path or schema branch for filter-only stored search. The fetch path stays corpus-only: it never contacts Find Case Law, whatever the query.
 
 ### Individual Filter Removal
 
