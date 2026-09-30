@@ -26,6 +26,10 @@ export const apiErrorCodeSchema = z.enum([
   // engine. Distinct from storage_unavailable (Find Case Law or Postgres)
   // so the UI names the outage instead of blaming the provider.
   'search_unavailable',
+  // One federated search half failed and the other had no usable hit, so the
+  // request has no trustworthy answer. Distinct from search_unavailable: the
+  // engine may be fine and only the legislation or exact-lookup half failed.
+  'search_incomplete',
   'job_unavailable',
   'conflict_detected',
   'redaction_run_not_found',

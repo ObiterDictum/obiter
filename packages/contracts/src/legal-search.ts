@@ -3,13 +3,16 @@ import { z } from 'zod'
 /**
  * Citation honesty for exact-lookup queries. A query the proxy recognises as
  * a neutral citation or document id is either held exactly, recognised but
- * not held, or not a citation at all. Additive: every member is optional at
- * the response boundary, so older clients keep reading.
+ * not held, or not a citation at all. `unverified` is the fourth state: the
+ * citation was recognised but a judgment leg failed, so no verdict is
+ * established and the response must not assert a negative. Additive: every
+ * member is optional at the response boundary, so older clients keep reading.
  */
 export const legalSearchCitationStatusSchema = z.enum([
   'held_exact',
   'not_held',
   'not_citation',
+  'unverified',
 ])
 export type LegalSearchCitationStatus = z.infer<
   typeof legalSearchCitationStatusSchema

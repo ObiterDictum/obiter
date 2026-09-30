@@ -39,6 +39,10 @@ export function SearchResults({
   const legislationNote = response.diagnostics?.legislationNote
   const legislationScheduleGuidance =
     response.diagnostics?.legislationScheduleGuidance
+  const judgmentSearchFailed =
+    response.diagnostics?.judgmentSearchFailed === true
+  const legislationSearchFailed =
+    response.diagnostics?.legislationSearchFailed === true
   const scheduleFeedback = legislationScheduleGuidance
     ? getLegislationScheduleGuidanceFeedback(legislationScheduleGuidance)
     : null
@@ -69,6 +73,22 @@ export function SearchResults({
         <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
           {formatResultMeta(response, browse)}
         </p>
+        {judgmentSearchFailed || legislationSearchFailed ? (
+          // A half that failed while the other served hits. The results stay
+          // visible, but incomplete coverage is stated rather than hidden:
+          // a partial answer must never read as a complete one.
+          <div
+            role="status"
+            className="mb-3 rounded-md border border-warning/30 bg-raised px-3 py-2 text-sm text-muted"
+          >
+            <p>
+              {incompleteCoverageMessage(
+                judgmentSearchFailed,
+                legislationSearchFailed,
+              )}
+            </p>
+          </div>
+        ) : null}
         {legislationVerdict && !showLegislation ? (
           // The legislation half reached a verdict but served no group. Say so
           // by name, above any judgment results, so an empty legislation group
@@ -230,6 +250,19 @@ function LegislationGroup({
 
 function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
+}
+
+function incompleteCoverageMessage(
+  judgmentSearchFailed: boolean,
+  legislationSearchFailed: boolean,
+) {
+  if (judgmentSearchFailed && legislationSearchFailed) {
+    return 'Part of this search failed, so these results may be incomplete.'
+  }
+  if (legislationSearchFailed) {
+    return 'Legislation could not be searched this time, so these results may be incomplete.'
+  }
+  return 'Case law could not be searched this time, so these results may be incomplete.'
 }
 
 function formatMatchReason(matchReason: string | undefined) {

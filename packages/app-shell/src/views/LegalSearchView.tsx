@@ -801,6 +801,9 @@ async function readSearchErrorMessage(response: Response): Promise<string> {
   if (code === 'search_unavailable') {
     return 'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.'
   }
+  if (code === 'search_incomplete') {
+    return 'Legal search could not be completed because part of the search failed. Try again later.'
+  }
   if (code === 'storage_unavailable') {
     return 'Legal search is temporarily unavailable because the legal-source store cannot be reached. Try again later.'
   }
