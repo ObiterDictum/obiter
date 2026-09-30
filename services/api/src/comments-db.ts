@@ -5,6 +5,7 @@ import {
   type DocumentCommentAnchor,
 } from '@obiter/contracts'
 import { appendAuditLog } from './database'
+import { lockMatterForEdit } from './matter-lock'
 
 type CommentRow = {
   id: string
@@ -85,6 +86,17 @@ export async function createDocumentComment(
   },
 ): Promise<DocumentComment | null> {
   return commentTransaction(pool, async (client) => {
+    // Matter before document, so a comment cannot commit on access that share
+    // revocation removed while the request was queued.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: input.organisationId,
+        matterId: input.matterId,
+        userId: input.authorId,
+      }))
+    ) {
+      return null
+    }
     if (!(await lockCurrentDocument(client, input))) return null
 
     const inserted = await client.query<CommentRow>(
@@ -144,6 +156,16 @@ export async function resolveDocumentComment(
   },
 ): Promise<DocumentComment | null> {
   return commentTransaction(pool, async (client) => {
+    // Matter before document, matching comment create and the revocation lock.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: input.organisationId,
+        matterId: input.matterId,
+        userId: input.resolvedBy,
+      }))
+    ) {
+      return null
+    }
     if (
       !(await lockCurrentDocument(client, {
         ...input,

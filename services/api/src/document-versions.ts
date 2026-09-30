@@ -15,6 +15,7 @@ import {
   serialiseDocx,
 } from '@obiter/ooxml'
 import type { AuditRecordInput, DocumentVersionRecord } from './database'
+import { lockMatterForEdit } from './matter-lock'
 import {
   commitPreparedVersion,
   DocumentEditStoreError,
@@ -258,6 +259,13 @@ async function createPreparedVersion(
 
   try {
     await client.query('begin')
+    // Matter before document: the commit-time authorization re-check shares the
+    // revocation lock, so a grant withdrawn while this write was queued cannot
+    // be outrun by the document lock. See matter-lock.ts.
+    if (!(await lockMatterForEdit(client, input))) {
+      await client.query('rollback')
+      return { status: 'not_found' }
+    }
     const locked = await lockCurrentAndBaseVersions(client, input)
     if (!locked) {
       await client.query('rollback')
