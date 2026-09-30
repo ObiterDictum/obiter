@@ -17,6 +17,7 @@ import {
   serialiseDocx,
 } from '@obiter/ooxml'
 import { findExistingCollaborationMerge } from './document-collaboration-db'
+import { lockMatterForEdit } from './matter-lock'
 import {
   commitPreparedVersion,
   DocumentEditStoreError,
@@ -76,6 +77,13 @@ export async function createCollaborationMergeVersion(
 
   try {
     await client.query('begin')
+    // Matter before document, and before the idempotency lookup: a revoked
+    // grantee must not learn through an already_applied replay that a sync id
+    // was previously merged.
+    if (!(await lockMatterForEdit(client, input))) {
+      await client.query('rollback')
+      return { status: 'not_found' }
+    }
     const locked = await lockCurrentAndBaseVersions(client, input)
     if (!locked) {
       await client.query('rollback')
