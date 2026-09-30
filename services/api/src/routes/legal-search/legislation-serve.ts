@@ -8,6 +8,7 @@ import {
   createActDirectory,
   formatScheduleCitation,
   type LegislationActDirectoryEntry,
+  type LegislationCitationOutcome,
 } from './legislation-citations'
 import {
   createCanonicalProvisionPath,
@@ -66,6 +67,14 @@ export interface LegislationFetchResult {
   note: string | null
   searched: boolean
   /**
+   * True when this half did not complete: the Postgres store, the Act
+   * directory build, or the keyword index failed. Distinct from a completed
+   * search that found nothing, which leaves this false and searched true.
+   * The route turns it into an explicit incomplete-coverage signal and never
+   * reports legislationSearched for it.
+   */
+  failed: boolean
+  /**
    * Search-time parameters the legislation keyword search sent to the engine.
    * Null when no keyword search ran: an exact Act or provision answer, an
    * ambiguous query, a store failure, or an empty query. The serve layer
@@ -107,6 +116,7 @@ const emptyResult: LegislationFetchResult = {
   scheduleUnderspecified: null,
   note: null,
   searched: false,
+  failed: false,
   keywordSearchParameters: null,
 }
 
@@ -240,11 +250,36 @@ export async function resolveLegislationFetch(
   try {
     acts = await withStoredTimeout(listLegislationActs(deps.pool))
   } catch {
-    return { ...emptyResult, note: 'Legislation store unavailable.' }
+    return {
+      ...emptyResult,
+      failed: true,
+      note: 'Legislation store unavailable.',
+    }
   }
   if (acts.length === 0) return emptyResult
-  const directory = createActDirectory(acts)
-  const outcome = classifyLegislationCitation(query, directory)
+  // Building the directory and classifying the query run outside the store
+  // read but over its rows: a malformed stored Act must fail this half like
+  // any other store failure, never throw past the route's fail-open boundary
+  // and let an empty answer read as a completed search.
+  let outcome: LegislationCitationOutcome
+  try {
+    const directory = createActDirectory(acts)
+    outcome = classifyLegislationCitation(query, directory)
+  } catch (error: unknown) {
+    // A malformed stored Act row or a classification defect is a code/data
+    // failure, not a store outage: at base this throw reached settleSearchHalf
+    // and was logged there, so it must keep an operational trace. Only the
+    // error message is logged — never the query or any legal text.
+    console.error(
+      'Legislation classification failed — serving an incomplete half.',
+      { reason: error instanceof Error ? error.message : String(error) },
+    )
+    return {
+      ...emptyResult,
+      failed: true,
+      note: 'Legislation search failed.',
+    }
+  }
 
   if (outcome.kind === 'ambiguous') {
     const names = outcome.candidates
@@ -299,7 +334,8 @@ export async function resolveLegislationFetch(
     } catch {
       return {
         ...emptyResult,
-        searched: true,
+        searched: false,
+        failed: true,
         note: 'Legislation store unavailable.',
       }
     }
@@ -356,6 +392,7 @@ export async function resolveLegislationFetch(
       scheduleUnderspecified: null,
       note: null,
       searched: true,
+      failed: false,
       keywordSearchParameters: null,
     }
   }
@@ -369,7 +406,8 @@ export async function resolveLegislationFetch(
     } catch {
       return {
         ...emptyResult,
-        searched: true,
+        searched: false,
+        failed: true,
         note: 'Legislation store unavailable.',
       }
     }
@@ -421,6 +459,7 @@ export async function resolveLegislationFetch(
       scheduleUnderspecified: null,
       note: null,
       searched: true,
+      failed: false,
       keywordSearchParameters: null,
     }
   }
@@ -430,6 +469,15 @@ export async function resolveLegislationFetch(
     query,
     deps.keywordLimit ?? 5,
   )
+  if (keyword.failed) {
+    // A rejected keyword engine is a failed leg, not a zero-hit search: the
+    // route must not report legislationSearched for it.
+    return {
+      ...emptyResult,
+      failed: true,
+      note: 'Legislation index unavailable.',
+    }
+  }
   if (keyword.hits.length === 0) {
     return {
       ...emptyResult,
@@ -447,6 +495,7 @@ export async function resolveLegislationFetch(
     scheduleUnderspecified: null,
     note: null,
     searched: true,
+    failed: false,
     keywordSearchParameters: keyword.appliedSearchParameters,
   }
 }
@@ -457,6 +506,7 @@ async function searchKeywordProvisions(
   limit: number,
 ): Promise<{
   hits: LegislationFetchHit[]
+  failed: boolean
   appliedSearchParameters: AppliedLegislationSearchParameters | null
 }> {
   let result
@@ -465,7 +515,7 @@ async function searchKeywordProvisions(
       limit,
     })
   } catch {
-    return { hits: [], appliedSearchParameters: null }
+    return { hits: [], failed: true, appliedSearchParameters: null }
   }
   const hits = result.hits.slice(0, limit).map((hit, index) =>
     // Fail-closed here too: only explicit false after a successful check
@@ -509,7 +559,11 @@ async function searchKeywordProvisions(
           citationMatch: undefined,
         },
   )
-  return { hits, appliedSearchParameters: result.appliedSearchParameters }
+  return {
+    hits,
+    failed: false,
+    appliedSearchParameters: result.appliedSearchParameters,
+  }
 }
 
 export interface LegislationProvisionPage {

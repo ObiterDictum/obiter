@@ -1305,6 +1305,38 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('Find Case Law')
   })
 
+  it('reports an incomplete search as an outage, never as a confident negative', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: {
+          code: 'search_incomplete',
+          message:
+            'Legal search could not be completed because part of the search failed. Try again later.',
+          requestId: 'req_test',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Human Rights Act 1998')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'Legal search could not be completed because part of the search failed. Try again later.',
+    )
+    // A request that never completed must not render an empty-state negative.
+    expect(container.textContent).not.toContain('No stored legal source holds')
+    expect(container.textContent).not.toContain('No stored legislation matches')
+  })
+
   it('reports an unrecognised 503 as a generic outage, not a provider failure', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,

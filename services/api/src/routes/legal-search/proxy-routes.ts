@@ -76,21 +76,28 @@ const servedStoredHitsLimit = 20
  * A rejection in one search half must not reject the other. The judgment and
  * legislation corpora are federated precisely so each fails independently; an
  * unhandled rejection from either half used to lose both and 500 the request.
- * The failure is logged, not swallowed, and the half contributes no result.
+ * The failure is logged, not swallowed, and the half reports a failure marker
+ * so a crash is never mistaken for "not attempted" or for a clean empty.
  */
+type SettledSearchHalf<T> =
+  { status: 'settled'; value: T } | { status: 'failed' }
+
 function settleSearchHalf<T>(
   promise: Promise<T>,
   requestId: string,
   half: string,
-): Promise<T | null> {
-  return promise.catch((error: unknown) => {
-    console.error('Legal search half failed', {
-      requestId,
-      half,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return null
-  })
+): Promise<SettledSearchHalf<T>> {
+  return promise.then(
+    (value) => ({ status: 'settled' as const, value }),
+    (error: unknown) => {
+      console.error('Legal search half failed', {
+        requestId,
+        half,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return { status: 'failed' as const }
+    },
+  )
 }
 
 export function createLegalSearchProxyRoutes(
@@ -167,47 +174,77 @@ export function createLegalSearchProxyRoutes(
     // Started without awaiting so it runs concurrently with the judgment
     // lookups below: a slow legislation store (2s fail-open) must not hold
     // the judgment half open. Every return path awaits it before responding.
-    const legislationPromise =
-      !storedOnlyBrowse &&
-      !isJudgmentOnlyFetch(parsed.data) &&
-      options.legislation
-        ? resolveLegislationFetch(
-            {
-              pool: options.legislation.pool,
-              searchClient,
-              indexName: options.legislation.indexName,
-            },
-            parsed.data.query,
-          )
-        : Promise.resolve(null)
-    const exactStoredAuthorityPromise =
-      !storedOnlyBrowse && exactLookup
-        ? findExactStoredAuthority(
-            searchClient,
-            reads,
-            env.legalAuthoritiesIndex,
-            parsed.data.query,
-            filters,
-            exactLookup,
-          )
-        : Promise.resolve(null)
+    const judgmentExactAttempted = !storedOnlyBrowse && exactLookup !== null
+    const exactLookupToRun = !storedOnlyBrowse ? exactLookup : null
+    const legislationOptions =
+      !storedOnlyBrowse && !isJudgmentOnlyFetch(parsed.data)
+        ? options.legislation
+        : undefined
+    const legislationAttempted = legislationOptions !== undefined
     // Overlap the two halves: neither holds the other open beyond its own
     // 2s fail-open bounds, and one half's failure cannot take the other down.
-    const [exactStoredAuthority, legislation] = await Promise.all([
+    const [judgmentExactHalf, legislationHalf] = await Promise.all([
       settleSearchHalf(
-        exactStoredAuthorityPromise,
+        exactLookupToRun
+          ? findExactStoredAuthority(
+              searchClient,
+              reads,
+              env.legalAuthoritiesIndex,
+              parsed.data.query,
+              filters,
+              exactLookupToRun,
+            )
+          : Promise.resolve(null),
         requestId,
         'judgment_exact',
       ),
-      settleSearchHalf(legislationPromise, requestId, 'legislation'),
+      settleSearchHalf(
+        legislationOptions
+          ? resolveLegislationFetch(
+              {
+                pool: legislationOptions.pool,
+                searchClient,
+                indexName: legislationOptions.indexName,
+              },
+              parsed.data.query,
+            )
+          : Promise.resolve(null),
+        requestId,
+        'legislation',
+      ),
     ])
+    const exactStoredAuthority =
+      judgmentExactHalf.status === 'settled' ? judgmentExactHalf.value : null
+    const legislation =
+      legislationHalf.status === 'settled' ? legislationHalf.value : null
+    const judgmentExactFailed =
+      judgmentExactAttempted && judgmentExactHalf.status === 'failed'
+    const legislationSearchFailed =
+      legislationAttempted &&
+      (legislationHalf.status === 'failed' || legislation?.failed === true)
+    const legislationServed = legislationGroupsServed(legislation)
 
-    // Meilisearch is the sole query engine: without it there is nothing to
-    // rank or verify against, so the outage fails visibly instead of
-    // degrading to a differently-ranked second engine.
-    if (exactStoredAuthority?.storedIndexStatus === 'unavailable') {
+    // Meilisearch is the sole judgment query engine. Its outage is normally
+    // the whole answer, but a legislation half that already answered from
+    // Postgres must keep its hits: the corpora are federated so neither
+    // failure discards the other's results.
+    const exactIndexUnavailable =
+      exactStoredAuthority?.storedIndexStatus === 'unavailable'
+
+    if (exactIndexUnavailable && !legislationServed) {
       return c.json(searchIndexUnavailable(requestId), 503)
     }
+
+    // Folds every later judgment-side outage into one failure flag. The exact
+    // hit branch below raises it only for a rejected exact half; the stored
+    // and citing lookups raise it after their own engine calls.
+    let judgmentSearchFailed = judgmentExactFailed
+    // A judgment leg that failed or was skipped cannot be reported as searched,
+    // and a citation verdict it would have established is not established. The
+    // exact lookup completes only when it ran and the engine answered; the
+    // stored-index flag is derived from the main search's own status below.
+    const exactLookupCompleted =
+      exactLookup !== null && !judgmentExactFailed && !exactIndexUnavailable
 
     if (exactStoredAuthority?.hit) {
       const summaries = [
@@ -221,47 +258,62 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         summaries,
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: true,
+            exactLookupSearched: exactLookupCompleted,
             storedIndexSearched: true,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
-            ...legislationDiagnosticsFor(legislation),
+            ...legislationDiagnosticsFor(legislation, {
+              judgment: judgmentSearchFailed,
+              legislation: legislationSearchFailed,
+            }),
           },
         }),
       )
     }
 
-    const cached = await searchStoredAuthorities(
-      searchClient,
-      env.legalAuthoritiesIndex,
-      parsed.data.query,
-      filters,
-      {
-        ...(storedOnlyBrowse
-          ? { limit: storedCourtBrowseLimit }
-          : { limit: storedIndexRerankPoolLimit }),
-        ...(recognisedCitation ? { exactPhrase: recognisedCitation } : {}),
-      },
-    )
+    const cached = exactIndexUnavailable
+      ? null
+      : await searchStoredAuthorities(
+          searchClient,
+          env.legalAuthoritiesIndex,
+          parsed.data.query,
+          filters,
+          {
+            ...(storedOnlyBrowse
+              ? { limit: storedCourtBrowseLimit }
+              : { limit: storedIndexRerankPoolLimit }),
+            ...(recognisedCitation ? { exactPhrase: recognisedCitation } : {}),
+          },
+        )
 
+    const cachedIndexUnavailable =
+      exactIndexUnavailable || cached?.storedIndexStatus === 'unavailable'
+    // Whether the main stored judgment index search actually answered. A leg
+    // that failed is never reported as searched.
+    const storedIndexCompleted = cached?.storedIndexStatus === 'ok'
     // The derived index lags the checker: filter Meili hits against the
     // Postgres withdrawn flag before responding, so a stale indexed copy of
     // a withdrawn judgment never serves. Unknown (lookup miss/timeout)
     // stays visible — only an explicit withdrawn flag hides a hit.
-    const visibleCachedHits = await excludeWithdrawnIndexHits(
-      reads,
-      cached.hits,
-    )
+    const visibleCachedHits =
+      cached && cached.storedIndexStatus === 'ok'
+        ? await excludeWithdrawnIndexHits(reads, cached.hits)
+        : []
+    judgmentSearchFailed = judgmentSearchFailed || cachedIndexUnavailable
 
-    if (cached.storedIndexStatus === 'unavailable') {
+    // A judgment-side engine outage is the whole answer only when nothing
+    // else answered. A legislation half already served from Postgres keeps
+    // its hits and is marked incomplete below instead of being discarded.
+    if (cachedIndexUnavailable && !legislationServed) {
       return c.json(searchIndexUnavailable(requestId), 503)
     }
 
@@ -284,19 +336,23 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         summaries,
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
-            storedIndexSearched: true,
+            exactLookupSearched: exactLookupCompleted,
+            storedIndexSearched: storedIndexCompleted,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
-            ...legislationDiagnosticsFor(legislation),
+            ...legislationDiagnosticsFor(legislation, {
+              judgment: judgmentSearchFailed,
+              legislation: legislationSearchFailed,
+            }),
           },
         }),
       )
@@ -307,6 +363,7 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         [],
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
@@ -314,13 +371,16 @@ export function createLegalSearchProxyRoutes(
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: Boolean(exactLookup),
-            storedIndexSearched: true,
+            exactLookupSearched: exactLookupCompleted,
+            storedIndexSearched: storedIndexCompleted,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
-            ...legislationDiagnosticsFor(legislation),
+            ...legislationDiagnosticsFor(legislation, {
+              judgment: judgmentSearchFailed,
+              legislation: legislationSearchFailed,
+            }),
           },
         }),
       )
@@ -343,7 +403,7 @@ export function createLegalSearchProxyRoutes(
     // floor still gates every ranked result. Precision comes from the
     // phrase plus the bounded-phrase body check, not the score.
     const citingLookup =
-      exactLookup && recognisedCitation
+      !cachedIndexUnavailable && exactLookup && recognisedCitation
         ? await searchStoredAuthorities(
             searchClient,
             env.legalAuthoritiesIndex,
@@ -355,12 +415,16 @@ export function createLegalSearchProxyRoutes(
             },
           )
         : null
-    if (citingLookup?.storedIndexStatus === 'unavailable') {
+    const citingIndexUnavailable =
+      citingLookup?.storedIndexStatus === 'unavailable'
+    const visibleCitingHits =
+      citingLookup && citingLookup.storedIndexStatus === 'ok'
+        ? await excludeWithdrawnIndexHits(reads, citingLookup.hits)
+        : []
+    judgmentSearchFailed = judgmentSearchFailed || citingIndexUnavailable
+    if (citingIndexUnavailable && !legislationServed) {
       return c.json(searchIndexUnavailable(requestId), 503)
     }
-    const visibleCitingHits = citingLookup
-      ? await excludeWithdrawnIndexHits(reads, citingLookup.hits)
-      : []
     const citingSummaries = await citingStoredSummariesForCitation(
       reads,
       visibleCitingHits,
@@ -372,22 +436,36 @@ export function createLegalSearchProxyRoutes(
         exactLookup,
         citingSummaries,
         legislation,
+        !judgmentSearchFailed,
       )
       return c.json(
         toFetchResponse(citingSummaries, parsed.data.query, true, 0, 0, false, {
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
-            exactLookupSearched: true,
-            storedIndexSearched: true,
+            exactLookupSearched: exactLookupCompleted,
+            storedIndexSearched: storedIndexCompleted,
             liveProviderSearched: false,
             foregroundLiveIgnored: foregroundLiveRequested || undefined,
             storedOnlyBrowse,
             ...citationDiagnostics,
-            ...legislationDiagnosticsFor(legislation),
+            ...legislationDiagnosticsFor(legislation, {
+              judgment: judgmentSearchFailed,
+              legislation: legislationSearchFailed,
+            }),
           },
         }),
       )
+    }
+    // A leg that failed cannot be reported as a completed verdict. With no
+    // usable hit from either half the whole request is untrustworthy, so it
+    // answers an explicit incomplete error instead of no_match or
+    // recognised_not_held.
+    if (
+      !legislationServed &&
+      (judgmentSearchFailed || legislationSearchFailed)
+    ) {
+      return c.json(searchIncomplete(requestId), 503)
     }
     // Corpus-only: a recognised citation
     // with no exact stored hit and no stored citing case is honestly not
@@ -396,6 +474,7 @@ export function createLegalSearchProxyRoutes(
       exactLookup,
       [],
       legislation,
+      !judgmentSearchFailed,
     )
     return c.json(
       toFetchResponse([], parsed.data.query, true, 0, 0, false, {
@@ -405,13 +484,16 @@ export function createLegalSearchProxyRoutes(
         citation,
         ...legislationFetchExtras(exactLookup, legislation),
         diagnostics: {
-          exactLookupSearched: Boolean(exactLookup),
-          storedIndexSearched: true,
+          exactLookupSearched: exactLookupCompleted,
+          storedIndexSearched: storedIndexCompleted,
           liveProviderSearched: false,
           foregroundLiveIgnored: foregroundLiveRequested || undefined,
           storedOnlyBrowse,
           ...citationDiagnostics,
-          ...legislationDiagnosticsFor(legislation),
+          ...legislationDiagnosticsFor(legislation, {
+            judgment: judgmentSearchFailed,
+            legislation: legislationSearchFailed,
+          }),
         },
       }),
     )
@@ -609,36 +691,58 @@ function legislationGroupsServed(legislation: LegislationFetchResult | null) {
   return legislation?.groups.some((group) => group.hits.length > 0) ?? false
 }
 
-/** Spread into a site diagnostics literal. Empty when legislation is off. */
-function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
-  if (!legislation) return {}
+/**
+ * Spread into a site diagnostics literal. Empty when legislation is off.
+ * `failures` names a half that did not complete, so the response never reads
+ * as a clean verdict and the client can show incomplete coverage.
+ */
+function legislationDiagnosticsFor(
+  legislation: LegislationFetchResult | null,
+  failures: { judgment: boolean; legislation: boolean },
+) {
   return {
-    legislationSearched: legislation.searched,
-    legislationGroupServed: legislationGroupsServed(legislation),
-    // A verdict, not an outage: the note alone cannot distinguish "the corpus
-    // does not hold this" from "the store did not answer".
-    ...(legislation.recognisedNotHeld ? { legislationNotHeld: true } : {}),
-    // A whole-title request no exact key matched, or a title two stored Acts
-    // satisfy. Neither is a not-held verdict, so each rides its own flag and
-    // the page can say only what is known.
-    ...(legislation.titleUnresolved
-      ? { legislationTitleUnresolved: true }
+    ...(legislation
+      ? {
+          // A failed leg never reads as searched, even where the attempt
+          // began: `legislationSearchFailed` carries the truth instead.
+          legislationSearched: legislation.searched && !legislation.failed,
+          legislationGroupServed: legislationGroupsServed(legislation),
+          // A verdict, not an outage: the note alone cannot distinguish "the
+          // corpus does not hold this" from "the store did not answer".
+          ...(legislation.recognisedNotHeld
+            ? { legislationNotHeld: true }
+            : {}),
+          // A whole-title request no exact key matched, or a title two stored
+          // Acts satisfy. Neither is a not-held verdict, so each rides its own
+          // flag and the page can say only what is known.
+          ...(legislation.titleUnresolved
+            ? { legislationTitleUnresolved: true }
+            : {}),
+          ...(legislation.ambiguous ? { legislationAmbiguous: true } : {}),
+          // A held Act whose schedule citation names no schedule: a corrective
+          // prompt, not a verdict. The structured example and Act context let
+          // the client offer a resubmission the parser accepts.
+          ...(legislation.scheduleUnderspecified
+            ? {
+                legislationScheduleGuidance: legislation.scheduleUnderspecified,
+              }
+            : {}),
+          ...(legislation.note ? { legislationNote: legislation.note } : {}),
+          // The parameters this server sent to the engine on this response.
+          // Emitted by the layer that applied them, not by the caller's
+          // configuration, so a measurement records observed conditions.
+          // Omitted when no keyword search ran (an exact Act or provision
+          // answer, an ambiguous query).
+          ...(legislation.keywordSearchParameters
+            ? {
+                legislationSearchParameters:
+                  legislation.keywordSearchParameters,
+              }
+            : {}),
+        }
       : {}),
-    ...(legislation.ambiguous ? { legislationAmbiguous: true } : {}),
-    // A held Act whose schedule citation names no schedule: a corrective
-    // prompt, not a verdict. The structured example and Act context let the
-    // client offer a resubmission the parser accepts.
-    ...(legislation.scheduleUnderspecified
-      ? { legislationScheduleGuidance: legislation.scheduleUnderspecified }
-      : {}),
-    ...(legislation.note ? { legislationNote: legislation.note } : {}),
-    // The parameters this server sent to the engine on this response. Emitted
-    // by the layer that applied them, not by the caller's configuration, so a
-    // measurement records observed conditions. Omitted when no keyword search
-    // ran (an exact Act or provision answer, an ambiguous query).
-    ...(legislation.keywordSearchParameters
-      ? { legislationSearchParameters: legislation.keywordSearchParameters }
-      : {}),
+    ...(failures.judgment ? { judgmentSearchFailed: true } : {}),
+    ...(failures.legislation ? { legislationSearchFailed: true } : {}),
   }
 }
 
@@ -701,8 +805,9 @@ function citationFieldsWithLegislation(
   exactLookup: ExactLookup | null,
   servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
   legislation: LegislationFetchResult | null,
+  judgmentComplete: boolean,
 ) {
-  const base = citationFields(exactLookup, servedHits)
+  const base = citationFields(exactLookup, servedHits, judgmentComplete)
   if (exactLookup || !legislation) return base
   if (legislation.citationHeldExact) {
     return {
@@ -734,6 +839,20 @@ function searchIndexUnavailable(requestId: string) {
   return apiError(
     'search_unavailable',
     'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.',
+    requestId,
+  )
+}
+
+/**
+ * Visible 503 when a federated half failed and the other half had no usable
+ * hit. Distinct from the index outage above: the engine may answer and only
+ * the legislation or exact-lookup half failed, so a `no_match` here would
+ * assert a negative the request never established.
+ */
+function searchIncomplete(requestId: string) {
+  return apiError(
+    'search_incomplete',
+    'Legal search could not be completed because part of the search failed. Try again later.',
     requestId,
   )
 }
@@ -969,12 +1088,17 @@ function bodyCitesRecognisedCitation(
 function citationFields(
   exactLookup: ExactLookup | null,
   servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
+  judgmentComplete = true,
 ) {
   const status: LegalSearchCitationStatus = !exactLookup
     ? 'not_citation'
     : servedHits.some((hit) => hit.citationMatch === 'exact')
       ? 'held_exact'
-      : 'not_held'
+      : judgmentComplete
+        ? 'not_held'
+        : // The citation was recognised but a judgment leg failed: no verdict
+          // is established, so the response never asserts a negative.
+          'unverified'
   return {
     citation: { recognised: exactLookup !== null, status },
     citationDiagnostics: {

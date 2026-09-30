@@ -750,3 +750,98 @@ describe('SearchResults withheld distinction and group headings', () => {
     expect(headings).toContain('Legislation')
   })
 })
+
+describe('SearchResults incomplete coverage', () => {
+  let root: ReturnType<typeof createRoot> | null
+  let container: HTMLElement | null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    root = null
+    container = null
+  })
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount())
+    }
+    container?.remove()
+  })
+
+  it('states partial coverage when the legislation half failed', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: { legislationSearchFailed: true },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      'Legislation could not be searched this time',
+    )
+    // The judgment hit is still visible: the failure flags coverage, it does
+    // not suppress valid hits.
+    expect(container.textContent).toContain(citingHit.title)
+  })
+
+  it('states partial coverage when the judgment half failed', () => {
+    const rendered = renderResults({
+      hits: [
+        {
+          ...citingHit,
+          id: 'ukpga-2010-15',
+          title: 'Equality Act 2010',
+          retrievalPath: 'stored_exact_lookup',
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: { judgmentSearchFailed: true },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      'Case law could not be searched this time',
+    )
+  })
+
+  it('names both halves when both failed', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: {
+        judgmentSearchFailed: true,
+        legislationSearchFailed: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('Part of this search failed')
+  })
+
+  it('shows no incomplete banner when both halves completed', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: { legislationSearched: true },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).not.toContain('may be incomplete')
+  })
+})
