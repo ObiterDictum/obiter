@@ -152,7 +152,10 @@ export function HomeRibbon({
           />
           <IconButton
             label="Strikethrough"
-            soon
+            pressed={format?.strikethrough}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onClick={format?.onToggleStrikethrough}
             icon={<TextStrikethrough size={16} aria-hidden />}
           />
           <IconButton
@@ -162,17 +165,26 @@ export function HomeRibbon({
           />
           <IconButton
             label="Highlight"
-            soon
+            pressed={Boolean(format?.highlight && format.highlight !== 'none')}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onClick={format?.onToggleHighlight}
             icon={<Highlighter size={16} aria-hidden />}
           />
           <IconButton
             label="Superscript"
-            soon
+            pressed={format?.vertAlign === 'superscript'}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onClick={format?.onToggleSuperscript}
             icon={<TextSuperscript size={16} aria-hidden />}
           />
           <IconButton
             label="Subscript"
-            soon
+            pressed={format?.vertAlign === 'subscript'}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onClick={format?.onToggleSubscript}
             icon={<TextSubscript size={16} aria-hidden />}
           />
           <IconButton

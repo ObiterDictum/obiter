@@ -6,7 +6,11 @@ import type {
 import { documentStory, paragraphPlainText } from './document-model-text'
 import { snapEmphasisRange } from './document-format-paint'
 import { paragraphNumPr } from './document-page-lists'
-import type { FormatDrafts, PendingEmphasis } from './document-format-types'
+import type {
+  EmphasisPatch,
+  FormatDrafts,
+  PendingEmphasis,
+} from './document-format-types'
 
 export { paragraphNumPr } from './document-page-lists'
 export type { ListKind } from './document-list-toggle'
@@ -25,6 +29,24 @@ export {
 export { formattedModel, paragraphStyleOptions } from './document-format-paint'
 export { documentFormatToolbar } from './document-format-toolbar'
 export type { FormatTarget, ParagraphRange } from './document-format-toolbar'
+
+/**
+ * The contract fields an emphasis draft restates, omitting the ones it leaves
+ * untouched so a later merge does not clear a property this click did not act
+ * on. Shared by the whole-run and range forms so they cannot drift.
+ */
+function emphasisProperties(item: PendingEmphasis): EmphasisPatch {
+  return {
+    ...(item.bold !== undefined ? { bold: item.bold } : {}),
+    ...(item.italic !== undefined ? { italic: item.italic } : {}),
+    ...(item.underline !== undefined ? { underline: item.underline } : {}),
+    ...(item.strikethrough !== undefined
+      ? { strikethrough: item.strikethrough }
+      : {}),
+    ...(item.highlight !== undefined ? { highlight: item.highlight } : {}),
+    ...(item.vertAlign !== undefined ? { vertAlign: item.vertAlign } : {}),
+  }
+}
 
 export function collectFormatOperations(
   model: DocumentModelWire,
@@ -55,9 +77,7 @@ export function collectFormatOperations(
     operations.push({
       type: 'set_run_emphasis',
       runId: item.runId,
-      ...(item.bold !== undefined ? { bold: item.bold } : {}),
-      ...(item.italic !== undefined ? { italic: item.italic } : {}),
-      ...(item.underline !== undefined ? { underline: item.underline } : {}),
+      ...emphasisProperties(item),
     })
   }
   for (const item of format.emphasis) {
@@ -75,9 +95,7 @@ export function collectFormatOperations(
       paragraphId: item.paragraphId,
       from: item.from,
       to: item.to,
-      ...(item.bold !== undefined ? { bold: item.bold } : {}),
-      ...(item.italic !== undefined ? { italic: item.italic } : {}),
-      ...(item.underline !== undefined ? { underline: item.underline } : {}),
+      ...emphasisProperties(item),
     })
   }
   for (const [paragraphId, styleId] of Object.entries(format.paragraphStyles)) {
@@ -181,12 +199,11 @@ export function emphasisAddress(
 export function toggleEmphasisOnRuns(
   format: FormatDrafts,
   runIds: readonly string[],
-  flag: 'bold' | 'italic' | 'underline',
-  value: boolean,
+  patch: EmphasisPatch,
 ): FormatDrafts {
   let emphasis = format.emphasis
   for (const runId of runIds) {
-    emphasis = mergeEmphasis(emphasis, { runId, [flag]: value })
+    emphasis = mergeEmphasis(emphasis, { runId, ...patch })
   }
   return { ...format, emphasis }
 }
@@ -194,12 +211,11 @@ export function toggleEmphasisOnRuns(
 export function toggleEmphasisAtAddress(
   format: FormatDrafts,
   address: ReturnType<typeof emphasisAddress>,
-  flag: 'bold' | 'italic' | 'underline',
-  value: boolean,
+  patch: EmphasisPatch,
 ): FormatDrafts {
   if ('runId' in address) {
     if (!address.runId) return format
-    return toggleEmphasisOnRuns(format, [address.runId], flag, value)
+    return toggleEmphasisOnRuns(format, [address.runId], patch)
   }
   return {
     ...format,
@@ -207,7 +223,7 @@ export function toggleEmphasisAtAddress(
       paragraphId: address.paragraphId,
       from: address.from,
       to: address.to,
-      [flag]: value,
+      ...patch,
     }),
   }
 }

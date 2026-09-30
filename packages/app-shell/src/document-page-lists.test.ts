@@ -106,4 +106,22 @@ describe('documentListMarkers', () => {
     ]
     expect(documentListMarkers(model).get('p1')?.text).toBe('1.')
   })
+
+  it('does not number from a numPr that exists only inside a tracked pPrChange', () => {
+    const model = listModel()
+    const first = model.stories[0]?.paragraphs[0]
+    if (!first) throw new Error('expected paragraph')
+    first.styleId = 'TrackedList'
+    first.preservedXmlFragments = [
+      '<w:pPr><w:pPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:pPrChange></w:pPr>',
+    ]
+    model.styles = [
+      {
+        styleId: 'TrackedList',
+        sourceFragment:
+          '<w:style w:styleId="TrackedList"><w:pPr><w:pPrChange w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:pPrChange></w:pPr></w:style>',
+      },
+    ]
+    expect(documentListMarkers(model).get('p1')).toBeUndefined()
+  })
 })

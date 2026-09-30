@@ -16,7 +16,11 @@ import {
   selectedParagraph,
 } from './document-format-controls'
 import { effectiveParagraph } from './document-model-text'
-import type { FormatDrafts } from './document-format-types'
+import type {
+  EmphasisPatch,
+  FormatDrafts,
+  HighlightValue,
+} from './document-format-types'
 import type { ExtraRuns } from './document-word-edits'
 
 export type ParagraphRange = {
@@ -36,6 +40,11 @@ export type FormatTarget =
   | { kind: 'selection'; ranges: ReadonlyArray<ParagraphRange> }
 
 const NOTHING_TO_FORMAT = 'Select text to format'
+
+/** A highlight is pressed for any colour but an explicit `none`. */
+function highlightPressed(value: HighlightValue | null) {
+  return value !== null && value !== 'none'
+}
 
 /** Where one run starts and ends in the paragraph's own text. */
 function runSpan(
@@ -88,7 +97,7 @@ export function documentFormatToolbar(
   // not representable yet; fail closed rather than dropping the tracking.
   const trackedRange =
     trackChanges && emphasis.some((range) => range.from !== range.to)
-  const toggle = (flag: 'bold' | 'italic' | 'underline', value: boolean) => {
+  const toggle = (patch: EmphasisPatch) => {
     if (trackedRange || emphasis.length === 0) return
     setFormat((current) => {
       let next = current
@@ -112,7 +121,7 @@ export function documentFormatToolbar(
           range.to,
           new Set(stored.runs.map((run) => run.id)),
         )
-        next = toggleEmphasisAtAddress(next, address, flag, value)
+        next = toggleEmphasisAtAddress(next, address, patch)
         if (!('runId' in address)) continue
         // Whole-run emphasis lands in the base model, which every pending
         // range paints over afterwards. Restate the same answer over the
@@ -138,8 +147,7 @@ export function documentFormatToolbar(
               from: Math.max(item.from ?? span.from, span.from),
               to: Math.min(item.to ?? span.to, span.to),
             },
-            flag,
-            value,
+            patch,
           )
         }
       }
@@ -167,6 +175,9 @@ export function documentFormatToolbar(
     bold: controls.bold,
     italic: controls.italic,
     underline: controls.underline,
+    strikethrough: controls.strikethrough,
+    highlight: controls.highlight,
+    vertAlign: controls.vertAlign,
     canIndent: controls.canIndent,
     canOutdent: controls.canOutdent,
     canContinue: controls.canContinue,
@@ -181,13 +192,36 @@ export function documentFormatToolbar(
       )
     },
     onToggleBold: () => {
-      toggle('bold', !controls.bold)
+      toggle({ bold: !controls.bold })
     },
     onToggleItalic: () => {
-      toggle('italic', !controls.italic)
+      toggle({ italic: !controls.italic })
     },
     onToggleUnderline: () => {
-      toggle('underline', !controls.underline)
+      toggle({ underline: !controls.underline })
+    },
+    onToggleStrikethrough: () => {
+      toggle({ strikethrough: !controls.strikethrough })
+    },
+    // Highlight has many values but one control: it applies a default and the
+    // second click releases it. A stored highlight colour reads pressed, so the
+    // release is reachable without a colour picker.
+    onToggleHighlight: () => {
+      toggle({
+        highlight: highlightPressed(controls.highlight) ? 'none' : 'yellow',
+      })
+    },
+    onToggleSuperscript: () => {
+      toggle({
+        vertAlign:
+          controls.vertAlign === 'superscript' ? 'baseline' : 'superscript',
+      })
+    },
+    onToggleSubscript: () => {
+      toggle({
+        vertAlign:
+          controls.vertAlign === 'subscript' ? 'baseline' : 'subscript',
+      })
     },
     onIndent: () =>
       forEachParagraph((current, id) => {
