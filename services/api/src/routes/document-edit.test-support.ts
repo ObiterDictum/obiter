@@ -204,6 +204,7 @@ class EditTransaction {
       if (!this.matterLockChecked) {
         throw new Error('The edit access re-check must follow the matter lock.')
       }
+      requireSql(sql, 'matter_shares')
       const access =
         this.options.access === undefined ? 'view' : this.options.access
       return {

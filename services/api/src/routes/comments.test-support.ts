@@ -131,6 +131,7 @@ export class TestDatabase extends SharedTestDatabase {
   private client(sharedClient: PoolClient) {
     let stagedComments = new Map(this.comments)
     let stagedAudits = [...this.audits]
+    let matterLockChecked = false
     return {
       query: async (sql: string, parameters: unknown[] = []) => {
         const command = sql.trim()
@@ -148,10 +149,21 @@ export class TestDatabase extends SharedTestDatabase {
         }
         if (sql.includes('select id from matters')) {
           this.queries.push(sql)
+          matterLockChecked = true
           return { rows: [{ id: 'mtr_1' }] }
         }
         if (sql.includes('select matter.id from matters matter')) {
           this.queries.push(sql)
+          if (!matterLockChecked) {
+            throw new Error(
+              'The edit access re-check must follow the matter lock.',
+            )
+          }
+          if (!sql.includes('matter_shares')) {
+            throw new Error(
+              'The edit access re-check must evaluate matter_shares.',
+            )
+          }
           const access = this.commentOptions.access ?? 'edit'
           return {
             rows:
