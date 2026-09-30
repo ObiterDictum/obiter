@@ -160,8 +160,247 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    const body = (await response.json()) as { hits: Array<{ id: string }> }
+    const body = (await response.json()) as {
+      hits: Array<{ id: string }>
+      diagnostics: Record<string, unknown>
+    }
     expect(body.hits.map((entry) => entry.id)).toContain(hit.id)
+    // P1.35: a rejected legislation half is named and never reads as
+    // searched. The judgment hits are kept; coverage is explicitly partial.
+    expect(body.diagnostics.legislationSearchFailed).toBe(true)
+    expect(body.diagnostics.legislationSearched).not.toBe(true)
+    expect(body.diagnostics.judgmentSearchFailed).toBeUndefined()
+  })
+
+  it('P1.35 control: both halves complete with no hits stays no_match', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: false,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: null,
+      note: null,
+      searched: true,
+      keywordSearchParameters: {
+        matchingStrategy: 'all',
+        rankingScoreThreshold: 0.25,
+      },
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'housing disrepair',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'housing disrepair' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      outcome: string
+      diagnostics: Record<string, unknown>
+    }
+    expect(body.outcome).toBe('no_match')
+    expect(body.diagnostics.legislationSearched).toBe(true)
+    expect(body.diagnostics.judgmentSearchFailed).toBeUndefined()
+    expect(body.diagnostics.legislationSearchFailed).toBeUndefined()
+  })
+
+  it('P1.35 a malformed stored Act row cannot answer no_match', async () => {
+    // A null title throws in createActDirectory, outside the store's own
+    // error handling. The route must not convert that crash into a
+    // confident "no match" for an Act the corpus holds.
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    const malformedActs = [
+      {
+        identity: 'ukpga/1998/42',
+        actType: 'ukpga',
+        year: 1998,
+        number: 42,
+        title: null,
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/1998/42',
+        extent: 'E+W',
+      },
+    ]
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Human Rights Act 1998',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: {
+          query: vi.fn(async (text: string) =>
+            text.includes('from legislation_documents order')
+              ? { rows: malformedActs }
+              : { rows: [] },
+          ),
+        } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Human Rights Act 1998' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'search_incomplete', requestId: 'req_test' },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('P1.35 a rejected legislation keyword index is never legislationSearched', async () => {
+    // searchKeywordProvisions catches an engine rejection to empty hits and
+    // reported searched:true. That is a failed leg, not a zero-hit search.
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    const directoryActs = [
+      {
+        identity: 'ukpga/2010/15',
+        actType: 'ukpga',
+        year: 2010,
+        number: 15,
+        title: 'Equality Act 2010',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+        extent: 'E+W+S',
+      },
+    ]
+    searchClientMock.index.mockReturnValue({
+      search: vi.fn(async () => {
+        throw new Error('legislation index down')
+      }),
+    })
+    // A variable, not a fresh literal: the real serve reads `.index()` off the
+    // client, while the default mock client deliberately carries only an id.
+    const provisionSearchClient = {
+      id: 'meili-client',
+      index: searchClientMock.index,
+    }
+    searchClientMock.createClient.mockReturnValue(provisionSearchClient)
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'appeal a housing decision',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: {
+          query: vi.fn(async (text: string) =>
+            text.includes('from legislation_documents order')
+              ? { rows: directoryActs }
+              : { rows: [] },
+          ),
+        } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'appeal a housing decision' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'search_incomplete', requestId: 'req_test' },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('P1.35 keeps a legislation hit when the judgment index fails', async () => {
+    // The federated property is symmetric: a judgment-side engine outage
+    // must not discard a legislation answer that came from Postgres.
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    const acts = [
+      {
+        identity: 'ukpga/2010/15',
+        actType: 'ukpga',
+        year: 2010,
+        number: 15,
+        title: 'Equality Act 2010',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+        extent: 'E+W+S',
+      },
+    ]
+    searchClientMock.search.mockRejectedValue(new Error('meili down'))
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: {
+          query: vi.fn(async (text: string) => {
+            if (text.includes('from legislation_documents order'))
+              return { rows: acts }
+            if (text.includes('where identity = $1')) return { rows: acts }
+            return { rows: [] }
+          }),
+        } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Equality Act 2010' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      groups?: Array<{ key: string; hits: Array<{ id: string }> }>
+      diagnostics: Record<string, unknown>
+    }
+    expect(body.groups?.[0]?.hits[0]?.id).toBe('ukpga/2010/15')
+    expect(body.diagnostics.judgmentSearchFailed).toBe(true)
+    expect(body.diagnostics.legislationSearchFailed).toBeUndefined()
+  })
+
+  it('P1.35 a recognised citation whose exact lookup fails is never not_held', async () => {
+    // The exact-lookup half already converts an engine failure into a
+    // visible index outage; this pins that it can never fall through to a
+    // recognised_not_held verdict for a held citation.
+    searchClientMock.search.mockRejectedValue(new Error('index missing'))
+    const app = createAuthenticatedProxyApp()
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2024] UKSC 3' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(503)
+    const body = (await response.json()) as {
+      error?: { code?: string }
+      outcome?: string
+      citation?: unknown
+    }
+    expect(body.error?.code).toBe('search_unavailable')
+    expect(body.outcome).toBeUndefined()
+    expect(body.citation).toBeUndefined()
   })
 
   it('returns cached results without calling Find Case Law', async () => {

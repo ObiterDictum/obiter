@@ -4825,10 +4825,18 @@
                 the case view renders with its full-text-unavailable state; a
                 request that sends the deprecated
                 <code>foregroundLiveResults: true</code> is answered with
-                <code>foregroundLiveIgnored: true</code>. Find Case Law is never
-                contacted, no hydration is queued and no corpus or index write
-                happens. National Archives access belongs to an explicit
-                indexing run, not to a request.</span
+                <code>foregroundLiveIgnored: true</code>. A half that failed is
+                never reported as an empty verdict: the judgment and legislation
+                corpora are federated so valid hits from one half survive the
+                other's failure, the response marks the incomplete coverage with
+                <code>judgmentSearchFailed</code> or
+                <code>legislationSearchFailed</code> for the client to surface,
+                and a request with no usable hit from either half answers
+                <code>503 search_incomplete</code> rather than
+                <code>no_match</code> or <code>recognised_not_held</code>. Find
+                Case Law is never contacted, no hydration is queued and no
+                corpus or index write happens. National Archives access belongs
+                to an explicit indexing run, not to a request.</span
               >
             </li>
           </ol>
@@ -4858,6 +4866,19 @@
             <code>127.0.0.1:7700</code> container runs under the benchmark
             master key and holds only throwaway benchmark indexes — it is not
             the product index.
+            <p>
+              A failure confined to one federated half is visible too. A
+              rejected or malformed legislation half, a legislation keyword
+              engine that errors, or a failed judgment exact lookup cannot
+              answer <code>no_match</code> or <code>recognised_not_held</code>.
+              If the other half served valid hits, those hits are kept and the
+              response names the failed half in diagnostics (<code
+                >judgmentSearchFailed</code
+              >
+              or <code>legislationSearchFailed</code>); with no usable hit at
+              all, fetch answers <code>503 search_incomplete</code>. A completed
+              zero-hit search still answers <code>no_match</code>.
+            </p>
           </div>
         </section>
 

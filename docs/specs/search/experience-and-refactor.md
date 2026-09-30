@@ -181,7 +181,7 @@ The current layered behavior is stored-only:
 
 1. Search the stored Meilisearch index first.
 2. If that misses or times out, search the PostgreSQL legal source store.
-3. If stored sources miss, answer honestly (`no_match`, or `recognised_not_held` for a recognised citation). The request path never queues Find Case Law hydration and never returns live foreground results; National Archives access happens only during an explicit indexing run.
+3. If stored sources miss, answer honestly (`no_match`, or `recognised_not_held` for a recognised citation). A federated half that fails is not a miss: valid hits from the other half are kept and the response marks the incomplete coverage, and a request with no usable hit from either half answers `503 search_incomplete` rather than a verdict. The request path never queues Find Case Law hydration and never returns live foreground results; National Archives access happens only during an explicit indexing run.
 4. Provider metadata is written and detail pages hydrated/indexed only by the indexing run, never on a request path.
 
 Stored Meilisearch search must include body text. The current `@obiter/search-client` searchable attributes include:
