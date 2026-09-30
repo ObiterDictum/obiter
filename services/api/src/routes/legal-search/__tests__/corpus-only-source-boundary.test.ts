@@ -18,6 +18,8 @@ import { describe, expect, it } from 'bun:test'
  *     only the running process reaches is still checked, and a module that is
  *     not reachable cannot hide behind an unreferenced helper.
  *  3. A runtime check that `runtime.ts` constructs neither provider meter.
+ *  4. Fail-first unit probes that feed the same scan known offences, so a
+ *     scan that silently stops matching cannot pass unseen.
  *
  * The behavioural zero-upstream-call proof lives in `proxy-routes.test.ts`:
  * a counting fake provider that rejects if called. The static checks here
@@ -253,7 +255,7 @@ function isConfigurationDefault(node: ts.Node): boolean {
     ts.isCallExpression(parent) &&
     ts.isIdentifier(parent.expression) &&
     parent.expression.text === 'readRequiredUrl' &&
-    parent.arguments.some((argument) => argument === node)
+    parent.arguments.findIndex((argument) => argument === node) > 0
   )
 }
 

@@ -1037,8 +1037,12 @@ path: the route module imports no provider fetch function, `runtime.ts`
 constructs neither `PostgresMojRequestBudget` nor
 `PostgresLegalHydrationLedger`, and a structural test scans every non-test API
 source file (all source extensions, the whole package tree) plus the static
-import graph from both production entry points for the provider fetch names and
-the National Archives host, so a future call fails the suite. A miss
+import graph from both production entry points for the provider fetch names,
+provider module specifiers, provider public-entry imports outside an explicit
+pure-symbol allowlist, direct `fetch(` calls outside the one allowlisted file
+(`routes/changelog.ts`, the fixed GitHub changelog endpoint), and the National
+Archives host outside a configuration default, so a future call fails the
+suite. A miss
 answers honestly under the existing contract: search returns its stored-only
 empty (`no_match`, or `recognised_not_held` for a recognised citation) with
 `diagnostics.liveProviderSearched: false` and `hydrationQueued: false`; a
