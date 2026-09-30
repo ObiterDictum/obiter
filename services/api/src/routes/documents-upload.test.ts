@@ -82,6 +82,7 @@ function pool(failExtractionStatusUpdate = false): Pool {
     )
       return { rows: [] }
     if (sql.includes('from matters')) return { rows: [matterRow()] }
+    if (sql.includes('from users')) return { rows: [{ id: 'usr_1' }] }
     if (sql.includes('insert into matter_documents'))
       return { rows: [documentRow()] }
     if (sql.includes('insert into document_versions')) {

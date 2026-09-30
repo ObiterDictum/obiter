@@ -19,6 +19,12 @@ const query = async (sql: string) => {
   const text = sql.trim()
   if (text.startsWith('select matter_id from matter_documents'))
     return { rows: [{ matter_id: 'mtr_private' }] }
+  if (text.startsWith('select id from matters'))
+    return { rows: [{ id: 'mtr_private', deleted_at: null }] }
+  if (text.startsWith('select id, deleted_at::text from matters'))
+    return {
+      rows: [{ id: 'mtr_private', deleted_at: '2026-01-01T00:00:00.000Z' }],
+    }
   if (text.startsWith('select matter_id, document_id, replaces_run_id'))
     return {
       rows: [

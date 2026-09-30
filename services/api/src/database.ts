@@ -10,6 +10,7 @@ import {
 } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
 import { matterAccessPredicate } from './matter-access-boundary'
+import { lockDeletedMatterForEdit, lockMatterForEdit } from './matter-lock'
 
 export interface SessionUserRecord {
   id: string
@@ -721,27 +722,37 @@ export async function updateMatter(
   const client = await pool.connect()
   try {
     await client.query('begin')
-    const result = await client.query<MatterRow>(
+    // Matter lock, fresh edit re-check, acting-member lock before the write so
+    // a revocation that commits during the request cannot be outrun.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: user.organisationId,
+        matterId: id,
+        userId: user.id,
+      }))
+    ) {
+      await client.query('rollback')
+      return null
+    }
+    const matterResult = await client.query<MatterRow>(
       `
         update matters matter
-        set name = coalesce($4, name),
-          description = case when $5::boolean then $6 else description end,
-          primary_jurisdiction = coalesce($7, primary_jurisdiction),
-          secondary_jurisdictions = case when $8::boolean then $9::jsonb else secondary_jurisdictions end,
-          legal_domains = case when $10::boolean then $11::jsonb else legal_domains end,
-          client_reference = coalesce($12, client_reference),
-          status = coalesce($13, status),
+        set name = coalesce($3, name),
+          description = case when $4::boolean then $5 else description end,
+          primary_jurisdiction = coalesce($6, primary_jurisdiction),
+          secondary_jurisdictions = case when $7::boolean then $8::jsonb else secondary_jurisdictions end,
+          legal_domains = case when $9::boolean then $10::jsonb else legal_domains end,
+          client_reference = coalesce($11, client_reference),
+          status = coalesce($12, status),
           updated_at = now()
         where matter.id = $1
           and matter.organisation_id = $2
           and matter.deleted_at is null
-          and ${matterAccessPredicate('$3', "'edit'")}
         returning ${matterColumns}
       `,
       [
         id,
         user.organisationId,
-        user.id,
         input.name ?? null,
         Object.hasOwn(input, 'description'),
         input.description ?? null,
@@ -755,7 +766,7 @@ export async function updateMatter(
       ],
     )
     await client.query('commit')
-    return firstOrNull(result, mapMatter)
+    return firstOrNull(matterResult, mapMatter)
   } catch (error) {
     await client.query('rollback')
     throw error
@@ -797,16 +808,14 @@ export async function softDeleteMatterWithCascade(
   try {
     await client.query('begin')
 
-    const lock = await client.query<{ id: string }>(
-      `select matter.id from matters matter
-       where matter.id = $1
-         and matter.organisation_id = $2
-         and matter.deleted_at is null
-         and ${matterAccessPredicate('$3', "'edit'")}
-       for update`,
-      [input.id, input.organisationId, input.userId],
-    )
-    if (lock.rows.length === 0) {
+    // Matter lock, fresh edit re-check, acting-member lock before the cascade.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: input.organisationId,
+        matterId: input.id,
+        userId: input.userId,
+      }))
+    ) {
       await client.query('rollback')
       return null
     }
@@ -820,7 +829,11 @@ export async function softDeleteMatterWithCascade(
       `,
       [input.id, input.organisationId, input.userId],
     )
-    const matter = mapMatter(matterResult.rows[0])
+    const matter = firstOrNull(matterResult, mapMatter)
+    if (!matter) {
+      await client.query('rollback')
+      return null
+    }
 
     const documentsResult = await client.query<MatterDocumentRow>(
       `
@@ -904,25 +917,20 @@ export async function restoreMatterWithAudit(
   try {
     await client.query('begin')
 
-    const lock = await client.query<{ deleted_at: string }>(
-      `select matter.deleted_at::text from matters matter
-       where matter.id = $1
-         and matter.organisation_id = $2
-         and matter.deleted_at is not null
-         and ${matterAccessPredicate('$3', "'edit'")}
-       for update`,
-      [input.id, input.organisationId, input.userId],
-    )
-    if (lock.rows.length === 0) {
+    // The deleted-matter form locks the soft-deleted row, re-checks edit
+    // access on a fresh snapshot, and returns the cascade timestamp as text:
+    // the pg driver returns timestamptz as a JS Date at millisecond precision,
+    // and round-tripping that through a param would drop microseconds and
+    // break the equality match against the children this deletion took down.
+    const cascadeTimestamp = await lockDeletedMatterForEdit(client, {
+      organisationId: input.organisationId,
+      matterId: input.id,
+      userId: input.userId,
+    })
+    if (cascadeTimestamp === null) {
       await client.query('rollback')
       return null
     }
-    // Capture as text to preserve microsecond precision. The pg driver returns
-    // timestamptz as a JS Date (millisecond precision); round-tripping that
-    // back as a param would drop microseconds and break the equality match
-    // against the stored value. Text keeps full fidelity so the cascade-restore
-    // matches exactly the children this deletion took down.
-    const cascadeTimestamp = lock.rows[0].deleted_at
 
     const matterResult = await client.query<MatterRow>(
       `
@@ -933,7 +941,11 @@ export async function restoreMatterWithAudit(
       `,
       [input.id, input.organisationId, cascadeTimestamp],
     )
-    const matter = mapMatter(matterResult.rows[0])
+    const matter = firstOrNull(matterResult, mapMatter)
+    if (!matter) {
+      await client.query('rollback')
+      return null
+    }
 
     const documentsResult = await client.query<MatterDocumentRow>(
       `
@@ -1098,16 +1110,15 @@ export async function createDocument(
   try {
     await client.query('begin')
 
-    const matter = await client.query<{ id: string }>(
-      `select matter.id from matters matter
-       where matter.id = $1
-         and matter.organisation_id = $2
-         and matter.deleted_at is null
-         and ${matterAccessPredicate('$3', "'edit'")}
-       for update`,
-      [input.matterId, input.organisationId, input.userId],
-    )
-    if (matter.rows.length === 0) {
+    // Matter lock before the document insert, so an upload cannot commit on a
+    // share revocation or removed membership that landed while it was queued.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: input.organisationId,
+        matterId: input.matterId,
+        userId: input.userId,
+      }))
+    ) {
       await client.query('rollback')
       return null
     }
@@ -1327,6 +1338,8 @@ export async function softDeleteDocumentWithCascade(
   try {
     await client.query('begin')
 
+    // Unlocked routing read: it only names the parent matter. The matter lock
+    // and the locked document re-read below are the authoritative checks.
     const candidate = await client.query<{ matter_id: string }>(
       `select matter_id from matter_documents
        where id = $1 and organisation_id = $2 and deleted_at is null`,
@@ -1338,16 +1351,15 @@ export async function softDeleteDocumentWithCascade(
       return null
     }
 
-    const matter = await client.query<{ id: string }>(
-      `select matter.id from matters matter
-       where matter.id = $1
-         and matter.organisation_id = $2
-         and matter.deleted_at is null
-         and ${matterAccessPredicate('$3', "'edit'")}
-       for update`,
-      [matterId, input.organisationId, input.userId],
-    )
-    if (!matter.rows[0]) {
+    // Matter lock, fresh edit re-check and acting-member lock before the
+    // document is locked and soft-deleted.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: input.organisationId,
+        matterId,
+        userId: input.userId,
+      }))
+    ) {
       await client.query('rollback')
       return null
     }
@@ -1375,7 +1387,11 @@ export async function softDeleteDocumentWithCascade(
       `,
       [input.id, input.organisationId, input.userId],
     )
-    const document = mapDocument(documentResult.rows[0])
+    const document = firstOrNull(documentResult, mapDocument)
+    if (!document) {
+      await client.query('rollback')
+      return null
+    }
 
     const runsResult = await client.query<{ id: string }>(
       `
@@ -1434,6 +1450,8 @@ export async function restoreDocumentWithAudit(
   try {
     await client.query('begin')
 
+    // Unlocked routing read: it only names the parent matter. The matter lock
+    // and the locked document re-read below are the authoritative checks.
     const candidate = await client.query<{ matter_id: string }>(
       `select matter_id from matter_documents
        where id = $1 and organisation_id = $2 and deleted_at is not null`,
@@ -1445,16 +1463,15 @@ export async function restoreDocumentWithAudit(
       return null
     }
 
-    const matter = await client.query<{ id: string }>(
-      `select id from matters matter
-       where matter.id = $1
-         and matter.organisation_id = $2
-         and matter.deleted_at is null
-         and ${matterAccessPredicate('$3', "'edit'")}
-       for update`,
-      [matterId, input.organisationId, input.userId],
-    )
-    if (matter.rows.length === 0) {
+    // Matter lock before the document lock, so a restore cannot commit on an
+    // access fact that a revocation or member removal already changed.
+    if (
+      !(await lockMatterForEdit(client, {
+        organisationId: input.organisationId,
+        matterId,
+        userId: input.userId,
+      }))
+    ) {
       await client.query('rollback')
       return null
     }
@@ -1485,7 +1502,11 @@ export async function restoreDocumentWithAudit(
       `,
       [input.id, input.organisationId, cascadeTimestamp],
     )
-    const document = mapDocument(documentResult.rows[0])
+    const document = firstOrNull(documentResult, mapDocument)
+    if (!document) {
+      await client.query('rollback')
+      return null
+    }
 
     const runsResult = await client.query<{ id: string }>(
       `

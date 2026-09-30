@@ -3453,26 +3453,39 @@
             writer's user-row <code>FOR SHARE</code> serialises with it, so a
             removed member (including a matter creator) cannot commit on a stale
             session. A denied write returns the concealed document 404 and
-            leaves no version, pointer change, comment or audit row. This covers
-            only those five write paths: matter PATCH, soft-delete and restore,
-            document soft-delete and restore, document upload, and actor-side
-            share management still evaluate the edit predicate inside their own
-            locking statement and take no membership lock, and remain the
-            follow-up. Route modules are prohibited from querying matter-derived
-            tables directly, so a new route must use an access-enforcing
-            resolver. Denial is a uniform 404. Web uses cookie sessions; desktop
-            uses the bearer plugin. Linked redaction runs inherit live matter
-            view/edit access; standalone runs use their creator for ordinary
-            access, with no administrator override. Transactional linked
-            lifecycle mutations lock matter, document, and redaction run lineage
-            in deterministic id order, matching the matter-first
-            share-revocation prefix. Deleted runs stay out of direct reads and
-            lists; only the known-id audit route uses an organisation-scoped
-            deleted-run resolver after an owner/admin role check, while members
-            are gated before the deleted lookup. The account and organisation
-            settings mutations carry no client-supplied scope:
-            <code>PATCH /api/me</code> writes the session&apos;s user, and the
-            settings client calls the bare
+            leaves no version, pointer change, comment or audit row. The same
+            matter-first prefix now also covers the remaining matter-derived
+            write paths. Matter PATCH, matter soft-delete and restore, document
+            soft-delete and restore, and document upload all acquire the matter
+            row <code>FOR UPDATE</code>, re-evaluate edit access in a separate
+            statement, and take the acting user's <code>FOR SHARE</code> before
+            writing. Cascade restore locks the soft-deleted row and reads its
+            <code>deleted_at</code> as text so the child cascade matches only
+            the children that deletion took down. Actor-side share management
+            keeps its <code>created_by</code> owner check and adds the same
+            membership <code>FOR SHARE</code>, so a removed owner's in-flight
+            grant or revoke observes the cleared membership and returns the
+            concealed matter 404. Upload reads and extracts the body before the
+            lock and writes the object after the write transaction commits, so
+            no external I/O is held under the row lock and a denied or failed
+            upload leaves no stored object. Each path keeps its existing
+            concealed code: matter operations and share management return
+            <code>matter_not_found</code>, document operations return
+            <code>document_not_found</code>. Route modules are prohibited from
+            querying matter-derived tables directly, so a new route must use an
+            access-enforcing resolver. Denial is a uniform 404. Web uses cookie
+            sessions; desktop uses the bearer plugin. Linked redaction runs
+            inherit live matter view/edit access; standalone runs use their
+            creator for ordinary access, with no administrator override.
+            Transactional linked lifecycle mutations lock matter, document, and
+            redaction run lineage in deterministic id order, matching the
+            matter-first share-revocation prefix. Deleted runs stay out of
+            direct reads and lists; only the known-id audit route uses an
+            organisation-scoped deleted-run resolver after an owner/admin role
+            check, while members are gated before the deleted lookup. The
+            account and organisation settings mutations carry no client-supplied
+            scope: <code>PATCH /api/me</code> writes the session&apos;s user,
+            and the settings client calls the bare
             <code>PATCH /api/organisations</code>, which resolves the tenant
             from the session rather than from the request. Organisation rename
             is owner-only on both paths, enforced by

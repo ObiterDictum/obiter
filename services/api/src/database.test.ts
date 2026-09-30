@@ -97,8 +97,14 @@ describe('matter workspace database operations', () => {
       if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
         return { rows: [] }
       }
+      if (sql.startsWith('select id from matters')) {
+        return { rows: [{ id: 'mtr_1', deleted_at: null }] }
+      }
       if (sql.includes('select matter.id from matters')) {
         return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (sql.includes('from users')) {
+        return { rows: [{ id: 'usr_1' }] }
       }
       if (sql.includes('insert into matter_documents')) {
         return { rows: [documentRow()] }
@@ -136,7 +142,9 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
+      'select id from',
       'select matter.id from',
+      'select id from',
       'insert into matter_documents',
       'insert into document_versions',
       'update matter_documents set',
@@ -157,8 +165,16 @@ describe('matter workspace database operations', () => {
     const parentLock = calls[1]
     expect(parentLock[0]).toContain('deleted_at is null')
     expect(parentLock[0]).toContain('for update')
-    expect(parentLock[1]).toEqual(['mtr_1', 'org_1', 'usr_1'])
-    const versionParams = calls[3][1]
+    // The lock statement must carry no access predicate; if it did, a blocked
+    // FOR UPDATE would authorise on the pre-wait snapshot. The re-check below
+    // is the only place matter_shares may be evaluated.
+    expect(parentLock[0]).not.toContain('matter_shares')
+    expect(parentLock[0]).not.toContain('created_by')
+    expect(parentLock[1]).toEqual(['mtr_1', 'org_1'])
+    const accessRecheck = calls[2]
+    expect(accessRecheck[0]).toContain('matter_shares')
+    expect(accessRecheck[1]).toEqual(['mtr_1', 'org_1', 'usr_1'])
+    const versionParams = calls[5][1]
     expect(versionParams).toEqual([
       expect.stringMatching(/^ver_/),
       'org_1',
@@ -188,7 +204,9 @@ describe('matter workspace database operations', () => {
   it('returns null before inserting when the parent matter is deleted', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('select matter.id from matters')) return { rows: [] }
+      if (sql.startsWith('select id from matters')) {
+        return { rows: [] }
+      }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
 
@@ -213,8 +231,14 @@ describe('matter workspace database operations', () => {
       if (sql === 'begin' || sql === 'rollback') {
         return { rows: [] }
       }
+      if (sql.startsWith('select id from matters')) {
+        return { rows: [{ id: 'mtr_1', deleted_at: null }] }
+      }
       if (sql.includes('select matter.id from matters')) {
         return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (sql.includes('from users')) {
+        return { rows: [{ id: 'usr_1' }] }
       }
       if (sql.includes('insert into matter_documents')) {
         return { rows: [documentRow()] }
@@ -259,6 +283,12 @@ describe('matter workspace database operations', () => {
       if (text.includes('for update') && text.includes('deleted_at is null')) {
         return { rows: [{ id: 'mtr_1' }] }
       }
+      if (text.includes('select matter.id from matters matter')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.includes('from users')) {
+        return { rows: [{ id: 'usr_1' }] }
+      }
       if (text.startsWith('update matters')) {
         return { rows: [deletedMatter] }
       }
@@ -295,7 +325,9 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
+      'select id from',
       'select matter.id from',
+      'select id from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
@@ -321,8 +353,11 @@ describe('matter workspace database operations', () => {
         return { rows: [] }
       if (text.startsWith('select matter_id from matter_documents'))
         return { rows: [{ matter_id: 'mtr_1' }] }
+      if (text.startsWith('select id from matters'))
+        return { rows: [{ id: 'mtr_1', deleted_at: null }] }
       if (text.includes('select matter.id from matters'))
         return { rows: [{ id: 'mtr_1' }] }
+      if (text.includes('from users')) return { rows: [{ id: 'usr_1' }] }
       if (text.startsWith('select id from matter_documents'))
         return { rows: [{ id: 'doc_1' }] }
       if (text.startsWith('update matter_documents'))
@@ -348,7 +383,7 @@ describe('matter workspace database operations', () => {
     })
 
     const matterLock = calls.findIndex(([sql]) =>
-      sql.includes('select matter.id from matters'),
+      sql.includes('select id from matters'),
     )
     const documentLock = calls.findIndex(([sql]) =>
       sql.startsWith('select id from matter_documents'),
@@ -406,6 +441,12 @@ describe('matter workspace database operations', () => {
       ) {
         return { rows: [{ deleted_at: '2026-02-01T00:00:00.000Z' }] }
       }
+      if (text.includes('select matter.id from matters matter')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.includes('from users')) {
+        return { rows: [{ id: 'usr_1' }] }
+      }
       if (text.startsWith('update matters')) {
         return { rows: [matterRow()] }
       }
@@ -440,7 +481,9 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
-      'select matter.deleted_at::text from',
+      'select id, deleted_at::text',
+      'select matter.id from',
+      'select id from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
@@ -469,6 +512,12 @@ describe('matter workspace database operations', () => {
       }
       if (text.includes('for update')) {
         return { rows: [{ deleted_at: '2026-02-01T00:00:00.000Z' }] }
+      }
+      if (text.includes('select matter.id from matters matter')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.includes('from users')) {
+        return { rows: [{ id: 'usr_1' }] }
       }
       if (text.startsWith('update matters')) {
         return { rows: [matterRow()] }
@@ -515,6 +564,12 @@ describe('matter workspace database operations', () => {
       ) {
         return { rows: [{ deleted_at: parentDeletedAt }] }
       }
+      if (text.includes('select matter.id from matters matter')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.includes('from users')) {
+        return { rows: [{ id: 'usr_1' }] }
+      }
       if (text.startsWith('update matters')) {
         return { rows: [matterRow()] }
       }
@@ -559,7 +614,13 @@ describe('matter workspace database operations', () => {
         return { rows: [{ matter_id: 'mtr_1' }] }
       }
       if (text.startsWith('select id from matters')) {
+        return { rows: [{ id: 'mtr_1', deleted_at: null }] }
+      }
+      if (text.startsWith('select matter.id from matters matter')) {
         return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.startsWith('select id from users')) {
+        return { rows: [{ id: 'usr_1' }] }
       }
       if (text.startsWith('select deleted_at::text from matter_documents')) {
         return { rows: [{ deleted_at: deletedAt }] }
@@ -594,8 +655,11 @@ describe('matter workspace database operations', () => {
     const matterLockQuery = calls.find(([sql]) =>
       sql.startsWith('select id from matters'),
     )
-    expect(matterLockQuery?.[0]).toMatch(/from matters\s+matter/)
-    expect(matterLockQuery?.[0]).toContain('matter.created_by')
+    expect(matterLockQuery?.[0]).toContain('for update')
+    const accessRecheck = calls.find(([sql]) =>
+      sql.startsWith('select matter.id from matters matter'),
+    )
+    expect(accessRecheck?.[0]).toContain('matter.created_by')
     expect(documentRestore?.[0]).toContain('deleted_at = $3::timestamptz')
     expect(documentRestore?.[1]?.[2]).toBe(deletedAt)
     expect(runRestore?.[0]).toContain('deleted_at = $3::timestamptz')
