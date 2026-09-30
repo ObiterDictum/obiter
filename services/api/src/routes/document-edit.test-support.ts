@@ -149,6 +149,7 @@ class EditTransaction {
   private stagedPointer: string | null = null
   private readonly stagedAudits: Audit[] = []
   private matterLockChecked = false
+  private memberLockChecked = false
   private lockChecked = false
 
   constructor(
@@ -197,6 +198,21 @@ class EditTransaction {
         this.options.access === undefined ? 'view' : this.options.access
       return {
         rows: access === 'owner' || access === 'edit' ? [{ id: 'mtr_1' }] : [],
+      }
+    }
+    if (sql.includes('from users') && sql.includes('for share')) {
+      this.recordQuery(sql)
+      if (!this.matterLockChecked) {
+        throw new Error('The member lock must follow the matter lock.')
+      }
+      this.memberLockChecked = true
+      const access =
+        this.options.access === undefined ? 'view' : this.options.access
+      return {
+        rows:
+          access === 'owner' || access === 'edit'
+            ? [{ id: String(parameters[0]) }]
+            : [],
       }
     }
     if (sql.includes('left join document_versions current')) {
@@ -371,9 +387,14 @@ class EditTransaction {
   }
 
   private requireLockedWrite() {
-    if (!this.matterLockChecked || !this.lockChecked || !this.releaseLock) {
+    if (
+      !this.matterLockChecked ||
+      !this.memberLockChecked ||
+      !this.lockChecked ||
+      !this.releaseLock
+    ) {
       throw new Error(
-        'Transaction writes require the locked matter and base recheck.',
+        'Transaction writes require the locked matter, member and base recheck.',
       )
     }
   }

@@ -311,6 +311,9 @@ describe('POST /api/documents/:id/edit', () => {
     const matterLockIndex = database.queries.findIndex((sql) =>
       sql.includes('select matter.id from matters'),
     )
+    const memberLockIndex = database.queries.findIndex(
+      (sql) => sql.includes('from users') && sql.includes('for share'),
+    )
     const lockIndex = database.queries.findIndex((sql) =>
       sql.includes('for update of document'),
     )
@@ -318,7 +321,8 @@ describe('POST /api/documents/:id/edit', () => {
       sql.includes('update matter_documents'),
     )
     expect(matterLockIndex).toBeGreaterThan(-1)
-    expect(lockIndex).toBeGreaterThan(matterLockIndex)
+    expect(memberLockIndex).toBeGreaterThan(matterLockIndex)
+    expect(lockIndex).toBeGreaterThan(memberLockIndex)
     expect(pointerIndex).toBeGreaterThan(lockIndex)
     expect(database.queries[pointerIndex]).toContain('current_version_id = $4')
   })
