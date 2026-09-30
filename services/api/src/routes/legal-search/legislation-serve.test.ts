@@ -885,3 +885,125 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
     )
   })
 })
+
+describe('resolveLegislationFetch — P1.34 legislation keyword bound', () => {
+  // A non-citation query over a one-Act directory reaches the keyword branch.
+  const keywordQuery = 'appeal a housing decision'
+
+  type KeywordEngineResponse = {
+    hits: Array<Record<string, unknown>>
+    query?: string
+    estimatedTotalHits?: number
+    processingTimeMs?: number
+  }
+  type KeywordSearch = (
+    query: string,
+    options: Record<string, unknown>,
+    extraRequestInit?: { signal?: AbortSignal | null },
+  ) => Promise<KeywordEngineResponse>
+
+  function keywordDeps(
+    search: KeywordSearch,
+    keywordTimeoutMs = 40,
+  ): LegislationServeDeps {
+    return {
+      pool: {
+        query: vi.fn(async (text: string) =>
+          text.includes('from legislation_documents order')
+            ? { rows: acts }
+            : { rows: [] },
+        ),
+      } as unknown as LegislationServeDeps['pool'],
+      searchClient: {
+        index: () => ({ search }),
+      } as unknown as LegislationServeDeps['searchClient'],
+      indexName: 'legislation_provisions',
+      keywordTimeoutMs,
+    }
+  }
+
+  it('classifies a hung keyword engine as failed, never a completed empty', async () => {
+    let engineSignal: AbortSignal | null | undefined
+    const result = await resolveLegislationFetch(
+      keywordDeps((_query, _options, extraRequestInit) => {
+        engineSignal = extraRequestInit?.signal
+        return new Promise<never>(() => undefined)
+      }),
+      keywordQuery,
+    )
+    expect(result.failed).toBe(true)
+    expect(result.searched).toBe(false)
+    expect(result.groups).toEqual([])
+    expect(result.note).toBe('Legislation index unavailable.')
+    // The deadline aborted the transport, not just abandoned the response.
+    expect(engineSignal?.aborted).toBe(true)
+  })
+
+  it('discards a keyword search that resolves after the deadline', async () => {
+    let resolveLate: (value: KeywordEngineResponse) => void = () => undefined
+    const late = new Promise<KeywordEngineResponse>((resolve) => {
+      resolveLate = resolve
+    })
+    const result = await resolveLegislationFetch(
+      keywordDeps(() => late),
+      keywordQuery,
+    )
+    expect(result.failed).toBe(true)
+    expect(result.searched).toBe(false)
+    // Resolving after the deadline is discarded, and a later request still
+    // works: no stale verdict, no corrupted subsequent call.
+    resolveLate({
+      hits: [],
+      query: keywordQuery,
+      estimatedTotalHits: 0,
+      processingTimeMs: 0,
+    })
+    await Promise.resolve()
+    const next = await resolveLegislationFetch(
+      keywordDeps(async () => ({
+        hits: [],
+        query: keywordQuery,
+        estimatedTotalHits: 0,
+        processingTimeMs: 0,
+      })),
+      keywordQuery,
+    )
+    expect(next.failed).toBe(false)
+    expect(next.searched).toBe(true)
+  })
+
+  it('handles a keyword search that rejects after the deadline', async () => {
+    let rejectLate: (error: unknown) => void = () => undefined
+    const late = new Promise<KeywordEngineResponse>((_resolve, reject) => {
+      rejectLate = reject
+    })
+    const result = await resolveLegislationFetch(
+      keywordDeps(() => late),
+      keywordQuery,
+    )
+    expect(result.failed).toBe(true)
+    // The race owns the engine promise, so this rejection is consumed, not
+    // raised as an unhandled rejection. Flush before asserting.
+    rejectLate(new Error('late engine rejection'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(result.failed).toBe(true)
+  })
+
+  it('keeps a fast keyword answer independent of a concurrent hang', async () => {
+    const hung = keywordDeps(() => new Promise<never>(() => undefined), 200)
+    const fast = keywordDeps(async () => ({
+      hits: [],
+      query: keywordQuery,
+      estimatedTotalHits: 0,
+      processingTimeMs: 0,
+    }))
+    const [hungResult, fastResult] = await Promise.all([
+      resolveLegislationFetch(hung, keywordQuery),
+      resolveLegislationFetch(fast, keywordQuery),
+    ])
+    expect(hungResult.failed).toBe(true)
+    expect(fastResult.failed).toBe(false)
+    expect(fastResult.searched).toBe(true)
+  })
+})

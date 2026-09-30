@@ -75,6 +75,13 @@ export interface LegislationSearchOptions {
   limit?: number
   rankingScoreThreshold?: number | null
   exactPhrase?: string
+  /**
+   * Cancels the engine request. The Meilisearch client forwards this to
+   * `fetch`, so an aborted search cancels the socket rather than only
+   * abandoning the response. The serve layer passes a deadline so a hung
+   * legislation index cannot hold a search response open.
+   */
+  signal?: AbortSignal
 }
 
 /**
@@ -265,6 +272,7 @@ type ProvisionSearchClient = {
         showRankingScore?: boolean
         attributesToRetrieve?: string[]
       },
+      extraRequestInit?: { signal?: AbortSignal | null },
     ): Promise<{
       hits: unknown[]
       query?: string
@@ -301,7 +309,11 @@ export async function searchLegislation(
   const engineQuery = trimmedPhrase ? toExactPhraseQuery(trimmedPhrase) : query
   const result = await client
     .index(indexName)
-    .search(engineQuery, searchOptions)
+    .search(
+      engineQuery,
+      searchOptions,
+      options.signal ? { signal: options.signal } : undefined,
+    )
   const hits: LegislationSearchHit[] = []
   for (const hit of result.hits) {
     if (!isLegislationProvisionDocument(hit)) continue

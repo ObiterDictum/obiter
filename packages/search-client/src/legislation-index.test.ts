@@ -7,6 +7,7 @@ import {
   searchLegislation,
   type LegislationProvisionDocument,
 } from './legislation-index'
+import { createClient } from './index'
 
 const provision: LegislationProvisionDocument = {
   id: 'ukpga-2020-1-section-13-2',
@@ -175,6 +176,66 @@ describe('legislation provision index', () => {
     expect(queries[0]?.query).toBe('"s. 13(2)"')
     expect(queries[0]?.options.rankingScoreThreshold).toBe(0.35)
     expect(queries[0]?.options.limit).toBe(5)
+  })
+
+  it('forwards a cancellation signal to the engine request', async () => {
+    // The serve layer bounds the keyword call with a deadline. The signal must
+    // reach the client so the transport is aborted, not merely abandoned.
+    const requestInits: Array<{ signal?: AbortSignal | null } | undefined> = []
+    const client = {
+      index: () => ({
+        search: async (
+          _query: string,
+          _options: Record<string, unknown>,
+          extraRequestInit?: { signal?: AbortSignal | null },
+        ) => {
+          requestInits.push(extraRequestInit)
+          return {
+            hits: [],
+            query: '',
+            estimatedTotalHits: 0,
+            processingTimeMs: 0,
+          }
+        },
+      }),
+    }
+    const controller = new AbortController()
+    await searchLegislation(
+      client as unknown as Parameters<typeof searchLegislation>[0],
+      'legislation_provisions',
+      'ground rent',
+      { signal: controller.signal },
+    )
+    expect(requestInits[0]?.signal).toBe(controller.signal)
+
+    // No signal: no fabricated extra request init, so any client-level
+    // transport default still applies.
+    await searchLegislation(
+      client as unknown as Parameters<typeof searchLegislation>[0],
+      'legislation_provisions',
+      'ground rent',
+    )
+    expect(requestInits[1]).toBeUndefined()
+  })
+
+  it('aborts a hung engine request when the signal fires', async () => {
+    // Task-owned fake engine: accepts the request and never answers. With the
+    // signal forwarded to fetch the search rejects at the deadline; without it
+    // the promise would never settle.
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => new Promise<Response>(() => undefined),
+    })
+    try {
+      const client = createClient(`http://127.0.0.1:${server.port}`, 'test-key')
+      await expect(
+        searchLegislation(client, 'legislation_provisions', 'ground rent', {
+          signal: AbortSignal.timeout(50),
+        }),
+      ).rejects.toThrow()
+    } finally {
+      await server.stop(true)
+    }
   })
 
   it('reports the search-time parameters it actually sent', async () => {
