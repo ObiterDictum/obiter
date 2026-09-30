@@ -948,11 +948,12 @@
             processes and twelve workspace packages.
           </p>
           <p>
-            Three product surfaces carry code: <b>Search</b> over Find Case Law
-            judgments, <b>Redact</b> for detecting and removing personal data,
-            and <b>Matters</b> for private document workspaces. Two more, Verify
-            and Research, are documented but not yet product surfaces: Verify
-            has a pure domain package and no surface, Research has neither.
+            Three product surfaces carry code: <b>Search</b> over a locally held
+            UK judgment corpus, <b>Redact</b> for detecting and removing
+            personal data, and <b>Matters</b> for private document workspaces.
+            Two more, Verify and Research, are documented but not yet product
+            surfaces: Verify has a pure domain package and no surface, Research
+            has neither.
           </p>
           <div class="callout">
             <b>Reading the layers.</b> The stack below is ordered by dependency
@@ -1415,17 +1416,6 @@
                 />
                 <text x="542.3" y="163.75" text-anchor="middle" class="e">
                   objects
-                </text>
-                <path
-                  d="M424.6,107.0 L660,280.5"
-                  fill="none"
-                  stroke="var(--danger)"
-                  stroke-width="1"
-                  stroke-dasharray="4 3"
-                  marker-end="url(#ahd-t-runtime-topology)"
-                />
-                <text x="542.3" y="207.75" text-anchor="middle" class="e">
-                  hydrate
                 </text>
                 <path
                   d="M424.6,107.0 L660,360.5"
@@ -3015,11 +3005,13 @@
                   <td class="id">POST /api/search/fetch</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public search with Find Case Law fallback. No session
-                    required. Must not expose matter or client data. Also serves
-                    a labelled legislation group (exact citations from Postgres,
-                    keyword hits from the legislation_provisions index)
-                    federated after the judgment hits.
+                    Public search over the stored corpus. No session required,
+                    and corpus-only: it never contacts Find Case Law, queues no
+                    hydration and writes nothing. Must not expose matter or
+                    client data. Also serves a labelled legislation group (exact
+                    citations from Postgres, keyword hits from the
+                    legislation_provisions index) federated after the judgment
+                    hits.
                   </td>
                 </tr>
                 <tr>
@@ -3471,24 +3463,21 @@
             <code>GET /api/invites/preview</code>
             are deliberately public: search and changelog serve published
             authorities and release notes only; anonymous
-            <code>POST /api/search/fetch</code> is stored-only and does not
-            hydrate the provider, while an anonymous
-            <code>GET /api/search/documents/:documentId</code> may answer a
-            read-only miss live but is charged to one shared anonymous bucket
-            and never writes; authenticated provider-reaching paths (foreground
-            live search, queued hydration and document fetch-through) cross one
-            hydration gate admitted through a cluster-wide Postgres ledger on
-            the application database, so the per-subject miss window and the
-            unexpired-lease bound are shared by every replica rather than
-            multiplied. The ledger counts unexpired leases, not every
-            still-running operation: an operation that outlives its lease drops
-            out of the count while it still runs; health is a minimal liveness
-            probe; in development it also exposes the API commit SHA and
-            checkout root for local provenance checks. Invite preview is gated
-            by the secret invite token and returns only organisation and inviter
-            display names. They must never return matter, client, redaction, or
-            session data, and production health must never expose environment,
-            version, or configuration detail.
+            <code>POST /api/search/fetch</code> and
+            <code>GET /api/search/documents/:documentId</code> are corpus-only:
+            they read Obiter-owned records and the derived index, never contact
+            Find Case Law, queue no hydration and write nothing. A miss answers
+            the stored-only empty contract honestly (search
+            <code>no_match</code> or <code>recognised_not_held</code>; document
+            <code>404</code>), so a provider outage cannot become a storage
+            failure. National Archives access belongs to an explicit indexing
+            run. Health is a minimal liveness probe; in development it also
+            exposes the API commit SHA and checkout root for local provenance
+            checks. Invite preview is gated by the secret invite token and
+            returns only organisation and inviter display names. They must never
+            return matter, client, redaction, or session data, and production
+            health must never expose environment, version, or configuration
+            detail.
           </div>
         </section>
 
@@ -4000,6 +3989,8 @@
                     is over unexpired leases, not still-running work) and one
                     row per charged subject miss. Opaque lease ids and
                     server-verified user ids only; no query text or matter data.
+                    Retained but unused by the API since the corpus-only
+                    decision; no request path constructs the ledger.
                   </td>
                   <td class="id">0028</td>
                 </tr>
@@ -4013,8 +4004,10 @@
                     one operation may spend many charges and N replicas share
                     one allowance instead of multiplying it. A row is a
                     timestamp and nothing else: no URL, query text, subject or
-                    matter data. Bulk ingestion runs with its own corpus-writer
-                    connection and does not reach this ledger.
+                    matter data. Retained but unused by the API since the
+                    corpus-only decision; no request path constructs the budget.
+                    Bulk ingestion runs with its own corpus-writer connection
+                    and does not reach this ledger.
                   </td>
                   <td class="id">0029</td>
                 </tr>
@@ -4368,11 +4361,12 @@
                 <tr>
                   <td class="id">CORPUS_WRITE_DATABASE_URL</td>
                   <td>
-                    Optional. A corpus writer for provider fetch-through
-                    hydration. It requires <code>CORPUS_DATABASE_URL</code>; a
-                    writer with no explicit reader refuses startup, because
-                    reads and writes must not silently target unrelated
-                    databases. Only the process that persists hydration should
+                    Optional. A corpus writer for the explicit indexing run. It
+                    requires <code>CORPUS_DATABASE_URL</code>; a writer with no
+                    explicit reader refuses startup, because reads and writes
+                    must not silently target unrelated databases. The
+                    corpus-only API does not use it; retained for the indexing
+                    service. Only the process that persists ingestion should
                     receive it, and the credential belongs in a service-private
                     environment file or systemd credential, never in
                     <code>.env</code> where lane setup copies it. Under
@@ -4420,8 +4414,10 @@
                     >
                     on the application database). It is charged before each
                     upstream HTTP attempt, so one operation may spend many
-                    charges. The default is an operator assumption, not a
-                    verified provider allowance
+                    charges. The corpus-only API neither contacts the provider
+                    nor constructs the budget; it is retained, with the provider
+                    seam, for the explicit indexing boundary. The default is an
+                    operator assumption, not a verified provider allowance
                   </td>
                 </tr>
                 <tr>
@@ -4456,13 +4452,16 @@
                     per-subject miss budget, rolling window, and lease lifetime.
                     Enforced by the shared Postgres admission ledger on the
                     application database, so every API replica shares one miss
-                    window and one unexpired-lease bound. The ledger counts
-                    unexpired leases, not every still-running operation. The
-                    admission transaction bounds its lock wait with
-                    transaction-local timeouts, so a wedged holder fails
-                    admission closed. The per-process MOJ rate limiter is a
-                    backstop composed before the cluster-wide request budget, so
-                    it can only tighten the shared window, never widen it
+                    window and one unexpired-lease bound. Retained but unused by
+                    the API since the corpus-only decision: no request path
+                    constructs the ledger or reads these values; the indexing
+                    boundary may reuse the ledger. The ledger counts unexpired
+                    leases, not every still-running operation. The admission
+                    transaction bounds its lock wait with transaction-local
+                    timeouts, so a wedged holder fails admission closed. The
+                    per-process MOJ rate limiter is a backstop composed before
+                    the cluster-wide request budget, so it can only tighten the
+                    shared window, never widen it
                   </td>
                 </tr>
                 <tr>
@@ -4581,8 +4580,10 @@
               >
                 <title id="t-search-request-flow">Search request flow</title>
                 <desc>
-                  Path of a query through exact lookup, lexical search and
-                  ranking, with the provider fallback that is due for removal.
+                  Path of a query through classification, exact lookup, lexical
+                  search, ranking and snippets. The provider is not in the
+                  request path; National Archives requests happen only during an
+                  explicit indexing run.
                 </desc>
                 <defs>
                   <marker
@@ -4718,24 +4719,6 @@
                     response
                   </text>
                 </g>
-                <g>
-                  <rect
-                    x="420"
-                    y="24"
-                    width="100.6"
-                    height="41"
-                    rx="2"
-                    fill="var(--raised)"
-                    stroke="var(--danger)"
-                    stroke-dasharray="3 3"
-                  />
-                  <text x="470.3" y="41" text-anchor="middle" class="n">
-                    Find Case Law
-                  </text>
-                  <text x="470.3" y="52" text-anchor="middle" class="s">
-                    on miss
-                  </text>
-                </g>
                 <path
                   d="M94,135.0 L130,135.0"
                   fill="none"
@@ -4778,23 +4761,11 @@
                   stroke-width="1"
                   marker-end="url(#ah-t-search-request-flow)"
                 />
-                <path
-                  d="M464.25,120 L470.3,65"
-                  fill="none"
-                  stroke="var(--danger)"
-                  stroke-width="1"
-                  stroke-dasharray="4 3"
-                  marker-end="url(#ahd-t-search-request-flow)"
-                />
-                <text x="501.275" y="92.5" text-anchor="middle" class="e">
-                  miss
-                </text>
               </svg>
             </div>
             <figcaption>
-              Red marks what is changing: the JavaScript re-rank discards
-              Meilisearch's score, and the provider call sits inside the
-              request.
+              Red marks the JavaScript re-rank, which discards Meilisearch's
+              score. Find Case Law is not in the request path.
             </figcaption>
           </figure>
           <ol class="steps">
@@ -4845,17 +4816,19 @@
             </li>
             <li>
               <span
-                ><b>Provider fallback.</b> On a miss, Find Case Law is called in
-                the request path, then hydrated, stored and indexed. Every
-                provider-reaching path (foreground live, queued hydration, the
-                detached detail pass and the document-detail fetch-through)
-                crosses one hydration gate admitted through a cluster-wide
-                Postgres ledger on the application database, which bounds
-                unexpired leases and charges the subject&apos;s rolling miss
-                window before the fetch and deduplicates equivalent work within
-                one process. An anonymous document miss may still answer live,
-                but it is charged to one shared anonymous bucket and never
-                writes the corpus or index.</span
+                ><b>Corpus-only answer.</b> On a miss the API answers from
+                Obiter-owned records alone: search returns its stored-only empty
+                (<code>no_match</code>, or <code>recognised_not_held</code> for
+                a recognised citation) with <code>hydrationQueued: false</code>,
+                and a document miss returns <code>404 document_not_found</code>.
+                A stored summary with no full text serves its metadata, which
+                the case view renders with its full-text-unavailable state; a
+                request that sends the deprecated
+                <code>foregroundLiveResults: true</code> is answered with
+                <code>foregroundLiveIgnored: true</code>. Find Case Law is never
+                contacted, no hydration is queued and no corpus or index write
+                happens. National Archives access belongs to an explicit
+                indexing run, not to a request.</span
               >
             </li>
           </ol>
@@ -4863,9 +4836,9 @@
             <b>Steps 3 to 6 are all changing.</b> Matching is substring-based,
             so <code>test</code> matches contested, testimony, testator,
             intestate and protest: measured precision 0.20. The index is
-            untuned. Meilisearch's score is discarded. And provider calls are to
-            leave the request path once the corpus is held locally. Tracked in
-            the Search PRD.
+            untuned. Meilisearch's score is discarded. Provider calls have left
+            the request path: the API is corpus-only and reads a locally held
+            corpus. Tracked in the Search PRD.
           </div>
           <div class="callout">
             <b>Stored-search failure is visible, not silent.</b>
@@ -6621,6 +6594,23 @@
                     loop stays free; the run contract did not change.
                   </td>
                   <td class="id">docs/specs/verify/implementation.md</td>
+                </tr>
+                <tr>
+                  <td>
+                    API provider-admission and request-budget code is retained
+                    but unreferenced
+                  </td>
+                  <td>
+                    The user-facing API is corpus-only and never contacts Find
+                    Case Law. The hydration ledger, the shared request budget,
+                    their modules and migrations 0028/0029 remain for an
+                    explicit indexing run; no request path constructs them. The
+                    withdrawal checker is unscheduled and this decision does not
+                    authorise a standalone Archives poll, so the licence
+                    withdrawal obligation is unresolved. Production egress
+                    topology is unverified from the repository.
+                  </td>
+                  <td class="id">architecture.md</td>
                 </tr>
               </tbody>
             </table>

@@ -284,6 +284,9 @@ function formatResultMeta(
     return `${response.hits.length} recent ${caseLabel} for ${browse.courtLabel} from stored legal sources`
   }
 
+  const resultLabel = response.hits.length === 1 ? 'result' : 'results'
+  const source = formatResultSource(response)
+
   if (
     response.citation?.status === 'not_held' &&
     response.hits.length > 0 &&
@@ -292,29 +295,34 @@ function formatResultMeta(
     // note is not a not-held verdict either.
     response.diagnostics?.legislationNotHeld !== true
   ) {
-    const resultLabel = response.hits.length === 1 ? 'result' : 'results'
     if (response.hits.every((hit) => hit.citationMatch === 'citing')) {
-      return `Citation not held · ${response.hits.length} citing ${resultLabel} from Find Case Law`
+      return `Citation not held · ${response.hits.length} citing ${resultLabel} ${source}`
     }
-    return `Citation not held · ${response.hits.length} ${resultLabel} from Find Case Law`
+    return `Citation not held · ${response.hits.length} ${resultLabel} ${source}`
   }
 
-  const resultLabel = response.hits.length === 1 ? 'result' : 'results'
+  return `${response.hits.length} ${resultLabel} ${source}`
+}
+
+/**
+ * Source attribution read from each hit's retrievalPath, never assumed.
+ * The corpus-only API serves `stored_*` paths; `live_provider` is retained
+ * so a genuinely live hit (an older cached response) is still labelled.
+ */
+function formatResultSource(response: LegalSearchFetchResponse) {
   const paths = new Set(
     response.hits.map((hit) => hit.retrievalPath).filter(Boolean),
   )
   const hasLive = paths.has('live_provider')
   const hasStored = [...paths].some((path) => path?.startsWith('stored'))
   if (hasLive && hasStored) {
-    return `${response.hits.length} ${resultLabel} from stored legal sources and Find Case Law`
+    return 'from stored legal sources and Find Case Law'
   }
   if (hasLive) {
-    return `${response.hits.length} ${resultLabel} from Find Case Law`
+    return 'from Find Case Law'
   }
   if (hasStored) {
-    return `${response.hits.length} ${resultLabel} from stored legal sources`
+    return 'from stored legal sources'
   }
-  return `${response.hits.length} ${resultLabel} from ${
-    response.cached ? 'stored legal sources' : 'legal sources'
-  }`
+  return `from ${response.cached ? 'stored legal sources' : 'legal sources'}`
 }

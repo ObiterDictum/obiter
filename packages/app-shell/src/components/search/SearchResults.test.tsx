@@ -113,6 +113,27 @@ describe('SearchResults citation distinction', () => {
     )
   })
 
+  it('attributes not-held citing hits to stored sources when the path is stored', () => {
+    // The corpus-only API serves this miss path from Postgres/Meili, so a hit
+    // can no longer have come from Find Case Law. The meta line must read the
+    // retrievalPath rather than assuming the provider.
+    const rendered = renderResults({
+      hits: [{ ...citingHit, retrievalPath: 'stored_index' as const }],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      'Citation not held · 1 citing result from stored legal sources',
+    )
+    expect(container.textContent).not.toContain('Find Case Law')
+  })
+
   it('stays neutral when not-held hits carry no citing label', () => {
     const rendered = renderResults({
       hits: [

@@ -341,6 +341,12 @@ describe('LegalSearchView debounce lifecycle', () => {
     container = rendered.container
 
     expect(container.textContent).toContain('Search judgments')
+    // The idle discovery copy must not advertise a provider the corpus-only
+    // API never contacts.
+    expect(container.textContent).not.toContain('Find Case Law')
+    expect(container.textContent).toContain(
+      'the records ingested so far, not every published judgment',
+    )
     expect(container.textContent).toContain('Case name')
     expect(container.textContent).toContain('Neutral citation')
     expect(container.textContent).toContain('Keyword')
@@ -356,7 +362,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     expect(JSON.parse(String(request?.body))).toEqual({
       query: '',
-      foregroundLiveResults: false,
       court: 'uksc',
     })
     expect(container.textContent).toContain(
@@ -395,7 +400,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       'No judgment held for this citation',
     )
     expect(container.textContent).toContain(
-      'No stored or provider source holds "[2023] EWCA Civ 123" as a judgment.',
+      'No stored legal source holds "[2023] EWCA Civ 123" as a judgment.',
     )
   })
 
@@ -798,7 +803,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('Find Case Law did not match')
   })
 
-  it('names Find Case Law when live was consulted and found nothing', async () => {
+  it('never advertises Find Case Law discovery for a stored-only miss', async () => {
+    // The corpus-only API cannot consult a provider, so a stale or hostile
+    // diagnostics.liveProviderSearched must not make the page claim it did.
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -823,9 +830,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     expect(container.textContent).toContain(
-      'Stored legal sources and Find Case Law did not match "zxqwv neverseen"',
+      'Stored legal sources did not match "zxqwv neverseen"',
     )
-    expect(container.textContent).not.toContain('were not consulted')
+    expect(container.textContent).not.toContain('Find Case Law')
   })
 
   it('keeps stored-only copy for a citation live never checked', async () => {
@@ -993,7 +1000,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(JSON.parse(String(request?.body))).toMatchObject({
       query: 'Miah',
       court: 'ewhc/admin',
-      foregroundLiveResults: true,
     })
   })
 
@@ -1057,7 +1063,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     expect(JSON.parse(String(request?.body))).toEqual({
       query: '',
-      foregroundLiveResults: false,
       court: 'uksc',
       dateTo: '2024-12-31',
     })
@@ -1208,8 +1213,8 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('names the wait on rate-limited search instead of a generic failure', async () => {
-    // The API answers 429 hydration_budget_exceeded while background
-    // hydration is over budget; the panel must say waiting, not failed.
+    // 429 is a rate-limit signal, not a specific outage; the panel must say
+    // busy, not failed, and must not imply a provider fetch.
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 429,
@@ -1234,7 +1239,7 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(container.textContent).toContain('Search could not complete')
     expect(container.textContent).toContain(
-      'Search is busy fetching new results. Try again shortly.',
+      'Search is busy. Try again shortly.',
     )
     expect(container.textContent).not.toContain(
       'Search could not complete the request.',
@@ -1271,14 +1276,14 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('Find Case Law')
   })
 
-  it('keeps blaming Find Case Law for provider 503s', async () => {
+  it('names the legal-source store when a document-store 503 is reported', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: false,
       status: 503,
       json: async () => ({
         error: {
           code: 'storage_unavailable',
-          message: 'Find Case Law is unavailable.',
+          message: 'Legal source storage is unavailable.',
           requestId: 'req_test',
         },
       }),
@@ -1295,8 +1300,63 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     expect(container.textContent).toContain(
-      'Find Case Law is currently unreachable. Cached results may still be available through standard search.',
+      'Legal search is temporarily unavailable because the legal-source store cannot be reached. Try again later.',
     )
+    expect(container.textContent).not.toContain('Find Case Law')
+  })
+
+  it('reports an unrecognised 503 as a generic outage, not a provider failure', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: {
+          code: 'upstream_proxy_unavailable',
+          message: 'Gateway unavailable.',
+          requestId: 'req_test',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'Legal search is temporarily unavailable. Try again later.',
+    )
+    expect(container.textContent).not.toContain('Find Case Law')
+  })
+
+  it('handles a 503 with no JSON body honestly', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input')
+      },
+    } as unknown as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'Legal search is temporarily unavailable. Try again later.',
+    )
+    expect(container.textContent).not.toContain('Find Case Law')
   })
 
   it('opens and closes the keyboard shortcuts overlay', async () => {

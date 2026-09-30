@@ -187,8 +187,6 @@ d2.edge("electron", "api", sa="r", sb="l", label="bearer token", ly=12)
 d2.edge("api", "pg", sa="r", sb="l", label="SQL", ly=-6)
 d2.edge("api", "meili", sa="r", sb="l", label="search", ly=-6)
 d2.edge("api", "store", sa="r", sb="l", label="objects", ly=10)
-d2.edge("api", "fcl", sa="r", sb="l", label="hydrate", tone="var(--danger)",
-        dashed=True, ly=14)
 d2.edge("api", "resend", sa="r", sb="l", tone="var(--danger)", dashed=True)
 d2.edge("api", "model", sa="b", sb="t", label="load", lx=26)
 d2.edge("ingestor", "meili", sa="r", sb="b", label="index", ly=20)
@@ -196,8 +194,10 @@ d2.edge("ingestor", "fcl", sa="r", sb="b", tone="var(--danger)", dashed=True)
 
 # -------------------------------------------------------------- search flow
 d3 = Diagram(920, 300, "Search request flow",
-             "Path of a query through exact lookup, lexical search and "
-             "ranking, with the provider fallback that is due for removal.")
+             "Path of a query through classification, exact lookup, lexical "
+             "search, ranking and snippets. The provider is not in the "
+             "request path; National Archives requests happen only during an "
+             "explicit indexing run.")
 d3.node("q", 20, 120, "query", accent="var(--info)")
 d3.node("classify", 130, 120, "classify")
 d3.node("exact", 258, 120, "exact lookup", "id · citation")
@@ -205,8 +205,6 @@ d3.node("meili", 420, 120, "Meilisearch", "lexical")
 d3.node("rank", 570, 120, "JS re-rank", "bucket score", accent="var(--danger)")
 d3.node("snip", 715, 120, "snippets", "evidence ids")
 d3.node("resp", 845, 120, "response", accent="var(--info)")
-d3.node("fcl", 420, 24, "Find Case Law", "on miss", accent="var(--danger)",
-        kind="dashed")
 
 d3.edge("q", "classify", sa="r", sb="l")
 d3.edge("classify", "exact", sa="r", sb="l")
@@ -214,8 +212,6 @@ d3.edge("exact", "meili", sa="r", sb="l")
 d3.edge("meili", "rank", sa="r", sb="l")
 d3.edge("rank", "snip", sa="r", sb="l")
 d3.edge("snip", "resp", sa="r", sb="l")
-d3.edge("meili", "fcl", sa="t", sb="b", tone="var(--danger)", dashed=True,
-        label="miss", lx=34)
 
 # ------------------------------------------------------------- redact flow
 d4 = Diagram(920, 330, "Redaction pipeline",
