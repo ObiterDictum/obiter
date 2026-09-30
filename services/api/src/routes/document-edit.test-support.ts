@@ -185,7 +185,7 @@ class EditTransaction {
       return { rows: [] }
     }
 
-    if (sql.includes('select matter.id from matters')) {
+    if (sql.includes('select id from matters')) {
       this.recordQuery(sql)
       requireSql(sql, 'for update')
       if (this.lockChecked) {
@@ -194,6 +194,16 @@ class EditTransaction {
         )
       }
       this.matterLockChecked = true
+      // The locking statement must not evaluate access. Under READ COMMITTED a
+      // blocked FOR UPDATE does not re-run the qual it read before the wait, so
+      // the share predicate belongs in the separate re-check below.
+      return { rows: [{ id: 'mtr_1' }] }
+    }
+    if (sql.includes('select matter.id from matters matter')) {
+      this.recordQuery(sql)
+      if (!this.matterLockChecked) {
+        throw new Error('The edit access re-check must follow the matter lock.')
+      }
       const access =
         this.options.access === undefined ? 'view' : this.options.access
       return {

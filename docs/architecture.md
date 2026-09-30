@@ -252,19 +252,35 @@ bypassed by a stale pre-lock authorization decision.
 
 Document and comment writes take that same matter-first prefix. The edit,
 collaboration merge (including an `already_applied` replay), tracked-change
-decision, comment create and comment resolve transactions lock the matter row,
-then take a `FOR SHARE` on the acting user row, and re-evaluate edit-level
-access in `services/api/src/matter-lock.ts` before they lock the document. The
-route-level resolver still rejects early, but it is not authoritative.
-Explicit matter-share revocation serialises on the matter lock. Member removal
-takes no matter lock: it locks the departing user row `FOR UPDATE` and deletes
-that user's shares, so the writer's user-row `FOR SHARE` is the second
-serialisation point. A write that owns either lock first commits and the
-revocation follows; a revocation that owns it first makes the write observe the
-removed share or membership and return the concealed document 404, leaving no
-version, current-version pointer change, comment row, audit row or candidate
-object. Re-reading the user row closes the `created_by` branch of the access
-predicate, which deleting shares cannot change.
+decision, comment create and comment resolve transactions acquire the matter row
+`FOR UPDATE` alone, then re-evaluate edit-level access in a separate statement on
+a fresh snapshot, then take a `FOR SHARE` on the acting user row, all through
+`services/api/src/matter-lock.ts`, before they lock the document. The lock and the
+re-check are deliberately separate statements: a `FOR UPDATE` that waits on a
+revocation does not re-run the qual it read before the wait, and a share
+revocation or downgrade leaves the matter row unchanged, so evaluating the share
+predicate in the locking statement would authorise on the pre-revocation
+snapshot. The route-level resolver still rejects early, but it is not
+authoritative. Explicit matter-share grant, revocation and downgrade serialise on
+the matter lock. Member removal takes no matter lock: it locks the departing user
+row `FOR UPDATE` and deletes that user's shares, so the writer's user-row
+`FOR SHARE` is the second serialisation point. A write that owns a lock first
+commits and the revocation follows; a revocation that owns it first makes the
+write observe the removed share or membership and return the concealed document
+404, leaving no version, current-version pointer change, comment row, audit row
+or candidate object. Re-reading the user row closes the `created_by` branch of
+the access predicate, which deleting shares cannot change.
+
+This boundary covers only those five write paths. Matter `PATCH`, matter
+soft-delete and restore, document soft-delete and restore, and document upload
+(`createDocument` in `database.ts`) still evaluate `matterAccessPredicate` inside
+their own matter-lock statement and take no user-row lock, so they retain the
+stale-share-subplan window and do not observe member removal. Actor-side share
+management (`grantMatterShare`/`revokeMatterShare` in `routes/document-access.ts`)
+takes the matter lock but authorises on `matters.created_by` with no membership
+re-read, so a removed owner's in-flight request can still commit. The same
+lock-then-recheck plus membership shape is the follow-up for those paths; they are
+deliberately out of this change.
 
 Direct reads and lists exclude deleted runs. The sole deleted-run exception is
 `GET /api/redaction-runs/:runId/audit`: after the live resolver misses, the route

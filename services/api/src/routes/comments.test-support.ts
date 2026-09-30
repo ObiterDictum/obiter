@@ -146,7 +146,11 @@ export class TestDatabase extends SharedTestDatabase {
           }
           return { rows: [] }
         }
-        if (sql.includes('select matter.id from matters')) {
+        if (sql.includes('select id from matters')) {
+          this.queries.push(sql)
+          return { rows: [{ id: 'mtr_1' }] }
+        }
+        if (sql.includes('select matter.id from matters matter')) {
           this.queries.push(sql)
           const access = this.commentOptions.access ?? 'edit'
           return {

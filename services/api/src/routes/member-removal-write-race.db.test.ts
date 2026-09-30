@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
-import type { Pool, PoolClient } from 'pg'
+import type { Pool } from 'pg'
 import { afterAll, describe, expect, it } from 'bun:test'
 import type { AuthzUser, AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
@@ -20,11 +20,12 @@ import {
   state,
   storageFor,
 } from './document-write-share-revocation.test-support'
+import {
+  isMatterLockStatement,
+  transactionPauseGate,
+} from './matter-lock-race.test-support'
 
 /**
- * P0.13 member-removal half: a write that passed its route-level check must
- * not commit after POST member removal revoked the member's access.
- *
  * Member removal locks the departing user row `FOR UPDATE` and deletes that
  * user's shares; `lockMatterForEdit` takes a `FOR SHARE` on the acting user
  * row after the matter lock. The writer is paused by a transaction gate after
@@ -54,53 +55,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string) {
   }
 }
 
-/**
- * Holds the first transaction query that `matches` until `open()` is called.
- * The query has already run, so its locks and snapshot are fixed; the caller
- * controls exactly which transaction resumes next without relying on timing.
- */
-function transactionGate(pool: Pool, matches: (sql: string) => boolean) {
-  let markEntered: () => void = () => undefined
-  let openGate: () => void = () => undefined
-  let armed = true
-  const entered = new Promise<void>((resolve) => {
-    markEntered = resolve
-  })
-  const opened = new Promise<void>((resolve) => {
-    openGate = resolve
-  })
-  const query = pool.query.bind(pool) as Pool['query']
-  return {
-    entered,
-    open: () => openGate(),
-    pool: {
-      query: (sql: string, parameters?: unknown[]) => query(sql, parameters),
-      connect: async () => {
-        const client: PoolClient = await pool.connect()
-        return {
-          query: async (sql: string, parameters: unknown[] = []) => {
-            const result = await client.query(sql, parameters)
-            if (armed && matches(sql)) {
-              armed = false
-              markEntered()
-              await opened
-            }
-            return result
-          },
-          release: () => client.release(),
-        }
-      },
-    } as unknown as Pool,
-  }
-}
-
 const matterLockGate = (pool: Pool) =>
-  transactionGate(
-    pool,
-    (sql) => sql.includes('from matters matter') && sql.includes('for update'),
-  )
+  transactionPauseGate(pool, isMatterLockStatement)
 const membershipGate = (pool: Pool) =>
-  transactionGate(
+  transactionPauseGate(
     pool,
     (sql) => sql.includes('select role') && sql.includes('for update'),
   )
