@@ -274,6 +274,10 @@ mutation. Verify:
   never HTML.
 - Empty, error, loading and 401/403 states are handled, not just the happy path.
 - Keyboard flow: focus, Escape/backdrop close, disabled-while-pending.
+- The PR body carries before/after media for the changed surface, published on the
+  `evidence` branch (`PR.md` "Before / After"). A claim that a visible behaviour
+  changed with no media is unverified: request the media, or cap the verdict below
+  `approve` for that claim.
 
 For destructive flows, the server gate is the enforcement and the UI must match
 it: if the server requires a capability the UI would not show, or the UI shows an
