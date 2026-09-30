@@ -120,7 +120,18 @@ Use this structure unless the change is truly trivial:
 - ...
 ```
 
-For UI PRs, add:
+For any user-visible change — a screen, a control, an editor behaviour, a
+rendered document, a printed page — add before/after media. This is required,
+not optional:
+
+```markdown
+## Before / After
+
+Before: ![before](...)
+After: ![after](...)
+```
+
+For UI PRs, also add:
 
 ```markdown
 ## UI / Accessibility
@@ -208,6 +219,23 @@ Bad:
 - Tested thoroughly.
 ```
 
+### Before / After
+
+Required for any change with a user-visible surface; the test is whether a
+reviewer could look at the result and disagree that it is better. Publish the
+media on the repository's `evidence` branch and paste the block the script
+prints:
+
+```bash
+scripts/pr-evidence.sh before-01-search.png after-01-search.png
+```
+
+Use `.gif` when motion matters. Capture from the lane the provenance block
+names and use synthetic or disposable data only — never a client matter, a real
+name, or a private document on screen. Do not commit media to the feature
+branch: it bloats the diff and the file-size ceiling rejects it. See `PR.md`
+("Before / After").
+
 ### Risks / Follow-Ups
 
 State remaining risk plainly:
@@ -224,14 +252,16 @@ State remaining risk plainly:
 1. Determine base branch and current branch.
 2. Inspect diff, changed files, and commits.
 3. Read relevant rules/docs.
-4. Draft title and body.
-5. If asked to create the PR, use GitHub CLI:
+4. For a user-visible change, capture before/after media and publish it with
+   `scripts/pr-evidence.sh`; keep the block it prints for the body.
+5. Draft title and body.
+6. If asked to create the PR, use GitHub CLI:
 
 ```bash
 gh pr create --base <base> --head <branch> --title "<title>" --body-file <body-file>
 ```
 
-6. If updating an existing PR:
+7. If updating an existing PR:
 
 ```bash
 gh pr edit <number-or-url> --title "<title>" --body-file <body-file>
@@ -248,6 +278,8 @@ Before posting, verify the PR body:
 - describes implementation choices and tradeoffs
 - includes security/data/privacy assessment
 - includes architecture/maintainability impact
+- includes before/after media for every user-visible change, or says plainly
+  why none applies
 - includes exact tests run and gaps
 - includes risks/follow-ups
 - avoids filler and hype

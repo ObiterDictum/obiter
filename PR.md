@@ -56,7 +56,6 @@ api checkout HEAD: <sha> (when development provenance is available)
 api served: <path> (when development provenance is available)
 api env file: <path> (when development provenance is available; a development
 API that resolved no .env prints `null [FAIL]` and fails the check)
-[screenshot]
 ```
 
 The `checkout HEAD` line comes from `scripts/verify-provenance.sh` run
@@ -88,6 +87,28 @@ the system recorded. Claims about persisted state — audit rows, stored
 documents, database effects — need a read of that state, not a screenshot.
 C12 on #148 could not have been verified by screenshot; show the read you
 made.
+
+## Before / After
+
+A change with a user-visible surface — a screen, a control, an editor
+behaviour, a rendered document, a printed page — carries before/after media in
+the PR body, not only a prose claim that it works. The test for "relevant" is
+whether a reviewer could look at the result and disagree that it is better; an
+API, schema, migration or internal refactor gets no media.
+
+Publish the media on the `evidence` branch — assets only, never merged — and
+paste the block the script prints:
+
+```bash
+scripts/pr-evidence.sh before-01-search.png after-01-search.png
+```
+
+The script writes `<branch>/<file>` through the GitHub git-data API and prints
+`## Before / After` with `raw.githubusercontent.com` image tags, which render
+in a PR body. Use `.gif` when motion matters; GitHub does not inline `.mp4` and
+the script links video instead. Capture from the lane the provenance block
+names, so the media and the committed sha agree. Synthetic or disposable data
+only: never a client matter, a real name, or a private document on screen.
 
 ## Writing Rules
 
