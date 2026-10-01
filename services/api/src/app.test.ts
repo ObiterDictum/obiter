@@ -2847,6 +2847,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         },
       })
     let published: Buffer | null = null
+    let persistedSummary: Record<string, unknown> | null = null
     let textWrites = 0
     let binaryWrites = 0
     let finalized = false
@@ -2862,7 +2863,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
           }
           return { rows: [] }
         },
-        async (sql) => {
+        async (sql, params) => {
           const statement = String(sql)
           if (statement === 'begin' || statement === 'commit')
             return { rows: [] }
@@ -2876,7 +2877,12 @@ describe('createApiApp degraded finalization acknowledgement', () => {
               rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
             }
           }
-          if (statement.includes('update redaction_runs')) return { rows: [] }
+          if (statement.includes('update redaction_runs')) {
+            persistedSummary = JSON.parse(
+              (params as unknown[])[3] as string,
+            ) as Record<string, unknown>
+            return { rows: [] }
+          }
           if (statement.includes('from artifacts')) {
             return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
           }
@@ -2916,6 +2922,14 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       ((await response.json()) as { warnings: { outputDowngrade: unknown } })
         .warnings.outputDowngrade,
     ).toBeNull()
+    // A successful burn persists the DOCX MIME type and no downgrade. The
+    // false downgrade this guards against was recorded even on success, so
+    // the stored summary contradicted the amber warning's own message.
+    expect(persistedSummary).toMatchObject({
+      outputMimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      outputDowngrade: null,
+    })
     expect(published).not.toBeNull()
     const zip = await JSZip.loadAsync(published ?? Buffer.alloc(0))
     for (const name of Object.keys(zip.files)) {

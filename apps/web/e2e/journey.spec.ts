@@ -1,8 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { test, expect } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import { fixturePath, verifyEmailInDb } from './support'
 
 // The sign-up origin, the Origin header and the psql database resolve together
 // from the same lane machinery the Playwright config uses, and resolution
@@ -11,48 +10,15 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
 // not explicitly selected. There is deliberately no fallback to the shared
 // dev API.
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
-// Reuse the synthetic fixture already in the repo — fictional names only.
-const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
-
-function fixturePath() {
-  const here = path.dirname(fileURLToPath(import.meta.url))
-  return path.resolve(here, FIXTURE_REL)
-}
-
-function verifyEmailInDb(email: string) {
-  // Mark the better-auth user as verified so sign-in succeeds (requireEmailVerification=true).
-  const safe = email.replace(/'/g, "''")
-  const sql = `update users set "emailVerified"=true where email='${safe}'`
-  // The API's database is whatever DATABASE_URL points at, and the Playwright
-  // config starts the API from OBITER_E2E_DATABASE_URL. journey-target derives
-  // this name from that same variable (refusing the shared `obiter` database
-  // and a NAME/URL mismatch), so this update always names the database the API
-  // reads — sign-up, verification and sign-in land in one database.
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
-      'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      sql,
-    ],
-    {
-      stdio: 'pipe',
-    },
-  )
-}
 
 test('sign in → create organisation → create matter → upload DOCX → see it listed', async ({
   page,
   request,
 }) => {
-  const runId =
-    Date.now().toString(36).slice(-6) + Math.random().toString(36).slice(2, 5)
+  // A short hex run id from a CSPRNG labels the synthetic account, organisation
+  // and matter. A predictable value must never seed an account password, so
+  // this is not Math.random() (CodeQL js/insecure-randomness).
+  const runId = randomUUID().slice(0, 8)
   const email = `e2e-${runId}@obiter.test`
   const password = `E2e-${runId}-Aa1!`
   const orgName = `E2E Org ${runId}`
@@ -65,7 +31,7 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   })
   // better-auth returns 200 with { token:null } when verification is required; that's ok.
   expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(email)
+  verifyEmailInDb(databaseName, email)
 
   // 1. Sign in via UI
   await page.goto('/sign-in', { waitUntil: 'networkidle' })

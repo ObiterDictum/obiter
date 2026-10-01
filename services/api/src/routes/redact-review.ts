@@ -418,9 +418,10 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
 
     let outputMimeType = 'text/plain'
     let outputFilename = redactedTextFilename(run.sourceFilename)
-    // Set only when a container burn was attempted and refused: the text
-    // fallback is then a silent downgrade the user must be told about.
-    // Reason codes only — never span text or filenames (user-facing).
+    // Which container burn was started, so a refusal can name it. A downgrade
+    // is recorded only when that burn fails and the text fallback replaces it;
+    // a successful burn must not persist a downgrade. Reason codes only —
+    // never span text or filenames (user-facing).
     let attemptedBurn: 'pdf' | 'docx' | null = null
     let downgradeReason: OutputDowngradeReason | null = null
     try {
@@ -511,6 +512,15 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       outputFilename = redactedTextFilename(run.sourceFilename)
     }
 
+    // The single downgrade value used for both the persisted summary and the
+    // response, so the warning can never disagree with the stored state. Only
+    // a genuine burn refusal counts: a successful burn leaves downgradeReason
+    // null and records no downgrade.
+    const outputDowngrade =
+      attemptedBurn && downgradeReason
+        ? { from: attemptedBurn, reason: downgradeReason }
+        : null
+
     let result
     try {
       result = await finalizeRedactionRun({
@@ -528,9 +538,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           body.data.unknownDetectionAcknowledged === true,
         outputMimeType,
         outputFilename,
-        outputDowngrade: attemptedBurn
-          ? { from: attemptedBurn, reason: downgradeReason ?? 'burn_failed' }
-          : null,
+        outputDowngrade,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -600,12 +608,6 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         requestId: c.get('requestId'),
       })
     }
-    // Built from the same values persisted above (not re-read from the run),
-    // so the warning agrees with the stored summary by construction.
-    const outputDowngrade =
-      attemptedBurn && downgradeReason
-        ? { from: attemptedBurn, reason: downgradeReason }
-        : null
     return c.json({
       run: publicRun(result.run),
       artifact: result.artifact,
