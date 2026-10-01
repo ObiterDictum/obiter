@@ -7,11 +7,13 @@ const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
   useRedactionDocumentText: vi.fn(),
   useRedactionOutput: vi.fn(),
-  useRedactionOutputFile: vi.fn(() => ({
-    isPending: false,
-    data: undefined,
-    error: null,
-  })),
+  useRedactionOutputFile: vi.fn(
+    (): { isPending: boolean; data: Blob | undefined; error: null } => ({
+      isPending: false,
+      data: undefined,
+      error: null,
+    }),
+  ),
   useSpanDecision: vi.fn(),
   useFinalizeRun: vi.fn(),
   useRedetectRun: vi.fn(),
@@ -96,6 +98,11 @@ const run = {
 describe('RedactionReviewView', () => {
   beforeEach(() => {
     onOpenRun.mockReset()
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: undefined,
+      error: null,
+    })
     hooks.useRedetectRun.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -197,6 +204,93 @@ describe('RedactionReviewView', () => {
     expect(
       screen.queryByText('No sensitive data was detected in this document'),
     ).toBeNull()
+  })
+
+  it('renders a successful DOCX output with no downgrade warning', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...run,
+        summary: {
+          ...run.summary,
+          outputMimeType:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          outputFilename: 'source-redacted.docx',
+          outputDowngrade: null,
+        },
+      },
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      data: {
+        text: null,
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        filename: 'source-redacted.docx',
+      },
+    })
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: new Blob(['docx-bytes'], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+      error: null,
+    })
+    hooks.useSpanDecision.mockReturnValue({})
+    hooks.useFinalizeRun.mockReturnValue({})
+
+    render(<RedactionReviewView runId="red_1" />)
+
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(
+      screen.getByText('Redacted document ready to download or share.'),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download' })).toHaveProperty(
+      'disabled',
+      false,
+    )
+  })
+
+  it('shows the downgrade warning when the DOCX burn genuinely failed', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...run,
+        summary: {
+          ...run.summary,
+          outputMimeType: 'text/plain',
+          outputFilename: 'source-redacted.txt',
+          outputDowngrade: { from: 'docx', reason: 'burn_failed' },
+        },
+      },
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      data: {
+        text: '[REDACTED] filed.',
+        mimeType: 'text/plain',
+        filename: 'source-redacted.txt',
+      },
+    })
+    hooks.useSpanDecision.mockReturnValue({})
+    hooks.useFinalizeRun.mockReturnValue({})
+
+    render(<RedactionReviewView runId="red_1" />)
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Word document unavailable — text file provided instead',
+      ),
+    ).toBeTruthy()
   })
 
   it('keeps degraded zero-span copy accurate when the model did not run', () => {
