@@ -455,6 +455,30 @@ describe('document access share routes', () => {
     expect(database.transactionCommands).toEqual(['begin', 'rollback'])
   })
 
+  it('conceals share management when the acting owner lost membership under the lock', async () => {
+    const database = new TestDatabase()
+    database.onTransactionMatterLock = () => {
+      database.users.delete('usr_owner')
+    }
+
+    const response = await createShare(routeApp(database.pool()), {
+      granteeUserId: 'usr_member',
+      accessLevel: 'view',
+    })
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'matter_not_found' },
+    })
+    expect(database.shares.size).toBe(0)
+    expect(database.audits).toEqual([])
+    const actorCheck = database.queries.find((query) =>
+      query.sql.includes('from users'),
+    )
+    expect(actorCheck?.sql).toContain('for share')
+    expect(database.transactionCommands).toEqual(['begin', 'rollback'])
+  })
+
   it('rechecks the active matter inside the transaction', async () => {
     const database = new TestDatabase()
     database.onTransactionMatterLock = () => {

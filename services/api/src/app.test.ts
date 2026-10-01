@@ -1038,6 +1038,12 @@ describe('createApiApp', () => {
         ) {
           return { rows: [{ deleted_at: '2026-02-01T00:00:00.000Z' }] }
         }
+        if (sql.includes('select matter.id from matters matter')) {
+          return { rows: [{ id: 'mtr_1' }] }
+        }
+        if (sql.includes('from users') && sql.includes('for share')) {
+          return { rows: [{ id: 'usr_1' }] }
+        }
         if (sql.includes('update matters')) {
           return {
             rows: [
@@ -1088,14 +1094,16 @@ describe('createApiApp', () => {
       ),
     ).toEqual([
       'begin',
-      'select matter.deleted_at::text from',
+      'select id, deleted_at::text',
+      'select matter.id from',
+      'select id from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
       'insert into audit_logs',
       'commit',
     ])
-    expect(queries[5]).toEqual([
+    expect(queries[7]).toEqual([
       expect.stringContaining('insert into audit_logs'),
       expect.arrayContaining([
         'org_1',
@@ -3465,8 +3473,7 @@ describe('createApiApp soft-delete write races', () => {
           const text = String(sql)
           transactionQueries.push(text)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('select matter.id from matters'))
-            return { rows: [] }
+          if (text.includes('select id from matters')) return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -3691,6 +3698,12 @@ describe('createApiApp deletion cascade and idempotence', () => {
         }
         if (sql.includes('for update') && sql.includes('deleted_at is null')) {
           return { rows: [{ id: 'mtr_1' }] }
+        }
+        if (sql.includes('select matter.id from matters matter')) {
+          return { rows: [{ id: 'mtr_1' }] }
+        }
+        if (sql.includes('from users') && sql.includes('for share')) {
+          return { rows: [{ id: 'usr_1' }] }
         }
         if (sql.startsWith('update matters'))
           return { rows: [deletedMatterRow] }

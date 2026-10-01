@@ -79,6 +79,17 @@ async function lockOwnedMatter(
   const row = matter.rows[0]
   if (!row) return 'matter_not_found' as const
   if (row.created_by !== input.ownerUserId) return 'forbidden' as const
+  // Member removal locks the departing user row FOR UPDATE and clears its
+  // organisationId, and takes no matter lock. This FOR SHARE re-read is what
+  // serialises an in-flight grant or revoke with it: a removal that commits
+  // first makes the actor observe the cleared membership here and fail,
+  // instead of authorising on the stale session. A membership that is gone is
+  // concealed as the uniform matter 404.
+  const member = await client.query<{ id: string }>(
+    `select id from users where id = $1 and "organisationId" = $2 for share`,
+    [input.ownerUserId, input.organisationId],
+  )
+  if (member.rows.length !== 1) return 'matter_not_found' as const
   return row
 }
 
