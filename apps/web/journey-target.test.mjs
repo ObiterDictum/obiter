@@ -47,6 +47,12 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
     new URL('e2e/journey.spec.ts', import.meta.url),
     'utf8',
   )
+  // The DB-touching helper was extracted here; the guard must cover both the
+  // call site and the helper boundary, not a token that moved files.
+  const support = await readFile(
+    new URL('e2e/support.ts', import.meta.url),
+    'utf8',
+  )
 
   // The reviewed head carried `?? 'http://127.0.0.1:8787'` on line 6; this
   // fails there and keeps it from coming back in any form.
@@ -75,9 +81,42 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
     guardAt < spec.indexOf('request.post('),
     'the guard must resolve before any request is made',
   )
+
+  // Call site: resolution precedes the database verification, and that call
+  // receives the database name the guard resolved (which throws on `obiter`).
+  const verifyAt = spec.search(/verifyEmailInDb\(\s*databaseName\b/)
   assert.ok(
-    guardAt < spec.indexOf('execFileSync('),
-    'the guard must resolve before any database is touched',
+    verifyAt !== -1,
+    'journey.spec.ts must call verifyEmailInDb with the resolved database name',
+  )
+  assert.ok(
+    guardAt < verifyAt,
+    'the guard must resolve before the database verification call',
+  )
+
+  // Helper boundary: the extracted helper must require an explicit database
+  // name, pass exactly that name to psql, and resolve nothing itself, so there
+  // is no shared-database fallback and no ambient origin to reach. Strip
+  // comments first so the assertion measures code, not explanatory prose.
+  const supportCode = support.replace(/\/\/[^\n]*/g, '')
+  assert.ok(
+    /function verifyEmailInDb\(\s*databaseName: string,/.test(supportCode),
+    'verifyEmailInDb must require an explicit database name parameter',
+  )
+  assert.ok(
+    /'-d',\s*databaseName,/.test(supportCode),
+    'verifyEmailInDb must pass the resolved database name to psql',
+  )
+  assert.ok(
+    !supportCode.includes('process.env') &&
+      !supportCode.includes('OBITER_E2E_DATABASE_URL') &&
+      !supportCode.includes('OBITER_API_ORIGIN') &&
+      !supportCode.includes('8787'),
+    'the helper must have no ambient configuration or shared-stack fallback',
+  )
+  assert.ok(
+    !supportCode.includes('resolveJourneyTargets'),
+    'the helper must receive the database name, not resolve it',
   )
 })
 

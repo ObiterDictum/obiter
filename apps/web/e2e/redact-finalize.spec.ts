@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
@@ -17,8 +18,10 @@ test('finalizes a DOCX with no downgrade warning and a valid Word download', asy
   page,
   request,
 }) => {
-  const runId =
-    Date.now().toString(36).slice(-6) + Math.random().toString(36).slice(2, 5)
+  // A short hex run id from a CSPRNG labels the synthetic account and the
+  // downloaded files. Password material must not be predictable, so this is
+  // not Math.random() (CodeQL js/insecure-randomness).
+  const runId = randomUUID().slice(0, 8)
   const email = `e2e-redact-${runId}@obiter.test`
   const password = `E2e-${runId}-Aa1!`
 

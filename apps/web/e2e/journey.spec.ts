@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { test, expect } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { fixturePath, verifyEmailInDb } from './support'
@@ -14,8 +15,10 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   page,
   request,
 }) => {
-  const runId =
-    Date.now().toString(36).slice(-6) + Math.random().toString(36).slice(2, 5)
+  // A short hex run id from a CSPRNG labels the synthetic account, organisation
+  // and matter. A predictable value must never seed an account password, so
+  // this is not Math.random() (CodeQL js/insecure-randomness).
+  const runId = randomUUID().slice(0, 8)
   const email = `e2e-${runId}@obiter.test`
   const password = `E2e-${runId}-Aa1!`
   const orgName = `E2E Org ${runId}`
