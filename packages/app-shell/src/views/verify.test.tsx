@@ -8,6 +8,8 @@ import type { VerificationRun } from '@obiter/contracts'
 const hooks = vi.hoisted(() => ({
   useCurrentUser: vi.fn(),
   useOrganisationVerificationRuns: vi.fn(),
+  useVerificationRunDocuments: vi.fn(),
+  useMattersList: vi.fn(),
 }))
 
 // The real module's export names as undefined: bun links named imports
@@ -38,6 +40,21 @@ mock.module('../verification-runs', () =>
     { ...verificationRunsModuleKeys },
     (() => ({
       useOrganisationVerificationRuns: hooks.useOrganisationVerificationRuns,
+      useVerificationRunDocuments: hooks.useVerificationRunDocuments,
+    }))(),
+  ),
+)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const mattersModuleKeys = Object.fromEntries(
+  Object.keys(await import('../matters')).map((key) => [key, undefined]),
+)
+mock.module('../matters', () =>
+  Object.assign(
+    { ...mattersModuleKeys },
+    (() => ({
+      useMattersList: hooks.useMattersList,
     }))(),
   ),
 )
@@ -54,8 +71,8 @@ mock.module('@tanstack/react-router', () =>
   Object.assign(
     { ...tanstackReactRouterModuleKeys },
     (() => ({
-      Link: ({ children }: { children: ReactNode }) => (
-        <a href="#document">{children}</a>
+      Link: ({ to, children }: { to?: string; children: ReactNode }) => (
+        <a href={to ?? '#'}>{children}</a>
       ),
     }))(),
   ),
@@ -105,6 +122,12 @@ function signedIn() {
   hooks.useCurrentUser.mockReturnValue({
     data: { organisation: { id: 'org_1' } },
   })
+  hooks.useVerificationRunDocuments.mockReturnValue(
+    new Map([['doc_1', 'demo-fixture.docx']]),
+  )
+  hooks.useMattersList.mockReturnValue({
+    data: [{ id: 'mtr_1', name: 'Potanina v Potanin appeal' }],
+  })
 }
 
 afterEach(() => {
@@ -130,6 +153,10 @@ describe('VerifyRouteView', () => {
     render(<VerifyRouteView />)
     expect(screen.getByText('No verification runs yet')).toBeTruthy()
     expect(screen.queryByText('In development')).toBeNull()
+    // The page cannot start a run; it must send the user to where one starts.
+    expect(
+      screen.getByRole('link', { name: 'Open matters' }).getAttribute('href'),
+    ).toBe('/matters')
   })
 
   it('surfaces a runs failure', () => {
@@ -166,12 +193,19 @@ describe('VerifyRouteView', () => {
       ]),
     )
     render(<VerifyRouteView />)
-    expect(screen.getByText('vrun_review')).toBeTruthy()
-    expect(screen.getByText('vrun_failed')).toBeTruthy()
+    // Identity is the document filename and matter, never the raw run or
+    // version UUID as the principal label.
+    expect(screen.getAllByText('demo-fixture.docx')).toHaveLength(3)
+    expect(
+      screen.getAllByText(/Potanina v Potanin appeal/).length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByText('vrun_review')).toBeNull()
     expect(screen.getByText('Review required (1)')).toBeTruthy()
     expect(screen.getByText('Failed')).toBeTruthy()
     expect(screen.getAllByText('Completed')).toHaveLength(2)
     expect(screen.getAllByText('Open document')).toHaveLength(3)
+    // The stored version stays visible beside the friendly identity.
+    expect(screen.getAllByText('ver_1').length).toBeGreaterThan(0)
   })
 
   it('does not present a flagged run as a plain green completion', () => {

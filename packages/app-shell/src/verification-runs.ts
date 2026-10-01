@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
@@ -12,6 +13,7 @@ import type {
   VerificationRunResponse,
 } from '@obiter/contracts'
 import { apiFetch } from './api'
+import { documentQueryOptions } from './documents'
 
 export const verificationRunsQueryKey = ['verification-runs'] as const
 
@@ -121,4 +123,34 @@ export function useCreateVerificationRun(documentId: string) {
 
 export function latestVerificationRun(runs: VerificationRun[]) {
   return runs[0] ?? null
+}
+
+/**
+ * The filename and matter of the documents a run list names. The run contract
+ * carries ids only and there is no bulk document endpoint, so the shell reads
+ * the existing document-detail boundary per distinct document. That keeps the
+ * run list's identity on the same source of truth as the document route
+ * instead of adding a second document projection to the API.
+ */
+export function useVerificationRunDocuments(runs: VerificationRun[]) {
+  const documentIds = useMemo(
+    () => [...new Set(runs.map((run) => run.documentId))],
+    [runs],
+  )
+  const queries = useQueries({
+    queries: documentIds.map((documentId) => ({
+      ...documentQueryOptions(documentId),
+      staleTime: 30_000,
+    })),
+  })
+  const identities = new Map<string, string>()
+  documentIds.forEach((documentId, index) => {
+    const document = queries[index]?.data?.document
+    if (!document) return
+    identities.set(
+      documentId,
+      document.currentVersion?.filename ?? document.logicalKey,
+    )
+  })
+  return identities
 }

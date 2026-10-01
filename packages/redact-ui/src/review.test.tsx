@@ -162,6 +162,36 @@ describe('RedactionReviewView', () => {
     })
   })
 
+  it('leaves the decision unchanged for modified chords the shell owns', () => {
+    const mutate = vi.fn()
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: { ...run, status: 'ready_for_review' },
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
+    hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
+    hooks.useFinalizeRun.mockReturnValue({})
+    render(<RedactionReviewView runId="red_1" />)
+    const listbox = screen.getByRole('listbox')
+    // Ctrl+K opens app search and Ctrl+R reloads the browser; Meta is the macOS
+    // equivalent. None may record a redaction decision.
+    for (const chord of [
+      { key: 'k', ctrlKey: true },
+      { key: 'r', ctrlKey: true },
+      { key: 'k', metaKey: true },
+      { key: 'r', metaKey: true },
+      { key: 'r', altKey: true },
+      { key: 'Enter', ctrlKey: true },
+    ]) {
+      fireEvent.keyDown(listbox, chord)
+    }
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
   it('shows finalized output for a zero-span finalized run', () => {
     hooks.useRedactionRun.mockReturnValue({
       isPending: false,

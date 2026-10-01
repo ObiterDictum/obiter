@@ -82,6 +82,10 @@ export type VerificationWorkspaceValue = {
   markerFor: (findingId: string) => HTMLElement | null
   dockAnchor: HTMLElement | null
   setDockAnchor: (element: HTMLElement | null) => void
+  /** The dock's Run verification control, so a ribbon entry can reveal the one
+   * real control instead of starting a second run of its own. */
+  setStartAnchor: (element: HTMLElement | null) => void
+  revealStart: () => void
   /** What the document layer drew, once it has measured. */
   rendered: RenderedFindings | null
   setRendered: (value: RenderedFindings | null) => void
@@ -143,6 +147,7 @@ export function VerificationWorkspaceProvider({
   const [panelOpen, setPanelOpen] = useState(false)
   const [indexOpen, setIndexOpen] = useState(false)
   const [dockAnchor, setDockAnchor] = useState<HTMLElement | null>(null)
+  const [startAnchor, setStartAnchor] = useState<HTMLElement | null>(null)
   const [rendered, setRendered] = useState<RenderedFindings | null>(null)
   const markers = useRef(new Map<string, HTMLElement>())
   const pendingStep = useRef<number | null>(null)
@@ -270,6 +275,16 @@ export function VerificationWorkspaceProvider({
     markerFor: (findingId) => markers.current.get(findingId) ?? null,
     dockAnchor,
     setDockAnchor,
+    setStartAnchor,
+    revealStart: () => {
+      if (dockAnchor && typeof dockAnchor.scrollIntoView === 'function') {
+        dockAnchor.scrollIntoView({ block: 'nearest' })
+      }
+      // The ribbon entry that calls this is enabled only while this control is,
+      // so it can take focus; a disabled control keeps its reason on the ribbon
+      // button's own accessible name.
+      startAnchor?.focus({ preventScroll: true })
+    },
     rendered,
     setRendered,
     indexOpen,

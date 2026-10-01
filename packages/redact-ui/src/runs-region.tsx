@@ -150,6 +150,10 @@ function CreateDocumentRunButton({
     <Button
       size="sm"
       variant="primary"
+      // `w-fit` stops the empty-state flex column stretching this into a
+      // content-column-wide bar, which read as a rendering bug rather than a
+      // primary action.
+      className="w-fit"
       disabled={disabled}
       loading={pending}
       onClick={onClick}

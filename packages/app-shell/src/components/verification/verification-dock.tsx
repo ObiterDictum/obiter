@@ -200,7 +200,7 @@ export function VerificationDock() {
       <div
         ref={(element) => verification.setDockAnchor(element)}
         data-verification-controls
-        className="flex shrink-0 flex-wrap items-center gap-2"
+        className="flex min-w-0 flex-wrap items-center gap-2"
       >
         {nextFinding ? (
           <Button
@@ -221,6 +221,7 @@ export function VerificationDock() {
           View all findings
         </Button>
         <Button
+          ref={verification.setStartAnchor}
           size="sm"
           disabled={
             !verification.ready ||

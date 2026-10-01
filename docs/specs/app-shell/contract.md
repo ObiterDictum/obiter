@@ -141,4 +141,4 @@ Renders the consistent page heading (eyebrow + title + actions) and a content re
 
 ## 6. App frame
 
-`<AppShellLayout>` renders night workspace chrome: top mode bar (Home + Search / Matters / Verify / Redact), content-column app search, persistent icon mode rail (collapsed brand strip on Home; mode shortcuts with hover-expand on other modes), content region, floating Agent widget, and mounted `<Toaster/>`, driven by real `useCurrentUser()` data. Verify and Agent ship as honest “in development” surfaces — not fake tools. User-facing copy uses **Obiter** throughout (FR6a).
+`<AppShellLayout>` renders night workspace chrome: top mode bar (Home + Search / Matters / Verify / Redact), content-column app search, persistent icon mode rail (collapsed brand strip on Home; mode shortcuts with hover-expand on other modes), content region, floating Agent widget, and mounted `<Toaster/>`, driven by real `useCurrentUser()` data. Verify is a live surface over real verification runs; the Agent widget remains an honest “in development” surface — not a fake tool. User-facing copy uses **Obiter** throughout (FR6a).

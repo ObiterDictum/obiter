@@ -1,7 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { ListChecks } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
+import type { VerificationRun } from '@obiter/contracts'
 import { useCurrentUser } from '../current-user'
+import { useMattersList } from '../matters'
 import {
   verificationFailureLabel,
   verificationOutcomeAnnouncement,
@@ -9,7 +11,10 @@ import {
   verificationOutcomeTone,
   verificationRunStatusLabel,
 } from '../verification-copy'
-import { useOrganisationVerificationRuns } from '../verification-runs'
+import {
+  useOrganisationVerificationRuns,
+  useVerificationRunDocuments,
+} from '../verification-runs'
 
 function statusTone(status: 'queued' | 'running' | 'completed' | 'failed') {
   if (status === 'failed') return 'danger' as const
@@ -17,10 +22,32 @@ function statusTone(status: 'queued' | 'running' | 'completed' | 'failed') {
   return 'neutral' as const
 }
 
+/** The completion time is the useful one once a run has finished; a queued or
+ * failed run is placed by when it was created. */
+function verificationRunTime(run: VerificationRun) {
+  const at =
+    run.status === 'completed'
+      ? (run.completedAt ?? run.createdAt)
+      : run.createdAt
+  const label =
+    run.status === 'completed'
+      ? 'Completed'
+      : run.status === 'failed'
+        ? 'Failed'
+        : 'Started'
+  return `${label} ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(at))}`
+}
+
 export function VerifyRouteView() {
   const { data: me } = useCurrentUser()
-  const runs = useOrganisationVerificationRuns(me?.organisation != null)
+  const enabled = me?.organisation != null
+  const runs = useOrganisationVerificationRuns(enabled)
   const list = runs.runs
+  const matters = useMattersList({ enabled })
+  const documents = useVerificationRunDocuments(list)
 
   return (
     <div className="flex h-full min-h-[24rem] flex-col">
@@ -45,57 +72,78 @@ export function VerifyRouteView() {
           <EmptyState
             icon={<ListChecks size={28} className="text-muted" />}
             title="No verification runs yet"
-            body="Open a matter document and start a verification run to check citations and quotations against stored sources."
+            body="Verification starts from a document, not from this page. Open a matter, open a document, then use Run verification there."
+            action={
+              <Link
+                to="/matters"
+                className="font-semibold text-brand hover:text-brand-pressed"
+              >
+                Open matters
+              </Link>
+            }
           />
         ) : (
           <div className="flex flex-col gap-4">
             <ul className="flex flex-col divide-y divide-line">
-              {list.map((run) => (
-                <li
-                  key={run.id}
-                  className="flex items-center justify-between gap-3 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-mono text-xs text-ink">
-                      {run.id}
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      Version {run.documentVersionId}
-                      {run.stale ? ' (earlier than current)' : ''}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Badge tone={statusTone(run.status)}>
-                      {verificationRunStatusLabel(run.status)}
-                    </Badge>
-                    {run.status === 'completed' ? (
-                      <>
-                        <Badge tone={verificationOutcomeTone(run.summary)}>
-                          {verificationOutcomeLabel(run.summary)}
-                        </Badge>
-                        <span className="sr-only">
-                          {verificationOutcomeAnnouncement(run.summary)}
+              {list.map((run) => {
+                const filename = documents.get(run.documentId)
+                const matterName =
+                  matters.data?.find((matter) => matter.id === run.matterId)
+                    ?.name ?? null
+                return (
+                  <li
+                    key={run.id}
+                    className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink">
+                        {filename ?? 'Document unavailable'}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {matterName ? `${matterName} · ` : null}
+                        {verificationRunTime(run)}
+                      </p>
+                      <p className="mt-0.5 text-[11px] break-all text-subtle">
+                        Stored version{' '}
+                        <span className="font-mono">
+                          {run.documentVersionId}
                         </span>
-                      </>
-                    ) : null}
-                    {run.failureCode ? (
-                      <Badge tone="danger">
-                        {verificationFailureLabel(run.failureCode)}
+                        {run.stale ? ' (earlier than current)' : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={statusTone(run.status)}>
+                        {verificationRunStatusLabel(run.status)}
                       </Badge>
-                    ) : null}
-                    <Link
-                      to="/matters/$matterId/documents/$documentId"
-                      params={{
-                        matterId: run.matterId,
-                        documentId: run.documentId,
-                      }}
-                      className="text-sm font-medium text-brand hover:text-brand-pressed"
-                    >
-                      Open document
-                    </Link>
-                  </div>
-                </li>
-              ))}
+                      {run.status === 'completed' ? (
+                        <>
+                          <Badge tone={verificationOutcomeTone(run.summary)}>
+                            {verificationOutcomeLabel(run.summary)}
+                          </Badge>
+                          <span className="sr-only">
+                            {verificationOutcomeAnnouncement(run.summary)}
+                          </span>
+                        </>
+                      ) : null}
+                      {run.failureCode ? (
+                        <Badge tone="danger">
+                          {verificationFailureLabel(run.failureCode)}
+                        </Badge>
+                      ) : null}
+                      <Link
+                        to="/matters/$matterId/documents/$documentId"
+                        params={{
+                          matterId: run.matterId,
+                          documentId: run.documentId,
+                        }}
+                        className="text-sm font-medium text-brand hover:text-brand-pressed"
+                      >
+                        Open document
+                      </Link>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
             {runs.hasNextPage ? (
               <Button
