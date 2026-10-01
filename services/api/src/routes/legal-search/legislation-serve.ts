@@ -44,6 +44,12 @@ export interface LegislationServeDeps {
   searchClient: Parameters<typeof searchLegislation>[0]
   indexName: string
   keywordLimit?: number
+  /**
+   * Bounds the keyword engine call. Defaults to the stored-lookup budget so a
+   * hung legislation index fails this half within the same 2s every Postgres
+   * read already has.
+   */
+  keywordTimeoutMs?: number
 }
 
 export interface LegislationFetchResult {
@@ -98,6 +104,37 @@ export async function withStoredTimeout<T>(promise: Promise<T>): Promise<T> {
           () => reject(new Error('Legislation store timed out.')),
           storedLegislationTimeoutMs,
         )
+        timer.unref?.()
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Bounds the legislation keyword engine call with the same fail-open budget as
+ * every stored lookup. The Meilisearch client accepts a per-request
+ * AbortSignal, so the deadline aborts the fetch itself rather than only
+ * abandoning the response. The race is the structural guarantee: a client that
+ * ignores the signal still cannot hold the route open. The race owns the
+ * engine promise, so a late settle after the deadline is discarded and never
+ * becomes an unhandled rejection. One timer, cleared on every outcome.
+ */
+async function withKeywordTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      run(controller.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort()
+          reject(new Error('Legislation keyword search timed out.'))
+        }, timeoutMs)
         timer.unref?.()
       }),
     ])
@@ -511,9 +548,14 @@ async function searchKeywordProvisions(
 }> {
   let result
   try {
-    result = await searchLegislation(deps.searchClient, deps.indexName, query, {
-      limit,
-    })
+    result = await withKeywordTimeout(
+      (signal) =>
+        searchLegislation(deps.searchClient, deps.indexName, query, {
+          limit,
+          signal,
+        }),
+      deps.keywordTimeoutMs ?? storedLegislationTimeoutMs,
+    )
   } catch {
     return { hits: [], failed: true, appliedSearchParameters: null }
   }

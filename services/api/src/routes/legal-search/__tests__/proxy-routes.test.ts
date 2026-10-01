@@ -106,6 +106,28 @@ function createAuthenticatedProxyApp(
   return app
 }
 
+/**
+ * Bounds a route assertion so a regression that hangs the handler fails the
+ * test instead of wedging the file. The guard is only a test harness: the
+ * assertions below still read the response the route produced.
+ */
+async function raceRouteWithin(
+  request: Response | Promise<Response>,
+  ms: number,
+): Promise<Response | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      request,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ms)
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const hit = {
   id: 'uksc-2024-3',
   title: 'Potanina v Potanin',
@@ -607,6 +629,177 @@ describe('createLegalSearchProxyRoutes', () => {
       status: 'not_citation',
     })
     expect(legislationServeMock.resolveLegislationFetch).not.toHaveBeenCalled()
+  })
+
+  // --- P1.34: the legislation keyword engine has its own 2s bound ---
+
+  // A never-settling legislation keyword search. Before P1.34 the route's
+  // Promise.all waited on this forever, so the whole request hung even though
+  // the judgment half had answered; the bound must turn it into a failed half.
+  const directoryActs = [
+    {
+      identity: 'ukpga/2010/15',
+      actType: 'ukpga',
+      year: 2010,
+      number: 15,
+      title: 'Equality Act 2010',
+      sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+      extent: 'E+W+S',
+    },
+  ]
+  const keywordQuery = 'appeal a housing decision'
+  const directoryPool = {
+    query: vi.fn(async (text: string) =>
+      text.includes('from legislation_documents order')
+        ? { rows: directoryActs }
+        : { rows: [] },
+    ),
+  }
+
+  it('P1.34 bounds a hung legislation keyword search and keeps a judgment hit', async () => {
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    // Controlled deferred, not a sleep: the test resolves it only after the
+    // route has already answered, to prove the late value is discarded.
+    let resolveLate: (value: unknown) => void = () => undefined
+    const lateSearch = new Promise((resolve) => {
+      resolveLate = resolve
+    })
+    searchClientMock.index.mockReturnValue({
+      search: vi.fn(() => lateSearch),
+    })
+    const provisionSearchClient = {
+      id: 'meili-client',
+      index: searchClientMock.index,
+    }
+    searchClientMock.createClient.mockReturnValue(provisionSearchClient)
+    searchClientMock.search.mockResolvedValue({
+      hits: [{ ...hit }],
+      query: keywordQuery,
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: directoryPool as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await raceRouteWithin(
+      app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ query: keywordQuery }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      5000,
+    )
+
+    // Fail-first: at base this is null because the route never resolved.
+    expect(response).not.toBeNull()
+    if (!response) throw new Error('P1.34: the route did not finish')
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      hits: Array<{ id: string }>
+      groups?: Array<{ hits: Array<{ id: string }> }>
+      diagnostics: Record<string, unknown>
+    }
+    // The judgment hit survives and the hung half is named as failed.
+    expect(body.hits.map((entry) => entry.id)).toContain(hit.id)
+    expect(body.diagnostics.legislationSearchFailed).toBe(true)
+    expect(body.diagnostics.legislationSearched).not.toBe(true)
+    expect(body.diagnostics.judgmentSearchFailed).toBeUndefined()
+    expect(body.groups).toBeUndefined()
+
+    // A resolution after the deadline produces no second response and no
+    // stale legislation group, and the next request is unaffected.
+    resolveLate({
+      hits: [],
+      query: keywordQuery,
+      estimatedTotalHits: 0,
+      processingTimeMs: 0,
+    })
+    await Promise.resolve()
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: keywordQuery,
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.index.mockReturnValue({
+      search: vi.fn(async () => ({
+        hits: [],
+        query: keywordQuery,
+        estimatedTotalHits: 0,
+        processingTimeMs: 0,
+      })),
+    })
+    const followUp = await raceRouteWithin(
+      app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ query: keywordQuery }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      5000,
+    )
+    expect(followUp?.status).toBe(200)
+    const followUpBody = (await followUp?.json()) as {
+      outcome: string
+      diagnostics: Record<string, unknown>
+    }
+    expect(followUpBody.outcome).toBe('no_match')
+    expect(followUpBody.diagnostics.legislationSearchFailed).toBeUndefined()
+    expect(followUpBody.diagnostics.legislationSearched).toBe(true)
+  })
+
+  it('P1.34 answers search_incomplete when hung legislation has no judgment hit', async () => {
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    searchClientMock.index.mockReturnValue({
+      search: vi.fn(() => new Promise(() => undefined)),
+    })
+    const provisionSearchClient = {
+      id: 'meili-client',
+      index: searchClientMock.index,
+    }
+    searchClientMock.createClient.mockReturnValue(provisionSearchClient)
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: keywordQuery,
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: directoryPool as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await raceRouteWithin(
+      app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ query: keywordQuery }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      5000,
+    )
+
+    expect(response).not.toBeNull()
+    if (!response) throw new Error('P1.34: the route did not finish')
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'search_incomplete',
+        message:
+          'Legal search could not be completed because part of the search failed. Try again later.',
+        requestId: 'req_test',
+      },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('returns cached results without calling Find Case Law', async () => {
