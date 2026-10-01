@@ -1,0 +1,33 @@
+== provenance check =============================
+run from checkout : /home/karl/orca/workspaces/obiter/Audit
+checkout HEAD     : 9ff76ed07f1bb6d5491bcf222b5d2117883b1c47 (fix/redaction-false-downgrade, clean)
+  NOTE            : path match proves this checkout, not that a long-running
+                  : server reloaded its latest commit — restart the dev
+                  : server after checkout/pull/commit changes.
+
+web  http://localhost:13030
+  module probed   : /src/routes/index.tsx
+  served from     : /home/karl/orca/workspaces/obiter/Audit
+  matches checkout : yes  [PASS]
+  revision freshness: NOT CHECKED (no expected-marker given)
+
+api  http://127.0.0.1:18730
+  reachable       : yes
+  HTTP status     : 200
+  commit sha      : 9ff76ed07f1bb6d5491bcf222b5d2117883b1c47
+  sha matches     : yes
+  checkout root   : /home/karl/orca/workspaces/obiter/Audit
+  root matches    : yes
+  env file        : /home/karl/orca/workspaces/obiter/Audit/.env
+  env file matches: yes
+  provenance      : reachable, development provenance exposed by /api/health [PASS]
+
+PR evidence block (paste into the PR body) ======
+checkout HEAD: 9ff76ed07f1bb6d5491bcf222b5d2117883b1c47 (clean)
+served: /home/karl/orca/workspaces/obiter/Audit
+revision freshness: NOT CHECKED (no expected-marker given)
+api checkout HEAD: 9ff76ed07f1bb6d5491bcf222b5d2117883b1c47
+api served: /home/karl/orca/workspaces/obiter/Audit
+api env file: /home/karl/orca/workspaces/obiter/Audit/.env
+[screenshot]  (web provenance: PASS)
+==================================================
