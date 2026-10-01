@@ -4913,19 +4913,22 @@
             <p>
               A failure confined to one federated half is visible too. A
               rejected or malformed legislation half, a legislation keyword
-              engine that errors, or a failed judgment exact lookup cannot
-              answer <code>no_match</code> or <code>recognised_not_held</code>.
-              If the other half served valid hits, those hits are kept and the
-              response names the failed half in diagnostics (<code
-                >judgmentSearchFailed</code
-              >
-              or <code>legislationSearchFailed</code>); with no usable hit at
-              all, fetch answers <code>503 search_incomplete</code>. A
-              recognised citation in a partial response reports
+              engine that errors or hangs past its 2s bound, or a failed
+              judgment exact lookup cannot answer <code>no_match</code> or
+              <code>recognised_not_held</code>. If the other half served valid
+              hits, those hits are kept and the response names the failed half
+              in diagnostics (<code>judgmentSearchFailed</code> or
+              <code>legislationSearchFailed</code>); with no usable hit at all,
+              fetch answers <code>503 search_incomplete</code>. A recognised
+              citation in a partial response reports
               <code>citationStatus: unverified</code> rather than
               <code>not_held</code>: recognition is kept, but the judgment
               corpus that never answered cannot establish a negative. A
-              completed zero-hit search still answers <code>no_match</code>.
+              completed zero-hit search still answers <code>no_match</code>. The
+              legislation keyword call carries the same 2s bound as the stored
+              lookups: the Meilisearch client's per-request
+              <code>AbortSignal</code> aborts a hung fetch, and a deadline race
+              keeps the route bounded even for a client that ignores the signal.
             </p>
           </div>
         </section>

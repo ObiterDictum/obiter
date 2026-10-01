@@ -1603,6 +1603,23 @@ server-side provision filter: a filtered query is silently ignored and the
 whole-Act feed returns, so per-provision currency pages the whole feed and
 filters client-side on document-scoped `ukm:Section` URIs.
 
+Fix-up: the legislation keyword call is bounded like every stored lookup.
+`searchKeywordProvisions` races `searchLegislation` against the same 2s
+deadline its Postgres reads use, and passes the deadline's `AbortSignal`
+through the Meilisearch client, which forwards it to `fetch` — so a hung
+engine request is aborted at the socket, not merely abandoned. Before this,
+`settleSearchHalf` caught rejections but not hangs: a never-resolving
+`legislation_provisions` search held the route's `Promise.all` open
+indefinitely even when the judgment half had already answered, contradicting
+the claim that the two halves are independently bounded. A deadline failure is
+a failed legislation half (P1.35's `legislationSearchFailed`), never a
+completed empty or a `no_match`: a usable judgment hit is kept and the response
+marks partial coverage, and with no usable hit from either half fetch answers
+`503 search_incomplete`. The race owns the engine promise, so a value that
+settles after the deadline is discarded rather than surfacing as a stale
+result or an unhandled rejection, and the single deadline timer is cleared on
+every outcome.
+
 ### Act contents hierarchy: Parts and Schedules as rows (September 2026)
 
 Context: whole-Act contents listed sections only; `legislation_provisions`
