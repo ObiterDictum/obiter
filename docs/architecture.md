@@ -271,22 +271,35 @@ write observe the removed share or membership and return the concealed document
 or candidate object. Re-reading the user row closes the `created_by` branch of
 the access predicate, which deleting shares cannot change.
 
-The same matter-first prefix now also covers the remaining matter-derived write
-paths. Matter `PATCH`, matter soft-delete and restore, document soft-delete and
-restore, and document upload (`createDocument` in `database.ts`) all acquire the
-matter row `FOR UPDATE`, re-evaluate edit access in a separate statement, and take
-the acting user's `FOR SHARE` before writing. Cascade restore uses
-`lockDeletedMatterForEdit`, which locks the soft-deleted row and returns its
-`deleted_at` as text so the child cascade matches only the children that deletion
-took down. Actor-side share management (`grantMatterShare`/`revokeMatterShare` in
-`routes/document-access.ts`) keeps its `matters.created_by` owner check and adds
-the same membership `FOR SHARE`, so a removed owner's in-flight grant or revoke
-observes the cleared membership and returns the concealed matter 404. Upload
-reads and extracts the body before the lock and writes the object after the write
-transaction commits, so no external I/O is held under the row lock and a denied
-or failed upload leaves no stored object. Each path keeps its existing concealed
-code: matter operations and share management return `matter_not_found`, document
-operations return `document_not_found`.
+The matter-first prefix now also covers eight named write paths: matter `PATCH`,
+matter soft-delete and restore, document soft-delete and restore, document upload
+(`createDocument` in `database.ts`), and actor-side share grant and revoke. The
+matter and document paths acquire the matter row `FOR UPDATE`, re-evaluate edit
+access in a separate statement, and take the acting user's `FOR SHARE` before
+writing. Cascade restore uses `lockDeletedMatterForEdit`, which locks the
+soft-deleted row and returns its `deleted_at` as text so the child cascade matches
+only the children that deletion took down. Actor-side share management
+(`grantMatterShare`/`revokeMatterShare` in `routes/document-access.ts`) keeps its
+`matters.created_by` owner check and adds the same membership `FOR SHARE`, so a
+removed owner's in-flight grant or revoke observes the cleared membership and
+returns the concealed matter 404. Upload reads and extracts the body before the
+lock and writes the object after the write transaction commits, so no external
+I/O is held under the row lock and a denied or failed upload leaves no stored
+object. Each path keeps its existing concealed code: matter operations and share
+management return `matter_not_found`, document operations return
+`document_not_found`.
+
+Those eight paths do not complete P0.13. The redaction-run write family still
+embeds `matterAccessPredicate` inside the matter `FOR UPDATE` and takes no
+acting-user `FOR SHARE`, so it retains the stale-share-subplan window and never
+observes member removal. `selectMutationRun` in `redaction-database.ts` is the
+shared mutation gate for span decisions (`recordSpanDecision`), finalize
+(`finalizeRedactionRun`), run soft-delete and restore
+(`softDeleteRedactionRun`/`restoreRedactionRunWithAudit`) and redetection
+(`createRedetectionRun`); `lockLinkedRunParents` in `redaction-run-creation.ts`
+is the same shape for linked-run creation. Extending the lock-then-recheck plus
+membership `FOR SHARE` shape to those paths is a tracked follow-up and is not
+part of this change.
 
 Direct reads and lists exclude deleted runs. The sole deleted-run exception is
 `GET /api/redaction-runs/:runId/audit`: after the live resolver misses, the route
