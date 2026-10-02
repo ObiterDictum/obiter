@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
-import { apiFetch } from './api'
+import { apiFetch, ApiError } from './api'
 import { declaredFileType } from './file-type'
 
 /**
@@ -98,12 +98,24 @@ export function matterDocumentsQueryOptions(matterId: string) {
   })
 }
 
+/**
+ * A 404 from the document boundary is definitive: the document is missing,
+ * deleted, or on another organisation's tenant, and the API conceals which. No
+ * retry can change that answer, so only genuinely transient failures (network,
+ * 5xx, storage unavailable) get the library's limited retries.
+ */
+export function retryDocumentLookup(failureCount: number, error: Error) {
+  if (error instanceof ApiError && error.status === 404) return false
+  return failureCount < 3
+}
+
 /** A single document with all its versions. */
 export function documentQueryOptions(documentId: string) {
   return queryOptions({
     queryKey: documentsKeys.detail(documentId),
     queryFn: async () =>
       apiFetch<DocumentDetailResponse>(`/api/documents/${documentId}`),
+    retry: retryDocumentLookup,
   })
 }
 

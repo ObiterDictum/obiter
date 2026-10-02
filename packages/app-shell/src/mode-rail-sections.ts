@@ -1,4 +1,5 @@
 import type { useNavigate } from '@tanstack/react-router'
+import type { VerificationRun } from '@obiter/contracts'
 import {
   BookmarkSimple,
   Clock,
@@ -15,6 +16,11 @@ import { useMattersList } from './matters'
 import type { ModeId, PhosphorIcon } from './mode-navigation'
 import { isAttentionRun, useRedactionRunsList } from './redaction-runs'
 import { getRecentLegalSearches } from './legal-search-recents'
+import {
+  verificationOutcomeLabel,
+  verificationRunStatusLabel,
+} from './verification-copy'
+import { useOrganisationVerificationRuns } from './verification-runs'
 
 export type RailItem = {
   id: string
@@ -36,6 +42,85 @@ export function matterIdFromPath(path: string): string | null {
   return match?.[1] ?? null
 }
 
+/**
+ * The Verify rail, sourced from the organisation's real runs. A completed run
+ * whose summary counts review-required or flagged findings is work waiting on a
+ * person, so the rail must never say "Nothing to review" while such a run
+ * exists: the rail and the pane beside it would contradict each other.
+ */
+export function verificationRailSections(
+  verificationRuns: VerificationRun[],
+): RailSection[] {
+  const needsReview = verificationRuns.filter(
+    (run) =>
+      run.status === 'completed' &&
+      (run.summary.reviewRequiredCount > 0 || run.summary.flaggedCount > 0),
+  )
+  return [
+    {
+      title: 'Runs',
+      items:
+        verificationRuns.length > 0
+          ? verificationRuns.slice(0, 8).map((run) => ({
+              id: `verify-run-${run.id}`,
+              label: verificationRunRailLabel(run),
+              note: verificationRunRailNote(run),
+              to: '/verify',
+              icon: ListChecks,
+            }))
+          : [
+              {
+                id: 'verify-empty',
+                label: 'No verification runs',
+                note: 'Start one from a document',
+                to: '/matters',
+                icon: ListChecks,
+                muted: true,
+              },
+            ],
+    },
+    {
+      title: 'Needs review',
+      items:
+        needsReview.length > 0
+          ? needsReview.slice(0, 6).map((run) => ({
+              id: `verify-review-${run.id}`,
+              label: verificationOutcomeLabel(run.summary),
+              note: verificationRunRailNote(run),
+              to: '/verify',
+              icon: WarningCircle,
+            }))
+          : [
+              {
+                id: 'verify-review-empty',
+                label: 'Nothing to review',
+                note: 'Completed runs with findings to check appear here',
+                icon: WarningCircle,
+                muted: true,
+              },
+            ],
+    },
+  ]
+}
+
+function verificationRunRailLabel(run: VerificationRun) {
+  return run.status === 'completed'
+    ? verificationOutcomeLabel(run.summary)
+    : verificationRunStatusLabel(run.status)
+}
+
+function verificationRunRailNote(run: VerificationRun) {
+  const at =
+    run.status === 'completed'
+      ? (run.completedAt ?? run.createdAt)
+      : run.createdAt
+  const label = run.status === 'completed' ? 'Completed' : 'Started'
+  return `${label} ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(at))}`
+}
+
 export function useModeRailSections(
   mode: ModeId,
   currentPath: string,
@@ -47,6 +132,7 @@ export function useModeRailSections(
   const runsQuery = useRedactionRunsList({
     enabled: mode === 'redact',
   })
+  const verificationQuery = useOrganisationVerificationRuns(mode === 'verify')
   const matterId = matterIdFromPath(currentPath)
   const documentsQuery = useMatterDocuments(matterId ?? '', {
     enabled: mode === 'matters' && Boolean(matterId),
@@ -63,6 +149,7 @@ export function useModeRailSections(
   )
   const runs = runsQuery.data?.runs ?? []
   const pendingRuns = runs.filter((run) => isAttentionRun(run.status))
+  const verificationRuns = verificationQuery.runs
   const documents = documentsQuery.data ?? []
 
   switch (mode) {
@@ -209,50 +296,7 @@ export function useModeRailSections(
         },
       ]
     case 'verify':
-      return [
-        {
-          title: 'Runs',
-          items: [
-            {
-              id: 'verify-overview',
-              label: 'Overview',
-              to: '/verify',
-              icon: ListChecks,
-            },
-            {
-              id: 'verify-empty',
-              label: 'No verification runs',
-              note: 'In development',
-              icon: Clock,
-              muted: true,
-            },
-          ],
-        },
-        {
-          title: 'Needs review',
-          items: [
-            {
-              id: 'verify-review-empty',
-              label: 'Nothing to review',
-              note: 'Claims will list here',
-              icon: WarningCircle,
-              muted: true,
-            },
-          ],
-        },
-        {
-          title: 'Sources',
-          items: [
-            {
-              id: 'verify-sources-empty',
-              label: 'No linked sources',
-              note: 'Evidence appears with a claim',
-              icon: FileText,
-              muted: true,
-            },
-          ],
-        },
-      ]
+      return verificationRailSections(verificationRuns)
     case 'redact':
       return [
         {

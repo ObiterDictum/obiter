@@ -48,6 +48,9 @@ export function SearchCommandBar({
       <div
         className={cn(
           'mx-auto flex w-full items-center gap-2 rounded-lg border border-line bg-surface px-4 py-3',
+          // The visible field is the pill, so the keyboard focus ring belongs on
+          // it; same tokens and geometry as the shared Button/Input primitives.
+          'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand',
           atTop ? 'max-w-3xl' : 'max-w-2xl',
         )}
       >

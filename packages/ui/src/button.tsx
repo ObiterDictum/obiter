@@ -1,5 +1,5 @@
 import { Button as BaseButton } from '@base-ui-components/react/button'
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { cn } from './lib/cn'
 
 type BaseButtonRender = React.ComponentProps<typeof BaseButton>['render']
@@ -15,6 +15,8 @@ export interface ButtonProps {
   onClick?: React.MouseEventHandler<HTMLButtonElement>
   children?: ReactNode
   className?: string
+  /** React 19 passes `ref` as a prop; declared so a caller can focus the button. */
+  ref?: Ref<HTMLButtonElement>
   /** Polymorphic render (e.g. `render={<Link to="/x" />}`). See Base UI render prop. */
   render?: BaseButtonRender
   'aria-label'?: string

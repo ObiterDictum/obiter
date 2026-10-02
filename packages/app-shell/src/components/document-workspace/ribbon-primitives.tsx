@@ -62,6 +62,7 @@ export function IconButton({
   pressed,
   disabled,
   soon,
+  disabledReason,
   onClick,
   icon,
 }: {
@@ -69,6 +70,7 @@ export function IconButton({
   pressed?: boolean
   disabled?: boolean
   soon?: boolean | string
+  disabledReason?: string
   onClick?: () => void
   icon: ReactNode
 }) {
@@ -78,7 +80,9 @@ export function IconButton({
       ? `${label}: ${soon}`
       : unavailable
         ? `${label} (not available yet)`
-        : label
+        : disabled && disabledReason
+          ? `${label}: ${disabledReason}`
+          : label
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}

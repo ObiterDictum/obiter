@@ -19,14 +19,16 @@ interface ModeItem {
   label: string
   to: string
   icon: PhosphorIcon
-  status: 'live' | 'soon'
 }
 
+// Every mode here is live. Verify was labelled "Soon" after the citation,
+// authority and quote checks shipped, which told the user a working capability
+// was unfinished; the status field is gone rather than left at a constant.
 const MODE_NAV: ModeItem[] = [
-  { label: 'Search', to: '/search', icon: MagnifyingGlass, status: 'live' },
-  { label: 'Matters', to: '/matters', icon: Folders, status: 'live' },
-  { label: 'Verify', to: '/verify', icon: ListChecks, status: 'soon' },
-  { label: 'Redact', to: '/redact', icon: PencilSimple, status: 'live' },
+  { label: 'Search', to: '/search', icon: MagnifyingGlass },
+  { label: 'Matters', to: '/matters', icon: Folders },
+  { label: 'Verify', to: '/verify', icon: ListChecks },
+  { label: 'Redact', to: '/redact', icon: PencilSimple },
 ]
 
 export type ModeId =
@@ -187,11 +189,6 @@ export function TopModeNav({ mode }: { mode: ModeId }) {
                 aria-hidden
               />
               {item.label}
-              {item.status === 'soon' ? (
-                <span className="text-[10px] font-normal text-subtle">
-                  Soon
-                </span>
-              ) : null}
             </Link>
           )
         })}

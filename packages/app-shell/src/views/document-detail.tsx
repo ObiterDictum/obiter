@@ -18,6 +18,7 @@ import {
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
 
 /**
  * Document detail — the contract route (PRD FR4). Receives route params as
@@ -62,8 +63,8 @@ export function DocumentDetailLayoutView({
           <ArrowLeft size={16} aria-hidden="true" />
           Back to matter
         </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
             <p className="text-xs font-medium uppercase tracking-wider text-subtle">
               Document
             </p>
@@ -178,7 +179,12 @@ export function DocumentDetailLayoutView({
         </>
       ) : null}
 
-      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+      <section
+        id={documentRedactionRunsId}
+        tabIndex={-1}
+        aria-label="Redaction runs"
+        className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5">
             <h2 className="text-base font-semibold text-ink">Redaction runs</h2>

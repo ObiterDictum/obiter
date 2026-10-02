@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
@@ -12,6 +13,7 @@ import type {
   VerificationRunResponse,
 } from '@obiter/contracts'
 import { apiFetch } from './api'
+import { documentQueryOptions } from './documents'
 
 export const verificationRunsQueryKey = ['verification-runs'] as const
 
@@ -121,4 +123,54 @@ export function useCreateVerificationRun(documentId: string) {
 
 export function latestVerificationRun(runs: VerificationRun[]) {
   return runs[0] ?? null
+}
+
+/**
+ * What the run list knows about one document. A pending lookup is its own
+ * state, not a failure: the run contract carries ids only, so a filename
+ * resolves per document and a cold load must not read as unavailable.
+ */
+export type RunDocumentIdentity =
+  | { status: 'pending' }
+  | { status: 'available'; filename: string }
+  | { status: 'unavailable' }
+
+/**
+ * The filename and matter of the documents a run list names. The run contract
+ * carries ids only and there is no bulk document endpoint, so the shell reads
+ * the existing document-detail boundary per distinct document. That keeps the
+ * run list's identity on the same source of truth as the document route
+ * instead of adding a second document projection to the API.
+ */
+export function useVerificationRunDocuments(
+  runs: VerificationRun[],
+): Map<string, RunDocumentIdentity> {
+  const documentIds = useMemo(
+    () => [...new Set(runs.map((run) => run.documentId))],
+    [runs],
+  )
+  const queries = useQueries({
+    queries: documentIds.map((documentId) => ({
+      ...documentQueryOptions(documentId),
+      staleTime: 30_000,
+    })),
+  })
+  const identities = new Map<string, RunDocumentIdentity>()
+  documentIds.forEach((documentId, index) => {
+    const query = queries[index]
+    if (!query || query.isPending) {
+      identities.set(documentId, { status: 'pending' })
+      return
+    }
+    const document = query.data?.document
+    if (!document) {
+      identities.set(documentId, { status: 'unavailable' })
+      return
+    }
+    identities.set(documentId, {
+      status: 'available',
+      filename: document.currentVersion?.filename ?? document.logicalKey,
+    })
+  })
+  return identities
 }

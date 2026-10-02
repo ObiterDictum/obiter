@@ -10,7 +10,10 @@ import {
   verificationRunStatusLabel,
   verificationStateLabel,
 } from '../../verification-copy'
-import { useVerificationWorkspace } from './verification-context'
+import {
+  useVerificationWorkspace,
+  verificationDockId,
+} from './verification-context'
 import { nextActionableIndex } from './verification-mapping'
 import { VerificationFindingsIndex } from './verification-findings-index'
 
@@ -200,7 +203,7 @@ export function VerificationDock() {
       <div
         ref={(element) => verification.setDockAnchor(element)}
         data-verification-controls
-        className="flex shrink-0 flex-wrap items-center gap-2"
+        className="flex min-w-0 flex-wrap items-center gap-2"
       >
         {nextFinding ? (
           <Button
@@ -221,6 +224,7 @@ export function VerificationDock() {
           View all findings
         </Button>
         <Button
+          ref={verification.setStartAnchor}
           size="sm"
           disabled={
             !verification.ready ||
@@ -281,8 +285,10 @@ export function VerificationDock() {
 function VerificationStrip({ children }: { children: ReactNode }) {
   return (
     <section
+      id={verificationDockId}
+      tabIndex={-1}
       aria-label="Verification"
-      className="flex flex-wrap items-start gap-3 border-b border-line bg-surface px-3 py-2.5"
+      className="flex flex-wrap items-start gap-3 border-b border-line bg-surface px-3 py-2.5 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
     >
       {children}
     </section>

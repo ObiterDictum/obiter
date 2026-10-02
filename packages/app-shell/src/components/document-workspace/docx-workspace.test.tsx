@@ -87,11 +87,11 @@ describe('DocxWorkspace ribbon', () => {
     ).toHaveProperty('disabled', false)
     expect(screen.queryByRole('combobox', { name: /Harvard/i })).toBeNull()
     openRibbonTab('Review')
+    // The document-level Redact action is real; the ribbon entry reveals it
+    // rather than claiming the capability does not exist.
     expect(
-      screen.getByRole('button', {
-        name: 'Redact this document (not available yet)',
-      }),
-    ).toHaveProperty('disabled', true)
+      screen.getByRole('button', { name: 'Redact this document' }),
+    ).toHaveProperty('disabled', false)
   })
 
   it('disables partial emphasis while track changes is on', () => {

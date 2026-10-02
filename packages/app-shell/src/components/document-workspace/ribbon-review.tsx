@@ -31,6 +31,8 @@ import {
   ToolbarRow,
 } from './ribbon-primitives'
 import { FindControls } from './ribbon-find'
+import { revealDocumentRedactionRuns } from './document-actions'
+import { useVerificationWorkspace } from '../verification/verification-context'
 
 export function ReferencesRibbon({
   authoritiesOpen,
@@ -41,6 +43,16 @@ export function ReferencesRibbon({
   onToggleAuthorities: () => void
   onInsertAuthority: () => void
 }) {
+  const verification = useVerificationWorkspace()
+  // The one document-level Verify control owns the action; this entry reveals
+  // it. The context exposes one canonical availability, so this entry is never
+  // enabled while the dock has no control to reveal, and a disabled entry
+  // carries the honest reason on its accessible name.
+  const startAvailability = verification?.startAvailability
+  const verifyReason =
+    startAvailability && !startAvailability.available
+      ? startAvailability.reason
+      : null
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -56,7 +68,12 @@ export function ReferencesRibbon({
           />
           <IconButton
             label="Verify citations"
-            soon
+            soon={verification ? undefined : true}
+            disabled={
+              verification ? startAvailability?.available === false : undefined
+            }
+            disabledReason={verifyReason ?? undefined}
+            onClick={() => verification?.revealStart()}
             icon={<SealCheck size={16} aria-hidden />}
           />
           <IconButton
@@ -213,7 +230,7 @@ export function ReviewRibbon({
       <ToolbarGroup label="Redact">
         <IconButton
           label="Redact this document"
-          soon
+          onClick={revealDocumentRedactionRuns}
           icon={<EyeSlash size={16} aria-hidden />}
         />
       </ToolbarGroup>

@@ -121,7 +121,10 @@ function TopBar({ platform, mode }: { platform: AppPlatform; mode: ModeId }) {
 
       <AppSearchField />
 
-      <div className="flex min-w-0 shrink-0 items-center justify-end gap-1 sm:flex-1">
+      {/* The mode nav is primary and must not be clipped by empty space beside
+          it; the account group keeps its content width so the growing left
+          group gets the room the modes need. */}
+      <div className="flex shrink-0 items-center justify-end gap-1">
         <ThemeToggle />
         <UserMenu platform={platform} />
       </div>
