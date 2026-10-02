@@ -1,7 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { ListChecks } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
-import type { VerificationRun } from '@obiter/contracts'
 import { useCurrentUser } from '../current-user'
 import { useMattersList } from '../matters'
 import {
@@ -10,6 +9,7 @@ import {
   verificationOutcomeLabel,
   verificationOutcomeTone,
   verificationRunStatusLabel,
+  verificationRunTime,
 } from '../verification-copy'
 import {
   useOrganisationVerificationRuns,
@@ -22,31 +22,18 @@ function statusTone(status: 'queued' | 'running' | 'completed' | 'failed') {
   return 'neutral' as const
 }
 
-/** The completion time is the useful one once a run has finished; a queued or
- * failed run is placed by when it was created. */
-function verificationRunTime(run: VerificationRun) {
-  const at =
-    run.status === 'completed'
-      ? (run.completedAt ?? run.createdAt)
-      : run.createdAt
-  const label =
-    run.status === 'completed'
-      ? 'Completed'
-      : run.status === 'failed'
-        ? 'Failed'
-        : 'Started'
-  return `${label} ${new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(at))}`
-}
-
 export function VerifyRouteView() {
   const { data: me } = useCurrentUser()
-  const enabled = me?.organisation != null
-  const runs = useOrganisationVerificationRuns(enabled)
+  // `/api/me` is a suspense query, so a real render has `me`; the branch is
+  // explicit so an unresolved account is never treated as organisationless.
+  const hasOrganisation = me?.organisation != null
+  // A disabled infinite query stays `isPending` forever, so an organisationless
+  // account would show a permanent loading skeleton. The query is only enabled
+  // once an organisation exists and the view no longer reads its pending state
+  // in that case.
+  const runs = useOrganisationVerificationRuns(hasOrganisation)
   const list = runs.runs
-  const matters = useMattersList({ enabled })
+  const matters = useMattersList({ enabled: hasOrganisation })
   const documents = useVerificationRunDocuments(list)
 
   return (
@@ -60,7 +47,25 @@ export function VerifyRouteView() {
         </div>
       </div>
       <div className="min-h-0 flex-1 p-6">
-        {runs.isPending ? (
+        {!me ? (
+          <div role="status" aria-live="polite" className="text-sm text-muted">
+            Loading your account…
+          </div>
+        ) : !hasOrganisation ? (
+          <EmptyState
+            icon={<ListChecks size={28} className="text-muted" />}
+            title="No organisation yet"
+            body="Verification runs are scoped to an organisation. Create one, then start a run from a document."
+            action={
+              <Link
+                to="/settings"
+                className="font-semibold text-brand hover:text-brand-pressed"
+              >
+                Open settings
+              </Link>
+            }
+          />
+        ) : runs.isPending ? (
           <Skeleton className="h-24" aria-label="Loading verification runs" />
         ) : runs.isError ? (
           <EmptyState
@@ -86,7 +91,7 @@ export function VerifyRouteView() {
           <div className="flex flex-col gap-4">
             <ul className="flex flex-col divide-y divide-line">
               {list.map((run) => {
-                const filename = documents.get(run.documentId)
+                const identity = documents.get(run.documentId)
                 const matterName =
                   matters.data?.find((matter) => matter.id === run.matterId)
                     ?.name ?? null
@@ -97,7 +102,11 @@ export function VerifyRouteView() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-ink">
-                        {filename ?? 'Document unavailable'}
+                        {identity?.status === 'available'
+                          ? identity.filename
+                          : identity?.status === 'pending'
+                            ? 'Loading document…'
+                            : 'Document unavailable'}
                       </p>
                       <p className="mt-0.5 text-[11px] text-muted">
                         {matterName ? `${matterName} · ` : null}

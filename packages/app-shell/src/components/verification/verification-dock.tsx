@@ -10,7 +10,10 @@ import {
   verificationRunStatusLabel,
   verificationStateLabel,
 } from '../../verification-copy'
-import { useVerificationWorkspace } from './verification-context'
+import {
+  useVerificationWorkspace,
+  verificationDockId,
+} from './verification-context'
 import { nextActionableIndex } from './verification-mapping'
 import { VerificationFindingsIndex } from './verification-findings-index'
 
@@ -282,8 +285,10 @@ export function VerificationDock() {
 function VerificationStrip({ children }: { children: ReactNode }) {
   return (
     <section
+      id={verificationDockId}
+      tabIndex={-1}
       aria-label="Verification"
-      className="flex flex-wrap items-start gap-3 border-b border-line bg-surface px-3 py-2.5"
+      className="flex flex-wrap items-start gap-3 border-b border-line bg-surface px-3 py-2.5 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
     >
       {children}
     </section>

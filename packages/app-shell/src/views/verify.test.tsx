@@ -123,7 +123,9 @@ function signedIn() {
     data: { organisation: { id: 'org_1' } },
   })
   hooks.useVerificationRunDocuments.mockReturnValue(
-    new Map([['doc_1', 'demo-fixture.docx']]),
+    new Map([
+      ['doc_1', { status: 'available', filename: 'demo-fixture.docx' }],
+    ]),
   )
   hooks.useMattersList.mockReturnValue({
     data: [{ id: 'mtr_1', name: 'Potanina v Potanin appeal' }],
@@ -242,5 +244,119 @@ describe('VerifyRouteView', () => {
     render(<VerifyRouteView />)
     fireEvent.click(screen.getByRole('button', { name: 'Load more runs' }))
     expect(fetchNextPage).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a pending document lookup as loading, never as unavailable', () => {
+    signedIn()
+    hooks.useVerificationRunDocuments.mockReturnValue(
+      new Map([['doc_1', { status: 'pending' }]]),
+    )
+    hooks.useOrganisationVerificationRuns.mockReturnValue(listResult([run()]))
+    render(<VerifyRouteView />)
+    expect(screen.queryByText('Document unavailable')).toBeNull()
+    expect(screen.getByText('Loading document…')).toBeTruthy()
+  })
+
+  it('reserves the unavailable state for a completed failed lookup', () => {
+    signedIn()
+    hooks.useVerificationRunDocuments.mockReturnValue(
+      new Map([['doc_1', { status: 'unavailable' }]]),
+    )
+    hooks.useOrganisationVerificationRuns.mockReturnValue(listResult([run()]))
+    render(<VerifyRouteView />)
+    expect(screen.getByText('Document unavailable')).toBeTruthy()
+  })
+
+  it('keeps a valid run visible when another document lookup fails', () => {
+    signedIn()
+    hooks.useVerificationRunDocuments.mockReturnValue(
+      new Map([
+        ['doc_1', { status: 'available', filename: 'demo-fixture.docx' }],
+        ['doc_2', { status: 'unavailable' }],
+      ]),
+    )
+    hooks.useOrganisationVerificationRuns.mockReturnValue(
+      listResult([
+        run({ id: 'vrun_1', documentId: 'doc_1' }),
+        run({ id: 'vrun_2', documentId: 'doc_2' }),
+      ]),
+    )
+    render(<VerifyRouteView />)
+    expect(screen.getByText('demo-fixture.docx')).toBeTruthy()
+    expect(screen.getByText('Document unavailable')).toBeTruthy()
+    expect(screen.getAllByRole('link', { name: 'Open document' })).toHaveLength(
+      2,
+    )
+  })
+
+  it('places a failed run at its recorded failure time', () => {
+    signedIn()
+    hooks.useOrganisationVerificationRuns.mockReturnValue(
+      listResult([
+        run({
+          status: 'failed',
+          failureCode: 'execution_failed',
+          createdAt: '2026-09-14T00:00:00.000Z',
+          completedAt: '2026-09-14T03:00:00.000Z',
+        }),
+      ]),
+    )
+    render(<VerifyRouteView />)
+    const at = (value: string) =>
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(value))
+    expect(
+      screen.getByText((content) =>
+        content.includes(`Failed ${at('2026-09-14T03:00:00.000Z')}`),
+      ),
+    ).toBeTruthy()
+  })
+
+  it('shows an account-loading state before the account resolves', () => {
+    hooks.useCurrentUser.mockReturnValue({ data: undefined })
+    hooks.useVerificationRunDocuments.mockReturnValue(new Map())
+    hooks.useMattersList.mockReturnValue({ data: [] })
+    hooks.useOrganisationVerificationRuns.mockReturnValue({
+      isPending: true,
+      isError: false,
+      runs: [],
+    })
+    render(<VerifyRouteView />)
+    expect(screen.getByRole('status')).toBeTruthy()
+    expect(screen.queryByText('No organisation yet')).toBeNull()
+  })
+
+  it('explains an organisationless account instead of loading forever', () => {
+    hooks.useCurrentUser.mockReturnValue({ data: { organisation: null } })
+    hooks.useVerificationRunDocuments.mockReturnValue(new Map())
+    hooks.useMattersList.mockReturnValue({ data: [] })
+    // A disabled infinite query stays pending; the view must not read that as
+    // an organisation's runs still loading.
+    hooks.useOrganisationVerificationRuns.mockReturnValue({
+      isPending: true,
+      isError: false,
+      runs: [],
+    })
+    render(<VerifyRouteView />)
+    expect(screen.getByText('No organisation yet')).toBeTruthy()
+    expect(
+      screen.getByRole('link', { name: 'Open settings' }).getAttribute('href'),
+    ).toBe('/settings')
+    // No organisation-scoped request may be fired for an organisationless user.
+    expect(hooks.useOrganisationVerificationRuns).toHaveBeenCalledWith(false)
+  })
+
+  it('still shows the runs skeleton while an organisation loads its runs', () => {
+    signedIn()
+    hooks.useOrganisationVerificationRuns.mockReturnValue({
+      isPending: true,
+      isError: false,
+      runs: [],
+    })
+    const { container } = render(<VerifyRouteView />)
+    expect(container.querySelector('.h-24')).toBeTruthy()
+    expect(screen.queryByText('No organisation yet')).toBeNull()
   })
 })

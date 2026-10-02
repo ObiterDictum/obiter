@@ -45,15 +45,14 @@ export function ReferencesRibbon({
 }) {
   const verification = useVerificationWorkspace()
   // The one document-level Verify control owns the action; this entry reveals
-  // it. The reason is carried on the disabled button's accessible name so a
-  // greyed control still says why it is unavailable.
-  const verifyReason = !verification
-    ? null
-    : !verification.ready
-      ? 'the document is not ready to verify'
-      : verification.dirty
-        ? 'save before verification'
-        : null
+  // it. The context exposes one canonical availability, so this entry is never
+  // enabled while the dock has no control to reveal, and a disabled entry
+  // carries the honest reason on its accessible name.
+  const startAvailability = verification?.startAvailability
+  const verifyReason =
+    startAvailability && !startAvailability.available
+      ? startAvailability.reason
+      : null
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -71,9 +70,7 @@ export function ReferencesRibbon({
             label="Verify citations"
             soon={verification ? undefined : true}
             disabled={
-              verification
-                ? verification.startPending || verifyReason !== null
-                : undefined
+              verification ? startAvailability?.available === false : undefined
             }
             disabledReason={verifyReason ?? undefined}
             onClick={() => verification?.revealStart()}

@@ -37,6 +37,19 @@ export type RenderedFindings = {
 }
 
 /**
+ * One canonical answer to "can the document-level Run verification control
+ * start a run, and if not, why not". The ribbon reads this instead of
+ * re-deriving the dock's gate, so an enabled ribbon control always has a real
+ * dock control to reveal and focus.
+ */
+export type StartAvailability =
+  { available: true } | { available: false; reason: string }
+
+/** The document-level Verify strip. `revealStart` falls back to it if the
+ * dock's own control anchor is not yet registered. */
+export const verificationDockId = 'document-verification'
+
+/**
  * One owner for the contextual verification interaction: which run and findings
  * are current, which finding is selected, where it maps in the open document,
  * and whether the editor holds unsaved work. The panel, the marker layer, the
@@ -78,6 +91,8 @@ export type VerificationWorkspaceValue = {
   startRun: () => void
   startPending: boolean
   startError: Error | null
+  /** Whether the document-level Run verification control can start a run. */
+  startAvailability: StartAvailability
   registerMarker: (findingId: string, element: HTMLElement | null) => void
   markerFor: (findingId: string) => HTMLElement | null
   dockAnchor: HTMLElement | null
@@ -206,6 +221,32 @@ export function VerificationWorkspaceProvider({
   // the run summary is not yet available.
   const totalFindings = latest?.summary.findingCount ?? findings.length
 
+  // The dock does not render its Run verification control while the runs or
+  // the document are unavailable, and it disables the control for unsaved work
+  // and a not-ready version. Deriving one availability here keeps the ribbon
+  // from offering a command with nothing to reveal.
+  const startAvailability: StartAvailability = document.isPending
+    ? { available: false, reason: 'the document is still loading' }
+    : document.isError
+      ? { available: false, reason: 'this document is unavailable' }
+      : runs.isPending
+        ? { available: false, reason: 'verification status is still loading' }
+        : runs.isError
+          ? { available: false, reason: 'verification runs are unavailable' }
+          : create.isPending
+            ? {
+                available: false,
+                reason: 'a verification run is already starting',
+              }
+            : !ready
+              ? {
+                  available: false,
+                  reason: 'the document is not ready to verify',
+                }
+              : dirty
+                ? { available: false, reason: 'save before verification' }
+                : { available: true }
+
   // A Next/Previous that lands on a page that is not loaded yet is remembered
   // and applied when the page arrives, so navigation is never silently bounded
   // by whichever pages happen to be resident.
@@ -268,6 +309,7 @@ export function VerificationWorkspaceProvider({
     },
     startPending: create.isPending,
     startError: create.error ? create.error : null,
+    startAvailability,
     registerMarker: (findingId, element) => {
       if (element) markers.current.set(findingId, element)
       else markers.current.delete(findingId)
@@ -277,13 +319,16 @@ export function VerificationWorkspaceProvider({
     setDockAnchor,
     setStartAnchor,
     revealStart: () => {
-      if (dockAnchor && typeof dockAnchor.scrollIntoView === 'function') {
-        dockAnchor.scrollIntoView({ block: 'nearest' })
-      }
-      // The ribbon entry that calls this is enabled only while this control is,
-      // so it can take focus; a disabled control keeps its reason on the ribbon
-      // button's own accessible name.
-      startAnchor?.focus({ preventScroll: true })
+      // The ribbon entry is enabled only while this control is, but a missing
+      // anchor must still not turn the click into a silent no-op: fall back to
+      // the document-level Verify strip, which exists in every dock state.
+      const target =
+        startAnchor ??
+        globalThis.document?.getElementById(verificationDockId) ??
+        null
+      if (!target) return
+      target.scrollIntoView?.({ block: 'nearest' })
+      target.focus({ preventScroll: true })
     },
     rendered,
     setRendered,

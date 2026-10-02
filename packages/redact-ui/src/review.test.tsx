@@ -53,6 +53,17 @@ const { RedactionReviewView: RedactionReviewViewComponent } =
 
 const onOpenRun = vi.fn()
 
+// jsdom does not implement CSS.escape, which the review's selection effect uses
+// to find the selected span by id. Provide the browser boundary so row
+// activation can be exercised; this is not the behaviour under test.
+if (typeof globalThis.CSS === 'undefined') {
+  Object.assign(globalThis, { CSS: { escape: (value: string) => value } })
+}
+// jsdom has no layout, so it does not implement scrollIntoView either.
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = () => undefined
+}
+
 function RedactionReviewView({ runId }: { runId: string }) {
   return <RedactionReviewViewComponent runId={runId} onOpenRun={onOpenRun} />
 }
@@ -190,6 +201,83 @@ describe('RedactionReviewView', () => {
       fireEvent.keyDown(listbox, chord)
     }
     expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('never decides on the selected span when a different row has focus', () => {
+    const mutate = vi.fn()
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...run,
+        status: 'ready_for_review',
+        spans: [
+          {
+            id: 'span_1',
+            start: 0,
+            end: 4,
+            text: 'Jane',
+            category: 'person_name' as const,
+            source: 'rampart_model' as const,
+            confidence: 'high' as const,
+            suggestion: 'redact' as const,
+          },
+          {
+            id: 'span_2',
+            start: 5,
+            end: 8,
+            text: 'Doe',
+            category: 'person_name' as const,
+            source: 'rampart_model' as const,
+            confidence: 'high' as const,
+            suggestion: 'redact' as const,
+          },
+        ],
+        summary: {
+          totalSpans: 2,
+          byCategory: { person_name: 2 },
+          bySource: {
+            rampartModel: 2,
+            rampartDeterministic: 0,
+            ukSupplement: 0,
+          },
+          reviewedCount: 0,
+          unreviewedCount: 2,
+        },
+      },
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane Doe filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
+    hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
+    hooks.useFinalizeRun.mockReturnValue({})
+    render(<RedactionReviewView runId="red_1" />)
+
+    const listbox = screen.getByRole('listbox')
+    const rowA = screen.getByRole('option', { name: /Jane/ })
+    const rowB = screen.getByRole('option', { name: /Doe/ })
+    fireEvent.click(rowA)
+    expect(rowA.getAttribute('aria-selected')).toBe('true')
+
+    // Decision shortcuts pressed on row B must not act on the separately
+    // selected row A, and must not swallow the row's own activation.
+    for (const key of ['r', 'p', 'Enter']) {
+      expect(fireEvent.keyDown(rowB, { key })).toBe(true)
+    }
+    expect(mutate).not.toHaveBeenCalled()
+
+    // A row's normal activation still selects that row.
+    fireEvent.click(rowB)
+    expect(rowB.getAttribute('aria-selected')).toBe('true')
+    expect(rowA.getAttribute('aria-selected')).toBe('false')
+
+    // A shortcut owned by the listbox still decides the selected row only.
+    fireEvent.keyDown(listbox, { key: 'r' })
+    expect(mutate).toHaveBeenCalledWith({
+      spanId: 'span_2',
+      decision: 'reject',
+    })
   })
 
   it('shows finalized output for a zero-span finalized run', () => {

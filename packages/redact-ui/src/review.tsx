@@ -540,6 +540,12 @@ export function RedactionReviewView({
     // so a modifier leaves every decision unchanged. Control, Meta and Alt are
     // all covered; the unmodified letters below stay list-scoped.
     if (event.ctrlKey || event.metaKey || event.altKey) return
+    // A decision shortcut is list-scoped: it belongs to the listbox only while
+    // the listbox itself owns focus. A key event that bubbled from a focused
+    // row button (or any child) belongs to that row: acting on the separately
+    // selected span would record a legal decision against a span the reviewer
+    // was not looking at. The row keeps its normal activation and selection.
+    if (event.target !== event.currentTarget) return
     const key = event.key.toLowerCase()
     const shortcutDecision =
       event.key === 'Enter'
