@@ -3,6 +3,7 @@ import type {
   VerificationFindingState,
   VerificationFindingType,
   VerificationReviewReason,
+  VerificationRun,
   VerificationRunStatus,
   VerificationRunSummary,
 } from '@obiter/contracts'
@@ -128,6 +129,41 @@ export function verificationRunStatusLabel(status: VerificationRunStatus) {
       return 'Failed'
     default: {
       const unhandled: never = status
+      return unhandled
+    }
+  }
+}
+
+/**
+ * The time label for a run, paired with the timestamp it actually describes.
+ * `completed_at` is written for both a completed and a failed run (the moment
+ * the terminal transition was recorded), so it describes a failure truthfully
+ * rather than showing when the run was requested. A live run has no completion
+ * time: it is placed by when it started, or when it was created if no executor
+ * has picked it up.
+ */
+export function verificationRunTime(run: VerificationRun) {
+  const format = (at: string) =>
+    new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(at))
+  switch (run.status) {
+    case 'completed':
+      return run.completedAt
+        ? `Completed ${format(run.completedAt)}`
+        : `Created ${format(run.createdAt)}`
+    case 'failed':
+      return run.completedAt
+        ? `Failed ${format(run.completedAt)}`
+        : `Created ${format(run.createdAt)}`
+    case 'running':
+    case 'queued':
+      return run.startedAt
+        ? `Started ${format(run.startedAt)}`
+        : `Created ${format(run.createdAt)}`
+    default: {
+      const unhandled: never = run.status
       return unhandled
     }
   }

@@ -248,4 +248,97 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(verifyButton().disabled).toBe(true)
     expect(screen.getByText(/Save before verification/)).toBeTruthy()
   })
+
+  it('connects the ribbon Verify citations entry to the real dock control', async () => {
+    mountGate({ editAsync: vi.fn() })
+    await waitFor(() => expect(verifyButton().disabled).toBe(false))
+
+    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    const ribbonVerify = screen.getByRole('button', {
+      name: 'Verify citations',
+    })
+    expect(ribbonVerify).toHaveProperty('disabled', false)
+
+    fireEvent.click(ribbonVerify)
+    // The one real control owns the action; the ribbon entry reveals it rather
+    // than starting a second run.
+    expect(document.activeElement).toBe(verifyButton())
+  })
+
+  it('carries the unsaved gate and its reason onto the ribbon entry', async () => {
+    mountGate({ editAsync: vi.fn() })
+    await waitFor(() => expect(verifyButton().disabled).toBe(false))
+    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+
+    edit('Hello world')
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Verify citations: save before verification',
+        }),
+      ).toHaveProperty('disabled', true),
+    )
+  })
+
+  it('disables the ribbon entry while verification status is still loading', () => {
+    runsHook.useDocumentVerificationRuns.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: undefined,
+    })
+    mountGate({ editAsync: vi.fn() })
+    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    expect(
+      screen.getByRole('button', {
+        name: 'Verify citations: verification status is still loading',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('disables the ribbon entry when verification runs are unavailable', () => {
+    runsHook.useDocumentVerificationRuns.mockReturnValue({
+      isPending: false,
+      isError: true,
+      error: new Error('runs service is down'),
+      data: undefined,
+    })
+    mountGate({ editAsync: vi.fn() })
+    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    expect(
+      screen.getByRole('button', {
+        name: 'Verify citations: verification runs are unavailable',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('disables the ribbon entry when the document is unavailable', () => {
+    documentHook.useDocument.mockReturnValue({
+      isPending: false,
+      isError: true,
+      data: undefined,
+    })
+    mountGate({ editAsync: vi.fn() })
+    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    expect(
+      screen.getByRole('button', {
+        name: 'Verify citations: this document is unavailable',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('disables the ribbon entry while a run start is already pending', () => {
+    runsHook.useCreateVerificationRun.mockReturnValue({
+      isPending: true,
+      mutate: vi.fn(),
+      error: null,
+    })
+    mountGate({ editAsync: vi.fn() })
+    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    expect(
+      screen.getByRole('button', {
+        name: 'Verify citations: a verification run is already starting',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
 })

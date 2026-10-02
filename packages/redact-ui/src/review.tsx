@@ -63,12 +63,15 @@ const sourceLabel = {
 const decisions: Array<{
   value: SpanDecision
   label: string
-  shortcut: string
+  shortcut?: string
 }> = [
   { value: 'accept', label: 'Accept', shortcut: 'Enter' },
   { value: 'reject', label: 'Reject', shortcut: 'R' },
-  { value: 'override_redact', label: 'Override redact', shortcut: 'Ctrl+R' },
-  { value: 'override_keep', label: 'Override keep', shortcut: 'Ctrl+K' },
+  // Override redact and override keep deliberately carry no chord. Ctrl+R and
+  // Ctrl+K are the browser's reload and the app shell's search, and binding a
+  // legal decision to either recorded a decision the user did not intend.
+  { value: 'override_redact', label: 'Override redact' },
+  { value: 'override_keep', label: 'Override keep' },
   { value: 'pseudonymise', label: 'Pseudonymise', shortcut: 'P' },
 ]
 
@@ -531,14 +534,21 @@ export function RedactionReviewView({
       return
     }
     if (!selected || run.status === 'finalized' || run.replacementRunId) return
+    // A modified chord belongs to the browser or the app shell, not to a legal
+    // decision: Ctrl+K opens app search and Ctrl+R reloads the page. Recording
+    // a decision on those chords mutated review state the user did not intend,
+    // so a modifier leaves every decision unchanged. Control, Meta and Alt are
+    // all covered; the unmodified letters below stay list-scoped.
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    // A decision shortcut is list-scoped: it belongs to the listbox only while
+    // the listbox itself owns focus. A key event that bubbled from a focused
+    // row button (or any child) belongs to that row: acting on the separately
+    // selected span would record a legal decision against a span the reviewer
+    // was not looking at. The row keeps its normal activation and selection.
+    if (event.target !== event.currentTarget) return
     const key = event.key.toLowerCase()
-    const shortcutDecision = event.ctrlKey
-      ? key === 'r'
-        ? 'override_redact'
-        : key === 'k'
-          ? 'override_keep'
-          : null
-      : event.key === 'Enter'
+    const shortcutDecision =
+      event.key === 'Enter'
         ? 'accept'
         : key === 'r'
           ? 'reject'
@@ -572,9 +582,9 @@ export function RedactionReviewView({
       <div className="shrink-0">
         <ReviewSummary run={run} />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] xl:overflow-y-hidden">
         <section
-          className="min-h-0 overflow-y-auto border-b border-line xl:border-b-0 xl:border-r"
+          className="shrink-0 border-b border-line xl:min-h-0 xl:overflow-y-auto xl:border-b-0 xl:border-r"
           aria-label="Document"
         >
           {run.status === 'finalized' ? (
@@ -610,7 +620,7 @@ export function RedactionReviewView({
           )}
         </section>
         <aside
-          className="flex min-h-0 flex-col xl:max-h-none"
+          className="flex flex-col xl:min-h-0 xl:max-h-none"
           aria-label="Review queue"
         >
           <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
@@ -715,9 +725,11 @@ export function RedactionReviewView({
                     }
                   >
                     {action.label}{' '}
-                    <span className="ml-auto text-subtle">
-                      {action.shortcut}
-                    </span>
+                    {action.shortcut ? (
+                      <span className="ml-auto text-subtle">
+                        {action.shortcut}
+                      </span>
+                    ) : null}
                   </Button>
                 ))}
               </div>

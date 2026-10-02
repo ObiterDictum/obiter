@@ -1,8 +1,8 @@
 import '@obiter/test-dom'
 import { createElement, type PropsWithChildren } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, mock } from 'bun:test'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { ApiError } from './api'
 
@@ -37,8 +37,16 @@ const {
   documentQueryOptions,
   documentsNeedStatusPoll,
   matterDocumentsQueryOptions,
+  retryDocumentLookup,
   useDeleteDocument,
 } = await import('./documents')
+const { useVerificationRunDocuments } = await import('./verification-runs')
+
+// Call history is per-file, and the hooks below assert exact request counts, so
+// each test starts from an empty one.
+beforeEach(() => {
+  api.apiFetch.mockClear()
+})
 
 function sampleVersion(
   overrides: Partial<DocumentVersionRecord> = {},
@@ -199,5 +207,106 @@ describe('documentQueryOptions', () => {
     await expect(options.queryFn?.({} as never)).rejects.toMatchObject({
       code: 'document_not_found',
     })
+  })
+})
+
+describe('retryDocumentLookup', () => {
+  it('does not retry a definitive 404 from the document boundary', () => {
+    expect(
+      retryDocumentLookup(
+        0,
+        new ApiError('document_not_found', 'Document not found.', 404, 'req'),
+      ),
+    ).toBe(false)
+  })
+
+  it('retries transient failures within a bound', () => {
+    expect(retryDocumentLookup(0, new Error('network'))).toBe(true)
+    expect(retryDocumentLookup(2, new Error('network'))).toBe(true)
+    expect(retryDocumentLookup(3, new Error('network'))).toBe(false)
+  })
+})
+
+function verificationRun(id: string, documentId: string) {
+  return {
+    id,
+    organisationId: 'org_1',
+    matterId: 'mtr_1',
+    documentId,
+    documentVersionId: 'ver_1',
+    status: 'completed' as const,
+    failureCode: null,
+    createdBy: 'usr_1',
+    createdAt: '2026-09-14T00:00:00.000Z',
+    startedAt: '2026-09-14T00:00:01.000Z',
+    completedAt: '2026-09-14T00:00:02.000Z',
+    summary: { findingCount: 0, flaggedCount: 0, reviewRequiredCount: 0 },
+    documentCurrentVersionId: 'ver_1',
+    stale: false,
+  }
+}
+
+describe('useVerificationRunDocuments', () => {
+  it('shares one lookup across runs for the same document', async () => {
+    api.apiFetch.mockResolvedValueOnce({
+      document: sampleDocument(),
+      versions: [],
+    })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retryDelay: 0 } },
+    })
+    const { result } = renderHook(
+      () =>
+        useVerificationRunDocuments([
+          verificationRun('a', 'doc_1'),
+          verificationRun('b', 'doc_1'),
+        ]),
+      { wrapper: queryWrapper(client) },
+    )
+
+    await waitFor(() =>
+      expect(result.current.get('doc_1')?.status).toBe('available'),
+    )
+    expect(api.apiFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('distinguishes pending, available and unavailable, and does not retry a 404', async () => {
+    api.apiFetch.mockImplementation((input: unknown) => {
+      const path = String(input)
+      if (path.includes('doc_missing')) {
+        return Promise.reject(
+          new ApiError('document_not_found', 'Document not found.', 404, 'req'),
+        )
+      }
+      if (path.includes('doc_pending')) return new Promise(() => undefined)
+      return Promise.resolve({
+        document: sampleDocument({ id: 'doc_ok' }),
+        versions: [],
+      })
+    })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retryDelay: 0 } },
+    })
+    const { result } = renderHook(
+      () =>
+        useVerificationRunDocuments([
+          verificationRun('a', 'doc_ok'),
+          verificationRun('b', 'doc_missing'),
+          verificationRun('c', 'doc_pending'),
+        ]),
+      { wrapper: queryWrapper(client) },
+    )
+
+    await waitFor(() =>
+      expect(result.current.get('doc_ok')?.status).toBe('available'),
+    )
+    await waitFor(() =>
+      expect(result.current.get('doc_missing')?.status).toBe('unavailable'),
+    )
+    expect(result.current.get('doc_pending')?.status).toBe('pending')
+    const missingCalls = api.apiFetch.mock.calls.filter(([path]) =>
+      String(path).includes('doc_missing'),
+    )
+    expect(missingCalls).toHaveLength(1)
   })
 })

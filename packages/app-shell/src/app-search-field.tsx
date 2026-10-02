@@ -55,7 +55,7 @@ const MODE_HITS: AppSearchHit[] = [
     kind: 'mode',
     id: 'mode-verify',
     label: 'Verify',
-    hint: 'Coming soon',
+    hint: 'Citation, authority and quote checks',
     to: '/verify',
   },
 ]
@@ -192,11 +192,16 @@ export function AppSearchField() {
   return (
     <div
       ref={shellRef}
-      className="relative hidden w-full max-w-[14rem] sm:block xl:max-w-sm"
+      className="relative hidden w-full min-w-0 max-w-[14rem] sm:block xl:max-w-sm"
     >
       <form
         className={cn(
           'flex h-8 items-center gap-2 rounded-pill border bg-surface px-3 transition-[border-color,box-shadow,background-color] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          // Keyboard focus must be visible on the field itself, not only as a
+          // border colour change. `has-[:focus-visible]` keeps the ring on the
+          // pill that is the field's visual box and matches the Button/Input
+          // convention (`outline-2 outline-offset-2 outline-brand`).
+          'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand',
           focused
             ? 'border-line-strong bg-raised shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_16%,transparent)]'
             : 'border-line hover:border-line-strong',
@@ -244,7 +249,10 @@ export function AppSearchField() {
 
       {expanded ? (
         <div
-          className="absolute top-[calc(100%+0.5rem)] left-1/2 z-50 w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2"
+          // Fixed and centred on the viewport: the compact field now sits at the
+          // right of the bar, so anchoring the panel to the field pushed it past
+          // a 768px viewport. The width already caps to `100vw - 2rem`.
+          className="fixed top-12 left-1/2 z-50 w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2"
           role="dialog"
           aria-label="Expanded search"
         >
