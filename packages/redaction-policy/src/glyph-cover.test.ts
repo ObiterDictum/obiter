@@ -135,6 +135,20 @@ describe('coverRectsForSpan', () => {
     expect(covers[0]!.x).toBeCloseTo(49.2, 5)
   })
 
+  it('merges across a wide whitespace gap only when source adjacency is proven', () => {
+    // 'A B': glyphs at 40 and 60 with a 10pt gap, wider than the single-span
+    // threshold. Only a coalesced-region caller may bridge it.
+    const segments = [
+      { start: 0, end: 1, pageIndex: 0, x: 40, y: 100, width: 10, height: 12 },
+      { start: 2, end: 3, pageIndex: 0, x: 60, y: 100, width: 10, height: 12 },
+    ]
+    const base = { segments, spanStart: 0, spanEnd: 3, spanText: 'A B' }
+    expect(coverRectsForSpan(base)).toHaveLength(2)
+    const merged = coverRectsForSpan({ ...base, mergeWhitespace: true })
+    expect(merged).toHaveLength(1)
+    expect(merged[0]!.width).toBeGreaterThan(25)
+  })
+
   it('does not merge a deep J into a word on its left', () => {
     const fontSize = 16
     const baseline = 100

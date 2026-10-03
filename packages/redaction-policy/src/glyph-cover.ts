@@ -73,6 +73,8 @@ type TrackedGlyph = GlyphCoverRect & {
   advanceWidth: number
   baselineX: number
   baselineY: number
+  /** Source character index; a gap means whitespace between two glyphs. */
+  index: number
 }
 
 /**
@@ -141,6 +143,7 @@ export function coverRectsForSpan(input: {
   spanStart: number
   spanEnd: number
   spanText: string
+  mergeWhitespace?: boolean
 }): Array<GlyphCoverRect & { pageIndex: number; ink: string }> {
   const glyphs: TrackedGlyph[] = []
 
@@ -201,17 +204,19 @@ export function coverRectsForSpan(input: {
         advanceWidth: width,
         baselineX,
         baselineY,
+        index,
       })
     }
   }
 
-  return unionMergeGlyphs(glyphs).map(
+  return unionMergeGlyphs(glyphs, input.mergeWhitespace === true).map(
     ({
       baseline: _baseline,
       along: _along,
       advanceWidth: _advanceWidth,
       baselineX: _baselineX,
       baselineY: _baselineY,
+      index: _index,
       ...cover
     }) => cover,
   )
@@ -274,7 +279,10 @@ function exactPlacement(
   }
 }
 
-function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
+function unionMergeGlyphs(
+  glyphs: TrackedGlyph[],
+  mergeWhitespace: boolean,
+): TrackedGlyph[] {
   if (glyphs.length <= 1) return glyphs
   const sorted = [...glyphs].sort(
     (left, right) =>
@@ -296,13 +304,20 @@ function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
       ? previous.baselineX * glyph.baselineX +
         previous.baselineY * glyph.baselineY
       : 0
+    // A coalesced region has only whitespace between its glyphs, so the gap
+    // may exceed the single-span threshold (multiple spaces, a tab) and still
+    // belong to one bar. The same-line and direction guards below still apply.
+    const whitespaceGap =
+      mergeWhitespace &&
+      previous !== undefined &&
+      glyph.index > previous.index + 1
     const sameLine =
       previous &&
       previous.pageIndex === glyph.pageIndex &&
       directionMatch > 0.999 &&
       Math.abs(previous.baseline - glyph.baseline) <= 1.25 &&
       glyph.along + glyph.advanceWidth / 2 >= previous.along &&
-      gap <= maxGap
+      (gap <= maxGap || whitespaceGap)
 
     if (previous && sameLine) {
       const right = Math.max(previous.x + previous.width, glyph.x + glyph.width)
@@ -319,6 +334,9 @@ function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
       previous.along = Math.min(previous.along, glyph.along)
       previous.advanceWidth = advanceEnd - previous.along
       previous.ink = `${previous.ink}${glyph.ink}`
+      // Track the last merged glyph so the whitespace check compares against
+      // the glyph immediately to the left, not the group's first glyph.
+      previous.index = glyph.index
       continue
     }
     merged.push({ ...glyph })
