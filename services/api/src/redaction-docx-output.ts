@@ -4,11 +4,15 @@ import {
   loadOoxmlZipEntries,
   parseDocx,
   serialiseDocx,
+  type RunEmphasis,
+  type RunTextReplacement,
 } from '@obiter/ooxml'
 import {
   affectsOutput,
+  coalesceRanges,
   RedactionSpanIntegrityError,
   type Decisions,
+  type RedactionRange,
   type RedactionSpan,
   type TokenMap,
 } from '@obiter/redaction-policy'
@@ -41,6 +45,13 @@ const REDACTABLE_STORY_KINDS = new Set([
   'footnotes',
   'endnotes',
 ])
+
+/**
+ * The harmless marker is written first, then styled as a solid black bar at
+ * run level. Because the source text is already gone, removing this styling
+ * (or copying the content) can only ever reveal `[REDACTED]`.
+ */
+const BLACK_BAR_EMPHASIS: RunEmphasis = { highlight: 'black', colour: '000000' }
 
 function replacementForSpan(
   span: RedactionSpan,
@@ -142,7 +153,7 @@ export async function buildRedactedDocx(
       if (!anchor) continue
       const paragraphText = anchor.runs.map((run) => run.wire.text).join('')
       if (!paragraphText) continue
-      const hits: Array<{ from: number; to: number; text: string }> = []
+      const occurrences: Array<RedactionRange & { replacement: string }> = []
       for (const span of affected) {
         if (!span.text) continue
         const replacement = replacements.get(span.id) ?? '[REDACTED]'
@@ -150,14 +161,31 @@ export async function buildRedactedDocx(
         for (;;) {
           const index = paragraphText.indexOf(span.text, cursor)
           if (index === -1) break
-          hits.push({
-            from: index,
-            to: index + span.text.length,
-            text: replacement,
+          occurrences.push({
+            start: index,
+            end: index + span.text.length,
+            spanId: span.id,
+            replacement,
           })
           cursor = index + span.text.length
         }
       }
+      // Redacted output coalesces adjacent occurrences into one bar per
+      // paragraph. Pseudonymised output keeps one token per span so distinct
+      // tokens are never absorbed into a shared bar.
+      const hits: RunTextReplacement[] =
+        input.outputMode === 'redacted'
+          ? coalesceRanges(paragraphText, occurrences).map((region) => ({
+              from: region.start,
+              to: region.end,
+              text: '[REDACTED]',
+              emphasis: BLACK_BAR_EMPHASIS,
+            }))
+          : occurrences.map((occurrence) => ({
+              from: occurrence.start,
+              to: occurrence.end,
+              text: occurrence.replacement,
+            }))
       if (hits.length > 0) {
         applyRunTextReplacementRange(document, anchor, hits)
       }

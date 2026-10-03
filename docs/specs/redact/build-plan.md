@@ -341,7 +341,7 @@ Response 200: {
 }
 ```
 
-Applies all decisions: redacted text removes spans entirely (replaces with `[REDACTED]`), pseudonymised text replaces with consistent tokens (`[PERSON_1]`, `[PERSON_2]`, etc.). Stores output as artifact. Writes audit log `redaction.finalize`.
+Applies all decisions: redacted output removes the accepted spans and replaces each contiguous accepted region with one `[REDACTED]` marker (or an opaque black bar in PDF and DOCX), pseudonymised text replaces with consistent tokens (`[PERSON_1]`, `[PERSON_2]`, etc.). Stores output as artifact. Writes audit log `redaction.finalize`. See [Finalized Output Presentation](#finalized-output-presentation-red-01).
 
 ### List runs for a document
 
@@ -409,6 +409,39 @@ export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
 // 'redaction_run_not_found', 'span_not_found', 'redaction_run_not_reviewable'
 // 'redaction_already_finalized', 'redaction_detection_failed'
 ```
+
+## Finalized Output Presentation (RED-01)
+
+Redaction output is destructive, not concealment. The finalized `.docx` removes the
+accepted text from the OOXML before any styling is written, and the finalized PDF is
+rasterized with no selectable text layer. Presentation is layered on top of removed
+content, never on the original.
+
+**Contiguous regions.** `packages/redaction-policy/src/apply.ts` plans one region per
+run of accepted spans that overlap, touch, or are separated only by horizontal
+whitespace (spaces and tabs). The region keeps its start/end range and the ids of
+every span it represents, so audit records continue to identify the original spans
+and decisions. A region never crosses a CR/LF or any visible character.
+
+- Plain text replaces each region with exactly one `[REDACTED]` marker.
+- DOCX writes one harmless `[REDACTED]` marker per region inside the existing runs,
+  then applies a run-level black highlight and black font colour so it renders as a
+  solid black bar. Removing the styling, or copying the content, reveals only
+  `[REDACTED]`.
+- PDF paints one opaque black rectangle per region per rendered line. A region that
+  wraps over two lines produces one bar on each line, never one rectangle across
+  both.
+
+**Structural boundaries.** DOCX coalescing is per paragraph, so it cannot bridge a
+paragraph, table cell, header/footer, footnote/endnote or story boundary. PDF
+coalescing is per page and per rendered baseline, so it cannot bridge a page, line,
+column or table cell. Text coalescing never bridges a newline. Pseudonymised output
+stays token-based and is never coalesced into a bar.
+
+**Review overlays.** The review screen keeps its category-coloured entity overlays so
+reviewers can inspect individual detections and decisions. Those overlays are review
+UI, not output: finalized PDF and DOCX output renders black bars, and the plain-text
+fallback uses `[REDACTED]`.
 
 ## Package Structure
 

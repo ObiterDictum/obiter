@@ -461,6 +461,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         const redactedPdf = await buildRedactedPdf({
           pdfBytes,
           layout,
+          text,
           spans: run.spans,
           decisions: run.decisions,
           outputMode: body.data.outputMode,
