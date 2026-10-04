@@ -71,6 +71,10 @@ export function planParagraphDeletion(
     state.deletedParagraphIds,
   )
   const index = order.indexOf(paragraphId)
+  // A stale id that names no paragraph in the effective flow is a no-op, not a
+  // deletion: committing it would add a phantom slot that surfaces at save as
+  // an already-removed deletion and dirties the document for nothing.
+  if (index < 0) return { kind: 'unchanged' }
   return {
     kind: 'deleted',
     selectId: order[index + 1] ?? order[index - 1] ?? null,

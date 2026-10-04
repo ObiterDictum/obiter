@@ -1,11 +1,6 @@
 import type { DocumentTrackedChangeDecisionRequest } from '@obiter/contracts'
 
-import {
-  OoxmlError,
-  type OoxmlDocument,
-  type ParagraphAnchor,
-  type TrackedChangeNode,
-} from './model'
+import { OoxmlError, type OoxmlDocument, type TrackedChangeNode } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { renameFragmentElements, setOverlayReplacement } from './parts/overlay'
 
@@ -162,7 +157,7 @@ function anchorFor(document: OoxmlDocument, paragraphId: string) {
 function wouldRemoveLastParagraph(
   document: OoxmlDocument,
   action: DocumentTrackedChangeDecisionRequest['action'],
-  removals: readonly { anchor: ParagraphAnchor }[],
+  removals: readonly { start: number; end: number }[],
   pending: readonly TrackedChangeNode[],
 ) {
   const mainStory = document.model.stories.find(
@@ -172,22 +167,43 @@ function wouldRemoveLastParagraph(
   const mainParagraphIds = new Set(
     mainStory.paragraphs.map((paragraph) => paragraph.id),
   )
+  // Every main-part mark-deletion change names the whole `w:p` its mark sits
+  // in, including paragraphs the parser excludes from the wire model. They are
+  // body paragraphs, so they count.
+  const markRanges: Array<{ start: number; end: number }> = []
   let bodyCount = mainStory.paragraphs.length
   for (const change of document.trackedChanges.values()) {
-    if (change.partName === mainStory.partName && change.paragraphMarkRange) {
-      bodyCount += 1
-    }
+    if (change.partName !== mainStory.partName) continue
+    if (!change.paragraphMarkRange) continue
+    markRanges.push(change.paragraphMarkRange)
+    bodyCount += 1
   }
-  let removed = 0
-  for (const removal of removals) {
-    if (mainParagraphIds.has(removal.anchor.wire.id)) removed += 1
-  }
+  // A decision removes whole `w:p` subtrees, so count every main paragraph or
+  // mark whose range is contained in a removed range. That catches hosted
+  // paragraphs and nested mark-deleted paragraphs inside the removed one, which
+  // an id-membership count would miss.
+  const removedRanges: Array<{ start: number; end: number }> = removals.map(
+    (removal) => ({ start: removal.start, end: removal.end }),
+  )
   if (action === 'accept') {
     for (const target of pending) {
-      if (target.partName === mainStory.partName && target.paragraphMarkRange) {
-        removed += 1
+      if (target.partName !== mainStory.partName) continue
+      if (target.paragraphMarkRange) {
+        removedRanges.push(target.paragraphMarkRange)
       }
     }
+  }
+  const contained = (range: { start: number; end: number }) =>
+    removedRanges.some(
+      (removed) => range.start >= removed.start && range.end <= removed.end,
+    )
+  let removed = 0
+  for (const anchor of document.paragraphAnchors.values()) {
+    if (!mainParagraphIds.has(anchor.wire.id)) continue
+    if (contained(anchor.paragraphRange)) removed += 1
+  }
+  for (const range of markRanges) {
+    if (contained(range)) removed += 1
   }
   return bodyCount - removed < 1
 }

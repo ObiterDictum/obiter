@@ -24,6 +24,10 @@ const soleMarkDeletionSourceBytes = await replaceDocumentXml(
   sourceBytes,
   '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:rPr><w:del w:id="90" w:author="Foreign Reviewer" w:date="2026-08-10T10:00:00Z"/></w:rPr></w:pPr></w:p></w:body></w:document>',
 )
+const soleInsertShellSourceBytes = await replaceDocumentXml(
+  sourceBytes,
+  '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="92" w:author="Foreign Reviewer" w:date="2026-08-10T10:00:00Z"><w:r><w:t>Typed</w:t></w:r></w:ins></w:p></w:body></w:document>',
+)
 const sourceDocument = await parseDocx(trackedSourceBytes)
 const insertion = sourceDocument.model.changes.find(
   ({ elementName }) => elementName === 'ins',
@@ -161,6 +165,50 @@ describe('tracked change routes', () => {
       error: { code: 'validation_failed' },
     })
     // Accepting the mark would persist an empty body, so nothing is committed.
+    expect(database.currentVersionId).toBe('ver_1')
+    expect(database.versions.size).toBe(1)
+    expect(database.audits).toEqual([])
+    expect(route.storage.writes).toEqual([])
+  })
+
+  it('refuses rejecting the only tracked-insert shell without a version', async () => {
+    const database = new EditDatabase()
+    const route = trackedRouteApp(
+      database,
+      undefined,
+      undefined,
+      soleInsertShellSourceBytes,
+    )
+    const crafted = await parseDocx(soleInsertShellSourceBytes)
+    const paragraphId = crafted.model.stories.find(
+      ({ kind }) => kind === 'document',
+    )?.paragraphs[0]?.id
+    const insert = crafted.model.changes.find(
+      ({ elementName }) => elementName === 'ins',
+    )
+    if (!paragraphId || !insert) {
+      throw new Error('Crafted tracked-insert shell is missing.')
+    }
+
+    const response = await route.app.request(
+      '/api/documents/doc_1/tracked-changes/decision',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          baseVersionId: 'ver_1',
+          action: 'reject',
+          changeIds: [insert.id],
+          removeParagraphIds: [paragraphId],
+        }),
+      },
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    // Rejecting the shell would remove the only paragraph, so nothing commits.
     expect(database.currentVersionId).toBe('ver_1')
     expect(database.versions.size).toBe(1)
     expect(database.audits).toEqual([])
