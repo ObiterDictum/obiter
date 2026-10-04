@@ -16,10 +16,12 @@ export function applyTrackedChangeDecisions(
       ? resolveRemovalParagraphs(document, requested, removeParagraphIds)
       : []
   const absorbed =
-    action === 'accept' ? absorbParagraphMarkSiblings(document, requested) : []
+    action === 'accept' ? collectParagraphMarkSiblings(document, requested) : []
+  const absorbedIds = new Set(absorbed.map((change) => change.wire.id))
   const pending = uniqueChanges([...requested, ...absorbed]).filter(
     (target) =>
       !target.absorbed &&
+      !absorbedIds.has(target.wire.id) &&
       !removals.some(
         (removal) =>
           removal.partName === target.partName &&
@@ -31,6 +33,9 @@ export function applyTrackedChangeDecisions(
   if (wouldRemoveLastParagraph(document, action, removals, pending)) {
     throw new OoxmlError('last-paragraph-required')
   }
+  // Fold the absorbed siblings only once the decision is accepted: a refused
+  // decision must leave the parsed document untouched.
+  commitParagraphMarkSiblings(document, absorbed)
 
   // Remove the shells first: each covers a whole paragraph, and any change
   // inside it is dropped from `pending`, so the two overlays never overlap.
@@ -290,7 +295,13 @@ function restoreDeletedText(target: TrackedChangeNode) {
   return restored
 }
 
-function absorbParagraphMarkSiblings(
+/**
+ * The changes a paragraph-mark deletion absorbs: changes whose range sits inside
+ * the deleted mark's paragraph. Pure: it only collects them, so a decision the
+ * guard later refuses leaves the parsed document unchanged. The caller folds
+ * them with `commitParagraphMarkSiblings` after the decision is accepted.
+ */
+function collectParagraphMarkSiblings(
   document: OoxmlDocument,
   accepted: readonly TrackedChangeNode[],
 ) {
@@ -298,7 +309,6 @@ function absorbParagraphMarkSiblings(
   for (const mark of accepted) {
     const range = mark.paragraphMarkRange
     if (!range) continue
-    const part = requireEditablePart(document, mark.partName)
     for (const change of document.trackedChanges.values()) {
       if (change.wire.id === mark.wire.id) continue
       if (change.partName !== mark.partName) continue
@@ -306,12 +316,22 @@ function absorbParagraphMarkSiblings(
       if (change.range.start < range.start || change.range.end > range.end) {
         continue
       }
-      change.absorbed = true
-      part.overlay.replacements.delete(`tracked-change:${change.wire.id}`)
+      if (absorbed.some((item) => item.wire.id === change.wire.id)) continue
       absorbed.push(change)
     }
   }
   return absorbed
+}
+
+function commitParagraphMarkSiblings(
+  document: OoxmlDocument,
+  absorbed: readonly TrackedChangeNode[],
+) {
+  for (const change of absorbed) {
+    change.absorbed = true
+    const part = requireEditablePart(document, change.partName)
+    part.overlay.replacements.delete(`tracked-change:${change.wire.id}`)
+  }
 }
 
 function uniqueChanges(changes: readonly TrackedChangeNode[]) {

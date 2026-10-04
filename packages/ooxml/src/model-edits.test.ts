@@ -568,6 +568,28 @@ describe('OOXML document edits', () => {
     ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
   })
 
+  it('leaves a refused accept untouched', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:rPr><w:del w:id="0" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"/></w:rPr></w:pPr><w:del w:id="1" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"><w:r><w:delText>Gone</w:delText></w:r></w:del></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const mark = document.model.changes.find(({ ooxmlId }) => ooxmlId === '0')
+    const run = document.model.changes.find(({ ooxmlId }) => ooxmlId === '1')
+    if (!mark || !run) throw new Error('Crafted tracked changes are missing.')
+
+    expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
+    expect(() =>
+      applyTrackedChangeDecisions(document, [mark.id], 'accept'),
+    ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
+    // The refused decision must not have folded the sibling change.
+    expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
+  })
+
   it('accepts a paragraph mark deletion when another paragraph survives', async () => {
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const zip = await JSZip.loadAsync(input)

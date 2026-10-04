@@ -53,9 +53,27 @@ export function planParagraphDeletion(
   }
   const removed = removeInsert([...state.inserts], paragraphId)
   if (removed) {
+    // `removeInsert` names the insert's anchor, but that anchor may itself be
+    // pending deletion, so it would not render. Keep it only when it survives,
+    // otherwise pick the effective neighbour at the insert's former position.
+    const order = flowParagraphIds(
+      model,
+      state.inserts,
+      state.deletedParagraphIds,
+    )
+    const index = order.indexOf(paragraphId)
+    const effective = flowParagraphIds(
+      model,
+      removed.inserts,
+      state.deletedParagraphIds,
+    )
+    const selectId =
+      removed.selectId !== null && effective.includes(removed.selectId)
+        ? removed.selectId
+        : (effective[index] ?? effective[index - 1] ?? null)
     return {
       kind: 'deleted',
-      selectId: removed.selectId,
+      selectId,
       state: {
         inserts: removed.inserts,
         deletedParagraphIds: [...state.deletedParagraphIds],
