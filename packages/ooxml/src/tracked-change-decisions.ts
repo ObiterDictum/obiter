@@ -1,6 +1,11 @@
 import type { DocumentTrackedChangeDecisionRequest } from '@obiter/contracts'
 
-import { OoxmlError, type OoxmlDocument, type TrackedChangeNode } from './model'
+import {
+  OoxmlError,
+  type OoxmlDocument,
+  type ParagraphAnchor,
+  type TrackedChangeNode,
+} from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { renameFragmentElements, setOverlayReplacement } from './parts/overlay'
 
@@ -28,6 +33,9 @@ export function applyTrackedChangeDecisions(
       ),
   )
   validateTargets(pending, action)
+  if (wouldRemoveLastParagraph(document, action, removals, pending)) {
+    throw new OoxmlError('last-paragraph-required')
+  }
 
   // Remove the shells first: each covers a whole paragraph, and any change
   // inside it is dropped from `pending`, so the two overlays never overlap.
@@ -140,6 +148,48 @@ function resolveRemovalParagraphs(
 
 function anchorFor(document: OoxmlDocument, paragraphId: string) {
   return document.paragraphAnchors.get(paragraphId)
+}
+
+/**
+ * Whether this decision would leave the main body with no paragraph. A tracked
+ * deletion keeps the paragraph mark as deleted markup, but accepting that mark
+ * (or rejecting the last tracked-insert shell) removes the whole `w:p`, so the
+ * persisted body must keep at least one paragraph. The count adds paragraphs
+ * the parser excludes because their mark is already deleted, so a reject that
+ * restores one is not mistaken for a removal. This is the same typed refusal
+ * the edit guard uses, not a second paragraph-count rule.
+ */
+function wouldRemoveLastParagraph(
+  document: OoxmlDocument,
+  action: DocumentTrackedChangeDecisionRequest['action'],
+  removals: readonly { anchor: ParagraphAnchor }[],
+  pending: readonly TrackedChangeNode[],
+) {
+  const mainStory = document.model.stories.find(
+    (story) => story.kind === 'document',
+  )
+  if (!mainStory) return false
+  const mainParagraphIds = new Set(
+    mainStory.paragraphs.map((paragraph) => paragraph.id),
+  )
+  let bodyCount = mainStory.paragraphs.length
+  for (const change of document.trackedChanges.values()) {
+    if (change.partName === mainStory.partName && change.paragraphMarkRange) {
+      bodyCount += 1
+    }
+  }
+  let removed = 0
+  for (const removal of removals) {
+    if (mainParagraphIds.has(removal.anchor.wire.id)) removed += 1
+  }
+  if (action === 'accept') {
+    for (const target of pending) {
+      if (target.partName === mainStory.partName && target.paragraphMarkRange) {
+        removed += 1
+      }
+    }
+  }
+  return bodyCount - removed < 1
 }
 
 function validateTargets(

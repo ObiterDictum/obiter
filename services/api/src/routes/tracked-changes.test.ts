@@ -20,6 +20,10 @@ const directChildPropertySourceBytes = await replaceDocumentXml(
   sourceBytes,
   '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPrChange w:id="91"><w:pPr><w:pStyle w:val="old"/></w:pPr></w:pPrChange><w:r><w:t>Text that must survive</w:t></w:r></w:p></w:body></w:document>',
 )
+const soleMarkDeletionSourceBytes = await replaceDocumentXml(
+  sourceBytes,
+  '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:rPr><w:del w:id="90" w:author="Foreign Reviewer" w:date="2026-08-10T10:00:00Z"/></w:rPr></w:pPr></w:p></w:body></w:document>',
+)
 const sourceDocument = await parseDocx(trackedSourceBytes)
 const insertion = sourceDocument.model.changes.find(
   ({ elementName }) => elementName === 'ins',
@@ -131,6 +135,36 @@ describe('tracked change routes', () => {
         ({ kind }) => kind === 'document',
       )?.paragraphs[0]?.runs[0]?.text,
     ).toBe('Text that must survive')
+  })
+
+  it('refuses accepting the only paragraph mark deletion without a version', async () => {
+    const database = new EditDatabase()
+    const route = trackedRouteApp(
+      database,
+      undefined,
+      undefined,
+      soleMarkDeletionSourceBytes,
+    )
+    const crafted = await parseDocx(soleMarkDeletionSourceBytes)
+    const change = crafted.model.changes.find(
+      ({ elementName }) => elementName === 'del',
+    )
+    if (!change) throw new Error('Crafted paragraph-mark deletion is missing.')
+
+    const response = await route.app.request(
+      '/api/documents/doc_1/tracked-changes/decision',
+      decisionRequest('accept', change.id),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    // Accepting the mark would persist an empty body, so nothing is committed.
+    expect(database.currentVersionId).toBe('ver_1')
+    expect(database.versions.size).toBe(1)
+    expect(database.audits).toEqual([])
+    expect(route.storage.writes).toEqual([])
   })
 
   it('returns the uniform 404 for an unknown selected version', async () => {

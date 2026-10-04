@@ -202,12 +202,15 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
     'Delete paragraph: A document must contain at least one paragraph.',
   )
 
-  // 9-11. Keyboard boundary: Backspace at the start of the only paragraph must
-  // not remove it and must not dirty the document.
+  // 9-11. Keyboard boundaries: Backspace at the start and Delete at the end of
+  // the only paragraph must not remove it or dirty the document.
   await page.locator('[data-paragraph-id]').first().click()
   await expect(editor(page)).toHaveValue(FIRST)
   await page.keyboard.press('Control+Home')
   await page.keyboard.press('Backspace')
+  await expect(editor(page)).toHaveValue(FIRST)
+  await page.keyboard.press('Control+End')
+  await page.keyboard.press('Delete')
   await expect(editor(page)).toHaveValue(FIRST)
   expect(await settledParagraphCount(page)).toBe(1)
   expect(await saveState(page)).not.toBe('unsaved')
