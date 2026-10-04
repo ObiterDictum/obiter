@@ -150,6 +150,30 @@ function model(text = 'Hello', styleId?: string): DocumentModelWire {
   }
 }
 
+/** A stored document with one paragraph per text, ids `p1`, `p2`, ... A test
+ * that needs a deletion the client keeps valid (the E45 containment probes)
+ * supplies two so the delete is not the last-paragraph refusal. */
+function modelWithParagraphs(texts: readonly string[]): DocumentModelWire {
+  const base = model(texts[0] ?? '')
+  const story = base.stories[0]
+  if (!story) return base
+  return {
+    ...base,
+    stories: [
+      {
+        ...story,
+        paragraphs: texts.map((text, index) => ({
+          id: `p${String(index + 1)}`,
+          runs: [
+            { id: `r${String(index + 1)}`, text, preservedXmlFragments: [] },
+          ],
+          preservedXmlFragments: [],
+        })),
+      },
+    ],
+  }
+}
+
 export const validationFailed = new ApiError(
   'validation_failed',
   'The document edit request is invalid.',
@@ -184,6 +208,8 @@ export type SaveWorkspaceOptions = {
   mergeAsync?: ReturnType<typeof vi.fn>
   versionId?: string
   body?: string
+  /** One stored paragraph per text; defaults to a single `body` paragraph. */
+  paragraphs?: readonly string[]
   /** Rendered next to the workspace, inside the draft-status provider. */
   beside?: ReactNode
 }
@@ -215,7 +241,9 @@ export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
       documentId: id,
       versionId: currentVersionId,
       versionNumber: 1,
-      model: model(options.body ?? 'Hello'),
+      model: options.paragraphs
+        ? modelWithParagraphs(options.paragraphs)
+        : model(options.body ?? 'Hello'),
     },
   }))
   hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })

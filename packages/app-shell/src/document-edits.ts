@@ -138,7 +138,7 @@ const noOmitHosts: ReadonlySet<string> = new Set()
 
 export function flowIds(
   hostIds: readonly string[],
-  inserts: LocalInsert[],
+  inserts: readonly LocalInsert[],
   omitHosts: ReadonlySet<string> = noOmitHosts,
 ): string[] {
   const byAfter = new Map<string, LocalInsert[]>()
@@ -174,14 +174,42 @@ export function flowIds(
 
 export function flowParagraphIds(
   model: DocumentModelWire,
-  inserts: LocalInsert[],
-  deletedParagraphIds: string[],
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
 ): string[] {
   return flowIds(
     (documentStory(model)?.paragraphs ?? []).map((paragraph) => paragraph.id),
     inserts,
     new Set(deletedParagraphIds),
   )
+}
+
+/** The one user-facing reason a final-paragraph deletion is refused. */
+export const LAST_PARAGRAPH_MESSAGE =
+  'A document must contain at least one paragraph.'
+
+/** The outcome a paragraph-deletion request reports to the editor. A refusal is
+ * typed so callers translate it rather than matching an English message, and so
+ * the last-paragraph invariant has one name across the ribbon, the deletion
+ * operation and the save plan. */
+export type ParagraphDeletionOutcome =
+  | { status: 'deleted'; selectId: string | null }
+  | { status: 'refused'; reason: 'last-paragraph'; selectId: null }
+
+/** Why deleting `paragraphId` is refused, or null when the effective document
+ * still keeps at least one body paragraph. `flowParagraphIds` is the single
+ * derivation of that effective flow: it counts stored paragraphs, adds pending
+ * inserts and drops paragraphs already marked for deletion, so the ribbon, the
+ * deletion operation and the save plan cannot diverge on what remains. */
+export function paragraphDeletionRefusal(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
+  paragraphId: string,
+): 'last-paragraph' | null {
+  const order = flowParagraphIds(model, inserts, deletedParagraphIds)
+  if (!order.includes(paragraphId)) return null
+  return order.length <= 1 ? 'last-paragraph' : null
 }
 
 export function collectEditOperations(

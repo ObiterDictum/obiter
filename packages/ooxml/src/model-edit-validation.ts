@@ -50,8 +50,14 @@ export function validatePlannedOperations(
       operation.type === 'insert_paragraph_after' ||
       operation.type === 'insert_paragraph_before',
   ).length
+  // An untracked delete removes the paragraph from the body. A tracked delete
+  // only wraps the paragraph (and its paragraph mark) in Word-compatible
+  // deleted markup, so the body still holds the paragraph and the invariant
+  // holds without this guard. Refusing the untracked case keeps the persisted
+  // document structurally valid; the reason is its own code so the caller can
+  // report it without matching English text.
   if (!tracking && paragraphCount - deletedIds.size + insertCount < 1) {
-    throw new OoxmlError('model-node-not-editable')
+    throw new OoxmlError('last-paragraph-required')
   }
 
   const alreadyDeleted = new Set<string>()

@@ -351,7 +351,7 @@ describe('OOXML document edits', () => {
       applyDocumentEdits(single, [
         { type: 'delete_paragraph', paragraphId: onlyId },
       ]),
-    ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
+    ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
   })
 
   it('replaces the only paragraph when an insert lands before the delete', async () => {
@@ -371,6 +371,26 @@ describe('OOXML document edits', () => {
     expect(mainParagraphs(single)).toMatchObject([
       { runs: [{ text: 'Typed line' }] },
     ])
+  })
+
+  it('keeps the only paragraph in the body when tracking its deletion', async () => {
+    const single = await parseSingleParagraphFixture()
+    const onlyId = mainParagraphs(single)[0]?.id
+    if (!onlyId) throw new Error('Single paragraph is missing.')
+
+    // A tracked delete records the word-compatible deleted markup instead of
+    // removing the paragraph, so the persisted body still holds a paragraph and
+    // the last-paragraph invariant holds without an untracked-style refusal.
+    applyDocumentEdits(
+      single,
+      [{ type: 'delete_paragraph', paragraphId: onlyId }],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+
+    const xml = await zipText(await serialiseDocx(single), 'word/document.xml')
+    expect(xml).toContain('<w:del ')
+    const reparsed = await parseDocx(await serialiseDocx(single))
+    expect(mainParagraphs(reparsed).length).toBe(1)
   })
 
   it('folds a tracked type-then-bold batch into the inserted run', async () => {

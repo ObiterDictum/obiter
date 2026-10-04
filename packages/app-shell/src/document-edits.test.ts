@@ -11,6 +11,8 @@ import {
   flowParagraphIds,
   insertPlainText,
   isDraftDirty,
+  LAST_PARAGRAPH_MESSAGE,
+  paragraphDeletionRefusal,
   removeInsert,
   runPropertiesFromFragments,
 } from './document-edits'
@@ -651,5 +653,86 @@ describe('runPropertiesFromFragments', () => {
         '<w:rPr><w:b/><w:rPrChange w:id="1"><w:rPr><w:strike/></w:rPr>',
       ]),
     ).toMatchObject({ bold: true, strikethrough: null })
+  })
+})
+
+describe('paragraphDeletionRefusal', () => {
+  function twoParagraphs(): DocumentModelWire {
+    return {
+      ...model,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+            {
+              id: 'p2',
+              runs: [{ id: 'r2', text: 'World', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+    }
+  }
+
+  const insertP1 = {
+    clientId: 'insert-1',
+    afterParagraphId: 'p1',
+    text: 'Pending',
+  }
+
+  it('refuses deleting the only stored paragraph', () => {
+    expect(paragraphDeletionRefusal(model, [], [], 'p1')).toBe('last-paragraph')
+    expect(LAST_PARAGRAPH_MESSAGE).toBe(
+      'A document must contain at least one paragraph.',
+    )
+  })
+
+  it('permits one deletion from a two-paragraph document', () => {
+    expect(paragraphDeletionRefusal(twoParagraphs(), [], [], 'p1')).toBeNull()
+    expect(paragraphDeletionRefusal(twoParagraphs(), [], [], 'p2')).toBeNull()
+  })
+
+  it('refuses the second deletion after a first valid deletion', () => {
+    // Deleting p1 leaves p2; deleting p2 against that state is the refusal.
+    expect(paragraphDeletionRefusal(twoParagraphs(), [], ['p1'], 'p2')).toBe(
+      'last-paragraph',
+    )
+  })
+
+  it('counts a pending inserted paragraph as effective', () => {
+    expect(paragraphDeletionRefusal(model, [insertP1], [], 'p1')).toBeNull()
+  })
+
+  it('does not count a paragraph already pending deletion', () => {
+    expect(paragraphDeletionRefusal(twoParagraphs(), [], ['p1'], 'p2')).toBe(
+      'last-paragraph',
+    )
+  })
+
+  it('permits deleting a pending insert when a stored paragraph survives', () => {
+    expect(
+      paragraphDeletionRefusal(twoParagraphs(), [insertP1], [], 'insert-1'),
+    ).toBeNull()
+  })
+
+  it('refuses deleting the last effective pending insert', () => {
+    expect(
+      paragraphDeletionRefusal(model, [insertP1], ['p1'], 'insert-1'),
+    ).toBe('last-paragraph')
+  })
+
+  it('treats an absent or already-deleted paragraph as a no-op', () => {
+    expect(paragraphDeletionRefusal(model, [], [], 'absent')).toBeNull()
+    expect(
+      paragraphDeletionRefusal(twoParagraphs(), [], ['p1'], 'p1'),
+    ).toBeNull()
   })
 })
