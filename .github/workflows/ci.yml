@@ -174,6 +174,12 @@ jobs:
             psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
           done
 
+      # The redaction-renderer suite launches the Playwright Chromium it ships
+      # against. Playwright fetches browsers on demand, not during install, so
+      # without this step the worker's real-render tests have no browser.
+      - name: Install Playwright Chromium
+        run: bun --bun playwright install --with-deps chromium
+
       - name: Test
         env:
           TEST_DATABASE_URL: postgres://obiter:obiter@localhost:5432/obiter_test

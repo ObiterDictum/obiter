@@ -1267,6 +1267,40 @@
                 </g>
                 <g>
                   <rect
+                    x="40"
+                    y="220"
+                    width="185.3"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--brand)"
+                  />
+                  <text x="132.65" y="237" text-anchor="middle" class="n">
+                    services/redaction-renderer
+                  </text>
+                  <text x="132.65" y="248" text-anchor="middle" class="s">
+                    private HTTP
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="40"
+                    y="310"
+                    width="96.2"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="88.1" y="327" text-anchor="middle" class="n">
+                    Chromium
+                  </text>
+                  <text x="88.1" y="338" text-anchor="middle" class="s">
+                    headless child
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="660"
                     y="20"
                     width="106.8"
@@ -1452,6 +1486,23 @@
                   stroke-width="1"
                   stroke-dasharray="4 3"
                   marker-end="url(#ahd-t-runtime-topology)"
+                />
+                <path
+                  d="M330,107.0 L132.65,220"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-runtime-topology)"
+                />
+                <text x="231.325" y="169.5" text-anchor="middle" class="e">
+                  DOCX to PDF
+                </text>
+                <path
+                  d="M132.65,261 L88.1,310"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-runtime-topology)"
                 />
               </svg>
             </div>
@@ -1646,6 +1697,20 @@
                 </g>
                 <g>
                   <rect
+                    x="470"
+                    y="126"
+                    width="179.3"
+                    height="30"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--brand)"
+                  />
+                  <text x="559.65" y="144.5" text-anchor="middle" class="n">
+                    @obiter/redaction-renderer
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="60"
                     y="226"
                     width="100.6"
@@ -1800,6 +1865,27 @@
                 />
                 <path
                   d="M250,141.0 L184.8,141.0"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M559.65,126 Q251.02499999999998,126.0 122.4,126"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M559.65,156 L110.3,226"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M559.65,156 Q371.025,261.0 122.4,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -2229,6 +2315,44 @@
               <dl class="kv">
                 <dt>Depends</dt>
                 <dd>legal-schema · search-client</dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/redaction-renderer"
+                    >services/redaction-renderer</a
+                  >
+                </h4>
+                <span class="pill warn">Private</span>
+              </header>
+              <p>
+                Renders a sanitized DOCX into an intermediate PDF by loading the
+                shared app-shell page engine inside headless Chromium and
+                printing the laid-out pages. It exposes a private HTTP worker
+                only: <code>GET /health</code>, <code>GET /ready</code> and
+                <code>POST /render</code> (DOCX body to
+                <code>application/pdf</code>). Chromium launches the existing
+                pagination, it is not a second layout engine. Not yet wired into
+                finalize; the API will call it over a private port through the
+                typed client in <code>src/contract.ts</code>. See
+                <a href="redaction-renderer.md">redaction-renderer.md</a>.
+              </p>
+              <dl class="kv">
+                <dt>Depends</dt>
+                <dd>app-shell · ooxml · contracts</dd>
+                <dt>Runtime</dt>
+                <dd>
+                  Bun · Playwright Chromium (external child process, no network
+                  or public route)
+                </dd>
+                <dt>Binds</dt>
+                <dd>
+                  <code>REDACTION_RENDERER_HOST</code> ·
+                  <code>REDACTION_RENDERER_PORT</code> — loopback by default
+                </dd>
               </dl>
             </article>
           </div>
@@ -4612,6 +4736,18 @@
             are not covered; the installer is platform-specific and is built
             only on <code>push: main</code>.
           </div>
+          <div class="callout note">
+            <b>The renderer is separately deployed.</b>
+            <code>services/redaction-renderer</code> reads only
+            <code>REDACTION_RENDERER_HOST</code> and
+            <code>REDACTION_RENDERER_PORT</code> from its own environment,
+            defaulting to <code>127.0.0.1:8790</code>. It resolves no
+            <code>.env</code> and holds no database, storage or model
+            credentials. Keep the bind on loopback or a private network:
+            <code>POST /render</code> accepts a document body and returns an
+            intermediate PDF with no authentication of its own, relying on the
+            caller's private network position.
+          </div>
         </section>
 
         <section id="search-flow">
@@ -6860,6 +6996,18 @@
                     >
                   </td>
                   <td>Stack decisions and their rationale</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/redaction-renderer.md"
+                      >docs/redaction-renderer.md</a
+                    >
+                  </td>
+                  <td>
+                    Sandboxed DOCX to PDF rendering worker: boundary, limits,
+                    isolation, packaging, rollout
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
