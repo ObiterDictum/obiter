@@ -3,7 +3,8 @@
 **Assessed base commit:** `4667e76aca7e4ff09b6f1ba965c367591cc4dc88` (`origin/dev`, "Add a sandboxed DOCX to PDF rendering worker (#265)")
 **Audit date:** 2026-10-04
 **Audit branch:** `audit/document-editor-completion` (clean worktree at the commit above)
-**Scope:** the DOCX document editor and read-only PDF workspace, every rendered ribbon control, and the supporting OOXML, API, database, contract and test surfaces.
+**Revision:** 2 — documentation repair responding to the independent review of PR #267. This revision: reclassifies controls whose complete stated journey is not proven by a browser journey from _proven working_ to _implemented but insufficiently verified_; adds the conditionally-rendered ribbon-region controls; corrects the zoom evidence, two source line references and the P0 label; maps every finding to a delivery stage; and splits the proposed `PR-E1` into `PR-E0`/`PR-E1`. No product behaviour was changed, no test was rerun for this revision, and no new functionality is claimed.
+**Scope:** the DOCX document editor and read-only PDF workspace, every rendered ribbon control, the conditionally-rendered ribbon-region controls, and the supporting OOXML, API, database, contract and test surfaces.
 **Nature:** read-only audit. No product code was modified. No schema, migration, dependency or test was changed. Nothing was merged.
 
 ---
@@ -12,14 +13,15 @@
 
 The Obiter document editor is a genuine, carefully engineered foundation, not a mock. It parses and preserves DOCX losslessly, edits real OOXML through a narrow typed operation contract, creates immutable versions, auto-merges disjoint collaborative edits, and has strong isolation and round-trip preservation. A meaningful core of the Home and Review ribbons is wired and covered by an unusually deep unit/component suite.
 
-It is **not ready for legal documents or source ingestion**. Two facts dominate:
+It is **not ready for legal documents or source ingestion**. Three facts dominate:
 
-1. **Most of the visible ribbon is a disabled placeholder.** Of 95 interactive controls audited, 43 render as `soon` and are disabled with an accessible name ending "(not available yet)". These include alignment, line spacing, font family/size/colour, clear formatting, page setup, tables, images, hyperlinks, headers/footers, page numbers, footnotes, table of contents, cross-references, defined terms, spelling, breaks, compare versions and share-safe export. Per the governing product rule, a control that does not perform its stated action is a defect, not a roadmap hint.
-2. **The export-to-Word journey has never been verified.** The editor's stated bar is "DOCX export → Microsoft Word reopen → expected content preserved". No automated or recorded manual Microsoft Word check exists anywhere in the repository. Microsoft Word is unavailable in this audit environment, so Word rendering is **NOT CHECKED** and must not be assumed.
+1. **Most of the visible ribbon is a disabled placeholder.** Of 109 interactive controls audited (plus 3 status regions), 43 render as `soon` and are disabled with an accessible name ending "(not available yet)". These include alignment, line spacing, font family/size/colour, clear formatting, page setup, tables, images, hyperlinks, headers/footers, page numbers, footnotes, table of contents, cross-references, defined terms, spelling, breaks, compare versions and share-safe export. Per the governing product rule, a control that does not perform its stated action is a defect, not a roadmap hint.
+2. **Only about a fifth of the inventory is proven end-to-end in-app.** 21 controls have a browser journey that exercises their stated action (saving and reloading where they mutate the document); 46 are implemented but insufficiently verified — they have unit/component/API evidence but no browser journey. The engine is strong; the verification is thin.
+3. **The export-to-Word journey has never been verified.** The editor's stated bar is "DOCX export → Microsoft Word reopen → expected content preserved". No automated or recorded manual Microsoft Word check exists anywhere in the repository. Microsoft Word is unavailable in this audit environment, so Word rendering is **NOT CHECKED** and must not be assumed. This is a **P0 release/acceptance blocker — verification gap**, not a proven defect.
 
-The in-app edit → save → immutable version → refresh → reopen journey is proven for the wired controls by browser journeys and 1,798 passing unit/component tests. The gap is not the engine; it is breadth of controls, comment/change fidelity, and the unverified export boundary.
+The in-app edit → save → immutable version → refresh → reopen journey is proven for the controls with a browser journey and for 1,798 passing unit/component/API assertions. The gap is not the engine; it is breadth of controls, the strictness of end-to-end verification, comment/change fidelity, and the unverified export boundary.
 
-**Bottom line:** the editor is a strong foundation that is roughly one third exposed, and the third that is exposed is only partly verified against Word. It should be treated as pre-release and not as ready for legal-document ingestion until the programme in section 30 is delivered.
+**Bottom line:** the editor is a strong foundation with roughly a fifth of its controls proven end-to-end, 43 placeholders, and no Word verification. It should be treated as pre-release and not as ready for legal-document ingestion until the programme in section 30 is delivered.
 
 ---
 
@@ -35,7 +37,7 @@ The editor is ready for legal documents and source ingestion when **all** of the
 6. Tracked insertions, deletions, replacements and formatting can be recorded, reviewed, accepted and rejected from the ribbon, and survive export to Word.
 7. Exported DOCX opens in Microsoft Word without a repair prompt, saves in Word without revealing malformed content, re-uploads into Obiter, and survives a second edit/export cycle.
 8. The editor is operable keyboard-only, announces save/conflict/error state, and is usable on a narrow laptop and at browser zoom.
-9. No P0 or P1 finding from this audit remains open.
+9. No P0 or P1 finding from this audit remains open, and every control classified _implemented but insufficiently verified_ has been promoted to _proven working_ or explicitly retired.
 
 ---
 
@@ -44,7 +46,7 @@ The editor is ready for legal documents and source ingestion when **all** of the
 - Read `AGENTS.md`, `README.md`, `RULES.md`, `docs/roadmap.md`, `TESTING.md`, `docs/current-product-scope.md`, `docs/specs/documents/*`, `docs/architecture.md` references.
 - Fetched `origin`; confirmed `HEAD == origin/dev == 4667e76`.
 - Read every ribbon component, the workspace shell, the editing/formatting/undo/find/save modules, the OOXML package, the API document routes, the document migrations and contracts.
-- Ran the existing suites (section 26) plus focused Playwright document journeys against an isolated task-owned database (`obiter_editor_audit_test`, migrated `0001…0029`).
+- Ran the existing suites (section 27) plus focused Playwright document journeys against an isolated task-owned database (`obiter_editor_audit_test`, migrated `0001…0029`). Those results are recorded as audit evidence at the assessed commit; they were **not** rerun for revision 2 of this document.
 - Used only synthetic fixtures. No client or matter material was read, written or committed.
 
 Where a claim below is derived from a read-only sub-survey rather than first-hand reading, the load-bearing parts were spot-checked directly. Line references are to the assessed commit.
@@ -53,9 +55,24 @@ Where a claim below is derived from a read-only sub-survey rather than first-han
 
 ## 4. Ribbon inventory (master)
 
-`soon` controls are rendered, disabled, `aria-label` ends "(not available yet)", and have no `onClick` (`ribbon-primitives.tsx:64-94`, `:161-186`). They are counted as visible placeholders.
+### 4.1 Counting methodology
 
-Classification key: **PW** proven working in-app (Word reopen NOT CHECKED); **IV** implemented but insufficiently verified; **PI** partially implemented; **VP** visible placeholder (`soon`); **BR** broken; **UN** unsafe; **MI** missing; **DU** deliberately unsupported.
+The inventory counts **interactive controls** and **status regions** separately, so a non-interactive readout is never counted as a control.
+
+- **Interactive control:** any element a user can operate — a button, an input, a select, a tab, a dialog trigger, or a control inside a dialog that completes a ribbon action.
+- **Status region:** a non-interactive element that reports editor, save, document or control state — the save status line, the find result count, and the PDF read-only label. Readouts of a control's own value (the DOCX/PDF zoom percentage) and the presence indicator are informational displays and are not counted as controls or status regions.
+- **Conditionally-rendered controls:** interactive controls that render only under a stated condition (a failed save, a stale draft, a conflict, an open dialog). They are counted in the interactive total and audited in section 4.4.
+- **Side-panel controls** (comments, tracked changes, authorities panels) are not in the ribbon region. They are audited in the feature matrix and findings but are excluded from the ribbon-control count; the ribbon toggles that reveal them are counted.
+
+`soon` controls are rendered, disabled, `aria-label` ends "(not available yet)", and have no `onClick` (`ribbon-primitives.tsx:60-98`, `:161-186`). They are counted as visible placeholders.
+
+### 4.2 Evidence levels
+
+- **PW — proven working:** the control's stated action is exercised end-to-end by an automated browser journey in the repository. For document-mutating controls the journey saves, reloads in a fresh context and re-renders. For non-mutating controls the journey exercises the interaction. Microsoft Word reopen is separately **NOT CHECKED** for every control.
+- **IV — implemented but insufficiently verified:** implementation exists and is covered by unit, component or API tests, but no browser journey proves the complete stated action.
+- **PI** partially implemented; **VP** visible placeholder (`soon`); **BR** broken; **UN** unsafe; **MI** missing; **DU** deliberately unsupported.
+
+### 4.3 Interactive controls
 
 ### Home tab (`ribbon-home.tsx`)
 
@@ -108,7 +125,7 @@ Classification key: **PW** proven working in-app (Word reopen NOT CHECKED); **IV
 | 40  | Header and footer | Header          | 100         | `soon` | none               | VP    | P1  |
 | 41  | Header and footer | Footer          | 105         | `soon` | none               | VP    | P1  |
 | 42  | Header and footer | Page number     | 110         | `soon` | none               | VP    | P1  |
-| 43  | Comments          | Comments toggle | 118         | wired  | `onToggleComments` | PW    | —   |
+| 43  | Comments          | Comments toggle | 118         | wired  | `onToggleComments` | IV    | P2  |
 
 ### Layout tab (`ribbon-insert-layout.tsx`)
 
@@ -143,21 +160,21 @@ Classification key: **PW** proven working in-app (Word reopen NOT CHECKED); **IV
 | #   | Group    | Control              | Source line          | State  | Handler → op                              | Class | Sev |
 | --- | -------- | -------------------- | -------------------- | ------ | ----------------------------------------- | ----- | --- |
 | 62  | Proofing | Spelling             | 178                  | `soon` | none                                      | VP    | P1  |
-| 63  | Find     | Find field           | `ribbon-find.tsx:44` | wired  | `onQuery`                                 | PW    | —   |
-| 64  | Find     | Previous match       | `ribbon-find.tsx:54` | wired  | `onPrevious`                              | PW    | —   |
-| 65  | Find     | Next match           | `ribbon-find.tsx:59` | wired  | `onNext`                                  | PW    | —   |
-| 66  | Find     | Result count         | `ribbon-find.tsx:50` | status | `matchLabel`                              | PW    | —   |
-| 67  | Find     | Replace field        | `ribbon-find.tsx:63` | wired  | `onReplace`                               | PW    | —   |
-| 68  | Find     | Replace              | `ribbon-find.tsx:70` | wired  | `onReplaceOne` → `replace_run_text`       | PW    | —   |
-| 69  | Find     | Replace all          | `ribbon-find.tsx:76` | wired  | `onReplaceAll` → `replace_run_text` batch | PW    | —   |
-| 70  | Comments | Comments toggle      | 190                  | wired  | `onToggleComments`                        | PW    | —   |
+| 63  | Find     | Find field           | `ribbon-find.tsx:44` | wired  | `onQuery`                                 | IV    | P2  |
+| 64  | Find     | Previous match       | `ribbon-find.tsx:54` | wired  | `onPrevious`                              | IV    | P2  |
+| 65  | Find     | Next match           | `ribbon-find.tsx:59` | wired  | `onNext`                                  | IV    | P2  |
+| 66  | Find     | Result count         | `ribbon-find.tsx:50` | status | `matchLabel` (non-interactive)            | IV    | P2  |
+| 67  | Find     | Replace field        | `ribbon-find.tsx:63` | wired  | `onReplace`                               | IV    | P2  |
+| 68  | Find     | Replace              | `ribbon-find.tsx:70` | wired  | `onReplaceOne` → `replace_run_text`       | IV    | P2  |
+| 69  | Find     | Replace all          | `ribbon-find.tsx:76` | wired  | `onReplaceAll` → `replace_run_text` batch | IV    | P2  |
+| 70  | Comments | Comments toggle      | 190                  | wired  | `onToggleComments`                        | IV    | P2  |
 | 71  | Tracking | Track changes        | 199                  | wired  | `onToggleTrackChanges`                    | PW    | —   |
-| 72  | Tracking | Changes toggle       | 206                  | wired  | `onToggleChanges`                         | PW    | —   |
+| 72  | Tracking | Changes toggle       | 206                  | wired  | `onToggleChanges`                         | IV    | P2  |
 | 73  | Tracking | Accept change        | 212                  | `soon` | none (panel only)                         | VP    | P1  |
 | 74  | Tracking | Reject change        | 217                  | `soon` | none (panel only)                         | VP    | P1  |
 | 75  | Versions | Compare versions     | 225                  | `soon` | none                                      | VP    | P1  |
 | 76  | Redact   | Redact this document | 232                  | wired  | `revealDocumentRedactionRuns`             | IV    | P1  |
-| 77  | Export   | Export               | 240                  | wired  | `exportDocx` → `fetchDocumentExport`      | PW    | —   |
+| 77  | Export   | Export               | 240                  | wired  | `exportDocx` → `fetchDocumentExport`      | IV    | P1  |
 | 78  | Export   | Share-safe export    | 245                  | `soon` | none                                      | VP    | P1  |
 | 79  | Export   | Print                | 250                  | wired  | `printDocument`                           | PW    | —   |
 
@@ -168,8 +185,8 @@ Classification key: **PW** proven working in-app (Word reopen NOT CHECKED); **IV
 | 80  | Views | Print layout    | 275         | pressed, no handler | none — silent no-op         | BR    | P3  |
 | 81  | Show  | Ruler           | 283         | `soon`              | none                        | VP    | P3  |
 | 82  | Show  | Navigation pane | 288         | `soon`              | none                        | VP    | P3  |
-| 83  | Zoom  | Zoom out        | 297         | wired               | `onZoom(max(75, zoom-10))`  | PW    | —   |
-| 84  | Zoom  | Zoom in         | 305         | wired               | `onZoom(min(140, zoom+10))` | PW    | —   |
+| 83  | Zoom  | Zoom out        | 297         | wired               | `onZoom(max(75, zoom-10))`  | IV    | P2  |
+| 84  | Zoom  | Zoom in         | 305         | wired               | `onZoom(min(140, zoom+10))` | IV    | P2  |
 
 ### Ribbon tabs (`toolbar.tsx:124-215`)
 
@@ -186,21 +203,45 @@ Classification key: **PW** proven working in-app (Word reopen NOT CHECKED); **IV
 
 | #   | Control               | Source               | State  | Handler                             | Class | Sev |
 | --- | --------------------- | -------------------- | ------ | ----------------------------------- | ----- | --- |
-| 91  | Zoom out              | `ribbon-find.tsx:23` | wired  | `onZoom`                            | PW    | —   |
-| 92  | Zoom in               | `ribbon-find.tsx:31` | wired  | `onZoom`                            | PW    | —   |
-| 93  | Export extracted text | `toolbar.tsx:105`    | wired  | `downloadPlainText(filename, text)` | PW    | —   |
-| 94  | Download original     | `toolbar.tsx:110`    | wired  | `fetchDocumentDownload`             | PW    | —   |
-| 95  | Previous page         | `pdf-view.tsx:31`    | wired  | `onPageIndexChange`                 | PW    | —   |
-| 96  | Next page             | `pdf-view.tsx:44`    | wired  | `onPageIndexChange`                 | PW    | —   |
+| 91  | Zoom out              | `ribbon-find.tsx:23` | wired  | `onZoom`                            | IV    | P2  |
+| 92  | Zoom in               | `ribbon-find.tsx:31` | wired  | `onZoom`                            | IV    | P2  |
+| 93  | Export extracted text | `toolbar.tsx:105`    | wired  | `downloadPlainText(filename, text)` | IV    | P2  |
+| 94  | Download original     | `toolbar.tsx:110`    | wired  | `fetchDocumentDownload`             | IV    | P2  |
+| 95  | Previous page         | `pdf-view.tsx:31`    | wired  | `onPageIndexChange`                 | IV    | P2  |
+| 96  | Next page             | `pdf-view.tsx:44`    | wired  | `onPageIndexChange`                 | IV    | P2  |
 | 97  | Read-only status      | `toolbar.tsx:116`    | status | "View only, not editable"           | PW    | —   |
 
-**Total:** 95 interactive controls + 2 status regions = 97 audited items.
+### 4.4 Conditionally-rendered ribbon-region controls
+
+These render inside the ribbon region (`WorkspaceRibbon`) or as dialogs that complete a ribbon action, only under a stated condition. They are interactive controls and are counted in the interactive total. All are already implemented; the gap is that no browser journey exercises them, so all are **IV**.
+
+| #   | Control                          | Rendering condition                                | Source                              | Class | Implementation evidence     | Automated evidence                                  | E2E | Word | Sev | PR  |
+| --- | -------------------------------- | -------------------------------------------------- | ----------------------------------- | ----- | --------------------------- | --------------------------------------------------- | --- | ---- | --- | --- |
+| 98  | Restore draft (per draft)        | ≥1 active recoverable draft                        | `save-banners.tsx:51-57`            | IV    | `drafts.restoreRecoverable` | `document-draft-store*.test.ts` (unit)              | N   | ?    | P2  | E13 |
+| 99  | Discard this draft (dialog)      | same                                               | `save-banners.tsx:58-64`            | IV    | `DiscardWorkDialog`         | `docx-workspace-draft-reload.test.tsx` (component)  | N   | ?    | P2  | E13 |
+| 100 | Discard unsaved changes (dialog) | `drafts.staleDraft`                                | `save-banners.tsx:74-81`            | IV    | `DiscardWorkDialog`         | `docx-workspace-draft-reload.test.tsx` (component)  | N   | ?    | P2  | E13 |
+| 101 | Retry save                       | `save.failure`                                     | `save-banners.tsx:85-87`            | IV    | `save.retry`                | `docx-workspace-save-recovery.test.tsx` (component) | N   | ?    | P2  | E13 |
+| 102 | Reload and discard (dialog)      | `save.failure`                                     | `save-banners.tsx:88-95`            | IV    | `DiscardWorkDialog`         | `docx-workspace-save-recovery.test.tsx` (component) | N   | ?    | P2  | E13 |
+| 103 | Reload (dialog)                  | `save.lineageUnresolved`                           | `save-banners.tsx:99-106`           | IV    | `DiscardWorkDialog`         | `docx-workspace-history-save.test.tsx` (component)  | N   | ?    | P2  | E13 |
+| 104 | Discard blocked changes (dialog) | unsendable blocked slots                           | `save-banners.tsx:116-123`          | IV    | `DiscardWorkDialog`         | `docx-workspace-history-save.test.tsx` (component)  | N   | ?    | P2  | E13 |
+| 105 | Discard held change (dialog)     | `save.held.length > 0`                             | `save-banners.tsx:127-134`          | IV    | `DiscardWorkDialog`         | `docx-workspace-save-recovery.test.tsx` (component) | N   | ?    | P2  | E13 |
+| 106 | Reload (conflict banner)         | `save.stale`; or `remoteChange && dirty && !stale` | `docx-workspace.tsx:285-298`        | IV    | `save.reload`               | `docx-workspace-history-save.test.tsx` (component)  | N   | ?    | P2  | E13 |
+| 107 | DiscardWorkDialog Cancel         | dialog open                                        | `discard-work-dialog.tsx:73`        | IV    | `DialogClose`               | none direct                                         | N   | ?    | P3  | E13 |
+| 108 | DiscardWorkDialog Confirm        | dialog open                                        | `discard-work-dialog.tsx:78-81`     | IV    | `confirm()`                 | none direct                                         | N   | ?    | P2  | E13 |
+| 109 | DiscardWorkDialog Close          | dialog open                                        | `discard-work-dialog.tsx:83`        | IV    | `DialogCloseButton`         | none direct                                         | N   | ?    | P3  | E13 |
+| 110 | InsertAuthorityDialog citation   | `insertAuthorityOpen`                              | `insert-authority-dialog.tsx:43-49` | IV    | controlled `Input`          | `docx-workspace.test.tsx` (component)               | N   | ?    | P3  | E11 |
+| 111 | InsertAuthorityDialog Cancel     | `insertAuthorityOpen`                              | `insert-authority-dialog.tsx:51-55` | IV    | `DialogClose`               | none direct                                         | N   | ?    | P3  | E11 |
+| 112 | InsertAuthorityDialog Insert     | `insertAuthorityOpen`                              | `insert-authority-dialog.tsx:57-62` | IV    | `onInsert`                  | `docx-workspace.test.tsx` (component)               | N   | ?    | P2  | E11 |
+
+**Total:** **109 interactive controls** (94 in the ribbon/viewer strips + 15 conditionally-rendered ribbon-region controls) + **3 status regions** (save status, find result count, PDF read-only) = **112 audited items**.
+
+Classification totals: **PW 21 · IV 46 · PI 1 · VP 43 · BR 1 · UN 0 · MI 0** = 112.
 
 ---
 
 ## 5. Per-control feature matrix
 
-The 29 requested attributes are reported across two tables. Table B covers attributes 8–21 and 25–26 for every wired control; Table C states the shared profile for the 43 placeholders (attributes 8–21 are all "n/a — no handler"); Table D covers accessibility (attribute 25) and tests (22–24).
+The 29 requested attributes are reported across these tables. Table B covers attributes 8–21 and 25–26 for every wired control; Table C states the shared profile for the 43 placeholders; Table D covers accessibility (attribute 25) and tests (22–24); Table E covers the conditionally-rendered controls.
 
 Legend: `Y` yes/covered; `N` no; `~` partial or refused; `?` not checked; `n/a` not applicable; `—` none.
 
@@ -228,11 +269,11 @@ Legend: `Y` yes/covered; `N` no; `~` partial or refused; `?` not checked; `n/a` 
 | Undo                               | Y     | Y     | Y         | Y          | Y     | Y     | n/a  | n/a  | Y     | Y    | Y       | Y       | Y      | ?    | Y    | Y   | Y   |
 | Redo                               | Y     | Y     | Y         | Y          | Y     | Y     | n/a  | n/a  | Y     | Y    | Y       | Y       | Y      | ?    | Y    | Y   | Y   |
 | Save                               | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | Y     | Y    | Y       | Y       | Y      | ?    | Y    | Y   | Y   |
-| Find / Prev / Next / count         | Y     | n/a   | Y         | N          | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | N   | N   |
+| Find / Prev / Next                 | Y     | n/a   | Y         | N          | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | N   | N   |
 | Replace / Replace all              | Y     | Y     | Y         | N          | n/a   | ~     | Y    | Y    | Y     | Y    | Y       | Y       | Y      | ?    | Y    | Y   | N   |
 | Track changes toggle               | n/a   | n/a   | n/a       | n/a        | n/a   | Y     | n/a  | n/a  | Y     | Y    | Y       | Y       | Y      | ?    | Y    | Y   | Y   |
-| Comments toggle                    | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | N   | N   |
-| Changes toggle                     | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | N   | N   |
+| Comments toggle                    | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | N    | N   | N   |
+| Changes toggle                     | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | N    | N   | N   |
 | Accept/Reject (panel)              | n/a   | n/a   | n/a       | n/a        | n/a   | Y     | n/a  | n/a  | Y     | Y    | Y       | Y       | Y      | ?    | Y    | Y   | N   |
 | Insert authority                   | Y     | n/a   | n/a       | n/a        | n/a   | N     | Y    | Y    | Y     | Y    | Y       | Y       | Y      | ?    | Y    | N   | N   |
 | Verify citations                   | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | Y   | N   |
@@ -240,22 +281,24 @@ Legend: `Y` yes/covered; `N` no; `~` partial or refused; `?` not checked; `n/a` 
 | Redact this document               | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | N   | N   |
 | Export DOCX                        | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | n/a   | n/a  | n/a     | Y       | Y      | ?    | Y    | Y   | N   |
 | Print                              | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | N    | n/a     | n/a     | n/a    | ?    | Y    | N   | Y   |
-| Zoom out / in                      | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | N       | n/a     | n/a    | n/a  | Y    | N   | Y   |
+| Zoom out / in (DOCX)               | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | N       | n/a     | n/a    | n/a  | N    | N   | N   |
 | PDF export text / download / pages | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | N       | n/a     | n/a    | n/a  | Y    | N   | N   |
+| PDF zoom out / in                  | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | N     | n/a  | N       | n/a     | n/a    | n/a  | N    | N   | N   |
 | Ribbon tabs                        | n/a   | n/a   | n/a       | n/a        | n/a   | n/a   | n/a  | n/a  | n/a   | n/a  | n/a     | n/a     | n/a    | n/a  | Y    | N   | Y   |
 
 Notes:
 
 - **Track `~`** on character formatting: a whole-run toggle under tracking works; a partial-range toggle is refused with the honest message "Partial formatting is not yet recorded as a tracked change" (`document-format-toolbar.ts:160-175`). Mid-run bold with tracking on is therefore impossible.
 - **Cross-para** on formatting is supported for emphasis (one range per paragraph, `docx-workspace.tsx:207-210`), but not for `replace` or list toggles.
-- **Find** matches within a single paragraph only and is case-insensitive (`document-find.ts`); it does not cross paragraphs or support match-case/whole-word.
-- **Delete paragraph `~`**: works for ordinary paragraphs; deleting the last remaining body paragraph is plannable client-side but refused by the server on save (`model-edit-validation.ts:37-40`), producing a failed save rather than a guarded control.
+- **Find** matches within a single paragraph only and is case-insensitive (`document-find.ts:19-60`); it does not cross paragraphs or support match-case/whole-word.
+- **Delete paragraph `~`**: works for ordinary paragraphs; deleting the last remaining body paragraph is plannable client-side but refused by the server on save (`model-edit-validation.ts:53`), producing a failed save rather than a guarded control.
 - **Word column is `?` for every export path**: Microsoft Word was unavailable (section 27).
 - **PDF refresh `N`**: PDF/TXT viewers always resolve the server's current version; there is no version pin in the URL (`workspace.tsx:129-147`).
+- **DOCX zoom has no unit or browser test**: `rg -ni zoom packages/app-shell/src --glob '*.test.*'` matches only `mode-navigation.test.ts`'s ctrl+wheel case, and no e2e clicks the Zoom buttons. The percentage readout is a non-interactive display, not a control.
 
 ### Table C — placeholder profile
 
-All 43 `soon` controls share one audited profile: visible; disabled; accessible name `"<label> (not available yet)"`; no handler; no editor or OOXML operation; caret/range/cross-run/cross-para/mixed/track/undo/redo/dirty/save/refresh/version/export all not applicable; no unit, API or browser test asserts their intended behaviour; failure behaviour is "cannot be activated". They are enumerated individually in section 4 and section 10.
+All 43 `soon` controls share one audited profile: visible; disabled; accessible name `"<label> (not available yet)"`; no handler; no editor or OOXML operation; caret/range/cross-run/cross-para/mixed/track/undo/redo/dirty/save/refresh/version/export all not applicable; no unit, API or browser test asserts their intended behaviour; failure behaviour is "cannot be activated". They are enumerated individually in section 4.3 and section 9.
 
 ### Table D — accessibility and test coverage (wired controls)
 
@@ -269,43 +312,56 @@ All 43 `soon` controls share one audited profile: visible; disabled; accessible 
 | Save                     | Y                | n/a                | N       | Y                   | Y (Ctrl/Cmd+S)                           | Y    | Y   | Y        | failed/stale/blocked banners                |
 | Find/Replace             | Y (inputs)       | n/a                | N       | Y                   | Y (Ctrl/Cmd+F)                           | Y    | N   | N        | empty-result label; no match-case           |
 | Track changes            | Y (on/off label) | Y                  | Y       | Y                   | N                                        | Y    | Y   | Y        | n/a                                         |
-| Comments/Changes toggles | Y                | Y                  | Y       | Y                   | N                                        | Y    | N   | N        | panel error alert                           |
+| Comments/Changes toggles | Y                | Y                  | Y       | Y                   | N                                        | N    | N   | N        | panel error alert                           |
 | Authorities              | Y                | Y                  | Y       | Y                   | N                                        | Y    | N   | N        | empty state                                 |
 | Redact/Export/Print      | Y                | n/a                | Y       | Y                   | Print: Ctrl/Cmd+P                        | Y    | Y   | Print: Y | error banner / print refusal                |
-| Zoom                     | Y                | n/a                | Y       | Y                   | N                                        | Y    | N   | Y        | clamped 75–140                              |
+| Zoom (DOCX/PDF)          | Y                | n/a                | Y       | Y                   | N                                        | N    | N   | N        | clamped 75–140                              |
 | Ribbon tabs              | Y                | `data-selected`    | n/a     | Y (roving, Base UI) | arrows move focus, Enter/Space activates | Y    | N   | Y        | n/a                                         |
 | PDF controls             | Y                | n/a                | Y       | Y                   | N                                        | Y    | N   | N        | query error surface                         |
+
+### Table E — conditionally-rendered controls (accessibility and tests)
+
+All 15 share: accessible names from their labels; standard dialog focus management from `@obiter/ui`; keyboard reach when rendered; failure surfaces (dialog error text, banner copy). They have component or unit evidence but no browser journey, which is why they are IV.
 
 ---
 
 ## 6. Proven working capabilities
 
-Proven by automated in-app journeys through save, immutable version, refresh and reopen (Word reopen NOT CHECKED):
+Proven by an automated browser journey that exercises the stated action and, where the control mutates the document, saves and reloads it in a fresh context (Word reopen NOT CHECKED):
 
-- **Character emphasis**: bold, italic, underline, strikethrough, highlight, superscript, subscript, over collapsed caret, within-run range, cross-run range and cross-paragraph selection, with mixed-format agreement (`document-format-controls.ts:71-112`), correct painted state, undo/redo and save/reload. Browser journeys: `document-character-formatting.spec.ts` (3/3 on rerun), plus `docx-workspace-history-save.test.tsx`, `toolbar-character-formatting.test.tsx`.
-- **Paragraph insert/delete** (ordinary paragraphs), **undo/redo** across text, split, join, formatting, style, numbering, find-and-replace and tracked-insertion reversals. Browser journeys: `document-history-save.spec.ts` (4/5 first run, failing test passed in isolation), `document-redo.spec.ts` (browser suite exists but is credential-gated), `e47-split-enter.spec.ts` (1/1).
+- **Character emphasis**: bold, italic, underline, strikethrough, highlight, superscript, subscript, over collapsed caret, within-run range, cross-run range and cross-paragraph selection, with mixed-format agreement (`document-format-controls.ts:71-112`), correct painted state, undo/redo and save/reload. Browser journey: `document-character-formatting.spec.ts` (3/3 on rerun), plus `docx-workspace-history-save.test.tsx`, `toolbar-character-formatting.test.tsx`.
+- **Paragraph insert** and **undo/redo** across text, split, join, formatting, style, numbering and tracked-insertion reversals. Browser journeys: `document-history-save.spec.ts` (4/5 first run, failing test passed in isolation), `document-redo.spec.ts` (browser suite exists but is credential-gated), `e47-split-enter.spec.ts` (1/1).
+- **Save** and the **save status region**: dirty/saving/saved/failed/stale/blocked states and the `aria-live` status line are exercised by the save journeys.
+- **Track changes toggle**: exercised by `enableTracking` in the character-formatting and history-save journeys.
+- **Print**: browser print of the painted document (`document-print.spec.ts`, 2 tests).
+- **Ribbon tabs**: all six tabs are clicked in browser journeys.
+- **PDF read-only status**: the honest "View only, not editable" label renders for a ready PDF version (unit-tested in `workspace.test.tsx`).
 - **Immutable versions and optimistic concurrency**: every save creates a new `document_versions` row; stale base versions are refused with 409; no silent overwrite (`document-version-commit.ts`, `document-versions.ts:236-260`).
 - **Collaborative merge**: disjoint edits auto-merge; same-range conflicts return 409; duplicate sync ids are idempotent (`document-collaboration-versions.ts`).
-- **Find and replace** within a paragraph, with result count and replace-all as one undoable step.
-- **Save state machine and recovery**: dirty/saving/saved/failed/stale/blocked, restored drafts, held rejected changes, retry and discard dialogs (`save-banners.tsx`, `use-document-save.ts`).
-- **Print** (browser print of the painted document) and **DOCX download** (API-verified export bytes).
-- **PDF read-only workspace**: zoom, page navigation, extracted-text export, original download, honest read-only label, text-layer rendering.
-- **Presence**: 8-second heartbeat and "Editors present" chips (in-memory, per process).
-- **Tenant isolation and authz** on every document route (section 21).
+- **Tenant isolation and authz** on every document route (section 20).
+
+This is 19 interactive controls plus 2 status regions. Everything else that is implemented is classified _implemented but insufficiently verified_ (section 7) because no browser journey proves its complete stated action.
 
 ## 7. Implemented but insufficiently verified
 
+These have implementation and unit/component/API evidence but no browser journey that proves the complete stated action. The list is the largest correctness risk in the report: each is one missing browser journey away from _proven working_.
+
+- **Find and replace** (`Find field`, `Previous match`, `Next match`, `Replace field`, `Replace`, `Replace all`): thoroughly unit-tested (`document-find.test.ts`) but no browser journey types a query, replaces, saves and reloads. `Result count` is a non-interactive status readout in the same boat.
+- **Export DOCX**: API unit tests assert byte and comment behaviour (`document-export.test.ts`); no browser journey downloads the file and reopens it, and no Word reopen.
+- **PDF viewer controls** (`Zoom out`, `Zoom in`, `Export extracted text`, `Download original`, `Previous page`, `Next page`): unit-tested in `workspace.test.tsx`; no browser journey exercises the controls.
+- **DOCX zoom** (`Zoom out`, `Zoom in`): wired but with no unit and no browser test.
+- **Comments toggle** and **Changes toggle**: wired panel toggles with no unit or browser test.
 - **Lists** (numbering, bullets, multilevel, indent, outdent, continue): unit/component-tested, no browser journey, no export/Word check, no restart/start-value.
 - **Paragraph styles**: applying a style is tested at unit level; mixed-selection pressed state is undefined; gallery degrades to `soon` chips when a document has no paragraph styles.
 - **Authorities**: extraction (neutral-citation regex), list and caret insertion are unit-tested; no lookup, no verification, no table of authorities, no browser journey.
 - **Verify citations**: wired to the verification dock with honest availability, but no document-editor browser journey.
 - **Redact this document**: scrolls/focuses the redaction region; no browser journey and no return path.
 - **Tracked-change recording and decisions**: extensively unit-tested in OOXML and API, and `document-character-formatting.spec.ts` covers tracked refusals; but most recording paths (paragraph insertion/deletion, replacement, property changes) have no browser journey.
-- **Export DOCX**: API unit tests assert byte/comment behaviour; no browser journey and no Word reopen.
+- **All 15 conditionally-rendered ribbon-region controls** (section 4.4): component/unit-tested save-recovery, discard and insert-authority controls with no browser journey.
 
 ## 8. Partially implemented
 
-- **Comments**: product comments are created, listed and resolved, but only against a whole paragraph (`startOffset` hard-coded `0`, `endOffset` = paragraph length, `docx-workspace.tsx:470-490`); imported Word comments are preserved and exported but never displayed; there is no comment navigation, reply, or insertion-point comment; resolution is allowed to any editor (`routes/comments.ts:89`).
+- **Comments**: product comments are created, listed and resolved, but only against a whole paragraph (`startOffset` hard-coded `0`, `endOffset` = paragraph length, `docx-workspace.tsx:439-446`); imported Word comments are preserved and exported but never displayed; there is no comment navigation, reply, or insertion-point comment; resolution is allowed to any editor (`routes/comments.ts:89`).
 - **Tracked changes**: recording and decisions exist, but ribbon Accept/Reject are placeholders, there is no change navigation or bulk accept/reject, and partial-range formatting under tracking is refused.
 - **Redaction handoff**: a document can start a linked run, but there is no endpoint or UI that writes a redacted result back as a document version (`document-redaction` survey; no return path found).
 - **Delete paragraph**: ordinary deletes work; deleting the last body paragraph is not guarded client-side and fails at save.
@@ -313,7 +369,7 @@ Proven by automated in-app journeys through save, immutable version, refresh and
 
 ## 9. Visible placeholders
 
-The 43 `soon` controls in section 4: Paste, Cut, Copy, Font family, Font size, Font colour, Clear formatting, Align left/centre/right/justify, Line spacing, Page break, Section break, Insert table, Picture, Link, Cross-reference, Header, Footer, Page number, Margins, Orientation, Page size, Document type, Draft, Privileged, Without prejudice, Indent, Citation style, Mark defined term, Check defined terms, Insert cross-reference, Check cross-references, Insert footnote, Table of contents, Spelling, Accept change, Reject change, Compare versions, Share-safe export, Ruler, Navigation pane, plus the style-gallery fallback chips.
+The 43 `soon` controls in section 4.3: Paste, Cut, Copy, Font family, Font size, Font colour, Clear formatting, Align left/centre/right/justify, Line spacing, Page break, Section break, Insert table, Picture, Link, Cross-reference, Header, Footer, Page number, Margins, Orientation, Page size, Document type, Draft, Privileged, Without prejudice, Indent, Citation style, Mark defined term, Check defined terms, Insert cross-reference, Check cross-references, Insert footnote, Table of contents, Spelling, Accept change, Reject change, Compare versions, Share-safe export, Ruler, Navigation pane, plus the style-gallery fallback chips (a conditional sub-state of the style gallery, not a separate counted control).
 
 ## 10. Broken controls
 
@@ -344,7 +400,7 @@ No confirmed data-loss, corruption, cross-tenant or silent-overwrite defect was 
 
 - Whole-paragraph comment anchoring can attach a comment to text the author did not intend to mark (P1).
 - Multi-paragraph paste collapsing into one paragraph can silently restructure a legal document (P2).
-- Non-ASCII export filenames degrade to underscores (`document-export.ts:103`), which can mislead a user about the exported file (P2).
+- Non-ASCII export filenames degrade to underscores (`document-export.ts:116-118`), which can mislead a user about the exported file (P2).
 - Deleting the last paragraph leaves an empty editor and a failed save (P2).
 
 ## 13. DOCX rendering findings
@@ -379,7 +435,7 @@ Presence heartbeat (8s), participants list, stale cleanup, 50-participant/1000-d
 
 ## 18. Persistence and immutable-version findings
 
-Every save writes a new version and advances `current_version_id` only under an optimistic check; stale bases return 409 before work is done and again at commit; lineage is stored atomically with the version. Originals remain available; the versions list renders all versions (metadata), though only the current version is viewable in the editor (`document-detail.tsx:245-286`). Drafts persist locally per document/base version and are recovered after refresh with explicit restore/discard. No silent overwrite was found.
+Every save writes a new version and advances `current_version_id` only under an optimistic check; stale bases return 409 before work is done and again at commit; lineage is stored atomically with the version. Originals remain available; the versions list renders all versions (metadata, `document-detail.tsx:245-286`), though only the current version is viewable in the editor. Drafts persist locally per document/base version and are recovered after refresh with explicit restore/discard. No silent overwrite was found.
 
 ## 19. OOXML and Word round-trip findings
 
@@ -406,7 +462,7 @@ Pagination and rendering are memoised by inputs (`document-page-engine`, `use-wo
 
 ## 24. Automated-test gaps
 
-- No browser/e2e journey for: lists, styles, comments create/resolve/anchor, tracked-change accept/reject panel, authorities, redaction handoff, save banners, draft recovery, presence, collaborative merge/conflict UI, export/download, PDF viewer.
+- No browser/e2e journey for: lists, styles, comments create/resolve/anchor, tracked-change accept/reject panel, authorities, redaction handoff, save banners and recovery, draft recovery, presence, collaborative merge/conflict UI, export/download, DOCX zoom, PDF viewer, and all 15 conditionally-rendered controls.
 - No test asserts the full 20-step journey per control (interaction → … → Word reopen).
 - `document-redo.spec.ts` and `document-selection.spec.ts` are credential-gated and skip without `E6_*`/`E52_*` env vars.
 - The two most recent e2e runs each produced one flake (sign-in timeout; Review-tab click timeout), which suggests the browser suite is not yet reliable as a gate.
@@ -422,14 +478,14 @@ Pagination and rendering are memoised by inputs (`document-page-engine`, `use-wo
 
 ## 26. Findings ordered by severity
 
-### P0 (blocking)
+### P0 (release/acceptance blocker — verification gap)
 
-- **P0-1 — Verification gap, not a confirmed defect: Microsoft Word round-trip is unverified.** No automated or recorded manual Word check exists; Word is unavailable here. The editor cannot be declared safe for legal export. Evidence: no Word-related test or artifact in the repo; `TESTING.md` does not include a Word gate. This must not be downgraded.
+- **P0-1 — Microsoft Word round-trip is unverified (verification gap, not a confirmed product defect).** No Word defect has been proven; Word compatibility has not been proven either. No automated or recorded manual Word check exists anywhere in the repository, and `TESTING.md` includes no Word gate. Editor readiness cannot be approved without this check, because release acceptance for legal documents requires it. This must not be downgraded, and it must not be read as evidence that export is defective. Evidence: no Word/libreoffice/reopen test or artifact in the repo.
 
 ### P1 (major)
 
-- **P1-1 — 43 of 95 visible controls are disabled placeholders.** Section 4. Includes alignment, line spacing, font family/size/colour, clear formatting, page setup, breaks, tables, images, links, headers/footers/page numbers, footnotes, TOC, cross-references, defined terms, spelling, compare versions, share-safe export. `ribbon-*.tsx` `soon` props.
-- **P1-2 — Comment anchoring is whole-paragraph only; imported comments invisible.** `docx-workspace.tsx:470-490` hard-codes `startOffset: 0` and `endOffset` = paragraph length; `comments-panel.tsx:45-80`; `listDocumentComments` reads only `document_comments`.
+- **P1-1 — 43 of 109 visible interactive controls are disabled placeholders.** Section 4.3. Includes alignment, line spacing, font family/size/colour, clear formatting, page setup, breaks, tables, images, links, headers/footers/page numbers, footnotes, TOC, cross-references, defined terms, spelling, compare versions, share-safe export. `ribbon-*.tsx` `soon` props.
+- **P1-2 — Comment anchoring is whole-paragraph only; imported comments invisible.** `docx-workspace.tsx:439-446` hard-codes `startOffset: 0` and `endOffset` = paragraph length; `comments-panel.tsx:45-80`; `listDocumentComments` reads only `document_comments`.
 - **P1-3 — Ribbon Accept/Reject change are placeholders; no change navigation or bulk action.** `ribbon-review.tsx:212-217`.
 - **P1-4 — Paragraph alignment, indentation, spacing and keep-with-next cannot be edited.** Paint-only (`document-page-style.ts`); all controls `soon`; no `set_paragraph_format` emitter.
 - **P1-5 — Font family, size and colour cannot be edited.** `document-format-types.ts:1-40` excludes them; controls `soon`.
@@ -440,13 +496,13 @@ Pagination and rendering are memoised by inputs (`document-page-engine`, `use-wo
 
 ### P2 (moderate)
 
-- **P2-1 — Delete paragraph can empty the body; save then fails.** No client guard; server refuses (`model-edit-validation.ts:37-40`).
-- **P2-2 — Find is single-paragraph and case-insensitive only.** `document-find.ts`.
+- **P2-1 — Delete paragraph can empty the body; save then fails.** No client guard; server refuses (`model-edit-validation.ts:53`).
+- **P2-2 — Find is single-paragraph and case-insensitive only.** `document-find.ts:19-60`.
 - **P2-3 — No undo grouping.** One history entry per keystroke (`use-workspace-drafts.ts`, `document-editor-history.ts`).
-- **P2-4 — Style gallery degrades to `soon` chips when no paragraph styles exist; mixed-style pressed state undefined.** `ribbon-home.tsx:307-334`, `document-format-controls.ts:150-162`.
+- **P2-4 — Style gallery degrades to `soon` chips when no paragraph styles exist; mixed-style pressed state undefined.** `ribbon-home.tsx:307-334`, `document-format-controls.ts:191-193`.
 - **P2-5 — No list restart/start-value.** No op or control; `document-list-toggle.ts`.
 - **P2-6 — Comment resolve allowed to any editor; no un-resolve.** `routes/comments.ts:89`.
-- **P2-7 — Export filename non-ASCII downgrade.** `document-export.ts:103`.
+- **P2-7 — Export filename non-ASCII downgrade.** `document-export.ts:116-118`.
 - **P2-8 — Presence is per-process in memory.** `app.ts` presence registry.
 - **P2-9 — Non-current versions readable by any `view` grantee.** `routes/document-export.ts`, `routes/tracked-changes.ts`.
 - **P2-10 — PDF viewer has no large-document handling or find.** `pdf-view.tsx`, `workspace.tsx:285-363`.
@@ -458,9 +514,39 @@ Pagination and rendering are memoised by inputs (`document-page-engine`, `use-wo
 - **P3-3 — Ribbon touch targets are 28×28 px.** `ribbon-primitives.tsx` `h-7 w-7`.
 - **P3-4 — Browser e2e suite produced one flake per recent run.**
 
+### 26.1 Every finding has a delivery owner
+
+| Finding                                       | Delivery                                                                                       |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| P0-1 Word round-trip unverified               | PR-E13 Word conformance harness; **release-acceptance gate**                                   |
+| P1-1 43 placeholders                          | PR-E1…E14 per control (section 31)                                                             |
+| P1-2 comments anchoring / imported comments   | PR-E8                                                                                          |
+| P1-3 ribbon accept/reject, no navigation      | PR-E9                                                                                          |
+| P1-4 paragraph alignment/indentation/spacing  | PR-E3                                                                                          |
+| P1-5 font family/size/colour                  | PR-E2                                                                                          |
+| P1-6 structural content not editable          | PR-E5, PR-E6, PR-E7                                                                            |
+| P1-7 no Ctrl+B/I/U; no narrow/zoom e2e        | PR-E1 (shortcuts), PR-E13 (responsive coverage)                                                |
+| P1-8 multi-paragraph paste                    | PR-E1                                                                                          |
+| P1-9 tracked partial-range formatting         | PR-E9                                                                                          |
+| P2-1 delete last paragraph                    | PR-E0                                                                                          |
+| P2-2 find single-paragraph / case-insensitive | PR-E14                                                                                         |
+| P2-3 no undo grouping                         | PR-E1                                                                                          |
+| P2-4 style gallery / mixed state              | PR-E4                                                                                          |
+| P2-5 no list restart                          | PR-E4                                                                                          |
+| P2-6 comment resolve authorisation            | PR-E8                                                                                          |
+| P2-7 export filename non-ASCII                | PR-E12                                                                                         |
+| P2-8 presence per-process                     | PR-E10                                                                                         |
+| P2-9 non-current version ACL                  | PR-E10                                                                                         |
+| P2-10 PDF large-document / find               | PR-E13 (large-document), PR-E14 (find)                                                         |
+| P3-1 print layout no-op                       | PR-E13                                                                                         |
+| P3-2 ruler / navigation pane                  | PR-E13                                                                                         |
+| P3-3 ribbon touch targets                     | PR-E13                                                                                         |
+| P3-4 e2e flake                                | **Verification gate:** stabilise the browser suite before it becomes a CI gate (no product PR) |
+| 15 conditional controls (no browser coverage) | **Verification gate:** PR-E13 browser coverage (implementation already exists)                 |
+
 ## 27. Test results
 
-Commands run from the assessed worktree after `bun install --frozen-lockfile` (no version changes).
+These are the results recorded during the original audit at the assessed commit `4667e76`. They are preserved as audit evidence; they were **not** rerun for revision 2 of this document, which changes documentation only.
 
 | Check                                       | Command                                                                                      | Result                                                                                    |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -501,15 +587,27 @@ Mapping to the requested 20 categories: categories 1 (letter), 4 (nested numberi
 
 ## 30. Dependency-ordered implementation programme
 
-Every ribbon control is accounted for. "Operational in" names the PR that makes the control perform its stated action.
+Every interactive control and status region is accounted for. "Operational in" names the PR that makes the control perform its stated action; controls that are already implemented but not browser-proven are delivered by the named verification coverage.
 
-### PR-E1 — Editor foundations: selection, clipboard, keyboard, history
+### PR-E0 — Last-paragraph deletion safety
+
+- Prevent the document from reaching an invalid zero-paragraph state; make the last-paragraph delete unavailable or replace it with an empty-paragraph guard, with a typed reason.
+- Domain/API validation already exists (`model-edit-validation.ts:53`); add the client guard and a typed failure path.
+- Undo/history interaction: deleting the final paragraph must remain undoable and must not leave a blocked save.
+- Focused unit, API and browser coverage, plus a negative control proving the guard is meaningful.
+- **Operational in E0:** Delete paragraph (last-paragraph case).
+- Depends on: nothing. Delivers P2-1 first as a narrowly reviewable correctness repair.
+
+### PR-E1 — Clipboard and editing foundations
 
 - Implement Paste/Cut/Copy (clipboard API + selection integration; multi-paragraph paste splitting).
-- Add Ctrl/Cmd+B/I/U and a shortcut layer; add undo grouping (time/word coalescing).
-- Guard the last body paragraph; define zero-paragraph behaviour.
-- **Operational in E1:** Paste, Cut, Copy.
-- Depends on: nothing.
+- Add the keyboard shortcut layer and Ctrl/Cmd+B/I/U.
+- Add undo grouping (time/word coalescing).
+- **Operational in E1:** Paste, Cut, Copy; hardening for Undo/Redo grouping.
+- Delivers P1-7 (shortcuts), P1-8 (paste), P2-3 (grouping).
+- Depends on: PR-E0 (small, independent; can merge first).
+
+Assessment: clipboard + multi-paragraph paste + the shortcut layer form one coherent input change; undo grouping is orthogonal but shares the history module and is small enough to review together. If the reviewer prefers, undo grouping can be split as E1b with no dependency change.
 
 ### PR-E2 — Character formatting completion
 
@@ -544,56 +642,67 @@ Every ribbon control is accounted for. "Operational in" names the PR that makes 
 ### PR-E8 — Comments
 
 - Range anchoring, insertion-point comments, comment navigation, imported Word comment display, reply, resolve authorization, export fidelity.
-- **Operational in E8:** comment creation/anchoring/navigation (panel and both Comments toggles).
+- **Operational in E8:** comment creation/anchoring/navigation (panel and both Comments toggles); delivers P1-2, P2-6.
 
 ### PR-E9 — Tracked changes
 
 - Ribbon Accept/Reject, bulk and navigation, partial-range tracked formatting, imported-change review.
-- **Operational in E9:** Accept change, Reject change (ribbon), Track changes hardening.
+- **Operational in E9:** Accept change, Reject change (ribbon), Track changes hardening; delivers P1-3, P1-9.
 
 ### PR-E10 — Versions, comparison, collaboration
 
 - Compare versions, version selection and difference presentation, version-level ACL, presence hardening.
-- **Operational in E10:** Compare versions.
+- **Operational in E10:** Compare versions; delivers P2-8, P2-9.
 
 ### PR-E11 — Legal-document tools
 
-- Citation style, table of authorities, defined-term mark/check, cross-reference check, Verify-citations integration.
-- **Operational in E11:** Citation style, Mark defined term, Check defined terms, Check cross-references, Verify citations hardening.
+- Citation style, table of authorities, defined-term mark/check, cross-reference check, Verify-citations integration, InsertAuthorityDialog hardening.
+- **Operational in E11:** Citation style, Mark defined term, Check defined terms, Check cross-references, Verify citations hardening; the InsertAuthorityDialog conditional controls (section 4.4).
 
 ### PR-E12 — Redaction handoff, share-safe export, print, classification
 
-- Redaction return path; Share-safe export; Print hardening; Document type, Draft, Privileged, Without prejudice markings.
-- **Operational in E12:** Share-safe export, Document type, Draft, Privileged, Without prejudice, Redact this document (return path).
+- Redaction return path; Share-safe export; Print hardening; Document type, Draft, Privileged, Without prejudice markings; export filename handling.
+- **Operational in E12:** Share-safe export, Document type, Draft, Privileged, Without prejudice, Redact this document (return path); delivers P2-7.
 
-### PR-E13 — Accessibility, responsive, Word conformance
+### PR-E13 — Accessibility, responsive behaviour, browser coverage and Word conformance
 
-- Spelling/proofing; Ruler; Navigation pane; Print layout alternatives; narrow-width/zoom/reduced-motion/high-contrast; Microsoft Word round-trip harness and fixture.
-- **Operational in E13:** Spelling, Ruler, Navigation pane, Print layout.
+- Spelling/proofing; Ruler; Navigation pane; Print layout alternatives; narrow-width/zoom/reduced-motion/high-contrast; touch targets.
+- Browser coverage for the conditionally-rendered ribbon-region controls, DOCX zoom, PDF viewer controls and the conflict/recovery banners.
+- Large-document handling for the PDF viewer.
+- Microsoft Word round-trip harness and fixture.
+- **Operational in E13:** Spelling, Ruler, Navigation pane, Print layout; delivers P0-1, P1-7 (responsive), P2-10 (large-document), P3-1, P3-2, P3-3, and the browser coverage for the 15 conditional controls and the IV viewer controls.
+
+### PR-E14 — Find, replace and proofing completeness
+
+- Cross-paragraph find, match-case/whole-word, Unicode-safe hits; browser journey that finds, replaces, saves and reloads.
+- **Operational in E14:** Find field, Previous match, Next match, Replace field, Replace, Replace all (hardening + end-to-end verification); delivers P2-2 and the find half of P2-10.
 
 ## 31. Proposed PR sequence
 
-| PR  | Theme                           | Makes operational                                               |
-| --- | ------------------------------- | --------------------------------------------------------------- |
-| E1  | Editor foundations              | Paste, Cut, Copy                                                |
-| E2  | Character formatting            | Font family, Font size, Font colour, Clear formatting           |
-| E3  | Paragraph formatting            | Align ×4, Line spacing, Indent                                  |
-| E4  | Lists and styles                | List hardening, style gallery/selector                          |
-| E5  | Page/section layout             | Margins, Orientation, Page size, Page break, Section break      |
-| E6  | Structural insertions           | Insert table, Picture, Link, Cross-reference                    |
-| E7  | Headers/footers/generated       | Header, Footer, Page number, Insert footnote, Table of contents |
-| E8  | Comments                        | Comment create/anchor/navigate/resolve, imported comments       |
-| E9  | Tracked changes                 | Accept change, Reject change                                    |
-| E10 | Versions/collaboration          | Compare versions                                                |
-| E11 | Legal tools                     | Citation style, defined terms, cross-reference checks           |
-| E12 | Redaction/export/classification | Share-safe export, markings, redaction return path              |
-| E13 | A11y/responsive/Word            | Spelling, Ruler, Navigation pane, Print layout                  |
+| PR  | Theme                                 | Makes operational / delivers                                                                                |
+| --- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| E0  | Last-paragraph deletion safety        | Delete paragraph (last-paragraph case); P2-1                                                                |
+| E1  | Clipboard and editing foundations     | Paste, Cut, Copy; undo grouping; Ctrl+B/I/U; P1-7, P1-8, P2-3                                               |
+| E2  | Character formatting                  | Font family, Font size, Font colour, Clear formatting                                                       |
+| E3  | Paragraph formatting                  | Align ×4, Line spacing, Indent                                                                              |
+| E4  | Lists and styles                      | List hardening, style gallery/selector; P2-4, P2-5                                                          |
+| E5  | Page/section layout                   | Margins, Orientation, Page size, Page break, Section break                                                  |
+| E6  | Structural insertions                 | Insert table, Picture, Link, Cross-reference                                                                |
+| E7  | Headers/footers/generated             | Header, Footer, Page number, Insert footnote, Table of contents                                             |
+| E8  | Comments                              | Comment create/anchor/navigate/resolve, imported comments; P1-2, P2-6                                       |
+| E9  | Tracked changes                       | Accept change, Reject change; P1-3, P1-9                                                                    |
+| E10 | Versions/collaboration                | Compare versions; P2-8, P2-9                                                                                |
+| E11 | Legal tools                           | Citation style, defined terms, cross-reference checks, insert-authority dialog                              |
+| E12 | Redaction/export/classification       | Share-safe export, markings, redaction return path; P2-7                                                    |
+| E13 | A11y/responsive/browser coverage/Word | Spelling, Ruler, Navigation pane, Print layout; P0-1, P2-10, P3-1, P3-2, P3-3, conditional-control coverage |
+| E14 | Find, replace and proofing            | Find/Replace hardening and end-to-end verification; P2-2                                                    |
 
-All 95 controls are mapped: 40 proven working (hardened where noted), 12 insufficiently verified (hardened in E4/E9/E11), 1 partially implemented (E1/E9), 1 broken (E13/E1), 43 placeholders (E1–E13 as above).
+All 109 interactive controls and 3 status regions are mapped: **21 proven working** (hardened where noted), **46 implemented but insufficiently verified** (promoted by the PRs and gates above), **1 partially implemented** (Delete paragraph; E0/E9), **1 broken** (Print layout; E13), **43 placeholders** (E1–E14 as above). **0 unsafe, 0 missing.**
 
 ## 32. Acceptance criteria per PR
 
-- **E1:** clipboard journeys pass in a browser (copy/cut/paste within and across paragraphs, multi-paragraph paste splits); Ctrl/Cmd+B/I/U work; undo groups a typing run into one step; deleting the last paragraph is refused or replaced by an empty-paragraph guard; all with unit + browser tests.
+- **E0:** the editor cannot reach a zero-paragraph state; deleting the last paragraph is refused or replaced with an empty-paragraph guard, with a typed reason and an accurate disabled state; the guard is undo-safe; a negative control proves it is meaningful; unit + API + browser tests.
+- **E1:** clipboard journeys pass in a browser (copy/cut/paste within and across paragraphs, multi-paragraph paste splits); Ctrl/Cmd+B/I/U work; undo groups a typing run into one step; unit + browser tests.
 - **E2:** each control changes painted state, survives save/reload and export, and reopens in Word with the expected run property; mixed selections make a uniform value on click.
 - **E3:** alignment, line spacing and indentation survive save/reload/export and reopen in Word; mixed selections apply uniformly.
 - **E4:** list restart/start values survive round-trip; gallery applies styles across mixed and pending selections; no fallback placeholder when the document has styles.
@@ -604,8 +713,9 @@ All 95 controls are mapped: 40 proven working (hardened where noted), 12 insuffi
 - **E9:** ribbon accept/reject and bulk decisions create immutable versions; partial-range formatting is tracked; exported tracked changes reopen in Word.
 - **E10:** compare versions renders a real difference; version selection is safe; presence is correct across instances.
 - **E11:** authorities, defined terms and cross-references are checked against stored sources with honest uncertainty.
-- **E12:** share-safe export and document markings survive export; redaction produces a linked document version and a return path.
-- **E13:** keyboard-only operation; visible focus; announced status; narrow/zoom/reduced-motion/high-contrast; a Word conformance harness that opens and re-uploads exported files.
+- **E12:** share-safe export and document markings survive export; redaction produces a linked document version and a return path; non-ASCII filenames round-trip.
+- **E13:** keyboard-only operation; visible focus; announced status; narrow/zoom/reduced-motion/high-contrast; a Word conformance harness that opens, saves and re-uploads exported files; browser journeys for every conditionally-rendered control.
+- **E14:** find matches across paragraphs and runs with match-case/whole-word; replace-all saves and reloads; a browser journey proves the complete find/replace journey.
 
 Every PR must include the full journey test for each control it makes operational, and must not weaken existing tests.
 
@@ -617,13 +727,15 @@ Every PR must include the full journey test for each control it makes operationa
 - Presence and caches are per-process; scale-out needs shared state.
 - Large-document performance is unmeasured.
 - Accessibility and responsive behaviour need ongoing verification as the ribbon grows.
+- The browser suite is currently flaky (P3-4); promoting it to a required gate without stabilisation would make CI unreliable.
 
 ---
 
 ## Appendix A — exact file references
 
 - Ribbon: `packages/app-shell/src/components/document-workspace/ribbon-home.tsx`, `ribbon-insert-layout.tsx`, `ribbon-review.tsx`, `ribbon-find.tsx`, `ribbon-primitives.tsx`, `ribbon-types.ts`, `toolbar.tsx`.
-- Workspace: `packages/app-shell/src/components/document-workspace/docx-workspace.tsx`, `workspace.tsx`, `pdf-view.tsx`, `workspace-chrome.tsx`, `comments-panel.tsx`, `changes-panel.tsx`, `authorities-panel.tsx`, `save-banners.tsx`, `use-document-save.ts`, `use-workspace-drafts.ts`, `use-workspace-caret.ts`, `use-workspace-find.ts`, `use-presence-heartbeat.ts`, `use-save-baseline.ts`, `document-page-style.ts`.
+- Conditional controls and dialogs: `packages/app-shell/src/components/document-workspace/save-banners.tsx`, `discard-work-dialog.tsx`, `insert-authority-dialog.tsx`, `workspace-chrome.tsx`.
+- Workspace: `packages/app-shell/src/components/document-workspace/docx-workspace.tsx`, `workspace.tsx`, `pdf-view.tsx`, `workspace-chrome.tsx`, `comments-panel.tsx`, `changes-panel.tsx`, `authorities-panel.tsx`, `use-document-save.ts`, `use-workspace-drafts.ts`, `use-workspace-caret.ts`, `use-workspace-find.ts`, `use-presence-heartbeat.ts`, `use-save-baseline.ts`, `document-page-style.ts`.
 - Editing: `packages/app-shell/src/document-edits.ts`, `document-range-edits.ts`, `document-word-edits.ts`, `document-run-range.ts`, `document-format-types.ts`, `document-format-edits.ts`, `document-format-toolbar.ts`, `document-format-controls.ts`, `document-list-toggle.ts`, `document-editor-history.ts`, `document-history-baseline.ts`, `document-find.ts`, `document-save-plan.ts`, `document-workspace-keys.ts`.
 - OOXML: `packages/ooxml/src/parse.ts`, `serialise.ts`, `model-edits.ts`, `model-edit-validation.ts`, `model-paragraph-edits.ts`, `model-property-edits.ts`, `model-run-emphasis.ts`, `model-run-range-edits.ts`, `model-style-edits.ts`, `comment-anchors.ts`, `comments-package.ts`, `tracked-changes.ts`, `tracked-edits.ts`, `tracked-change-decisions.ts`, `collaboration-merge.ts`, `document-lineage.ts`, `equivalence.ts`; fixtures `packages/ooxml/fixtures/*`.
 - Contracts: `packages/contracts/src/document-edit.ts`, `document-model.ts`, `document-comments.ts`, `document-collaboration.ts`, `document-tracked-changes.ts`, `document-lineage.ts`.
@@ -634,7 +746,9 @@ Every PR must include the full journey test for each control it makes operationa
 ## Appendix B — audit hygiene
 
 - Base commit stated: `4667e76aca7e4ff09b6f1ba965c367591cc4dc88`.
-- Only `docs/audits/document-editor-completeness-audit.md` was added. No product code, schema, migration, dependency, test or configuration changed.
-- The isolated e2e database `obiter_editor_audit_test` was created and migrated for verification only; it is not part of the repository.
+- Revision 2 is a documentation-only repair: it reclassifies controls, adds the conditionally-rendered controls, corrects the zoom evidence and source references, relabels the P0, maps findings to delivery stages, and splits PR-E0/PR-E1. It changes no product code, schema, migration, dependency, test or configuration.
+- The isolated e2e database `obiter_editor_audit_test` was created and migrated for the original audit only; it is not part of the repository.
+- Test results in section 27 are the original audit's recorded evidence at the assessed commit; they were not rerun for revision 2.
+- Microsoft Word remains **NOT CHECKED**. No new functionality is claimed.
 - Synthetic fixtures only; no real client or matter material was used.
 - Nothing was merged.
