@@ -15,7 +15,9 @@ import {
   buildRedactedPdf,
   isDocumentTextLayout,
   padGlyphRect,
+  rasterizePdf,
   RedactionCoverGeometryError,
+  RedactionRasterLimitError,
   redactedPdfFilename,
   redactedTextFilename,
 } from './redaction-pdf-output'
@@ -78,8 +80,6 @@ function acceptedSpanInput(
         decidedAt: '2026-07-29T00:00:00.000Z',
       },
     },
-    outputMode: 'redacted' as const,
-    tokenMap: {},
   }
 }
 
@@ -333,6 +333,18 @@ describe('redaction-pdf-output', () => {
     ).toBe(false)
   })
 
+  it('refuses a page too large to rasterize before allocating its canvas', async () => {
+    // 6000 pt at RENDER_SCALE 2 is 12000 px on a side, over the 10000 px cap.
+    // Without the guard this allocates a multi-hundred-megabyte canvas; the
+    // guard must refuse first, which is what the test observes.
+    const document = await PDFDocument.create()
+    document.addPage([6000, 6000])
+    const bytes = Buffer.from(await document.save())
+    await expect(rasterizePdf(bytes, undefined)).rejects.toBeInstanceOf(
+      RedactionRasterLimitError,
+    )
+  })
+
   it('throws when an output-affecting span has no cover geometry', async () => {
     const pdfBytes = await samplePdf()
     const layout: DocumentTextLayout = {
@@ -462,8 +474,6 @@ describe('redaction-pdf-output', () => {
         text,
         spans,
         decisions: acceptAll(spans),
-        outputMode: 'redacted',
-        tokenMap: {},
       }),
     ).rejects.toMatchObject({
       name: 'RedactionCoverGeometryError',
@@ -497,8 +507,6 @@ describe('redaction-pdf-output', () => {
           decidedAt: '2026-07-29T00:00:00.000Z',
         },
       },
-      outputMode: 'redacted',
-      tokenMap: {},
     })
 
     const pdf = await getDocumentProxy(Uint8Array.from(output))
@@ -547,8 +555,6 @@ describe('redaction-pdf-output', () => {
       text,
       spans,
       decisions,
-      outputMode: 'redacted',
-      tokenMap: {},
     })
     const pixels = await sampleOutputPixels(output, [
       { x: centers[4]!, y: 106 },
@@ -583,8 +589,6 @@ describe('redaction-pdf-output', () => {
       text,
       spans,
       decisions: acceptAll(spans),
-      outputMode: 'redacted',
-      tokenMap: {},
     })
     const centers = charCenters(advancesByLine[0]!, 40)
     const pixels = await sampleOutputPixels(output, [
@@ -627,8 +631,6 @@ describe('redaction-pdf-output', () => {
       text,
       spans,
       decisions,
-      outputMode: 'redacted',
-      tokenMap: {},
     })
     const centers = charCenters(advancesByLine[0]!, 40)
     // The space after the John bar, before the visible 'a'. Deterministic
@@ -661,8 +663,6 @@ describe('redaction-pdf-output', () => {
       text,
       spans,
       decisions: acceptAll(spans),
-      outputMode: 'redacted',
-      tokenMap: {},
     })
     const centers1 = charCenters(advancesByLine[0]!, 40)
     const centers2 = charCenters(advancesByLine[1]!, 40)
@@ -705,8 +705,6 @@ describe('redaction-pdf-output', () => {
       text,
       spans,
       decisions: acceptAll(spans),
-      outputMode: 'redacted',
-      tokenMap: {},
     })
     const reloaded = await PDFDocument.load(output)
     expect(reloaded.getPageCount()).toBe(2)

@@ -4,7 +4,6 @@ import {
   documentTextLayoutSchema,
   redactionFinalizeInputSchema,
   spanDecisionSchema,
-  type DocumentTextLayout,
 } from '@obiter/contracts'
 import {
   applyPseudonymised,
@@ -36,8 +35,6 @@ import {
   type RedactionRunRecord,
 } from '../redaction-database'
 import {
-  buildRedactedPdf,
-  isPdfMimeOrFilename,
   redactedPdfFilename,
   redactedTextFilename,
 } from '../redaction-pdf-output'
@@ -204,11 +201,17 @@ function isSecurePdfOutput(run: FinalizedRun, mimeType: string) {
 }
 
 /** Header-safe filename: strip quotes, controls and non-ASCII code points. */
+/**
+ * Header-safe filename: take only the basename, then strip path separators,
+ * quotes, controls and non-ASCII code points. A source filename is user input,
+ * so `../../../etc/passwd.docx` must not survive into Content-Disposition.
+ */
 function asciiSafeFilename(filename: string) {
-  const cleaned = filename
+  const base = filename.split(/[\\/]/u).pop() ?? ''
+  const cleaned = base
     .normalize('NFKD')
     .replace(/[^\x20-\x7e]/gu, '')
-    .replace(/["\\\r\n]/gu, '')
+    .replace(/["\\:]/gu, '')
     .trim()
   return cleaned.length > 0 ? cleaned : 'redacted.pdf'
 }
@@ -612,57 +615,21 @@ export function createRedactReviewRoutes(
         })
       }
     } else {
-      // Pseudonymised output is a distinct, editable confidentiality workflow,
-      // not a hard redaction. It keeps its existing token semantics and its
-      // existing text fallback.
+      // Pseudonymised output is the editable confidentiality workflow: category
+      // tokens, no black bars, and a token map behind restricted audited access.
+      // It never rasterizes a PDF, because a rasterized cover is not an editable
+      // token copy; a PDF source therefore gets token text.
       try {
-        const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
         const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
-        const canWritePdf =
-          Boolean(source) &&
-          Boolean(layoutObjectKey) &&
-          Boolean(storage.readBinary) &&
-          Boolean(storage.writeBinary) &&
-          isPdfMimeOrFilename(run.sourceFilename, sourceMimeType)
         // Burned .docx needs no layout geometry: spans address w:t runs, not
         // page coordinates, so the source bytes alone are sufficient.
         const canWriteDocx =
-          !canWritePdf &&
           Boolean(source) &&
           Boolean(storage.readBinary) &&
           Boolean(storage.writeBinary) &&
           isDocxMimeOrFilename(run.sourceFilename, sourceMimeType)
 
-        if (canWritePdf && source && layoutObjectKey) {
-          attemptedBurn = 'pdf'
-          const parsedLayout = documentTextLayoutSchema.safeParse(
-            JSON.parse(await storage.readText(layoutObjectKey)),
-          )
-          // Invalid stored geometry must follow the same fail-closed path as
-          // missing geometry. An empty layout makes any accepted span raise
-          // RedactionCoverGeometryError before source pixels are rasterized.
-          const layout: DocumentTextLayout = parsedLayout.success
-            ? parsedLayout.data
-            : {
-                version: 2,
-                pages: [{ width: 1, height: 1 }],
-                segments: [],
-              }
-          const pdfBytes = await storage.readBinary!(source.objectKey)
-          const redactedPdf = await buildRedactedPdf({
-            pdfBytes,
-            layout,
-            text,
-            spans: run.spans,
-            decisions: run.decisions,
-            outputMode: 'pseudonymised',
-            tokenMap,
-          })
-          await storage.writeBinary!(objectKey, Buffer.from(redactedPdf))
-          outputMimeType = 'application/pdf'
-          outputFilename = redactedPdfFilename(run.sourceFilename)
-          outputSha256 = sha256(redactedPdf)
-        } else if (canWriteDocx && source) {
+        if (canWriteDocx && source) {
           attemptedBurn = 'docx'
           const docxBytes = await storage.readBinary!(source.objectKey)
           const redactedDocx = await buildRedactedDocx({
@@ -684,7 +651,7 @@ export function createRedactReviewRoutes(
         }
       } catch (error) {
         if (error instanceof RedactionSpanIntegrityError) throw error
-        // PDF/DOCX burn failed — fall back to text output so finalize still
+        // DOCX burn failed — fall back to text output so finalize still
         // completes. The text output carries no source container, so tracked
         // changes, metadata, comments, and embedded parts cannot leak
         // through it.

@@ -16,6 +16,7 @@ import {
   rasterizePdf,
   redactedPdfFilename,
   RedactionCoverGeometryError,
+  RedactionRasterLimitError,
 } from './redaction-pdf-output'
 import {
   RedactionRendererError,
@@ -130,10 +131,11 @@ async function buildSecurePdfFromSourcePdf(
       text: input.sourceText,
       spans,
       decisions,
-      outputMode: 'redacted',
-      tokenMap: input.tokenMap,
     })
   } catch (error) {
+    // A page the rasterizer refused as too large is a safety refusal, not a
+    // geometry or parse failure, so it keeps its own category.
+    if (error instanceof RedactionRasterLimitError) throw error
     // Span-integrity errors are handled by the route before this runs, so any
     // refusal here is a cover or rasterization failure.
     throw new HardRedactionOutputError(
@@ -192,7 +194,8 @@ async function buildSecurePdfFromSourceDocx(input: BuildHardRedactionPdfInput) {
 
   try {
     return await rasterizePdf(Buffer.from(intermediate), undefined)
-  } catch {
+  } catch (error) {
+    if (error instanceof RedactionRasterLimitError) throw error
     throw new HardRedactionOutputError(
       'rasterization_failed',
       'The rendered document could not be rasterized.',
@@ -222,6 +225,7 @@ export function hardRedactionFailureCategory(
 ): HardRedactionFailureCategory {
   if (error instanceof HardRedactionOutputError) return error.category
   if (error instanceof RedactionRendererError) return error.failure
+  if (error instanceof RedactionRasterLimitError) return 'validation_failed'
   if (error instanceof SecurePdfError) return 'validation_failed'
   return 'secure_pdf_failed'
 }

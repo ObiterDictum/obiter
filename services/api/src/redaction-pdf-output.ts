@@ -3,12 +3,10 @@ import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument } from 'pdf-lib'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import {
-  affectsOutput,
   coalesceRedactionRegions,
   coverRectsForSpan,
   glyphCoverRect,
   snapDeviceCoverOutward,
-  type TokenMap,
 } from '@obiter/redaction-policy'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import type { DocumentTextLayout } from './document-layout'
@@ -20,8 +18,6 @@ export interface RedactedPdfInput {
   text: string
   spans: RedactionSpan[]
   decisions: Decisions
-  outputMode: 'redacted' | 'pseudonymised'
-  tokenMap: TokenMap
 }
 
 interface PageRect {
@@ -29,7 +25,6 @@ interface PageRect {
   y: number
   width: number
   height: number
-  label?: string
   /** Characters covered by this rect — drives descender/ascent padding. */
   ink?: string
   /** Spans this rect redacts, so an off-page cover is refused by every id. */
@@ -56,6 +51,25 @@ function pageBoundsOf(view: number[] | undefined): PageBounds {
 
 /** Render scale for burned-in output. Higher = sharper, larger files. */
 const RENDER_SCALE = 2
+
+/**
+ * Ceilings on one rasterized page. A4 at RENDER_SCALE is about 2 megapixels;
+ * these allow a large-format page while refusing a hostile /MediaBox that would
+ * otherwise allocate gigabytes before validateSecurePdf could run.
+ */
+const MAX_RASTER_DIMENSION_PX = 10_000
+const MAX_RASTER_PIXELS = 40_000_000
+
+/**
+ * Thrown when a page is too large to rasterize safely. The finalize path maps
+ * this to a visible secure-PDF failure instead of attempting the allocation.
+ */
+export class RedactionRasterLimitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RedactionRasterLimitError'
+  }
+}
 
 /**
  * Thrown when an output-affecting span has no cover geometry. Finalize catches
@@ -145,6 +159,17 @@ export async function rasterizePdf(
       const viewport = page.getViewport({ scale: RENDER_SCALE })
       const width = Math.max(1, Math.ceil(viewport.width))
       const height = Math.max(1, Math.ceil(viewport.height))
+      // Refuse before allocating. validateSecurePdf runs only after the whole
+      // PDF is built, so without this guard a hostile /MediaBox becomes a
+      // multi-gigabyte canvas and can take the API process down.
+      if (
+        width > MAX_RASTER_DIMENSION_PX ||
+        height > MAX_RASTER_DIMENSION_PX ||
+        width * height > MAX_RASTER_PIXELS
+      )
+        throw new RedactionRasterLimitError(
+          'A page in the document is too large to rasterize.',
+        )
       const canvas = createCanvas(width, height)
       const context = canvas.getContext('2d')
       // SAFETY: the canvas comes from @napi-rs/canvas, the implementation handed to
@@ -218,8 +243,8 @@ function paintRedaction(
     width + fringe * 2,
     height + fringe * 2,
   )
-  // A cover that is not opaque black has failed to conceal the glyphs under
-  // it. Sample it before publishing rather than trusting globalAlpha.
+  // A cover that is not fully opaque black has failed to conceal the glyphs
+  // under it. Sample it before publishing rather than trusting globalAlpha.
   assertOpaqueBlackCover(context, {
     left: left - fringe,
     top: top - fringe,
@@ -227,22 +252,6 @@ function paintRedaction(
     height: height + fringe * 2,
     spanIds: rect.spanIds,
   })
-
-  if (rect.label) {
-    const fontSize = Math.min(height * 0.55, 22)
-    if (fontSize >= 6) {
-      context.fillStyle = '#ffffff'
-      context.font = `bold ${fontSize}px sans-serif`
-      const textWidth = context.measureText(rect.label).width
-      if (textWidth + 4 < width) {
-        context.fillText(
-          rect.label,
-          left + 2,
-          top + height / 2 + fontSize * 0.35,
-        )
-      }
-    }
-  }
   context.restore()
 }
 
@@ -264,38 +273,29 @@ interface RectPlan {
   spanIds: string[]
   start: number
   end: number
-  label?: string
 }
 
 function collectRedactionRects(input: RedactedPdfInput) {
   const rectsByPage = new Map<number, PageRect[]>()
   const missingSpanIds: string[] = []
-  // Redacted output plans one bar per coalesced region; pseudonymised output
-  // keeps one labelled rect per span so distinct tokens never share a bar.
-  const plans: RectPlan[] =
-    input.outputMode === 'redacted'
-      ? coalesceRedactionRegions(input.text, input.spans, input.decisions).map(
-          (region) => ({
-            spanIds: region.spanIds,
-            start: region.start,
-            end: region.end,
-          }),
-        )
-      : input.spans
-          .filter((span) => affectsOutput(input.decisions[span.id]))
-          .map((span) => ({
-            spanIds: [span.id],
-            start: span.start,
-            end: span.end,
-            label: input.tokenMap[span.id] ?? '[REDACTED]',
-          }))
+  // One bar per coalesced accepted region. Pseudonymised output never reaches
+  // this rasterizer: it stays an editable token copy (DOCX or text).
+  const plans: RectPlan[] = coalesceRedactionRegions(
+    input.text,
+    input.spans,
+    input.decisions,
+  ).map((region) => ({
+    spanIds: region.spanIds,
+    start: region.start,
+    end: region.end,
+  }))
   for (const plan of plans) {
     const coveredRects = coverRectsForSpan({
       segments: input.layout.segments,
       spanStart: plan.start,
       spanEnd: plan.end,
       spanText: input.text.slice(plan.start, plan.end),
-      mergeWhitespace: input.outputMode === 'redacted',
+      mergeWhitespace: true,
     })
     if (coveredRects.length === 0) {
       missingSpanIds.push(...plan.spanIds)
@@ -308,7 +308,6 @@ function collectRedactionRects(input: RedactedPdfInput) {
         y: covered.y,
         width: covered.width,
         height: covered.height,
-        label: plan.label,
         ink: covered.ink,
         spanIds: plan.spanIds,
       })

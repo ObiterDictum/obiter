@@ -432,7 +432,9 @@ limits. A hard-redaction failure is visible: the run is not finalized, no artifa
 kept, and the API reports that no secure PDF was produced. It never silently falls
 back to a text or other container. Pseudonymisation remains a separate, editable
 output: it replaces accepted content with consistent category tokens, keeps its
-token map behind restricted audited access, and never renders a black bar.
+token map behind restricted audited access, and never renders a black bar. It is
+never rasterized; a PDF source produces token text, so the pseudonymised artifact
+stays editable and visually distinct from a hard redaction.
 
 **Preview and download share one artifact.** The review view fetches the finalized
 bytes once through `GET /api/redaction-runs/:runId/output/file` and uses that same
