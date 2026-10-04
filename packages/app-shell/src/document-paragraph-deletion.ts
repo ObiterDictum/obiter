@@ -67,10 +67,9 @@ export function planParagraphDeletion(
       removed.inserts,
       state.deletedParagraphIds,
     )
-    const selectId =
-      removed.selectId !== null && effective.includes(removed.selectId)
-        ? removed.selectId
-        : (effective[index] ?? effective[index - 1] ?? null)
+    const selectId = effective.includes(removed.selectId)
+      ? removed.selectId
+      : (effective[index] ?? effective[index - 1] ?? null)
     return {
       kind: 'deleted',
       selectId,
