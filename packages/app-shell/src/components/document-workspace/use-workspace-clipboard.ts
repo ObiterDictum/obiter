@@ -17,6 +17,7 @@ import type { DocumentClipboardToolbar } from './ribbon-types'
  * paste needs an editable document.
  */
 export function documentClipboardToolbar(input: {
+  editable: boolean
   selectionActive: boolean
   onCopy: () => void
   onCut: () => void
@@ -25,9 +26,10 @@ export function documentClipboardToolbar(input: {
   return {
     canCopy: input.selectionActive,
     canCut: input.selectionActive,
-    canPaste: true,
+    canPaste: input.editable,
     copyReason: 'Select text to copy',
     cutReason: 'Select text to cut',
+    ...(input.editable ? {} : { pasteReason: 'The document is read-only' }),
     onCopy: input.onCopy,
     onCut: input.onCut,
     onPaste: input.onPaste,

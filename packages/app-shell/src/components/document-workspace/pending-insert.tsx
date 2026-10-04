@@ -13,6 +13,7 @@ export function PendingInsert({
   selected,
   verticalCaret,
   onSelect,
+  onPasteText,
   onTextChange,
   onInsertParagraph,
   onDeleteParagraph,
@@ -23,7 +24,8 @@ export function PendingInsert({
   insert: LocalInsert
   selected: boolean
   verticalCaret?: VerticalCaretColumn
-  onSelect: () => void
+  onSelect: (offset?: number) => void
+  onPasteText?: (text: string, from: number, to: number) => void
   onTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
   onDeleteParagraph?: (paragraphId: string) => void
@@ -64,7 +66,7 @@ export function PendingInsert({
       data-paragraph-id={insert.clientId}
       aria-current={selected ? 'true' : undefined}
       aria-label="Pending paragraph"
-      onClick={onSelect}
+      onClick={() => onSelect(field.current?.selectionStart ?? undefined)}
       className="relative min-h-[1.15em]"
     >
       <textarea
@@ -92,7 +94,31 @@ export function PendingInsert({
         onFocus={() => {
           clearColumn()
           if (programmaticFocus.current) return
-          onSelect()
+          onSelect(field.current?.selectionStart ?? undefined)
+        }}
+        onPaste={(event) => {
+          if (!onPasteText) return
+          const data = event.clipboardData?.getData('text/plain') ?? ''
+          if (data.length === 0) return
+          event.preventDefault()
+          clearColumn()
+          onPasteText(
+            data,
+            event.currentTarget.selectionStart,
+            event.currentTarget.selectionEnd,
+          )
+        }}
+        onDrop={(event) => {
+          if (!onPasteText) return
+          const data = event.dataTransfer?.getData('text/plain') ?? ''
+          if (data.length === 0) return
+          event.preventDefault()
+          clearColumn()
+          onPasteText(
+            data,
+            event.currentTarget.selectionStart,
+            event.currentTarget.selectionEnd,
+          )
         }}
         onCompositionStart={clearColumn}
         onCompositionEnd={clearColumn}
@@ -149,7 +175,7 @@ export function PendingInsert({
         onClick={(event) => {
           clearColumn()
           event.stopPropagation()
-          onSelect()
+          onSelect(field.current?.selectionStart ?? undefined)
         }}
         className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none print:hidden"
         style={{ lineHeight: '1.15', minHeight: '1.15em' }}

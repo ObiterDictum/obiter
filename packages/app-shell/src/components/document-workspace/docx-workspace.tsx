@@ -258,6 +258,7 @@ export function DocxWorkspace({
         deleteParagraphReason={deleteParagraphReason}
         format={format}
         clipboard={documentClipboardToolbar({
+          editable: true,
           selectionActive,
           onCopy: () => void copyToClipboard(),
           onCut: () => void cutToClipboard(),
