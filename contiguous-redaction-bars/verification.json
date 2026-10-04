@@ -1,0 +1,141 @@
+{
+  "docx": {
+    "bytes": 1557,
+    "sha256": "3ab2b80005101b489c38f064b07dd13dfd190855e9ddd0bb6fc26faf238e461a",
+    "zipParts": [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "word/document.xml"
+    ],
+    "markerCount": 1,
+    "highlightRunCount": 1,
+    "blackColourRunCount": 1,
+    "sourceNamesInPackage": [],
+    "sourceNamesAfterStylingRemoved": [],
+    "strippedContainsMarker": true,
+    "highlightAroundMarker": true
+  },
+  "pdf": {
+    "bytes": 4813,
+    "sha256": "492c7d88bb4d1bc7c431f2b7d03538c5b8a2ed444ca72f0f4009c7e0af793c23",
+    "selectableTextLength": 0,
+    "sourceNamesInBytes": [],
+    "opaqueBlackRunsOnBaseline": [
+      {
+        "startPx": 118,
+        "endPx": 119,
+        "widthPx": 1
+      },
+      {
+        "startPx": 128,
+        "endPx": 129,
+        "widthPx": 1
+      },
+      {
+        "startPx": 133,
+        "endPx": 134,
+        "widthPx": 1
+      },
+      {
+        "startPx": 154,
+        "endPx": 155,
+        "widthPx": 1
+      },
+      {
+        "startPx": 158,
+        "endPx": 160,
+        "widthPx": 2
+      },
+      {
+        "startPx": 165,
+        "endPx": 166,
+        "widthPx": 1
+      },
+      {
+        "startPx": 169,
+        "endPx": 388,
+        "widthPx": 219
+      },
+      {
+        "startPx": 395,
+        "endPx": 396,
+        "widthPx": 1
+      },
+      {
+        "startPx": 420,
+        "endPx": 421,
+        "widthPx": 1
+      },
+      {
+        "startPx": 426,
+        "endPx": 427,
+        "widthPx": 1
+      },
+      {
+        "startPx": 435,
+        "endPx": 436,
+        "widthPx": 1
+      },
+      {
+        "startPx": 453,
+        "endPx": 454,
+        "widthPx": 1
+      },
+      {
+        "startPx": 460,
+        "endPx": 461,
+        "widthPx": 1
+      },
+      {
+        "startPx": 466,
+        "endPx": 467,
+        "widthPx": 1
+      },
+      {
+        "startPx": 473,
+        "endPx": 474,
+        "widthPx": 1
+      },
+      {
+        "startPx": 479,
+        "endPx": 480,
+        "widthPx": 1
+      },
+      {
+        "startPx": 487,
+        "endPx": 488,
+        "widthPx": 1
+      },
+      {
+        "startPx": 493,
+        "endPx": 494,
+        "widthPx": 1
+      }
+    ],
+    "longestOpaqueBlackRunPx": 219,
+    "barCentre": {
+      "r": 0,
+      "g": 0,
+      "b": 0,
+      "a": 255
+    },
+    "backgroundSamples": [
+      {
+        "x": 20,
+        "y": 150,
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      {
+        "x": 200,
+        "y": 150,
+        "r": 255,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+PR #264 repair evidence (synthetic content only)
+generated: 2026-10-04T11:51:58Z
+
+previous reviewed head: d391b291ed74906777f67b578462056113ec74dd
+repair head:            01d1b889a8df540bb435d6e35e81d28c1a504ad8
+
+worktree: /home/karl/.t3/worktrees/obiter/t3code-6a3147db
+web:      http://localhost:3004 served from /home/karl/.t3/worktrees/obiter/t3code-6a3147db
+api:      http://127.0.0.1:8791
+  checkoutRoot: /home/karl/.t3/worktrees/obiter/t3code-6a3147db
+  commitSha:    01d1b889a8df540bb435d6e35e81d28c1a504ad8
+  envFile:      /home/karl/.t3/worktrees/obiter/t3code-6a3147db/.env
+web revision freshness: the served module packages/redact-ui/src/finalize-dialog.tsx comes from this
+  worktree and contains the PR marker "opaque black bars". verify-provenance.sh --expect only probes
+  /src/routes/{index,__root}.tsx, which the PR did not touch, so its marker check cannot carry a
+  PR-specific marker; the API commitSha above is the primary revision proof.
+
+database: postgres://obiter:obiter@localhost:5432/obiter_pr264_repair (test-only, 28 migrations)
+storage:  .obiter-storage (local, test-only)
+synthetic source: "Met with John Michael Smith yesterday."
+
+detection: model+supplement produced TWO adjacent person_name spans ("John Michael" 9-21,
+  "Smith" 22-27), both separately accepted before finalize. The detector did not split the
+  three tokens; the three-span plan is covered by unit test "plans one cover rect across
+  three adjacent accepted words".
+
+artifacts (sha256):
+  pr264-synthetic-redacted.docx  3ab2b80005101b489c38f064b07dd13dfd190855e9ddd0bb6fc26faf238e461a
+  pr264-synthetic-redacted.pdf   492c7d88bb4d1bc7c431f2b7d03538c5b8a2ed444ca72f0f4009c7e0af793c23
+  pr264-synthetic-redacted.txt   1c775efdd2f4d6ca1a6ff212ecc2c2eba30dc413468fb83d422a34a0d1264942
+  pr264-redacted-pdf-page1.png   25d950a28d3195b2d51c5966dad068577eb01f9804f38fd2a224b193e734214f
+
+journey: journey.sh (sign-up, email verify, sign-in via bearer token, upload, per-span
+  accept, finalize, GET /api/redaction-runs/:runId/output/file). Raw responses in run-*.json,
+  finalize-*.json, output-*.json and journey-results.jsonl.
