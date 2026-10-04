@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
 export type PdfPreviewStatus =
@@ -9,11 +9,12 @@ export type PdfPreviewStatus =
 /**
  * Read-only multi-page PDF preview (no span overlays).
  *
- * Readiness is reported upward so a caller can keep the primary download
- * disabled until at least the first page has actually rendered. Loading a
- * document is not enough: a blank or broken page must never read as
- * preview-ready. The parent owns the download; this component only renders the
- * bytes it is given and never substitutes another source.
+ * Pages render lazily: a page mounts its canvas and starts a pdf.js render only
+ * when it scrolls near the viewport, so a several-hundred-page secure PDF does
+ * not allocate every page bitmap at once. Readiness is still reported only
+ * after page 1 has actually rendered; loading the document is not enough. The
+ * parent owns the download; this component only renders the bytes it is given
+ * and never substitutes another source.
  */
 export function PdfDocumentPreview({
   file,
@@ -113,6 +114,9 @@ export function PdfDocumentPreview({
   )
 }
 
+/** Distance ahead of the viewport at which a page starts rendering. */
+const RENDER_ROOT_MARGIN = '800px 0px'
+
 function PdfPreviewPage({
   pdf,
   pageNumber,
@@ -124,10 +128,31 @@ function PdfPreviewPage({
   pageCount: number
   onFirstPageRendered: () => void
 }) {
+  const placeholder = useRef<HTMLElement | null>(null)
+  // Environments without IntersectionObserver (jsdom, older engines) render
+  // eagerly rather than never: the preview must still work, just without the
+  // memory saving.
+  const [visible, setVisible] = useState(
+    () => typeof IntersectionObserver === 'undefined',
+  )
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
-    if (!canvas) return
+    if (visible) return
+    const element = placeholder.current
+    if (!element) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setVisible(true)
+      },
+      { rootMargin: RENDER_ROOT_MARGIN },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [visible])
+
+  useEffect(() => {
+    if (!visible || !canvas) return
     let cancelled = false
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null =
       null
@@ -158,17 +183,27 @@ function PdfPreviewPage({
       renderTask?.cancel()
     }
     // The render callback depends on canvas identity, document and page only.
-  }, [canvas, pdf, pageNumber])
+  }, [canvas, pdf, pageNumber, visible])
 
   return (
-    <figure className="flex w-full max-w-[820px] flex-col items-center gap-2">
+    <figure
+      ref={placeholder}
+      className="flex w-full max-w-[820px] flex-col items-center gap-2"
+    >
       <figcaption className="self-start text-xs font-medium text-muted">
         Page {pageNumber} of {pageCount}
       </figcaption>
-      <canvas
-        ref={setCanvas}
-        className="block w-full max-w-full rounded-lg border border-line-strong bg-raised shadow-lg"
-      />
+      {visible ? (
+        <canvas
+          ref={setCanvas}
+          className="block w-full max-w-full rounded-lg border border-line-strong bg-raised shadow-lg"
+        />
+      ) : (
+        <div
+          className="h-[520px] w-full animate-pulse rounded-lg border border-line bg-raised"
+          aria-hidden="true"
+        />
+      )}
     </figure>
   )
 }

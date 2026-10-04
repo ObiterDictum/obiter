@@ -8,7 +8,10 @@ import {
   hardRedactionFailureCategory,
   type HardRedactionSource,
 } from './redaction-hard-output'
-import type { RedactionRenderer } from './redaction-renderer'
+import {
+  RedactionRendererError,
+  type RedactionRenderer,
+} from './redaction-renderer'
 import type { StorageService } from './storage'
 
 const SOURCE_TEXT = 'Alice Smith signed the deed.'
@@ -243,6 +246,22 @@ describe('buildHardRedactionPdf', () => {
     } catch (error) {
       expect(hardRedactionFailureCategory(error)).toBe('renderer_error')
     }
+  })
+
+  it('keeps the worker failure category so operators can tell retriable from fatal', () => {
+    for (const failure of [
+      'renderer_at_capacity',
+      'renderer_not_ready',
+      'renderer_input_too_large',
+      'renderer_too_many_pages',
+      'renderer_timeout',
+      'renderer_too_large',
+    ] as const)
+      expect(
+        hardRedactionFailureCategory(
+          new RedactionRendererError(failure, 'typed'),
+        ),
+      ).toBe(failure)
   })
 
   it('rasterizes a zero-span PDF source without needing a renderer', async () => {

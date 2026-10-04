@@ -309,14 +309,21 @@ function FinalizedOutput({
     run.id,
     isFile && Boolean(run.outputArtifactId),
   )
-  const [previewStatus, setPreviewStatus] = useState<PdfPreviewStatus>({
-    kind: 'loading',
-  })
+  const [preview, setPreview] = useState<{
+    blob: Blob | null
+    status: PdfPreviewStatus
+  }>({ blob: null, status: { kind: 'loading' } })
   const copy = finalizedOutputCopy(run, securePdf)
   // Preview and download read the same immutable Blob fetched once here. The
   // secure redaction download stays disabled until its preview has rendered at
   // least the first page, so a broken preview cannot push an unchecked file.
   const artifact = fileQuery.data
+  // Trust a preview status only for the Blob it described: a refetched or new
+  // artifact must render again before the download is enabled.
+  const previewStatus: PdfPreviewStatus =
+    artifact !== undefined && preview.blob === artifact
+      ? preview.status
+      : { kind: 'loading' }
   const previewReady = isPdf && previewStatus.kind === 'ready'
   const downloadReady = isFile
     ? securePdf
@@ -395,7 +402,9 @@ function FinalizedOutput({
               ) : null}
               <PdfDocumentPreview
                 file={artifact}
-                onStatusChange={setPreviewStatus}
+                onStatusChange={(status) =>
+                  setPreview({ blob: artifact, status })
+                }
               />
             </div>
           ) : isDocx && artifact ? (

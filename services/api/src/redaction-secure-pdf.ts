@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas'
-import { PDFDict, PDFDocument, PDFName } from 'pdf-lib'
+import { PDFArray, PDFDict, PDFDocument, PDFName } from 'pdf-lib'
 import { extractText } from 'unpdf'
 import {
   affectsOutput,
@@ -272,22 +272,36 @@ export async function validateSecurePdf(input: {
         'page_geometry',
         'The secure PDF has a page with invalid dimensions.',
       )
+    // pdf-lib writes an empty /Annots array on every page, so only a
+    // non-empty one is an annotation the source could hide in. /AA (additional
+    // actions) is never valid on a rasterized output page.
+    const annots = page.node.Annots()
+    if (annots instanceof PDFArray && annots.size() > 0)
+      throw new SecurePdfValidationError(
+        'structured_content',
+        'The secure PDF retains annotations.',
+      )
+    if (page.node.get(PDFName.of('AA')))
+      throw new SecurePdfValidationError(
+        'structured_content',
+        'The secure PDF retains page actions.',
+      )
     const resources = page.node.Resources()
     if (!resources)
       throw new SecurePdfValidationError(
         'not_rasterized',
         'A secure PDF page was not rasterized.',
       )
-    if (resources.get(PDFName.of('Font')) instanceof PDFDict) {
-      const fonts = resources.get(PDFName.of('Font'))
-      if (fonts instanceof PDFDict && fonts.keys().length > 0)
-        throw new SecurePdfValidationError(
-          'text_layer',
-          'The secure PDF contains a text layer.',
-        )
-    }
-    const xobjects = resources.get(PDFName.of('XObject'))
-    if (!(xobjects instanceof PDFDict) || xobjects.keys().length === 0)
+    // Resolve through references: a font or image dictionary reached only by
+    // an indirect reference must still be seen by this check.
+    const fonts = resources.lookupMaybe(PDFName.of('Font'), PDFDict)
+    if (fonts && fonts.keys().length > 0)
+      throw new SecurePdfValidationError(
+        'text_layer',
+        'The secure PDF contains a text layer.',
+      )
+    const xobjects = resources.lookupMaybe(PDFName.of('XObject'), PDFDict)
+    if (!xobjects || xobjects.keys().length === 0)
       throw new SecurePdfValidationError(
         'not_rasterized',
         'A secure PDF page was not rasterized.',
@@ -308,7 +322,25 @@ export async function validateSecurePdf(input: {
 
 function assertNoStructuredContent(document: PDFDocument) {
   const catalog = document.catalog
-  for (const key of ['AcroForm', 'Names', 'StructTreeRoot', 'MarkInfo'])
+  // Every catalog entry that can carry source text, hide an action, or add a
+  // structure the rasterized pages do not represent. The output is produced by
+  // this API with only /Type and /Pages, so any of these is a leak.
+  const deniedCatalogKeys = [
+    'AcroForm',
+    'Names',
+    'StructTreeRoot',
+    'MarkInfo',
+    'OpenAction',
+    'AA',
+    'Outlines',
+    'PageLabels',
+    'Metadata',
+    'URI',
+    'JavaScript',
+    'Perms',
+    'OCProperties',
+  ]
+  for (const key of deniedCatalogKeys)
     if (catalog.get(PDFName.of(key)))
       throw new SecurePdfValidationError(
         'structured_content',

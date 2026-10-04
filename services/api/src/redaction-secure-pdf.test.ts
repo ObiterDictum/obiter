@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test'
-import { PDFDocument, StandardFonts } from 'pdf-lib'
+import {
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFString,
+  StandardFonts,
+} from 'pdf-lib'
 import { extractText } from 'unpdf'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import {
@@ -163,5 +169,75 @@ describe('validateSecurePdf', () => {
     await expect(
       validateSecurePdf({ bytes, spans: [], decisions: {} }),
     ).rejects.toMatchObject({ reason: 'no_pages' })
+  })
+
+  it.each([
+    ['literal', PDFString.of('Alice Smith')],
+    ['hex', PDFHexString.fromText('Alice Smith')],
+  ])(
+    'refuses a page annotation whose %s contents carry source text',
+    async (_label, contents) => {
+      const base = await buildSecurePdfFromText('clean')
+      const document = await PDFDocument.load(base)
+      const page = document.getPages()[0]!
+      const annotation = document.context.obj({
+        Type: 'Annot',
+        Subtype: 'FreeText',
+        Rect: [10, 10, 120, 40],
+        Contents: contents,
+      })
+      page.node.set(PDFName.of('Annots'), document.context.obj([annotation]))
+      const bytes = await document.save()
+      await expect(
+        validateSecurePdf({
+          bytes,
+          spans: [span('Alice Smith')],
+          decisions: accepted([span('Alice Smith')]),
+        }),
+      ).rejects.toMatchObject({ reason: 'structured_content' })
+    },
+  )
+
+  it('refuses a catalog OpenAction JavaScript action', async () => {
+    const base = await buildSecurePdfFromText('clean')
+    const document = await PDFDocument.load(base)
+    document.catalog.set(
+      PDFName.of('OpenAction'),
+      document.context.obj({
+        Type: 'Action',
+        S: 'JavaScript',
+        JS: PDFString.of('app.alert(1)'),
+      }),
+    )
+    const bytes = await document.save()
+    await expect(
+      validateSecurePdf({ bytes, spans: [], decisions: {} }),
+    ).rejects.toMatchObject({ reason: 'structured_content' })
+  })
+
+  it('refuses a page additional-action dictionary', async () => {
+    const base = await buildSecurePdfFromText('clean')
+    const document = await PDFDocument.load(base)
+    const page = document.getPages()[0]!
+    page.node.set(
+      PDFName.of('AA'),
+      document.context.obj({
+        O: document.context.obj({ S: 'JavaScript', JS: PDFString.of('x') }),
+      }),
+    )
+    const bytes = await document.save()
+    await expect(
+      validateSecurePdf({ bytes, spans: [], decisions: {} }),
+    ).rejects.toMatchObject({ reason: 'structured_content' })
+  })
+
+  it('refuses a catalog entry from the deny-list', async () => {
+    const base = await buildSecurePdfFromText('clean')
+    const document = await PDFDocument.load(base)
+    document.catalog.set(PDFName.of('PageLabels'), document.context.obj({}))
+    const bytes = await document.save()
+    await expect(
+      validateSecurePdf({ bytes, spans: [], decisions: {} }),
+    ).rejects.toMatchObject({ reason: 'structured_content' })
   })
 })

@@ -141,12 +141,23 @@ async function reportSecurePdfFailure(
     c,
     'redaction_secure_pdf_failed',
     securePdfFailureMessage(category),
-    502,
+    // Busy or warming are retriable; the caller can try the same run again.
+    category === 'renderer_at_capacity' || category === 'renderer_not_ready'
+      ? 503
+      : 502,
   )
 }
 
 function securePdfFailureMessage(category: HardRedactionFailureCategory) {
   switch (category) {
+    case 'renderer_at_capacity':
+      return 'The secure PDF could not be produced because the document renderer is busy. Try again shortly; this run was not finalized.'
+    case 'renderer_not_ready':
+      return 'The secure PDF could not be produced because the document renderer is starting. Try again shortly; this run was not finalized.'
+    case 'renderer_input_too_large':
+    case 'renderer_too_many_pages':
+    case 'renderer_too_large':
+      return 'The source document is too large for the secure PDF renderer, so no secure PDF was produced. This run was not finalized.'
     case 'renderer_unavailable':
     case 'renderer_timeout':
     case 'renderer_error':

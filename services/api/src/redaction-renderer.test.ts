@@ -61,6 +61,42 @@ describe('createHttpRedactionRenderer', () => {
     )
   })
 
+  it.each([
+    ['at_capacity', 'renderer_at_capacity', 503],
+    ['not_ready', 'renderer_not_ready', 503],
+    ['input_too_large', 'renderer_input_too_large', 413],
+    ['too_many_pages', 'renderer_too_many_pages', 422],
+    ['render_timeout', 'renderer_timeout', 504],
+  ])('preserves the worker code %s as %s', async (code, failure, status) => {
+    await withServer(
+      () => Response.json({ error: { code, message: 'typed' } }, { status }),
+      async (url) => {
+        const renderer = createHttpRedactionRenderer({ url })
+        await expect(
+          renderer.renderDocxToPdf(Buffer.from('PK')),
+        ).rejects.toMatchObject({ failure })
+      },
+    )
+  })
+
+  it('refuses an oversized response before buffering it whole', async () => {
+    await withServer(
+      () =>
+        new Response(`%PDF-${'x'.repeat(400)}`, {
+          headers: { 'content-type': 'application/pdf' },
+        }),
+      async (url) => {
+        const renderer = createHttpRedactionRenderer({
+          url,
+          maxResponseBytes: 32,
+        })
+        await expect(
+          renderer.renderDocxToPdf(Buffer.from('PK')),
+        ).rejects.toMatchObject({ failure: 'renderer_too_large' })
+      },
+    )
+  })
+
   it('rejects a 200 response that is not a PDF', async () => {
     await withServer(
       () => new Response('not a pdf'),

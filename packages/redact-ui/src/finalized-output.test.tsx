@@ -209,6 +209,35 @@ describe('finalized secure redacted PDF output', () => {
     revokeObjectURL.mockRestore()
     click.mockRestore()
   })
+
+  it('re-locks the download when a new artifact Blob replaces a rendered one', () => {
+    const { rerender } = renderView()
+    setPreview({ kind: 'ready', pageCount: 1 })
+    expect(
+      screen.getByRole('button', { name: 'Download secure PDF' }),
+    ).toHaveProperty('disabled', false)
+
+    // A refetch hands the view a different Blob; the ready state belonged to
+    // the old one and must not enable a download of bytes nobody previewed.
+    const replacement = new Blob(['%PDF-replacement'], {
+      type: 'application/pdf',
+    })
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: replacement,
+      error: null,
+    })
+    rerender(<RedactionReviewView runId="red_1" onOpenRun={onOpenRun} />)
+    expect(
+      screen.getByRole('button', { name: 'Download secure PDF' }),
+    ).toHaveProperty('disabled', true)
+    expect(screen.queryByText('Preview ready, 1 page')).toBeNull()
+
+    setPreview({ kind: 'ready', pageCount: 1 })
+    expect(
+      screen.getByRole('button', { name: 'Download secure PDF' }),
+    ).toHaveProperty('disabled', false)
+  })
 })
 
 describe('legacy finalized output', () => {
