@@ -10,9 +10,17 @@ import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
 import { ReferencesRibbon, ReviewRibbon, ViewRibbon } from './ribbon-review'
 import { IconButton, RibbonTab, ToolbarGroup } from './ribbon-primitives'
-import type { DocumentFindToolbar, DocumentFormatToolbar } from './ribbon-types'
+import type {
+  DocumentClipboardToolbar,
+  DocumentFindToolbar,
+  DocumentFormatToolbar,
+} from './ribbon-types'
 
-export type { DocumentFindToolbar, DocumentFormatToolbar }
+export type {
+  DocumentClipboardToolbar,
+  DocumentFindToolbar,
+  DocumentFormatToolbar,
+}
 
 export function DocumentWorkspaceToolbar({
   kind,
@@ -47,6 +55,7 @@ export function DocumentWorkspaceToolbar({
   canRedo,
   deleteParagraphReason,
   format,
+  clipboard,
   find,
 }: {
   kind: 'docx' | 'pdf'
@@ -83,6 +92,7 @@ export function DocumentWorkspaceToolbar({
   /** The accessible reason Delete paragraph is unavailable, when it is. */
   deleteParagraphReason?: string
   format?: DocumentFormatToolbar
+  clipboard?: DocumentClipboardToolbar
   find?: DocumentFindToolbar
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
@@ -158,6 +168,7 @@ export function DocumentWorkspaceToolbar({
             canUndo={canUndo}
             canRedo={canRedo}
             format={format}
+            clipboard={clipboard}
             deleteParagraphReason={deleteParagraphReason}
             onUndo={onUndo}
             onRedo={onRedo}
