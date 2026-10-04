@@ -748,4 +748,30 @@ describe('RedactionReviewView', () => {
     click.mockRestore()
     vi.useRealTimers()
   })
+
+  it('describes secure black-bar output in the finalize dialog', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...run,
+        status: 'ready_for_review',
+        summary: { ...run.summary, reviewedCount: 1, unreviewedCount: 0 },
+      },
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
+    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
+    hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
+
+    render(<RedactionReviewView runId="red_1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
+
+    expect(screen.getAllByText(/opaque black bars/).length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText(/plain-text output uses \[REDACTED\]/).length,
+    ).toBeGreaterThan(0)
+  })
 })

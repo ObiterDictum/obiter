@@ -175,6 +175,7 @@ function acceptedSpanInput(
   return {
     pdfBytes,
     layout,
+    text,
     spans: [
       {
         id: 'span_1',

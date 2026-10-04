@@ -97,6 +97,19 @@ function spanAt(text: string, occurrence: string, nth = 1) {
   }
 }
 
+function acceptAll(spans: ReturnType<typeof spanAt>[]) {
+  return Object.fromEntries(
+    spans.map((span) => [
+      span.id,
+      {
+        decision: 'accept' as const,
+        decidedBy: 'usr_1',
+        decidedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]),
+  )
+}
+
 async function zipEntries(bytes: Uint8Array) {
   const zip = await JSZip.loadAsync(bytes)
   const entries = new Map<string, string>()
@@ -397,6 +410,110 @@ describe('buildRedactedDocx', () => {
         tokenMap: {},
       }),
     ).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
+  it('renders adjacent accepted words as one styled black bar', async () => {
+    const text = 'Met with John Michael Smith yesterday.'
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
+      footnotes: null,
+    })
+    const spans = [
+      spanAt(text, 'John'),
+      spanAt(text, 'Michael'),
+      spanAt(text, 'Smith'),
+    ]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: acceptAll(spans),
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const document = (await zipEntries(output)).get('word/document.xml') ?? ''
+    for (const name of ['John', 'Michael', 'Smith']) {
+      expect(document, `${name} survives`).not.toContain(name)
+    }
+    expect(document.match(/\[REDACTED\]/gu)?.length).toBe(1)
+    expect(document).toContain('<w:highlight w:val="black"/>')
+    expect(document).toContain('<w:color w:val="000000"/>')
+  })
+
+  it('reveals only the harmless marker when the black styling is removed', async () => {
+    const text = 'Met with John Michael Smith yesterday.'
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
+      footnotes: null,
+    })
+    const spans = [
+      spanAt(text, 'John'),
+      spanAt(text, 'Michael'),
+      spanAt(text, 'Smith'),
+    ]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: acceptAll(spans),
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const document = (await zipEntries(output)).get('word/document.xml') ?? ''
+    const unstyled = document.replace(/<w:(?:highlight|color)\b[^>]*\/>/gu, '')
+    expect(unstyled).not.toContain('John')
+    expect(unstyled).not.toContain('Michael')
+    expect(unstyled).not.toContain('Smith')
+    expect(unstyled).toContain('[REDACTED]')
+  })
+
+  it('does not merge redactions across a paragraph boundary', async () => {
+    const text = 'John\nMichael'
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>John</w:t></w:r></w:p><w:p><w:r><w:t>Michael</w:t></w:r></w:p>`,
+      footnotes: null,
+    })
+    const spans = [spanAt(text, 'John'), spanAt(text, 'Michael')]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: acceptAll(spans),
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const document = (await zipEntries(output)).get('word/document.xml') ?? ''
+    expect(document.match(/\[REDACTED\]/gu)?.length).toBe(2)
+  })
+
+  it('keeps adjacent pseudonymised tokens separate', async () => {
+    const text = 'John Michael'
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
+      footnotes: null,
+    })
+    const spans = [spanAt(text, 'John'), spanAt(text, 'Michael')]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: Object.fromEntries(
+        spans.map((span) => [
+          span.id,
+          {
+            decision: 'pseudonymise' as const,
+            decidedBy: 'usr_1',
+            decidedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ]),
+      ),
+      outputMode: 'pseudonymised',
+      tokenMap: { PERSON_NAME_1: 'John', PERSON_NAME_2: 'Michael' },
+    })
+    const document = (await zipEntries(output)).get('word/document.xml') ?? ''
+    expect(document).toContain('[PERSON_NAME_1]')
+    expect(document).toContain('[PERSON_NAME_2]')
+    expect(document).not.toContain('<w:highlight')
   })
 })
 

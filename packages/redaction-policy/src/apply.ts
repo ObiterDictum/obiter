@@ -14,13 +14,98 @@ export interface TokenMap {
   [token: string]: string
 }
 
-type OutputSpan = RedactionSpan & { replacement: string }
+export interface RedactionRegion {
+  start: number
+  end: number
+  spanIds: string[]
+}
+
+export interface RedactionRange {
+  start: number
+  end: number
+  spanId: string
+}
+
+/**
+ * Horizontal whitespace that may sit inside one output region: ordinary
+ * spaces and tabs only. A CR/LF or any visible character ends the region, so a
+ * bar can never bridge a line or absorb unredacted text. A non-breaking space
+ * (U+00A0) is deliberately excluded: it is a non-ASCII separator, so it
+ * produces separate bars rather than widening a merge on a character the
+ * source did not prove was ordinary spacing.
+ */
+const REGION_GAP = /^[ \t]*$/
 
 export function affectsOutput(decision: Decisions[string] | undefined) {
   return (
     decision?.decision === 'accept' ||
     decision?.decision === 'override_redact' ||
     decision?.decision === 'pseudonymise'
+  )
+}
+
+/**
+ * Merge located output ranges into contiguous regions. Ranges may overlap,
+ * touch, or be separated solely by horizontal whitespace; anything else starts
+ * a new region. Shared by text, DOCX and PDF planning so all three agree on
+ * which spans form one bar. `text` is the coordinate space the ranges are
+ * expressed in, so a caller with paragraph-local ranges gets paragraph-local
+ * regions and cannot bridge its own structural boundary.
+ */
+export function coalesceRanges(
+  text: string,
+  ranges: readonly RedactionRange[],
+): RedactionRegion[] {
+  const ordered = [...ranges].sort(
+    (left, right) => left.start - right.start || right.end - left.end,
+  )
+  const regions: RedactionRegion[] = []
+  for (const range of ordered) {
+    const current = regions.at(-1)
+    const joins =
+      current !== undefined &&
+      (range.start <= current.end ||
+        REGION_GAP.test(text.slice(current.end, range.start)))
+    if (!current || !joins) {
+      regions.push({
+        start: range.start,
+        end: range.end,
+        spanIds: [range.spanId],
+      })
+      continue
+    }
+    current.end = Math.max(current.end, range.end)
+    if (!current.spanIds.includes(range.spanId))
+      current.spanIds.push(range.spanId)
+  }
+  return regions
+}
+
+/**
+ * Plan contiguous redaction regions for finalized output. Only
+ * output-affecting spans participate, and every span is verified against the
+ * source before any region is produced, so a stale offset refuses instead of
+ * redacting the wrong bytes. Original spans and decisions are never mutated:
+ * the region is a presentation plan, not a replacement for the audit record.
+ */
+export function coalesceRedactionRegions(
+  text: string,
+  spans: RedactionSpan[],
+  decisions: Decisions,
+): RedactionRegion[] {
+  const affected = spans.filter((span) => affectsOutput(decisions[span.id]))
+  for (const span of affected) {
+    if (text.slice(span.start, span.end) !== span.text) {
+      throw new RedactionSpanIntegrityError(span.id)
+    }
+  }
+  return coalesceRanges(
+    text,
+    affected.map((span) => ({
+      start: span.start,
+      end: span.end,
+      spanId: span.id,
+    })),
   )
 }
 
@@ -45,12 +130,18 @@ function outputSpans(
     })
 }
 
-function replace(text: string, spans: OutputSpan[]) {
-  return spans
+interface Replacement {
+  start: number
+  end: number
+  replacement: string
+}
+
+function replace(text: string, replacements: Replacement[]) {
+  return replacements
     .sort((left, right) => right.start - left.start || right.end - left.end)
     .reduce(
-      (result, span) =>
-        `${result.slice(0, span.start)}${span.replacement}${result.slice(span.end)}`,
+      (result, replacement) =>
+        `${result.slice(0, replacement.start)}${replacement.replacement}${result.slice(replacement.end)}`,
       text,
     )
 }
@@ -62,8 +153,9 @@ export function applyRedacted(
 ): string {
   return replace(
     text,
-    outputSpans(text, spans, decisions).map((span) => ({
-      ...span,
+    coalesceRedactionRegions(text, spans, decisions).map((region) => ({
+      start: region.start,
+      end: region.end,
       replacement: '[REDACTED]',
     })),
   )
@@ -113,7 +205,7 @@ export function applyPseudonymised(
       const token = tokensByEntity.get(`${span.category}:${span.text}`)
       if (!token)
         throw new Error(`Missing pseudonym token for span ${span.id}.`)
-      return { ...span, replacement: `[${token}]` }
+      return { start: span.start, end: span.end, replacement: `[${token}]` }
     }),
   )
 }

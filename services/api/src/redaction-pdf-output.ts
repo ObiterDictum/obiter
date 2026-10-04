@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import {
   affectsOutput,
+  coalesceRedactionRegions,
   coverRectsForSpan,
   glyphCoverRect,
   snapDeviceCoverOutward,
@@ -15,6 +16,8 @@ import type { DocumentTextLayout } from './document-layout'
 export interface RedactedPdfInput {
   pdfBytes: Buffer
   layout: DocumentTextLayout
+  /** Extracted source text the span offsets address; drives region coalescing. */
+  text: string
   spans: RedactionSpan[]
   decisions: Decisions
   outputMode: 'redacted' | 'pseudonymised'
@@ -29,8 +32,8 @@ interface PageRect {
   label?: string
   /** Characters covered by this rect — drives descender/ascent padding. */
   ink?: string
-  /** Span this rect redacts, so an off-page cover can be refused by id. */
-  spanId: string
+  /** Spans this rect redacts, so an off-page cover is refused by every id. */
+  spanIds: string[]
 }
 
 /** Visible page box in PDF user space, origin included. */
@@ -117,7 +120,7 @@ export async function buildRedactedPdf(
       }).promise
 
       const pageIndex = pageNumber - 1
-      for (const rect of mergeRects(rectsByPage.get(pageIndex) ?? [])) {
+      for (const rect of rectsByPage.get(pageIndex) ?? []) {
         paintRedaction(context, viewport, rect)
       }
 
@@ -197,8 +200,8 @@ function paintRedaction(
 
 /** @deprecated Prefer glyphCoverRect / coverRectsForSpan. */
 export function padGlyphRect(
-  rect: Omit<PageRect, 'spanId'>,
-): Omit<PageRect, 'spanId'> {
+  rect: Omit<PageRect, 'spanIds'>,
+): Omit<PageRect, 'spanIds'> {
   const covered = glyphCoverRect({
     x: rect.x,
     y: rect.y,
@@ -209,23 +212,45 @@ export function padGlyphRect(
   return { ...rect, ...covered }
 }
 
+interface RectPlan {
+  spanIds: string[]
+  start: number
+  end: number
+  label?: string
+}
+
 function collectRedactionRects(input: RedactedPdfInput) {
   const rectsByPage = new Map<number, PageRect[]>()
   const missingSpanIds: string[] = []
-  for (const span of input.spans) {
-    if (!affectsOutput(input.decisions[span.id])) continue
-    const label =
-      input.outputMode === 'pseudonymised'
-        ? (input.tokenMap[span.id] ?? '[REDACTED]')
-        : undefined
+  // Redacted output plans one bar per coalesced region; pseudonymised output
+  // keeps one labelled rect per span so distinct tokens never share a bar.
+  const plans: RectPlan[] =
+    input.outputMode === 'redacted'
+      ? coalesceRedactionRegions(input.text, input.spans, input.decisions).map(
+          (region) => ({
+            spanIds: region.spanIds,
+            start: region.start,
+            end: region.end,
+          }),
+        )
+      : input.spans
+          .filter((span) => affectsOutput(input.decisions[span.id]))
+          .map((span) => ({
+            spanIds: [span.id],
+            start: span.start,
+            end: span.end,
+            label: input.tokenMap[span.id] ?? '[REDACTED]',
+          }))
+  for (const plan of plans) {
     const coveredRects = coverRectsForSpan({
       segments: input.layout.segments,
-      spanStart: span.start,
-      spanEnd: span.end,
-      spanText: span.text,
+      spanStart: plan.start,
+      spanEnd: plan.end,
+      spanText: input.text.slice(plan.start, plan.end),
+      mergeWhitespace: input.outputMode === 'redacted',
     })
     if (coveredRects.length === 0) {
-      missingSpanIds.push(span.id)
+      missingSpanIds.push(...plan.spanIds)
       continue
     }
     for (const covered of coveredRects) {
@@ -235,9 +260,9 @@ function collectRedactionRects(input: RedactedPdfInput) {
         y: covered.y,
         width: covered.width,
         height: covered.height,
-        label,
+        label: plan.label,
         ink: covered.ink,
-        spanId: span.id,
+        spanIds: plan.spanIds,
       })
       rectsByPage.set(covered.pageIndex, list)
     }
@@ -248,11 +273,6 @@ function collectRedactionRects(input: RedactedPdfInput) {
     throw new RedactionCoverGeometryError(missingSpanIds)
   }
   return rectsByPage
-}
-
-function mergeRects(rects: PageRect[]): PageRect[] {
-  // coverRectsForSpan already union-merges per span; keep separate span bars.
-  return rects
 }
 
 /**
@@ -267,7 +287,8 @@ function assertCoversOnPage(
   const missing = new Set<string>()
   for (const [pageIndex, rects] of rectsByPage) {
     for (const rect of rects) {
-      if (coverMissesPage(rect, pageBounds[pageIndex])) missing.add(rect.spanId)
+      if (coverMissesPage(rect, pageBounds[pageIndex]))
+        for (const spanId of rect.spanIds) missing.add(spanId)
     }
   }
   if (missing.size > 0) throw new RedactionCoverGeometryError([...missing])
