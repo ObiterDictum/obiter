@@ -98,6 +98,19 @@ describe('drawingBoxSize', () => {
   it('converts EMU extents into CSS pixels', () => {
     expect(drawingBoxSize(drawing)).toEqual({ width: 180, height: 48 })
   })
+
+  it('reads a repeated extent cx with no cy without backtracking', () => {
+    const repeatedCx = 'cx="0" '.repeat(20_000)
+    for (const xml of [
+      `<wp:extent ${repeatedCx}/>`,
+      `<a:ext ${repeatedCx}/>`,
+    ]) {
+      const start = performance.now()
+      const size = drawingBoxSize(xml)
+      expect(performance.now() - start).toBeLessThan(1000)
+      expect(size).toEqual({ width: 180, height: 48 })
+    }
+  })
 })
 
 describe('readableRunColor', () => {

@@ -37,15 +37,21 @@ const RENDER_SHELL_HTML =
   '<!doctype html><html><head><meta charset="utf-8"><title>Obiter document renderer</title></head><body></body></html>'
 
 /**
- * Chromium renders this itself, and its sandbox, DNS blackhole and heap ceiling
- * are the isolation boundary: the page loads no network resource and its only
- * script is the injected app-shell bundle.
+ * Chromium renders this itself, and its sandbox, network blackhole and heap
+ * ceiling are the isolation boundary: the page loads no network resource and
+ * its only script is the injected app-shell bundle.
+ *
+ * `--host-resolver-rules` refuses DNS lookups, but a compromised page could
+ * still dial a literal IP. `--proxy-server` points at a dead local port so
+ * direct-IP requests fail too. The page script is trusted and offline, so this
+ * is defence-in-depth, not the only barrier.
  */
 const CHROMIUM_ARGS = [
   '--disable-dev-shm-usage',
   '--disable-background-networking',
   '--disable-component-update',
   '--host-resolver-rules=MAP * ~NOTFOUND',
+  '--proxy-server=127.0.0.1:9',
 ]
 
 /** Image types a Chromium `<img>` can paint; others fall back to a placeholder. */
@@ -159,6 +165,9 @@ export async function createDocxRenderer(
           },
         )
         assertRenderable(result, limits)
+        // A disconnect during the layout pass must not spend another full
+        // timeout running the PDF pass on a page nobody is waiting for.
+        if (signal?.aborted) throw new RendererFailure('render_cancelled')
         const pdf = await raceRender(
           page.pdf({ printBackground: true, preferCSSPageSize: true }),
           limits.renderTimeoutMs,
@@ -275,6 +284,18 @@ function raceRender<T>(
       timer = undefined
       signal?.removeEventListener('abort', onAbort)
       finish()
+    }
+    // An abort that landed before this race began must fail now, not after a
+    // full render timeout; the in-flight work is swallowed because the page
+    // is discarded anyway.
+    if (signal?.aborted) {
+      onBound()
+      work.then(
+        () => undefined,
+        () => undefined,
+      )
+      reject(new RendererFailure('render_cancelled'))
+      return
     }
     timer = setTimeout(() => {
       onBound()

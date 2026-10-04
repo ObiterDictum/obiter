@@ -142,7 +142,13 @@ export function createRendererServer(config: RendererServerConfig): Server {
     try {
       const body = await readRequestBody(request, limits.maxInputBytes)
       const pdf = await renderer.render(body, abort.signal)
-      if (response.writableEnded || abort.signal.aborted) return
+      if (response.writableEnded) return
+      // An abort after the render resolved must still end the request; the
+      // headers are unsent, so a typed 499 is safe to write.
+      if (abort.signal.aborted) {
+        respondError(request, response, 499, 'render_cancelled')
+        return
+      }
       response.writeHead(200, {
         'content-type': 'application/pdf',
         'content-length': String(pdf.byteLength),

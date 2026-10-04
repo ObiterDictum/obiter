@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { chmod, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { chromium, type Browser, type Page } from 'playwright'
 import { createCanvas } from '@napi-rs/canvas'
 import { PDFDict, PDFDocument, PDFName } from 'pdf-lib'
 import {
@@ -248,13 +249,17 @@ describe('redaction renderer', () => {
     expect(await renderDirCount(baseDir)).toBe(0)
   })
 
-  it('refuses an aborted render with a typed error and no artifact', async () => {
+  it('refuses an already-aborted render immediately without an artifact', async () => {
     const controller = new AbortController()
     controller.abort()
     const docx = await demoFixtureBytes()
+    const start = performance.now()
     const code = await failureCode(() =>
       renderer.render(docx, controller.signal),
     )
+    // The 60s default timeout would hold the single slot if the abort were
+    // only observed by raceRender; an already-aborted signal must fail now.
+    expect(performance.now() - start).toBeLessThan(1000)
     expect(code).toBe('render_cancelled')
     expect(await renderDirCount(baseDir)).toBe(0)
   })
@@ -263,6 +268,44 @@ describe('redaction renderer', () => {
     await renderer.render(await demoFixtureBytes())
     expect(await renderDirCount(baseDir)).toBe(0)
   })
+})
+
+describe('redaction renderer browser surface', () => {
+  let browser: Browser
+  let page: Page
+
+  beforeAll(async () => {
+    const assets = await loadRendererAssets()
+    browser = await chromium.launch({ headless: true })
+    page = await browser.newPage()
+    await page.setContent(
+      '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
+      { waitUntil: 'load' },
+    )
+    await page.addStyleTag({ content: assets.css })
+    await page.addScriptTag({ content: assets.script })
+    await page.evaluate(() => document.fonts.ready.then(() => undefined))
+  }, 60_000)
+
+  afterAll(async () => {
+    await browser?.close()
+  })
+
+  it('reuses one render container across repeated renders', async () => {
+    const model = (await parseDocx(await createSyntheticDocx(['Contained'])))
+      .model
+    for (let index = 0; index < 5; index += 1) {
+      await page.evaluate(
+        (input) =>
+          window.__obiterRenderDocument?.(input.model, input.imageUrls),
+        { model, imageUrls: {} },
+      )
+    }
+    const containers = await page.evaluate(
+      () => document.querySelectorAll('[data-obiter-render-container]').length,
+    )
+    expect(containers).toBe(1)
+  }, 60_000)
 })
 
 describe('redaction renderer limits', () => {

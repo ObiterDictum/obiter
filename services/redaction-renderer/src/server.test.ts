@@ -8,7 +8,7 @@ import {
 } from './contract'
 import { RENDERER_LIMITS, type RendererLimits } from './limits'
 import { RendererFailure, type DocxRenderer } from './renderer'
-import { createRendererServer } from './server'
+import { createRendererServer, type RendererLogEvent } from './server'
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31])
 
@@ -26,8 +26,9 @@ const servers: Server[] = []
 async function startServer(
   getRenderer: () => DocxRenderer | null,
   limits: RendererLimits = RENDERER_LIMITS,
+  log?: (event: RendererLogEvent) => void,
 ) {
-  const server = createRendererServer({ getRenderer, limits })
+  const server = createRendererServer({ getRenderer, limits, log })
   servers.push(server)
   await new Promise<void>((resolve) =>
     server.listen(0, '127.0.0.1', () => resolve()),
@@ -55,6 +56,15 @@ function postDocx(baseUrl: string, body: Uint8Array, contentType?: string) {
     },
     body: new Uint8Array(body),
   })
+}
+
+async function waitFor(predicate: () => boolean, ms = 3000): Promise<boolean> {
+  const deadline = Date.now() + ms
+  while (Date.now() < deadline) {
+    if (predicate()) return true
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  return predicate()
 }
 
 describe('redaction renderer HTTP surface', () => {
@@ -153,6 +163,48 @@ describe('redaction renderer HTTP surface', () => {
     expect(response.status).toBe(413)
     const body = (await response.json()) as { error: { code: string } }
     expect(body.error.code).toBe('input_too_large')
+  })
+
+  it('ends a render the client aborted with a typed cancellation', async () => {
+    const logged: RendererLogEvent[] = []
+    let started: () => void = () => undefined
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    const baseUrl = await startServer(
+      () =>
+        stubRenderer({
+          render: (_docx, signal) =>
+            new Promise((resolve) => {
+              started()
+              if (!signal || signal.aborted) {
+                resolve(PDF_BYTES)
+                return
+              }
+              signal.addEventListener('abort', () => resolve(PDF_BYTES), {
+                once: true,
+              })
+            }),
+        }),
+      RENDERER_LIMITS,
+      (event) => logged.push(event),
+    )
+    const controller = new AbortController()
+    const pending = fetch(`${baseUrl}/render`, {
+      method: 'POST',
+      headers: { 'content-type': REDACTION_RENDER_DOCX_CONTENT_TYPE },
+      body: new Uint8Array([1, 2, 3]),
+      signal: controller.signal,
+    }).catch(() => undefined)
+    await startedPromise
+    controller.abort()
+    await pending
+    const ended = await waitFor(() =>
+      logged.some(
+        (event) => event.code === 'render_cancelled' && event.status === 499,
+      ),
+    )
+    expect(ended).toBe(true)
   })
 
   it('answers an unknown route with a typed 404', async () => {

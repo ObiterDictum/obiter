@@ -3,7 +3,7 @@ import {
   drawingIsTextBox,
   drawingShapeFill,
 } from './document-page-media'
-import { emuToPx } from './document-page-units'
+import { emuToPx, xmlDigitAttr, xmlStartTag } from './document-page-units'
 
 export type DrawingPart = {
   kind: 'rect' | 'picture'
@@ -165,20 +165,15 @@ function xfrmBox(xml: string):
       heightPx: number
     }
   | undefined {
-  const off = xml.match(
-    /<a:off\b[^>]*x="(\d+)"[^>]*y="(\d+)"|<a:off\b[^>]*y="(\d+)"[^>]*x="(\d+)"/i,
-  )
-  const ext = xml.match(
-    /<a:ext\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"|<a:ext\b[^>]*cy="(\d+)"[^>]*cx="(\d+)"/i,
-  )
-  if (!ext) return undefined
-  const cx = Number(ext[1] || ext[4])
-  const cy = Number(ext[2] || ext[3])
-  if (!Number.isFinite(cx) || !Number.isFinite(cy) || cx <= 0 || cy <= 0) {
+  const ext = xmlStartTag(xml, 'a:ext')
+  const cx = xmlDigitAttr(ext, 'cx')
+  const cy = xmlDigitAttr(ext, 'cy')
+  if (cx === undefined || cy === undefined || cx <= 0 || cy <= 0) {
     return undefined
   }
-  const x = Number(off?.[1] || off?.[4] || 0)
-  const y = Number(off?.[2] || off?.[3] || 0)
+  const off = xmlStartTag(xml, 'a:off')
+  const x = xmlDigitAttr(off, 'x') ?? 0
+  const y = xmlDigitAttr(off, 'y') ?? 0
   return {
     leftPx: emuPx(x),
     topPx: emuPx(y),
@@ -192,13 +187,10 @@ function extentBox(
 ): { widthPx: number; heightPx: number } | undefined {
   const box = xfrmBox(xml)
   if (box) return { widthPx: box.widthPx, heightPx: box.heightPx }
-  const extent = xml.match(
-    /<wp:extent\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"|<wp:extent\b[^>]*cy="(\d+)"[^>]*cx="(\d+)"/i,
-  )
-  if (!extent) return undefined
-  const cx = Number(extent[1] || extent[4])
-  const cy = Number(extent[2] || extent[3])
-  if (!Number.isFinite(cx) || !Number.isFinite(cy) || cx <= 0 || cy <= 0) {
+  const extent = xmlStartTag(xml, 'wp:extent')
+  const cx = xmlDigitAttr(extent, 'cx')
+  const cy = xmlDigitAttr(extent, 'cy')
+  if (cx === undefined || cy === undefined || cx <= 0 || cy <= 0) {
     return undefined
   }
   return { widthPx: Math.max(1, emuPx(cx)), heightPx: Math.max(1, emuPx(cy)) }
