@@ -61,10 +61,11 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
       <DialogContent>
         <DialogTitle>Finalize redaction output</DialogTitle>
         <DialogDescription>
-          Choose the output format. Redacted PDF and DOCX outputs remove the
-          approved spans and render opaque black bars; plain-text output uses
-          [REDACTED] markers. Pseudonymisation is keyed by exact text within
-          each category, not entity identity.
+          Choose how this document leaves Obiter. A secure redacted PDF is fixed
+          and share-safe. A pseudonymised editable copy is for continued
+          internal work and keeps its token map behind restricted, audited
+          access. They are different confidentiality workflows, not two formats
+          of the same output.
         </DialogDescription>
         <div className="flex flex-col gap-3">
           {limitedDetectionMode ? (
@@ -73,36 +74,43 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
               role="alert"
             />
           ) : null}
-          <label className="flex gap-2 text-sm text-ink">
-            <input
-              type="radio"
-              checked={outputMode === 'redacted'}
-              onChange={() => setOutputMode('redacted')}
-            />{' '}
-            <span>
-              <strong>Redacted</strong>
-              <br />
-              <span className="text-muted">
-                Removes approved spans. PDF and DOCX render opaque black bars;
-                plain-text output uses [REDACTED].
+          <fieldset className="flex flex-col gap-3">
+            <legend className="sr-only">Output type</legend>
+            <label className="flex gap-2 text-sm text-ink">
+              <input
+                type="radio"
+                name="redaction-output-mode"
+                checked={outputMode === 'redacted'}
+                onChange={() => setOutputMode('redacted')}
+              />{' '}
+              <span>
+                <strong>Secure redacted PDF</strong>
+                <br />
+                <span className="text-muted">
+                  Removes accepted content and creates a fixed, share-safe PDF
+                  with opaque black bars. The finalized PDF contains no
+                  selectable source-text layer.
+                </span>
               </span>
-            </span>
-          </label>
-          <label className="flex gap-2 text-sm text-ink">
-            <input
-              type="radio"
-              checked={outputMode === 'pseudonymised'}
-              onChange={() => setOutputMode('pseudonymised')}
-            />{' '}
-            <span>
-              <strong>Pseudonymised</strong>
-              <br />
-              <span className="text-muted">
-                Uses consistent category tokens; re-identification requires
-                token-map access.
+            </label>
+            <label className="flex gap-2 text-sm text-ink">
+              <input
+                type="radio"
+                name="redaction-output-mode"
+                checked={outputMode === 'pseudonymised'}
+                onChange={() => setOutputMode('pseudonymised')}
+              />{' '}
+              <span>
+                <strong>Pseudonymised editable copy</strong>
+                <br />
+                <span className="text-muted">
+                  Replaces accepted content with consistent category tokens for
+                  continued internal work. Token-map access remains restricted
+                  and audited.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          </fieldset>
           {hasUnreviewed ? (
             <label className="rounded-md border border-warning p-3 text-sm text-ink">
               <input
@@ -133,7 +141,9 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
             </label>
           ) : null}
           {finalize.error ? (
-            <p className="text-sm text-danger">{finalize.error.message}</p>
+            <p className="text-sm text-danger" role="alert">
+              {finalize.error.message}
+            </p>
           ) : null}
           <div className="flex justify-end gap-2">
             <DialogClose render={<Button variant="secondary">Cancel</Button>} />
@@ -146,7 +156,9 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
               }
               onClick={submit}
             >
-              Confirm finalize
+              {outputMode === 'redacted'
+                ? 'Create secure PDF'
+                : 'Create pseudonymised copy'}
             </Button>
           </div>
         </div>

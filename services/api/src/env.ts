@@ -32,6 +32,10 @@ const requiredProductionKeys = [
   'BETTER_AUTH_URL',
   'OBITER_WEB_ORIGIN',
   'OBITER_RESEND_API_KEY',
+  // Hard-redaction finalize renders sanitized DOCX through the sandboxed
+  // rendering worker. Without it a DOCX-source run cannot produce its secure
+  // PDF, so production must configure it rather than fail at finalize time.
+  'OBITER_REDACTION_RENDERER_URL',
   'MEILISEARCH_HOST',
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
@@ -57,6 +61,12 @@ export interface ApiEnv {
   desktopOrigin: string
   resendApiKey: string | null
   emailFrom: string
+  /**
+   * Base URL of the sandboxed rendering worker that turns a sanitized .docx
+   * into an intermediate PDF. Null outside production when unconfigured; a
+   * DOCX-source hard redaction then fails visibly instead of downgrading.
+   */
+  redactionRendererUrl: string | null
   meilisearchHost: string
   meilisearchSearchApiKey: string
   meilisearchAdminApiKey: string
@@ -415,6 +425,7 @@ export function readApiEnv(): ApiEnv {
     emailFrom: (
       process.env.OBITER_EMAIL_FROM ?? 'onboarding@resend.dev'
     ).trim(),
+    redactionRendererUrl: readOptionalUrl('OBITER_REDACTION_RENDERER_URL'),
     meilisearchHost: readRequiredUrl(
       'MEILISEARCH_HOST',
       'http://localhost:7700',

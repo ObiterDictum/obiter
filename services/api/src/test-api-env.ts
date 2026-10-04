@@ -33,6 +33,7 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     desktopOrigin: 'obiter://desktop-auth',
     resendApiKey: null,
     emailFrom: 'onboarding@resend.dev',
+    redactionRendererUrl: null,
     meilisearchHost: 'http://localhost:7700',
     meilisearchSearchApiKey: 'dev-key',
     meilisearchAdminApiKey: 'dev-key',

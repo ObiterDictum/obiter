@@ -38,6 +38,10 @@ import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRunCreationRoutes } from './routes/redact-run-creation'
 import { createRedactReviewRoutes } from './routes/redact-review'
 import { createRedactLifecycleRoutes } from './routes/redact-lifecycle'
+import {
+  createHttpRedactionRenderer,
+  type RedactionRenderer,
+} from './redaction-renderer'
 import { apiRequestLimitsFromEnv } from './request-limits'
 import { createRequestBodyLimitMiddleware } from './request-body-limit'
 import { createTrackedChangeRoutes } from './routes/tracked-changes'
@@ -61,6 +65,12 @@ export type ApiRuntimeKind = 'node' | 'bun'
 interface ApiAppOptions {
   auth?: Auth
   storage?: StorageService
+  /**
+   * Sandboxed document renderer used by DOCX hard-redaction finalize. Defaults
+   * to the HTTP client for `OBITER_REDACTION_RENDERER_URL`; null when no URL is
+   * configured, which makes a DOCX secure-PDF finalize fail visibly.
+   */
+  redactionRenderer?: RedactionRenderer | null
   /**
    * The adapter serving this app, declared by the entry point that built it.
    * Omitted by tests that build the app directly, so health stays minimal.
@@ -145,6 +155,12 @@ export function createApiApp(
   })
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
+  const redactionRenderer =
+    options.redactionRenderer !== undefined
+      ? options.redactionRenderer
+      : env.redactionRendererUrl
+        ? createHttpRedactionRenderer({ url: env.redactionRendererUrl })
+        : null
   // The default is the compatibility seam: corpus reads and writes are the
   // application pool, exactly as they were before the seam existed.
   const corpusAccess = options.corpus ?? { read: pool, write: pool }
@@ -306,7 +322,7 @@ export function createApiApp(
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createTrackedChangeRoutes(pool, storage))
   app.route('/', createRedactRunCreationRoutes(pool, storage, requestLimits))
-  app.route('/', createRedactReviewRoutes(pool, storage))
+  app.route('/', createRedactReviewRoutes(pool, storage, redactionRenderer))
   app.route('/', createRedactLifecycleRoutes(pool, storage))
   app.route('/', createVerificationRunRoutes(pool, storage, corpusAccess.read))
   app.route('/', createLegalSearchRoutes(env))

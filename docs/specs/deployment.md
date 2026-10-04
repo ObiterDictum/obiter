@@ -44,12 +44,14 @@ what remains true from the original plan:
   Dockerfile stage that installs without `bun.lock` or opts `onnxruntime-node`
   into its install scripts).
 - Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy
-  internal network), better-auth secret/base-URL, CORS origin, and the optional
-  detection settings `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION`,
-  `OBITER_RAMPART_CACHE_DIR`, `OBITER_RAMPART_MIN_SCORE` and
-  `OBITER_RAMPART_CHUNK_TOKENS`. Detection settings are validated once at API
-  startup; defaults pin the shipped model/revision, minimum confidence `0.4` and
-  chunk size `400`.
+  internal network), better-auth secret/base-URL, CORS origin,
+  `OBITER_REDACTION_RENDERER_URL` (required in production: the sandboxed worker
+  that renders a sanitized `.docx` into an intermediate PDF for hard-redaction
+  finalize), and the optional detection settings `OBITER_RAMPART_MODEL`,
+  `OBITER_RAMPART_REVISION`, `OBITER_RAMPART_CACHE_DIR`,
+  `OBITER_RAMPART_MIN_SCORE` and `OBITER_RAMPART_CHUNK_TOKENS`. Detection settings
+  are validated once at API startup; defaults pin the shipped model/revision,
+  minimum confidence `0.4` and chunk size `400`.
 - The API loads the model once at startup rather than on the first redaction
   request. A load failure is logged with its cause and leaves the service
   running — detection degrades per run to `heuristics+supplement`, which the

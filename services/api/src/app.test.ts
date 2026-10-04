@@ -2,10 +2,12 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, mock } from 'bun:test'
+import { PDFDocument } from 'pdf-lib'
 import { vi } from '../../../scripts/test/vitest-compat'
 
 import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { RedactionRunRow } from './redaction-database'
+import type { RedactionRenderer } from './redaction-renderer'
 import { createLocalStorage } from './storage'
 
 const searchClientMock = vi.hoisted(() => ({
@@ -1811,6 +1813,26 @@ function finalizedRunRow(
   }
 }
 
+/** A valid, text-free PDF the fake renderer can return for rasterization. */
+async function blankRendererPdf() {
+  const document = await PDFDocument.create()
+  document.addPage([200, 200])
+  return new Uint8Array(await document.save())
+}
+
+/**
+ * Fake sandbox renderer at the HTTP client's boundary. It records the sanitized
+ * .docx it receives so a test can assert the burn happened before rendering.
+ */
+function fakeDocxRenderer(onDocx?: (bytes: Buffer) => void): RedactionRenderer {
+  return {
+    renderDocxToPdf: async (docxBytes) => {
+      onDocx?.(docxBytes)
+      return blankRendererPdf()
+    },
+  }
+}
+
 describe('createApiApp redaction review reads', () => {
   function createRedactionReadApp({
     run,
@@ -2098,6 +2120,30 @@ describe('createApiApp redaction review reads', () => {
     )
   })
 
+  it('hides output metadata and bytes for a soft-deleted run', async () => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow({ deleted_at: '2026-02-01T00:00:00.000Z' }),
+      artifactKey: 'org/org_1/artifacts/art_1',
+    })
+
+    const meta = await app.request('/api/redaction-runs/red_1/output')
+    expect(meta.status).toBe(404)
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(404)
+  })
+
+  it('hides output metadata and bytes for a run owned by another organisation', async () => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow({ organisation_id: 'org_other' }),
+      artifactKey: 'org/org_other/artifacts/art_1',
+    })
+
+    const meta = await app.request('/api/redaction-runs/red_1/output')
+    expect(meta.status).toBe(404)
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(404)
+  })
+
   it('returns stored redaction output text', async () => {
     const { app, readText } = createRedactionReadApp({
       run: finalizedRunRow(),
@@ -2111,6 +2157,9 @@ describe('createApiApp redaction review reads', () => {
       mimeType: 'text/plain',
       filename: 'source-redacted.txt',
       text: 'Stored redaction text.',
+      artifactId: 'art_1',
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      securePdf: false,
     })
     expect(readText).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
   })
@@ -2164,6 +2213,9 @@ describe('createApiApp redaction review reads', () => {
       mimeType: 'application/pdf',
       filename: 'brief-redacted.pdf',
       text: null,
+      artifactId: 'art_1',
+      sha256: null,
+      securePdf: true,
     })
 
     const file = await app.request('/api/redaction-runs/red_1/output/file')
@@ -2175,6 +2227,56 @@ describe('createApiApp redaction review reads', () => {
     expect(file.headers.get('x-content-type-options')).toBe('nosniff')
     expect(Buffer.from(await file.arrayBuffer())).toEqual(pdfBytes)
     expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+  })
+
+  it('strips path separators from a hostile source filename in the download header', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 redacted')
+    const run = finalizedRunRow({
+      source_filename: '../../../etc/passwd.docx',
+      summary_json: {
+        totalSpans: 1,
+        outputMode: 'redacted',
+        outputMimeType: 'application/pdf',
+        outputFilename: null,
+      },
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
+          }
+          if (text.includes('from artifacts')) {
+            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          }
+          return { rows: [] }
+        },
+        async () => ({ rows: [] }),
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => {
+            throw new Error('text read should not be used for PDF output')
+          },
+          writeText: async () => undefined,
+          readBinary: async () => pdfBytes,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(200)
+    expect(file.headers.get('content-disposition')).toBe(
+      'attachment; filename="passwd-redacted.pdf"',
+    )
+    expect(file.headers.get('content-disposition')).not.toContain('/')
   })
 
   function sourceFileApp({
@@ -2459,6 +2561,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
           writeText: async () => {
             outputWrites += 1
           },
+          writeBinary: async () => {
+            outputWrites += 1
+          },
           delete: async () => undefined,
         },
       },
@@ -2562,7 +2667,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
   })
 
-  it('fails closed to text output when stored PDF geometry is invalid', async () => {
+  it('fails visibly with no artifact when stored PDF geometry is invalid', async () => {
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
       output_artifact_id: null,
@@ -2669,23 +2774,19 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       body: JSON.stringify({ outputMode: 'redacted' }),
     })
 
-    expect(response.status).toBe(200)
-    expect(textOutputWrites).toBe(1)
+    expect(response.status).toBe(502)
+    expect(((await response.json()) as ErrorBody).error).toMatchObject({
+      code: 'redaction_secure_pdf_failed',
+    })
+    // No silent downgrade: neither an artifact nor a text fallback is written,
+    // so the run stays unfinalized and cannot be shared.
+    expect(textOutputWrites).toBe(0)
     expect(binaryOutputWrites).toBe(0)
     expect(log).toHaveBeenCalledWith(
-      'redaction_burn_failed',
-      expect.objectContaining({
-        reason: 'cover geometry missing for one or more spans',
-      }),
+      'redaction_secure_pdf_failed',
+      expect.objectContaining({ category: 'pdf_burn_failed' }),
     )
     log.mockRestore()
-    const body = (await response.json()) as {
-      warnings: { outputDowngrade: { from: string; reason: string } | null }
-    }
-    expect(body.warnings.outputDowngrade).toEqual({
-      from: 'pdf',
-      reason: 'burn_failed',
-    })
   })
 
   it('finalizes footnote-bearing docs once extracted, still refuses stale text', async () => {
@@ -2736,10 +2837,14 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         ),
         {
           auth: authWithRole('member'),
+          redactionRenderer: fakeDocxRenderer(),
           storage: {
             readText: async () => text,
             readBinary: async () => sourceBytes,
             writeText: async () => {
+              outputWrites += 1
+            },
+            writeBinary: async () => {
               outputWrites += 1
             },
             delete: async () => undefined,
@@ -2792,7 +2897,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(clean.outputWrites()).toBe(1)
   })
 
-  it('finalizes docx sources to a burned .docx, not text', async () => {
+  it('renders a sanitized docx through the renderer and rasterizes a secure PDF', async () => {
     const { extractDocumentContent } = await import('./document-extraction')
     const { default: JSZip } = await import('jszip')
     const sourceBytes = await readFile(
@@ -2841,12 +2946,14 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         summary_json: {
           totalSpans: 1,
           outputMode: 'redacted',
-          outputMimeType:
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          outputFilename: 'letter-footnotes-numbering-redacted.docx',
+          outputMimeType: 'application/pdf',
+          outputFilename: 'letter-footnotes-numbering-redacted.pdf',
+          securePdf: true,
         },
       })
     let published: Buffer | null = null
+    let renderedDocx: Buffer | null = null
+    let writtenKey: string | null = null
     let persistedSummary: Record<string, unknown> | null = null
     let textWrites = 0
     let binaryWrites = 0
@@ -2895,14 +3002,18 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       ),
       {
         auth: authWithRole('member'),
+        redactionRenderer: fakeDocxRenderer((bytes) => {
+          renderedDocx = bytes
+        }),
         storage: {
           readText: async () => text,
           readBinary: async () => published ?? sourceBytes,
           writeText: async () => {
             textWrites += 1
           },
-          writeBinary: async (_key: string, bytes: Buffer) => {
+          writeBinary: async (key: string, bytes: Buffer) => {
             binaryWrites += 1
+            writtenKey = key
             published = Buffer.from(bytes)
           },
           delete: async () => undefined,
@@ -2918,20 +3029,11 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     finalized = true
     expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(1)
-    expect(
-      ((await response.json()) as { warnings: { outputDowngrade: unknown } })
-        .warnings.outputDowngrade,
-    ).toBeNull()
-    // A successful burn persists the DOCX MIME type and no downgrade. The
-    // false downgrade this guards against was recorded even on success, so
-    // the stored summary contradicted the amber warning's own message.
-    expect(persistedSummary).toMatchObject({
-      outputMimeType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      outputDowngrade: null,
-    })
-    expect(published).not.toBeNull()
-    const zip = await JSZip.loadAsync(published ?? Buffer.alloc(0))
+    // The burn happens before the render hop: the sanitized .docx the renderer
+    // receives no longer carries the accepted name, and the published artifact
+    // is the rasterized image-only PDF, not the .docx.
+    expect(renderedDocx).not.toBeNull()
+    const zip = await JSZip.loadAsync(renderedDocx ?? Buffer.alloc(0))
     for (const name of Object.keys(zip.files)) {
       if (name.endsWith('/')) continue
       const content = await (zip.file(name)?.async('string') ?? '')
@@ -2948,22 +3050,173 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       ?.async('string') ?? '')
     expect(footnotesXml).toContain('[REDACTED]')
 
+    expect(published).not.toBeNull()
+    expect(
+      Buffer.from(published ?? Buffer.alloc(0))
+        .subarray(0, 5)
+        .toString('latin1'),
+    ).toBe('%PDF-')
+    // The object key carries stable ids only: no client, matter or source
+    // filename can leak through storage layout.
+    expect(writtenKey).toMatch(/^org\/org_1\/artifacts\/art_[0-9a-f-]{36}$/u)
+    expect(writtenKey).not.toContain('letter-footnotes-numbering')
+    expect(persistedSummary).toMatchObject({
+      outputMimeType: 'application/pdf',
+      securePdf: true,
+      outputDowngrade: null,
+    })
+
     const output = await app.request('/api/redaction-runs/red_1/output')
     expect(output.status).toBe(200)
     expect(await output.json()).toMatchObject({
-      mimeType:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      filename: 'letter-footnotes-numbering-redacted.docx',
+      mimeType: 'application/pdf',
+      filename: 'letter-footnotes-numbering-redacted.pdf',
       text: null,
+      securePdf: true,
     })
     const file = await app.request('/api/redaction-runs/red_1/output/file')
     expect(file.status).toBe(200)
-    expect(file.headers.get('content-type')).toBe(
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    )
+    expect(file.headers.get('content-type')).toBe('application/pdf')
   })
 
-  it('warns and persists the downgrade when .docx burn refuses tracked-change text', async () => {
+  it('finalizes a pseudonymised PDF source as editable token text, never a rasterized PDF', async () => {
+    // A rasterized cover is not an editable token copy, and this branch used to
+    // render black bars (with a wrong `[REDACTED]` label). Pseudonymised output
+    // must stay text tokens so it is distinct from a hard redaction.
+    const sourcePdf = await PDFDocument.create()
+    sourcePdf.addPage([200, 200])
+    const sourceBytes = Buffer.from(await sourcePdf.save())
+    const readyRun = finalizedRunRow({
+      status: 'ready_for_review',
+      output_artifact_id: null,
+      source_filename: 'source.pdf',
+      source_mime_type: 'application/pdf',
+      source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
+      source_layout_object_key: 'org/org_1/redaction-runs/red_1/layout.json',
+      spans_json: [
+        {
+          id: 'span_1',
+          start: 0,
+          end: 5,
+          text: 'Alice',
+          category: 'person_name',
+          source: 'rampart_model',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+      decisions_json: {
+        span_1: {
+          decision: 'accept',
+          decidedBy: 'usr_1',
+          decidedAt: '2026-07-30T00:00:00.000Z',
+        },
+      },
+    })
+    const finalizedRow = finalizedRunRow({
+      status: 'finalized',
+      output_artifact_id: 'art_1',
+      source_filename: 'source.pdf',
+      source_mime_type: 'application/pdf',
+      spans_json: readyRun.spans_json,
+      decisions_json: readyRun.decisions_json,
+      summary_json: {
+        totalSpans: 1,
+        outputMode: 'pseudonymised',
+        outputMimeType: 'text/plain',
+        outputFilename: 'source-redacted.txt',
+        securePdf: false,
+      },
+    })
+    let textWrites = 0
+    let binaryWrites = 0
+    let persistedSummary: Record<string, unknown> | null = null
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return { rows: [readyRun] }
+          }
+          return { rows: [] }
+        },
+        async (sql, params) => {
+          const statement = String(sql)
+          if (statement === 'begin' || statement === 'commit')
+            return { rows: [] }
+          if (
+            statement.includes('for update of run') ||
+            statement.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
+          if (statement.includes('insert into artifacts')) {
+            return {
+              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+            }
+          }
+          if (statement.includes('update redaction_runs')) {
+            persistedSummary = JSON.parse(
+              (params as unknown[])[3] as string,
+            ) as Record<string, unknown>
+            return { rows: [] }
+          }
+          if (statement.includes('from redaction_runs')) {
+            return { rows: [finalizedRow] }
+          }
+          if (statement.includes('insert into audit_logs')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${statement}`)
+        },
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async (key: string) =>
+            key.endsWith('/layout.json')
+              ? JSON.stringify({
+                  version: 1,
+                  pages: [{ width: 200, height: 200 }],
+                  segments: [
+                    {
+                      start: 0,
+                      end: 5,
+                      pageIndex: 0,
+                      x: 40,
+                      y: 100,
+                      width: 30,
+                      height: 12,
+                    },
+                  ],
+                })
+              : 'Alice signed.',
+          readBinary: async () => sourceBytes,
+          writeText: async () => {
+            textWrites += 1
+          },
+          writeBinary: async () => {
+            binaryWrites += 1
+          },
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'pseudonymised' }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(binaryWrites).toBe(0)
+    expect(textWrites).toBe(1)
+    expect(persistedSummary).toMatchObject({
+      outputMode: 'pseudonymised',
+      outputMimeType: 'text/plain',
+      securePdf: false,
+    })
+  })
+
+  it('fails visibly with no artifact when .docx burn refuses tracked-change text', async () => {
     const { default: JSZip } = await import('jszip')
     // The deletion duplicates live text exactly, so coverage passes it as
     // examined — but the burn still refuses the residual tracked copy of
@@ -3027,11 +3280,19 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     let textWrites = 0
     let binaryWrites = 0
     let persistedSummary: Record<string, unknown> | null = null
+    const auditMetadata: Array<Record<string, unknown>> = []
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const app = createApiApp(
       testEnv,
       createHybridPool(
-        async (sql) => {
+        async (sql, params) => {
+          if (
+            String(sql).includes('insert into audit_logs') &&
+            Array.isArray(params)
+          )
+            auditMetadata.push(
+              JSON.parse(String(params[5])) as Record<string, unknown>,
+            )
           if (String(sql).includes('from redaction_runs')) {
             return { rows: [readyRun] }
           }
@@ -3066,6 +3327,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       ),
       {
         auth: authWithRole('member'),
+        redactionRenderer: fakeDocxRenderer(),
         storage: {
           readText: async () => text,
           readBinary: async () => sourceBytes,
@@ -3084,32 +3346,23 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ outputMode: 'redacted' }),
     })
-    expect(response.status).toBe(200)
-    // Safe text fallback: no .docx artifact written.
-    expect(textWrites).toBe(1)
+    expect(response.status).toBe(502)
+    expect(((await response.json()) as ErrorBody).error).toMatchObject({
+      code: 'redaction_secure_pdf_failed',
+    })
+    // No silent downgrade: no text fallback, no artifact, no finalized run.
+    expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(0)
+    expect(persistedSummary).toBeNull()
     expect(log).toHaveBeenCalledWith(
-      'redaction_burn_failed',
-      expect.objectContaining({ runId: 'red_1' }),
+      'redaction_secure_pdf_failed',
+      expect.objectContaining({ category: 'docx_burn_failed' }),
     )
     log.mockRestore()
-    const body = (await response.json()) as {
-      warnings: {
-        unreviewedSpanIds: string[]
-        coverageUnchecked: boolean
-        outputDowngrade: { from: string; reason: string } | null
-      }
-    }
-    // The downgrade is surfaced, not silent: reason codes only.
-    expect(body.warnings.outputDowngrade).toEqual({
-      from: 'docx',
-      reason: 'tracked_change',
-    })
-    // ... and persisted on the run so it survives a page reload.
-    expect(persistedSummary).toMatchObject({
-      outputMimeType: 'text/plain',
-      outputDowngrade: { from: 'docx', reason: 'tracked_change' },
-    })
+    // Only the stable category and mode cross into audit metadata.
+    expect(auditMetadata).toEqual([
+      { outputMode: 'redacted', failureCategory: 'docx_burn_failed' },
+    ])
   })
 
   it('finalizes runs with no stored source as coverage-unchecked (warning + audit)', async () => {
@@ -3160,6 +3413,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         storage: {
           readText: async () => 'Synthetic text.',
           writeText: async () => {
+            outputWrites += 1
+          },
+          writeBinary: async () => {
             outputWrites += 1
           },
           delete: async () => undefined,
@@ -3391,6 +3647,7 @@ describe('createApiApp soft-delete write races', () => {
         storage: {
           readText: async () => 'Synthetic text.',
           writeText: async () => undefined,
+          writeBinary: async () => undefined,
           delete: async (key) => {
             deletedKeys.push(key)
           },

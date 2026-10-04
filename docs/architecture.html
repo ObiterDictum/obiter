@@ -2282,16 +2282,20 @@
                 <dd>
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
-                  redaction-audit-report · document-extraction · document-layout
-                  · comments-db · pdf-glyph-layout · redaction-pdf-output ·
-                  storage · authz
+                  redaction-audit-report · redaction-renderer ·
+                  redaction-hard-output · redaction-secure-pdf ·
+                  document-extraction · document-layout · comments-db ·
+                  pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
                 <dt>Render</dt>
                 <dd>
                   @napi-rs/canvas (native) · pdf-lib, for burning redactions
-                  into rasterized PDF output
+                  into rasterized PDF output. DOCX hard redaction is rendered to
+                  an intermediate PDF by the sandboxed worker behind
+                  <code>OBITER_REDACTION_RENDERER_URL</code> over HTTP, then
+                  every page is rasterized here
                 </dd>
               </dl>
             </article>
@@ -4652,6 +4656,18 @@
                   <td>Object storage root directory</td>
                 </tr>
                 <tr>
+                  <td class="id">OBITER_REDACTION_RENDERER_URL</td>
+                  <td>
+                    Base URL of the sandboxed rendering worker. Required in
+                    production. Hard-redaction finalize POSTs a sanitized
+                    <code>.docx</code> to <code>/render</code> and rasterizes
+                    the returned intermediate PDF; the worker is reached only
+                    over HTTP and its package is not imported. A non-2xx,
+                    timeout, network failure or invalid PDF fails the run
+                    visibly instead of downgrading the output.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">OBITER_RESEND_API_KEY · OBITER_EMAIL_FROM</td>
                   <td>Transactional email</td>
                 </tr>
@@ -4668,6 +4684,20 @@
             cache directory, minimum confidence and chunk size are read through
             <code>ApiEnv</code> once at startup; invalid values stop startup
             rather than changing detection silently.
+          </div>
+          <div class="callout note">
+            <b
+              >The redaction renderer is an outbound boundary, not a package.</b
+            >
+            Hard-redaction finalize never imports the rendering worker's code.
+            It sends the sanitized <code>.docx</code> bytes to
+            <code>POST {OBITER_REDACTION_RENDERER_URL}/render</code> over HTTP
+            and rasterizes the returned PDF with the same <code>unpdf</code> /
+            <code>@napi-rs/canvas</code> / <code>pdf-lib</code> machinery used
+            for PDF sources. Every failure mode — non-2xx, timeout, unreachable
+            host, or a body that is not a PDF — fails the run; the API never
+            falls back to a text artifact or finalizes a run without its secure
+            PDF.
           </div>
           <div class="callout note">
             <b>The ONNX Runtime install is CPU-only.</b>

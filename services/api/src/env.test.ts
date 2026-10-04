@@ -430,6 +430,8 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
     process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
@@ -449,6 +451,8 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
     process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
@@ -530,6 +534,8 @@ describe('readApiEnv', () => {
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example/'
     process.env.OBITER_DESKTOP_ORIGIN = 'obiter://desktop-auth'
     process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example/'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
@@ -545,6 +551,7 @@ describe('readApiEnv', () => {
     expect(env.webOrigin).toBe('https://app.obiter.example')
     expect(env.desktopOrigin).toBe('obiter://desktop-auth')
     expect(env.resendApiKey).toBe('re_0123456789abcdef0123456789abcdef')
+    expect(env.redactionRendererUrl).toBe('http://redaction-renderer:8080/')
     expect(env.meilisearchHost).toBe('https://search.obiter.example')
     expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.meilisearchAdminApiKey).toBe('0123456789abcdef0123456789abcdef')
@@ -556,6 +563,27 @@ describe('readApiEnv', () => {
     expect(env.port).toBe(8788)
   })
 
+  it('requires the redaction renderer URL in production', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
+    delete process.env.OBITER_REDACTION_RENDERER_URL
+
+    expect(() => readApiEnv()).toThrow(
+      'Missing required production environment values: OBITER_REDACTION_RENDERER_URL',
+    )
+  })
+
   it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL =
@@ -564,6 +592,8 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
     process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     delete process.env.MEILISEARCH_SEARCH_API_KEY

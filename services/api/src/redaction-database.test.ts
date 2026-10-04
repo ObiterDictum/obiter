@@ -862,6 +862,100 @@ describe('redaction run write guards', () => {
       calls.some(([sql]) => sql.includes('insert into redaction_runs')),
     ).toBe(false)
   })
+
+  it('refuses a retry on an already-finalized run without inserting another artifact', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      )
+        return {
+          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_0' })],
+        }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      finalizeRedactionRun({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        outputMode: 'redacted',
+        tokenMap: {},
+        artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
+      }),
+    ).resolves.toEqual({ kind: 'already_finalized' })
+
+    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+      false,
+    )
+    expect(calls.some(([sql]) => sql.includes('update redaction_runs'))).toBe(
+      false,
+    )
+  })
+
+  it('persists the secure PDF digest and flag in the summary and audit', async () => {
+    let summary: Record<string, unknown> | undefined
+    let audit: Record<string, unknown> | undefined
+    const { pool } = createTransactionalPool(async (sql, params) => {
+      if (sql === 'begin' || sql === 'commit') return { rows: [] }
+      if (sql.includes('for update of run')) return { rows: [runRow()] }
+      if (sql.includes('insert into artifacts')) {
+        return {
+          rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+        }
+      }
+      if (sql.includes('update redaction_runs')) {
+        summary = JSON.parse(String(params?.[3])) as Record<string, unknown>
+        return { rows: [] }
+      }
+      if (sql.includes('from redaction_runs')) {
+        return {
+          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
+        }
+      }
+      if (sql.includes('insert into audit_logs')) {
+        audit = JSON.parse(String(params?.[5])) as Record<string, unknown>
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      finalizeRedactionRun({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        outputMode: 'redacted',
+        tokenMap: {},
+        artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
+        outputMimeType: 'application/pdf',
+        outputFilename: 'source-redacted.pdf',
+        outputSha256: 'a'.repeat(64),
+        securePdf: true,
+      }),
+    ).resolves.toMatchObject({ kind: 'finalized' })
+
+    expect(summary).toMatchObject({
+      outputMimeType: 'application/pdf',
+      outputFilename: 'source-redacted.pdf',
+      outputSha256: 'a'.repeat(64),
+      securePdf: true,
+    })
+    expect(audit).toMatchObject({
+      outputMimeType: 'application/pdf',
+      securePdf: true,
+    })
+  })
 })
 
 describe('softDeleteRedactionRun', () => {

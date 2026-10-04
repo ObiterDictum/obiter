@@ -658,6 +658,8 @@ export async function finalizeRedactionRun(input: {
   outputMimeType?: string
   outputFilename?: string
   outputDowngrade?: RunSummary['outputDowngrade']
+  outputSha256?: string
+  securePdf?: boolean
 }) {
   const client = await input.pool.connect()
   try {
@@ -719,6 +721,10 @@ export async function finalizeRedactionRun(input: {
       // Burn fallback reason persists here (not just in the finalize
       // response) so the review UI still warns after a page reload.
       outputDowngrade: input.outputDowngrade ?? null,
+      ...(input.outputSha256 ? { outputSha256: input.outputSha256 } : {}),
+      // True only for the new secure rasterized hard-redaction PDF; absent on
+      // legacy DOCX/TXT artifacts and pseudonymised output.
+      securePdf: input.securePdf === true,
     }
     await client.query(
       `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
@@ -749,6 +755,7 @@ export async function finalizeRedactionRun(input: {
         outputMode: input.outputMode,
         outputMimeType: input.outputMimeType ?? 'text/plain',
         outputFilename: input.outputFilename ?? null,
+        securePdf: input.securePdf === true,
         detectionMode: finalizedRun.detectionMode,
         degradedDetectionAcknowledged:
           finalizedRun.detectionMode === 'heuristics+supplement' &&
