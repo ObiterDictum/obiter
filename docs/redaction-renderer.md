@@ -59,12 +59,18 @@ Constants in `src/limits.ts`, enforced fail-closed:
 | Input bytes    | 25 MB  | Before parse; HTTP body cap       |
 | Page count     | 500    | After layout, before PDF          |
 | Wall clock     | 60 s   | Layout and PDF, each              |
+| Queue wait     | 60 s   | Before a queued render starts     |
 | Queued renders | 8      | Single Chromium page, FIFO        |
 | Chromium heap  | 512 MB | `--js-flags=--max-old-space-size` |
 
 A render beyond a bound returns a typed error and never a partial or degraded
-artifact. The `.docx` package parser carries its own deflate/pack limits
-(`@obiter/ooxml`), so a zip bomb is refused as `invalid_docx`.
+artifact. A queued render that cannot start within the queue wait fails
+`at_capacity` instead of holding the request. The worst case for one request is
+therefore queue wait + layout + PDF (180 s), exported as
+`REDACTION_RENDERER_WORST_CASE_MS` from `src/contract.ts`; a client of the
+renderer must allow at least that long before giving up. The `.docx` package
+parser carries its own deflate/pack limits (`@obiter/ooxml`), so a zip bomb is
+refused as `invalid_docx`.
 
 ## Isolation
 
@@ -132,9 +138,12 @@ never a partial PDF.
   use it in this change. Rolling it out does not change user-visible output.
 - Deploy the worker, confirm `/ready` is `200`, then the consuming change wires
   `POST /render` into finalize behind its own flag/decision.
-- Rollback is stopping the worker and reverting the consuming change. Finalize
-  already fails closed to text output, so a rolled-back worker does not leave
-  an unredacted artifact.
+- Rollback is stopping the worker and reverting the consuming change. At this
+  layer finalize does not call the worker, so it still fails closed to text
+  output and a stopped worker changes nothing. Once the consuming change wires
+  `POST /render` into finalize, that change owns the fail-closed behaviour and
+  must not fall back to an unredacted artifact when the worker is stopped; the
+  text fallback described here is no longer the safety net after that point.
 
 ## Known limitations
 
@@ -149,3 +158,17 @@ never a partial PDF.
   engine paints them.
 - The output is an intermediate PDF for a later burn step; it carries a text
   layer and is not itself a redacted artifact.
+
+## Risks
+
+- Node-side parsing of an untrusted package (`parseDocx`,
+  `serialiseModelJson`, `readPackageImageParts`) runs outside the render
+  timeout. It is bounded by the input-size cap and the OOXML package limits,
+  not by the wall clock, so a pathologically structured but small package can
+  still spend CPU there before Chromium is involved.
+- The app-shell page modules this worker reuses
+  (`document-page-drawings.ts`, `document-page-media.ts`,
+  `document-page-tables.ts`) contain pre-existing regexes and `DOMParser`
+  parsing that CodeQL flags. They are reachable with attacker-controlled DOCX
+  XML, but they run inside the render timeout, which is the bound. Hardening
+  those shared parsers is separate work and is deliberately not changed here.

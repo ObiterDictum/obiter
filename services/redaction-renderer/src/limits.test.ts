@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { Readable } from 'node:stream'
 import { REDACTION_RENDERER_ERROR_CODES } from './contract'
-import { RendererFailure } from './renderer'
+import { createRenderQueue, RendererFailure } from './renderer'
 import {
   messageForErrorCode,
   readStreamBody,
@@ -36,5 +36,42 @@ describe('renderer failure mapping', () => {
       expect(status).toBeLessThan(600)
       expect(messageForErrorCode(code).length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('render queue', () => {
+  it('grants a waiter when the active render releases the slot', async () => {
+    const queue = createRenderQueue(4, 1_000)
+    await queue.acquire()
+    const waiter = queue.acquire()
+    queue.release()
+    await waiter
+  })
+
+  it('rejects a waiter that cannot start within the wait bound', async () => {
+    const queue = createRenderQueue(4, 20)
+    await queue.acquire()
+    let code: string | undefined
+    try {
+      await queue.acquire()
+    } catch (error) {
+      if (error instanceof RendererFailure) code = error.code
+    }
+    expect(code).toBe('at_capacity')
+  })
+
+  it('refuses a waiter once the bounded queue is full', async () => {
+    const queue = createRenderQueue(1, 1_000)
+    await queue.acquire()
+    const first = queue.acquire()
+    let code: string | undefined
+    try {
+      await queue.acquire()
+    } catch (error) {
+      if (error instanceof RendererFailure) code = error.code
+    }
+    expect(code).toBe('at_capacity')
+    queue.release()
+    await first
   })
 })

@@ -10,6 +10,8 @@ export interface RendererLimits {
   maxPages: number
   /** One layout plus PDF pass. A document that exceeds it is refused. */
   renderTimeoutMs: number
+  /** A render that cannot start within this wait is refused `at_capacity`. */
+  queueWaitTimeoutMs: number
   /** Renders waiting for the single Chromium page before `at_capacity`. */
   maxQueuedRenders: number
   /** V8 heap ceiling passed to the Chromium renderer process. */
@@ -20,6 +22,7 @@ export const RENDERER_LIMITS: RendererLimits = {
   maxInputBytes: 25 * 1024 * 1024,
   maxPages: 500,
   renderTimeoutMs: 60_000,
+  queueWaitTimeoutMs: 60_000,
   maxQueuedRenders: 8,
   browserHeapMb: 512,
 }

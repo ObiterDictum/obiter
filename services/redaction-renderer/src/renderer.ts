@@ -85,22 +85,42 @@ export async function createDocxRenderer(
       ],
     },
   )
-  const queue = createRenderQueue(limits.maxQueuedRenders)
+  const queue = createRenderQueue(
+    limits.maxQueuedRenders,
+    limits.queueWaitTimeoutMs,
+  )
   let page = await createWarmPage(context, config.assets)
   let ready = true
   let pageStuck = false
 
+  async function discardPage(): Promise<void> {
+    await page.close().catch(() => undefined)
+    page = await createWarmPage(context, config.assets)
+    pageStuck = false
+  }
+
+  /**
+   * Returns the parked page to an empty shell. A page whose DOM will not clear
+   * is discarded rather than reused: the next render would otherwise print the
+   * previous document alongside the new one, which no downstream check sees.
+   */
   async function resetPage(): Promise<void> {
     if (pageStuck || page.isClosed()) {
-      await page.close().catch(() => undefined)
-      page = await createWarmPage(context, config.assets)
+      await discardPage()
       return
     }
-    await page
-      .evaluate(() => {
+    try {
+      await page.evaluate(() => {
         document.body.replaceChildren()
       })
-      .catch(() => undefined)
+    } catch {
+      await discardPage()
+    }
+  }
+
+  /** Recreates a page the previous render left stuck or dead, before reuse. */
+  async function ensurePage(): Promise<void> {
+    if (pageStuck || page.isClosed()) await discardPage()
   }
 
   return {
@@ -115,9 +135,14 @@ export async function createDocxRenderer(
         throw new RendererFailure('input_too_large')
       }
       await queue.acquire()
-      const renderDir = await mkdtemp(join(baseDir, 'render-'))
-      const inputPath = join(renderDir, 'input.docx')
+      // Every path below the acquire must release the single slot. Work that
+      // throws before the try, or cleanup that throws inside the finally, used
+      // to leave the queue active with waiters that could never start.
+      let renderDir: string | undefined
       try {
+        await ensurePage()
+        renderDir = await mkdtemp(join(baseDir, 'render-'))
+        const inputPath = join(renderDir, 'input.docx')
         if (signal?.aborted) throw new RendererFailure('render_cancelled')
         // The isolated directory holds the bounded input for the length of the
         // render; parsing reads it back so no caller buffer outlives the slot.
@@ -147,9 +172,18 @@ export async function createDocxRenderer(
         }
         return new Uint8Array(pdf)
       } finally {
-        await resetPage()
-        pageStuck = false
-        await rm(renderDir, { recursive: true, force: true })
+        try {
+          await resetPage()
+        } catch {
+          // The page could not be returned to a clean shell; mark it stuck so
+          // ensurePage recreates it before the next render reuses it.
+          pageStuck = true
+        }
+        if (renderDir) {
+          await rm(renderDir, { recursive: true, force: true }).catch(
+            () => undefined,
+          )
+        }
         queue.release()
       }
     },
@@ -254,8 +288,12 @@ function raceRender<T>(
   })
 }
 
-/** One Chromium page, so one render at a time; a bounded queue waits for it. */
-function createRenderQueue(maxWaiting: number) {
+/**
+ * One Chromium page, so one render at a time. A waiter that cannot start
+ * within `waitTimeoutMs` rejects `at_capacity` rather than holding the request
+ * open; the wait timer is cleared when the slot is granted.
+ */
+export function createRenderQueue(maxWaiting: number, waitTimeoutMs: number) {
   let active = false
   const waiters: Array<() => void> = []
   return {
@@ -267,7 +305,18 @@ function createRenderQueue(maxWaiting: number) {
       if (waiters.length >= maxWaiting) {
         return Promise.reject(new RendererFailure('at_capacity'))
       }
-      return new Promise<void>((resolve) => waiters.push(resolve))
+      return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(grant)
+          if (index !== -1) waiters.splice(index, 1)
+          reject(new RendererFailure('at_capacity'))
+        }, waitTimeoutMs)
+        const grant = () => {
+          clearTimeout(timer)
+          resolve()
+        }
+        waiters.push(grant)
+      })
     },
     release() {
       const next = waiters.shift()

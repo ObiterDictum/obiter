@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createCanvas } from '@napi-rs/canvas'
@@ -26,6 +26,27 @@ import {
 } from './renderer'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
+
+/** Denying writes needs a non-root user; root bypasses the directory mode. */
+const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+
+/** Fails a test instead of hanging when a leaked slot never settles. */
+async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('render did not settle within the deadline')),
+          ms,
+        )
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
 
 async function demoFixtureBytes(): Promise<Uint8Array> {
   return new Uint8Array(
@@ -247,7 +268,7 @@ describe('redaction renderer', () => {
 describe('redaction renderer limits', () => {
   async function withRenderer<T>(
     limits: Partial<typeof RENDERER_LIMITS>,
-    work: (renderer: DocxRenderer) => Promise<T>,
+    work: (renderer: DocxRenderer, baseDir: string) => Promise<T>,
   ): Promise<T> {
     const baseDir = await mkdtemp(join(tmpdir(), 'obiter-renderer-limits-'))
     const renderer = await createDocxRenderer({
@@ -256,7 +277,7 @@ describe('redaction renderer limits', () => {
       baseTempDir: baseDir,
     })
     try {
-      return await work(renderer)
+      return await work(renderer, baseDir)
     } finally {
       await renderer.close()
       await rm(baseDir, { recursive: true, force: true })
@@ -283,4 +304,29 @@ describe('redaction renderer limits', () => {
     )
     expect(code).toBe('render_timeout')
   }, 60_000)
+
+  it.skipIf(isRoot)(
+    'lets the next render proceed after a render that fails before its try block',
+    async () => {
+      await withRenderer({}, async (renderer, baseDir) => {
+        try {
+          // `mkdtemp` refuses, which is the same shape as EACCES/ENOSPC/EMFILE
+          // in production. A slot leaked on that path wedges every later
+          // render, so the second render must still settle.
+          await chmod(baseDir, 0o500)
+          await expect(
+            renderer.render(await demoFixtureBytes()),
+          ).rejects.toBeDefined()
+        } finally {
+          await chmod(baseDir, 0o700)
+        }
+        const pdf = await withDeadline(
+          renderer.render(await demoFixtureBytes()),
+          20_000,
+        )
+        expect(Buffer.from(pdf.subarray(0, 5)).toString('latin1')).toBe('%PDF-')
+      })
+    },
+    60_000,
+  )
 })

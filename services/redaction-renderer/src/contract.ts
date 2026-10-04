@@ -3,6 +3,17 @@
  * a caller (the API finalize path) can import it without pulling in Chromium
  * or Playwright. The renderer service itself imports the same codes.
  */
+import { RENDERER_LIMITS } from './limits'
+
+/**
+ * Worst-case wall clock for one `POST /render` from admission to PDF, derived
+ * from the worker's own bounds: a queue wait, then the layout and PDF passes.
+ * A client must allow at least this long before giving up, or it can abort a
+ * render the worker would still have completed. Kept in sync with `limits.ts`.
+ */
+export const REDACTION_RENDERER_WORST_CASE_MS =
+  RENDERER_LIMITS.queueWaitTimeoutMs + RENDERER_LIMITS.renderTimeoutMs * 2
+
 export const REDACTION_RENDERER_ERROR_CODES = [
   'invalid_request',
   'unsupported_media_type',
@@ -43,7 +54,7 @@ export interface RedactionRendererClientConfig {
   /** Origin of the private renderer service, for example `http://127.0.0.1:8790`. */
   baseUrl: string
   fetchImpl?: typeof fetch
-  /** Whole-request budget. Defaults to two minutes. */
+  /** Whole-request budget. Defaults to the worker's worst case. */
   timeoutMs?: number
 }
 
@@ -58,7 +69,7 @@ export function createRedactionRendererClient(
   config: RedactionRendererClientConfig,
 ): RedactionRendererClient {
   const fetchImpl = config.fetchImpl ?? fetch
-  const timeoutMs = config.timeoutMs ?? 120_000
+  const timeoutMs = config.timeoutMs ?? REDACTION_RENDERER_WORST_CASE_MS
   const renderUrl = new URL('/render', config.baseUrl).toString()
   return {
     async renderSanitizedDocx(docx, signal) {
