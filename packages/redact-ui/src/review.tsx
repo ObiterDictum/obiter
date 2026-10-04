@@ -195,6 +195,14 @@ function HighlightedText({
   )
 }
 
+/**
+ * How long a download's object URL is kept alive after the click. Revoking on
+ * the next macrotask races a browser that defers the blob fetch (WebKit in
+ * particular), which then fails the download. A minute is far past any realistic
+ * scheduling delay and still releases the URL promptly.
+ */
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -204,7 +212,7 @@ function downloadBlob(blob: Blob, filename: string) {
   // Defer revoke past the click handler so the browser can start the download.
   setTimeout(() => {
     URL.revokeObjectURL(url)
-  }, 0)
+  }, DOWNLOAD_URL_REVOKE_DELAY_MS)
 }
 
 async function shareOrDownload(blob: Blob, filename: string) {

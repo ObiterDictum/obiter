@@ -42,6 +42,7 @@ HTMLCanvasElement.prototype.getContext = (() => ({})) as never
 beforeEach(() => {
   pdfjs.render.mockClear()
   pdfjs.getPageCount.mockClear()
+  pdfjs.destroy.mockClear()
   pdfjs.getDocumentError = null
 })
 
@@ -76,6 +77,16 @@ describe('PdfDocumentPreview', () => {
       message: 'corrupt pdf',
     })
     expect(screen.queryByText(/Preview ready/)).toBeNull()
+  })
+
+  it('destroys the loaded pdf.js document on unmount', async () => {
+    const { unmount } = render(<PdfDocumentPreview file={file} />)
+    await waitFor(() => {
+      expect(screen.getByText('Page 1 of 3')).toBeTruthy()
+    })
+    expect(pdfjs.destroy).not.toHaveBeenCalled()
+    unmount()
+    expect(pdfjs.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('does not render every page at once, only pages near the viewport', async () => {

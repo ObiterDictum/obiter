@@ -29,6 +29,9 @@ export function PdfDocumentPreview({
   const [error, setError] = useState<string | null>(null)
   const [pageCount, setPageCount] = useState(0)
   const [firstPageRendered, setFirstPageRendered] = useState(false)
+  // The loaded document owns a pdf.js worker port and its decoded pages. Hold
+  // it so unmount or a new Blob can destroy it instead of leaking both.
+  const loadedDocument = useRef<PDFDocumentProxy | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -47,6 +50,7 @@ export function PdfDocumentPreview({
           void document.destroy()
           return
         }
+        loadedDocument.current = document
         setPdf(document)
         setPageCount(document.numPages)
       } catch (loadError: unknown) {
@@ -61,6 +65,9 @@ export function PdfDocumentPreview({
     })
     return () => {
       cancelled = true
+      const document = loadedDocument.current
+      loadedDocument.current = null
+      if (document) void document.destroy()
     }
     // The preview is keyed to one immutable artifact Blob; a new Blob means a
     // different artifact and must reload.

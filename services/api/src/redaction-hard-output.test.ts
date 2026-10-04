@@ -12,6 +12,7 @@ import {
   RedactionRendererError,
   type RedactionRenderer,
 } from './redaction-renderer'
+import { SecurePdfValidationError } from './redaction-secure-pdf'
 import type { StorageService } from './storage'
 
 const SOURCE_TEXT = 'Alice Smith signed the deed.'
@@ -262,6 +263,35 @@ describe('buildHardRedactionPdf', () => {
           new RedactionRendererError(failure, 'typed'),
         ),
       ).toBe(failure)
+    // The validation gate is not a renderer: its refusal keeps its own category
+    // so operators can tell a safety refusal from a geometry or transport one.
+    expect(
+      hardRedactionFailureCategory(
+        new SecurePdfValidationError('source_text_survives', 'refused'),
+      ),
+    ).toBe('validation_failed')
+  })
+
+  it('surfaces a secure-PDF validation refusal as validation_failed, not a burn failure', async () => {
+    // An accepted span whose text also appears in the PDF container (`%PDF`) is
+    // refused by the byte scan. This proves the validation failure propagates
+    // unwrapped, rather than being re-labelled by the PDF burn catch.
+    const pdfToken = span('%PDF', 0)
+    const error = await buildHardRedactionPdf({
+      run: run({}, [pdfToken]),
+      sourceText: SOURCE_TEXT,
+      redactedText: '[REDACTED] token in the container.',
+      source: null,
+      layoutObjectKey: null,
+      storage: textStorage(SOURCE_TEXT),
+      renderer: null,
+      tokenMap: {},
+    }).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    )
+    expect(error).toBeInstanceOf(SecurePdfValidationError)
+    expect(hardRedactionFailureCategory(error)).toBe('validation_failed')
   })
 
   it('rasterizes a zero-span PDF source without needing a renderer', async () => {
