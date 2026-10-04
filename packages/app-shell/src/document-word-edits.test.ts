@@ -67,6 +67,43 @@ describe('applyDeleteBackward', () => {
       }),
     ).toBeUndefined()
   })
+
+  it('cannot remove the only paragraph', () => {
+    const only: DocumentModelWire = {
+      version: 1,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+      styles: [],
+      numbering: [],
+      relationships: [],
+      preservedXmlFragments: [],
+      changes: [],
+    }
+    expect(
+      applyDeleteBackward(only, emptyEditorState(), {
+        paragraphId: 'p1',
+        offset: 0,
+      }),
+    ).toBeUndefined()
+    expect(
+      applyDeleteForward(only, emptyEditorState(), {
+        paragraphId: 'p1',
+        offset: 5,
+      }),
+    ).toBeUndefined()
+  })
 })
 
 describe('applyDeleteForward', () => {

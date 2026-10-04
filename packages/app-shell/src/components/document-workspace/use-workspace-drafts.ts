@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
-import { removeInsert, type LocalInsert } from '../../document-edits'
+import type {
+  LocalInsert,
+  ParagraphDeletionOutcome,
+} from '../../document-edits'
+import { planParagraphDeletion } from '../../document-paragraph-deletion'
 import {
   adoptDocumentDraft,
   clearDocumentDraft,
@@ -425,20 +429,16 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     return clientId
   }
 
-  function deleteParagraph(paragraphId: string) {
-    const removed = removeInsert(bundle.state.inserts, paragraphId)
-    if (removed) {
-      checkpoint()
-      setState((current) => ({ ...current, inserts: removed.inserts }))
-      return removed.selectId
-    }
-    if (bundle.state.deletedParagraphIds.includes(paragraphId)) return null
+  function deleteParagraph(paragraphId: string): ParagraphDeletionOutcome {
+    const plan = planParagraphDeletion(scope.model, bundle.state, paragraphId)
+    if (plan.kind === 'refused')
+      return { status: 'refused', reason: 'last-paragraph', selectId: null }
+    if (plan.kind === 'unchanged') return { status: 'deleted', selectId: null }
+    // The invariant is checked before this checkpoint, so a refused deletion
+    // leaves no undo entry and no pending edit operation behind.
     checkpoint()
-    setState((current) => ({
-      ...current,
-      deletedParagraphIds: [...current.deletedParagraphIds, paragraphId],
-    }))
-    return null
+    setState((current) => ({ ...current, ...plan.state }))
+    return { status: 'deleted', selectId: plan.selectId }
   }
 
   function setFormat(update: (current: FormatDrafts) => FormatDrafts) {

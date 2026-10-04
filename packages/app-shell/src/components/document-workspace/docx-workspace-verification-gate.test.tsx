@@ -75,7 +75,10 @@ const { bodyEditor, mountSaveDocumentWorkspace, saveState, validationFailed } =
  * The whole document workspace, so the unsaved gate is exercised against the
  * real provider boundary the dock reads rather than a panel mounted beside it.
  */
-function mountGate(options: { editAsync?: ReturnType<typeof vi.fn> }) {
+function mountGate(options: {
+  editAsync?: ReturnType<typeof vi.fn>
+  paragraphs?: readonly string[]
+}) {
   return mountSaveDocumentWorkspace(options)
 }
 
@@ -198,7 +201,9 @@ describe('V5 verification gate against the E45 save owner', () => {
         return { documentId: 'doc_1', versionId: 'ver_2', versionNumber: 2 }
       },
     )
-    mountGate({ editAsync })
+    // Two stored paragraphs so the client keeps the deletion valid; it is the
+    // server that rejects it, which is what leaves the save partly covered.
+    mountGate({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
