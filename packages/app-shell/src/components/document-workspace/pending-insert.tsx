@@ -32,6 +32,7 @@ export function PendingInsert({
   restoreCaret?: { paragraphId: string; offset: number } | null
 }) {
   const field = useRef<HTMLTextAreaElement>(null)
+  const programmaticFocus = useRef(false)
   // A pending insert cannot continue a vertical-column run, so every way of
   // entering or editing it ends the run rather than holding a stale column.
   const clearColumn = () => clearVerticalColumn(verticalCaret)
@@ -45,7 +46,12 @@ export function PendingInsert({
     if (!selected) return
     const node = field.current
     if (!node) return
+    // Focus from this effect is not a user selection: the insert is already the
+    // selected paragraph. Marking it keeps `onFocus` from re-selecting, so a
+    // late effect can never seat the caret back on an insert an undo removed.
+    programmaticFocus.current = true
     node.focus({ preventScroll: true })
+    programmaticFocus.current = false
     if (restore != null) {
       const offset = Math.min(restore, node.value.length)
       node.setSelectionRange(offset, offset)
@@ -85,6 +91,7 @@ export function PendingInsert({
         }}
         onFocus={() => {
           clearColumn()
+          if (programmaticFocus.current) return
           onSelect()
         }}
         onCompositionStart={clearColumn}
