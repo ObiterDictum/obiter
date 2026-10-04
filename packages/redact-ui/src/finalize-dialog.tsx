@@ -61,8 +61,10 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
       <DialogContent>
         <DialogTitle>Finalize redaction output</DialogTitle>
         <DialogDescription>
-          Choose the output format. Pseudonymisation is keyed by exact text
-          within each category, not entity identity.
+          Choose the output format. Redacted PDF and DOCX outputs remove the
+          approved spans and render opaque black bars; plain-text output uses
+          [REDACTED] markers. Pseudonymisation is keyed by exact text within
+          each category, not entity identity.
         </DialogDescription>
         <div className="flex flex-col gap-3">
           {limitedDetectionMode ? (
@@ -81,7 +83,8 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
               <strong>Redacted</strong>
               <br />
               <span className="text-muted">
-                Replaces approved spans with [REDACTED].
+                Removes approved spans. PDF and DOCX render opaque black bars;
+                plain-text output uses [REDACTED].
               </span>
             </span>
           </label>

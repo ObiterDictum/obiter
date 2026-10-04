@@ -10,7 +10,7 @@
 
 ## M2 — complete
 
-- Review UI, decisions, redacted output and pseudonymised output work.
+- Review UI, decisions, redacted output and pseudonymised output work. Finalized redacted PDF and DOCX output removes the accepted text and renders contiguous opaque black bars (one per coalesced region per rendered line); plain-text output uses one `[REDACTED]` marker per region. See [build-plan.md](build-plan.md#finalized-output-presentation-red-01).
 
 ## M3 — production readiness
 

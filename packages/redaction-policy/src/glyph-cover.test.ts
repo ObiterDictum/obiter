@@ -135,6 +135,20 @@ describe('coverRectsForSpan', () => {
     expect(covers[0]!.x).toBeCloseTo(49.2, 5)
   })
 
+  it('merges across a wide whitespace gap only when source adjacency is proven', () => {
+    // 'A B': glyphs at 40 and 60 with a 10pt gap, wider than the single-span
+    // threshold. Only a coalesced-region caller may bridge it.
+    const segments = [
+      { start: 0, end: 1, pageIndex: 0, x: 40, y: 100, width: 10, height: 12 },
+      { start: 2, end: 3, pageIndex: 0, x: 60, y: 100, width: 10, height: 12 },
+    ]
+    const base = { segments, spanStart: 0, spanEnd: 3, spanText: 'A B' }
+    expect(coverRectsForSpan(base)).toHaveLength(2)
+    const merged = coverRectsForSpan({ ...base, mergeWhitespace: true })
+    expect(merged).toHaveLength(1)
+    expect(merged[0]!.width).toBeGreaterThan(25)
+  })
+
   it('does not merge a deep J into a word on its left', () => {
     const fontSize = 16
     const baseline = 100
@@ -180,5 +194,82 @@ describe('coverRectsForSpan', () => {
     expect(jones[0]!.ink).toBe('Jones')
     expect(jones[0]!.x).toBeLessThanOrEqual(60)
     expect(karl[0]!.x + karl[0]!.width).toBeLessThan(jones[0]!.x + 1)
+  })
+})
+
+describe('coverRectsForSpan whitespace merge bound', () => {
+  const segment = (
+    start: number,
+    end: number,
+    x: number,
+    width: number,
+    extra: Record<string, number> = {},
+  ) => ({ start, end, pageIndex: 0, x, y: 100, width, height: 12, ...extra })
+
+  const planned = (segments: ReturnType<typeof segment>[], spanText: string) =>
+    coverRectsForSpan({
+      segments,
+      spanStart: 0,
+      spanEnd: spanText.length,
+      spanText,
+      mergeWhitespace: true,
+    })
+
+  it('merges three adjacent accepted words into one bar', () => {
+    const result = planned(
+      [segment(0, 4, 40, 25), segment(5, 12, 68, 45), segment(13, 18, 116, 30)],
+      'John Michael Smith',
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0]!.x).toBeLessThanOrEqual(40)
+    expect(result[0]!.x + result[0]!.width).toBeGreaterThanOrEqual(146)
+  })
+
+  it('still merges a multi-space gap wider than one space', () => {
+    // Two spaces at 12pt: a 10pt gap, inside the two-em bound.
+    expect(
+      planned([segment(0, 1, 40, 10), segment(3, 4, 60, 10)], 'A  B'),
+    ).toHaveLength(1)
+  })
+
+  it('does not bridge the reproduced 260pt same-baseline gap', () => {
+    // The review's adversarial layout: glyphs 260pt apart, source 'A B'.
+    expect(
+      planned([segment(0, 1, 40, 10), segment(2, 3, 310, 10)], 'A B'),
+    ).toHaveLength(2)
+  })
+
+  it('does not bridge a same-baseline two-column gap', () => {
+    expect(
+      planned([segment(0, 1, 40, 40), segment(2, 3, 200, 40)], 'A B'),
+    ).toHaveLength(2)
+  })
+
+  it('does not bridge a same-baseline table gutter beyond word spacing', () => {
+    // A 30pt gutter at 12pt text: wider than the two-em bound, so it splits.
+    expect(
+      planned([segment(0, 1, 40, 10), segment(2, 3, 80, 10)], 'A B'),
+    ).toHaveLength(2)
+  })
+
+  it('keeps a wrapped region as one bar per rendered line', () => {
+    expect(
+      planned([segment(0, 1, 40, 10), segment(2, 3, 40, 10, { y: 80 })], 'A B'),
+    ).toHaveLength(2)
+  })
+
+  it('does not merge across pages or opposing writing directions', () => {
+    expect(
+      planned(
+        [segment(0, 1, 40, 10), segment(2, 3, 42, 10, { pageIndex: 1 })],
+        'A B',
+      ),
+    ).toHaveLength(2)
+    expect(
+      planned(
+        [segment(0, 1, 40, 10), segment(2, 3, 42, 10, { baselineX: -1 })],
+        'A B',
+      ),
+    ).toHaveLength(2)
   })
 })

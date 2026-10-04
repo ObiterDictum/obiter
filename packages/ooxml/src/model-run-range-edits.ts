@@ -100,7 +100,17 @@ export function splitsSurrogate(value: string, offset: number) {
   )
 }
 
-export type RunTextReplacement = { from: number; to: number; text: string }
+export type RunTextReplacement = {
+  from: number
+  to: number
+  text: string
+  /**
+   * Run properties applied to the replacement run only. The covered source
+   * text is gone before this is written, so a black highlight/colour here
+   * styles the harmless marker, never the original content.
+   */
+  emphasis?: RunEmphasis
+}
 
 /**
  * Replace text ranges inside one paragraph, splitting runs at range
@@ -180,10 +190,17 @@ export function applyRunTextReplacementRange(
         localFrom: Math.max(span.from, runStart) - runStart,
         localTo: Math.min(span.to, runEnd) - runStart,
         text: span.text,
+        emphasis: span.emphasis,
       }))
     if (hits.length === 1) {
       const hit = hits[0]!
-      if (hit.localFrom === 0 && hit.localTo === run.wire.text.length) {
+      // A styled replacement cannot use the whole-run fast path: it keeps the
+      // run's existing rPr, so the emphasis would be lost.
+      if (
+        hit.localFrom === 0 &&
+        hit.localTo === run.wire.text.length &&
+        !hit.emphasis
+      ) {
         if (!replaceTextRunAtAnchor(document, run, hit.text)) {
           throw new OoxmlError('model-node-not-editable')
         }
@@ -219,7 +236,12 @@ function splitReplacedRun(
   paragraph: ParagraphAnchor,
   run: ParagraphAnchor['runs'][number],
   runStart: number,
-  hits: Array<{ localFrom: number; localTo: number; text: string }>,
+  hits: Array<{
+    localFrom: number
+    localTo: number
+    text: string
+    emphasis?: RunEmphasis
+  }>,
   nextId: () => string,
 ) {
   const bounds = new Set<number>([0, run.wire.text.length])
@@ -246,8 +268,11 @@ function splitReplacedRun(
       (candidate) => candidate.localFrom <= start && end <= candidate.localTo,
     )
     if (hit) {
+      const propertiesXml = hit.emphasis
+        ? patchRunEmphasisXml(properties, hit.emphasis)
+        : properties
       parts.push({
-        xml: `${openRun}${properties}${wordRunInnerTextXml(prefix, hit.text)}${closeRun}`,
+        xml: `${openRun}${propertiesXml}${wordRunInnerTextXml(prefix, hit.text)}${closeRun}`,
         text: hit.text,
       })
     } else {
