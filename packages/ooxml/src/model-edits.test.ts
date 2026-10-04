@@ -583,11 +583,19 @@ describe('OOXML document edits', () => {
     if (!mark || !run) throw new Error('Crafted tracked changes are missing.')
 
     expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
+    const beforeXml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
     expect(() =>
       applyTrackedChangeDecisions(document, [mark.id], 'accept'),
     ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
-    // The refused decision must not have folded the sibling change.
+    // The refused decision must not have folded the sibling change or touched
+    // the source: the serialised part is byte-identical.
     expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
+    expect(
+      await zipText(await serialiseDocx(document), 'word/document.xml'),
+    ).toBe(beforeXml)
   })
 
   it('accepts a paragraph mark deletion when another paragraph survives', async () => {
