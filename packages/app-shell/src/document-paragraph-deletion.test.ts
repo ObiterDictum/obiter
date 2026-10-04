@@ -105,6 +105,17 @@ describe('planParagraphDeletion', () => {
     expect(plan.state.inserts).toEqual([])
   })
 
+  it('selects a rendered survivor when the insert anchor is pending-deleted', () => {
+    // insert-1 sits after p1, and p1 is already pending deletion, so the anchor
+    // does not render. The survivor must come from the effective flow instead.
+    const plan = planParagraphDeletion(
+      model(['p1', 'p2']),
+      { inserts: [insert], deletedParagraphIds: ['p1'] },
+      'insert-1',
+    )
+    expect(selectId(plan)).toBe('p2')
+  })
+
   it('refuses removing the last effective pending insert', () => {
     expect(
       planParagraphDeletion(
