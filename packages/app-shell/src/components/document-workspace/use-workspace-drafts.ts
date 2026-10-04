@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
-import type {
-  LocalInsert,
-  ParagraphDeletionOutcome,
-} from '../../document-edits'
-import { planParagraphDeletion } from '../../document-paragraph-deletion'
+import type { LocalInsert } from '../../document-edits'
 import {
   adoptDocumentDraft,
   clearDocumentDraft,
@@ -28,19 +24,7 @@ import {
 import { useDraftWriterClaim } from './use-draft-writer-claim'
 import { useSaveBaseline, type BaselineBlockReason } from './use-save-baseline'
 import type { FormatDrafts } from '../../document-format-edits'
-import {
-  applyInsertText,
-  applyWordEdit,
-  replaceFindHits,
-  wordEditJoinRefusal,
-  type EditorCaret,
-  type EditorResult,
-  type WordEditOutcome,
-} from '../../document-word-edits'
-import {
-  applyReplaceDocumentRange,
-  applySplitOverDocumentRange,
-} from '../../document-range-edits'
+import type { HistoryEdit } from '../../document-history-grouping'
 import {
   clearableSlots,
   emptyDraftState,
@@ -49,11 +33,11 @@ import {
   type DraftSlot,
   type DraftState,
 } from '../../document-save-plan'
-import type { ParagraphWordEdit } from './model-paragraph'
 import type {
   DraftPersistence,
   WorkspaceDraftScope,
 } from './document-workspace-draft-scope'
+import { createWorkspaceDraftEdits } from './workspace-draft-edits'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
@@ -161,9 +145,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     writerId: () => storedScope().tabId,
     instanceId: instanceId.current,
   })
-  function checkpoint() {
+  function checkpoint(edit?: HistoryEdit) {
     // Recording ends the redo branch: a new edit supersedes anything undone.
-    history.record(bundle.state)
+    history.record(bundleRef.current.state, edit)
   }
 
   /**
@@ -209,6 +193,15 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   function setState(update: (current: DraftState) => DraftState) {
     setBundle((current) => ({ ...current, state: update(current.state) }))
   }
+
+  // The editor operations live in their own module; they read the latest state
+  // and history checkpoint through these seams.
+  const edits = createWorkspaceDraftEdits({
+    getModel: () => scope.model,
+    getState: () => bundleRef.current.state,
+    setState,
+    checkpoint,
+  })
 
   /**
    * Clears the slots a successful request covered, leaving anything held back
@@ -314,133 +307,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     return snapshot
   }
 
-  function commitEditor(result: EditorResult) {
-    setState((current) => ({
-      ...current,
-      drafts: result.state.drafts,
-      inserts: result.state.inserts,
-      deletedParagraphIds: result.state.deletedParagraphIds,
-      extraRuns: result.state.extraRuns,
-    }))
-  }
-
-  function handleWordEdit(
-    model: DocumentModelWire,
-    edit: ParagraphWordEdit,
-  ): WordEditOutcome | null {
-    const result = applyWordEdit(model, bundle.state, edit, crypto.randomUUID())
-    if (result) {
-      checkpoint()
-      commitEditor(result)
-      return { status: 'applied', caret: result.caret }
-    }
-    // No result means the edit could not join a neighbour; say which boundary
-    // refused it rather than leaving the keystroke silent.
-    const refusal = wordEditJoinRefusal(model, bundle.state, edit)
-    return refusal ? { status: 'refused', refusal } : null
-  }
-
-  /**
-   * Replaces a selection that spans paragraphs. It is one draft-state change,
-   * so a rejected or impossible range leaves the document exactly as it was.
-   */
-  function replaceDocumentRange(
-    model: DocumentModelWire,
-    from: EditorCaret,
-    to: EditorCaret,
-    text: string,
-  ): { paragraphId: string; offset: number } | null {
-    const result = applyReplaceDocumentRange(
-      model,
-      bundle.state,
-      from,
-      to,
-      text,
-    )
-    if (!result) return null
-    checkpoint()
-    commitEditor(result)
-    return result.caret
-  }
-
-  /** Enter over a selection: collapse the range, then split where it was. */
-  function splitDocumentRange(
-    model: DocumentModelWire,
-    from: EditorCaret,
-    to: EditorCaret,
-  ): { paragraphId: string; offset: number } | null {
-    const result = applySplitOverDocumentRange(
-      model,
-      bundle.state,
-      from,
-      to,
-      crypto.randomUUID(),
-    )
-    if (!result) return null
-    checkpoint()
-    commitEditor(result)
-    return result.caret
-  }
-
-  function replaceHits(
-    model: DocumentModelWire,
-    hits: ReadonlyArray<{ paragraphId: string; start: number; end: number }>,
-    replacement: string,
-    which: number | 'all',
-  ) {
-    const result = replaceFindHits(
-      model,
-      bundle.state,
-      hits,
-      replacement,
-      which,
-    )
-    if (!result) return null
-    checkpoint()
-    commitEditor(result)
-    return result.caret
-  }
-
-  function insertText(
-    model: DocumentModelWire,
-    paragraphId: string,
-    offset: number,
-    text: string,
-  ) {
-    const result = applyInsertText(
-      model,
-      bundle.state,
-      { paragraphId, offset },
-      text,
-    )
-    if (!result) return null
-    checkpoint()
-    commitEditor(result)
-    return result.caret
-  }
-
-  function insertAfter(afterParagraphId: string) {
-    checkpoint()
-    const clientId = crypto.randomUUID()
-    setState((current) => ({
-      ...current,
-      inserts: [...current.inserts, { clientId, afterParagraphId, text: '' }],
-    }))
-    return clientId
-  }
-
-  function deleteParagraph(paragraphId: string): ParagraphDeletionOutcome {
-    const plan = planParagraphDeletion(scope.model, bundle.state, paragraphId)
-    if (plan.kind === 'refused')
-      return { status: 'refused', reason: 'last-paragraph', selectId: null }
-    if (plan.kind === 'unchanged') return { status: 'deleted', selectId: null }
-    // The invariant is checked before this checkpoint, so a refused deletion
-    // leaves no undo entry and no pending edit operation behind.
-    checkpoint()
-    setState((current) => ({ ...current, ...plan.state }))
-    return { status: 'deleted', selectId: plan.selectId }
-  }
-
   function setFormat(update: (current: FormatDrafts) => FormatDrafts) {
     setBundle((current) => {
       const next = update(current.state.format)
@@ -486,13 +352,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardRecoverable,
     undoDraft,
     redoDraft,
-    handleWordEdit,
-    replaceDocumentRange,
-    splitDocumentRange,
-    replaceHits,
-    insertText,
-    insertAfter,
-    deleteParagraph,
+    ...edits,
     canUndo: history.canUndo && blockedReason === null,
     canRedo: history.canRedo && blockedReason === null,
   }

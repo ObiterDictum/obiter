@@ -1,4 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import {
+  continuesTypingGroup,
+  nextTypingGroup,
+  type HistoryEdit,
+  type TypingGroup,
+} from './document-history-grouping'
 import type { DraftState } from './document-save-plan'
 
 export type WorkspaceDraftSnapshot = DraftState
@@ -34,17 +40,32 @@ export function popWorkspaceDraft(history: readonly WorkspaceDraftSnapshot[]): {
  * branch, and redo moves it back. Recording a new edit ends the redo branch,
  * because the document has moved past the state it held. Documents are kept
  * apart by the workspace remount key rather than a document id here.
+ *
+ * Consecutive typing in one paragraph coalesces into one entry: the first
+ * keystroke records the pre-run state and the rest join it, so an undo reverses
+ * the run rather than one character. Every structural edit, and every history
+ * move, closes the run so the next keystroke starts a fresh step.
  */
 export function useWorkspaceDraftHistory() {
   const [past, setPast] = useState<WorkspaceDraftSnapshot[]>([])
   const [future, setFuture] = useState<WorkspaceDraftSnapshot[]>([])
+  const group = useRef<TypingGroup | null>(null)
 
-  function record(snapshot: WorkspaceDraftSnapshot) {
+  function record(snapshot: WorkspaceDraftSnapshot, edit?: HistoryEdit) {
+    const now = Date.now()
+    if (edit && continuesTypingGroup(group.current, edit, now)) {
+      group.current = nextTypingGroup(edit, now)
+      // The open run's snapshot already sits at the top of the stack: the undo
+      // target is the state before the whole run, not before this keystroke.
+      return
+    }
+    group.current = edit ? nextTypingGroup(edit, now) : null
     setPast((current) => pushWorkspaceDraft(current, snapshot))
     setFuture([])
   }
 
   function clear() {
+    group.current = null
     setPast([])
     setFuture([])
   }
@@ -61,6 +82,7 @@ export function useWorkspaceDraftHistory() {
       snapshot: WorkspaceDraftSnapshot,
     ) => WorkspaceDraftSnapshot | null,
   ) {
+    group.current = null
     let translated = true
     const map = (stack: WorkspaceDraftSnapshot[]) =>
       stack.flatMap((snapshot) => {
@@ -90,6 +112,7 @@ export function useWorkspaceDraftHistory() {
   function stepBack(current: WorkspaceDraftSnapshot) {
     const popped = popWorkspaceDraft(past)
     if (!popped) return null
+    group.current = null
     setPast(popped.history)
     setFuture((branch) => pushWorkspaceDraft(branch, current))
     return popped.snapshot
@@ -98,6 +121,7 @@ export function useWorkspaceDraftHistory() {
   function stepForward(current: WorkspaceDraftSnapshot) {
     const popped = popWorkspaceDraft(future)
     if (!popped) return null
+    group.current = null
     setFuture(popped.history)
     setPast((branch) => pushWorkspaceDraft(branch, current))
     return popped.snapshot
