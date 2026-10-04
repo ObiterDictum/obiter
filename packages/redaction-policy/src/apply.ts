@@ -29,7 +29,10 @@ export interface RedactionRange {
 /**
  * Horizontal whitespace that may sit inside one output region: ordinary
  * spaces and tabs only. A CR/LF or any visible character ends the region, so a
- * bar can never bridge a line or absorb unredacted text.
+ * bar can never bridge a line or absorb unredacted text. A non-breaking space
+ * (U+00A0) is deliberately excluded: it is a non-ASCII separator, so it
+ * produces separate bars rather than widening a merge on a character the
+ * source did not prove was ordinary spacing.
  */
 const REGION_GAP = /^[ \t]*$/
 

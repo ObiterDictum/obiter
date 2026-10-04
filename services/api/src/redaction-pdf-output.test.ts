@@ -5,7 +5,11 @@ import {
   extractText,
   getDocumentProxy,
 } from 'unpdf'
-import { coverRectsForSpan, type RedactionSpan } from '@obiter/redaction-policy'
+import {
+  coalesceRedactionRegions,
+  coverRectsForSpan,
+  type RedactionSpan,
+} from '@obiter/redaction-policy'
 import { describe, expect, it } from 'bun:test'
 import {
   buildRedactedPdf,
@@ -190,8 +194,12 @@ async function pdfWithLines(lines: DrawnLine[]) {
   }
 }
 
-function isNearBlack(r: number, g: number, b: number) {
-  return r < 20 && g < 20 && b < 20
+/**
+ * A cover paint is opaque black. Alpha matters: `getImageData` returns
+ * `(0,0,0,0)` for an unpainted pixel, and RGB alone would call that black.
+ */
+function isNearBlack(r: number, g: number, b: number, a: number) {
+  return a >= 250 && r < 20 && g < 20 && b < 20
 }
 
 async function sampleOutputPixels(
@@ -227,7 +235,7 @@ async function sampleOutputPixels(
       const clampedX = Math.min(Math.max(px, 0), width - 1)
       const clampedY = Math.min(Math.max(py, 0), height - 1)
       const data = context.getImageData(clampedX, clampedY, 1, 1).data
-      return { r: data[0]!, g: data[1]!, b: data[2]! }
+      return { r: data[0]!, g: data[1]!, b: data[2]!, a: data[3]! }
     })
   } finally {
     await pdf.destroy()
@@ -283,7 +291,7 @@ describe('redaction-pdf-output', () => {
     expect(withJ.x).toBeLessThan(plain.x)
   })
 
-  it('rasterizes output so accepted span pixels are black and other text is not', async () => {
+  it('rasterizes output so the accepted span bar is opaque black and the page is not', async () => {
     const pdfBytes = await samplePdf()
     const layout = aliceLayout()
     const output = await buildRedactedPdf(acceptedAliceInput(pdfBytes, layout))
@@ -305,16 +313,23 @@ describe('redaction-pdf-output', () => {
     })
     expect(covers.length).toBeGreaterThan(0)
     const cover = covers[0]!
-    const [coverPixel, visiblePixel] = await sampleOutputPixels(output, [
+    const [coverPixel, backgroundPixel] = await sampleOutputPixels(output, [
       { x: cover.x + cover.width / 2, y: cover.y + cover.height / 2 },
-      // Centre of the "Visible later" baseline ink, well clear of Alice's bar.
-      { x: 70, y: 64 },
+      // Deterministic page background above every glyph and every bar.
+      { x: 100, y: 180 },
     ])
 
-    expect(isNearBlack(coverPixel!.r, coverPixel!.g, coverPixel!.b)).toBe(true)
-    expect(isNearBlack(visiblePixel!.r, visiblePixel!.g, visiblePixel!.b)).toBe(
-      false,
-    )
+    expect(
+      isNearBlack(coverPixel!.r, coverPixel!.g, coverPixel!.b, coverPixel!.a),
+    ).toBe(true)
+    expect(
+      isNearBlack(
+        backgroundPixel!.r,
+        backgroundPixel!.g,
+        backgroundPixel!.b,
+        backgroundPixel!.a,
+      ),
+    ).toBe(false)
   })
 
   it('throws when an output-affecting span has no cover geometry', async () => {
@@ -409,6 +424,52 @@ describe('redaction-pdf-output', () => {
     })
   })
 
+  it('names every span in a coalesced region that misses the page', async () => {
+    const pdfBytes = await samplePdf()
+    const text = 'John Michael'
+    const layout = textLayout({
+      pages: [{ width: 200, height: 200 }],
+      segments: [
+        {
+          start: 0,
+          end: 4,
+          pageIndex: 0,
+          x: 40,
+          y: 400,
+          width: 25,
+          height: 12,
+        },
+        {
+          start: 5,
+          end: 12,
+          pageIndex: 0,
+          x: 68,
+          y: 400,
+          width: 45,
+          height: 12,
+        },
+      ],
+    })
+    const spans = [
+      wordSpan(text, 'John', 'span_john'),
+      wordSpan(text, 'Michael', 'span_michael'),
+    ]
+    await expect(
+      buildRedactedPdf({
+        pdfBytes,
+        layout,
+        text,
+        spans,
+        decisions: acceptAll(spans),
+        outputMode: 'redacted',
+        tokenMap: {},
+      }),
+    ).rejects.toMatchObject({
+      name: 'RedactionCoverGeometryError',
+      spanIds: ['span_john', 'span_michael'],
+    })
+  })
+
   it('still produces a valid PDF when every span is rejected', async () => {
     const pdfBytes = await samplePdf()
     const layout = aliceLayout()
@@ -446,7 +507,7 @@ describe('redaction-pdf-output', () => {
     expect(output.byteLength).toBeGreaterThan(100)
   })
 
-  it('renders adjacent accepted spans as one continuous black bar', async () => {
+  it('plans one cover rect across three adjacent accepted words', async () => {
     const { pdfBytes, layout, text, advancesByLine } = await pdfWithLines([
       { text: 'John Michael Smith', x: 40, y: 100, pageIndex: 0 },
     ])
@@ -455,23 +516,45 @@ describe('redaction-pdf-output', () => {
       wordSpan(text, 'Michael', 'span_michael'),
       wordSpan(text, 'Smith', 'span_smith'),
     ]
+    const decisions = acceptAll(spans)
+    // Geometry plan, independent of any rasterizer: one region, one rect.
+    expect(coalesceRedactionRegions(text, spans, decisions)).toEqual([
+      {
+        start: 0,
+        end: 18,
+        spanIds: ['span_john', 'span_michael', 'span_smith'],
+      },
+    ])
+    const covers = coverRectsForSpan({
+      segments: layout.segments,
+      spanStart: 0,
+      spanEnd: 18,
+      spanText: text,
+      mergeWhitespace: true,
+    })
+    expect(covers).toHaveLength(1)
+    const cover = covers[0]!
+    const centers = charCenters(advancesByLine[0]!, 40)
+    // The rect spans the whitespace between the words, not just their glyphs.
+    for (const index of [4, 12]) {
+      expect(centers[index]!).toBeGreaterThan(cover.x)
+      expect(centers[index]!).toBeLessThan(cover.x + cover.width)
+    }
     const output = await buildRedactedPdf({
       pdfBytes,
       layout,
       text,
       spans,
-      decisions: acceptAll(spans),
+      decisions,
       outputMode: 'redacted',
       tokenMap: {},
     })
-    const centers = charCenters(advancesByLine[0]!, 40)
     const pixels = await sampleOutputPixels(output, [
       { x: centers[4]!, y: 106 },
       { x: centers[12]!, y: 106 },
     ])
-    for (const pixel of pixels) {
-      expect(isNearBlack(pixel.r, pixel.g, pixel.b)).toBe(true)
-    }
+    for (const pixel of pixels)
+      expect(isNearBlack(pixel.r, pixel.g, pixel.b, pixel.a)).toBe(true)
   })
 
   it('merges a whitespace gap wider than a single space into one bar', async () => {
@@ -485,6 +568,14 @@ describe('redaction-pdf-output', () => {
       wordSpan(text, 'Michael', 'span_michael'),
       wordSpan(text, 'Smith', 'span_smith'),
     ]
+    const covers = coverRectsForSpan({
+      segments: layout.segments,
+      spanStart: 0,
+      spanEnd: text.length,
+      spanText: text,
+      mergeWhitespace: true,
+    })
+    expect(covers).toHaveLength(1)
     const output = await buildRedactedPdf({
       pdfBytes,
       layout,
@@ -499,9 +590,8 @@ describe('redaction-pdf-output', () => {
       { x: centers[4]!, y: 106 },
       { x: centers[13]!, y: 106 },
     ])
-    for (const pixel of pixels) {
-      expect(isNearBlack(pixel.r, pixel.g, pixel.b)).toBe(true)
-    }
+    for (const pixel of pixels)
+      expect(isNearBlack(pixel.r, pixel.g, pixel.b, pixel.a)).toBe(true)
   })
 
   it('does not merge across a visible unredacted word', async () => {
@@ -512,18 +602,38 @@ describe('redaction-pdf-output', () => {
       wordSpan(text, 'John', 'span_john'),
       wordSpan(text, 'Smith', 'span_smith'),
     ]
+    const decisions = acceptAll(spans)
+    // The visible word forbids one region at the source level, so the plan
+    // holds two rects even though both spans share a baseline.
+    expect(coalesceRedactionRegions(text, spans, decisions)).toEqual([
+      { start: 0, end: 4, spanIds: ['span_john'] },
+      { start: 9, end: 14, spanIds: ['span_smith'] },
+    ])
+    const covers = coalesceRedactionRegions(text, spans, decisions).flatMap(
+      (region) =>
+        coverRectsForSpan({
+          segments: layout.segments,
+          spanStart: region.start,
+          spanEnd: region.end,
+          spanText: text.slice(region.start, region.end),
+          mergeWhitespace: true,
+        }),
+    )
+    expect(covers).toHaveLength(2)
     const output = await buildRedactedPdf({
       pdfBytes,
       layout,
       text,
       spans,
-      decisions: acceptAll(spans),
+      decisions,
       outputMode: 'redacted',
       tokenMap: {},
     })
     const centers = charCenters(advancesByLine[0]!, 40)
-    const [gap] = await sampleOutputPixels(output, [{ x: centers[6]!, y: 106 }])
-    expect(isNearBlack(gap!.r, gap!.g, gap!.b)).toBe(false)
+    // The space after the John bar, before the visible 'a'. Deterministic
+    // background, never the glyph ink the old test sampled.
+    const [gap] = await sampleOutputPixels(output, [{ x: centers[4]!, y: 106 }])
+    expect(isNearBlack(gap!.r, gap!.g, gap!.b, gap!.a)).toBe(false)
   })
 
   it('splits a wrapped region into one bar per rendered line', async () => {
@@ -536,6 +646,14 @@ describe('redaction-pdf-output', () => {
       wordSpan(text, 'Michael', 'span_michael'),
       wordSpan(text, 'Smith', 'span_smith'),
     ]
+    const covers = coverRectsForSpan({
+      segments: layout.segments,
+      spanStart: 0,
+      spanEnd: text.length,
+      spanText: text,
+      mergeWhitespace: true,
+    })
+    expect(covers).toHaveLength(2)
     const output = await buildRedactedPdf({
       pdfBytes,
       layout,
@@ -555,11 +673,20 @@ describe('redaction-pdf-output', () => {
         { x: centers2[3]!, y: 93 },
       ],
     )
-    expect(isNearBlack(line1Glyph!.r, line1Glyph!.g, line1Glyph!.b)).toBe(true)
-    expect(isNearBlack(line2Gap!.r, line2Gap!.g, line2Gap!.b)).toBe(true)
-    expect(isNearBlack(betweenLines!.r, betweenLines!.g, betweenLines!.b)).toBe(
-      false,
-    )
+    expect(
+      isNearBlack(line1Glyph!.r, line1Glyph!.g, line1Glyph!.b, line1Glyph!.a),
+    ).toBe(true)
+    expect(
+      isNearBlack(line2Gap!.r, line2Gap!.g, line2Gap!.b, line2Gap!.a),
+    ).toBe(true)
+    expect(
+      isNearBlack(
+        betweenLines!.r,
+        betweenLines!.g,
+        betweenLines!.b,
+        betweenLines!.a,
+      ),
+    ).toBe(false)
   })
 
   it('does not merge redactions across PDF pages', async () => {
@@ -588,7 +715,11 @@ describe('redaction-pdf-output', () => {
       [{ x: 50, y: 106 }],
       2,
     )
-    expect(isNearBlack(firstPage!.r, firstPage!.g, firstPage!.b)).toBe(true)
-    expect(isNearBlack(secondPage!.r, secondPage!.g, secondPage!.b)).toBe(true)
+    expect(
+      isNearBlack(firstPage!.r, firstPage!.g, firstPage!.b, firstPage!.a),
+    ).toBe(true)
+    expect(
+      isNearBlack(secondPage!.r, secondPage!.g, secondPage!.b, secondPage!.a),
+    ).toBe(true)
   })
 })

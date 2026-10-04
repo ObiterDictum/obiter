@@ -208,6 +208,17 @@ describe('finalized region coalescing', () => {
     )
   })
 
+  it('does not bridge a non-breaking space', () => {
+    const text = 'John\u00a0Michael'
+    const spans = [
+      spanAt(text, 'John', 'span_john'),
+      spanAt(text, 'Michael', 'span_michael'),
+    ]
+    expect(applyRedacted(text, spans, acceptAll(spans))).toBe(
+      '[REDACTED]\u00a0[REDACTED]',
+    )
+  })
+
   it('bridges punctuation only when it is inside an accepted range', () => {
     const text = 'John, Michael'
     const withoutComma = [

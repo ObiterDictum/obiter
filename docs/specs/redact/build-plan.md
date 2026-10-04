@@ -421,7 +421,13 @@ content, never on the original.
 run of accepted spans that overlap, touch, or are separated only by horizontal
 whitespace (spaces and tabs). The region keeps its start/end range and the ids of
 every span it represents, so audit records continue to identify the original spans
-and decisions. A region never crosses a CR/LF or any visible character.
+and decisions. A region never crosses a CR/LF or any visible character, and only
+ASCII space and tab join regions: a non-breaking space (U+00A0) or any other
+separator ends the region, producing separate bars rather than risking a merge the
+source never proved was ordinary spacing. The geometric gap between two joined
+glyphs is also bounded relative to the local glyph height (two em by default), so
+a distant column, table gutter, or layout fragment becomes separate bars even when
+the source between them is only whitespace.
 
 - Plain text replaces each region with exactly one `[REDACTED]` marker.
 - DOCX writes one harmless `[REDACTED]` marker per region inside the existing runs,

@@ -10,6 +10,16 @@ import type { DocumentTextLayoutSegment } from '@obiter/contracts'
 /** Ink that often exceeds the font descent line. */
 const DEEP_DESCENDER = /[gjpqyQJ]/u
 
+/**
+ * Largest whitespace bridge a coalesced bar may cross, in em of the smaller
+ * adjacent glyph. Two em is about seven ordinary spaces (a space is ~0.28em),
+ * which covers multiple spaces and tabs, yet stays far below the hundreds of
+ * points a column, table cell, or layout fragment leaves. A wider gap that
+ * source adjacency alone cannot justify falls back to separate bars, which
+ * stay secure, instead of one page-wide bar that could hide unredacted text.
+ */
+const WHITESPACE_GAP_EM = 2
+
 export interface GlyphCoverInput {
   x: number
   /** Glyph baseline in PDF user space. */
@@ -296,17 +306,18 @@ function unionMergeGlyphs(
     const gap = previous
       ? glyph.along - (previous.along + previous.advanceWidth)
       : Number.POSITIVE_INFINITY
-    const maxGap = Math.max(
-      2.5,
-      Math.min(previous?.height ?? 0, glyph.height) * 0.4,
-    )
+    const smallerHeight = Math.min(previous?.height ?? 0, glyph.height)
+    const maxGap = Math.max(2.5, smallerHeight * 0.4)
+    // A coalesced region has only whitespace between its glyphs, so the gap
+    // may exceed the single-span threshold (multiple spaces, a tab) and still
+    // belong to one bar. Bound that bridge to WHITESPACE_GAP_EM of the smaller
+    // adjacent glyph so a distant fragment cannot be bridged on source
+    // adjacency alone.
+    const maxWhitespaceGap = Math.max(maxGap, smallerHeight * WHITESPACE_GAP_EM)
     const directionMatch = previous
       ? previous.baselineX * glyph.baselineX +
         previous.baselineY * glyph.baselineY
       : 0
-    // A coalesced region has only whitespace between its glyphs, so the gap
-    // may exceed the single-span threshold (multiple spaces, a tab) and still
-    // belong to one bar. The same-line and direction guards below still apply.
     const whitespaceGap =
       mergeWhitespace &&
       previous !== undefined &&
@@ -317,7 +328,7 @@ function unionMergeGlyphs(
       directionMatch > 0.999 &&
       Math.abs(previous.baseline - glyph.baseline) <= 1.25 &&
       glyph.along + glyph.advanceWidth / 2 >= previous.along &&
-      (gap <= maxGap || whitespaceGap)
+      (gap <= maxGap || (whitespaceGap && gap <= maxWhitespaceGap))
 
     if (previous && sameLine) {
       const right = Math.max(previous.x + previous.width, glyph.x + glyph.width)

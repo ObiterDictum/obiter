@@ -32,8 +32,8 @@ interface PageRect {
   label?: string
   /** Characters covered by this rect — drives descender/ascent padding. */
   ink?: string
-  /** Span this rect redacts, so an off-page cover can be refused by id. */
-  spanId: string
+  /** Spans this rect redacts, so an off-page cover is refused by every id. */
+  spanIds: string[]
 }
 
 /** Visible page box in PDF user space, origin included. */
@@ -200,8 +200,8 @@ function paintRedaction(
 
 /** @deprecated Prefer glyphCoverRect / coverRectsForSpan. */
 export function padGlyphRect(
-  rect: Omit<PageRect, 'spanId'>,
-): Omit<PageRect, 'spanId'> {
+  rect: Omit<PageRect, 'spanIds'>,
+): Omit<PageRect, 'spanIds'> {
   const covered = glyphCoverRect({
     x: rect.x,
     y: rect.y,
@@ -262,7 +262,7 @@ function collectRedactionRects(input: RedactedPdfInput) {
         height: covered.height,
         label: plan.label,
         ink: covered.ink,
-        spanId: plan.spanIds[0] ?? 'span',
+        spanIds: plan.spanIds,
       })
       rectsByPage.set(covered.pageIndex, list)
     }
@@ -287,7 +287,8 @@ function assertCoversOnPage(
   const missing = new Set<string>()
   for (const [pageIndex, rects] of rectsByPage) {
     for (const rect of rects) {
-      if (coverMissesPage(rect, pageBounds[pageIndex])) missing.add(rect.spanId)
+      if (coverMissesPage(rect, pageBounds[pageIndex]))
+        for (const spanId of rect.spanIds) missing.add(spanId)
     }
   }
   if (missing.size > 0) throw new RedactionCoverGeometryError([...missing])
