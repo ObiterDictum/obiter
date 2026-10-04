@@ -3,6 +3,7 @@ import { apiFetch, apiFetchBlob, declaredFileType } from '@obiter/app-shell'
 import type {
   FinalizeInput,
   FinalizeResponse,
+  RedactionOutput,
   RedactionRun,
   RedetectResponse,
   SpanDecisionInput,
@@ -106,11 +107,7 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['redaction-run-output', runId],
     queryFn: () =>
-      apiFetch<{
-        mimeType: string
-        filename: string
-        text: string | null
-      }>(`/api/redaction-runs/${runId}/output`),
+      apiFetch<RedactionOutput>(`/api/redaction-runs/${runId}/output`),
     enabled,
     staleTime: 30_000,
   })

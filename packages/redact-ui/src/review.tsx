@@ -26,7 +26,10 @@ import {
   useSpanDecision,
 } from './hooks'
 import { useRedactionSource } from './source-preview-hooks'
-import { PdfDocumentPreview } from './pdf-document-preview'
+import {
+  PdfDocumentPreview,
+  type PdfPreviewStatus,
+} from './pdf-document-preview'
 import { PdfReviewDocument } from './pdf-review-document'
 import { DetectionRetryWarning } from './detection-retry-warning'
 import { FinalizeDialog } from './finalize-dialog'
@@ -192,6 +195,14 @@ function HighlightedText({
   )
 }
 
+/**
+ * How long a download's object URL is kept alive after the click. Revoking on
+ * the next macrotask races a browser that defers the blob fetch (WebKit in
+ * particular), which then fails the download. A minute is far past any realistic
+ * scheduling delay and still releases the URL promptly.
+ */
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -201,7 +212,7 @@ function downloadBlob(blob: Blob, filename: string) {
   // Defer revoke past the click handler so the browser can start the download.
   setTimeout(() => {
     URL.revokeObjectURL(url)
-  }, 0)
+  }, DOWNLOAD_URL_REVOKE_DELAY_MS)
 }
 
 async function shareOrDownload(blob: Blob, filename: string) {
@@ -255,6 +266,36 @@ function OutputDowngradeWarning({ run }: { run: RedactionRun }) {
   )
 }
 
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+function isSecureRedacted(run: RedactionRun, mimeType: string) {
+  return run.summary.outputMode === 'redacted' && mimeType === 'application/pdf'
+}
+
+function finalizedOutputCopy(run: RedactionRun, securePdf: boolean) {
+  if (run.summary.outputMode === 'pseudonymised')
+    return {
+      heading: 'Pseudonymised editable copy',
+      body: 'Replaces accepted content with consistent category tokens for continued internal work. Token-map access remains restricted and audited.',
+      download: 'Download editable copy',
+      share: 'Share editable copy',
+    }
+  if (securePdf)
+    return {
+      heading: 'Secure redacted PDF',
+      body: 'Preview the finalized file below. Download and share this PDF only after checking every page.',
+      download: 'Download secure PDF',
+      share: 'Share secure PDF',
+    }
+  return {
+    heading: 'Finalized output',
+    body: 'Created before secure PDF became the default output.',
+    download: 'Download',
+    share: 'Share',
+  }
+}
+
 function FinalizedOutput({
   run,
   outputQuery,
@@ -262,92 +303,89 @@ function FinalizedOutput({
   run: RedactionRun
   outputQuery: ReturnType<typeof useRedactionOutput>
 }) {
+  const output = outputQuery.data
   const mimeType =
-    outputQuery.data?.mimeType ?? run.summary.outputMimeType ?? 'text/plain'
+    output?.mimeType ?? run.summary.outputMimeType ?? 'text/plain'
+  const securePdf = output?.securePdf ?? isSecureRedacted(run, mimeType)
   const isPdf = mimeType === 'application/pdf'
-  const isDocx =
-    mimeType ===
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const isDocx = mimeType === DOCX_MIME
   // Both burned outputs download as files; only the PDF previews inline.
   const isFile = isPdf || isDocx
   const filename =
-    outputQuery.data?.filename ??
-    run.summary.outputFilename ??
-    run.sourceFilename
+    output?.filename ?? run.summary.outputFilename ?? run.sourceFilename
   const fileQuery = useRedactionOutputFile(
     run.id,
     isFile && Boolean(run.outputArtifactId),
   )
+  const [preview, setPreview] = useState<{
+    blob: Blob | null
+    status: PdfPreviewStatus
+  }>({ blob: null, status: { kind: 'loading' } })
+  const copy = finalizedOutputCopy(run, securePdf)
+  // Preview and download read the same immutable Blob fetched once here. The
+  // secure redaction download stays disabled until its preview has rendered at
+  // least the first page, so a broken preview cannot push an unchecked file.
+  const artifact = fileQuery.data
+  // Trust a preview status only for the Blob it described: a refetched or new
+  // artifact must render again before the download is enabled.
+  const previewStatus: PdfPreviewStatus =
+    artifact !== undefined && preview.blob === artifact
+      ? preview.status
+      : { kind: 'loading' }
+  const previewReady = isPdf && previewStatus.kind === 'ready'
+  const downloadReady = isFile
+    ? securePdf
+      ? previewReady && Boolean(artifact)
+      : Boolean(artifact)
+    : output?.text != null
+  const textBlob = () =>
+    new Blob([output?.text ?? ''], { type: 'text/plain;charset=utf-8' })
+  const artifactBlob = () =>
+    isFile && artifact ? artifact : output?.text != null ? textBlob() : null
 
   return (
     <section className="px-4 py-4 sm:px-5" aria-label="Redaction output">
       <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
         <OutputDowngradeWarning run={run} />
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-8 py-6 md:px-10">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
-              Finalized output
+              Finalized
             </p>
-            <h2 className="mt-2 text-lg font-semibold leading-snug text-ink">
-              {filename}
+            <h2 className="mt-2 break-words text-lg font-semibold leading-snug text-ink">
+              {copy.heading}
             </h2>
-            <p className="mt-1 text-sm text-muted">
-              {isPdf
-                ? 'Redacted PDF ready to download or share.'
-                : isDocx
-                  ? 'Redacted document ready to download or share.'
-                  : 'Redacted text ready to download or share.'}
-            </p>
+            <p className="mt-1 break-all text-sm text-muted">{filename}</p>
+            <p className="mt-2 text-sm text-muted">{copy.body}</p>
+            {isPdf && previewStatus.kind === 'ready' ? (
+              <p className="mt-1 text-xs text-muted" role="status">
+                Preview ready, {previewStatus.pageCount}{' '}
+                {previewStatus.pageCount === 1 ? 'page' : 'pages'}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              variant="secondary"
-              disabled={
-                isFile
-                  ? !fileQuery.data
-                  : !outputQuery.data?.text && outputQuery.data?.text !== ''
-              }
+              variant="primary"
+              disabled={!downloadReady}
               onClick={() => {
-                if (isFile && fileQuery.data) {
-                  downloadBlob(fileQuery.data, filename)
-                  return
-                }
-                if (outputQuery.data?.text != null) {
-                  downloadBlob(
-                    new Blob([outputQuery.data.text], {
-                      type: 'text/plain;charset=utf-8',
-                    }),
-                    filename,
-                  )
-                }
+                const blob = artifactBlob()
+                if (blob) downloadBlob(blob, filename)
               }}
             >
-              Download
+              {copy.download}
             </Button>
             <Button
-              disabled={
-                isFile
-                  ? !fileQuery.data
-                  : !outputQuery.data?.text && outputQuery.data?.text !== ''
-              }
+              variant="secondary"
+              disabled={!downloadReady}
               onClick={() => {
                 void (async () => {
-                  if (isFile && fileQuery.data) {
-                    await shareOrDownload(fileQuery.data, filename)
-                    return
-                  }
-                  if (outputQuery.data?.text != null) {
-                    await shareOrDownload(
-                      new Blob([outputQuery.data.text], {
-                        type: 'text/plain;charset=utf-8',
-                      }),
-                      filename,
-                    )
-                  }
+                  const blob = artifactBlob()
+                  if (blob) await shareOrDownload(blob, filename)
                 })()
               }}
             >
-              Share
+              {copy.share}
             </Button>
           </div>
         </header>
@@ -355,19 +393,36 @@ function FinalizedOutput({
           {outputQuery.isPending || (isFile && fileQuery.isPending) ? (
             <Skeleton className="h-32" />
           ) : outputQuery.error ? (
-            <p className="text-sm text-danger">{outputQuery.error.message}</p>
+            <p className="text-sm text-danger" role="alert">
+              {outputQuery.error.message}
+            </p>
           ) : isFile && fileQuery.error ? (
-            <p className="text-sm text-danger">{fileQuery.error.message}</p>
-          ) : isPdf && fileQuery.data ? (
-            <PdfDocumentPreview file={fileQuery.data} />
-          ) : isDocx && fileQuery.data ? (
+            <p className="text-sm text-danger" role="alert">
+              {fileQuery.error.message}
+            </p>
+          ) : isPdf && artifact ? (
+            <div className="flex flex-col gap-2">
+              {previewStatus.kind === 'error' ? (
+                <p className="text-sm text-danger" role="alert">
+                  The finalized PDF could not be previewed, so the download is
+                  disabled until it loads. This is not the source document.
+                </p>
+              ) : null}
+              <PdfDocumentPreview
+                file={artifact}
+                onStatusChange={(status) =>
+                  setPreview({ blob: artifact, status })
+                }
+              />
+            </div>
+          ) : isDocx && artifact ? (
             <p className="text-sm text-muted">
               The redacted document keeps its formatting. Use Download to open
               it in Word.
             </p>
           ) : (
             <div className="px-4 pb-4 text-base leading-relaxed text-ink [overflow-wrap:anywhere] whitespace-pre-wrap md:px-5">
-              {outputQuery.data?.text}
+              {output?.text}
             </div>
           )}
         </div>
@@ -485,9 +540,7 @@ export function RedactionReviewView({
         }
         meta={eyebrow}
         actions={
-          run.status === 'finalized' ? (
-            <Badge tone="success">Finalized</Badge>
-          ) : run.replacementRunId ? (
+          run.status === 'finalized' ? null : run.replacementRunId ? (
             <Badge tone="neutral">Replaced</Badge>
           ) : (
             <FinalizeDialog run={run} />
@@ -567,9 +620,7 @@ export function RedactionReviewView({
       title="Redaction review"
       meta={eyebrow}
       actions={
-        run.status === 'finalized' ? (
-          <Badge tone="success">Finalized</Badge>
-        ) : run.replacementRunId ? (
+        run.status === 'finalized' ? null : run.replacementRunId ? (
           <Badge tone="neutral">Replaced</Badge>
         ) : (
           <FinalizeDialog run={run} />

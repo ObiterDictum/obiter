@@ -210,6 +210,12 @@ is worse than no e2e.
 
 ## Host prerequisites (found the hard way):
 
+- **Playwright Chromium must be installed** to run the `services/redaction-renderer`
+  suite: `bun --bun playwright install chromium`. The worker launches the real
+  browser its renderer ships against, and Playwright fetches browsers on demand
+  rather than during `bun install`. CI installs it before the test step;
+  `scripts/ci-local.sh` runs the same install.
+
 - **Meilisearch must be running** at `http://127.0.0.1:7700` with
   `MEILI_MASTER_KEY=obiter-local-dev-key`, matching the version pinned in
   `ci.yml` (`getmeili/meilisearch:v1.53.1`). Start it with

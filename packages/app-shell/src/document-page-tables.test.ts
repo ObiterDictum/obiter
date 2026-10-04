@@ -229,6 +229,24 @@ describe('storyTables with drawings', () => {
       'para-w14-AABBCCDD',
     ])
   })
+
+  it('refuses a table fragment that declares a DTD or entity', () => {
+    const attacks = [
+      '<!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">]><w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>',
+      '<w:tbl><!ENTITY lol "lol"><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>',
+    ]
+    for (const xml of attacks) {
+      const start = performance.now()
+      const tables = storyTables({
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: [],
+        preservedXmlFragments: [xml],
+      })
+      expect(performance.now() - start).toBeLessThan(1000)
+      expect(tables).toEqual([])
+    }
+  })
 })
 
 describe('tablePaintHeight', () => {

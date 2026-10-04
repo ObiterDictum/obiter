@@ -46,3 +46,27 @@ export function xmlInner(xml: string, localName: string): string | undefined {
     new RegExp(`<w:${localName}\\b[^>]*>([\\s\\S]*?)</w:${localName}>`, 'i'),
   )?.[1]
 }
+
+/**
+ * The first start tag with the given qualified name, isolated from the rest of
+ * the fragment. Reading attributes from one short tag avoids the polynomial
+ * backtracking of a single regex whose `[^>]*` gaps repeatedly scan a long
+ * attribute list looking for a missing `x`/`y`/`cx`/`cy`.
+ */
+export function xmlStartTag(
+  xml: string,
+  qualifiedName: string,
+): string | undefined {
+  return xml.match(new RegExp(`<${qualifiedName}\\b[^>]*>`, 'i'))?.[0]
+}
+
+/** A non-negative integer attribute read from an isolated start tag. */
+export function xmlDigitAttr(
+  tag: string | undefined,
+  name: string,
+): number | undefined {
+  const value = tag?.match(new RegExp(`\\b${name}="(\\d+)"`, 'i'))?.[1]
+  if (value === undefined) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}

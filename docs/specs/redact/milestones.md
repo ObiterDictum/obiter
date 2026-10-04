@@ -10,7 +10,15 @@
 
 ## M2 — complete
 
-- Review UI, decisions, redacted output and pseudonymised output work. Finalized redacted PDF and DOCX output removes the accepted text and renders contiguous opaque black bars (one per coalesced region per rendered line); plain-text output uses one `[REDACTED]` marker per region. See [build-plan.md](build-plan.md#finalized-output-presentation-red-01).
+- Review UI, decisions, redacted output and pseudonymised output work. Hard redaction
+  finalizes to one immutable, image-only secure PDF for DOCX, PDF and text sources,
+  with contiguous opaque black bars (one per coalesced region per rendered line) and
+  no selectable source-text layer. The review view previews that PDF and the same
+  fetched bytes back the primary download and share, which stay disabled until the
+  preview renders its first page. A failed secure-PDF conversion is visible and never
+  finalizes the run. Pseudonymisation is a separate editable workflow with category
+  tokens and no bars. See
+  [build-plan.md](build-plan.md#finalized-output-presentation-red-01).
 
 ## M3 — production readiness
 

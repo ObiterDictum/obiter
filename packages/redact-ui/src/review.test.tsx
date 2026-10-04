@@ -365,7 +365,7 @@ describe('RedactionReviewView', () => {
 
     expect(screen.queryByRole('alert')).toBeNull()
     expect(
-      screen.getByText('Redacted document ready to download or share.'),
+      screen.getByText('Created before secure PDF became the default output.'),
     ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Download' })).toHaveProperty(
       'disabled',
@@ -522,7 +522,7 @@ describe('RedactionReviewView', () => {
     expect(
       screen.queryAllByRole('button', { name: 'Run model detection again' }),
     ).toHaveLength(0)
-    const confirm = screen.getByRole('button', { name: 'Confirm finalize' })
+    const confirm = screen.getByRole('button', { name: 'Create secure PDF' })
     expect(confirm).toHaveProperty('disabled', true)
 
     fireEvent.click(
@@ -575,7 +575,7 @@ describe('RedactionReviewView', () => {
     ).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
-    const confirm = screen.getByRole('button', { name: 'Confirm finalize' })
+    const confirm = screen.getByRole('button', { name: 'Create secure PDF' })
     expect(confirm).toHaveProperty('disabled', true)
     fireEvent.click(
       screen.getByLabelText(
@@ -687,7 +687,7 @@ describe('RedactionReviewView', () => {
 
     expect(screen.queryByText('Model detection did not run')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
-    const confirm = screen.getByRole('button', { name: 'Confirm finalize' })
+    const confirm = screen.getByRole('button', { name: 'Create secure PDF' })
     expect(confirm).toHaveProperty('disabled', false)
     fireEvent.click(confirm)
 
@@ -769,9 +769,20 @@ describe('RedactionReviewView', () => {
     render(<RedactionReviewView runId="red_1" />)
     fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
 
-    expect(screen.getAllByText(/opaque black bars/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Secure redacted PDF')).toBeTruthy()
     expect(
-      screen.getAllByText(/plain-text output uses \[REDACTED\]/).length,
-    ).toBeGreaterThan(0)
+      screen.getByText(
+        'Removes accepted content and creates a fixed, share-safe PDF with opaque black bars. The finalized PDF contains no selectable source-text layer.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('Pseudonymised editable copy')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Replaces accepted content with consistent category tokens for continued internal work. Token-map access remains restricted and audited.',
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Create secure PDF' }),
+    ).toBeTruthy()
   })
 })
