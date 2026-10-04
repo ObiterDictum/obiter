@@ -168,7 +168,8 @@ never a partial PDF.
   still spend CPU there before Chromium is involved.
 - The app-shell page modules this worker reuses
   (`document-page-drawings.ts`, `document-page-media.ts`,
-  `document-page-tables.ts`) contain pre-existing regexes and `DOMParser`
-  parsing that CodeQL flags. They are reachable with attacker-controlled DOCX
-  XML, but they run inside the render timeout, which is the bound. Hardening
-  those shared parsers is separate work and is deliberately not changed here.
+  `document-page-tables.ts`) parse attacker-controlled DOCX XML. The
+  drawing/extent attribute reads are linear (no polynomial regex), and the
+  table parser refuses `<!DOCTYPE`/`<!ENTITY` fragments before `DOMParser`, so
+  the known ReDoS and entity-expansion hazards are closed. The render timeout
+  remains the backstop for anything else reachable.
