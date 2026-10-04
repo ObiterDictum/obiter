@@ -348,6 +348,9 @@ async function main() {
       MEILISEARCH_SEARCH_API_KEY: 'obiter-api-ingress-meili-key-0123456789',
       MEILISEARCH_ADMIN_API_KEY: 'obiter-api-ingress-meili-key-0123456789',
       LEGAL_AUTHORITIES_INDEX: 'legal_authorities',
+      // Required in production for DOCX hard-redaction finalize. Unreachable on
+      // purpose here: this harness never finalizes a DOCX hard redaction.
+      OBITER_REDACTION_RENDERER_URL: 'http://renderer.invalid:8790',
     }
     startTracked({
       name: names.bun,
