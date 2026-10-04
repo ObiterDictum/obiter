@@ -187,8 +187,9 @@ test('enables the clipboard controls from the document selection', async ({
   await shot(page, '02-clipboard-enabled-with-a-selection')
 
   // Copy writes the selection and leaves the document alone.
+  const before = await page.locator('[data-paragraph-id]').count()
   await copyButton(page).click()
-  await expect(page.locator('[data-paragraph-id]')).toHaveCount(4)
+  await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
   await shot(page, '03-copied-without-mutating')
 })
 
