@@ -6,6 +6,7 @@ import {
   type TokenClassifier,
 } from '@obiter/rampart-inference'
 import {
+  applyRedacted,
   mergeSpans,
   normalizePersonDetections,
   reconcileRampartSpans,
@@ -127,6 +128,7 @@ function finalizeApp(
   const readyRun = runRow(spans, decisions)
   const finalized = { ...readyRun, status: 'finalized' as const }
   let written: string | null = null
+  let writtenBytes: Buffer | null = null
   const pool = {
     query: async (sql: unknown) => {
       const statement = String(sql)
@@ -168,10 +170,17 @@ function finalizeApp(
       writeText: async (_key: string, value: string) => {
         written = value
       },
+      writeBinary: async (_key: string, value: Buffer) => {
+        writtenBytes = Buffer.from(value)
+      },
       delete: async () => undefined,
     },
   })
-  return { app, written: () => written }
+  return {
+    app,
+    written: () => written,
+    writtenBytes: () => writtenBytes,
+  }
 }
 
 describe('redaction merge integrity (P2.39)', () => {
@@ -185,7 +194,11 @@ describe('redaction merge integrity (P2.39)', () => {
 
   it('finalizes a run whose detection produced a partial-overlap union', async () => {
     const spans = detectionSpans()
-    const { app, written } = finalizeApp(text, spans, accepted(spans))
+    const { app, written, writtenBytes } = finalizeApp(
+      text,
+      spans,
+      accepted(spans),
+    )
 
     const response = await app.request('/api/redaction-runs/red_1/finalize', {
       method: 'POST',
@@ -193,8 +206,11 @@ describe('redaction merge integrity (P2.39)', () => {
       body: JSON.stringify({ outputMode: 'redacted' }),
     })
 
+    // A matched union must not 409 on span integrity, and the hard-redaction
+    // output is the secure PDF rather than text.
     expect(response.status).toBe(200)
-    expect(written()).toBe('[REDACTED]')
+    expect(written()).toBeNull()
+    expect(writtenBytes()!.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   })
 })
 
@@ -350,7 +366,14 @@ describe('overlap disposition (P0.31)', () => {
       ),
       supplementSpans(source),
     )
-    const { app, written } = finalizeApp(source, spans, fromSuggestions(spans))
+    const decisions = fromSuggestions(spans)
+    // The union's disposition is a policy decision; assert it directly. The
+    // route then publishes the redacted text as a secure, image-only PDF, so
+    // the accepted bytes cannot appear in the artifact.
+    expect(applyRedacted(source, spans, decisions)).toBe(
+      'alpha [REDACTED] delta',
+    )
+    const { app, writtenBytes, written } = finalizeApp(source, spans, decisions)
 
     const response = await app.request('/api/redaction-runs/red_1/finalize', {
       method: 'POST',
@@ -359,9 +382,12 @@ describe('overlap disposition (P0.31)', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(written()).toBe('alpha [REDACTED] delta')
-    expect(written()).not.toContain('bravo')
-    expect(written()).not.toContain('charlie')
+    // No text fallback: the only output is the secure PDF.
+    expect(written()).toBeNull()
+    const bytes = writtenBytes()
+    expect(bytes).not.toBeNull()
+    expect(bytes!.subarray(0, 5).toString('latin1')).toBe('%PDF-')
+    expect(bytes!.includes(Buffer.from('charlie'))).toBe(false)
   })
 
   it('honours explicit keep and redact overrides on the same union', async () => {
@@ -386,6 +412,7 @@ describe('overlap disposition (P0.31)', () => {
         ]),
       )
 
+    expect(applyRedacted(source, spans, override('override_keep'))).toBe(source)
     const kept = finalizeApp(source, spans, override('override_keep'))
     const keptResponse = await kept.app.request(
       '/api/redaction-runs/red_1/finalize',
@@ -396,8 +423,12 @@ describe('overlap disposition (P0.31)', () => {
       },
     )
     expect(keptResponse.status).toBe(200)
-    expect(kept.written()).toBe(source)
+    expect(kept.written()).toBeNull()
+    expect(kept.writtenBytes()!.subarray(0, 5).toString('latin1')).toBe('%PDF-')
 
+    expect(applyRedacted(source, spans, override('override_redact'))).toBe(
+      'alpha [REDACTED] delta',
+    )
     const redacted = finalizeApp(source, spans, override('override_redact'))
     const redactedResponse = await redacted.app.request(
       '/api/redaction-runs/red_1/finalize',
@@ -408,7 +439,10 @@ describe('overlap disposition (P0.31)', () => {
       },
     )
     expect(redactedResponse.status).toBe(200)
-    expect(redacted.written()).toBe('alpha [REDACTED] delta')
+    expect(redacted.written()).toBeNull()
+    expect(redacted.writtenBytes()!.subarray(0, 5).toString('latin1')).toBe(
+      '%PDF-',
+    )
   })
 })
 
@@ -488,6 +522,9 @@ describe('multi-window cross-window merge (P0.31 residual)', () => {
       body: JSON.stringify({ outputMode: 'redacted' }),
     })
     expect(response.status).toBe(200)
-    expect(written()).not.toContain(text.slice(60, 80))
+    expect(written()).toBeNull()
+    expect(
+      applyRedacted(text, detection.spans, fromSuggestions(detection.spans)),
+    ).not.toContain(text.slice(60, 80))
   })
 })

@@ -346,6 +346,28 @@ export type RedactionFinalizeInput = z.infer<
   typeof redactionFinalizeInputSchema
 >
 
+/**
+ * Metadata for a finalized redaction artifact. The bytes are served separately
+ * by `/output/file` so preview and download read the same stored object; this
+ * response only describes it. `securePdf` marks a hard-redaction PDF produced
+ * by the current rasterized path; a legacy hard-redaction DOCX/TXT artifact
+ * reports `securePdf: false` and keeps its true MIME type and filename.
+ */
+export const redactionOutputResponseSchema = z.object({
+  mimeType: z.string().min(1),
+  filename: z.string().min(1),
+  text: z.string().nullable(),
+  artifactId: z.string().min(1).nullable(),
+  sha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/u)
+    .nullable(),
+  securePdf: z.boolean(),
+})
+export type RedactionOutputResponse = z.infer<
+  typeof redactionOutputResponseSchema
+>
+
 export type Tone = 'ink' | 'sage' | 'amber' | 'rust'
 
 export function createCanonicalCasePath(input: {

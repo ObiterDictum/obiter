@@ -251,7 +251,7 @@ test('the finalized output and its controls fit a 390px viewport', async ({
   const acknowledgements = page.getByRole('checkbox')
   for (let index = 0; index < (await acknowledgements.count()); index += 1)
     await acknowledgements.nth(index).check()
-  await page.getByRole('button', { name: 'Confirm finalize' }).click()
+  await page.getByRole('button', { name: 'Create secure PDF' }).click()
   await expect(page.getByText('Finalized', { exact: true })).toBeVisible({
     timeout: 30_000,
   })

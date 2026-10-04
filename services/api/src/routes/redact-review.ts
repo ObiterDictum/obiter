@@ -17,6 +17,14 @@ import { appendAuditLog } from '../database'
 import { createDocumentMediaResponse } from '../document-media-response'
 import { findUncoveredRegions } from '../extraction-coverage'
 import {
+  buildHardRedactionPdf,
+  hardRedactionFailureCategory,
+  HardRedactionOutputError,
+  type HardRedactionFailureCategory,
+} from '../redaction-hard-output'
+import type { RedactionRenderer } from '../redaction-renderer'
+import { sha256 } from '../redaction-secure-pdf'
+import {
   finalizeRedactionRun,
   getRedactionOutputKey,
   getRedactionRun,
@@ -25,6 +33,7 @@ import {
   getRunTextObjectKey,
   publicRun,
   recordSpanDecision,
+  type RedactionRunRecord,
 } from '../redaction-database'
 import {
   buildRedactedPdf,
@@ -42,6 +51,7 @@ import {
   errorResponse,
   jsonBody,
   requireUser,
+  type RouteContext,
   type RouteVariables,
 } from './redact-shared'
 
@@ -84,7 +94,127 @@ function burnFallbackReason(error: unknown): OutputDowngradeReason {
   return 'burn_failed'
 }
 
-export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
+/**
+ * A hard-redaction finalize that cannot produce a secure PDF is a visible
+ * failure: the run stays unfinalized, no artifact is kept, and an audit event
+ * records only the stable failure category.
+ */
+async function reportSecurePdfFailure(
+  c: RouteContext,
+  pool: Pool,
+  input: {
+    runId: string
+    organisationId: string
+    userId: string
+    outputMode: 'redacted' | 'pseudonymised'
+    error: unknown
+  },
+) {
+  const category: HardRedactionFailureCategory = hardRedactionFailureCategory(
+    input.error,
+  )
+  console.error('redaction_secure_pdf_failed', {
+    requestId: c.get('requestId'),
+    runId: input.runId,
+    outputMode: input.outputMode,
+    category,
+  })
+  try {
+    await appendAuditLog(pool, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'redaction_run',
+      entityId: input.runId,
+      action: 'redaction.finalize_failed',
+      metadata: { outputMode: input.outputMode, failureCategory: category },
+      requestId: c.get('requestId'),
+    })
+  } catch {
+    // The run is already unfinalized; a failed audit append must not turn the
+    // secure-PDF refusal into a different error.
+    console.error('redaction_finalize_failed_audit_unavailable', {
+      requestId: c.get('requestId'),
+      runId: input.runId,
+    })
+  }
+  return errorResponse(
+    c,
+    'redaction_secure_pdf_failed',
+    securePdfFailureMessage(category),
+    502,
+  )
+}
+
+function securePdfFailureMessage(category: HardRedactionFailureCategory) {
+  switch (category) {
+    case 'renderer_unavailable':
+    case 'renderer_timeout':
+    case 'renderer_error':
+    case 'renderer_invalid_pdf':
+      return 'The secure PDF could not be produced because the document renderer is unavailable. This run was not finalized and no file was shared.'
+    case 'docx_burn_failed':
+      return 'The Word document could not be redacted safely, so no secure PDF was produced. This run was not finalized.'
+    case 'pdf_burn_failed':
+      return 'A redaction could not be placed on the page, so no secure PDF was produced. This run was not finalized.'
+    case 'validation_failed':
+      return 'The secure PDF failed its safety checks and was discarded. This run was not finalized.'
+    default:
+      return 'No secure PDF was produced, so this run was not finalized. Nothing was downloaded or shared.'
+  }
+}
+
+type FinalizedRun = RedactionRunRecord
+
+function outputMimeTypeOf(run: FinalizedRun) {
+  return run.summary.outputMimeType ?? 'text/plain'
+}
+
+function outputFilenameOf(run: FinalizedRun, mimeType: string) {
+  return (
+    run.summary.outputFilename ??
+    (mimeType === 'application/pdf'
+      ? redactedPdfFilename(run.sourceFilename)
+      : mimeType ===
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ? redactedDocxFilename(run.sourceFilename)
+        : redactedTextFilename(run.sourceFilename))
+  )
+}
+
+/**
+ * A hard-redaction PDF from the rasterized path, including legacy PDF runs
+ * that predate the `securePdf` summary flag. A pseudonymised PDF is not a
+ * secure redaction and reports false.
+ */
+function isSecurePdfOutput(run: FinalizedRun, mimeType: string) {
+  if (mimeType !== 'application/pdf') return false
+  if (run.summary.outputMode === 'pseudonymised') return false
+  return run.summary.securePdf === true || run.summary.outputMode === 'redacted'
+}
+
+/** Header-safe filename: strip quotes, controls and non-ASCII code points. */
+function asciiSafeFilename(filename: string) {
+  const cleaned = filename
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7e]/gu, '')
+    .replace(/["\\\r\n]/gu, '')
+    .trim()
+  return cleaned.length > 0 ? cleaned : 'redacted.pdf'
+}
+
+function isBinaryOutput(mimeType: string) {
+  return (
+    mimeType === 'application/pdf' ||
+    mimeType ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  )
+}
+
+export function createRedactReviewRoutes(
+  pool: Pool,
+  storage: StorageService,
+  renderer: RedactionRenderer | null = null,
+) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs/:runId', async (c) => {
@@ -418,99 +548,154 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
 
     let outputMimeType = 'text/plain'
     let outputFilename = redactedTextFilename(run.sourceFilename)
+    let outputSha256: string
+    let securePdf = false
     // Which container burn was started, so a refusal can name it. A downgrade
     // is recorded only when that burn fails and the text fallback replaces it;
     // a successful burn must not persist a downgrade. Reason codes only —
     // never span text or filenames (user-facing).
     let attemptedBurn: 'pdf' | 'docx' | null = null
     let downgradeReason: OutputDowngradeReason | null = null
-    try {
-      const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
-      const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
-      const canWritePdf =
-        Boolean(source) &&
-        Boolean(layoutObjectKey) &&
-        Boolean(storage.readBinary) &&
-        Boolean(storage.writeBinary) &&
-        isPdfMimeOrFilename(run.sourceFilename, sourceMimeType)
-      // Burned .docx needs no layout geometry: spans address w:t runs, not
-      // page coordinates, so the source bytes alone are sufficient.
-      const canWriteDocx =
-        !canWritePdf &&
-        Boolean(source) &&
-        Boolean(storage.readBinary) &&
-        Boolean(storage.writeBinary) &&
-        isDocxMimeOrFilename(run.sourceFilename, sourceMimeType)
 
-      if (canWritePdf && source && layoutObjectKey) {
-        attemptedBurn = 'pdf'
-        const parsedLayout = documentTextLayoutSchema.safeParse(
-          JSON.parse(await storage.readText(layoutObjectKey)),
-        )
-        // Invalid stored geometry must follow the same fail-closed path as
-        // missing geometry. An empty layout makes any accepted span raise
-        // RedactionCoverGeometryError before source pixels are rasterized.
-        const layout: DocumentTextLayout = parsedLayout.success
-          ? parsedLayout.data
-          : {
-              version: 2,
-              pages: [{ width: 1, height: 1 }],
-              segments: [],
-            }
-        const pdfBytes = await storage.readBinary!(source.objectKey)
-        const redactedPdf = await buildRedactedPdf({
-          pdfBytes,
-          layout,
-          text,
-          spans: run.spans,
-          decisions: run.decisions,
-          outputMode: body.data.outputMode,
+    if (body.data.outputMode === 'redacted') {
+      // Hard redaction has exactly one share-safe output: a rasterized PDF.
+      // There is no text fallback, so any failure leaves the run unfinalized.
+      const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+      try {
+        if (!storage.writeBinary)
+          throw new HardRedactionOutputError(
+            'container_unavailable',
+            'Secure PDF storage is not available.',
+          )
+        const secure = await buildHardRedactionPdf({
+          run,
+          sourceText: text,
+          redactedText: output,
+          source,
+          layoutObjectKey,
+          storage,
+          renderer,
           tokenMap,
         })
-        await storage.writeBinary!(objectKey, Buffer.from(redactedPdf))
+        await storage.writeBinary(objectKey, Buffer.from(secure.bytes))
         outputMimeType = 'application/pdf'
-        outputFilename = redactedPdfFilename(run.sourceFilename)
-      } else if (canWriteDocx && source) {
-        attemptedBurn = 'docx'
-        const docxBytes = await storage.readBinary!(source.objectKey)
-        const redactedDocx = await buildRedactedDocx({
-          docxBytes: Buffer.from(docxBytes),
-          text,
-          spans: run.spans,
-          decisions: run.decisions,
-          outputMode: body.data.outputMode,
-          tokenMap,
+        outputFilename = secure.filename
+        outputSha256 = sha256(secure.bytes)
+        securePdf = true
+      } catch (error) {
+        if (error instanceof RedactionSpanIntegrityError)
+          return errorResponse(
+            c,
+            'redaction_span_integrity_error',
+            'The document text changed; create a new redaction run before finalizing.',
+            409,
+          )
+        // Never leave a partially staged artifact behind a refusal.
+        await storage.delete(objectKey)
+        return await reportSecurePdfFailure(c, pool, {
+          runId: run.id,
+          organisationId: run.organisationId,
+          userId: user.id,
+          outputMode: 'redacted',
+          error,
         })
-        await storage.writeBinary!(objectKey, Buffer.from(redactedDocx))
-        outputMimeType =
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        outputFilename = redactedDocxFilename(run.sourceFilename)
-      } else {
-        await storage.writeText(objectKey, output)
       }
-    } catch (error) {
-      if (error instanceof RedactionSpanIntegrityError) throw error
-      // PDF/DOCX burn failed — fall back to text output so finalize still
-      // completes. The text output carries no source container, so tracked
-      // changes, metadata, comments, and embedded parts cannot leak
-      // through it.
-      // Do not log span ids, filenames, or document content (cover-geometry
-      // errors name span ids in their message).
-      const reason =
-        error instanceof Error && error.name === 'RedactionCoverGeometryError'
-          ? 'cover geometry missing for one or more spans'
-          : error instanceof Error
-            ? error.message
-            : 'unknown failure'
-      console.error('redaction_burn_failed', {
-        requestId: c.get('requestId'),
-        runId: run.id,
-        reason,
-      })
-      if (attemptedBurn) downgradeReason = burnFallbackReason(error)
-      await storage.writeText(objectKey, output)
-      outputMimeType = 'text/plain'
-      outputFilename = redactedTextFilename(run.sourceFilename)
+    } else {
+      // Pseudonymised output is a distinct, editable confidentiality workflow,
+      // not a hard redaction. It keeps its existing token semantics and its
+      // existing text fallback.
+      try {
+        const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+        const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
+        const canWritePdf =
+          Boolean(source) &&
+          Boolean(layoutObjectKey) &&
+          Boolean(storage.readBinary) &&
+          Boolean(storage.writeBinary) &&
+          isPdfMimeOrFilename(run.sourceFilename, sourceMimeType)
+        // Burned .docx needs no layout geometry: spans address w:t runs, not
+        // page coordinates, so the source bytes alone are sufficient.
+        const canWriteDocx =
+          !canWritePdf &&
+          Boolean(source) &&
+          Boolean(storage.readBinary) &&
+          Boolean(storage.writeBinary) &&
+          isDocxMimeOrFilename(run.sourceFilename, sourceMimeType)
+
+        if (canWritePdf && source && layoutObjectKey) {
+          attemptedBurn = 'pdf'
+          const parsedLayout = documentTextLayoutSchema.safeParse(
+            JSON.parse(await storage.readText(layoutObjectKey)),
+          )
+          // Invalid stored geometry must follow the same fail-closed path as
+          // missing geometry. An empty layout makes any accepted span raise
+          // RedactionCoverGeometryError before source pixels are rasterized.
+          const layout: DocumentTextLayout = parsedLayout.success
+            ? parsedLayout.data
+            : {
+                version: 2,
+                pages: [{ width: 1, height: 1 }],
+                segments: [],
+              }
+          const pdfBytes = await storage.readBinary!(source.objectKey)
+          const redactedPdf = await buildRedactedPdf({
+            pdfBytes,
+            layout,
+            text,
+            spans: run.spans,
+            decisions: run.decisions,
+            outputMode: 'pseudonymised',
+            tokenMap,
+          })
+          await storage.writeBinary!(objectKey, Buffer.from(redactedPdf))
+          outputMimeType = 'application/pdf'
+          outputFilename = redactedPdfFilename(run.sourceFilename)
+          outputSha256 = sha256(redactedPdf)
+        } else if (canWriteDocx && source) {
+          attemptedBurn = 'docx'
+          const docxBytes = await storage.readBinary!(source.objectKey)
+          const redactedDocx = await buildRedactedDocx({
+            docxBytes: Buffer.from(docxBytes),
+            text,
+            spans: run.spans,
+            decisions: run.decisions,
+            outputMode: 'pseudonymised',
+            tokenMap,
+          })
+          await storage.writeBinary!(objectKey, Buffer.from(redactedDocx))
+          outputMimeType =
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          outputFilename = redactedDocxFilename(run.sourceFilename)
+          outputSha256 = sha256(redactedDocx)
+        } else {
+          await storage.writeText(objectKey, output)
+          outputSha256 = sha256(Buffer.from(output, 'utf8'))
+        }
+      } catch (error) {
+        if (error instanceof RedactionSpanIntegrityError) throw error
+        // PDF/DOCX burn failed — fall back to text output so finalize still
+        // completes. The text output carries no source container, so tracked
+        // changes, metadata, comments, and embedded parts cannot leak
+        // through it.
+        // Do not log span ids, filenames, or document content (cover-geometry
+        // errors name span ids in their message).
+        const reason =
+          error instanceof Error && error.name === 'RedactionCoverGeometryError'
+            ? 'cover geometry missing for one or more spans'
+            : error instanceof Error
+              ? error.message
+              : 'unknown failure'
+        console.error('redaction_burn_failed', {
+          requestId: c.get('requestId'),
+          runId: run.id,
+          reason,
+        })
+        if (attemptedBurn) downgradeReason = burnFallbackReason(error)
+        await storage.writeText(objectKey, output)
+        outputMimeType = 'text/plain'
+        outputFilename = redactedTextFilename(run.sourceFilename)
+        outputSha256 = sha256(Buffer.from(output, 'utf8'))
+      }
     }
 
     // The single downgrade value used for both the persisted summary and the
@@ -540,6 +725,8 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         outputMimeType,
         outputFilename,
         outputDowngrade,
+        outputSha256,
+        securePdf,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -642,30 +829,26 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'Redaction output is not available.',
         404,
       )
-    const mimeType = run.summary.outputMimeType ?? 'text/plain'
-    const filename =
-      run.summary.outputFilename ??
-      (mimeType === 'application/pdf'
-        ? redactedPdfFilename(run.sourceFilename)
-        : mimeType ===
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          ? redactedDocxFilename(run.sourceFilename)
-          : redactedTextFilename(run.sourceFilename))
-    if (
-      mimeType === 'application/pdf' ||
-      mimeType ===
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ) {
+    const mimeType = outputMimeTypeOf(run)
+    const filename = outputFilenameOf(run, mimeType)
+    if (isBinaryOutput(mimeType)) {
       return c.json({
         mimeType,
         filename,
         text: null,
+        artifactId: run.outputArtifactId,
+        sha256: run.summary.outputSha256 ?? null,
+        securePdf: isSecurePdfOutput(run, mimeType),
       })
     }
+    const text = await storage.readText(objectKey)
     return c.json({
       mimeType,
       filename,
-      text: await storage.readText(objectKey),
+      text,
+      artifactId: run.outputArtifactId,
+      sha256: run.summary.outputSha256 ?? sha256(Buffer.from(text, 'utf8')),
+      securePdf: false,
     })
   })
 
@@ -695,21 +878,10 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'Redaction output is not available.',
         404,
       )
-    const mimeType = run.summary.outputMimeType ?? 'text/plain'
-    const filename =
-      run.summary.outputFilename ??
-      (mimeType === 'application/pdf'
-        ? redactedPdfFilename(run.sourceFilename)
-        : mimeType ===
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          ? redactedDocxFilename(run.sourceFilename)
-          : redactedTextFilename(run.sourceFilename))
-    const safeName = filename.replaceAll('"', '')
-    if (
-      mimeType === 'application/pdf' ||
-      mimeType ===
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    ) {
+    const mimeType = outputMimeTypeOf(run)
+    const filename = outputFilenameOf(run, mimeType)
+    const safeName = asciiSafeFilename(filename)
+    if (isBinaryOutput(mimeType)) {
       if (!storage.readBinary)
         return errorResponse(
           c,
@@ -723,7 +895,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         headers: {
           'content-type': mimeType,
           'content-disposition': `attachment; filename="${safeName}"`,
-          'cache-control': 'private, max-age=60',
+          'cache-control': 'private',
           'x-content-type-options': 'nosniff',
         },
       })
@@ -734,7 +906,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       headers: {
         'content-type': 'text/plain; charset=utf-8',
         'content-disposition': `attachment; filename="${safeName}"`,
-        'cache-control': 'private, max-age=60',
+        'cache-control': 'private',
         'x-content-type-options': 'nosniff',
       },
     })

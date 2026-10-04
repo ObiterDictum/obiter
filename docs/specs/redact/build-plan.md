@@ -417,6 +417,33 @@ accepted text from the OOXML before any styling is written, and the finalized PD
 rasterized with no selectable text layer. Presentation is layered on top of removed
 content, never on the original.
 
+**Secure redacted PDF is the default hard-redaction output.** For `redacted` output
+the finalized artifact is always one image-only PDF. A PDF source is rasterized with
+the accepted bars burned into the page pixels. A DOCX source is first destructively
+sanitized (`buildRedactedDocx`, which removes the accepted text from the OOXML and
+styles a harmless marker as a black bar), then the sanitized bytes are sent to the
+sandboxed renderer worker, which returns an intermediate PDF that is rasterized page
+by page. A text source is paginated into image-only pages. Every path runs the same
+validation gate before the artifact is stored: a valid PDF with at least one page,
+finite positive page geometry within configured limits, no selectable text layer, no
+their accepted source strings, no fonts, annotations, forms, attachments or
+accessibility structure from the source, directory opacity, and a file size within
+limits. A hard-redaction failure is visible: the run is not finalized, no artifact is
+kept, and the API reports that no secure PDF was produced. It never silently falls
+back to a text or other container. Pseudonymisation remains a separate, editable
+output: it replaces accepted content with consistent category tokens, keeps its
+token map behind restricted audited access, and never renders a black bar.
+
+**Preview and download share one artifact.** The review view fetches the finalized
+bytes once through `GET /api/redaction-runs/:runId/output/file` and uses that same
+Blob for the inline preview, the primary download and the share action. The download
+stays disabled until the preview has rendered at least its first page. A preview
+failure shows an inline error and leaves the download disabled; the source document is
+never substituted. Finalized artifacts are immutable and are not regenerated. A DOCX
+or TXT artifact created before secure PDF became the default keeps its true filename
+and MIME type, downloads its original stored bytes, and is labelled as having been
+created before the change.
+
 **Contiguous regions.** `packages/redaction-policy/src/apply.ts` plans one region per
 run of accepted spans that overlap, touch, or are separated only by horizontal
 whitespace (spaces and tabs). The region keeps its start/end range and the ids of
@@ -429,14 +456,16 @@ glyphs is also bounded relative to the local glyph height (two em by default), s
 a distant column, table gutter, or layout fragment becomes separate bars even when
 the source between them is only whitespace.
 
-- Plain text replaces each region with exactly one `[REDACTED]` marker.
 - DOCX writes one harmless `[REDACTED]` marker per region inside the existing runs,
   then applies a run-level black highlight and black font colour so it renders as a
   solid black bar. Removing the styling, or copying the content, reveals only
-  `[REDACTED]`.
+  `[REDACTED]`; the sanitized bytes are then rendered and rasterized into the secure
+  PDF.
 - PDF paints one opaque black rectangle per region per rendered line. A region that
   wraps over two lines produces one bar on each line, never one rectangle across
   both.
+- Text paints one opaque black bar per region per rendered line into page pixels; no
+  `[REDACTED]` marker or source glyph remains selectable in the final artifact.
 
 **Structural boundaries.** DOCX coalescing is per paragraph, so it cannot bridge a
 paragraph, table cell, header/footer, footnote/endnote or story boundary. PDF
@@ -446,8 +475,8 @@ stays token-based and is never coalesced into a bar.
 
 **Review overlays.** The review screen keeps its category-coloured entity overlays so
 reviewers can inspect individual detections and decisions. Those overlays are review
-UI, not output: finalized PDF and DOCX output renders black bars, and the plain-text
-fallback uses `[REDACTED]`.
+UI, not output: the finalized hard-redaction artifact renders black bars in an
+image-only PDF, and pseudonymised output uses tokens.
 
 ## Package Structure
 

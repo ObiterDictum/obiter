@@ -16,6 +16,8 @@ const reuseExistingServer = !process.env.CI
 assertLaneTargets(targets, { reuseExistingServer })
 
 const { apiOrigin, apiPort, webOrigin, webPort } = targets
+const rendererPort = Number(process.env.OBITER_E2E_RENDERER_PORT ?? 8892)
+const rendererOrigin = `http://127.0.0.1:${rendererPort}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -40,6 +42,17 @@ export default defineConfig({
   ],
   webServer: [
     {
+      // The agreed renderer HTTP boundary, faked for the lane. The API never
+      // imports the renderer package; it only POSTs sanitized .docx bytes here.
+      command: 'bun e2e/renderer-server.ts',
+      url: `${rendererOrigin}/ready`,
+      reuseExistingServer,
+      timeout: 30_000,
+      env: {
+        OBITER_E2E_RENDERER_PORT: String(rendererPort),
+      },
+    },
+    {
       command: 'bun run --filter @obiter/api dev',
       url: `${apiOrigin}/api/health`,
       reuseExistingServer,
@@ -63,6 +76,7 @@ export default defineConfig({
         BETTER_AUTH_SECRET: '0123456789abcdef0123456789abcdef',
         NODE_ENV: 'development',
         OBITER_WEB_ORIGIN: webOrigin,
+        OBITER_REDACTION_RENDERER_URL: rendererOrigin,
         PORT: String(apiPort),
       },
     },

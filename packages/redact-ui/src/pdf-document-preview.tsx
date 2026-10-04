@@ -1,16 +1,36 @@
 import { useEffect, useState } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
+export type PdfPreviewStatus =
+  | { kind: 'loading' }
+  | { kind: 'ready'; pageCount: number }
+  | { kind: 'error'; message: string }
+
 /**
  * Read-only multi-page PDF preview (no span overlays).
+ *
+ * Readiness is reported upward so a caller can keep the primary download
+ * disabled until at least the first page has actually rendered. Loading a
+ * document is not enough: a blank or broken page must never read as
+ * preview-ready. The parent owns the download; this component only renders the
+ * bytes it is given and never substitutes another source.
  */
-export function PdfDocumentPreview({ file }: { file: Blob }) {
+export function PdfDocumentPreview({
+  file,
+  onStatusChange,
+  ariaLabel = 'Finalized PDF preview',
+}: {
+  file: Blob
+  onStatusChange?: (status: PdfPreviewStatus) => void
+  ariaLabel?: string
+}) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pageCount, setPageCount] = useState(0)
+  const [firstPageRendered, setFirstPageRendered] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    const objectUrl = URL.createObjectURL(file)
     void import('pdfjs-dist').then(async (pdfjs) => {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL(
         'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -27,19 +47,22 @@ export function PdfDocumentPreview({ file }: { file: Blob }) {
           return
         }
         setPdf(document)
+        setPageCount(document.numPages)
       } catch (loadError: unknown) {
         if (cancelled) return
-        setError(
+        const message =
           loadError instanceof Error
             ? loadError.message
-            : 'PDF preview could not be loaded.',
-        )
+            : 'PDF preview could not be loaded.'
+        setError(message)
+        onStatusChange?.({ kind: 'error', message })
       }
     })
     return () => {
       cancelled = true
-      URL.revokeObjectURL(objectUrl)
     }
+    // The preview is keyed to one immutable artifact Blob; a new Blob means a
+    // different artifact and must reload.
   }, [file])
 
   if (error) {
@@ -52,20 +75,40 @@ export function PdfDocumentPreview({ file }: { file: Blob }) {
 
   if (!pdf) {
     return (
-      <p className="text-sm text-muted" role="status">
-        Loading PDF…
-      </p>
+      <div
+        className="flex w-full max-w-[820px] flex-col gap-3"
+        role="status"
+        aria-live="polite"
+      >
+        <p className="text-sm text-muted">Loading the finalized PDF…</p>
+        <div className="h-[520px] w-full animate-pulse rounded-lg border border-line bg-raised" />
+        <div className="h-[520px] w-full animate-pulse rounded-lg border border-line bg-raised" />
+      </div>
     )
   }
 
   return (
-    <div
-      className="flex flex-col items-center gap-4 overflow-x-auto"
-      aria-label="Redacted PDF preview"
-    >
-      {Array.from({ length: pdf.numPages }, (_, index) => (
-        <PdfPreviewPage key={index} pdf={pdf} pageNumber={index + 1} />
-      ))}
+    <div className="flex flex-col items-center gap-4" aria-label={ariaLabel}>
+      {!firstPageRendered ? (
+        <p className="self-start text-sm text-muted" role="status">
+          Loading the finalized PDF…
+        </p>
+      ) : null}
+      <div className="flex w-full flex-col items-center gap-6 overflow-x-auto">
+        {Array.from({ length: pdf.numPages }, (_, index) => (
+          <PdfPreviewPage
+            key={index}
+            pdf={pdf}
+            pageNumber={index + 1}
+            pageCount={pageCount}
+            onFirstPageRendered={() => {
+              if (index !== 0 || firstPageRendered) return
+              setFirstPageRendered(true)
+              onStatusChange?.({ kind: 'ready', pageCount })
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -73,9 +116,13 @@ export function PdfDocumentPreview({ file }: { file: Blob }) {
 function PdfPreviewPage({
   pdf,
   pageNumber,
+  pageCount,
+  onFirstPageRendered,
 }: {
   pdf: PDFDocumentProxy
   pageNumber: number
+  pageCount: number
+  onFirstPageRendered: () => void
 }) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null)
 
@@ -101,6 +148,7 @@ function PdfPreviewPage({
       renderTask = task
       try {
         await task.promise
+        if (pageNumber === 1) onFirstPageRendered()
       } catch {
         // Cancelled or superseded render.
       }
@@ -109,12 +157,18 @@ function PdfPreviewPage({
       cancelled = true
       renderTask?.cancel()
     }
+    // The render callback depends on canvas identity, document and page only.
   }, [canvas, pdf, pageNumber])
 
   return (
-    <canvas
-      ref={setCanvas}
-      className="block max-w-full rounded-lg border border-line-strong bg-raised shadow-lg"
-    />
+    <figure className="flex w-full max-w-[820px] flex-col items-center gap-2">
+      <figcaption className="self-start text-xs font-medium text-muted">
+        Page {pageNumber} of {pageCount}
+      </figcaption>
+      <canvas
+        ref={setCanvas}
+        className="block w-full max-w-full rounded-lg border border-line-strong bg-raised shadow-lg"
+      />
+    </figure>
   )
 }

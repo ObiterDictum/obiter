@@ -8,13 +8,14 @@ import { fixturePath, verifyEmailInDb } from './support'
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
 /**
- * The P0 regression this guards: a successful DOCX burn must show the Word
- * "ready" copy and no amber downgrade warning, because the stored summary must
- * not carry `outputDowngrade` after a successful burn. The API test in
- * app.test.ts asserts the stored summary; this proves the rendered screen and
- * the real download agree with it.
+ * The journey this guards: a DOCX source is destructively sanitized, rendered to
+ * an intermediate PDF by the sandboxed renderer (faked at the HTTP boundary),
+ * rasterized into an image-only secure PDF, previewed, and downloaded through
+ * the same fetched artifact bytes. The API tests assert the stored summary and
+ * the rasterized bytes; this proves the rendered screen, the preview gate and
+ * the real download agree with them.
  */
-test('finalizes a DOCX with no downgrade warning and a valid Word download', async ({
+test('finalizes a DOCX into a previewable secure PDF download', async ({
   page,
   request,
 }) => {
@@ -65,36 +66,47 @@ test('finalizes a DOCX with no downgrade warning and a valid Word download', asy
   const acknowledgements = page.getByRole('checkbox')
   for (let index = 0; index < (await acknowledgements.count()); index += 1)
     await acknowledgements.nth(index).check()
-  await page.getByRole('button', { name: 'Confirm finalize' }).click()
+  await page.getByRole('button', { name: 'Create secure PDF' }).click()
 
-  // Successful DOCX burn: formatted output copy, no downgrade warning.
+  // Secure PDF: the finalized heading, the preview-before-download copy and no
+  // downgrade warning.
   await expect(page.getByText('Finalized', { exact: true })).toBeVisible({
-    timeout: 20_000,
+    timeout: 30_000,
   })
   await page.screenshot({
     path: `/tmp/redact-finalized-${runId}.png`,
     fullPage: true,
   })
   await expect(
-    page.getByText('Redacted document ready to download or share.'),
+    page.getByRole('heading', { name: 'Secure redacted PDF' }),
   ).toBeVisible({ timeout: 15_000 })
+  await expect(
+    page.getByText(
+      'Preview the finalized file below. Download and share this PDF only after checking every page.',
+    ),
+  ).toBeVisible()
   await expect(
     page.getByText('Word document unavailable — text file provided instead'),
   ).toBeHidden()
 
-  // The valid DOCX download stays available and produces a real Word package.
-  const downloadButton = page.getByRole('button', { name: 'Download' })
+  // The primary download stays disabled until the preview has rendered.
+  const downloadButton = page.getByRole('button', {
+    name: 'Download secure PDF',
+  })
+  await expect(page.getByText(/^Preview ready, /)).toBeVisible({
+    timeout: 30_000,
+  })
   await expect(downloadButton).toBeEnabled({ timeout: 15_000 })
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
   await downloadButton.click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/\.docx$/)
-  const savedPath = `/tmp/redact-finalized-${runId}.docx`
+  expect(download.suggestedFilename()).toMatch(/-redacted\.pdf$/)
+  const savedPath = `/tmp/redact-finalized-${runId}.pdf`
   await download.saveAs(savedPath)
   const bytes = readFileSync(savedPath)
   expect(bytes.length).toBeGreaterThan(1000)
-  // Word files are zip containers; a valid package starts with the zip magic.
-  expect(bytes.subarray(0, 2).toString('latin1')).toBe('PK')
+  // A PDF, not a Word package or plain text.
+  expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-')
 
   console.log(`finalized screenshot: /tmp/redact-finalized-${runId}.png`)
 })

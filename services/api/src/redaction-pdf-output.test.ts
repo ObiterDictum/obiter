@@ -245,6 +245,7 @@ async function sampleOutputPixels(
 describe('redaction-pdf-output', () => {
   it('names redacted PDF and text downloads from the source filename', () => {
     expect(redactedPdfFilename('brief.pdf')).toBe('brief-redacted.pdf')
+    expect(redactedPdfFilename('brief.docx')).toBe('brief-redacted.pdf')
     expect(redactedTextFilename('brief.docx')).toBe('brief-redacted.txt')
   })
 

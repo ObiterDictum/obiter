@@ -3,6 +3,7 @@ import type {
   DocumentTextLayout,
   DocumentTextLayoutSegment,
   RedactionFinalizeInput,
+  RedactionOutputResponse,
   RedactionPolicyMode,
   RedactionRunStatus,
   SpanDecision,
@@ -55,6 +56,13 @@ export interface FinalizeResponse {
     outputDowngrade?: RunSummary['outputDowngrade']
   }
 }
+
+/**
+ * Metadata for a finalized redaction artifact. Bytes are fetched once from
+ * `/output/file` and used for preview, download and share alike. Shared with
+ * the API response contract rather than duplicated here.
+ */
+export type RedactionOutput = RedactionOutputResponse
 
 export interface SpanDecisionInput {
   spanId: string
