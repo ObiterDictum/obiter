@@ -1,6 +1,8 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   collectEditOperations,
+  flowParagraphIds,
+  LAST_PARAGRAPH_MESSAGE,
   resolveInsertAnchor,
   type LocalInsert,
 } from './document-edits'
@@ -147,7 +149,7 @@ export function planDocumentSave(
   const insertById = new Map(state.inserts.map((item) => [item.clientId, item]))
   const realIds = paragraphIds
 
-  const covered: DraftSlot[] = []
+  let covered: DraftSlot[] = []
   const blocked: BlockedDraft[] = []
   const keep = emptyDraftState()
   let pending = 0
@@ -358,6 +360,26 @@ export function planDocumentSave(
         ? { removeParagraphIds: [...group.removeParagraphIds] }
         : {}),
     })
+  }
+
+  // A restored or constructed draft state can hold deletions that would leave
+  // no effective paragraph. Block them rather than send a batch the server must
+  // reject; the client guard already stops the editor creating this state, so
+  // this is the save-plan safety net. `flowParagraphIds` is the same canonical
+  // derivation the ribbon and the delete operation use.
+  if (
+    flowParagraphIds(model, keep.inserts, keep.deletedParagraphIds).length < 1
+  ) {
+    for (const slot of covered) {
+      if (slot.kind !== 'delete') continue
+      blocked.push({
+        slot,
+        reason: LAST_PARAGRAPH_MESSAGE,
+        label: 'a deletion',
+      })
+    }
+    covered = covered.filter((slot) => slot.kind !== 'delete')
+    keep.deletedParagraphIds = []
   }
 
   return {
