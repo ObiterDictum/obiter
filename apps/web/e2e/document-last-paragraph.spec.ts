@@ -227,6 +227,16 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   await saveAndWait(page)
   expect(await settledParagraphCount(page)).toBe(2)
 
+  // A whole-document selection delete joins the two paragraphs and must leave
+  // one; undo restores both. This is the selection-deletion path, which cannot
+  // reach zero paragraphs because a range needs two endpoints.
+  await page.locator('[data-paragraph-id]').first().click()
+  await page.keyboard.press('Control+a')
+  await page.keyboard.press('Delete')
+  expect(await settledParagraphCount(page)).toBe(1)
+  await undoButton(page).click()
+  expect(await settledParagraphCount(page)).toBe(2)
+
   // 14-15. Delete the stored second paragraph; exactly one remains and the
   // surviving paragraph holds a usable, focused editor.
   await page.locator('[data-paragraph-id]', { hasText: SECOND }).first().click()
