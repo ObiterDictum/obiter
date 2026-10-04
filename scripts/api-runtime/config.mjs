@@ -127,6 +127,10 @@ export function childEnvironment({
     MEILISEARCH_SEARCH_API_KEY: MEILI_KEY,
     MEILISEARCH_ADMIN_API_KEY: MEILI_KEY,
     LEGAL_AUTHORITIES_INDEX: 'legal_authorities',
+    // Required in production since hard-redaction finalize renders DOCX through
+    // the sandboxed worker. This harness never finalizes a DOCX hard redaction,
+    // so the value is only here to satisfy the startup requirement.
+    OBITER_REDACTION_RENDERER_URL: 'http://127.0.0.1:8790',
     OBITER_STORAGE_ROOT: storageRoot,
     // Deterministic compatibility mode for the main run: an ambient
     // CORPUS_* from the developer's shell must not silently change the mode

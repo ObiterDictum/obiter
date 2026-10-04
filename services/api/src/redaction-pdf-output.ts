@@ -3,12 +3,10 @@ import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument } from 'pdf-lib'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import {
-  affectsOutput,
   coalesceRedactionRegions,
   coverRectsForSpan,
   glyphCoverRect,
   snapDeviceCoverOutward,
-  type TokenMap,
 } from '@obiter/redaction-policy'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import type { DocumentTextLayout } from './document-layout'
@@ -20,8 +18,6 @@ export interface RedactedPdfInput {
   text: string
   spans: RedactionSpan[]
   decisions: Decisions
-  outputMode: 'redacted' | 'pseudonymised'
-  tokenMap: TokenMap
 }
 
 interface PageRect {
@@ -29,7 +25,6 @@ interface PageRect {
   y: number
   width: number
   height: number
-  label?: string
   /** Characters covered by this rect — drives descender/ascent padding. */
   ink?: string
   /** Spans this rect redacts, so an off-page cover is refused by every id. */
@@ -58,6 +53,25 @@ function pageBoundsOf(view: number[] | undefined): PageBounds {
 const RENDER_SCALE = 2
 
 /**
+ * Ceilings on one rasterized page. A4 at RENDER_SCALE is about 2 megapixels;
+ * these allow a large-format page while refusing a hostile /MediaBox that would
+ * otherwise allocate gigabytes before validateSecurePdf could run.
+ */
+const MAX_RASTER_DIMENSION_PX = 10_000
+const MAX_RASTER_PIXELS = 40_000_000
+
+/**
+ * Thrown when a page is too large to rasterize safely. The finalize path maps
+ * this to a visible secure-PDF failure instead of attempting the allocation.
+ */
+export class RedactionRasterLimitError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RedactionRasterLimitError'
+  }
+}
+
+/**
  * Thrown when an output-affecting span has no cover geometry. Finalize catches
  * this and falls back to text output; the message names span ids for diagnosis
  * but must not be logged verbatim (see redaction_burn_failed in redact-review).
@@ -84,30 +98,78 @@ export async function buildRedactedPdf(
   // before the source is even parsed, so stored invalid geometry reports the
   // same reason regardless of the source bytes.
   const rectsByPage = collectRedactionRects(input)
+  return rasterizePdf(
+    input.pdfBytes,
+    // Backstop before any rendering: a cover that misses the page paints
+    // nothing, so the span would publish its source ink intact. Bounds come
+    // from the page itself, not the stored layout, which carries no origin.
+    async (source) => {
+      const pageBounds: PageBounds[] = []
+      for (let pageNumber = 1; pageNumber <= source.numPages; pageNumber += 1) {
+        const page = await source.getPage(pageNumber)
+        pageBounds.push(pageBoundsOf(page.view))
+      }
+      assertCoversOnPage(rectsByPage, pageBounds)
+    },
+    ({ context, viewport, pageIndex }) => {
+      for (const rect of rectsByPage.get(pageIndex) ?? [])
+        paintRedaction(context, viewport, rect)
+    },
+  )
+}
+
+export interface RasterizePaintContext {
+  context: SKRSContext2D
+  viewport: {
+    convertToViewportRectangle: (rect: number[]) => number[]
+    width: number
+    height: number
+  }
+  pageIndex: number
+  pageNumber: number
+}
+
+/**
+ * Rasterize every page of a PDF into a new image-only PDF: each output page is
+ * a single embedded PNG with no fonts, annotations, forms or text operators.
+ * `paint` may draw marks into the rendered pixels before they are embedded.
+ * `onOpened` runs after the source parses and before the first page renders,
+ * so a caller can refuse before any work is done.
+ */
+export async function rasterizePdf(
+  pdfBytes: Buffer,
+  onOpened:
+    | ((source: Awaited<ReturnType<typeof getDocumentProxy>>) => Promise<void>)
+    | undefined,
+  paint?: (context: RasterizePaintContext) => void,
+): Promise<Uint8Array> {
   const CanvasFactory = await createIsomorphicCanvasFactory(
     () => import('@napi-rs/canvas'),
   )
-  const source = await getDocumentProxy(Uint8Array.from(input.pdfBytes), {
+  const source = await getDocumentProxy(Uint8Array.from(pdfBytes), {
     CanvasFactory,
   })
   const output = await PDFDocument.create()
 
   try {
-    // Backstop before any rendering: a cover that misses the page paints
-    // nothing, so the span would publish its source ink intact. Bounds come
-    // from the page itself, not the stored layout, which carries no origin.
-    const pageBounds: PageBounds[] = []
-    for (let pageNumber = 1; pageNumber <= source.numPages; pageNumber += 1) {
-      const page = await source.getPage(pageNumber)
-      pageBounds.push(pageBoundsOf(page.view))
-    }
-    assertCoversOnPage(rectsByPage, pageBounds)
+    if (onOpened) await onOpened(source)
 
     for (let pageNumber = 1; pageNumber <= source.numPages; pageNumber += 1) {
       const page = await source.getPage(pageNumber)
       const viewport = page.getViewport({ scale: RENDER_SCALE })
       const width = Math.max(1, Math.ceil(viewport.width))
       const height = Math.max(1, Math.ceil(viewport.height))
+      // Refuse before allocating. validateSecurePdf runs only after the whole
+      // PDF is built, so without this guard a hostile /MediaBox becomes a
+      // multi-gigabyte canvas and can take the API process down.
+      if (
+        width > MAX_RASTER_DIMENSION_PX ||
+        height > MAX_RASTER_DIMENSION_PX ||
+        width * height > MAX_RASTER_PIXELS
+      )
+        throw new RedactionRasterLimitError(
+          'A page in the document is too large to rasterize.',
+        )
       const canvas = createCanvas(width, height)
       const context = canvas.getContext('2d')
       // SAFETY: the canvas comes from @napi-rs/canvas, the implementation handed to
@@ -119,10 +181,12 @@ export async function buildRedactedPdf(
         canvas: canvas as never,
       }).promise
 
-      const pageIndex = pageNumber - 1
-      for (const rect of rectsByPage.get(pageIndex) ?? []) {
-        paintRedaction(context, viewport, rect)
-      }
+      paint?.({
+        context,
+        viewport,
+        pageIndex: pageNumber - 1,
+        pageNumber,
+      })
 
       const image = await output.embedPng(canvas.toBuffer('image/png'))
       const pageWidth = viewport.width / RENDER_SCALE
@@ -179,22 +243,15 @@ function paintRedaction(
     width + fringe * 2,
     height + fringe * 2,
   )
-
-  if (rect.label) {
-    const fontSize = Math.min(height * 0.55, 22)
-    if (fontSize >= 6) {
-      context.fillStyle = '#ffffff'
-      context.font = `bold ${fontSize}px sans-serif`
-      const textWidth = context.measureText(rect.label).width
-      if (textWidth + 4 < width) {
-        context.fillText(
-          rect.label,
-          left + 2,
-          top + height / 2 + fontSize * 0.35,
-        )
-      }
-    }
-  }
+  // A cover that is not fully opaque black has failed to conceal the glyphs
+  // under it. Sample it before publishing rather than trusting globalAlpha.
+  assertOpaqueBlackCover(context, {
+    left: left - fringe,
+    top: top - fringe,
+    width: width + fringe * 2,
+    height: height + fringe * 2,
+    spanIds: rect.spanIds,
+  })
   context.restore()
 }
 
@@ -216,38 +273,29 @@ interface RectPlan {
   spanIds: string[]
   start: number
   end: number
-  label?: string
 }
 
 function collectRedactionRects(input: RedactedPdfInput) {
   const rectsByPage = new Map<number, PageRect[]>()
   const missingSpanIds: string[] = []
-  // Redacted output plans one bar per coalesced region; pseudonymised output
-  // keeps one labelled rect per span so distinct tokens never share a bar.
-  const plans: RectPlan[] =
-    input.outputMode === 'redacted'
-      ? coalesceRedactionRegions(input.text, input.spans, input.decisions).map(
-          (region) => ({
-            spanIds: region.spanIds,
-            start: region.start,
-            end: region.end,
-          }),
-        )
-      : input.spans
-          .filter((span) => affectsOutput(input.decisions[span.id]))
-          .map((span) => ({
-            spanIds: [span.id],
-            start: span.start,
-            end: span.end,
-            label: input.tokenMap[span.id] ?? '[REDACTED]',
-          }))
+  // One bar per coalesced accepted region. Pseudonymised output never reaches
+  // this rasterizer: it stays an editable token copy (DOCX or text).
+  const plans: RectPlan[] = coalesceRedactionRegions(
+    input.text,
+    input.spans,
+    input.decisions,
+  ).map((region) => ({
+    spanIds: region.spanIds,
+    start: region.start,
+    end: region.end,
+  }))
   for (const plan of plans) {
     const coveredRects = coverRectsForSpan({
       segments: input.layout.segments,
       spanStart: plan.start,
       spanEnd: plan.end,
       spanText: input.text.slice(plan.start, plan.end),
-      mergeWhitespace: input.outputMode === 'redacted',
+      mergeWhitespace: true,
     })
     if (coveredRects.length === 0) {
       missingSpanIds.push(...plan.spanIds)
@@ -260,7 +308,6 @@ function collectRedactionRects(input: RedactedPdfInput) {
         y: covered.y,
         width: covered.width,
         height: covered.height,
-        label: plan.label,
         ink: covered.ink,
         spanIds: plan.spanIds,
       })
@@ -312,12 +359,33 @@ function coverMissesPage(rect: PageRect, page: PageBounds | undefined) {
   )
 }
 
+/** RENDER_SCALE is above; the opacity check runs in device pixels. */
+function assertOpaqueBlackCover(
+  context: SKRSContext2D,
+  cover: {
+    left: number
+    top: number
+    width: number
+    height: number
+    spanIds: string[]
+  },
+) {
+  const x = Math.round(cover.left + cover.width / 2)
+  const y = Math.round(cover.top + cover.height / 2)
+  // SAFETY: the context is @napi-rs/canvas, whose getImageData returns a
+  // Uint8ClampedArray of RGBA for the 1x1 region requested.
+  const sample = context.getImageData(x, y, 1, 1).data
+  const [red = 0, green = 0, blue = 0, alpha = 0] = sample
+  if (alpha !== 255 || red > 8 || green > 8 || blue > 8)
+    throw new RedactionCoverGeometryError(cover.spanIds)
+}
+
 export function redactedPdfFilename(sourceFilename: string) {
   const trimmed = sourceFilename.trim() || 'document.pdf'
-  if (/\.pdf$/i.test(trimmed)) {
-    return trimmed.replace(/\.pdf$/i, '-redacted.pdf')
-  }
-  return `${trimmed}-redacted.pdf`
+  // A DOCX or text source becomes a PDF here, so the container extension is
+  // replaced rather than appended (matching redactedTextFilename).
+  const stem = trimmed.replace(/\.[^.]+$/u, '') || trimmed
+  return `${stem}-redacted.pdf`
 }
 
 export function redactedTextFilename(sourceFilename: string) {

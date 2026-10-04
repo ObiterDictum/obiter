@@ -131,6 +131,7 @@ d1.node("ingestor", 610, 26, "@obiter/legal-ingestor", accent="var(--brand)")
 
 d1.node("shell", 60, 126, "@obiter/app-shell", accent="var(--warning)")
 d1.node("redactui", 250, 126, "@obiter/redact-ui", accent="var(--warning)")
+d1.node("renderer", 470, 126, "@obiter/redaction-renderer", accent="var(--brand)")
 
 d1.node("ooxml", 60, 226, "@obiter/ooxml", accent="var(--warning)")
 d1.node("policy", 330, 226, "@obiter/redaction-policy", accent="var(--warning)")
@@ -147,6 +148,9 @@ for a, b in [("web", "shell"), ("desktop", "shell"), ("web", "redactui"),
              ("desktop", "redactui")]:
     d1.edge(a, b)
 d1.edge("redactui", "shell", sa="l", sb="r")
+d1.edge("renderer", "shell", sa="t", sb="t", curve=-90)
+d1.edge("renderer", "ooxml", sa="b", sb="t")
+d1.edge("renderer", "contracts", sa="b", sb="t", curve=30)
 d1.edge("shell", "ooxml")
 d1.edge("shell", "contracts", curve=50)
 d1.edge("shell", "ui", curve=30)
@@ -174,6 +178,8 @@ d2.node("browser", 40, 40, "apps/web", "browser", accent="var(--info)")
 d2.node("electron", 40, 130, "apps/desktop", "Electron", accent="var(--info)")
 d2.node("api", 330, 84, "services/api", "Hono", accent="var(--brand)", h=46)
 d2.node("ingestor", 330, 300, "services/legal-ingestor", accent="var(--brand)")
+d2.node("renderer", 40, 220, "services/redaction-renderer", "private HTTP", accent="var(--brand)")
+d2.node("chromium", 40, 310, "Chromium", "headless child", accent="var(--warning)")
 
 d2.node("pg", 660, 20, "PostgreSQL", "system of record", accent="var(--success)")
 d2.node("meili", 660, 100, "Meilisearch", "derived index", accent="var(--success)")
@@ -191,6 +197,8 @@ d2.edge("api", "resend", sa="r", sb="l", tone="var(--danger)", dashed=True)
 d2.edge("api", "model", sa="b", sb="t", label="load", lx=26)
 d2.edge("ingestor", "meili", sa="r", sb="b", label="index", ly=20)
 d2.edge("ingestor", "fcl", sa="r", sb="b", tone="var(--danger)", dashed=True)
+d2.edge("api", "renderer", sa="l", sb="t", label="DOCX to PDF", ly=6)
+d2.edge("renderer", "chromium", sa="b", sb="t")
 
 # -------------------------------------------------------------- search flow
 d3 = Diagram(920, 300, "Search request flow",

@@ -15,7 +15,9 @@ export {
 export type {
   FinalizeInput,
   FinalizeResponse,
+  RedactionOutput,
   RedactionRun,
   RedetectResponse,
   SpanDecisionInput,
 } from './types'
+export type { PdfPreviewStatus } from './pdf-document-preview'

@@ -6,7 +6,7 @@ import type {
   DocumentTextRunWire,
 } from '@obiter/contracts'
 import { resolveRelationshipTarget } from '@obiter/ooxml'
-import { emuToPx } from './document-page-units'
+import { emuToPx, xmlDigitAttr } from './document-page-units'
 
 const IMAGE_MARK =
   /<w:drawing\b|<w:pict\b|<v:imagedata\b|<a:blip\b|<pic:pic\b|<w:object\b/i
@@ -156,17 +156,15 @@ export type DrawingBoxSize = {
 }
 
 export function drawingBoxSize(xml: string): DrawingBoxSize {
-  const extent = xml.match(
-    /<(?:wp:extent|a:ext)\b[^>]*cx="(\d+)"[^>]*cy="(\d+)"|<(?:wp:extent|a:ext)\b[^>]*cy="(\d+)"[^>]*cx="(\d+)"/i,
-  )
-  if (extent) {
-    const cx = Number(extent[1] || extent[4])
-    const cy = Number(extent[2] || extent[3])
-    if (Number.isFinite(cx) && Number.isFinite(cy) && cx > 0 && cy > 0) {
-      return {
-        width: Math.max(1, Math.round(emuToPx(cx))),
-        height: Math.max(1, Math.round(emuToPx(cy))),
-      }
+  // One linear tag match, then attribute reads over that tag: an alternation
+  // with `[^>]*` gaps backtracks polynomially on repeated `cx="0"` attributes.
+  const extent = xml.match(/<(?:wp:extent|a:ext)\b[^>]*>/i)?.[0]
+  const cx = xmlDigitAttr(extent, 'cx')
+  const cy = xmlDigitAttr(extent, 'cy')
+  if (cx !== undefined && cy !== undefined && cx > 0 && cy > 0) {
+    return {
+      width: Math.max(1, Math.round(emuToPx(cx))),
+      height: Math.max(1, Math.round(emuToPx(cy))),
     }
   }
   const vml = vmlBoxSize(xml)

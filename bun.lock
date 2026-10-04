@@ -262,6 +262,30 @@
         "@types/pg": "^8.20.0",
       },
     },
+    "services/redaction-renderer": {
+      "name": "@obiter/redaction-renderer",
+      "version": "0.0.0",
+      "dependencies": {
+        "@obiter/app-shell": "workspace:*",
+        "@obiter/contracts": "workspace:*",
+        "@obiter/ooxml": "workspace:*",
+        "playwright": "^1.62.1",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
+      },
+      "devDependencies": {
+        "@napi-rs/canvas": "^0.1.100",
+        "@tailwindcss/node": "^4.3.2",
+        "@tailwindcss/oxide": "^4.3.2",
+        "@types/node": "^22.15.18",
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+        "jszip": "^3.10.1",
+        "pdf-lib": "^1.17.1",
+        "tailwindcss": "^4.3.2",
+        "unpdf": "1.6.2",
+      },
+    },
   },
   "overrides": {
     "@xmldom/xmldom": "0.8.15",
@@ -602,6 +626,8 @@
     "@obiter/redact-ui": ["@obiter/redact-ui@workspace:packages/redact-ui"],
 
     "@obiter/redaction-policy": ["@obiter/redaction-policy@workspace:packages/redaction-policy"],
+
+    "@obiter/redaction-renderer": ["@obiter/redaction-renderer@workspace:services/redaction-renderer"],
 
     "@obiter/search-client": ["@obiter/search-client@workspace:packages/search-client"],
 

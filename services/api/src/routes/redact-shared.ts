@@ -14,7 +14,7 @@ export function errorResponse(
   c: RouteContext,
   code: ApiErrorCode,
   message: string,
-  status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 503,
+  status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 502 | 503,
 ) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },

@@ -343,6 +343,10 @@ function bindTableParagraphs(
 
 function parseWordTable(xml: string): DisplayTable | undefined {
   if (!xml.includes('<w:tbl')) return undefined
+  // A table fragment never carries a DTD. A DOCTYPE or entity declaration is a
+  // billion-laughs attempt that `application/xml` would expand before layout,
+  // so refuse the fragment rather than parse it.
+  if (/<!(?:DOCTYPE|ENTITY)\b/i.test(xml)) return undefined
   const document = new DOMParser().parseFromString(
     `<root ${TABLE_WRAP}>${tableStructureXml(xml)}</root>`,
     'application/xml',

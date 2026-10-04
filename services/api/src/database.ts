@@ -58,6 +58,7 @@ export interface AuditRecordInput {
     | 'redaction.run_redetect'
     | 'redaction.span_decision'
     | 'redaction.finalize'
+    | 'redaction.finalize_failed'
     | 'redaction.coverage_unchecked'
     | 'redaction.token_map_access'
     | 'redaction_run.delete'
