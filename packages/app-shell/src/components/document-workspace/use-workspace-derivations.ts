@@ -5,6 +5,7 @@ import {
   type AuthorityHit,
 } from '../../document-authorities'
 import { formattedModel } from '../../document-format-edits'
+import { flowParagraphIds, LAST_PARAGRAPH_MESSAGE } from '../../document-edits'
 import { documentStory } from '../../document-model-text'
 import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
 import { storyBlocks } from '../../document-page-tables'
@@ -43,6 +44,10 @@ export type WorkspaceDerivations = {
   pages: LaidOutPage[]
   authorities: AuthorityHit[]
   imageUrls: Record<string, string>
+  /** Set when the effective document holds one paragraph, so Delete paragraph
+   * can explain why it is unavailable. `flowParagraphIds` is the same
+   * derivation the deletion operation and the save plan use. */
+  deleteParagraphReason: string | undefined
 }
 
 export function useWorkspaceDerivations({
@@ -101,5 +106,16 @@ export function useWorkspaceDerivations({
       drafts.extraRuns,
     ],
   )
-  return { painted, pages, authorities, imageUrls }
+  return {
+    painted,
+    pages,
+    authorities,
+    imageUrls,
+    deleteParagraphReason:
+      model &&
+      flowParagraphIds(model, drafts.inserts, drafts.deletedParagraphIds)
+        .length <= 1
+        ? LAST_PARAGRAPH_MESSAGE
+        : undefined,
+  }
 }

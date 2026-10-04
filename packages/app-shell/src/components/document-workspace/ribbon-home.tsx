@@ -72,6 +72,7 @@ export function HomeRibbon({
   canUndo,
   canRedo,
   format,
+  deleteParagraphReason,
   onUndo,
   onRedo,
   onInsertParagraph,
@@ -81,6 +82,9 @@ export function HomeRibbon({
   canUndo?: boolean
   canRedo?: boolean
   format?: DocumentFormatToolbar
+  /** Set when the effective document has one paragraph: the accessible reason
+   * Delete paragraph is unavailable rather than an unexplained disabled state. */
+  deleteParagraphReason?: string
   onUndo?: () => void
   onRedo?: () => void
   onInsertParagraph: () => void
@@ -277,7 +281,8 @@ export function HomeRibbon({
           />
           <IconButton
             label="Delete paragraph"
-            disabled={!canEdit}
+            disabled={!canEdit || deleteParagraphReason !== undefined}
+            disabledReason={deleteParagraphReason}
             onClick={onDeleteParagraph}
             icon={<Trash size={16} aria-hidden />}
           />

@@ -148,6 +148,54 @@ describe('planDocumentSave addressability', () => {
     expect(emptyFormatDrafts.numbering).toEqual({})
     expect(emptyFormatDrafts.paragraphStyles).toEqual({})
   })
+
+  it('blocks deletions that would leave no effective paragraph', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      deletedParagraphIds: ['p1'],
+    }
+    const plan = planDocumentSave(model(['p1'], ['r1']), state)
+    expect(plan.operations).toEqual([])
+    expect(plan.covered).toEqual([])
+    expect(plan.blocked).toEqual([
+      {
+        slot: { kind: 'delete', key: 'delete:p1', paragraphId: 'p1' },
+        reason: 'A document must contain at least one paragraph.',
+        label: 'a deletion',
+      },
+    ])
+  })
+
+  it('still sends a deletion that leaves a surviving paragraph', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      deletedParagraphIds: ['p1'],
+    }
+    const plan = planDocumentSave(model(['p1', 'p2'], ['r1', 'r2']), state)
+    expect(plan.operations).toEqual([
+      { type: 'delete_paragraph', paragraphId: 'p1' },
+    ])
+    expect(plan.blocked).toEqual([])
+  })
+
+  it('blocks the invalid deletions and still sends the surviving operations', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      drafts: { r1: 'changed' },
+      deletedParagraphIds: ['p1', 'p2'],
+    }
+    const plan = planDocumentSave(model(['p1', 'p2'], ['r1', 'r2']), state)
+    expect(plan.operations).toEqual([
+      { type: 'replace_run_text', runId: 'r1', text: 'changed' },
+    ])
+    expect(plan.covered).toEqual([
+      { kind: 'run-text', key: 'run:r1', runId: 'r1' },
+    ])
+    expect(plan.blocked.map((item) => item.slot)).toEqual([
+      { kind: 'delete', key: 'delete:p1', paragraphId: 'p1' },
+      { kind: 'delete', key: 'delete:p2', paragraphId: 'p2' },
+    ])
+  })
 })
 
 describe('draft slot removal', () => {

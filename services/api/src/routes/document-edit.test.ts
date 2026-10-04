@@ -129,6 +129,38 @@ describe('POST /api/documents/:id/edit', () => {
     expect(storage.writes).toEqual([])
   })
 
+  it('refuses deleting every paragraph without writing a version or artifact', async () => {
+    const database = new EditDatabase()
+    const original = Buffer.from(sourceBytes)
+    const { app, storage } = routeApp(database)
+    const story = (await parseDocx(sourceBytes)).model.stories.find(
+      ({ kind }) => kind === 'document',
+    )
+    const operations = (story?.paragraphs ?? []).map(({ id }) => ({
+      type: 'delete_paragraph' as const,
+      paragraphId: id,
+    }))
+    expect(operations.length).toBeGreaterThan(0)
+
+    const response = await app.request('/api/documents/doc_1/edit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseVersionId: 'ver_1', operations }),
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    // Nothing was committed: no new version, no pointer move, no object write,
+    // no audit, and the source version is untouched.
+    expect(database.versions.size).toBe(1)
+    expect(database.currentVersionId).toBe('ver_1')
+    expect(database.audits).toEqual([])
+    expect(storage.writes).toEqual([])
+    expect(storage.binary.get(sourceKey)).toEqual(original)
+  })
+
   it.each([
     [
       'uses the trimmed session name',

@@ -45,6 +45,7 @@ export function DocumentWorkspaceToolbar({
   canEdit,
   canUndo,
   canRedo,
+  deleteParagraphReason,
   format,
   find,
 }: {
@@ -79,6 +80,8 @@ export function DocumentWorkspaceToolbar({
   canEdit: boolean
   canUndo?: boolean
   canRedo?: boolean
+  /** The accessible reason Delete paragraph is unavailable, when it is. */
+  deleteParagraphReason?: string
   format?: DocumentFormatToolbar
   find?: DocumentFindToolbar
 }) {
@@ -155,6 +158,7 @@ export function DocumentWorkspaceToolbar({
             canUndo={canUndo}
             canRedo={canRedo}
             format={format}
+            deleteParagraphReason={deleteParagraphReason}
             onUndo={onUndo}
             onRedo={onRedo}
             onInsertParagraph={onInsertParagraph}

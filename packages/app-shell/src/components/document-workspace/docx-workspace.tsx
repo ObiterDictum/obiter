@@ -109,11 +109,8 @@ export function DocxWorkspace({
       setSavedVersion(version ? { documentId, versionId: version } : null),
   })
 
-  const { painted, pages, authorities, imageUrls } = useWorkspaceDerivations({
-    documentId,
-    model,
-    drafts,
-  })
+  const { painted, pages, authorities, imageUrls, deleteParagraphReason } =
+    useWorkspaceDerivations({ documentId, model, drafts })
 
   // Verification reads the stored version, so it must stay disabled while any
   // work is off-server: editable operations, a blocked or held change, or a
@@ -249,9 +246,10 @@ export function DocxWorkspace({
         }}
         onDeleteParagraph={() => {
           if (!selectedParagraphId) return
-          const selectId = drafts.deleteParagraph(selectedParagraphId)
+          const { selectId } = drafts.deleteParagraph(selectedParagraphId)
           if (selectId) selectParagraph(selectId)
         }}
+        deleteParagraphReason={deleteParagraphReason}
         format={
           painted
             ? documentFormatToolbar(
@@ -394,7 +392,7 @@ export function DocxWorkspace({
                         selectParagraph(drafts.insertAfter(afterParagraphId), 0)
                       }
                       onDeleteParagraph={(paragraphId) => {
-                        const selectId = drafts.deleteParagraph(paragraphId)
+                        const { selectId } = drafts.deleteParagraph(paragraphId)
                         if (selectId) selectParagraph(selectId)
                       }}
                       onWordEdit={(edit) => {
