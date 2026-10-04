@@ -220,8 +220,11 @@ test('undo after a save persists the reverted text once', async ({
   await saveAndWait(page)
   await shot(page, '02-text-saved')
 
-  // Undo the saved typing against the saved document, then persist it.
-  for (let step = 0; step < ' E50TEXT'.length; step += 1) {
+  // Undo the saved typing against the saved document, then persist it. Typing
+  // coalesces into one undo run, so the number of steps is not the character
+  // count; undo until the marker is gone (bounded).
+  for (let step = 0; step < 12; step += 1) {
+    if (!(await editor(page).inputValue()).includes('E50TEXT')) break
     await undo(page).click()
   }
   await expect(editor(page)).not.toHaveValue(/E50TEXT/)
@@ -257,8 +260,8 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   await page.getByRole('button', { name: 'Insert paragraph' }).click()
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
-  // One character is one history step, so two undos remove the text and then
-  // the insert itself.
+  // The typed character is one step and the insert itself another, so two
+  // undos remove the text and then the insert.
   await pending.pressSequentially('X')
   await shot(page, '05-insert-typed')
   await saveAndWait(page)

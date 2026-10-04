@@ -154,6 +154,80 @@ describe('the clipboard ribbon controls', () => {
     fireEvent.click(control('Paste'))
     await waitFor(() => expect(bodyField().value).toBe('HXo'))
   })
+
+  it('splits a native multi-paragraph paste inside a pending insert', async () => {
+    mountWorkspace({ models: { doc_1: model() } })
+    clickParagraph('p1')
+    fireEvent.click(control('Insert paragraph'))
+    const pending = screen.getByLabelText(
+      'Pending paragraph text',
+    ) as HTMLTextAreaElement
+    await waitFor(() => expect(document.activeElement).toBe(pending))
+
+    fireEvent.paste(pending, {
+      clipboardData: { getData: () => 'A\nB' },
+    })
+
+    // The insert splits into two pending paragraphs, not one with a hard break.
+    await waitFor(() => expect(renderedParagraphIds()).toHaveLength(4))
+    expect(
+      (
+        screen.getAllByLabelText(
+          'Pending paragraph text',
+        ) as HTMLTextAreaElement[]
+      ).map((field) => field.value),
+    ).toEqual(['A', 'B'])
+
+    // One paste is one history step: a single undo restores the pre-paste
+    // insert rather than leaving the two the paste created.
+    fireEvent.click(control('Undo'))
+    expect(renderedParagraphIds()).toHaveLength(3)
+    expect(screen.getAllByLabelText('Pending paragraph text')).toHaveLength(1)
+  })
+
+  it('does not treat a stale selection as live when pasting into a pending insert', async () => {
+    stubClipboard({ readText: vi.fn().mockResolvedValue('Z') })
+    mountWorkspace({ models: { doc_1: model() } })
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+
+    fireEvent.click(control('Insert paragraph'))
+    const pending = () =>
+      screen.getByLabelText('Pending paragraph text') as HTMLTextAreaElement
+    fireEvent.change(pending(), { target: { value: 'xy' } })
+    await waitFor(() => expect(document.activeElement).toBe(pending()))
+
+    fireEvent.click(control('Paste'))
+    // The old paragraph's selection must not survive: the insert keeps both
+    // characters and the paste lands at its caret.
+    await waitFor(() => expect(pending().value).toBe('xyZ'))
+  })
+
+  it('says why when the clipboard read is denied', async () => {
+    stubClipboard({ readText: vi.fn().mockRejectedValue(new Error('denied')) })
+    mountWorkspace({ models: { doc_1: model() } })
+    clickParagraph('p1')
+
+    fireEvent.click(control('Paste'))
+    await waitFor(() =>
+      expect(selectionStatus()).toMatch(/clipboard could not be read/i),
+    )
+  })
+
+  it('says why when the clipboard write is denied', async () => {
+    stubClipboard({
+      writeText: vi.fn().mockRejectedValue(new Error('denied')),
+    })
+    mountWorkspace({ models: { doc_1: model() } })
+    clickParagraph('p1')
+    nativeSelect(1, 3)
+
+    fireEvent.click(control('Copy'))
+    await waitFor(() =>
+      expect(selectionStatus()).toMatch(/clipboard could not be written/i),
+    )
+    expect(bodyField().value).toBe('Hello')
+  })
 })
 
 describe('the character-formatting keyboard layer', () => {

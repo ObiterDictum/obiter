@@ -206,7 +206,9 @@ export function useWorkspaceCaret({
     setSelectionRefusal(null)
     setSelectedParagraphId(paragraphId)
     setRestoreCaret(offset == null ? null : { paragraphId, offset })
-    if (offset != null) setFormatRange({ from: offset, to: offset })
+    // A reseat without an offset is a focus, not a caret, so the previous
+    // paragraph's format range must not survive as a phantom selection.
+    setFormatRange(offset == null ? null : { from: offset, to: offset })
   }
 
   /**
