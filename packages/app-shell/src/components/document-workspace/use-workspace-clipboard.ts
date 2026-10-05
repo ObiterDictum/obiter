@@ -54,6 +54,8 @@ export function useWorkspaceClipboard({
   selectedRange,
   replaceSelection,
   selectedParagraphId,
+  selectionParagraphIds,
+  isStructuralParagraph,
   formatRange,
   restoreCaret,
   placeCaret,
@@ -70,6 +72,12 @@ export function useWorkspaceClipboard({
   } | null
   replaceSelection: (text: string) => void
   selectedParagraphId: string | null
+  /** The paragraphs a live document selection covers, so a paste can tell a
+   * selection replacement from a paste into another (unfocused) paragraph. */
+  selectionParagraphIds: ReadonlySet<string>
+  /** Whether a paragraph is outside the body flow: a table cell or a text box.
+   * Splitting a paste there would render siblings as body text. */
+  isStructuralParagraph: (paragraphId: string) => boolean
   formatRange: { from: number; to: number } | null
   restoreCaret: ClipboardPlacement | null
   placeCaret: (paragraphId: string, offset?: number) => void
@@ -127,12 +135,21 @@ export function useWorkspaceClipboard({
     replaceSelection('')
   }
 
-  function pasteTarget(offsets?: {
-    from: number
-    to: number
-  }): PasteTarget | null {
+  /** The paragraph and offsets a paste targets. Absent the ribbon, a field
+   * hands its own paragraph and DOM selection. */
+  type PasteOffsets = { paragraphId: string; from: number; to: number }
+
+  function pasteTarget(
+    target?: PasteOffsets,
+  ): PasteTarget | 'structure' | null {
     if (!model) return null
-    if (selectionActive) {
+    // A live document selection is the target unless the caller names a
+    // paragraph it does not cover: a drop onto an unfocused pending insert must
+    // land there, not in the selected paragraph.
+    if (
+      selectionActive &&
+      (target === undefined || selectionParagraphIds.has(target.paragraphId))
+    ) {
       const range = selectedRange()
       if (!range) return null
       return { kind: 'range', from: range.start, to: range.end }
@@ -141,10 +158,17 @@ export function useWorkspaceClipboard({
     // record of where the caret is; a paragraph with neither pastes at its
     // start rather than being disabled.
     const paragraphId =
-      selectedParagraphId ?? documentStory(model)?.paragraphs[0]?.id
+      target?.paragraphId ??
+      selectedParagraphId ??
+      documentStory(model)?.paragraphs[0]?.id
     if (!paragraphId) return null
-    const from = offsets?.from ?? formatRange?.from ?? restoreCaret?.offset ?? 0
-    const to = offsets?.to ?? formatRange?.to ?? from
+    // A split paste creates sibling paragraphs, which a table cell or a text
+    // box cannot hold: the flow would render them as body text while the save
+    // writes them inside the cell. Refuse with the selection's own structure
+    // reason rather than producing edits the document cannot represent.
+    if (isStructuralParagraph(paragraphId)) return 'structure'
+    const from = target?.from ?? formatRange?.from ?? restoreCaret?.offset ?? 0
+    const to = target?.to ?? formatRange?.to ?? from
     return from === to
       ? { kind: 'caret', caret: { paragraphId, offset: from } }
       : {
@@ -154,11 +178,15 @@ export function useWorkspaceClipboard({
         }
   }
 
-  function pasteText(text: string, offsets?: { from: number; to: number }) {
+  function pasteText(text: string, target?: PasteOffsets) {
     if (!model) return
-    const target = pasteTarget(offsets)
-    if (!target) return
-    const outcome = paste(model, target, text)
+    const resolved = pasteTarget(target)
+    if (resolved === 'structure') {
+      setRefusal('structure')
+      return
+    }
+    if (!resolved) return
+    const outcome = paste(model, resolved, text)
     if (outcome?.status === 'applied') {
       placeCaret(outcome.caret.paragraphId, outcome.caret.offset)
     } else if (outcome?.status === 'refused') {

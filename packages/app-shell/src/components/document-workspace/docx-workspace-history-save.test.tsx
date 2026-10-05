@@ -1145,6 +1145,42 @@ describe('undo across a successful save', () => {
     expect(persistedText(document.paragraphs)).toEqual(['Hello three'])
     expect(document.editAsync).toHaveBeenCalledTimes(3)
   })
+
+  it('keeps a per-character tracked run undoable after it is saved', async () => {
+    const document = await server(['IN THE HIGH COURT OF JUSTICE'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    enableTracking()
+    fireEvent.click(screen.getByText('IN THE HIGH COURT OF JUSTICE'))
+
+    // Type the way a keyboard does: one change event per character. The run
+    // coalesces, so the save translates the run's snapshots, not each keystroke.
+    let value = 'IN THE HIGH COURT OF JUSTICE'
+    for (const character of ' TRACKED') {
+      value += character
+      fireEvent.change(field(), { target: { value } })
+    }
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+
+    // The saved tracked run is still one undo, and the whole run's snapshots
+    // became the same tracked-change rejection. One undo is therefore enough to
+    // offer the reversal, which saves as a single decision.
+    expect(undoButton()).toHaveProperty('disabled', false)
+    expect(redoButton()).toHaveProperty('disabled', true)
+    fireEvent.click(undoButton())
+    await clickDecisionSave(document, 1)
+    expect(document.decideAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'reject' }),
+    )
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(persistedText(document.paragraphs)).toEqual([
+      'IN THE HIGH COURT OF JUSTICE',
+    ])
+  })
 })
 
 function paintedBold(paragraphText: string): boolean {

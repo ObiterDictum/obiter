@@ -144,6 +144,8 @@ export function useWorkspaceCaret({
     selectedRange,
     replaceSelection: replaceSelectionRange,
     selectedParagraphId,
+    selectionParagraphIds: new Set(segments.keys()),
+    isStructuralParagraph: (paragraphId) => structuralIds.has(paragraphId),
     formatRange,
     restoreCaret,
     placeCaret: selectParagraph,

@@ -444,6 +444,32 @@ describe('cut ordering and non-keydown input', () => {
     expect(editAsync).not.toHaveBeenCalled()
   })
 
+  it('splits a multi-line drop at a caret into paragraphs', () => {
+    const { editAsync } = mount()
+    clickParagraph('p1')
+    placeCaret(5)
+    fireEvent.drop(bodyField(), { dataTransfer: { getData: () => 'A\nB' } })
+    save()
+    // A drop carries the same payload as a paste, so its newline becomes a
+    // paragraph break rather than a hard break inside p1.
+    const operations = saveOperations(editAsync)
+    expect(operations[0]).toEqual({
+      type: 'replace_run_text',
+      runId: 'p1-r',
+      text: 'AlphaA',
+    })
+    const inserted = operations[1] as Extract<
+      DocumentEditOperation,
+      { type: 'insert_paragraph_after' }
+    >
+    expect(inserted.type).toBe('insert_paragraph_after')
+    expect(
+      insertParagraphRuns(inserted)
+        .map((run) => run.text)
+        .join(''),
+    ).toBe('B')
+  })
+
   it('applies an IME commit once as a range replacement', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
