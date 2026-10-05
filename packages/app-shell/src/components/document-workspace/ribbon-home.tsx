@@ -1,6 +1,7 @@
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
+  ArrowsClockwise,
   ClipboardText,
   Copy,
   Eraser,
@@ -283,6 +284,13 @@ export function HomeRibbon({
             onClick={format?.onContinueList}
             icon={<ListChecks size={16} aria-hidden />}
           />
+          <IconButton
+            label="Restart numbering"
+            pressed={format?.listRestarted}
+            disabled={!editing || !format?.canRestart}
+            onClick={format?.onRestartList}
+            icon={<ArrowsClockwise size={16} aria-hidden />}
+          />
         </ToolbarRow>
         <ToolbarRow>
           <IconButton
@@ -357,21 +365,39 @@ export function HomeRibbon({
   )
 }
 
-const FALLBACK_STYLES = ['Normal', 'Heading 1', 'Quote', 'List Number']
+/**
+ * A document with no paragraph styles has nothing to apply. The gallery shows
+ * one disabled control that names the reason rather than fake `soon` chips: the
+ * old fallback listed `Normal`, `Heading 1` and `Quote` as unavailable, which
+ * looked like pending UI instead of an absent document feature. Not editable
+ * (no format) hides the group entirely; a document that genuinely has no
+ * paragraph styles keeps the group so the reason stays discoverable.
+ */
+const MIXED_STYLE_VALUE = '__mixed__'
 
 function StyleGallery({ format }: { format?: DocumentFormatToolbar }) {
-  if (!format || format.paragraphStyles.length === 0) {
+  if (!format) return null
+  if (format.paragraphStyles.length === 0) {
     return (
       <ToolbarGroup label="Styles">
         <ToolbarRow>
-          {FALLBACK_STYLES.map((name) => (
-            <CaptionButton key={name} label={name} soon />
-          ))}
+          <RibbonSelect
+            label="Paragraph style"
+            className="max-w-36"
+            value=""
+            options={[{ value: '', label: 'No paragraph styles' }]}
+            disabled
+            disabledReason="This document has no paragraph styles."
+            onChange={() => undefined}
+          />
         </ToolbarRow>
       </ToolbarGroup>
     )
   }
+  // Stable, de-duplicated document order; a bounded chip row keeps the ribbon
+  // from growing with the style catalogue, and the select reaches every style.
   const chips = format.paragraphStyles.slice(0, 4)
+  const mixed = format.paragraphStyleMixed
   return (
     <ToolbarGroup label="Styles">
       <ToolbarRow>
@@ -379,24 +405,28 @@ function StyleGallery({ format }: { format?: DocumentFormatToolbar }) {
           <CaptionButton
             key={style.styleId}
             label={style.name}
-            pressed={format.paragraphStyleId === style.styleId}
+            pressed={!mixed && format.paragraphStyleId === style.styleId}
             onClick={() => format.onParagraphStyle(style.styleId)}
           />
         ))}
         <RibbonSelect
           label="Paragraph style"
           className="max-w-36"
-          value={format.paragraphStyleId}
+          value={mixed ? MIXED_STYLE_VALUE : format.paragraphStyleId}
           options={[
+            ...(mixed
+              ? [{ value: MIXED_STYLE_VALUE, label: 'Mixed styles' }]
+              : []),
             { value: '', label: 'No direct style' },
             ...format.paragraphStyles.map((style) => ({
               value: style.styleId,
               label: style.name,
             })),
           ]}
-          onChange={(value) =>
+          onChange={(value) => {
+            if (value === MIXED_STYLE_VALUE) return
             format.onParagraphStyle(value === '' ? null : value)
-          }
+          }}
         />
       </ToolbarRow>
     </ToolbarGroup>

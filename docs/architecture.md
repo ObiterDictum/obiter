@@ -1446,6 +1446,60 @@ Rejected: a parallel `set_run_properties` type; a custom font-name field or
 colour picker beyond bounded selects; dropping the contract's `smallCaps` from
 clear formatting.
 
+### Lists and styles hardening: gallery, mixed state and list restart (5 October 2026)
+
+Context: the Home Styles gallery rendered a fixed `Normal`/`Heading 1`/`Quote`/
+`List Number` row as `soon` chips whenever the document had no paragraph
+styles, so a document without styles showed dead UI that looked like pending
+work. A multi-paragraph selection also read its style from one anchor
+paragraph, so a mixed selection falsely pressed one style. List indentation
+assumed the next `ilvl` existed, list toggles ran per paragraph (so a mixed
+selection both added and removed in one click), a dangling numbering definition
+could be copied into an operation the server rejects, and the model wire's
+`startOverride` had no edit contract, writer or control.
+
+Decision, styles: a document that genuinely has no paragraph styles shows one
+disabled Paragraph-style control whose accessible name states "This document
+has no paragraph styles."; it never shows fake chips, and a non-editable
+document hides the group. When styles exist the gallery lists each paragraph
+style once in document order (a style with no `w:type` defaults to paragraph;
+a character style is excluded), bounded to four chips plus the select. Style
+agreement is computed across every target paragraph, so a selection whose
+paragraphs differ is a defined mixed state: no chip is pressed and the select
+shows "Mixed styles" rather than one paragraph's style.
+
+Decision, lists: `indentList`/`outdentList` clamp to the levels the numbering
+instance actually defines, so a sparse definition never produces an
+out-of-range level and outdenting past the first level clears the numbering.
+`pickNumberingId` picks the lowest numeric matching instance, deterministically.
+A toggle acts on the whole target: if every paragraph already carries the kind
+the click removes it from all, otherwise every paragraph becomes that kind.
+`continueList` and the controls skip a numbering instance the model no longer
+holds, and no operation is emitted for a dangling definition. Cross-paragraph
+list toggles therefore emit one `set_paragraph_numbering` per paragraph.
+
+Decision, restart: `set_paragraph_numbering` gains one field,
+`startOverride` (integer 1..32767, nullable/optional; `null`/absent means no
+override). When present, the writer points the paragraph at a numbering
+instance whose `w:lvlOverride`/`w:startOverride` carries the value: it reuses
+an existing instance that references the same `w:abstractNum` with a pure
+override for the same level, otherwise it appends a new `w:num` to
+`word/numbering.xml` and registers it on the model so validation and later
+operations in the batch see it. The tracked writer resolves the same instance
+before building its `w:pPrChange`, so the current state and the recorded change
+name one instance. The created `w:lvlOverride` emits `w:startOverride` before
+any nested `w:lvl` (the order CT_NumLvl requires). When the source redefined the
+target level, that nested `w:lvl` is kept so the restart does not silently change
+formatting, with its own `w:start` rewritten to the restart value so the two
+cannot disagree. The Home Paragraph group adds a Restart numbering toggle
+that applies the override to every numbered target and reads pressed only when
+every numbered target carries one; one history step, one save operation.
+
+Rejected: a per-paragraph list toggle; a second style or numbering owner; a
+writer that rewrites unrelated numbering content; clearing a restart by
+rewriting the original `w:num` (undo, or choosing the plain instance, is the
+honest path).
+
 ### Document edit operation batches: one coordinate space (14 September 2026)
 
 Context: `replace_run_text` updates a run's model text but not its source

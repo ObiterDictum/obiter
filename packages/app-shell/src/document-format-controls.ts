@@ -13,7 +13,12 @@ import {
   runVertAlign,
 } from './document-run-properties'
 import { paragraphNumPr } from './document-page-lists'
-import { paragraphListKind, pickNumberingId } from './document-list-toggle'
+import {
+  findNumberingInstance,
+  paragraphListKind,
+  paragraphStartOverride,
+  pickNumberingId,
+} from './document-list-toggle'
 import { paragraphFormatState } from './document-paragraph-format'
 import {
   formattedParagraphDraft,
@@ -142,6 +147,16 @@ export function selectedParagraphIds(
   return [...new Set(ranges.map((range) => range.paragraphId))]
 }
 
+/** The numbering instance a target names, including its pending draft. */
+function numberedInstance(
+  model: DocumentModelWire,
+  format: FormatDrafts,
+  item: DocumentParagraphWire,
+) {
+  const numPr = format.numbering[item.id] ?? paragraphNumPr(item, model.styles)
+  return findNumberingInstance(model, numPr?.numId)
+}
+
 export function formatControlState(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -179,14 +194,44 @@ export function formatControlState(
   const previousNum = previous
     ? (format.numbering[previous.id] ?? paragraphNumPr(previous, model.styles))
     : undefined
-  const nextIlvl = (numPr?.ilvl ?? 0) + 1
+  const currentInstance = findNumberingInstance(model, numPr?.numId)
+  const currentIlvl = numPr?.ilvl ?? 0
   const canIndent = Boolean(
-    numPr?.numId &&
-    model.numbering
-      .find((item) => item.numberingId === numPr.numId)
-      ?.levels?.some((level) => level.ilvl === nextIlvl),
+    currentInstance?.levels?.some(
+      (level) => level.ilvl > currentIlvl && level.ilvl <= 8,
+    ),
   )
   const paragraphIds = selectedParagraphIds(ranges)
+  // A multi-paragraph selection whose paragraphs do not all carry one style is
+  // a defined mixed state: no chip is pressed and the select does not falsely
+  // show one paragraph's style. A pending insert's style lives only in the
+  // format drafts until the insert is saved, so the draft is read for it too.
+  const paragraphStyleIds = paragraphIds.map((id) =>
+    effectiveParagraphStyleId(model, format, id),
+  )
+  const styleAgrees =
+    paragraphStyleIds.length > 0 &&
+    paragraphStyleIds.every((value) => value === paragraphStyleIds[0])
+  const paragraphStyleId = styleAgrees ? (paragraphStyleIds[0] ?? '') : ''
+  const paragraphStyleMixed = paragraphIds.length > 1 && !styleAgrees
+  const targetParagraphs = paragraphIds.flatMap((id) => {
+    const item = selectedParagraph(model, id)
+    return item ? [item] : []
+  })
+  // Restart acts on every stored target paragraph, not just the caret's, so
+  // the control is available when any target names a valid numbering instance.
+  const numberedTargets = targetParagraphs.filter((item) =>
+    Boolean(numberedInstance(model, format, item)),
+  )
+  const canRestart = numberedTargets.length > 0
+  // Pressed only when every numbered target carries an override, so a mixed
+  // selection reads unpressed and one click makes the whole selection restart.
+  const listRestarted =
+    numberedTargets.length > 0 &&
+    numberedTargets.every((item) => {
+      const override = paragraphStartOverride(model, format, item)
+      return override !== undefined && override !== null
+    })
   const paragraphFormat = paragraphFormatState(model, format, paragraphIds)
   return {
     paragraph,
@@ -194,9 +239,8 @@ export function formatControlState(
     // A pending insert is not part of the stored story, so its style lives only
     // in the format drafts until the insert is saved. Report it so the style
     // control shows the chosen style instead of "No direct style".
-    paragraphStyleId:
-      paragraph?.styleId ??
-      (paragraphId ? (format.paragraphStyles[paragraphId] ?? '') : ''),
+    paragraphStyleId,
+    paragraphStyleMixed,
     paragraphStyles: paragraphStyleOptions(model),
     alignment: paragraphFormat.alignment,
     lineSpacing: paragraphFormat.lineSpacing,
@@ -217,11 +261,24 @@ export function formatControlState(
       (xml) => runVertAlign(xml) ?? 'baseline',
     ),
     canIndent,
-    canOutdent: Boolean(numPr?.numId),
-    canContinue: Boolean(previousNum?.numId),
+    canOutdent: Boolean(currentInstance),
+    canContinue: Boolean(findNumberingInstance(model, previousNum?.numId)),
+    canRestart,
+    listRestarted,
     listKind: paragraphListKind(model, format, paragraph),
     canApplyBullet: Boolean(pickNumberingId(model, 'bullet')),
     canApplyNumber: Boolean(pickNumberingId(model, 'number')),
     canApplyMultilevel: Boolean(pickNumberingId(model, 'multilevel')),
   }
+}
+
+/** The style a paragraph effectively carries, including a pending style draft. */
+function effectiveParagraphStyleId(
+  model: DocumentModelWire,
+  format: FormatDrafts,
+  paragraphId: string,
+): string {
+  const draft = format.paragraphStyles[paragraphId]
+  if (draft !== undefined) return draft ?? ''
+  return selectedParagraph(model, paragraphId)?.styleId ?? ''
 }

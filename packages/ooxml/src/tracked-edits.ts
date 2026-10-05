@@ -15,12 +15,15 @@ import { requireEditablePart } from './model-edit-overlay'
 import { insertParagraphAfter } from './model-paragraph-edits'
 import {
   patchParagraphFormatXml,
-  patchParagraphNumberingXml,
   patchRunEmphasisXml,
   type ParagraphFormat,
-  type ParagraphNumbering,
   type RunEmphasis,
 } from './model-property-edits'
+import {
+  patchParagraphNumberingXml,
+  resolveParagraphNumbering,
+  type ParagraphNumbering,
+} from './numbering-edits'
 import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
 import {
   recordDeletedParagraph,
@@ -248,6 +251,10 @@ export function createTrackedEditWriter(
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
+      // A start override points at a newly created or reused numbering
+      // instance; resolve it before the tracked pPrChange is built so the
+      // recorded change and the current state name the same instance.
+      const resolved = resolveParagraphNumbering(document, numbering)
       setTrackedProperties(document, {
         id: anchor.wire.id,
         partName: anchor.partName,
@@ -256,7 +263,7 @@ export function createTrackedEditWriter(
         propertiesName: 'pPr',
         prefix,
         attributes: attributes(prefix, 'pPrChange'),
-        patch: (current) => patchParagraphNumberingXml(current, numbering),
+        patch: (current) => patchParagraphNumberingXml(current, resolved),
       })
     },
 

@@ -60,13 +60,7 @@ export function paragraphListMarker(
   )
   const level = instance?.levels?.find((item) => item.ilvl === numPr.ilvl)
   if (!instance || !level) return undefined
-  const values = nextCounters(
-    counters,
-    instance.numberingId,
-    numPr.ilvl,
-    level,
-    instance.startOverride,
-  )
+  const values = nextCounters(counters, instance.numberingId, numPr.ilvl, level)
   const leftTwips = level.indentLeftTwips ?? DEFAULT_LEFT_TWIPS
   const hangingTwips = level.hangingTwips ?? DEFAULT_HANGING_TWIPS
   return {
@@ -121,14 +115,14 @@ function nextCounters(
   numberingId: string,
   ilvl: number,
   level: DocumentNumberingLevelWire,
-  startOverride: number | undefined,
 ): number[] {
   const values = [...(counters.get(numberingId) ?? [])]
   while (values.length <= ilvl) values.push(0)
-  const start =
-    ilvl === 0 && startOverride !== undefined
-      ? startOverride
-      : (level.start ?? 1)
+  // The parser folds a per-level `w:startOverride` into the level's own
+  // `start`, so that value is the only correct restart for this level. The
+  // instance-level `startOverride` is its first override at any level and
+  // would apply another level's restart here.
+  const start = level.start ?? 1
   values[ilvl] = (values[ilvl] || start - 1) + 1
   values.length = ilvl + 1
   counters.set(numberingId, values)

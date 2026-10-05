@@ -4,6 +4,7 @@ import { describe, expect, it } from 'bun:test'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   collectFormatOperations,
+  continueList,
   documentFormatToolbar,
   emphasisAddress,
   emptyFormatDrafts,
@@ -12,9 +13,12 @@ import {
   indentList,
   mergeEmphasis,
   outdentList,
+  paragraphStyleOptions,
+  restartList,
   type FormatDrafts,
 } from './document-format-edits'
 import { projectRangeEmphasis } from './document-format-paint'
+import { documentListMarkers } from './document-page-lists'
 
 const model: DocumentModelWire = {
   version: 1,
@@ -1057,6 +1061,422 @@ describe('font formatting controls', () => {
       highlight: null,
       vertAlign: 'baseline',
     })
+  })
+})
+
+describe('list and style hardening', () => {
+  const twoParagraphs: DocumentModelWire = {
+    version: 1,
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: [
+          {
+            id: 'p1',
+            styleId: 'Heading1',
+            runs: [{ id: 'r1', text: 'One', preservedXmlFragments: [] }],
+            preservedXmlFragments: [
+              '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+            ],
+          },
+          {
+            id: 'p2',
+            runs: [{ id: 'r2', text: 'Two', preservedXmlFragments: [] }],
+            preservedXmlFragments: [],
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+    ],
+    styles: [
+      {
+        styleId: 'Heading1',
+        sourceFragment:
+          '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="Heading 1"/></w:style>',
+      },
+      {
+        styleId: 'Quote',
+        sourceFragment:
+          '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/></w:style>',
+      },
+    ],
+    numbering: [
+      {
+        numberingId: '1',
+        abstractNumberingId: '0',
+        sourceFragment: '<w:num w:numId="1"/>',
+        levels: [
+          { ilvl: 0, numFmt: 'decimal' },
+          { ilvl: 2, numFmt: 'lowerRoman' },
+        ],
+      },
+      {
+        numberingId: '2',
+        abstractNumberingId: '0',
+        sourceFragment: '<w:num w:numId="2"/>',
+        levels: [{ ilvl: 0, numFmt: 'bullet' }],
+      },
+      {
+        numberingId: '3',
+        abstractNumberingId: '0',
+        sourceFragment: '<w:num w:numId="3"/>',
+        levels: [{ ilvl: 0, numFmt: 'decimal' }],
+      },
+    ],
+    relationships: [],
+    preservedXmlFragments: [],
+    changes: [],
+  }
+
+  const first = twoParagraphs.stories[0]?.paragraphs[0]
+  if (!first) throw new Error('test model paragraph is missing')
+
+  it('defines a mixed style state for a multi-paragraph selection', () => {
+    const singleRange = { paragraphId: 'p1', from: 0, to: 0 }
+    const ranges = [singleRange, { paragraphId: 'p2', from: 0, to: 0 }]
+    expect(
+      formatControlState(twoParagraphs, emptyFormatDrafts, 'p1', [singleRange]),
+    ).toMatchObject({
+      paragraphStyleId: 'Heading1',
+      paragraphStyleMixed: false,
+    })
+    expect(
+      formatControlState(twoParagraphs, emptyFormatDrafts, 'p1', ranges),
+    ).toMatchObject({ paragraphStyleId: '', paragraphStyleMixed: true })
+  })
+
+  it('reflects a pending insert style from the drafts', () => {
+    const format: FormatDrafts = {
+      ...emptyFormatDrafts,
+      paragraphStyles: { ins_1: 'Quote' },
+    }
+    expect(
+      formatControlState(twoParagraphs, format, 'ins_1', [
+        { paragraphId: 'ins_1', from: 0, to: 0 },
+      ]),
+    ).toMatchObject({ paragraphStyleId: 'Quote', paragraphStyleMixed: false })
+  })
+
+  it('lists paragraph styles once in document order', () => {
+    expect(
+      paragraphStyleOptions({
+        ...twoParagraphs,
+        styles: [
+          ...twoParagraphs.styles,
+          {
+            styleId: 'Emphasis',
+            sourceFragment:
+              '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>',
+          },
+          {
+            styleId: 'Heading1',
+            sourceFragment:
+              '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="Heading 1"/></w:style>',
+          },
+        ],
+      }),
+    ).toEqual([
+      { styleId: 'Heading1', name: 'Heading 1' },
+      { styleId: 'Quote', name: 'Quote' },
+    ])
+  })
+
+  it('clamps list indent and outdent to the levels the instance defines', () => {
+    const indented = indentList(emptyFormatDrafts, twoParagraphs, first)
+    // Levels 0 and 2 only: indent jumps to 2, never to an undefined 1.
+    expect(indented.numbering.p1).toEqual({ numId: '1', ilvl: 2 })
+    const outdented = outdentList(indented, twoParagraphs, first)
+    expect(outdented.numbering.p1).toEqual({ numId: '1', ilvl: 0 })
+    expect(outdentList(outdented, twoParagraphs, first).numbering.p1).toEqual({
+      numId: null,
+    })
+  })
+
+  it('leaves a dangling numbering definition alone', () => {
+    const dangling: DocumentModelWire = {
+      ...twoParagraphs,
+      numbering: twoParagraphs.numbering.filter(
+        (instance) => instance.numberingId !== '1',
+      ),
+    }
+    expect(indentList(emptyFormatDrafts, dangling, first)).toBe(
+      emptyFormatDrafts,
+    )
+    expect(outdentList(emptyFormatDrafts, dangling, first)).toBe(
+      emptyFormatDrafts,
+    )
+    expect(restartList(emptyFormatDrafts, dangling, first)).toBe(
+      emptyFormatDrafts,
+    )
+  })
+
+  it('continues from the nearest valid list past a dangling one', () => {
+    const story = twoParagraphs.stories[0]
+    if (!story) throw new Error('test model story is missing')
+    const danglingModel: DocumentModelWire = {
+      ...twoParagraphs,
+      stories: [
+        {
+          ...story,
+          paragraphs: [
+            first,
+            {
+              id: 'p2',
+              runs: [{ id: 'r2', text: 'Two', preservedXmlFragments: [] }],
+              preservedXmlFragments: [
+                '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="99"/></w:numPr></w:pPr>',
+              ],
+            },
+            {
+              id: 'p3',
+              runs: [{ id: 'r3', text: 'Three', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+        },
+      ],
+    }
+    const target = danglingModel.stories[0]?.paragraphs[2]
+    if (!target) throw new Error('test target paragraph is missing')
+    const continued = continueList(emptyFormatDrafts, danglingModel, target)
+    expect(continued.numbering.p3).toEqual({ numId: '1', ilvl: 0 })
+  })
+
+  it('emits a start override on the numbering operation', () => {
+    expect(
+      collectFormatOperations(
+        twoParagraphs,
+        {
+          ...emptyFormatDrafts,
+          numbering: { p1: { numId: '1', ilvl: 0, startOverride: 1 } },
+        },
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: 'p1',
+        numId: '1',
+        ilvl: 0,
+        startOverride: 1,
+      },
+    ])
+  })
+
+  it('applies and reads a list restart through the toolbar', () => {
+    let format: FormatDrafts = emptyFormatDrafts
+    const build = () =>
+      documentFormatToolbar(
+        formattedModel(twoParagraphs, format),
+        format,
+        'p1',
+        (update) => {
+          format = update(format)
+        },
+        { kind: 'caret', paragraphId: 'p1', from: 0, to: 0 },
+      )
+    expect(build().canRestart).toBe(true)
+    expect(build().listRestarted).toBe(false)
+    build().onRestartList()
+    expect(format.numbering.p1).toEqual({
+      numId: '1',
+      ilvl: 0,
+      startOverride: 1,
+    })
+    expect(build().listRestarted).toBe(true)
+  })
+
+  it('applies one list toggle across a multi-paragraph selection', () => {
+    let format: FormatDrafts = emptyFormatDrafts
+    const ranges = [
+      { paragraphId: 'p1', from: 0, to: 0 },
+      { paragraphId: 'p2', from: 0, to: 0 },
+    ]
+    const build = () =>
+      documentFormatToolbar(
+        formattedModel(twoParagraphs, format),
+        format,
+        'p1',
+        (update) => {
+          format = update(format)
+        },
+        { kind: 'selection', ranges },
+      )
+    // p1 is multilevel and p2 is plain, so one click makes both the picked
+    // decimal instance instead of adding to one and removing from the other.
+    build().onToggleList('number')
+    expect(format.numbering.p1).toEqual({ numId: '3', ilvl: 0 })
+    expect(format.numbering.p2).toEqual({ numId: '3', ilvl: 0 })
+    build().onToggleList('number')
+    expect(format.numbering.p1).toEqual({ numId: null })
+    expect(format.numbering.p2).toEqual({ numId: null })
+  })
+
+  it('paints a restart at the drafted number before any save', () => {
+    const story = twoParagraphs.stories[0]
+    if (!story) throw new Error('test model story is missing')
+    const listedModel: DocumentModelWire = {
+      ...twoParagraphs,
+      stories: [
+        {
+          ...story,
+          paragraphs: ['p1', 'p2', 'p3'].map((id) => ({
+            id,
+            runs: [{ id: `${id}-r`, text: id, preservedXmlFragments: [] }],
+            preservedXmlFragments: [
+              '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+            ],
+          })),
+        },
+      ],
+    }
+    const before = documentListMarkers(
+      formattedModel(listedModel, emptyFormatDrafts),
+    )
+    expect(before.get('p1')?.text).toBe('1.')
+    expect(before.get('p2')?.text).toBe('2.')
+    expect(before.get('p3')?.text).toBe('3.')
+
+    const target = listedModel.stories[0]?.paragraphs[2]
+    if (!target) throw new Error('test target paragraph is missing')
+    const format = restartList(emptyFormatDrafts, listedModel, target)
+    expect(format.numbering.p3).toEqual({
+      numId: '1',
+      ilvl: 0,
+      startOverride: 1,
+    })
+
+    // The draft names the source, which the model does not carry an override
+    // for, so the paint synthesises an instance and the marker restarts now.
+    const after = documentListMarkers(formattedModel(listedModel, format))
+    expect(after.get('p1')?.text).toBe('1.')
+    expect(after.get('p2')?.text).toBe('2.')
+    expect(after.get('p3')?.text).toBe('1.')
+  })
+
+  it('drafts an existing matching restart instance instead of the source', () => {
+    const base = twoParagraphs.numbering[0]
+    if (!base) throw new Error('test numbering instance is missing')
+    const reusable: DocumentModelWire = {
+      ...twoParagraphs,
+      numbering: [
+        base,
+        {
+          numberingId: '2',
+          abstractNumberingId: '0',
+          startOverride: 1,
+          sourceFragment:
+            '<w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>',
+          levels: [{ ilvl: 0, start: 1, numFmt: 'decimal' }],
+        },
+      ],
+    }
+    const format = restartList(emptyFormatDrafts, reusable, first)
+    expect(format.numbering.p1).toEqual({
+      numId: '2',
+      ilvl: 0,
+      startOverride: 1,
+    })
+    // The resolved instance already carries the override, so the paint does
+    // not synthesise a second one.
+    const painted = formattedModel(reusable, format)
+    expect(painted.numbering.map((instance) => instance.numberingId)).toEqual([
+      '1',
+      '2',
+    ])
+    expect(documentListMarkers(painted).get('p1')?.text).toBe('1.')
+  })
+
+  it('paints one sequence for paragraphs restarted together', () => {
+    const story = twoParagraphs.stories[0]
+    if (!story) throw new Error('test model story is missing')
+    const listed: DocumentModelWire = {
+      ...twoParagraphs,
+      stories: [
+        {
+          ...story,
+          paragraphs: ['p1', 'p2', 'p3'].map((id) => ({
+            id,
+            runs: [{ id: `${id}-r`, text: id, preservedXmlFragments: [] }],
+            preservedXmlFragments: [
+              '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+            ],
+          })),
+        },
+      ],
+    }
+    const [first, second, third] = listed.stories[0]?.paragraphs ?? []
+    if (!first || !second || !third) {
+      throw new Error('test target paragraphs are missing')
+    }
+    let format = restartList(emptyFormatDrafts, listed, second)
+    format = restartList(format, listed, third)
+    // Both drafts still name the source; the paint must synthesise one shared
+    // instance, so the two restarted paragraphs count 1., 2. like the save.
+    expect(format.numbering.p2).toEqual({
+      numId: '1',
+      ilvl: 0,
+      startOverride: 1,
+    })
+    expect(format.numbering.p3).toEqual({
+      numId: '1',
+      ilvl: 0,
+      startOverride: 1,
+    })
+    const markers = documentListMarkers(formattedModel(listed, format))
+    expect(markers.get('p1')?.text).toBe('1.')
+    expect(markers.get('p2')?.text).toBe('1.')
+    expect(markers.get('p3')?.text).toBe('2.')
+  })
+
+  it('reads restart unpressed when only some numbered targets carry an override', () => {
+    const story = twoParagraphs.stories[0]
+    if (!story) throw new Error('test model story is missing')
+    const bothNumbered: DocumentModelWire = {
+      ...twoParagraphs,
+      stories: [
+        {
+          ...story,
+          paragraphs: ['p1', 'p2'].map((id) => ({
+            id,
+            runs: [{ id: `${id}-r`, text: id, preservedXmlFragments: [] }],
+            preservedXmlFragments: [
+              '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+            ],
+          })),
+        },
+      ],
+    }
+    const [first, second] = bothNumbered.stories[0]?.paragraphs ?? []
+    if (!first || !second) {
+      throw new Error('test target paragraphs are missing')
+    }
+    const ranges = [
+      { paragraphId: 'p1', from: 0, to: 0 },
+      { paragraphId: 'p2', from: 0, to: 0 },
+    ]
+    let format = restartList(emptyFormatDrafts, bothNumbered, first)
+    expect(
+      formatControlState(bothNumbered, format, 'p1', ranges).listRestarted,
+    ).toBe(false)
+    format = restartList(format, bothNumbered, second)
+    expect(
+      formatControlState(bothNumbered, format, 'p1', ranges).listRestarted,
+    ).toBe(true)
+  })
+
+  it('enables restart when any target paragraph is a list, not only the caret', () => {
+    const ranges = [
+      { paragraphId: 'p1', from: 0, to: 0 },
+      { paragraphId: 'p2', from: 0, to: 0 },
+    ]
+    // The caret sits in the plain p2, but p1 is a valid numbered target, so
+    // the control that would act on it must not be disabled.
+    expect(
+      formatControlState(twoParagraphs, emptyFormatDrafts, 'p2', ranges)
+        .canRestart,
+    ).toBe(true)
   })
 })
 

@@ -48,6 +48,11 @@ export {
   patchRunEmphasisXml,
   patchParagraphFormatXml,
 } from './model-property-edits'
+export {
+  buildOverrideFragment,
+  hasPureStartOverride,
+  levelStartOverride,
+} from './numbering-edits'
 export * from './model-json'
 export * from './parse'
 export * from './serialise'
