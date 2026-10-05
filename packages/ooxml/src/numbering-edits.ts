@@ -224,20 +224,34 @@ function levelOverrides(fragment: string) {
  * The target override's nested `w:lvl` with its own `w:start` set to the
  * restart value. The level is kept so the restart does not change formatting;
  * rewriting the start keeps it from contradicting the sibling `w:startOverride`.
+ * A level is expanded from its self-closing form so a schema-valid
+ * `<w:lvl .../>` keeps its redefinition instead of vanishing from the saved
+ * part; the existing `w:start` rewrite also accepts a paired element so it
+ * never leaves a dangling close tag.
  */
 function restartedLevelXml(overrideXml: string, prefix: string, start: number) {
-  const nested = overrideXml.match(
-    /<(?:\w+:)?lvl\b[^>]*>[\s\S]*?<\/(?:\w+:)?lvl>/u,
-  )?.[0]
-  if (!nested) return undefined
-  const element = `<${qualify(prefix, 'start')} ${qualify(
+  const match = overrideXml.match(
+    /<(\w+:)?lvl\b([^>]*?)\/>|<(\w+:)?lvl\b([^>]*?)>([\s\S]*?)<\/(?:\w+:)?lvl>/u,
+  )
+  if (!match) return undefined
+  const selfClosing = match[2] !== undefined
+  const tagPrefix = ((selfClosing ? match[1] : match[3]) ?? '').replace(
+    /:$/u,
+    '',
+  )
+  const attributes = (selfClosing ? match[2] : match[4]) ?? ''
+  const body = selfClosing ? '' : (match[5] ?? '')
+  const startXml = `<${qualify(prefix, 'start')} ${qualify(
     prefix,
     'val',
   )}="${String(start)}"/>`
-  if (/<(?:\w+:)?start\b[^>]*\/?>/u.test(nested)) {
-    return nested.replace(/<(?:\w+:)?start\b[^>]*\/?>/u, element)
-  }
-  return nested.replace(/^(<(?:\w+:)?lvl\b[^>]*>)/u, `$1${element}`)
+  const startPattern =
+    /<(?:\w+:)?start\b[^>]*\/>|<(?:\w+:)?start\b[^>]*>[\s\S]*?<\/(?:\w+:)?start>/u
+  const children = startPattern.test(body)
+    ? body.replace(startPattern, startXml)
+    : `${startXml}${body}`
+  const lvl = qualify(tagPrefix, 'lvl')
+  return `<${lvl}${attributes}>${children}</${lvl}>`
 }
 
 /**

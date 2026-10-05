@@ -62,18 +62,20 @@ function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
     const ilvl = draft.ilvl ?? 0
     if (hasPureStartOverride(source.sourceFragment, ilvl, start)) continue
     const abstractId = source.abstractNumberingId
+    // The server refuses a restart whose source names no abstract numbering
+    // (`resolveParagraphNumbering` throws invalid-document-edit), so a preview
+    // that synthesised one would claim a restart the save rejects.
+    if (!abstractId) continue
     // The server reuses an instance that already carries a pure override for
     // the same abstract numbering, level and start. Searching the model and
     // the instances synthesised earlier in this pass the same way makes two
     // paragraphs restarted in one action share one counter (1., 2.), not paint
     // one counter each (1., 1.) and diverge from the save.
-    const matching = abstractId
-      ? [...model.numbering, ...instances].find(
-          (instance) =>
-            instance.abstractNumberingId === abstractId &&
-            hasPureStartOverride(instance.sourceFragment, ilvl, start),
-        )
-      : undefined
+    const matching = [...model.numbering, ...instances].find(
+      (instance) =>
+        instance.abstractNumberingId === abstractId &&
+        hasPureStartOverride(instance.sourceFragment, ilvl, start),
+    )
     if (matching) {
       drafts[paragraphId] = { ...draft, numId: matching.numberingId }
       continue
@@ -81,7 +83,7 @@ function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
     const numberingId = `draft:${paragraphId}`
     instances.push({
       numberingId,
-      ...(abstractId ? { abstractNumberingId: abstractId } : {}),
+      abstractNumberingId: abstractId,
       startOverride: start,
       // Mirror the server's created instance with the same builder, so a later
       // paragraph with this resolution tuple recognises it as reusable exactly
@@ -89,7 +91,7 @@ function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
       sourceFragment: buildOverrideFragment(
         source.sourceFragment,
         'w',
-        abstractId ?? '',
+        abstractId,
         numberingId,
         ilvl,
         start,
