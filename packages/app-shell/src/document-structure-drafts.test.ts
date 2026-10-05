@@ -7,7 +7,6 @@ import type {
 
 import { MapStorage, scope } from './document-draft-store-test-support'
 import { readDocumentDraft, writeDocumentDraft } from './document-draft-store'
-import { translateSnapshot } from './document-history-baseline'
 import {
   imagePartNameForDrawing,
   paragraphImageXml,
@@ -19,8 +18,10 @@ import {
   documentStructureToolbar,
   storyTableCellIds,
 } from './document-structure-toolbar'
+import { DOCUMENT_EDIT_IMAGE_DIMENSION_MAX } from '@obiter/contracts'
 import {
   pendingImagePartName,
+  scaleImageInsertSize,
   structuralDraftSchema,
   type StructuralDraft,
   type StructuralImageDraft,
@@ -95,6 +96,12 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   }
 }
 
+function requiredStory(document: DocumentModelWire, index = 0) {
+  const story = document.stories[index]
+  if (!story) throw new Error('Fixture story is missing.')
+  return story
+}
+
 describe('withStructuralDrafts', () => {
   it('folds a table into cell wires and a fragment the table paint binds', () => {
     const base = model([paragraph('p1', 'First'), paragraph('p2', 'Second')])
@@ -107,7 +114,7 @@ describe('withStructuralDrafts', () => {
 
     // The writer's own fragment binds the folded cell wires through the same
     // `para-w14-` ids a reparse would allocate.
-    const blocks = storyBlocks(story!)
+    const blocks = storyBlocks(story)
     expect(blocks.map((block) => block.type)).toEqual([
       'paragraph',
       'table',
@@ -123,7 +130,7 @@ describe('withStructuralDrafts', () => {
   it('appends the boundary paragraph a body-final table needs', () => {
     const base = model([paragraph('p1', 'Only')])
     const folded = withStructuralDrafts(base, [tableDraft('s1', 'p1')])
-    const blocks = storyBlocks(folded.stories[0]!)
+    const blocks = storyBlocks(requiredStory(folded))
     expect(blocks.map((block) => block.type)).toEqual([
       'paragraph',
       'table',
@@ -137,7 +144,7 @@ describe('withStructuralDrafts', () => {
       tableDraft('s1', 'p1'),
       tableDraft('s2', 'p1'),
     ])
-    const blocks = storyBlocks(folded.stories[0]!)
+    const blocks = storyBlocks(requiredStory(folded))
     // The separator paragraph sits between the tables, as it serialises —
     // two adjacent `w:tbl` elements would merge on reload.
     expect(blocks.map((block) => block.type)).toEqual([
@@ -187,6 +194,29 @@ describe('withStructuralDrafts', () => {
     expect(partName).toBe(pendingImagePartName(draft))
   })
 
+  it('splices a picture inside a run whose text is being replaced', () => {
+    const base = model([paragraph('p1', 'Hello world')])
+    const drafts = { 'p1-r': 'Hello brave world' }
+    const folded = withStructuralDrafts(
+      base,
+      [imageDraft('s1', 'p1', 6)],
+      drafts,
+    )
+    const runs = requiredStory(folded).paragraphs[0]?.runs ?? []
+    // The offset addresses effective text, so the drawing lands inside the
+    // typed replacement — the same split the writer's pending overlay makes.
+    expect(runs.map((run) => run.text)).toEqual(['Hello ', '', 'brave world'])
+    // Neither half keeps `p1-r`: the drafts map would repaint the full
+    // replacement text on it.
+    expect(runs[0]?.id).not.toBe('p1-r')
+    expect(runs[2]?.id).not.toBe('p1-r')
+    expect(
+      runs[1]?.preservedXmlFragments.some((fragment) =>
+        fragment.includes('<w:drawing'),
+      ),
+    ).toBe(true)
+  })
+
   it('splices a second image after the first at one offset', () => {
     const base = model([paragraph('p1', 'text')])
     const folded = withStructuralDrafts(base, [
@@ -226,6 +256,31 @@ describe('structural draft persistence', () => {
     expect(restored.status).toBe('restored')
     if (restored.status !== 'restored') throw new Error('expected restored')
     expect(restored.state.structures).toEqual(state.structures)
+  })
+
+  it('drops only a malformed structure slot and keeps the text drafts', () => {
+    const storage = new MapStorage()
+    const state = {
+      ...emptyDraftState(),
+      drafts: { 'p1-r': 'typed text' },
+      structures: [
+        tableDraft('s1', 'p1'),
+        // A malformed slot: the dimension bound was not enforced when this
+        // payload was written. It must not take the typed draft down with it.
+        { ...imageDraft('s2', 'p1', 3), heightPx: 12_000_000 },
+      ],
+    }
+    expect(
+      writeDocumentDraft(storage, scope, {
+        baseVersionId: 'ver_1',
+        state,
+        held: [],
+      }),
+    ).toBe(true)
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    expect(restored.state.drafts).toEqual({ 'p1-r': 'typed text' })
+    expect(restored.state.structures).toEqual([state.structures[0]])
   })
 })
 
@@ -304,7 +359,7 @@ describe('structural save planning', () => {
 
 describe('documentStructureToolbar', () => {
   const cellModel = () => {
-    const story = model([]).stories[0]!
+    const story = requiredStory(model([]))
     return {
       ...model([]),
       stories: [
@@ -380,35 +435,47 @@ describe('documentStructureToolbar', () => {
     expect(api.tableUnavailable).toContain('cell')
     expect(api.pictureUnavailable).toBeUndefined()
   })
+
+  it('refuses a picture whose fields build an invalid draft', () => {
+    const { api, structures } = toolbar()
+    const outcome = api.insertImage({
+      contentType: 'image/png',
+      dataBase64: PNG_BASE64,
+      widthPx: 0,
+      heightPx: 10,
+      name: 'Figure',
+    })
+    expect(outcome).toEqual({
+      inserted: false,
+      reason: 'That image cannot be held as a draft.',
+    })
+    expect(structures).toEqual([])
+  })
 })
 
-describe('translateSnapshot structure slots', () => {
-  const fromModel = model([paragraph('p1')])
-
-  it('blocks a saved structure it cannot remove, drops a covered pre-save one', () => {
-    const slot: DraftSlot = {
-      kind: 'structure',
-      key: 'structure:s1',
-      id: 's1',
-      structureKind: 'table',
-    }
-    const sent: DraftState = {
-      ...emptyDraftState(),
-      structures: [tableDraft('s1', 'p1')],
-    }
-    // The snapshot holds the table as pending work, so undoing the save would
-    // need a delete-table operation that does not exist.
-    expect(
-      translateSnapshot({ ...sent }, { covered: [slot], sent, fromModel }),
-    ).toBeNull()
-    // A snapshot that predates the table forgets the covered slot: the
-    // document without it already lacks the table.
-    const pre = translateSnapshot(emptyDraftState(), {
-      covered: [slot],
-      sent,
-      fromModel,
+describe('scaleImageInsertSize', () => {
+  it('clamps both dimensions to the contract maximum', () => {
+    // The 1×20000 regression: scaling to the page column does not shrink the
+    // height, so it must be clamped on its own.
+    expect(scaleImageInsertSize(1, 20_000)).toEqual({
+      widthPx: 1,
+      heightPx: DOCUMENT_EDIT_IMAGE_DIMENSION_MAX,
     })
-    expect(pre).not.toBeNull()
-    expect(pre?.structures).toEqual([])
+    expect(scaleImageInsertSize(1200, 800)).toEqual({
+      widthPx: 600,
+      heightPx: 400,
+    })
+    // Every admitted size still parses as a draft.
+    for (const size of [
+      scaleImageInsertSize(1, 20_000),
+      scaleImageInsertSize(1200, 800),
+    ]) {
+      expect(
+        structuralDraftSchema.safeParse({
+          ...imageDraft('s1', 'p1', 0),
+          ...size,
+        }).success,
+      ).toBe(true)
+    }
   })
 })

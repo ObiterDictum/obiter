@@ -97,7 +97,8 @@ export function useInsertRibbon(
                 onImageError(result.error)
                 return
               }
-              structure.insertImage(result)
+              const outcome = structure.insertImage(result)
+              if (!outcome.inserted) onImageError(outcome.reason)
             })
           }}
         />

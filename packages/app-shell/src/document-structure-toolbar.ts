@@ -1,10 +1,22 @@
-import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
+import type { DocumentModelWire } from '@obiter/contracts'
 import { documentStory } from './document-model-text'
-import { storyBlocks } from './document-page-tables'
-import type {
-  ImageInsertFields,
-  StructuralDraft,
+import {
+  structuralDraftSchema,
+  type ImageInsertFields,
+  type StructuralDraft,
 } from './document-structural-drafts'
+
+export { storyTableCellIds } from './document-page-tables'
+
+/**
+ * Why an insert was refused after the picker already read the file. The draft
+ * is validated against the persisted schema before it is accepted: an
+ * unparseable structure slot would delete itself — and every sibling draft —
+ * on the next restore, so an invalid draft is impossible to create.
+ */
+export type StructuralInsertOutcome =
+  | { inserted: true }
+  | { inserted: false; reason: string }
 
 type SetStructures = (
   update: (current: StructuralDraft[]) => StructuralDraft[],
@@ -84,37 +96,25 @@ export function documentStructureToolbar({
         },
       ])
     },
-    insertImage(fields: ImageInsertFields) {
-      if (pictureUnavailable || !paragraphId || offset == null) return
-      setStructures((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          kind: 'image',
-          paragraphId,
-          offset,
-          ...fields,
-        },
-      ])
+    insertImage(fields: ImageInsertFields): StructuralInsertOutcome {
+      if (pictureUnavailable || !paragraphId || offset == null) {
+        return { inserted: false, reason: pictureUnavailable ?? 'No anchor' }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'image',
+        paragraphId,
+        offset,
+        ...fields,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That image cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
     },
   }
-}
-
-/**
- * The paragraph ids bound inside the story's tables. Cell paragraphs are
- * story paragraphs, but the writer refuses them as anchors — a nested `w:tbl`
- * is not a body-level block — so the ribbon must refuse them too. Reads the
- * same `storyBlocks` binding the paint uses, so paraId-less stored tables
- * resolve by position exactly as they render.
- */
-export function storyTableCellIds(
-  story: DocumentStoryWire | undefined,
-): Set<string> {
-  const ids = new Set<string>()
-  if (!story) return ids
-  for (const block of storyBlocks(story)) {
-    if (block.type !== 'table') continue
-    for (const id of block.table.paragraphIds) ids.add(id)
-  }
-  return ids
 }

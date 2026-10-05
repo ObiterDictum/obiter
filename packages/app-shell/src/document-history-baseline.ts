@@ -980,16 +980,18 @@ export function translateSnapshot(
         break
       }
       case 'structure': {
-        // There is no operation that removes a table or a picture, the same
-        // constraint as `break`: a snapshot holding the saved structure as
-        // pending work would resend the insertion, so the boundary drops the
-        // snapshot rather than claiming the reversal; a snapshot that
-        // predates it forgets the covered slot.
+        // A snapshot that still holds the saved structure as pending work
+        // finds it on disk after the save: the covered slot drops and the
+        // rest of the snapshot — unrelated typed drafts especially —
+        // survives translation. A snapshot that predates the structure
+        // describes the document without it, so restoring it would need a
+        // removal no operation expresses: the boundary is explicitly
+        // unsupported rather than silently claimed.
         if (snapshot.structures.some((item) => item.id === slot.id)) {
-          return null
+          Object.assign(next, removeDraftSlots(next, [slot]))
+          break
         }
-        Object.assign(next, removeDraftSlots(next, [slot]))
-        break
+        return null
       }
       default: {
         // Any other slot (there is none the editor produces today): a snapshot
