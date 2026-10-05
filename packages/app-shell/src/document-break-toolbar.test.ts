@@ -13,12 +13,17 @@ import { emptyDraftState, planDocumentSave } from './document-save-plan'
 // offset share the save's overlay key, so only one is written while the
 // paginator could paint two. Recording deduplicates the same paragraph, offset
 // and kind, so the draft state, the save plan and the paint agree.
+//
+// Review round 6 finding 2: a section break ignores its offset — it is one
+// paragraph-level `w:sectPr` — so two at different offsets on one paragraph
+// would paint one section but emit two operations, the second refused. A
+// section break therefore deduplicates per paragraph and kind.
 describe('break recording', () => {
   it('records one break when a page break is inserted twice at one offset', () => {
     const model = singleParagraphModel()
-    const breaks = recordBreaks((toolbar) => {
-      toolbar.onPageBreak()
-      toolbar.onPageBreak()
+    const breaks = recordBreaks((at) => {
+      at(2).onPageBreak()
+      at(2).onPageBreak()
     })
     expect(breaks).toHaveLength(1)
 
@@ -37,30 +42,67 @@ describe('break recording', () => {
     expect(pages).toHaveLength(single.length)
   })
 
+  it('records one section break when one is inserted at two offsets', () => {
+    const model = singleParagraphModel()
+    const breaks = recordBreaks((at) => {
+      at(1).onSectionBreak()
+      at(3).onSectionBreak()
+    })
+    expect(breaks).toHaveLength(1)
+
+    const plan = planDocumentSave(model, { ...emptyDraftState(), breaks })
+    const sectionBreaks = plan.operations.filter(
+      (operation) => operation.type === 'insert_section_break',
+    )
+    expect(sectionBreaks).toEqual([
+      { type: 'insert_section_break', paragraphId: 'p1' },
+    ])
+  })
+
+  it('keeps two page breaks at different offsets distinct', () => {
+    const breaks = recordBreaks((at) => {
+      at(1).onPageBreak()
+      at(3).onPageBreak()
+    })
+    expect(breaks.map((item) => item.offset)).toEqual([1, 3])
+  })
+
   it('keeps a page break and a section break at one offset distinct', () => {
-    const breaks = recordBreaks((toolbar) => {
-      toolbar.onPageBreak()
-      toolbar.onSectionBreak()
+    const breaks = recordBreaks((at) => {
+      at(2).onPageBreak()
+      at(2).onSectionBreak()
+    })
+    expect(breaks.map((item) => item.kind)).toEqual(['page', 'section'])
+  })
+
+  it('keeps a page break and a section break at different offsets distinct', () => {
+    const breaks = recordBreaks((at) => {
+      at(1).onPageBreak()
+      at(3).onSectionBreak()
     })
     expect(breaks.map((item) => item.kind)).toEqual(['page', 'section'])
   })
 })
 
-function recordBreaks(
-  insert: (toolbar: ReturnType<typeof documentBreakToolbar>) => void,
-) {
+type BreakToolbarAt = (
+  offset: number,
+) => ReturnType<typeof documentBreakToolbar>
+
+function recordBreaks(insert: (at: BreakToolbarAt) => void) {
   let breaks: BreakDraft[] = []
-  const toolbar = documentBreakToolbar({
-    paragraphId: 'p1',
-    model: singleParagraphModel(),
-    offset: 2,
-    selectionActive: false,
-    trackChanges: false,
-    setBreaks: (update) => {
-      breaks = update(breaks)
-    },
-  })
-  insert(toolbar)
+  const setBreaks = (update: (current: BreakDraft[]) => BreakDraft[]) => {
+    breaks = update(breaks)
+  }
+  const at: BreakToolbarAt = (offset) =>
+    documentBreakToolbar({
+      paragraphId: 'p1',
+      model: singleParagraphModel(),
+      offset,
+      selectionActive: false,
+      trackChanges: false,
+      setBreaks,
+    })
+  insert(at)
   return breaks
 }
 

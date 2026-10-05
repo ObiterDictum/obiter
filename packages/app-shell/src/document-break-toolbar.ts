@@ -13,10 +13,13 @@ type SetBreaks = (update: (current: BreakDraft[]) => BreakDraft[]) => void
  * Inserting a break at a caret that already holds one of the same kind is a
  * no-op. Two page breaks at the identical paragraph offset share the save's
  * overlay key — only one is written — while the paginator would lay both out,
- * a paint/save divergence. Deduplicating here keeps the draft state canonical
- * (one break per paragraph, offset and kind), so the save plan and the paint
- * read the same single break. Different kinds at one offset stay distinct: a
- * page break and a section break there are two different structures.
+ * a paint/save divergence. Deduplicating here keeps the draft state canonical,
+ * so the save plan and the paint read the same single break: a page break per
+ * paragraph, offset and kind, a section break per paragraph and kind because
+ * `collectEditOperations` drops its offset (it is one paragraph-level
+ * `w:sectPr`, which the writer refuses a second time on the same paragraph).
+ * Different kinds at one offset stay distinct: a page break and a section
+ * break there are two different structures.
  */
 export function documentBreakToolbar({
   paragraphId,
@@ -54,8 +57,13 @@ export function documentBreakToolbar({
       current.some(
         (item) =>
           item.paragraphId === paragraphId &&
-          item.offset === offset &&
-          item.kind === kind,
+          item.kind === kind &&
+          // A section break ignores the offset: it is one paragraph-level
+          // `w:sectPr`, so two section breaks on one paragraph at different
+          // offsets would paint as one section but emit two operations, and
+          // the second is refused by the writer's existing-section check. A
+          // page break is offset-addressed, so different offsets stay distinct.
+          (kind === 'section' || item.offset === offset),
       )
         ? current
         : [...current, { id: crypto.randomUUID(), paragraphId, offset, kind }],

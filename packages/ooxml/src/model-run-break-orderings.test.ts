@@ -161,6 +161,40 @@ describe('run-keyed writes listed after a page break splice', () => {
     expect(bold.map((item) => item.text)).toEqual([' world'])
   })
 
+  // Review round 6 finding 1: once the run-start boundary break composes with a
+  // run-keyed write (round 5), a later break strictly inside the same run
+  // materialises the run. The run-start splice is the preceding boundary and
+  // must be left in place rather than trip the inside scan, so the batch
+  // composes with both breaks retained instead of over-refusing.
+  it('composes a run-start break, a run-keyed write and an inside break', async () => {
+    const { document, paragraph } = await loadRun(
+      '<w:r><w:t>Hello</w:t></w:r><w:r><w:t> world</w:t></w:r>',
+    )
+    const target = paragraph.runs[1]
+    if (!target) throw new Error('Fixture is missing.')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 5,
+        kind: 'page',
+      },
+      { type: 'set_run_emphasis', runId: target.id, bold: true },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 8,
+        kind: 'page',
+      },
+    ])
+    const xml = await documentXml(document)
+    expect(xml.split(PAGE_BREAK).length - 1).toBe(2)
+    const runs = paragraphs(await save(document))[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello world')
+    const bold = runs.filter((item) => flag(item, 'bold'))
+    expect(bold.map((item) => item.text)).toEqual([' world'])
+  })
+
   it('still refuses a run-keyed write after a break strictly inside the run', async () => {
     const { document, paragraph, run } = await loadRun(
       '<w:r><w:t>Hello world</w:t></w:r>',
