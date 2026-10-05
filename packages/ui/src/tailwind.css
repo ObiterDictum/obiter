@@ -1,0 +1,120 @@
+/*
+ * Tailwind v4 entry for Obiter. Apps import this once from their root CSS:
+ *   @import "@obiter/ui/tailwind.css";
+ *
+ * - tokens.css holds the --obiter-* custom properties (light default, dark
+ *   under [data-theme="dark"]).
+ * - @theme inline maps those into Tailwind's namespace so utilities reference
+ *   the live custom properties (theme switching works at runtime).
+ *
+ * Generated utility families (examples):
+ *   bg-canvas  bg-surface  bg-raised  text-ink  text-muted  border-line
+ *   bg-brand  text-brand  text-brand-fg  ring-ring  bg-overlay
+ *   bg-info  text-success  text-warning-fg  ...
+ *   bg-span-person-name  text-span-person-name-fg  ...
+ *   rounded-md  shadow-md  font-sans  font-mono
+ *
+ * - source(none) turns automatic source detection off. Detection scans whatever
+ *   is on disk (honouring .gitignore only when one is present), so each build
+ *   pass compiled a different stylesheet: in the production image build, which
+ *   ships no .gitignore, the SSR pass rescanned the client pass's dist/ output,
+ *   hashed its stylesheet differently, and named a styles-*.css the client pass
+ *   never emitted. Every app must therefore declare its own source trees with
+ *   @source in its root CSS (see apps/web and the desktop renderer).
+ */
+@import 'tailwindcss' source(none);
+@import './tokens.css';
+@import './fonts.css';
+@import './print.css';
+
+@theme inline {
+  /* Surfaces + text */
+  --color-canvas: var(--obiter-bg);
+  --color-surface: var(--obiter-surface);
+  --color-raised: var(--obiter-surface-raised);
+  --color-line: var(--obiter-border);
+  --color-line-strong: var(--obiter-border-strong);
+  --color-ink: var(--obiter-text);
+  --color-muted: var(--obiter-text-muted);
+  --color-subtle: var(--obiter-text-subtle);
+
+  /* Brand */
+  --color-brand: var(--obiter-brand);
+  --color-brand-fg: var(--obiter-brand-fg);
+  --color-brand-pressed: var(--obiter-brand-pressed);
+  --color-ring: var(--obiter-ring);
+  --color-overlay: var(--obiter-overlay);
+
+  /* Status */
+  --color-info: var(--obiter-status-info);
+  --color-info-fg: var(--obiter-status-info-fg);
+  --color-success: var(--obiter-status-success);
+  --color-success-fg: var(--obiter-status-success-fg);
+  --color-warning: var(--obiter-status-warning);
+  --color-warning-fg: var(--obiter-status-warning-fg);
+  --color-danger: var(--obiter-status-danger);
+  --color-danger-fg: var(--obiter-status-danger-fg);
+
+  /* Redaction span categories — bg + fg per contract §2.3 */
+  --color-span-person-name: var(--obiter-span-person-name-bg);
+  --color-span-person-name-fg: var(--obiter-span-person-name-fg);
+  --color-span-email: var(--obiter-span-email-bg);
+  --color-span-email-fg: var(--obiter-span-email-fg);
+  --color-span-phone: var(--obiter-span-phone-bg);
+  --color-span-phone-fg: var(--obiter-span-phone-fg);
+  --color-span-address: var(--obiter-span-address-bg);
+  --color-span-address-fg: var(--obiter-span-address-fg);
+  --color-span-date: var(--obiter-span-date-bg);
+  --color-span-date-fg: var(--obiter-span-date-fg);
+  --color-span-government-id: var(--obiter-span-government-id-bg);
+  --color-span-government-id-fg: var(--obiter-span-government-id-fg);
+  --color-span-account-number: var(--obiter-span-account-number-bg);
+  --color-span-account-number-fg: var(--obiter-span-account-number-fg);
+  --color-span-secret: var(--obiter-span-secret-bg);
+  --color-span-secret-fg: var(--obiter-span-secret-fg);
+  --color-span-passport: var(--obiter-span-passport-bg);
+  --color-span-passport-fg: var(--obiter-span-passport-fg);
+  --color-span-drivers-license: var(--obiter-span-drivers-license-bg);
+  --color-span-drivers-license-fg: var(--obiter-span-drivers-license-fg);
+  --color-span-url: var(--obiter-span-url-bg);
+  --color-span-url-fg: var(--obiter-span-url-fg);
+  --color-span-ip-address: var(--obiter-span-ip-address-bg);
+  --color-span-ip-address-fg: var(--obiter-span-ip-address-fg);
+  --color-span-national-insurance: var(--obiter-span-national-insurance-bg);
+  --color-span-national-insurance-fg: var(--obiter-span-national-insurance-fg);
+  --color-span-case-reference: var(--obiter-span-case-reference-bg);
+  --color-span-case-reference-fg: var(--obiter-span-case-reference-fg);
+  --color-span-organisation-name: var(--obiter-span-organisation-name-bg);
+  --color-span-organisation-name-fg: var(--obiter-span-organisation-name-fg);
+
+  /* Type */
+  --font-sans: var(--obiter-font-sans);
+  --font-mono: var(--obiter-font-mono);
+
+  /* Radius */
+  --radius-sm: var(--obiter-radius-sm);
+  --radius-md: var(--obiter-radius-md);
+  --radius-lg: var(--obiter-radius-lg);
+  --radius-xl: var(--obiter-radius-xl);
+  --radius-pill: var(--obiter-radius-pill);
+
+  /* Elevation */
+  --shadow-sm: var(--obiter-shadow-sm);
+  --shadow-md: var(--obiter-shadow-md);
+  --shadow-lg: var(--obiter-shadow-lg);
+}
+
+/* Base element defaults so every screen inherits the token system. */
+@layer base {
+  html,
+  body {
+    background-color: var(--obiter-bg);
+    color: var(--obiter-text);
+    font-family: var(--obiter-font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--obiter-brand);
+    outline-offset: 2px;
+  }
+}

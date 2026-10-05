@@ -1,0 +1,516 @@
+/**
+ * Exact per-glyph geometry from the PDF content stream.
+ *
+ * `getTextContent` aggregates glyphs into runs and reports one advance for the
+ * whole run, so per-character positions can only be interpolated. Interpolation
+ * is wrong for proportional faces: a redaction bar derived from it can both
+ * over-cover neighbouring words and leave part of the redacted text visible,
+ * which was measured at over a character of exposed ink on ordinary lines.
+ *
+ * The operator list carries the real numbers. `showText` arguments are glyph
+ * records with the font-unit advance of each glyph, interleaved with the TJ
+ * kerning adjustments, so replaying the text state machine gives exact
+ * positions. This module replays it.
+ */
+import type { LaidChar } from './document-layout'
+
+/** PDF transform [a b c d e f]. */
+type Matrix = [number, number, number, number, number, number]
+
+const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
+
+/** Glyph widths are expressed in 1/1000 em. */
+const FONT_UNITS = 1000
+
+/** Baseline shift, relative to font size, that starts a new line. */
+const LINE_BREAK_RATIO = 0.3
+
+/** A same-line positioning gap above this size carries semantic whitespace. */
+const SEMANTIC_SPACE_RATIO = 0.2
+
+interface Glyph {
+  unicode?: string
+  width?: number
+  isSpace?: boolean
+  vmetric?: unknown
+}
+
+interface TextState {
+  fontName: string | null
+  fontSize: number
+  charSpacing: number
+  wordSpacing: number
+  hScale: number
+  rise: number
+  leading: number
+}
+
+/** Font ascent/descent ratios, keyed by the loaded name `setFont` reports. */
+export type FontStyles = Record<
+  string,
+  { ascent?: number; descent?: number; vertical?: boolean } | undefined
+>
+
+export interface OperatorListPage {
+  fnArray: number[] | Int32Array
+  argsArray: unknown[]
+}
+
+export interface PdfOps {
+  save: number
+  restore: number
+  transform: number
+  beginText: number
+  endText: number
+  setCharSpacing: number
+  setWordSpacing: number
+  setHScale: number
+  setLeading: number
+  setFont: number
+  setGState: number
+  setTextRise: number
+  moveText: number
+  setLeadingMoveText: number
+  setTextMatrix: number
+  nextLine: number
+  showText: number
+  showSpacedText: number
+  nextLineShowText: number
+  nextLineSetSpacingShowText: number
+  paintFormXObjectBegin: number
+  paintFormXObjectEnd: number
+  beginAnnotation: number
+  endAnnotation: number
+}
+
+function multiply(left: Matrix, right: Matrix): Matrix {
+  return [
+    left[0] * right[0] + left[1] * right[2],
+    left[0] * right[1] + left[1] * right[3],
+    left[2] * right[0] + left[3] * right[2],
+    left[2] * right[1] + left[3] * right[3],
+    left[4] * right[0] + left[5] * right[2] + right[4],
+    left[4] * right[1] + left[5] * right[3] + right[5],
+  ]
+}
+
+function translation(tx: number, ty: number): Matrix {
+  return [1, 0, 0, 1, tx, ty]
+}
+
+function ctmIsIdentity(matrix: Matrix) {
+  return (
+    Math.abs(matrix[0] - 1) < 0.001 &&
+    Math.abs(matrix[1]) < 0.001 &&
+    Math.abs(matrix[2]) < 0.001 &&
+    Math.abs(matrix[3] - 1) < 0.001 &&
+    Math.abs(matrix[4]) < 0.001 &&
+    Math.abs(matrix[5]) < 0.001
+  )
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** Read a numeric operator argument; pdf.js emits a number for these ops. */
+function numericArgument(
+  args: unknown[] | undefined,
+  index: number,
+): number | null {
+  return asNumber(args?.[index])
+}
+
+function asMatrix(value: unknown): Matrix | null {
+  // pdf.js passes matrices as arrays or as array-like objects.
+  // SAFETY: pdf.js supplies matrices as arrays or array-like objects; every
+  // entry is re-validated with Number.isFinite below, so the element type only
+  // affects how the value is read.
+  const source = value as ArrayLike<number> | undefined
+  if (!source || typeof source !== 'object') return null
+  const out: number[] = []
+  for (let index = 0; index < 6; index += 1) {
+    const entry = source[index]
+    if (typeof entry !== 'number' || !Number.isFinite(entry)) return null
+    out.push(entry)
+  }
+  // SAFETY: the loop above pushed exactly six finite numbers.
+  return out as Matrix
+}
+
+function initialState(): TextState {
+  return {
+    fontName: null,
+    fontSize: 0,
+    charSpacing: 0,
+    wordSpacing: 0,
+    hScale: 1,
+    rise: 0,
+    leading: 0,
+  }
+}
+
+/**
+ * Replay one page's text operators into per-glyph laid characters. Returns an
+ * empty array when the page draws no text through the glyph path (Type 3 fonts
+ * and some generators), so the caller can fall back rather than lose content.
+ */
+export function laidCharsFromOperatorList(input: {
+  operatorList: OperatorListPage
+  ops: PdfOps
+  pageIndex: number
+  styles: FontStyles | undefined
+}): LaidChar[] {
+  const { operatorList, ops, pageIndex, styles } = input
+  const chars: LaidChar[] = []
+
+  let ctm: Matrix = IDENTITY
+  let textMatrix: Matrix = IDENTITY
+  let lineMatrix: Matrix = IDENTITY
+  let state = initialState()
+  // The PDF graphics state stack (`q`/`Q`, Form XObjects, annotations). One
+  // stack for every saved field, not one per field: pdf.js restores the CTM,
+  // the text state and both text matrices together, and a field omitted from
+  // the snapshot is precisely how a restore desynchronised the replay.
+  const graphicsStack: Array<{
+    ctm: Matrix
+    textMatrix: Matrix
+    lineMatrix: Matrix
+    state: TextState
+  }> = []
+
+  const pushGraphicsState = () => {
+    graphicsStack.push({ ctm, textMatrix, lineMatrix, state: { ...state } })
+  }
+
+  const restoreGraphicsState = () => {
+    // pdf.js `CanvasGraphics.restore` early-returns on an empty stack
+    // (pdf.mjs:10268), so a stray `Q` is ignored by the renderer. Popping
+    // unconditionally would reset the replay to identity and place every later
+    // glyph in the wrong space while the page still draws it where the reader
+    // sees it — the P0.29 off-page cover.
+    const restored = graphicsStack.pop()
+    if (!restored) return
+    ctm = restored.ctm
+    textMatrix = restored.textMatrix
+    lineMatrix = restored.lineMatrix
+    state = restored.state
+  }
+
+  const moveLine = (tx: number, ty: number) => {
+    lineMatrix = multiply(translation(tx, ty), lineMatrix)
+    textMatrix = lineMatrix
+  }
+
+  const applyFont = (name: unknown, size: unknown) => {
+    if (typeof name === 'string') state.fontName = name
+    if (typeof size === 'number') state.fontSize = size
+  }
+
+  const show = (items: unknown) => {
+    if (!Array.isArray(items)) return
+    for (const entry of items) {
+      if (typeof entry === 'number') {
+        // TJ adjustment: a positive number moves left, in 1/1000 em.
+        const shift = (-entry / FONT_UNITS) * state.fontSize * state.hScale
+        textMatrix = multiply(translation(shift, 0), textMatrix)
+        continue
+      }
+      // SAFETY: a showText array holds pdf.js glyph records; unicode, width
+      // and isSpace are all read defensively below.
+      const glyph = entry as Glyph
+      const unicode = glyph.unicode ?? ''
+      const advanceWidth =
+        typeof glyph.width === 'number' ? glyph.width / FONT_UNITS : 0
+
+      // Glyph space → text space → user space.
+      const scaling: Matrix = [
+        state.fontSize * state.hScale,
+        0,
+        0,
+        state.fontSize,
+        0,
+        state.rise,
+      ]
+      const render = multiply(multiply(scaling, textMatrix), ctm)
+      const placement = multiply(textMatrix, ctm)
+      const horizontal = Math.hypot(placement[0], placement[1]) || 1
+      const baselineMagnitude = Math.hypot(render[0], render[1]) || 1
+      const baselineX = render[0] / baselineMagnitude
+      const baselineY = render[1] / baselineMagnitude
+      const size = Math.hypot(render[2], render[3]) || state.fontSize
+      const axisAlignment =
+        (render[0] * render[2] + render[1] * render[3]) /
+        (baselineMagnitude * (size || 1))
+      const skewed = Math.abs(axisAlignment) > 0.01
+
+      const glyphAdvance = advanceWidth * state.fontSize * state.hScale
+      const advance =
+        (advanceWidth * state.fontSize +
+          state.charSpacing +
+          (glyph.isSpace ? state.wordSpacing : 0)) *
+        state.hScale
+
+      if (unicode) {
+        const styleAscent = styles?.[state.fontName ?? '']?.ascent
+        const ascentRatio =
+          typeof styleAscent === 'number' &&
+          Number.isFinite(styleAscent) &&
+          styleAscent > 0
+            ? styleAscent
+            : 0.8
+        const styleDescent = styles?.[state.fontName ?? '']?.descent
+        const descentRatio =
+          typeof styleDescent === 'number' && Number.isFinite(styleDescent)
+            ? Math.abs(styleDescent)
+            : 0.2
+        // Positioning includes spacing and TJ adjustments, but a glyph's cover
+        // width is only its own drawn advance. Ligature characters share it.
+        const perCharWidth =
+          Math.abs(glyphAdvance * horizontal) / Math.max([...unicode].length, 1)
+        let offset = 0
+        for (const ch of unicode) {
+          chars.push({
+            ch,
+            pageIndex,
+            x: render[4] + offset * baselineX,
+            y: render[5] + offset * baselineY,
+            width: perCharWidth,
+            height: size,
+            ascent: size * ascentRatio,
+            descent: size * descentRatio,
+            baselineX,
+            baselineY,
+            ...(skewed ? { skewed: true } : {}),
+            ...(ctmIsIdentity(ctm) ? {} : { transformed: true }),
+          })
+          offset += perCharWidth
+        }
+      }
+
+      textMatrix = multiply(translation(advance, 0), textMatrix)
+    }
+  }
+
+  const { fnArray, argsArray } = operatorList
+  for (let index = 0; index < fnArray.length; index += 1) {
+    const fn = fnArray[index]
+    // SAFETY: pdf.js emits each operator's arguments as an array, or omits
+    // them entirely; every read below tolerates an undefined entry.
+    const args = argsArray[index] as unknown[] | undefined
+
+    switch (fn) {
+      case ops.save:
+        pushGraphicsState()
+        break
+      case ops.restore:
+        restoreGraphicsState()
+        break
+      case ops.transform: {
+        const matrix = asMatrix(args?.length === 1 ? args[0] : args)
+        if (matrix) ctm = multiply(matrix, ctm)
+        break
+      }
+      case ops.paintFormXObjectBegin: {
+        pushGraphicsState()
+        const matrix = asMatrix(args?.[0])
+        if (matrix) ctm = multiply(matrix, ctm)
+        break
+      }
+      case ops.paintFormXObjectEnd:
+        restoreGraphicsState()
+        break
+      case ops.beginAnnotation: {
+        // An annotation's page placement lives only in this operator's
+        // transform/matrix arguments, so restart from the page base and
+        // apply them in order like the renderer does.
+        pushGraphicsState()
+        ctm = IDENTITY
+        const transform = asMatrix(args?.[2])
+        if (transform) ctm = multiply(transform, ctm)
+        const matrix = asMatrix(args?.[3])
+        if (matrix) ctm = multiply(matrix, ctm)
+        break
+      }
+      case ops.endAnnotation:
+        restoreGraphicsState()
+        break
+      case ops.beginText:
+        textMatrix = IDENTITY
+        lineMatrix = IDENTITY
+        break
+      case ops.endText:
+        break
+      case ops.setFont:
+        applyFont(args?.[0], args?.[1])
+        break
+      case ops.setGState: {
+        // An ExtGState /Font entry changes the text font and size through the
+        // renderer's setFont path, so it moves every subsequent glyph; the
+        // replay must apply it or the cover lands at the previous font's
+        // geometry while the page drew that text at a different size. The
+        // worker emits args[0] as an array of [key, value] pairs, and only
+        // Font carries placement — line width, colours and blend mode do not.
+        const entries = args?.[0]
+        if (Array.isArray(entries)) {
+          for (const entry of entries) {
+            if (Array.isArray(entry) && entry[0] === 'Font') {
+              const font = entry[1]
+              if (Array.isArray(font)) applyFont(font[0], font[1])
+            }
+          }
+        }
+        break
+      }
+      case ops.setCharSpacing:
+        state.charSpacing = numericArgument(args, 0) ?? 0
+        break
+      case ops.setWordSpacing:
+        state.wordSpacing = numericArgument(args, 0) ?? 0
+        break
+      case ops.setHScale:
+        // Tz is a percentage.
+        state.hScale = (numericArgument(args, 0) ?? 100) / 100
+        break
+      case ops.setTextRise:
+        state.rise = numericArgument(args, 0) ?? 0
+        break
+      case ops.setLeading:
+        state.leading = numericArgument(args, 0) ?? 0
+        break
+      case ops.setLeadingMoveText: {
+        const tx = numericArgument(args, 0) ?? 0
+        const ty = numericArgument(args, 1) ?? 0
+        state.leading = -ty
+        moveLine(tx, ty)
+        break
+      }
+      case ops.moveText:
+        moveLine(numericArgument(args, 0) ?? 0, numericArgument(args, 1) ?? 0)
+        break
+      case ops.setTextMatrix: {
+        const matrix = asMatrix(args?.length === 1 ? args[0] : args)
+        if (matrix) {
+          textMatrix = matrix
+          lineMatrix = matrix
+        }
+        break
+      }
+      case ops.showText:
+      case ops.showSpacedText:
+        show(args?.[0])
+        break
+      case ops.nextLine:
+        moveLine(0, -state.leading)
+        break
+      case ops.nextLineShowText:
+        moveLine(0, -state.leading)
+        show(args?.[0])
+        break
+      case ops.nextLineSetSpacingShowText:
+        state.wordSpacing = numericArgument(args, 0) ?? state.wordSpacing
+        state.charSpacing = numericArgument(args, 1) ?? state.charSpacing
+        moveLine(0, -state.leading)
+        show(args?.[2])
+        break
+      default:
+        break
+    }
+  }
+
+  return chars
+}
+
+/**
+ * Insert newlines between glyphs that sit on different baselines. Reading
+ * order is measured in the run's own writing direction, not page x/y, so a
+ * vertical baseline does not turn every rotated glyph into a separate line.
+ */
+export function withLineBreaks(chars: LaidChar[]): LaidChar[] {
+  const out: LaidChar[] = []
+  for (let index = 0; index < chars.length; index += 1) {
+    const current = chars[index]
+    if (!current) continue
+    const previous = chars[index - 1]
+    if (previous) {
+      const deltaX = current.x - previous.x
+      const deltaY = current.y - previous.y
+      const threshold =
+        Math.max(previous.height, current.height, 1) * LINE_BREAK_RATIO
+      const directionMatch =
+        previous.baselineX * current.baselineX +
+        previous.baselineY * current.baselineY
+      const perpendicular =
+        deltaX * -previous.baselineY + deltaY * previous.baselineX
+      const along = deltaX * previous.baselineX + deltaY * previous.baselineY
+      const droppedLine =
+        directionMatch < 0.95 || Math.abs(perpendicular) > threshold
+      const carriageReturn = !droppedLine && along < 0
+      if (droppedLine || carriageReturn) {
+        out.push({
+          ch: '\n',
+          pageIndex: previous.pageIndex,
+          x: previous.x + previous.width * previous.baselineX,
+          y: previous.y + previous.width * previous.baselineY,
+          width: 0,
+          height: previous.height,
+          ascent: previous.ascent,
+          descent: previous.descent,
+          baselineX: previous.baselineX,
+          baselineY: previous.baselineY,
+        })
+      }
+    }
+    out.push(current)
+  }
+  return out
+}
+
+/**
+ * Recover spaces that PDF producers express only as text positioning. This runs
+ * after line-break injection so a page-space gap can never bridge two lines.
+ */
+export function withSemanticSpaces(chars: LaidChar[]): LaidChar[] {
+  const out: LaidChar[] = []
+  for (const current of chars) {
+    const previous = out.at(-1)
+    if (
+      previous &&
+      previous.ch !== '\n' &&
+      current.ch !== '\n' &&
+      !/\s/u.test(previous.ch) &&
+      !/\s/u.test(current.ch)
+    ) {
+      const deltaX = current.x - previous.x
+      const deltaY = current.y - previous.y
+      const directionMatch =
+        previous.baselineX * current.baselineX +
+        previous.baselineY * current.baselineY
+      const perpendicular =
+        deltaX * -previous.baselineY + deltaY * previous.baselineX
+      const along = deltaX * previous.baselineX + deltaY * previous.baselineY
+      const threshold =
+        Math.max(previous.height, current.height, 1) * SEMANTIC_SPACE_RATIO
+      const sameBaseline =
+        directionMatch > 0.95 && Math.abs(perpendicular) <= threshold
+      const gap = along - previous.width
+
+      if (sameBaseline && gap > threshold) {
+        out.push({
+          ch: ' ',
+          pageIndex: previous.pageIndex,
+          x: previous.x + previous.width * previous.baselineX,
+          y: previous.y + previous.width * previous.baselineY,
+          width: gap,
+          height: previous.height,
+          ascent: previous.ascent,
+          descent: previous.descent,
+          baselineX: previous.baselineX,
+          baselineY: previous.baselineY,
+        })
+      }
+    }
+    out.push(current)
+  }
+  return out
+}

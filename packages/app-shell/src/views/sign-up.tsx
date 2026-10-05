@@ -1,0 +1,200 @@
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
+import { ArrowRight } from '@phosphor-icons/react'
+import { Button, Input } from '@obiter/ui'
+import { useState, type FormEvent } from 'react'
+import { ORGANISATION_NAME_MAX_LENGTH } from '@obiter/contracts'
+import { useAuth } from '../auth'
+import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
+import { checkInviteAccountExists } from '../organisation-membership'
+import { Wordmark } from '../wordmark'
+import { useForceNightTheme, ResendVerificationControl } from './sign-in'
+
+function inviteTokenFromSearch(search: { token?: unknown }): string {
+  return typeof search.token === 'string' && search.token.length > 0
+    ? search.token
+    : ''
+}
+
+/**
+ * Self-serve registration. Verification is required, so success ends on a
+ * check-your-email state rather than a session.
+ */
+export function SignUpRouteView() {
+  const navigate = useNavigate()
+  const { signUpWithEmail, resendVerificationEmail } = useAuth()
+  // SAFETY: useSearch with strict:false is untyped; token is re-validated as a non-empty string by inviteTokenFromSearch before use.
+  const search = useSearch({ strict: false }) as { token?: string }
+  const token = inviteTokenFromSearch(search)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [organisationName, setOrganisationName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  useForceNightTheme()
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setError('Name is required.')
+      return
+    }
+    // Invitees join the inviting organisation, so they never name one.
+    // Everyone else names their new workspace here — this is the only
+    // moment the name can be captured before product surfaces
+    // auto-provision a default-named workspace.
+    const trimmedOrgName = token ? '' : organisationName.trim()
+    if (!token && !trimmedOrgName) {
+      setError('Organisation name is required.')
+      return
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+    if (password.length > 128) {
+      setError('Password must be at most 128 characters.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const trimmedEmail = email.trim()
+      // An invitee who already registered should sign in — better-auth's
+      // duplicate sign-up response is indistinguishable from a fresh one
+      // ("check your email" with no email actually sent). Undetermined →
+      // proceed with normal sign-up rather than blocking.
+      if (
+        token &&
+        (await checkInviteAccountExists(token, trimmedEmail)) === true
+      ) {
+        await navigate({ to: '/sign-in', search: { token } })
+        return
+      }
+      const result = await signUpWithEmail({
+        name: trimmedName,
+        email: trimmedEmail,
+        password,
+        ...(token ? { callbackURL: inviteAcceptCallbackURL(token) } : {}),
+        ...(trimmedOrgName ? { pendingOrganisationName: trimmedOrgName } : {}),
+      })
+      if (!result.ok) {
+        setError(result.message ?? 'Sign-up failed.')
+        return
+      }
+      setSubmitted(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Sign-up failed.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const signInSearch = token ? { token } : undefined
+
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
+      <div className="flex w-full max-w-[28rem] flex-col gap-8">
+        <header className="flex flex-col items-center gap-4 text-center">
+          <Wordmark className="text-[1.35rem]" />
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-lg font-semibold tracking-tight text-ink">
+              Create an Obiter account
+            </h1>
+            <p className="text-sm text-muted">
+              We will email a link to verify your address before you can sign
+              in.
+            </p>
+          </div>
+        </header>
+
+        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
+          {submitted ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm leading-relaxed text-muted">
+                Check your email to verify your account before signing in.
+              </p>
+              <ResendVerificationControl
+                email={email.trim()}
+                callbackURL={inviteAcceptCallbackURL(token)}
+                resendVerificationEmail={resendVerificationEmail}
+              />
+              <Link
+                to="/sign-in"
+                search={signInSearch}
+                className="text-sm font-medium text-brand hover:text-brand-pressed"
+              >
+                Back to sign in
+              </Link>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-4"
+              noValidate
+            >
+              <Input
+                label="Name"
+                type="text"
+                autoComplete="name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Input
+                label="Email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              {!token ? (
+                <Input
+                  label="Organisation name"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  maxLength={ORGANISATION_NAME_MAX_LENGTH}
+                  value={organisationName}
+                  onChange={(e) => setOrganisationName(e.target.value)}
+                />
+              ) : null}
+              <Input
+                label="Password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={error ?? undefined}
+              />
+              <Button
+                type="submit"
+                loading={submitting}
+                iconEnd={<ArrowRight size={16} weight="bold" />}
+                className="w-full"
+              >
+                Create account
+              </Button>
+            </form>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-subtle">
+          Already have an account?{' '}
+          <Link
+            to="/sign-in"
+            search={signInSearch}
+            className="font-medium text-brand hover:text-brand-pressed"
+          >
+            Sign in
+          </Link>
+        </p>
+      </div>
+    </main>
+  )
+}
