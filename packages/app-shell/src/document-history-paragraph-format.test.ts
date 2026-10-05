@@ -142,6 +142,20 @@ describe('paragraph-format reversal', () => {
     expect(translated?.format.paragraphFormats.p1).toEqual({ alignment: null })
   })
 
+  it('drops the reversal when the result paragraph is absent from the saved model', () => {
+    // The same batch deleted this paragraph, so the saved model has no result
+    // paragraph to hold a reversal. Mirroring the paragraph-style branch, the
+    // covered slot just drops rather than leaving a draft the next save can
+    // never send and so blocks permanently.
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [pformatSlot('p1')],
+      sent: formatState('p1', { alignment: 'center' }),
+      fromModel: model([paragraph('p1', '<w:pPr/>')]),
+      toModel: model([]),
+    } satisfies SaveBaseline)
+    expect(translated?.format.paragraphFormats).toEqual({})
+  })
+
   it('keeps a pending alignment the snapshot held instead of releasing it', () => {
     // Align centre, then type a character. The snapshot recorded for the
     // keystroke still holds the pending alignment and the save stores it, so
