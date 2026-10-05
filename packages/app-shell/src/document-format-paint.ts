@@ -1,8 +1,13 @@
 import type {
   DocumentModelWire,
+  DocumentNumberingWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { patchParagraphFormatXml, patchRunEmphasisXml } from '@obiter/ooxml'
+import {
+  hasPureStartOverride,
+  patchParagraphFormatXml,
+  patchRunEmphasisXml,
+} from '@obiter/ooxml'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 import type {
   FormatDrafts,
@@ -16,15 +21,64 @@ export function formattedModel(
   format: FormatDrafts,
 ): DocumentModelWire {
   const emphasisByRun = runEmphasisIndex(format)
+  const numbering = paintedNumbering(model, format)
+  const paintedFormat = numbering.instances.length
+    ? { ...format, numbering: numbering.drafts }
+    : format
   return {
     ...model,
+    numbering: numbering.instances.length
+      ? [...model.numbering, ...numbering.instances]
+      : model.numbering,
     stories: model.stories.map((story) => ({
       ...story,
       paragraphs: story.paragraphs.map((paragraph) =>
-        formattedParagraph(paragraph, format, emphasisByRun),
+        formattedParagraph(paragraph, paintedFormat, emphasisByRun),
       ),
     })),
   }
+}
+
+/**
+ * Drafts whose restart the model cannot yet name. The server creates or reuses
+ * an instance on save, so before that the paragraph's `w:numPr` still points at
+ * the source and the markers would number on. Synthesising a private instance
+ * for the draft — with the override folded into the paragraph's own level —
+ * points the painted `w:numPr` at it so the marker visibly restarts now. A draft
+ * that already names an instance carrying the override is left alone, so the
+ * paint and the save agree on the instance id.
+ */
+function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
+  const drafts = { ...format.numbering }
+  const instances: DocumentNumberingWire[] = []
+  for (const [paragraphId, draft] of Object.entries(format.numbering)) {
+    const start = draft.startOverride
+    if (!draft.numId || start === undefined || start === null) continue
+    const source = model.numbering.find(
+      (instance) => instance.numberingId === draft.numId,
+    )
+    if (!source) continue
+    const ilvl = draft.ilvl ?? 0
+    if (hasPureStartOverride(source.sourceFragment, ilvl, start)) continue
+    const numberingId = `draft:${paragraphId}`
+    instances.push({
+      numberingId,
+      ...(source.abstractNumberingId
+        ? { abstractNumberingId: source.abstractNumberingId }
+        : {}),
+      startOverride: start,
+      sourceFragment: source.sourceFragment,
+      ...(source.levels
+        ? {
+            levels: source.levels.map((level) =>
+              level.ilvl === ilvl ? { ...level, start } : { ...level },
+            ),
+          }
+        : {}),
+    })
+    drafts[paragraphId] = { ...draft, numId: numberingId }
+  }
+  return { drafts, instances }
 }
 
 function runEmphasisIndex(format: FormatDrafts) {
@@ -90,7 +144,7 @@ export function paragraphStyleOptions(model: DocumentModelWire) {
  * character style out of the gallery.
  */
 function isParagraphStyle(sourceFragment: string) {
-  const type = sourceFragment.match(/w:type\s*=\s*"([^"]*)"/iu)?.[1]
+  const type = sourceFragment.match(/w:type\s*=\s*["']([^"']*)["']/iu)?.[1]
   return type === undefined || type === 'paragraph'
 }
 function paintRangeEmphasis(

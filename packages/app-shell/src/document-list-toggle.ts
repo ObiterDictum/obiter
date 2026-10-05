@@ -3,6 +3,7 @@ import type {
   DocumentNumberingWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
+import { hasPureStartOverride } from '@obiter/ooxml'
 import type { FormatDrafts } from './document-format-edits'
 import { paragraphNumPr } from './document-page-lists'
 
@@ -56,9 +57,31 @@ export function paragraphListKind(
 }
 
 /**
+ * The existing instance a restart should reuse: same abstract numbering as the
+ * source and a pure start override for the target level and value. Mirrors the
+ * server's `resolveParagraphNumbering` so the draft names the instance the save
+ * will resolve to rather than the source it started from.
+ */
+export function findRestartInstance(
+  model: Pick<DocumentModelWire, 'numbering'>,
+  source: DocumentNumberingWire,
+  ilvl: number,
+  start: number,
+): DocumentNumberingWire | undefined {
+  const abstractId = source.abstractNumberingId
+  if (!abstractId) return undefined
+  return model.numbering.find(
+    (instance) =>
+      instance.abstractNumberingId === abstractId &&
+      hasPureStartOverride(instance.sourceFragment, ilvl, start),
+  )
+}
+
+/**
  * The start override the target's list effectively carries: the pending draft
- * wins, otherwise the numbering instance the paragraph points at. `undefined`
- * means the paragraph is not a list or its numbering definition is missing.
+ * wins, otherwise the override the instance declares for the level the
+ * paragraph actually uses. `undefined` means the paragraph is not a list, its
+ * numbering definition is missing, or that level is not restarted.
  */
 export function paragraphStartOverride(
   model: DocumentModelWire,
@@ -67,12 +90,38 @@ export function paragraphStartOverride(
 ): number | null | undefined {
   if (!paragraph) return undefined
   const draft = format.numbering[paragraph.id]
-  const numId = draft
-    ? draft.numId
-    : (paragraphNumPr(paragraph, model.styles)?.numId ?? null)
-  if (!numId) return undefined
+  const numPr = draft
+    ? { numId: draft.numId, ilvl: draft.ilvl ?? 0 }
+    : paragraphNumPr(paragraph, model.styles)
+  if (!numPr?.numId) return undefined
   if (draft && draft.startOverride !== undefined) return draft.startOverride
-  return findNumberingInstance(model, numId)?.startOverride
+  const instance = findNumberingInstance(model, numPr.numId)
+  if (!instance) return undefined
+  return levelStartOverride(instance.sourceFragment, numPr.ilvl ?? 0)
+}
+
+/**
+ * The `w:startOverride` an instance declares for one level, read from its raw
+ * `w:num`. The instance-level `startOverride` the parser exposes is its first
+ * descendant override at any level, so it cannot answer this per-level read.
+ */
+function levelStartOverride(
+  sourceFragment: string,
+  ilvl: number,
+): number | undefined {
+  const override = sourceFragment.match(
+    new RegExp(
+      `<(?:(?:\\w+):)?lvlOverride\\b[^>]*\\bilvl\\s*=\\s*["']${String(ilvl)}["'][^>]*>[\\s\\S]*?</(?:\\w+:)?lvlOverride>`,
+      'u',
+    ),
+  )?.[0]
+  if (!override) return undefined
+  const value = override.match(
+    /<(?:\w+:)?startOverride\b[^>]*\bval\s*=\s*["'](\d+)["']/u,
+  )?.[1]
+  if (value === undefined) return undefined
+  const start = Number(value)
+  return Number.isInteger(start) && start > 0 ? start : undefined
 }
 
 /**

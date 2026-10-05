@@ -7,7 +7,10 @@ import { documentStory, paragraphPlainText } from './document-model-text'
 import { snapEmphasisRange } from './document-format-paint'
 import { paragraphFormatFields } from './document-paragraph-format'
 import { paragraphNumPr } from './document-page-lists'
-import { findNumberingInstance } from './document-list-toggle'
+import {
+  findNumberingInstance,
+  findRestartInstance,
+} from './document-list-toggle'
 import type {
   EmphasisPatch,
   FormatDrafts,
@@ -338,10 +341,17 @@ export function restartList(
   const current =
     format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
   if (!current?.numId) return format
-  if (!findNumberingInstance(model, current.numId)) return format
+  const source = findNumberingInstance(model, current.numId)
+  if (!source) return format
+  const ilvl = current.ilvl ?? 0
+  // Mirror the server's resolution: point the draft at the instance the save
+  // will reuse when one already carries this restart, so the painted `w:numPr`
+  // and the saved one name the same instance. The create case keeps the source
+  // id and relies on the paint's virtual instance for the marker.
+  const matching = findRestartInstance(model, source, ilvl, 1)
   const draft: NumberingDraft = {
-    numId: current.numId,
-    ilvl: current.ilvl ?? 0,
+    numId: matching?.numberingId ?? current.numId,
+    ilvl,
     startOverride: 1,
   }
   return {

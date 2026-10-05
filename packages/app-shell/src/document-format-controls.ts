@@ -208,6 +208,13 @@ export function formatControlState(
     const item = selectedParagraph(model, id)
     return item ? [item] : []
   })
+  // Restart acts on every stored target paragraph, not just the caret's, so
+  // the control is available when any target names a valid numbering instance.
+  const canRestart = targetParagraphs.some((item) => {
+    const targetNumPr =
+      format.numbering[item.id] ?? paragraphNumPr(item, model.styles)
+    return Boolean(findNumberingInstance(model, targetNumPr?.numId))
+  })
   const numberedTargets = targetParagraphs.filter(
     (item) => paragraphStartOverride(model, format, item) !== undefined,
   )
@@ -247,7 +254,7 @@ export function formatControlState(
     canIndent,
     canOutdent: Boolean(currentInstance),
     canContinue: Boolean(findNumberingInstance(model, previousNum?.numId)),
-    canRestart: Boolean(currentInstance),
+    canRestart,
     listRestarted,
     listKind: paragraphListKind(model, format, paragraph),
     canApplyBullet: Boolean(pickNumberingId(model, 'bullet')),
