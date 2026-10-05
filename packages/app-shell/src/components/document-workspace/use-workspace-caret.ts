@@ -323,13 +323,16 @@ export function useWorkspaceCaret({
     return range
   }
 
-  function replaceSelectionRange(text: string) {
-    const range = selectedRange()
-    if (!model || !range) return
+  function replaceSelectionRange(
+    text: string,
+    range?: { start: SelectionEndpoint; end: SelectionEndpoint },
+  ) {
+    const resolved = range ?? selectedRange()
+    if (!model || !resolved) return
     const caret = drafts.replaceDocumentRange(
       model,
-      range.start,
-      range.end,
+      resolved.start,
+      resolved.end,
       text,
     )
     if (caret) selectParagraph(caret.paragraphId, caret.offset)

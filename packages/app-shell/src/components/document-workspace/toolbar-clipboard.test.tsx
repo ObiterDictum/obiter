@@ -211,6 +211,21 @@ describe('the clipboard ribbon controls', () => {
     await waitFor(() => expect(pendingField().value).toBe('abZ'))
   })
 
+  it('pastes at the first paragraph after Escape clears the caret record', async () => {
+    stubClipboard({ readText: vi.fn().mockResolvedValue('Z') })
+    mountWorkspace({ models: { doc_1: model() } })
+    clickParagraph('p2')
+    nativeSelect(1, 3)
+    // Escape collapses the selection, then a second Escape leaves the paragraph.
+    fireEvent.keyDown(bodyField(), { key: 'Escape' })
+    fireEvent.keyDown(bodyField(), { key: 'Escape' })
+
+    fireEvent.click(control('Paste'))
+    // Escape cleared the selected paragraph; the ribbon falls back to the first
+    // paragraph and must not reuse the blurred paragraph's caret offset.
+    await waitFor(() => expect(bodyField().value).toBe('ZHello'))
+  })
+
   it('drops onto an unfocused pending insert, not the live selection', async () => {
     mountWorkspace({ models: { doc_1: model() } })
     clickParagraph('p1')
