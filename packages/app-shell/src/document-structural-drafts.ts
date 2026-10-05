@@ -8,8 +8,8 @@ import {
   documentEditImageContentTypeSchema,
   type DocumentEditImageContentType,
   type DocumentEditOperation,
+  imageExtensionForContentType,
 } from '@obiter/contracts'
-import { imageExtensionForContentType } from '@obiter/ooxml'
 
 /**
  * A structural insertion the workspace holds before save: a body-level table

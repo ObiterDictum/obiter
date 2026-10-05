@@ -31,6 +31,24 @@ export type DocumentEditImageContentType = z.infer<
   typeof documentEditImageContentTypeSchema
 >
 
+const IMAGE_EXTENSION_BY_CONTENT_TYPE = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+} satisfies Record<DocumentEditImageContentType, string>
+
+/**
+ * The package-part extension an inserted picture's content type carries —
+ * contract-level because both the package writer and the client draft schema
+ * (which must not depend on the writer) name parts with it.
+ */
+export function imageExtensionForContentType(
+  contentType: DocumentEditImageContentType,
+) {
+  return IMAGE_EXTENSION_BY_CONTENT_TYPE[contentType]
+}
+
 const BASE64_PADDING = 0x3d // '='
 
 /**
