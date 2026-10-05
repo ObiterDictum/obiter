@@ -356,6 +356,95 @@ describe('OOXML section and break edits', () => {
     ).toBe('Hello brave world')
   })
 
+  it('materialises a run-keyed property write before a page break inside it', async () => {
+    const document = await parseDocx(await createSyntheticDocx(['Hello world']))
+    const paragraph = mainParagraphs(document)[0]
+    const run = paragraph?.runs[0]
+    if (!paragraph || !run) throw new Error('Synthetic run is missing.')
+    // A collapsed-caret toggle is run-keyed and writes no text, so only the
+    // run-keyed overlay key can tell the break path to materialise. Otherwise
+    // the reopened tail run comes from the parse-time `runProperties` snapshot
+    // and saves unstyled while the paint claims the whole run is bold.
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 5,
+        kind: 'page',
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+    expect(xml).toContain('<w:br w:type="page"/>')
+    expect(xml.match(/<w:rPr>/gu)).toHaveLength(1)
+    const runs = mainParagraphs(await parseDocx(output))[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello world')
+    expect(
+      runs.every((item) =>
+        /<w:b\b(?![^>]*w:val="0")/u.test(item.preservedXmlFragments.join('')),
+      ),
+    ).toBe(true)
+  })
+
+  it.each(['<w:p/>', '<w:p></w:p>'])(
+    'composes a page break and a section break on %s',
+    async (empty) => {
+      for (const order of ['page', 'section'] as const) {
+        const document = await load(empty)
+        const paragraph = paragraphWires(document)[0]
+        if (!paragraph) throw new Error('Fixture is missing.')
+        const page = {
+          type: 'insert_break',
+          paragraphId: paragraph.id,
+          offset: 0,
+          kind: 'page',
+        } as const
+        const section = {
+          type: 'insert_section_break',
+          paragraphId: paragraph.id,
+        } as const
+        applyDocumentEdits(
+          document,
+          order === 'page' ? [page, section] : [section, page],
+        )
+        const xml = await documentXml(document)
+        expect(xml).toContain(
+          '<w:pPr><w:sectPr/></w:pPr><w:r><w:br w:type="page"/></w:r>',
+        )
+        expect(xml.indexOf('<w:pPr>')).toBeLessThan(xml.indexOf('<w:r><w:br'))
+        const reloaded = await save(document)
+        const reloadedParagraph = paragraphWires(reloaded)[0]
+        expect(reloadedParagraph?.preservedXmlFragments.join('')).toContain(
+          '<w:sectPr',
+        )
+        expect(
+          (reloadedParagraph?.runs ?? [])
+            .flatMap((item) => item.preservedXmlFragments)
+            .join(''),
+        ).toContain('w:type="page"')
+      }
+    },
+  )
+
+  it('orders a paragraph style before a section break in a property-less paragraph', async () => {
+    const document = await load('<w:p><w:r><w:t>text</w:t></w:r></w:p>')
+    const paragraph = paragraphWires(document)[0]
+    if (!paragraph) throw new Error('Fixture is missing.')
+    applyDocumentEdits(document, [
+      { type: 'insert_section_break', paragraphId: paragraph.id },
+      {
+        type: 'set_paragraph_style',
+        paragraphId: paragraph.id,
+        styleId: 'Heading1',
+      },
+    ])
+    const xml = await documentXml(document)
+    expect(xml).toContain(
+      '<w:pPr><w:pStyle w:val="Heading1"/><w:sectPr/></w:pPr>',
+    )
+  })
+
   it('patches the live section, never the recorded sectPrChange copy', () => {
     const sect =
       '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440"/>' +

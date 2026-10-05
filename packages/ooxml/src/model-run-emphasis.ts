@@ -12,6 +12,8 @@ import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import {
   applyEmphasisXml,
+  mergeSiblingRuns,
+  parseWrappedRun,
   runPieceXml,
   splitsSurrogate,
 } from './model-run-range-edits'
@@ -22,7 +24,6 @@ import {
 } from './model-property-edits'
 import {
   elementFragment,
-  parseXmlElements,
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
@@ -95,7 +96,10 @@ export function applyRunEmphasisRanges(
       .filter((range) => range.from < range.to)
     if (local.length > 0) {
       const length = run.wire.text.length
-      if (local.every((range) => range.from === 0 && range.to === length)) {
+      if (
+        local.every((range) => range.from === 0 && range.to === length) &&
+        !hasPendingBreakSplice(part.overlay, run)
+      ) {
         setRunEmphasis(
           document,
           run,
@@ -238,16 +242,19 @@ function effectiveView(
   paragraph: ParagraphAnchor,
 ): RunSplitView {
   const folded = materialiseRun(overlay, run)
-  const source = folded.xml
+  // A page-break splice closes and reopens the run, so the folded XML can hold
+  // several sibling `<w:r>` elements for what the model still treats as one
+  // run. Coalesce them into a single run — one property set, the break inline —
+  // so the split machinery styles exactly the characters a range covers and
+  // emits each run's properties once instead of duplicating `w:rPr`.
+  const source = mergeSiblingRuns(overlay.source, folded.xml)
   const elements = parseWrappedRun(overlay.source, source)
-  // A fold can introduce sibling runs: a page-break splice closes and reopens
-  // the run around the break. The effective run spans every top-level run so
-  // the split machinery sees the whole reconstructed sequence, not just the
-  // first run.
   const runElements = elements.filter((element) => element.depth === 0)
   const first = runElements[0]
   const last = runElements.at(-1)
-  if (!first || !last) throw new OoxmlError('invalid-document-edit')
+  if (!first || !last || runElements.length !== 1) {
+    throw new OoxmlError('invalid-document-edit')
+  }
   const children = elements.filter((element) => element.depth === 1)
   const textElements = children
     .filter((element) => element.localName === 't' && !element.selfClosing)
@@ -361,6 +368,29 @@ function hasPendingOverlay(overlay: XmlOverlay, run: TextRunAnchor) {
   return false
 }
 
+/**
+ * Whether a page-break splice already owns part of the run. The whole-run
+ * emphasis fast path cannot take this branch: it would write the run's
+ * properties while leaving the splice's reopened tail on its parse-time
+ * snapshot, so the tail would save unstyled. Materialising instead rebuilds
+ * both halves from the effective properties.
+ */
+function hasPendingBreakSplice(overlay: XmlOverlay, run: TextRunAnchor) {
+  const { start, end } = run.runRange
+  for (const [key, replacement] of overlay.replacements) {
+    if (!key.includes('page-break')) continue
+    if (key.startsWith(`${run.wire.id}:`)) return true
+    if (
+      replacement.start >= start &&
+      replacement.end <= end &&
+      replacement.start < end
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function textRunIdAllocator(document: OoxmlDocument) {
   const used = new Set(
     document.model.stories.flatMap((story) =>
@@ -426,27 +456,4 @@ function elementRange(element: {
     endTagStart: element.endTagStart,
     end: element.end,
   }
-}
-
-// A materialised run is a bare <w:r>; its namespace prefixes are declared on
-// the part root, so wrap it in a synthetic root carrying the part's
-// declarations and shift the parsed ranges back into run coordinates.
-function parseWrappedRun(partSource: string, runXml: string) {
-  const declarationEnd = partSource.startsWith('<?xml')
-    ? partSource.indexOf('?>') + 2
-    : 0
-  const rootStart = partSource.indexOf('<', declarationEnd)
-  const head = partSource.slice(rootStart, partSource.indexOf('>', rootStart))
-  const declarations =
-    head.match(/xmlns(?::[\w.-]+)?="[^"]*"/gu)?.join(' ') ?? ''
-  const open = `<obiter-run ${declarations}>`
-  const shift = open.length
-  return parseXmlElements(`${open}${runXml}</obiter-run>`).map((element) => ({
-    ...element,
-    depth: element.depth - 1,
-    start: element.start - shift,
-    startTagEnd: element.startTagEnd - shift,
-    endTagStart: element.endTagStart - shift,
-    end: element.end - shift,
-  }))
 }
