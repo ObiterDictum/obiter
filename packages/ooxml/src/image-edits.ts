@@ -6,6 +6,7 @@ import {
   addMediaPart,
   appendRelationship,
   nextDrawingId,
+  relationshipsPartName,
 } from './structure-package'
 import { spliceInlineXml, spliceRunWires } from './structure-splice'
 import { buildInlineDrawingXml, IMAGE_RELATIONSHIP_TYPE } from './structure-xml'
@@ -40,7 +41,9 @@ export function insertImage(
     throw new OoxmlError('model-node-not-editable')
   }
   const bytes = decodeBase64(operation.dataBase64)
-  const partName = addMediaPart(document, operation.contentType, bytes)
+  const partName = addMediaPart(document, operation.contentType, bytes, [
+    relationshipsPartName(paragraph.partName),
+  ])
   const storyDirectory = paragraph.partName.slice(
     0,
     paragraph.partName.lastIndexOf('/') + 1,

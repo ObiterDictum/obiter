@@ -309,12 +309,20 @@ export function applyDocumentEdits(
         // anchor so far — move its wire to the end of the appended region to
         // match. Paragraph inserts do not re-park it: their overlay key stays
         // ahead of the re-set key in serialisation order only when they ran
-        // before the last table op.
+        // before the last table op. The lookup must be by id: a repeated
+        // insert dedupes the wire but mints a fresh object, so an identity
+        // search would miss and park a second copy. The wire already parked —
+        // not the fresh object — is what moves, so its lineage provenance
+        // (keyed by identity) survives the relocation.
         if (inserted.trailingWire) {
-          const from = mainStory.paragraphs.indexOf(inserted.trailingWire)
+          const trailing = inserted.trailingWire
+          const from = mainStory.paragraphs.findIndex(
+            (paragraph) => paragraph.id === trailing.id,
+          )
+          const wire = from === -1 ? trailing : mainStory.paragraphs[from]
           if (from !== -1) mainStory.paragraphs.splice(from, 1)
           const at = mainStory.paragraphs.indexOf(inserted.lastCell)
-          mainStory.paragraphs.splice(at + 1, 0, inserted.trailingWire)
+          mainStory.paragraphs.splice(at + 1, 0, wire ?? trailing)
         }
         tableCounts.set(key, occurrence + 1)
       }

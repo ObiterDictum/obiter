@@ -3,28 +3,35 @@ import type {
   DocumentRelationshipWire,
 } from '@obiter/contracts'
 
-import { OoxmlError, type OoxmlDocument } from './model'
+import { WORD_2010_NAMESPACE } from './document-identity'
+import { OoxmlError, type OoxmlDocument, type SourcePart } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import {
   OOXML_MAX_ENTRIES,
   OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
   OOXML_MAX_UNCOMPRESSED_BYTES,
 } from './package-limits-defaults'
-import { parseContentTypes } from './parts/content-types'
+import {
+  CONTENT_TYPES_NAMESPACE,
+  parseContentTypes,
+} from './parts/content-types'
 import { createOpaquePart } from './parts/opaque'
 import {
   createXmlOverlay,
   escapeXmlAttribute,
   parseXmlElements,
+  serialiseOverlay,
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
+import { RELATIONSHIPS_NAMESPACE } from './parts/rels'
+import type { XmlElement } from './parts/xml-elements'
 
 export { IMAGE_RELATIONSHIP_TYPE } from './structure-xml'
 
 const CONTENT_TYPES_PART = '[Content_Types].xml'
-const RELATIONSHIPS_ROOT_OPEN =
-  '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+const RELATIONSHIPS_ROOT_OPEN = `<Relationships xmlns="${RELATIONSHIPS_NAMESPACE}">`
+const encoder = new TextEncoder()
 
 const IMAGE_EXTENSION_BY_CONTENT_TYPE = {
   'image/png': 'png',
@@ -89,10 +96,16 @@ export function appendRelationship(
   const editable = requireEditablePart(document, partName)
   const id = nextRelationshipId(document, sourcePartName)
   const target = escapeXmlAttribute(input.target)
-  const xml = `<Relationship Id="${id}" Type="${input.type}" Target="${target}"${
-    input.targetMode ? ` TargetMode="${input.targetMode}"` : ''
-  }/>`
-  insertRootChild(editable.overlay, 'Relationships', xml, `rel-add-${id}`)
+  const xml = insertRootChild(
+    editable.overlay,
+    'Relationships',
+    'Relationship',
+    `Id="${id}" Type="${input.type}" Target="${target}"${
+      input.targetMode ? ` TargetMode="${input.targetMode}"` : ''
+    }`,
+    `rel-add-${id}`,
+    RELATIONSHIPS_NAMESPACE,
+  )
   editable.dirty = true
   const wire: DocumentRelationshipWire = {
     sourcePartName,
@@ -107,34 +120,52 @@ export function appendRelationship(
 }
 
 /**
- * Ensures `[Content_Types].xml` declares `Extension` as a Default content
- * type. A same-batch insert must not add a second `<Default>` for an
- * extension a pending replacement already declared — duplicate Default
- * elements are invalid OOXML — so pending values are scanned alongside the
- * source.
+ * Ensures the inserted media part resolves to `contentType`. A missing
+ * extension gets a `<Default>`; an existing Default that maps the extension
+ * to a different type must be preserved for the parts that rely on it, so
+ * this part takes a `<Override>` instead. Declarations are read from the
+ * part as it would serialise — pending same-batch inserts included — so the
+ * effective type, not just the presence of any declaration, decides.
  */
-export function ensureContentTypeDefault(
+export function ensureMediaContentType(
   document: OoxmlDocument,
+  partName: string,
   extension: string,
   contentType: string,
 ) {
   const editable = requireEditablePart(document, CONTENT_TYPES_PART)
-  const declared = new Set(
-    [...parseContentTypes(editable.overlay.source).defaults.keys()].map(
-      (value) => value.toLowerCase(),
-    ),
-  )
-  for (const pending of editable.overlay.replacements.values()) {
-    for (const match of pending.value.matchAll(/Extension="([^"]+)"/gu)) {
-      if (match[1]) declared.add(match[1].toLowerCase())
-    }
+  let effective
+  try {
+    effective = parseContentTypes(serialiseOverlay(editable.overlay))
+  } catch {
+    throw new OoxmlError('serialisation-failed')
   }
-  if (declared.has(extension.toLowerCase())) return
+  const override = effective.overrides.get(partName)
+  if (override === contentType) return
+  // A second Override for one part name is invalid OOXML — a conflicting one
+  // cannot be papered over.
+  if (override !== undefined) throw new OoxmlError('invalid-document-edit')
+  const declared = effective.defaults.get(extension.toLowerCase())
+  if (declared === contentType) return
+  if (declared === undefined) {
+    insertRootChild(
+      editable.overlay,
+      'Types',
+      'Default',
+      `Extension="${extension}" ContentType="${contentType}"`,
+      `ct-default-${extension}`,
+      CONTENT_TYPES_NAMESPACE,
+    )
+    editable.dirty = true
+    return
+  }
   insertRootChild(
     editable.overlay,
     'Types',
-    `<Default Extension="${extension}" ContentType="${contentType}"/>`,
-    `ct-${extension}`,
+    'Override',
+    `PartName="/${partName}" ContentType="${contentType}"`,
+    `ct-override-${partName}`,
+    CONTENT_TYPES_NAMESPACE,
   )
   editable.dirty = true
 }
@@ -142,12 +173,16 @@ export function ensureContentTypeDefault(
 /**
  * Adds an image binary part under `word/media`, enforcing the loader's
  * package limits so an edit cannot create a package the reader itself would
- * refuse.
+ * refuse. `reservedPartNames` lists every other part the same insertion will
+ * create (a relationships part, for example), so the entry count guards the
+ * finished package; dirty parts are weighed at their serialised size because
+ * the original payload ignores pending growth.
  */
 export function addMediaPart(
   document: OoxmlDocument,
   contentType: string,
   bytes: Uint8Array,
+  reservedPartNames: readonly string[] = [],
 ) {
   if (!(contentType in IMAGE_EXTENSION_BY_CONTENT_TYPE)) {
     throw new OoxmlError('invalid-document-edit')
@@ -156,15 +191,21 @@ export function addMediaPart(
   // keys, which are exactly the DocumentEditImageContentType union.
   const extension =
     IMAGE_EXTENSION_BY_CONTENT_TYPE[contentType as DocumentEditImageContentType]
+  if (!matchesImageSignature(contentType as DocumentEditImageContentType, bytes)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+  const reserved = reservedPartNames.filter(
+    (name) => !document.sourceParts.has(name),
+  ).length
   if (
     bytes.byteLength > OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES ||
-    document.sourceParts.size >= OOXML_MAX_ENTRIES
+    document.sourceParts.size + 1 + reserved > OOXML_MAX_ENTRIES
   ) {
     throw new OoxmlError('package-limits-exceeded')
   }
   let total = 0
   for (const part of document.sourceParts.values()) {
-    total += part.originalPayload.byteLength
+    total += serialisedPartLength(part)
   }
   if (total + bytes.byteLength > OOXML_MAX_UNCOMPRESSED_BYTES) {
     throw new OoxmlError('package-limits-exceeded')
@@ -178,39 +219,119 @@ export function addMediaPart(
     partName,
     createOpaquePart(partName, 'binary', bytes),
   )
-  ensureContentTypeDefault(document, extension, contentType)
+  ensureMediaContentType(document, partName, extension, contentType)
   return partName
 }
 
+/** The byte signature each supported raster type must actually carry. */
+const IMAGE_SIGNATURES: Record<DocumentEditImageContentType, readonly number[]> = {
+  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  'image/jpeg': [0xff, 0xd8, 0xff],
+  'image/gif': [0x47, 0x49, 0x46, 0x38],
+  'image/bmp': [0x42, 0x4d],
+}
+
 /**
- * Inserts an element inside a root element, expanding a self-closing root.
- * The content-types and relationships parts are always single-rooted.
+ * The declared content type is a client claim; the bytes are the truth. A
+ * mismatch would write a part whose payload disagrees with its declared type,
+ * so the signature is verified before the part exists.
+ */
+function matchesImageSignature(
+  contentType: DocumentEditImageContentType,
+  bytes: Uint8Array,
+) {
+  const signature = IMAGE_SIGNATURES[contentType]
+  return signature.every((value, index) => bytes[index] === value)
+}
+
+/** The size a part contributes to the serialised package. */
+function serialisedPartLength(part: SourcePart) {
+  if (!part.dirty) return part.originalPayload.byteLength
+  if (part.kind !== 'xml' || !part.overlay) {
+    throw new OoxmlError('serialisation-failed')
+  }
+  try {
+    return encoder.encode(serialiseOverlay(part.overlay)).byteLength
+  } catch {
+    throw new OoxmlError('serialisation-failed')
+  }
+}
+
+/**
+ * Inserts an element inside a root element, expanding a self-closing root,
+ * and returns the child XML as emitted. The content-types and relationships
+ * parts are always single-rooted.
+ *
+ * One replacement owns the root's expansion: the first child rewrites the
+ * whole self-closing element and later children append inside that same
+ * replacement — a second whole-root replacement would overlap the first and
+ * fail serialisation.
  */
 function insertRootChild(
   overlay: XmlOverlay,
   rootName: string,
-  childXml: string,
+  childName: string,
+  attributesXml: string,
   key: string,
+  namespaceUri: string,
 ) {
   const root = parseXmlElements(overlay.source).find(
     (element) => element.parent === undefined && element.localName === rootName,
   )
   if (!root) throw new OoxmlError('invalid-document-edit')
+  const childXml = qualifiedChildXml(root, childName, attributesXml, namespaceUri)
   if (root.selfClosing) {
-    setOverlayReplacement(overlay, key, {
+    const ownerKey = `${rootName}:children`
+    const close = `</${root.qualifiedName}>`
+    const owner = overlay.replacements.get(ownerKey)
+    if (owner) {
+      if (!owner.value.endsWith(close)) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      setOverlayReplacement(overlay, ownerKey, {
+        ...owner,
+        value: `${owner.value.slice(0, owner.value.length - close.length)}${childXml}${close}`,
+      })
+      return childXml
+    }
+    setOverlayReplacement(overlay, ownerKey, {
       start: root.start,
       end: root.end,
       value: `${overlay.source
         .slice(root.start, root.startTagEnd)
-        .replace(/\/\s*>$/u, '>')}${childXml}</${root.qualifiedName}>`,
+        .replace(/\/\s*>$/u, '>')}${childXml}${close}`,
     })
-    return
+    return childXml
   }
   setOverlayReplacement(overlay, key, {
     start: root.endTagStart,
     end: root.endTagStart,
     value: childXml,
   })
+  return childXml
+}
+
+/**
+ * Emits the child in the root's resolved namespace. A prefixed root passes
+ * its prefix down (`pkg:Relationships` gets `pkg:Relationship` children); an
+ * unprefixed root relies on its default namespace, and a root bound to no
+ * namespace needs the child to declare the part's namespace explicitly — an
+ * unprefixed child there would resolve to no namespace and be dropped on
+ * reload.
+ */
+function qualifiedChildXml(
+  root: XmlElement,
+  childName: string,
+  attributesXml: string,
+  namespaceUri: string,
+) {
+  const colon = root.qualifiedName.indexOf(':')
+  if (colon !== -1) {
+    return `<${root.qualifiedName.slice(0, colon)}:${childName} ${attributesXml}/>`
+  }
+  const declaration =
+    root.namespaceUri === '' ? ` xmlns="${namespaceUri}"` : ''
+  return `<${childName}${declaration} ${attributesXml}/>`
 }
 
 export type CounterSource = {
@@ -230,14 +351,54 @@ export function nextDrawingId(source: CounterSource) {
  * `w14:paraId` values for paragraphs a table insert creates: an `E6`-prefixed
  * hex suffix checked against the source and pending splices, so repeated
  * inserts in one batch never reuse an id.
+ *
+ * Source ids are collected namespace-resolved: the attribute is matched by
+ * the w14 namespace URI, not its spelling, so `alias:paraId`, single quotes
+ * and whitespace around `=` cannot slip a collision past the allocator.
+ * Pending splice values are fragments whose namespace bindings may live
+ * outside them, so every prefixed spelling is scanned — over-matching only
+ * costs an id; under-matching allocates a duplicate.
  */
 export function nextSyntheticParaId(source: CounterSource) {
-  const id = nextCounterId(
-    paraIdCounters,
-    source,
-    (n) => `w14:paraId="${syntheticParaId(n)}"`,
-  )
-  return syntheticParaId(id)
+  const used = new Set(sourceParaIds(source))
+  for (const pending of source.replacements.values()) {
+    for (const match of pending.value.matchAll(PENDING_PARA_ID)) {
+      if (match[1]) used.add(match[1].toUpperCase())
+    }
+  }
+  let id = paraIdCounters.get(source) ?? 0
+  for (;;) {
+    id += 1
+    paraIdCounters.set(source, id)
+    const candidate = syntheticParaId(id)
+    if (!used.has(candidate)) return candidate
+  }
+}
+
+const PENDING_PARA_ID =
+  /\b[\w.-]+:paraId\s*=\s*["']([0-9A-Fa-f]{8})["']/gu
+const PARA_ID_VALUE = /^[0-9A-Fa-f]{8}$/u
+
+const paraIdsInSource = new WeakMap<CounterSource, ReadonlySet<string>>()
+
+/** The paraId values the part source already uses, keyed by namespace URI. */
+function sourceParaIds(source: CounterSource) {
+  const cached = paraIdsInSource.get(source)
+  if (cached) return cached
+  const found = new Set<string>()
+  for (const element of parseXmlElements(source.source)) {
+    for (const attribute of element.attributes) {
+      if (
+        attribute.namespaceUri === WORD_2010_NAMESPACE &&
+        attribute.localName === 'paraId' &&
+        PARA_ID_VALUE.test(attribute.value)
+      ) {
+        found.add(attribute.value.toUpperCase())
+      }
+    }
+  }
+  paraIdsInSource.set(source, found)
+  return found
 }
 
 function syntheticParaId(n: number) {
