@@ -7,6 +7,7 @@ import type {
 import {
   buildInlineDrawingXml,
   buildTableXml,
+  decideTablePlacement,
   IMAGE_RELATIONSHIP_TYPE,
 } from '@obiter/ooxml'
 import { storyTableCellIds } from './document-page-tables'
@@ -121,35 +122,54 @@ function foldStory(
   // the writer finds the sibling `w:tbl`. Pending cell wires join the set as
   // they fold, so a later anchor can also see a not-yet-saved table.
   const tableCellIds = storyTableCellIds(story)
-  // Per-anchor chaining mirrors the writer's `tableTailWires`: the next table
-  // at one anchor splices after the previous table's last cell, and the
-  // separator paragraph keeps adjacent tables from merging.
+  // The parked tail per anchor — the wire the writer's `postAnchorTails`
+  // records — so the placement descriptor reads the same neighbourhood.
   const tails = new Map<string, DocumentParagraphWire>()
   const occurrences = new Map<string, number>()
   let changed = false
 
   for (const draft of structures) {
     if (draft.kind === 'table') {
-      const anchor = tailAnchor(paragraphs, draft.paragraphId, tails)
-      if (!anchor) continue
+      const anchorWire = paragraphs.find(
+        (paragraph) => paragraph.id === draft.paragraphId,
+      )
+      if (!anchorWire) continue
+      const pendingTail = tails.get(draft.paragraphId)
+      // The neighbourhood is read behind the parked tail — the position the
+      // writer's zero-width splices land at — so the shared rule decides from
+      // the same facts on both sides. A body `w:sectPr` is not a wire, so the
+      // story's end already reports no following block.
+      const probe = pendingTail ?? anchorWire
+      const index = paragraphs.indexOf(probe)
+      const following = paragraphs[index + 1]
       const occurrence = occurrences.get(draft.paragraphId) ?? 0
       occurrences.set(draft.paragraphId, occurrence + 1)
+      const placement = decideTablePlacement({
+        hasPendingTail: pendingTail !== undefined,
+        hasFollowingBlock: following !== undefined,
+        followingIsTable:
+          following !== undefined && tableCellIds.has(following.id),
+        followingIsSectionProperties: false,
+        occurrence,
+      })
+      const anchor =
+        placement.chainAfterPendingTail && pendingTail
+          ? pendingTail
+          : anchorWire
       const cellParaIds = Array.from(
         { length: draft.rows * draft.columns },
         () => nextParaId(),
       )
       const wires: DocumentParagraphWire[] = []
-      if (occurrence > 0) wires.push(paragraphWire(nextParaId()))
+      if (placement.needsSeparatorParagraph) {
+        wires.push(paragraphWire(nextParaId()))
+      }
       wires.push(...cellParaIds.map(paragraphWire))
-      const index = paragraphs.indexOf(anchor)
-      paragraphs.splice(index + 1, 0, ...wires)
-      // A table at the story's end, or directly before another table, needs
-      // the trailing paragraph the writer adds — a `w:tbl` cannot be a body's
-      // last child, and two adjacent tables merge.
-      const after = paragraphs[index + 1 + wires.length]
-      if (!after || tableCellIds.has(after.id)) {
+      const spliceAt = paragraphs.indexOf(anchor)
+      paragraphs.splice(spliceAt + 1, 0, ...wires)
+      if (placement.needsTrailingParagraph) {
         paragraphs.splice(
-          index + 1 + wires.length,
+          spliceAt + 1 + wires.length,
           0,
           paragraphWire(nextParaId()),
         )
@@ -190,17 +210,6 @@ function paragraphWire(paraId: string): DocumentParagraphWire {
     runs: [],
     preservedXmlFragments: [],
   }
-}
-
-function tailAnchor(
-  paragraphs: DocumentParagraphWire[],
-  paragraphId: string,
-  tails: ReadonlyMap<string, DocumentParagraphWire>,
-) {
-  return (
-    tails.get(paragraphId) ??
-    paragraphs.find((paragraph) => paragraph.id === paragraphId)
-  )
 }
 
 /**
