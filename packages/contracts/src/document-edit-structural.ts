@@ -49,6 +49,42 @@ export function imageExtensionForContentType(
   return IMAGE_EXTENSION_BY_CONTENT_TYPE[contentType]
 }
 
+/**
+ * The longest hyperlink target the contract accepts. Two kilobytes covers any
+ * legitimate address while keeping a hostile client from writing an unbounded
+ * string into the package relationships.
+ */
+export const DOCUMENT_EDIT_HYPERLINK_TARGET_MAX_LENGTH = 2_048
+
+const HYPERLINK_SCHEMES = new Set(['http:', 'https:', 'mailto:'])
+
+/**
+ * An external hyperlink target: a URL in a scheme Word and the reader can
+ * open without executing script. `javascript:` and `data:` URLs are refused
+ * here rather than written into the package and opened by Word.
+ */
+function isHyperlinkTarget(value: string): boolean {
+  if (value !== value.trim()) return false
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+  if (!HYPERLINK_SCHEMES.has(parsed.protocol)) return false
+  if (parsed.protocol === 'mailto:') return parsed.pathname.length > 0
+  return parsed.host.length > 0
+}
+
+const hyperlinkTargetSchema = z
+  .string()
+  .min(1)
+  .max(DOCUMENT_EDIT_HYPERLINK_TARGET_MAX_LENGTH)
+  .refine(isHyperlinkTarget, {
+    message:
+      'Hyperlink target must be an http, https or mailto URL; other schemes are not accepted.',
+  })
+
 const BASE64_PADDING = 0x3d // '='
 
 /**
@@ -130,4 +166,51 @@ export const insertImageOperationSchema = z
   .strict()
 export type DocumentEditInsertImageOperation = z.infer<
   typeof insertImageOperationSchema
+>
+
+/**
+ * A range mark over `[from, to)` of `paragraphId`'s effective text. It
+ * inserts no text, so it cannot shift an offset: the runs the range covers
+ * are wrapped in `w:hyperlink` joined to a new external relationship, or —
+ * with `target: null` — the `w:hyperlink` covering the range is unwrapped
+ * and its relationship dropped, the text surviving byte-for-byte.
+ */
+export const setHyperlinkOperationSchema = z
+  .object({
+    type: z.literal('set_hyperlink'),
+    paragraphId: editIdSchema,
+    from: characterOffsetSchema,
+    to: characterOffsetSchema,
+    target: hyperlinkTargetSchema.nullable(),
+  })
+  .strict()
+  .superRefine((operation, context) => {
+    if (operation.from >= operation.to) {
+      context.addIssue({
+        code: 'custom',
+        path: ['to'],
+        message: 'from and to must form a non-empty forward range.',
+      })
+    }
+  })
+export type DocumentEditSetHyperlinkOperation = z.infer<
+  typeof setHyperlinkOperationSchema
+>
+
+/**
+ * A `REF` field spliced at `offset` in `paragraphId`, pointing at a bookmark
+ * the writer ensures around `targetParagraphId`'s content. The bookmark name
+ * is derived deterministically from the target's wire id, so the client never
+ * invents names.
+ */
+export const insertCrossReferenceOperationSchema = z
+  .object({
+    type: z.literal('insert_cross_reference'),
+    paragraphId: editIdSchema,
+    offset: characterOffsetSchema,
+    targetParagraphId: editIdSchema,
+  })
+  .strict()
+export type DocumentEditInsertCrossReferenceOperation = z.infer<
+  typeof insertCrossReferenceOperationSchema
 >
