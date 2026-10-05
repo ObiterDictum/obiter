@@ -38,6 +38,74 @@ describe('run and paragraph property families', () => {
     expect(reparsed).toMatch(/<w:smallCaps\b/)
   })
 
+  it('clears every direct run property through apply, serialise and reload', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    // Write the whole family first, then release it, so the removed elements
+    // are ones the writer had just produced rather than absent by accident.
+    applyDocumentEdits(document, [
+      documentEditOperationSchema.parse({
+        type: 'set_run_emphasis',
+        runId: run.id,
+        bold: true,
+        italic: true,
+        underline: true,
+        fontFamily: 'Times New Roman',
+        fontSize: 28,
+        colour: 'C00000',
+        highlight: 'yellow',
+        strikethrough: true,
+        vertAlign: 'superscript',
+        smallCaps: true,
+      }),
+    ])
+    const written = await parseDocx(await serialiseDocx(document))
+    const writtenRun = mainParagraphs(written)[1]?.runs[0]
+    if (!writtenRun) throw new Error('Written run is missing.')
+    expect(writtenRun.preservedXmlFragments.join('')).toContain('Times New Roman')
+
+    applyDocumentEdits(written, [
+      documentEditOperationSchema.parse({
+        type: 'set_run_emphasis',
+        runId: writtenRun.id,
+        bold: null,
+        italic: null,
+        underline: null,
+        fontFamily: null,
+        fontSize: null,
+        colour: null,
+        highlight: null,
+        strikethrough: null,
+        vertAlign: null,
+        smallCaps: null,
+      }),
+    ])
+    const reparsed =
+      mainParagraphs(await parseDocx(await serialiseDocx(written)))[1]?.runs
+        .map((item) => item.preservedXmlFragments.join(''))
+        .join('') ?? ''
+
+    for (const element of [
+      'w:b',
+      'w:i',
+      'w:u',
+      'w:strike',
+      'w:highlight',
+      'w:vertAlign',
+      'w:rFonts',
+      'w:sz',
+      'w:szCs',
+      'w:color',
+      'w:smallCaps',
+    ]) {
+      expect(reparsed).not.toMatch(new RegExp(`<${element}\\b`, 'u'))
+    }
+  })
+
   it('round-trips paragraph alignment, spacing, and indent through apply and reload', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),

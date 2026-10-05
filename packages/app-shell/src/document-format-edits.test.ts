@@ -140,6 +140,10 @@ describe('tracked emphasis from the client path', () => {
     toolbar.onToggleHighlight()
     toolbar.onToggleSuperscript()
     toolbar.onToggleSubscript()
+    toolbar.onFontFamily('Georgia')
+    toolbar.onFontSize(28)
+    toolbar.onColour('FF0000')
+    toolbar.onClearFormatting()
     expect(format.emphasis).toEqual([])
   })
 })
@@ -769,6 +773,250 @@ describe('character formatting controls', () => {
   })
 })
 
+describe('font formatting controls', () => {
+  it('collects font family, size, colour and small caps for a run and a range', () => {
+    expect(
+      collectFormatOperations(
+        model,
+        {
+          emphasis: [
+            {
+              runId: 'r1',
+              fontFamily: 'Georgia',
+              fontSize: 28,
+              colour: 'FF0000',
+              smallCaps: true,
+            },
+            {
+              paragraphId: 'p1',
+              from: 1,
+              to: 3,
+              fontFamily: null,
+              fontSize: null,
+              colour: null,
+            },
+          ],
+          paragraphStyles: {},
+          numbering: {},
+        },
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'set_run_emphasis',
+        runId: 'r1',
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        smallCaps: true,
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 1,
+        to: 3,
+        fontFamily: null,
+        fontSize: null,
+        colour: null,
+      },
+    ])
+  })
+
+  it('paints font family, size and colour onto the draft model', () => {
+    const painted = formattedModel(model, {
+      emphasis: [
+        {
+          runId: 'r1',
+          fontFamily: 'Georgia',
+          fontSize: 28,
+          colour: 'FF0000',
+        },
+      ],
+      paragraphStyles: {},
+      numbering: {},
+    })
+    const fragments = (
+      painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
+    ).join('')
+    expect(fragments).toContain(
+      '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/>',
+    )
+    expect(fragments).toContain('<w:sz w:val="28"/>')
+    expect(fragments).toContain('<w:szCs w:val="28"/>')
+    expect(fragments).toContain('<w:color w:val="FF0000"/>')
+  })
+
+  it('clears every direct character property at once', () => {
+    const decorated = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'Styled',
+        preservedXmlFragments: [
+          '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:i/><w:u w:val="single"/><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/><w:sz w:val="28"/><w:szCs w:val="28"/><w:color w:val="FF0000"/><w:smallCaps/></w:rPr>',
+        ],
+      },
+    ])
+    const painted = formattedModel(decorated, {
+      emphasis: [
+        {
+          runId: 'r1',
+          bold: null,
+          italic: null,
+          underline: null,
+          strikethrough: null,
+          fontFamily: null,
+          fontSize: null,
+          colour: null,
+          highlight: null,
+          vertAlign: null,
+          smallCaps: null,
+        },
+      ],
+      paragraphStyles: {},
+      numbering: {},
+    })
+    const fragments = (
+      painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
+    ).join('')
+    for (const element of [
+      'w:b',
+      'w:i',
+      'w:u',
+      'w:strike',
+      'w:highlight',
+      'w:vertAlign',
+      'w:rFonts',
+      'w:sz',
+      'w:szCs',
+      'w:color',
+      'w:smallCaps',
+    ]) {
+      expect(fragments, element).not.toContain(`<${element}`)
+    }
+  })
+
+  it('reads the effective font family, size and colour from the covered run', () => {
+    const formatted = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/><w:color w:val="ff0000"/></w:rPr>',
+        ],
+      },
+    ])
+    expect(
+      formatControlState(formatted, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
+    ).toMatchObject({
+      fontFamily: 'Georgia',
+      fontSize: 28,
+      colour: 'FF0000',
+    })
+  })
+
+  it('reports mixed font values as unset', () => {
+    const mixed = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The ',
+        preservedXmlFragments: [
+          '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/></w:rPr>',
+        ],
+      },
+      { id: 'r2', text: 'Claimant', preservedXmlFragments: plainXml },
+    ])
+    expect(
+      formatControlState(mixed, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 11 },
+      ]),
+    ).toMatchObject({ fontFamily: null, fontSize: null, colour: null })
+  })
+
+  it('applies a chosen font and reads it back through the toolbar', () => {
+    const source = modelWithRuns([
+      { id: 'r1', text: 'The Claimant', preservedXmlFragments: plainXml },
+    ])
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = (view: DocumentModelWire) =>
+      documentFormatToolbar(
+        view,
+        format,
+        'p1',
+        (update) => {
+          format = update(format)
+        },
+        { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 0, to: 12 }] },
+      )
+
+    toolbar(source).onFontFamily('Georgia')
+    toolbar(source).onFontSize(28)
+    toolbar(source).onColour('FF0000')
+    const painted = toolbar(formattedModel(source, format))
+    expect(painted.fontFamily).toBe('Georgia')
+    expect(painted.fontSize).toBe(28)
+    expect(painted.colour).toBe('FF0000')
+  })
+
+  it('releases every direct property through clear formatting', () => {
+    const decorated = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'The Claimant',
+        preservedXmlFragments: [
+          '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:i/><w:u w:val="single"/><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/><w:sz w:val="28"/><w:color w:val="FF0000"/><w:smallCaps/></w:rPr>',
+        ],
+      },
+    ])
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      decorated,
+      format,
+      'p1',
+      (update) => {
+        format = update(format)
+      },
+      { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 0, to: 4 }] },
+    )
+    toolbar.onClearFormatting()
+    expect(format.emphasis).toEqual([
+      {
+        paragraphId: 'p1',
+        from: 0,
+        to: 4,
+        bold: null,
+        italic: null,
+        underline: null,
+        strikethrough: null,
+        fontFamily: null,
+        fontSize: null,
+        colour: null,
+        highlight: null,
+        vertAlign: null,
+        smallCaps: null,
+      },
+    ])
+    const painted = formatControlState(
+      formattedModel(decorated, format),
+      format,
+      'p1',
+      [{ paragraphId: 'p1', from: 0, to: 4 }],
+    )
+    expect(painted).toMatchObject({
+      bold: false,
+      italic: false,
+      underline: false,
+      strikethrough: false,
+      fontFamily: null,
+      fontSize: null,
+      colour: null,
+      highlight: null,
+      vertAlign: 'baseline',
+    })
+  })
+})
+
 describe('document-format-edits module size', () => {
   it('stays within the source line ceiling', () => {
     const files = [
@@ -786,6 +1034,7 @@ describe('document-format-edits module size', () => {
       './components/document-workspace/model-view.tsx',
       './components/document-workspace/toolbar-emphasis-state.test.tsx',
       './components/document-workspace/toolbar-character-formatting.test.tsx',
+      './components/document-workspace/toolbar-font-formatting.test.tsx',
       './components/document-workspace/model-page-blocks.tsx',
       './components/document-workspace/model-paragraph.tsx',
       './components/document-workspace/model-run.tsx',

@@ -3,7 +3,6 @@ import {
   ArrowCounterClockwise,
   ClipboardText,
   Copy,
-  Drop,
   Eraser,
   Highlighter,
   ListBullets,
@@ -48,6 +47,8 @@ const FONT_FACES = [
   'Courier New',
 ].map((name) => ({ value: name, label: name }))
 
+// The contract carries a font size in half-points, so the option value is
+// twice the point label the user sees.
 const FONT_SIZES = [
   '8',
   '9',
@@ -61,7 +62,20 @@ const FONT_SIZES = [
   '24',
   '28',
   '36',
-].map((size) => ({ value: size, label: size }))
+].map((size) => ({ value: String(Number(size) * 2), label: size }))
+
+// Hex without the leading `#`, matching the contract's colour pattern.
+const FONT_COLOURS = [
+  { value: '000000', label: 'Black' },
+  { value: 'C00000', label: 'Dark red' },
+  { value: 'FF0000', label: 'Red' },
+  { value: '0070C0', label: 'Blue' },
+  { value: '00B050', label: 'Green' },
+]
+
+const DEFAULT_FONT = { value: '', label: 'Default font' }
+const DEFAULT_SIZE = { value: '', label: 'Default size' }
+const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
 
 const LINE_SPACING = [
   { value: '1', label: '1.0' },
@@ -134,17 +148,29 @@ export function HomeRibbon({
         <ToolbarRow>
           <RibbonSelect
             label="Font"
-            soon
             className="w-[8.5rem]"
-            value="Calibri"
-            options={FONT_FACES}
+            value={format?.fontFamily ?? ''}
+            options={[DEFAULT_FONT, ...FONT_FACES]}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onChange={(value) =>
+              format?.onFontFamily(value === '' ? null : value)
+            }
           />
           <RibbonSelect
             label="Font size"
-            soon
             className="w-12"
-            value="11"
-            options={FONT_SIZES}
+            value={
+              format?.fontSize === null || format?.fontSize === undefined
+                ? ''
+                : String(format.fontSize)
+            }
+            options={[DEFAULT_SIZE, ...FONT_SIZES]}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onChange={(value) =>
+              format?.onFontSize(value === '' ? null : Number(value))
+            }
           />
         </ToolbarRow>
         <ToolbarRow>
@@ -180,10 +206,14 @@ export function HomeRibbon({
             onClick={format?.onToggleStrikethrough}
             icon={<TextStrikethrough size={16} aria-hidden />}
           />
-          <IconButton
+          <RibbonSelect
             label="Font colour"
-            soon
-            icon={<Drop size={16} aria-hidden />}
+            className="w-20"
+            value={format?.colour ?? ''}
+            options={[DEFAULT_COLOUR, ...FONT_COLOURS]}
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onChange={(value) => format?.onColour(value === '' ? null : value)}
           />
           <IconButton
             label="Highlight"
@@ -211,7 +241,9 @@ export function HomeRibbon({
           />
           <IconButton
             label="Clear formatting"
-            soon
+            disabled={!editing}
+            soon={format?.emphasisUnavailable}
+            onClick={format?.onClearFormatting}
             icon={<Eraser size={16} aria-hidden />}
           />
         </ToolbarRow>

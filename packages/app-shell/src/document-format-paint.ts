@@ -2,6 +2,7 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
+import { escapeXmlAttribute } from '@obiter/ooxml'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 import type {
   FormatDrafts,
@@ -249,6 +250,44 @@ function emphasisXml(fragments: readonly string[], emphasis: PendingEmphasis) {
             next,
             'vertAlign',
             `<w:vertAlign w:val="${emphasis.vertAlign}"/>`,
+          )
+  }
+  // Font family, size and colour carry the same XML the server writes in
+  // patchRunEmphasisXml: a named rFonts writes both ascii and hAnsi, a size
+  // writes sz and szCs together so the Latin and complex-script runs match,
+  // and both are released by removing every element that would set them.
+  if (emphasis.fontFamily !== undefined) {
+    next =
+      emphasis.fontFamily === null
+        ? strip(next, 'rFonts')
+        : upsert(
+            next,
+            'rFonts',
+            `<w:rFonts w:ascii="${escapeXmlAttribute(emphasis.fontFamily)}" w:hAnsi="${escapeXmlAttribute(emphasis.fontFamily)}"/>`,
+          )
+  }
+  if (emphasis.fontSize !== undefined) {
+    next = strip(strip(next, 'sz'), 'szCs')
+    if (emphasis.fontSize !== null) {
+      const size = String(emphasis.fontSize)
+      next = upsert(next, 'sz', `<w:sz w:val="${size}"/>`)
+      next = upsert(next, 'szCs', `<w:szCs w:val="${size}"/>`)
+    }
+  }
+  if (emphasis.colour !== undefined) {
+    next =
+      emphasis.colour === null
+        ? strip(next, 'color')
+        : upsert(next, 'color', `<w:color w:val="${emphasis.colour}"/>`)
+  }
+  if (emphasis.smallCaps !== undefined) {
+    next =
+      emphasis.smallCaps === null
+        ? strip(next, 'smallCaps')
+        : upsert(
+            next,
+            'smallCaps',
+            emphasis.smallCaps ? '<w:smallCaps/>' : '<w:smallCaps w:val="0"/>',
           )
   }
   return next

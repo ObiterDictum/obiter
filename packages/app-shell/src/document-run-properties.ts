@@ -237,3 +237,36 @@ export function runVertAlign(xml: string): VertAlignValue | null {
     lowercaseValue(current, prefix, 'vertAlign'),
   )
 }
+
+/** The run's named font, read from `w:rFonts`, or null when it is inherited. */
+export function runFontFamily(xml: string): string | null {
+  const current = withoutTrackedRunProperties(xml)
+  const prefix = xmlPrefix(current)
+  const fonts = tagAttrs(current, prefix, 'rFonts')
+  return (
+    wordAttr(fonts, 'ascii', prefix) ?? wordAttr(fonts, 'hAnsi', prefix) ?? null
+  )
+}
+
+/** The run's size in half-points, the unit the edit contract carries. */
+export function runFontSize(xml: string): number | null {
+  const current = withoutTrackedRunProperties(xml)
+  const prefix = xmlPrefix(current)
+  const value = wordAttr(tagAttrs(current, prefix, 'sz'), 'val', prefix)
+  if (value === undefined) return null
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * The run's colour as the contract spells it: `auto` or six upper-case hex
+ * digits, so a select's options compare against one canonical form.
+ */
+export function runColour(xml: string): string | null {
+  const current = withoutTrackedRunProperties(xml)
+  const prefix = xmlPrefix(current)
+  const value = wordAttr(tagAttrs(current, prefix, 'color'), 'val', prefix)
+  if (!value) return null
+  if (value.toLowerCase() === 'auto') return 'auto'
+  return /^[0-9A-Fa-f]{6}$/u.test(value) ? value.toUpperCase() : null
+}
