@@ -846,6 +846,30 @@ describe('font formatting controls', () => {
     expect(fragments).toContain('<w:color w:val="FF0000"/>')
   })
 
+  it('paints emphasis without disturbing a nested rPrChange history', () => {
+    const tracked = modelWithRuns([
+      {
+        id: 'r1',
+        text: 'Clause',
+        preservedXmlFragments: [
+          '<w:rPr><w:rPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr><w:rFonts w:ascii="Old" w:hAnsi="Old"/></w:rPr></w:rPrChange></w:rPr>',
+        ],
+      },
+    ])
+    const painted = formattedModel(tracked, {
+      emphasis: [{ runId: 'r1', fontFamily: 'Georgia' }],
+      paragraphStyles: {},
+      numbering: {},
+    })
+    const fragment = (
+      painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
+    ).join('')
+    // The active run gains the new font while the historical w:rPrChange
+    // subtree keeps the font it recorded.
+    expect(fragment).toContain('w:ascii="Georgia"')
+    expect(fragment).toContain('w:ascii="Old"')
+  })
+
   it('clears every direct character property at once', () => {
     const decorated = modelWithRuns([
       {

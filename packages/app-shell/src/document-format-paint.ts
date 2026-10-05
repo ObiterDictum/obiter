@@ -2,7 +2,7 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { escapeXmlAttribute } from '@obiter/ooxml'
+import { patchRunEmphasisXml } from '@obiter/ooxml'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 import type {
   FormatDrafts,
@@ -215,90 +215,11 @@ function numberingXml(fragments: readonly string[], numbering: NumberingDraft) {
 function emphasisXml(fragments: readonly string[], emphasis: PendingEmphasis) {
   const current =
     fragments.find((fragment) => /<w:rPr\b/u.test(fragment)) ?? '<w:rPr/>'
-  let next = current
-  if (emphasis.bold === true) next = upsert(next, 'b', '<w:b/>')
-  if (emphasis.bold === false) next = upsert(next, 'b', '<w:b w:val="0"/>')
-  if (emphasis.bold === null) next = strip(next, 'b')
-  if (emphasis.italic === true) next = upsert(next, 'i', '<w:i/>')
-  if (emphasis.italic === false) next = upsert(next, 'i', '<w:i w:val="0"/>')
-  if (emphasis.italic === null) next = strip(next, 'i')
-  if (emphasis.underline === true)
-    next = upsert(next, 'u', '<w:u w:val="single"/>')
-  if (emphasis.underline === false)
-    next = upsert(next, 'u', '<w:u w:val="none"/>')
-  if (emphasis.underline === null) next = strip(next, 'u')
-  if (emphasis.strikethrough === true)
-    next = upsert(next, 'strike', '<w:strike/>')
-  if (emphasis.strikethrough === false)
-    next = upsert(next, 'strike', '<w:strike w:val="0"/>')
-  if (emphasis.strikethrough === null) next = strip(next, 'strike')
-  if (emphasis.highlight !== undefined) {
-    next =
-      emphasis.highlight === null
-        ? strip(next, 'highlight')
-        : upsert(
-            next,
-            'highlight',
-            `<w:highlight w:val="${emphasis.highlight}"/>`,
-          )
-  }
-  if (emphasis.vertAlign !== undefined) {
-    next =
-      emphasis.vertAlign === null
-        ? strip(next, 'vertAlign')
-        : upsert(
-            next,
-            'vertAlign',
-            `<w:vertAlign w:val="${emphasis.vertAlign}"/>`,
-          )
-  }
-  // Font family, size and colour carry the same XML the server writes in
-  // patchRunEmphasisXml: a named rFonts writes both ascii and hAnsi, a size
-  // writes sz and szCs together so the Latin and complex-script runs match,
-  // and both are released by removing every element that would set them.
-  if (emphasis.fontFamily !== undefined) {
-    next =
-      emphasis.fontFamily === null
-        ? strip(next, 'rFonts')
-        : upsert(
-            next,
-            'rFonts',
-            `<w:rFonts w:ascii="${escapeXmlAttribute(emphasis.fontFamily)}" w:hAnsi="${escapeXmlAttribute(emphasis.fontFamily)}"/>`,
-          )
-  }
-  if (emphasis.fontSize !== undefined) {
-    next = strip(strip(next, 'sz'), 'szCs')
-    if (emphasis.fontSize !== null) {
-      const size = String(emphasis.fontSize)
-      next = upsert(next, 'sz', `<w:sz w:val="${size}"/>`)
-      next = upsert(next, 'szCs', `<w:szCs w:val="${size}"/>`)
-    }
-  }
-  if (emphasis.colour !== undefined) {
-    next =
-      emphasis.colour === null
-        ? strip(next, 'color')
-        : upsert(next, 'color', `<w:color w:val="${emphasis.colour}"/>`)
-  }
-  if (emphasis.smallCaps !== undefined) {
-    next =
-      emphasis.smallCaps === null
-        ? strip(next, 'smallCaps')
-        : upsert(
-            next,
-            'smallCaps',
-            emphasis.smallCaps ? '<w:smallCaps/>' : '<w:smallCaps w:val="0"/>',
-          )
-  }
-  return next
-}
-
-function upsert(fragment: string, localName: string, instruction: string) {
-  const without = strip(fragment, localName)
-  if (/\/\s*>$/u.test(without)) {
-    return `${without.replace(/\/\s*>$/u, '>')}${instruction}</w:rPr>`
-  }
-  return without.replace(/(<\/[^>]+>)$/u, `${instruction}$1`)
+  // The server's save path writes run emphasis through the same function, so a
+  // preview and the saved document cannot drift: it protects a nested
+  // `w:rPrChange` history, escapes every attribute value and inserts each child
+  // at its schema position rather than at the end of the fragment.
+  return patchRunEmphasisXml(current, emphasis)
 }
 
 function strip(fragment: string, localName: string) {
