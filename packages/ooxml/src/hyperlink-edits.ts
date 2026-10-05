@@ -17,16 +17,13 @@ import {
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
+import { attributeValue, isWord, type XmlElement } from './parts/xml-elements'
 import {
-  attributeValue,
-  isWord,
-  type XmlElement,
-} from './parts/xml-elements'
-import { effectiveRunView, runHasPendingOverlay } from './run-effective'
-import {
-  appendRelationship,
-  relationshipsPartName,
-} from './structure-package'
+  effectiveRunView,
+  runHasPendingOverlay,
+  type EffectiveRunView,
+} from './run-effective'
+import { appendRelationship, relationshipsPartName } from './structure-package'
 import {
   HYPERLINK_RELATIONSHIP_TYPE,
   RELATIONSHIPS_NAMESPACE,
@@ -186,13 +183,14 @@ function writeHyperlinkWrap(
       continue
     }
     const materialise = runHasPendingOverlay(overlay, anchor)
-    const view = materialise
+    const view: EffectiveRunView = materialise
       ? effectiveRunView(overlay, anchor, paragraph)
       : {
           paragraph,
           run: anchor,
           source: overlay.source,
-          consumedKeys: [] as string[],
+          fragments: anchor.wire.preservedXmlFragments,
+          consumedKeys: [],
         }
     // A materialised view's paragraph holds only the folded run, so its
     // offsets are run-local; the source view addresses paragraph offsets.
