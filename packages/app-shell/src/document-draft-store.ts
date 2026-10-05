@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { documentTextRunWireSchema } from '@obiter/contracts'
 import { pendingEmphasisSchema } from './document-draft-emphasis'
+import { paragraphFormatDraftSchema } from './document-draft-paragraph-format'
 import type { DraftState } from './document-save-plan'
 import {
   CLAIM_PREFIX,
@@ -80,6 +81,12 @@ export const draftStateSchema = z
         emphasis: z.array(pendingEmphasisSchema),
         paragraphStyles: z.record(z.string(), z.string().min(1).nullable()),
         numbering: z.record(z.string(), numberingDraftSchema),
+        // Introduced by E3 paragraph formatting. Absent in older persisted
+        // drafts, which parse to no pending paragraph layout.
+        paragraphFormats: z
+          .record(z.string(), paragraphFormatDraftSchema)
+          .optional()
+          .default({}),
       })
       .strict(),
     // A tracked-change rejection group introduced by E50 undo. Absent in older

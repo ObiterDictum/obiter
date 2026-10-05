@@ -7,7 +7,10 @@ import {
   continueList,
   emphasisAddress,
   indentList,
+  indentationPatch,
+  lineSpacingPatch,
   outdentList,
+  setParagraphFormatDraft,
   setParagraphStyleDraft,
   toggleEmphasisAtAddress,
 } from './document-format-edits'
@@ -17,10 +20,12 @@ import {
 } from './document-format-controls'
 import { effectiveParagraph } from './document-model-text'
 import type {
+  AlignmentValue,
   EmphasisPatch,
   FormatDrafts,
   HighlightValue,
 } from './document-format-types'
+import type { IndentKind } from './document-paragraph-format'
 import type { ExtraRuns } from './document-word-edits'
 
 export type ParagraphRange = {
@@ -161,6 +166,16 @@ export function documentFormatToolbar(
       controls.paragraphIds.reduce((next, id) => apply(next, id), current),
     )
   }
+  // Paragraph layout is whole-paragraph, so a caret in no paragraph (an empty
+  // id) is not a target; unlike run emphasis it does not need covered text.
+  const formatParagraphIds = controls.paragraphIds.filter((id) => id.length > 0)
+  const forEachFormatParagraph = (
+    apply: (current: FormatDrafts, paragraphId: string) => FormatDrafts,
+  ) => {
+    setFormat((current) =>
+      formatParagraphIds.reduce((next, id) => apply(next, id), current),
+    )
+  }
   return {
     ...(trackedRange
       ? {
@@ -172,6 +187,9 @@ export function documentFormatToolbar(
         : {}),
     paragraphStyleId: controls.paragraphStyleId,
     paragraphStyles: controls.paragraphStyles,
+    alignment: controls.alignment,
+    lineSpacing: controls.lineSpacing,
+    indentKind: controls.indentKind,
     bold: controls.bold,
     italic: controls.italic,
     underline: controls.underline,
@@ -192,6 +210,27 @@ export function documentFormatToolbar(
       if (controls.paragraphIds.length === 0) return
       forEachParagraph((current, id) =>
         setParagraphStyleDraft(current, id, styleId),
+      )
+    },
+    onAlignment: (alignment: AlignmentValue) => {
+      if (formatParagraphIds.length === 0) return
+      forEachFormatParagraph((current, id) =>
+        setParagraphFormatDraft(current, id, { alignment }),
+      )
+    },
+    onLineSpacing: (value: string) => {
+      const lineSpacing = lineSpacingPatch(value)
+      if (!lineSpacing || formatParagraphIds.length === 0) return
+      forEachFormatParagraph((current, id) =>
+        setParagraphFormatDraft(current, id, { lineSpacing }),
+      )
+    },
+    onIndentKind: (kind: IndentKind) => {
+      if (formatParagraphIds.length === 0) return
+      forEachFormatParagraph((current, id) =>
+        setParagraphFormatDraft(current, id, {
+          indentation: indentationPatch(kind),
+        }),
       )
     },
     onToggleBold: () => {

@@ -159,6 +159,7 @@ export function RibbonSelect({
   options,
   disabled,
   soon,
+  disabledReason,
   onChange,
   className,
 }: {
@@ -169,6 +170,9 @@ export function RibbonSelect({
   /** True for a not-yet control, or the reason a currently-unavailable one is
    * disabled (a tracked-change refusal), which its accessible name publishes. */
   soon?: boolean | string
+  /** The reason a currently-disabled control is unavailable, announced in its
+   * accessible name the same way `IconButton` publishes one. */
+  disabledReason?: string
   onChange?: (value: string) => void
   className?: string
 }) {
@@ -178,7 +182,9 @@ export function RibbonSelect({
       ? `${label}: ${soon}`
       : unavailable
         ? `${label} (not available yet)`
-        : label
+        : disabled && disabledReason
+          ? `${label}: ${disabledReason}`
+          : label
   return (
     <select
       aria-label={caption}

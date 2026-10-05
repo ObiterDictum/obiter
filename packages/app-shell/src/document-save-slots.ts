@@ -35,6 +35,11 @@ export function splitDraftSlots(
     drop,
     (key) => `number:${key}`,
   )
+  const paragraphFormats = splitKeys(
+    state.format.paragraphFormats,
+    drop,
+    (key) => `pformat:${key}`,
+  )
   const emphasis = {
     kept: state.format.emphasis.filter(
       (item) => !drop.has(emphasisSlotKey(item)),
@@ -64,6 +69,7 @@ export function splitDraftSlots(
       format: {
         paragraphStyles: paragraphStyles.kept,
         numbering: numbering.kept,
+        paragraphFormats: paragraphFormats.kept,
         emphasis: emphasis.kept,
       },
     },
@@ -78,6 +84,7 @@ export function splitDraftSlots(
       format: {
         paragraphStyles: paragraphStyles.taken,
         numbering: numbering.taken,
+        paragraphFormats: paragraphFormats.taken,
         emphasis: emphasis.taken,
       },
     },
@@ -114,6 +121,7 @@ export function hasDraftState(state: DraftState) {
     state.format.emphasis.length > 0 ||
     Object.keys(state.format.paragraphStyles).length > 0 ||
     Object.keys(state.format.numbering).length > 0 ||
+    Object.keys(state.format.paragraphFormats).length > 0 ||
     state.trackedRejections.length > 0
   )
 }
@@ -152,6 +160,8 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
       return JSON.stringify(state.format.paragraphStyles[slot.paragraphId])
     case 'numbering':
       return JSON.stringify(state.format.numbering[slot.paragraphId])
+    case 'paragraph-format':
+      return JSON.stringify(state.format.paragraphFormats[slot.paragraphId])
     case 'emphasis': {
       const match = [...state.format.emphasis]
         .reverse()
@@ -180,6 +190,8 @@ export function slotLabel(slot: DraftSlot): string {
       return 'a paragraph style'
     case 'numbering':
       return 'list formatting'
+    case 'paragraph-format':
+      return 'paragraph formatting'
     case 'emphasis':
       return 'formatting'
     case 'tracked-reject':

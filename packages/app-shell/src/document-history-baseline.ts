@@ -10,7 +10,11 @@ import {
   type LocalInsert,
 } from './document-edits'
 import { mergeEmphasis, paragraphNumPr } from './document-format-edits'
-import type { PendingEmphasis } from './document-format-types'
+import { paragraphFormatOf } from './document-paragraph-format'
+import type {
+  ParagraphFormatDraft,
+  PendingEmphasis,
+} from './document-format-types'
 import { documentStory } from './document-model-text'
 import {
   emphasisSlotKey,
@@ -267,6 +271,10 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
         remapParagraph,
       ),
       numbering: remapRecordKeys(state.format.numbering, remapParagraph),
+      paragraphFormats: remapRecordKeys(
+        state.format.paragraphFormats,
+        remapParagraph,
+      ),
       emphasis,
     },
   }
@@ -383,7 +391,11 @@ export function lineageCoversCoveredSlots(
       }
       continue
     }
-    if (slot.kind === 'paragraph-style' || slot.kind === 'numbering') {
+    if (
+      slot.kind === 'paragraph-style' ||
+      slot.kind === 'numbering' ||
+      slot.kind === 'paragraph-format'
+    ) {
       if (reversedParagraphs.has(slot.paragraphId)) continue
       // A style on a paragraph the same batch inserted is addressed by the
       // insert's intent id; every other paragraph must be in the map.
@@ -860,6 +872,38 @@ export function translateSnapshot(
           paragraph,
           baseline.fromModel.styles,
         ) ?? { numId: null }
+        break
+      }
+      case 'paragraph-format': {
+        // Reverse a saved paragraph-layout change by restating the pre-save
+        // answer at the result paragraph. A family the save wrote that the
+        // paragraph did not carry before is released with an explicit null, so
+        // undo clears it rather than leaving the saved value.
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        const reversal = identities.paragraphReversals.get(slot.paragraphId)
+        if (reversal) {
+          addTrackedRejection(next, reversal)
+          break
+        }
+        const paragraph = storyParagraph(baseline.fromModel, slot.paragraphId)
+        const sent = baseline.sent.format.paragraphFormats[slot.paragraphId]
+        if (!paragraph || !sent) break
+        const before = paragraphFormatOf(paragraph)
+        const inverse: ParagraphFormatDraft = {
+          ...(sent.alignment !== undefined
+            ? { alignment: before.alignment ?? null }
+            : {}),
+          ...(sent.lineSpacing !== undefined
+            ? { lineSpacing: before.lineSpacing ?? null }
+            : {}),
+          ...(sent.indentation !== undefined
+            ? { indentation: before.indentation ?? null }
+            : {}),
+        }
+        if (Object.keys(inverse).length === 0) break
+        const targetParagraphId =
+          identities.paragraphIds.get(slot.paragraphId) ?? slot.paragraphId
+        next.format.paragraphFormats[targetParagraphId] = inverse
         break
       }
       case 'extra-runs': {

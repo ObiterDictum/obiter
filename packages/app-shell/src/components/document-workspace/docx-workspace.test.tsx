@@ -70,10 +70,8 @@ describe('DocxWorkspace ribbon', () => {
       screen.getByRole('button', { name: 'Clear formatting' }),
     ).toHaveProperty('disabled', false)
     expect(
-      screen.getByRole('combobox', {
-        name: 'Line spacing (not available yet)',
-      }),
-    ).toHaveProperty('disabled', true)
+      screen.getByRole('combobox', { name: 'Line spacing' }),
+    ).toHaveProperty('disabled', false)
     expect(screen.getByRole('button', { name: 'Bullets' })).toHaveProperty(
       'disabled',
       true,

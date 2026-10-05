@@ -18,6 +18,8 @@ import {
   ToolbarGroup,
   ToolbarRow,
 } from './ribbon-primitives'
+import { INDENT_OPTIONS } from '../../document-paragraph-format'
+import type { DocumentFormatToolbar } from './ribbon-types'
 
 const PAGE_SIZES = [
   { value: 'a4', label: 'A4' },
@@ -125,7 +127,7 @@ export function InsertRibbon({
   )
 }
 
-export function LayoutRibbon() {
+export function LayoutRibbon({ format }: { format?: DocumentFormatToolbar }) {
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -174,14 +176,14 @@ export function LayoutRibbon() {
       <ToolbarGroup label="Paragraph">
         <RibbonSelect
           label="Indent"
-          soon
           className="w-[6.5rem]"
-          value="hanging"
-          options={[
-            { value: 'none', label: 'None' },
-            { value: 'first', label: 'First line' },
-            { value: 'hanging', label: 'Hanging' },
-          ]}
+          value={format?.indentKind ?? ''}
+          options={INDENT_OPTIONS}
+          disabled={!format}
+          onChange={(value) => {
+            const option = INDENT_OPTIONS.find((item) => item.value === value)
+            if (option) format?.onIndentKind(option.value)
+          }}
         />
       </ToolbarGroup>
     </div>

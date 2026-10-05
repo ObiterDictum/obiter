@@ -1,5 +1,7 @@
 import type { ListKind } from '../../document-list-toggle'
+import type { IndentKind } from '../../document-paragraph-format'
 import type {
+  AlignmentValue,
   HighlightValue,
   VertAlignValue,
 } from '../../document-format-types'
@@ -7,6 +9,12 @@ import type {
 export type DocumentFormatToolbar = {
   paragraphStyleId: string
   paragraphStyles: ReadonlyArray<{ styleId: string; name: string }>
+  /** The alignment every target paragraph agrees on, or null when mixed. */
+  alignment: AlignmentValue | null
+  /** A line-spacing option value, or '' when mixed or not an option. */
+  lineSpacing: string
+  /** The indent kind every target agrees on, or null when mixed. */
+  indentKind: IndentKind | null
   bold: boolean
   italic: boolean
   underline: boolean
@@ -27,6 +35,9 @@ export type DocumentFormatToolbar = {
   canApplyNumber: boolean
   canApplyMultilevel: boolean
   onParagraphStyle: (styleId: string | null) => void
+  onAlignment: (alignment: AlignmentValue) => void
+  onLineSpacing: (value: string) => void
+  onIndentKind: (kind: IndentKind) => void
   emphasisUnavailable?: string
   onToggleBold: () => void
   onToggleItalic: () => void
