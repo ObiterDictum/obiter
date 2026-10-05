@@ -1,9 +1,10 @@
-import type { OoxmlDocument, TextRunAnchor } from './model'
+import { OoxmlError, type OoxmlDocument, type TextRunAnchor } from './model'
 import {
   escapeXmlText,
   setOverlayReplacement,
   type OverlayReplacement,
 } from './parts/overlay'
+import { hasPendingBreakSplice } from './run-break-splices'
 
 // P10: extracting replaceTextRunText changed overlay keys to the run-scoped
 // `:text:` namespace, added xml:space for whitespace-bounded replacements, and
@@ -16,6 +17,14 @@ export function replaceTextRunAtAnchor(
   const part = document.sourceParts.get(anchor.partName)
   const overlay = part?.overlay
   if (!part || !overlay || anchor.textRanges.length === 0) return false
+  // A text replacement rewrites the run's text elements, so it cannot compose
+  // with a page-break splice that already reopens the run inside them: the
+  // replacement range strictly contains the splice point and the overlay
+  // serialiser rejects the overlap. Fail closed with a typed edit error so the
+  // batch is a holdable 400 rather than a 500 at serialisation.
+  if (hasPendingBreakSplice(overlay, anchor.runRange)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
 
   const breakReplacements = lineBreakRunReplacements(
     anchor,

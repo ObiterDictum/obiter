@@ -1,5 +1,10 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { patchSectionPropertiesXml } from '@obiter/ooxml'
+import {
+  activeSectionXml,
+  insertPropertyChild,
+  patchSectionPropertiesXml,
+  stripPropertyChild,
+} from '@obiter/ooxml'
 import { documentSectionXml } from './document-page-layout'
 import { xmlNumber, xmlTagAttrs } from './document-page-units'
 import type { BreakDraft } from './document-edits'
@@ -238,6 +243,7 @@ export function withBreakDrafts(
   // A section break's new section inherits the final section, exactly as the
   // writer seeds it, so the painted first section does not jump to defaults.
   const bodySection = documentSectionXml(model)
+  const instruction = bodySection || '<w:sectPr/>'
   return {
     ...model,
     stories: model.stories.map((story) => {
@@ -247,16 +253,45 @@ export function withBreakDrafts(
         paragraphs: story.paragraphs.map((paragraph) => {
           const list = byParagraph.get(paragraph.id)
           if (!list || list.length === 0) return paragraph
-          // The writer refuses a second section break on a paragraph that
-          // already ends a section, so paint one fragment per paragraph: two
-          // pending breaks on one paragraph must not register a phantom
-          // section and skew the geometry index for later sections.
+          // The writer refuses a section break on a paragraph that already
+          // ends a section, so painting one would register a phantom section
+          // the save never writes.
+          if (
+            paragraph.preservedXmlFragments.some(
+              (fragment) => activeSectionXml(fragment).length > 0,
+            )
+          ) {
+            return paragraph
+          }
+          // Merge the section into the paragraph's existing `w:pPr`, exactly
+          // as the writer does, instead of appending a second properties
+          // fragment the save would never produce. Two pending breaks on one
+          // paragraph still paint one fragment, so they cannot register a
+          // phantom section and skew the geometry index for later sections.
+          const index = paragraph.preservedXmlFragments.findIndex((fragment) =>
+            /<w:pPr\b/u.test(fragment),
+          )
+          if (index === -1) {
+            return {
+              ...paragraph,
+              preservedXmlFragments: [
+                ...paragraph.preservedXmlFragments,
+                breakFragment(instruction),
+              ],
+            }
+          }
           return {
             ...paragraph,
-            preservedXmlFragments: [
-              ...paragraph.preservedXmlFragments,
-              breakFragment(bodySection),
-            ],
+            preservedXmlFragments: paragraph.preservedXmlFragments.map(
+              (fragment, fragmentIndex) =>
+                fragmentIndex === index
+                  ? insertPropertyChild(
+                      stripPropertyChild(fragment, 'sectPr'),
+                      'sectPr',
+                      instruction,
+                    )
+                  : fragment,
+            ),
           }
         }),
       }
@@ -264,8 +299,8 @@ export function withBreakDrafts(
   }
 }
 
-function breakFragment(bodySection: string) {
-  return `<w:pPr>${bodySection || '<w:sectPr/>'}</w:pPr>`
+function breakFragment(section: string) {
+  return `<w:pPr>${section}</w:pPr>`
 }
 
 function readMarginsKind(attrs: string | undefined): SectionMarginsKind {
