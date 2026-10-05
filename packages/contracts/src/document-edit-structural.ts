@@ -76,7 +76,7 @@ function isHyperlinkTarget(value: string): boolean {
   return parsed.host.length > 0
 }
 
-const hyperlinkTargetSchema = z
+export const documentEditHyperlinkTargetSchema = z
   .string()
   .min(1)
   .max(DOCUMENT_EDIT_HYPERLINK_TARGET_MAX_LENGTH)
@@ -181,7 +181,7 @@ export const setHyperlinkOperationSchema = z
     paragraphId: editIdSchema,
     from: characterOffsetSchema,
     to: characterOffsetSchema,
-    target: hyperlinkTargetSchema.nullable(),
+    target: documentEditHyperlinkTargetSchema.nullable(),
   })
   .strict()
   .superRefine((operation, context) => {

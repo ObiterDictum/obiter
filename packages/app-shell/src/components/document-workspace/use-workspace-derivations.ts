@@ -12,7 +12,11 @@ import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
 import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
 import { withStructuralDrafts } from '../../document-structure-fold'
-import { pendingImageUrls } from '../../document-structural-drafts'
+import {
+  pendingImageUrls,
+  structuralLinkOverlays,
+  type ParagraphLinkOverlay,
+} from '../../document-structural-drafts'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -63,6 +67,11 @@ export type WorkspaceDerivations = {
   deleteParagraphReason: string | undefined
   /** The Insert ribbon's break and structural controls. */
   insert: InsertRibbonProps
+  /**
+   * Pending hyperlink ranges and cross-reference markers, grouped by the
+   * paragraph they paint over, in painted-text offsets.
+   */
+  linkOverlays: ReadonlyMap<string, ParagraphLinkOverlay>
 }
 
 export function useWorkspaceDerivations({
@@ -178,6 +187,13 @@ export function useWorkspaceDerivations({
       drafts.extraRuns,
     ],
   )
+  // Links and field markers carry no model change, so they are grouped into
+  // an overlay map here rather than folded like a table. The painted model
+  // feeds the marker labels so a reference names the target's current text.
+  const linkOverlays = useMemo(
+    () => structuralLinkOverlays(painted, drafts.structures),
+    [painted, drafts.structures],
+  )
   const insertRibbon = useInsertRibbon(
     model,
     painted,
@@ -193,6 +209,7 @@ export function useWorkspaceDerivations({
     authorities,
     imageUrls,
     insert: insertRibbon,
+    linkOverlays,
     deleteParagraphReason:
       model &&
       flowParagraphIds(model, drafts.inserts, drafts.deletedParagraphIds)

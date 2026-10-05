@@ -41,24 +41,29 @@ const imageDraft = (
   name,
 })
 
-const operationFor = (draft: StructuralDraft): DocumentEditOperation =>
-  draft.kind === 'table'
-    ? {
-        type: 'insert_table',
-        paragraphId: draft.paragraphId,
-        rows: draft.rows,
-        columns: draft.columns,
-      }
-    : {
-        type: 'insert_image',
-        paragraphId: draft.paragraphId,
-        offset: draft.offset,
-        contentType: draft.contentType,
-        dataBase64: draft.dataBase64,
-        widthPx: draft.widthPx,
-        heightPx: draft.heightPx,
-        name: draft.name,
-      }
+const operationFor = (draft: StructuralDraft): DocumentEditOperation => {
+  if (draft.kind === 'table') {
+    return {
+      type: 'insert_table',
+      paragraphId: draft.paragraphId,
+      rows: draft.rows,
+      columns: draft.columns,
+    }
+  }
+  if (draft.kind === 'image') {
+    return {
+      type: 'insert_image',
+      paragraphId: draft.paragraphId,
+      offset: draft.offset,
+      contentType: draft.contentType,
+      dataBase64: draft.dataBase64,
+      widthPx: draft.widthPx,
+      heightPx: draft.heightPx,
+      name: draft.name,
+    }
+  }
+  throw new Error('Only table and image drafts fold into the model.')
+}
 
 /**
  * The fold and the writer must agree on the same placement rules — one

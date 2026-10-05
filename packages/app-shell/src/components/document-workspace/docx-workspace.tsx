@@ -180,6 +180,7 @@ export function DocxWorkspace({
     imageUrls,
     deleteParagraphReason,
     insert,
+    linkOverlays,
   } = useWorkspaceDerivations({
     documentId,
     model,
@@ -370,6 +371,7 @@ export function DocxWorkspace({
                         mirrorSelection(paragraphId, from, to, direction)
                       }}
                       selectionSegments={selectionSegments}
+                      linkOverlays={linkOverlays}
                       selectionHandlers={selectionHandlers}
                       onFocusParagraph={focusParagraph}
                       onMoveCaret={moveCaret}
