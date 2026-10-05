@@ -228,7 +228,7 @@ export function DocxWorkspace({
         {...documentBreakToolbar({
           paragraphId: selectedParagraphId,
           model: painted ?? model,
-          offset: formatRange?.to ?? 0,
+          offset: formatRange?.to ?? null,
           selectionActive,
           trackChanges,
           setBreaks: drafts.setBreaks,

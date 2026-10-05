@@ -82,6 +82,25 @@ describe('break recording', () => {
     })
     expect(breaks.map((item) => item.kind)).toEqual(['page', 'section'])
   })
+
+  it('refuses an unresolved caret rather than defaulting to offset zero', () => {
+    const recorded: BreakDraft[] = []
+    const toolbar = documentBreakToolbar({
+      paragraphId: 'p1',
+      model: singleParagraphModel(),
+      offset: null,
+      selectionActive: false,
+      trackChanges: false,
+      setBreaks: (update) => {
+        recorded.splice(0, recorded.length, ...update(recorded))
+      },
+    })
+    expect(toolbar.breakUnavailable).toBe(
+      'Place the cursor in the paragraph text to insert a break',
+    )
+    toolbar.onPageBreak()
+    expect(recorded).toEqual([])
+  })
 })
 
 type BreakToolbarAt = (

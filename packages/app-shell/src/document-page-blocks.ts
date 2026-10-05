@@ -98,6 +98,12 @@ export function layoutParagraph(
     extraRuns[item.paragraph.id] ?? [],
   )
   const text = paragraphPlainText(paragraph)
+  // A stored break is addressed by text offset exactly like a pending one, so
+  // both merge into one ordered set. Only the pending path used to split, which
+  // left a reloaded break rendering as a single sheet.
+  const breaks = [
+    ...new Set([...pageBreaks, ...storedPageBreakOffsets(paragraph)]),
+  ].sort((left, right) => left - right)
   const face = paragraphFace(paragraph, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx
@@ -119,7 +125,7 @@ export function layoutParagraph(
     placed = true
   }
 
-  if (hasPageBreak(paragraph) && session.y > 0) advance()
+  if (breaks.includes(0) && session.y > 0) advance()
 
   if (imagePx > 0) {
     if (session.y > 0 && imagePx + linePx > frame.heightPx - session.y) {
@@ -140,7 +146,7 @@ export function layoutParagraph(
     // text at the next break makes this fragment stop there; the advance below
     // then starts the new sheet, so the break lands at the caret rather than
     // after the whole paragraph.
-    const nextBreak = pageBreaks.find((at) => at > offset)
+    const nextBreak = breaks.find((at) => at > offset)
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : face.marginTopPx
     const remaining = frame.heightPx - session.y
@@ -262,12 +268,34 @@ function placeAnchors(
   }
 }
 
-function hasPageBreak(paragraph: DocumentParagraphWire): boolean {
-  const xml = [
-    ...paragraph.preservedXmlFragments,
-    ...paragraph.runs.flatMap((run) => run.preservedXmlFragments),
-  ].join('')
-  if (/<w:br\b[^>]*w:type="page"/i.test(xml)) return true
+/**
+ * Effective-text offsets of the page breaks already stored in a paragraph. A
+ * break run between text runs maps to the offset the text before it ends at;
+ * `w:pageBreakBefore` (and a paragraph-level break) maps to the paragraph
+ * start. A break inside a run that still carries text is addressed at that
+ * run's start, the only boundary the run list can recover.
+ */
+function storedPageBreakOffsets(paragraph: DocumentParagraphWire): number[] {
+  const offsets: number[] = []
+  const paragraphXml = paragraph.preservedXmlFragments.join('')
+  if (pageBreakBefore(paragraphXml) || hasPageBreakElement(paragraphXml)) {
+    offsets.push(0)
+  }
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    if (hasPageBreakElement(run.preservedXmlFragments.join(''))) {
+      offsets.push(cursor)
+    }
+    cursor += run.text.length
+  }
+  return offsets
+}
+
+function hasPageBreakElement(xml: string): boolean {
+  return /<w:br\b[^>]*w:type="page"/i.test(xml)
+}
+
+function pageBreakBefore(xml: string): boolean {
   const before = xml.match(/<w:pageBreakBefore\b([^>]*)\/?>/i)
   if (!before) return false
   const val = before[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()
