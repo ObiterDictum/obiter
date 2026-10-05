@@ -1,0 +1,508 @@
+import { loadLocalEnvFile, readNodeEnv, type NodeEnv } from '@obiter/config'
+import {
+  NER_DEFAULT_CHUNK_TOKENS,
+  NER_TOKEN_BUDGET,
+  NER_TOKEN_OVERLAP,
+  RAMPART_MODEL_ID,
+  RAMPART_MODEL_REVISION,
+} from '@obiter/rampart-inference'
+import { defaultRampartCacheDir } from './rampart-cache'
+import { readCorpusDatabaseUrls } from './env-corpus'
+import type { RedactionDetectionConfig } from './redaction-detection'
+import {
+  DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+  DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+  DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET,
+} from './request-limit-defaults'
+import {
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+} from '@obiter/ooxml'
+
+const requiredProductionKeys = [
+  'DATABASE_URL',
+  'BETTER_AUTH_SECRET',
+  'BETTER_AUTH_URL',
+  'OBITER_WEB_ORIGIN',
+  'OBITER_RESEND_API_KEY',
+  // Hard-redaction finalize renders sanitized DOCX through the sandboxed
+  // rendering worker. Without it a DOCX-source run cannot produce its secure
+  // PDF, so production must configure it rather than fail at finalize time.
+  'OBITER_REDACTION_RENDERER_URL',
+  'MEILISEARCH_HOST',
+  'MEILISEARCH_SEARCH_API_KEY',
+  'MEILISEARCH_ADMIN_API_KEY',
+] as const
+
+const requiredTestKeys = ['TEST_DATABASE_URL'] as const
+
+export interface ApiEnv {
+  databaseUrl: string
+  /** Legal-corpus reads. Null means no separate corpus target was configured,
+   * so the corpus is `databaseUrl`: the compatibility seam. */
+  corpusDatabaseUrl: string | null
+  /** Legal-corpus writes for the explicit indexing run. Null means no
+   * corpus write path: either the compatibility seam, where writes use
+   * `databaseUrl`, or an explicitly configured read-only corpus. No user
+   * request path writes the corpus; the writer capability exists for bulk
+   * ingestion. */
+  corpusWriteDatabaseUrl: string | null
+  authSecret: string
+  authBaseUrl: string
+  webOrigin: string
+  marketingOrigin: string | null
+  desktopOrigin: string
+  resendApiKey: string | null
+  emailFrom: string
+  /**
+   * Base URL of the sandboxed rendering worker that turns a sanitized .docx
+   * into an intermediate PDF. Null outside production when unconfigured; a
+   * DOCX-source hard redaction then fails visibly instead of downgrading.
+   */
+  redactionRendererUrl: string | null
+  meilisearchHost: string
+  meilisearchSearchApiKey: string
+  meilisearchAdminApiKey: string
+  legalAuthoritiesIndex: string
+  legislationProvisionsIndex: string
+  mojFindCaseLawBaseUrl: string
+  mojFindCaseLawRateLimit: number
+  /**
+   * Cluster-wide Find Case Law HTTP attempts allowed across every API replica
+   * in the rolling five-minute window. Retained for the explicit indexing run's
+   * admission machinery: no user request path constructs the budget, so the
+   * user-facing API neither charges nor enforces it.
+   */
+  mojFindCaseLawRequestBudget: number
+  rampartModel: string
+  rampartRevision: string
+  rampartCacheDir: string
+  rampartMinScore: number
+  rampartChunkTokens: number
+  jsonBodyMaxBytes: number
+  documentUploadMaxBytes: number
+  ooxmlMaxEntries: number
+  ooxmlMaxUncompressedBytes: number
+  ooxmlMaxEntryUncompressedBytes: number
+  ooxmlMaxCompressionRatio: number
+  ooxmlInflateConcurrency: number
+  legalSearchHydrationQueueMax: number
+  legalSearchHydrationPerClientMax: number
+  legalSearchHydrationWindowMs: number
+  legalSearchHydrationLeaseMs: number
+  port: number
+  nodeEnv: NodeEnv
+  // The .env this process actually read, or null when it read none. Reported by
+  // /api/health provenance so a lane can prove which configuration file it runs
+  // with, the same way it proves its checkout root and commit.
+  localEnvFile: string | null
+}
+
+function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv !== 'production') {
+    return
+  }
+
+  const missing: string[] = requiredProductionKeys.filter(
+    (key) => !process.env[key],
+  )
+  if (!process.env.LEGAL_AUTHORITIES_INDEX) {
+    missing.push('LEGAL_AUTHORITIES_INDEX')
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required production environment values: ${missing.join(', ')}`,
+    )
+  }
+}
+
+function requireTestEnv(nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv !== 'test') {
+    return
+  }
+
+  const missing = requiredTestKeys.filter((key) => !process.env[key])
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required test environment values: ${missing.join(', ')}`,
+    )
+  }
+}
+
+function parseUrl(key: string, value: string): string {
+  try {
+    return new URL(value).toString().replace(/\/$/, '')
+  } catch {
+    throw new Error(`${key} must be a valid URL.`)
+  }
+}
+
+function readRequiredUrl(key: string, fallback: string): string {
+  const value = process.env[key]
+
+  if (!value) {
+    return parseUrl(key, fallback)
+  }
+
+  return parseUrl(key, value)
+}
+
+function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv !== 'test') {
+    return readRequiredUrl(
+      'DATABASE_URL',
+      'postgres://obiter:obiter@localhost:5432/obiter',
+    )
+  }
+
+  const testDatabaseUrl = parseUrl(
+    'TEST_DATABASE_URL',
+    process.env.TEST_DATABASE_URL ?? '',
+  )
+  const productionDatabaseUrl = process.env.DATABASE_URL
+    ? parseUrl('DATABASE_URL', process.env.DATABASE_URL)
+    : null
+
+  if (productionDatabaseUrl === testDatabaseUrl) {
+    throw new Error('TEST_DATABASE_URL must not match DATABASE_URL.')
+  }
+
+  return testDatabaseUrl
+}
+
+function readOptionalUrl(key: string): string | null {
+  const value = process.env[key]
+
+  if (!value) {
+    return null
+  }
+
+  try {
+    return new URL(value).toString()
+  } catch {
+    throw new Error(`${key} must be a valid URL.`)
+  }
+}
+
+function readSecret(key: string, fallback: string, nodeEnv: ApiEnv['nodeEnv']) {
+  const value = process.env[key] ?? fallback
+  const trimmed = value.trim()
+
+  if (trimmed.length !== value.length || trimmed.length === 0) {
+    throw new Error(`${key} must not be blank or padded with whitespace.`)
+  }
+
+  if (nodeEnv === 'production' && trimmed.length < 32) {
+    throw new Error(`${key} must be at least 32 characters in production.`)
+  }
+
+  return trimmed
+}
+
+// `dev-key` is a working local placeholder, so it is reachable only in
+// development. Production already refused it; test now does too, because a
+// default credential that works eventually gets used somewhere real.
+function readMeilisearchKey(key: string, nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv === 'development') {
+    return readSecret(key, 'dev-key', nodeEnv)
+  }
+
+  return readConfiguredSecret(key, nodeEnv)
+}
+
+function readIndexName(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const trimmed = value.trim()
+
+  if (trimmed.length !== value.length || trimmed.length === 0) {
+    throw new Error(`${key} must not be blank or padded with whitespace.`)
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+    throw new Error(
+      `${key} may only contain letters, numbers, underscores, and hyphens.`,
+    )
+  }
+
+  return trimmed
+}
+
+function readLegalAuthoritiesIndexName() {
+  return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
+}
+
+function readLegislationProvisionsIndexName() {
+  return readIndexName('LEGISLATION_PROVISIONS_INDEX', 'legislation_provisions')
+}
+
+function readOptionalSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
+  const value = process.env[key]
+
+  if (!value) {
+    return null
+  }
+
+  return readSecret(key, value, nodeEnv)
+}
+
+function readConfiguredSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
+  const value = process.env[key]
+
+  if (!value) {
+    throw new Error(`${key} must be configured.`)
+  }
+
+  return readSecret(key, value, nodeEnv)
+}
+
+function readAuthSecret(nodeEnv: ApiEnv['nodeEnv']) {
+  return readConfiguredSecret('BETTER_AUTH_SECRET', nodeEnv)
+}
+
+function readPort() {
+  const rawPort = process.env.PORT ?? '8787'
+  const port = Number(rawPort)
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PORT must be an integer between 1 and 65535.')
+  }
+
+  return port
+}
+
+/**
+ * Load the worktree's `.env` into process.env without overriding values the
+ * process already has, and return the path read (null when none was). The path
+ * is reported by /api/health provenance so a lane can prove its configuration
+ * file as well as its checkout. The bounded walk and duplicate rule live once,
+ * in `@obiter/config`, shared with the legal ingestor.
+ */
+export function loadLocalDotEnv(): string | null {
+  return loadLocalEnvFile()
+}
+
+function readPositiveInteger(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer.`)
+  }
+
+  return parsed
+}
+
+function readCompressionRatio(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer compression ratio.`)
+  }
+
+  return parsed
+}
+
+function readUnpaddedValue(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const trimmed = value.trim()
+
+  if (trimmed.length === 0 || trimmed.length !== value.length) {
+    throw new Error(`${key} must not be blank or padded with whitespace.`)
+  }
+
+  return trimmed
+}
+
+function readRampartCacheDir() {
+  const value = process.env.OBITER_RAMPART_CACHE_DIR
+  if (value === undefined || value === '') return defaultRampartCacheDir()
+
+  return readUnpaddedValue('OBITER_RAMPART_CACHE_DIR', value)
+}
+
+function readRampartMinScore() {
+  const key = 'OBITER_RAMPART_MIN_SCORE'
+  const value = process.env[key] ?? '0.4'
+  const parsed = Number(value)
+
+  if (
+    value.trim().length === 0 ||
+    value.trim() !== value ||
+    !Number.isFinite(parsed) ||
+    parsed < 0 ||
+    parsed > 1
+  ) {
+    throw new Error(`${key} must be a number between 0 and 1.`)
+  }
+
+  return parsed
+}
+
+function readRampartChunkTokens() {
+  const key = 'OBITER_RAMPART_CHUNK_TOKENS'
+  const value = process.env[key] ?? String(NER_DEFAULT_CHUNK_TOKENS)
+  const parsed = Number(value)
+
+  if (
+    value.trim().length === 0 ||
+    value.trim() !== value ||
+    !Number.isInteger(parsed) ||
+    parsed <= NER_TOKEN_OVERLAP ||
+    parsed > NER_TOKEN_BUDGET
+  ) {
+    throw new Error(
+      `${key} must be an integer between ${NER_TOKEN_OVERLAP + 1} and ${NER_TOKEN_BUDGET}.`,
+    )
+  }
+
+  return parsed
+}
+
+/**
+ * Detection settings on their own, without the database, auth and search
+ * configuration `readApiEnv` also demands. The model prefetch script needs the
+ * same model id, revision and cache directory the API will use, but it has no
+ * business requiring production secrets to download a file.
+ */
+export function readRampartDetectionConfig(): RedactionDetectionConfig {
+  loadLocalDotEnv()
+
+  return {
+    model: readUnpaddedValue('OBITER_RAMPART_MODEL', RAMPART_MODEL_ID),
+    revision: readUnpaddedValue(
+      'OBITER_RAMPART_REVISION',
+      RAMPART_MODEL_REVISION,
+    ),
+    cacheDir: readRampartCacheDir(),
+    minScore: readRampartMinScore(),
+    chunkTokens: readRampartChunkTokens(),
+  }
+}
+
+export function readApiEnv(): ApiEnv {
+  const localEnvFile = loadLocalDotEnv()
+  const nodeEnv = readNodeEnv()
+  requireProductionEnv(nodeEnv)
+  requireTestEnv(nodeEnv)
+  const resendApiKey = readOptionalSecret('OBITER_RESEND_API_KEY', nodeEnv)
+  const databaseUrl = readDatabaseUrl(nodeEnv)
+
+  if (nodeEnv === 'production' && !resendApiKey) {
+    throw new Error('OBITER_RESEND_API_KEY must be configured in production.')
+  }
+
+  const webOrigin = readRequiredUrl(
+    'OBITER_WEB_ORIGIN',
+    'http://localhost:3000',
+  )
+  const rampart = readRampartDetectionConfig()
+
+  return {
+    databaseUrl,
+    ...readCorpusDatabaseUrls(nodeEnv, databaseUrl),
+    authSecret: readAuthSecret(nodeEnv),
+    authBaseUrl: readRequiredUrl(
+      'BETTER_AUTH_URL',
+      nodeEnv === 'development' ? webOrigin : 'http://localhost:8787',
+    ),
+    webOrigin,
+    marketingOrigin: readOptionalUrl('OBITER_MARKETING_ORIGIN'),
+    desktopOrigin: readRequiredUrl(
+      'OBITER_DESKTOP_ORIGIN',
+      'obiter://desktop-auth',
+    ),
+    resendApiKey,
+    emailFrom: (
+      process.env.OBITER_EMAIL_FROM ?? 'onboarding@resend.dev'
+    ).trim(),
+    redactionRendererUrl: readOptionalUrl('OBITER_REDACTION_RENDERER_URL'),
+    meilisearchHost: readRequiredUrl(
+      'MEILISEARCH_HOST',
+      'http://localhost:7700',
+    ),
+    meilisearchSearchApiKey: readMeilisearchKey(
+      'MEILISEARCH_SEARCH_API_KEY',
+      nodeEnv,
+    ),
+    meilisearchAdminApiKey: readMeilisearchKey(
+      'MEILISEARCH_ADMIN_API_KEY',
+      nodeEnv,
+    ),
+    legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),
+    legislationProvisionsIndex: readLegislationProvisionsIndexName(),
+    mojFindCaseLawBaseUrl: readRequiredUrl(
+      'MOJ_FIND_CASE_LAW_BASE_URL',
+      'https://caselaw.nationalarchives.gov.uk',
+    ),
+    mojFindCaseLawRateLimit: readPositiveInteger(
+      'MOJ_FIND_CASE_LAW_RATE_LIMIT',
+      '1000',
+    ),
+    mojFindCaseLawRequestBudget: readPositiveInteger(
+      'MOJ_FIND_CASE_LAW_REQUEST_BUDGET',
+      String(DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET),
+    ),
+    rampartModel: rampart.model,
+    rampartRevision: rampart.revision,
+    rampartCacheDir: rampart.cacheDir,
+    rampartMinScore: rampart.minScore,
+    rampartChunkTokens: rampart.chunkTokens,
+    jsonBodyMaxBytes: readPositiveInteger(
+      'JSON_BODY_MAX_BYTES',
+      String(DEFAULT_JSON_BODY_MAX_BYTES),
+    ),
+    documentUploadMaxBytes: readPositiveInteger(
+      'DOCUMENT_UPLOAD_MAX_BYTES',
+      String(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES),
+    ),
+    ooxmlMaxEntries: readPositiveInteger(
+      'OOXML_MAX_ENTRIES',
+      String(OOXML_MAX_ENTRIES),
+    ),
+    ooxmlMaxUncompressedBytes: readPositiveInteger(
+      'OOXML_MAX_UNCOMPRESSED_BYTES',
+      String(OOXML_MAX_UNCOMPRESSED_BYTES),
+    ),
+    ooxmlMaxEntryUncompressedBytes: readPositiveInteger(
+      'OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES',
+      String(OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES),
+    ),
+    ooxmlMaxCompressionRatio: readCompressionRatio(
+      'OOXML_MAX_COMPRESSION_RATIO',
+      String(OOXML_MAX_COMPRESSION_RATIO),
+    ),
+    ooxmlInflateConcurrency: readPositiveInteger(
+      'OOXML_INFLATE_CONCURRENCY',
+      String(OOXML_INFLATE_CONCURRENCY),
+    ),
+    legalSearchHydrationQueueMax: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_QUEUE_MAX',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX),
+    ),
+    legalSearchHydrationPerClientMax: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX),
+    ),
+    legalSearchHydrationWindowMs: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_WINDOW_MS',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS),
+    ),
+    legalSearchHydrationLeaseMs: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_LEASE_MS',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS),
+    ),
+    port: readPort(),
+    nodeEnv,
+    localEnvFile,
+  }
+}
