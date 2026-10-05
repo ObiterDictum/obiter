@@ -89,6 +89,40 @@ describe('structural edit contracts', () => {
     expect(parse([operation]).success).toBe(false)
   })
 
+  it('accepts a maximum-sized valid base64 payload without overflowing', () => {
+    const parsed = parse([
+      { ...image, dataBase64: 'A'.repeat(DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH) },
+    ])
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects a maximum-sized invalid base64 payload without overflowing', () => {
+    // One bad character at the tail of a bound-length string; the check is a
+    // linear scan, so this cannot throw a stack RangeError the way the old
+    // regex did at 8 MiB.
+    const parsed = parse([
+      {
+        ...image,
+        dataBase64: `${'A'.repeat(DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH - 1)}!`,
+      },
+    ])
+    expect(parsed.success).toBe(false)
+  })
+
+  it.each([
+    ['unpadded group', 'AQID'],
+    ['single padding', 'AQI='],
+    ['double padding', 'AQ=='],
+    ['padding mid-string', 'A=AA'],
+    ['padding only', '===='],
+    ['a length not divisible by four', 'AQIDB'],
+  ])('handles base64 edge case %s', (_label, dataBase64) => {
+    const parsed = parse([{ ...image, dataBase64 }])
+    const valid =
+      dataBase64 === 'AQID' || dataBase64 === 'AQI=' || dataBase64 === 'AQ=='
+    expect(parsed.success).toBe(valid)
+  })
+
   it('accepts every supported image content type', () => {
     for (const contentType of [
       'image/png',

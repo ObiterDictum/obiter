@@ -3360,7 +3360,11 @@
                 <code>/api/matters/:matterId/documents</code> and
                 <code>/api/redaction-runs</code> use
                 <code>DOCUMENT_UPLOAD_MAX_BYTES</code> only when
-                <code>c.get('user')</code> is set. This includes
+                <code>c.get('user')</code> is set. The two document-edit routes
+                — <code>POST /api/documents/:id/edit</code> and
+                <code>/api/documents/:id/collaboration/merge</code> — alone use
+                <code>DOCUMENT_EDIT_MAX_BYTES</code> (12 MiB by default), since
+                edit batches carry base64 picture payloads. This includes
                 <code>/api/auth/*</code>; Better Auth sees only the replaced
                 bounded <code>Request</code>.</span
               >
@@ -4596,11 +4600,15 @@
                 </tr>
                 <tr>
                   <td class="id">
-                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES
+                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES ·
+                    DOCUMENT_EDIT_MAX_BYTES
                   </td>
                   <td>
-                    Request body caps for JSON routes and multipart document or
-                    redact uploads. Enforced globally in
+                    Request body caps for JSON routes, multipart document or
+                    redact uploads, and the two document-edit routes (<code
+                      >POST /api/documents/:id/edit</code
+                    >, <code>/api/documents/:id/collaboration/merge</code>; 12
+                    MiB by default). Enforced globally in
                     <code>createApiApp</code> middleware, not only on routes
                     that call <code>readLimitedJsonBody</code> or
                     <code>readLimitedFormData</code>.
