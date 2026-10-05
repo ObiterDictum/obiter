@@ -6852,6 +6852,25 @@
                   </td>
                   <td class="id">architecture.md</td>
                 </tr>
+                <tr>
+                  <td>
+                    A <code>w:pPr</code> containing a <code>w:pPrChange</code>
+                    is absent from preserved fragments
+                  </td>
+                  <td>
+                    The story parser drops any paragraph child that contains a
+                    tracked change, so paragraph properties with tracked history
+                    never reach <code>preservedXmlFragments</code>. A
+                    paragraph-format or numbering reversal then reads no direct
+                    properties and releases values the paragraph still has,
+                    silently losing formatting on undo. The proper fix is a
+                    model-level active-properties fragment; until then undo on
+                    such a paragraph is conservative and can drop formatting.
+                  </td>
+                  <td class="id">
+                    ooxml/parts/stories.ts · document-paragraph-format.ts
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

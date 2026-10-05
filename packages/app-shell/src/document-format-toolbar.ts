@@ -11,6 +11,7 @@ import {
   lineSpacingPatch,
   outdentList,
   paragraphFormatState,
+  paragraphIndentLeftPx,
   setParagraphFormatDraft,
   setParagraphStyleDraft,
   toggleEmphasisAtAddress,
@@ -169,7 +170,12 @@ export function documentFormatToolbar(
   }
   // Paragraph layout is whole-paragraph, so a caret in no paragraph (an empty
   // id) is not a target; unlike run emphasis it does not need covered text.
-  const formatParagraphIds = controls.paragraphIds.filter((id) => id.length > 0)
+  // A pending insert's clientId is not a stored paragraph, so formatting it
+  // could only write a draft that never paints and blocks the save; the save
+  // plan already excludes a pending insert the same way.
+  const formatParagraphIds = controls.paragraphIds.filter(
+    (id) => id.length > 0 && selectedParagraph(model, id) !== undefined,
+  )
   const forEachFormatParagraph = (
     apply: (current: FormatDrafts, paragraphId: string) => FormatDrafts,
   ) => {
@@ -243,7 +249,9 @@ export function documentFormatToolbar(
           return current
         }
         return setParagraphFormatDraft(current, id, {
-          indentation: indentationPatch(kind),
+          indentation: indentationPatch(kind, {
+            leftPx: paragraphIndentLeftPx(model, current, id),
+          }),
         })
       })
     },

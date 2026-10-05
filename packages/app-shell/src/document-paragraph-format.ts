@@ -4,7 +4,12 @@ import type {
 } from '@obiter/contracts'
 import { formattedParagraphDraft } from './document-format-paint'
 import { documentStory } from './document-model-text'
-import { xmlAttr, xmlNumber, xmlTagAttrs } from './document-page-units'
+import {
+  pxToTwip,
+  xmlAttr,
+  xmlNumber,
+  xmlTagAttrs,
+} from './document-page-units'
 import { paragraphFace, type ParagraphFace } from './document-page-style'
 import type {
   AlignmentValue,
@@ -53,12 +58,24 @@ export function lineSpacingPatch(
  * first-line/hanging indent but leaves any direct left/right indentation alone,
  * so it is an instruction that names those two attributes rather than a release
  * of the whole `ind`.
+ *
+ * Hanging also names `w:left`: OOXML measures `w:hanging` from `w:left`, so
+ * without a body indent the first line would outdent into the margin. The body
+ * indent is the larger of the paragraph's effective left indent and Word's
+ * default half inch; the caller supplies it in px so the face stays the single
+ * source of the effective value.
  */
 export function indentationPatch(
   kind: IndentKind,
+  options?: { leftPx?: number },
 ): ParagraphFormatDraft['indentation'] {
   if (kind === 'first') return { firstLine: DEFAULT_INDENT_TWIPS }
-  if (kind === 'hanging') return { hanging: DEFAULT_INDENT_TWIPS }
+  if (kind === 'hanging') {
+    return {
+      left: Math.max(pxToTwip(options?.leftPx ?? 0), DEFAULT_INDENT_TWIPS),
+      hanging: DEFAULT_INDENT_TWIPS,
+    }
+  }
   return { firstLine: null, hanging: null }
 }
 
@@ -137,9 +154,38 @@ export function paragraphFormatState(
 }
 
 /**
+ * The effective left indent of one paragraph in px, read from the painted
+ * paragraph so a pending draft is what the next control acts on. The hanging
+ * indent option needs a body indent to measure `w:hanging` from; an absent
+ * paragraph (a pending insert) reports no indent.
+ */
+export function paragraphIndentLeftPx(
+  model: DocumentModelWire,
+  format: FormatDrafts,
+  paragraphId: string,
+): number {
+  const stored = documentStory(model)?.paragraphs.find(
+    (paragraph) => paragraph.id === paragraphId,
+  )
+  if (!stored) return 0
+  return (
+    paragraphFace(formattedParagraphDraft(stored, format), model.styles)
+      .indentLeftPx ?? 0
+  )
+}
+
+/**
  * The direct paragraph layout one paragraph already carries. The reversal a
  * saved edit is undoing needs the pre-save answer in contract form, including
  * which families were absent (so the release can be explicit).
+ *
+ * Known limitation (recorded in architecture.html, "Known divergences"): the
+ * wire parser drops any paragraph child containing a tracked change, so a
+ * `w:pPr` that holds a `w:pPrChange` never reaches `preservedXmlFragments`.
+ * Such a paragraph reads here as carrying no direct layout, and a reversal
+ * releases properties it actually still has. Numbering shares the blind spot
+ * through `paragraphNumPr`; a model-level active-properties fragment is the
+ * proper fix and is out of scope for E3.
  */
 export function paragraphFormatOf(
   paragraph: DocumentParagraphWire,

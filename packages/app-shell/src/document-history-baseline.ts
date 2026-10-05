@@ -857,7 +857,11 @@ export function translateSnapshot(
       }
       case 'numbering': {
         // Reverse a saved numbering change by restating the pre-save numbering
-        // at the result paragraph, rather than merely dropping the slot.
+        // at the result paragraph, rather than merely dropping the slot. A
+        // `w:pPr` holding tracked history never reaches the model's preserved
+        // fragments (see paragraphFormatOf), so a pre-save numbering inside one
+        // is not visible here: the same wire-model blind spot, recorded in the
+        // Known divergences table.
         Object.assign(next, removeDraftSlots(next, [slot]))
         const reversal = identities.paragraphReversals.get(slot.paragraphId)
         if (reversal) {
@@ -897,7 +901,18 @@ export function translateSnapshot(
             ? { lineSpacing: before.lineSpacing ?? null }
             : {}),
           ...(sent.indentation !== undefined
-            ? { indentation: before.indentation ?? null }
+            ? {
+                // A complete snapshot, with explicit nulls for the attributes
+                // the paragraph did not carry: the writer merges `w:ind`, so a
+                // partial object would let an attribute the save added survive
+                // its own reversal.
+                indentation: {
+                  left: before.indentation?.left ?? null,
+                  right: before.indentation?.right ?? null,
+                  firstLine: before.indentation?.firstLine ?? null,
+                  hanging: before.indentation?.hanging ?? null,
+                },
+              }
             : {}),
         }
         if (Object.keys(inverse).length === 0) break
