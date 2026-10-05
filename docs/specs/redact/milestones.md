@@ -1,0 +1,36 @@
+# Redact Milestones
+
+> **Detection scope (re-verified 2026-07-27):** this note previously said the Rampart model integration was planned but not shipped. It has since shipped. Detection now runs the Rampart token-classification model (names, addresses, dates of birth, context-dependent detection) merged with the deterministic UK supplement (`packages/redaction-policy/src/supplement.ts`: national insurance numbers, case references, organisation names, emails, UK phone numbers, postcodes, GB IBANs, and context-gated sort codes / account numbers).
+>
+> When the model cannot be loaded, detection degrades to supplement-only and records `mode=heuristics+supplement`. That degraded state is **not currently surfaced to reviewers**, which is the primary item in [Redact PRD 4](../../prds/redact-4-hardening.md). The degraded mode is recorded server-side as the structured `detection_mode` field on the run (`model+supplement | heuristics+supplement | unknown`, migration 0011, validated at the read boundary in `services/api/src/redaction-database.ts`), returned by the run endpoints and carried in the audit report. Recording it server-side does not change the FR2 point that the review UI does not yet surface the mode. Decision log: [Detection mode — structured field on the run, not a version-string parse (August 2026)](../../architecture.md#detection-mode--structured-field-on-the-run-not-a-version-string-parse-august-2026). Design record: [Redact PRD 1](../../prds/archive/redact-1-detection.md).
+
+## M1 — complete
+
+- Detection, UK supplement and storage-backed source text work. "Detection" here is the deterministic UK supplement; the Rampart model integration is outstanding.
+
+## M2 — complete
+
+- Review UI, decisions, redacted output and pseudonymised output work. Hard redaction
+  finalizes to one immutable, image-only secure PDF for DOCX, PDF and text sources,
+  with contiguous opaque black bars (one per coalesced region per rendered line) and
+  no selectable source-text layer. The review view previews that PDF and the same
+  fetched bytes back the primary download and share, which stay disabled until the
+  preview renders its first page. A failed secure-PDF conversion is visible and never
+  finalizes the run. Pseudonymisation is a separate editable workflow with category
+  tokens and no bars. See
+  [build-plan.md](build-plan.md#finalized-output-presentation-red-01).
+
+## M3 — production readiness
+
+- DOCX, text-layer PDF, and TXT multipart upload extract server-side text and record a ready or failed document status.
+- Versioned audit export is generated on read at `GET /api/redaction-runs/:runId/audit` (JSON, HTML and Markdown). Persisting `redaction_report` artifacts is deferred to a tracked follow-up.
+- Synthetic UK legal training data, a reviewed-run JSONL exporter, demo fixture and walkthrough are checked in.
+- Fine-tuning preparation is documented in `fine-tuning.md`.
+
+Deferred: PDF extraction/redaction, actual Rampart fine-tuning, desktop-local redaction, batch processing and firm-specific policy configuration.
+
+## Verification references
+
+- Demo walkthrough: `docs/specs/redact/demo.md`
+- Demo fixture: `data/evals/redact/demo-fixture.docx`
+- Training corpus generator: `scripts/generate-synthetic-data.ts`

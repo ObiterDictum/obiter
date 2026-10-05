@@ -1,0 +1,5 @@
+# Test-suite guards for bare `bun test` runs. Per-package scripts pass
+# --isolate and --preload explicitly (bunfig is only read from the cwd).
+[test]
+pathIgnorePatterns = ["**/e2e/**"]
+preload = ["./scripts/test/vitest-compat.ts"]

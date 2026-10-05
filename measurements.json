@@ -1,0 +1,181 @@
+{
+  "commit": "9048e14c806fc0ad99f1501ad718bf111ec9a610",
+  "apiOrigin": "http://127.0.0.1:8797",
+  "webOrigin": "http://localhost:3005",
+  "headingBefore": {
+    "textAlign": "start",
+    "lineHeightPx": "16.8667px",
+    "textIndent": "0px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "",
+    "inlineTextIndent": "",
+    "inlineLineHeight": "16.8667px",
+    "offsetHeight": 17,
+    "gapLeft": 0,
+    "gapRight": 368.28125
+  },
+  "headingCentred": {
+    "textAlign": "center",
+    "lineHeightPx": "16.8667px",
+    "textIndent": "0px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "center",
+    "inlineTextIndent": "",
+    "inlineLineHeight": "16.8667px",
+    "offsetHeight": 17,
+    "gapLeft": 184.140625,
+    "gapRight": 184.140625
+  },
+  "headingSpaced15": {
+    "textAlign": "center",
+    "lineHeightPx": "22px",
+    "textIndent": "0px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "center",
+    "inlineTextIndent": "",
+    "inlineLineHeight": "22px",
+    "offsetHeight": 22,
+    "gapLeft": 184.140625,
+    "gapRight": 184.140625
+  },
+  "headingFirstLine": {
+    "textAlign": "center",
+    "lineHeightPx": "22px",
+    "textIndent": "48px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "center",
+    "inlineTextIndent": "48px",
+    "inlineLineHeight": "22px",
+    "offsetHeight": 22,
+    "gapLeft": 208.140625,
+    "gapRight": 160.140625
+  },
+  "headingReloadedIndentValue": "first",
+  "headingReloaded": {
+    "textAlign": "center",
+    "lineHeightPx": "22px",
+    "textIndent": "48px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "center",
+    "inlineTextIndent": "48px",
+    "inlineLineHeight": "22px",
+    "offsetHeight": 22,
+    "gapLeft": 208.140625,
+    "gapRight": 160.140625
+  },
+  "headingIndentNone": {
+    "textAlign": "center",
+    "lineHeightPx": "22px",
+    "textIndent": "0px",
+    "paddingLeft": "0px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "center",
+    "inlineTextIndent": "",
+    "inlineLineHeight": "22px",
+    "offsetHeight": 22,
+    "gapLeft": 184.140625,
+    "gapRight": 184.140625
+  },
+  "indentNoneOperations": [
+    {
+      "type": "set_paragraph_format",
+      "paragraphId": "para-w14-00000001",
+      "indentation": {
+        "firstLine": null,
+        "hanging": null
+      }
+    }
+  ],
+  "leftIndentedBefore": {
+    "textAlign": "start",
+    "lineHeightPx": "16.8667px",
+    "textIndent": "0px",
+    "paddingLeft": "48px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "",
+    "inlineTextIndent": "",
+    "inlineLineHeight": "16.8667px",
+    "offsetHeight": 17,
+    "gapLeft": 0,
+    "gapRight": 253.484375
+  },
+  "leftIndentedAfterNone": {
+    "textAlign": "start",
+    "lineHeightPx": "16.8667px",
+    "textIndent": "0px",
+    "paddingLeft": "48px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "",
+    "inlineTextIndent": "",
+    "inlineLineHeight": "16.8667px",
+    "offsetHeight": 17,
+    "gapLeft": 0,
+    "gapRight": 253.484375
+  },
+  "leftNoneNewOperations": [],
+  "leftIndentedPlusFirst": {
+    "textAlign": "start",
+    "lineHeightPx": "16.8667px",
+    "textIndent": "48px",
+    "paddingLeft": "48px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "",
+    "inlineTextIndent": "48px",
+    "inlineLineHeight": "16.8667px",
+    "offsetHeight": 17,
+    "gapLeft": 48,
+    "gapRight": 205.484375
+  },
+  "leftFirstLineOperations": [
+    {
+      "type": "set_paragraph_format",
+      "paragraphId": "para-000012",
+      "indentation": {
+        "firstLine": 720
+      }
+    }
+  ],
+  "leftIndentedReloaded": {
+    "textAlign": "start",
+    "lineHeightPx": "16.8667px",
+    "textIndent": "48px",
+    "paddingLeft": "48px",
+    "paddingRight": "0px",
+    "inlineTextAlign": "",
+    "inlineTextIndent": "48px",
+    "inlineLineHeight": "16.8667px",
+    "offsetHeight": 17,
+    "gapLeft": 48,
+    "gapRight": 205.484375
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedRequests": [
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_fd15ddb7-a5ee-44ff-add2-a7dfe9aa43f3/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED",
+    "FAILED PUT http://localhost:3005/api/documents/doc_83534424-63fd-4248-83bc-46d597a28760/collaboration/presence :: net::ERR_ABORTED"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@obiter/config",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./env-keys": "./src/env-keys.mjs",
+    "./local-env": "./src/local-env.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts"
+  }
+}

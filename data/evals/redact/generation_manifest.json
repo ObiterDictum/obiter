@@ -1,0 +1,35 @@
+{
+  "generator": "scripts/generate-synthetic-data.ts",
+  "totalDocuments": 300,
+  "trainDocuments": 240,
+  "validationDocuments": 60,
+  "documentTypes": {
+    "skeleton_argument": 43,
+    "witness_statement": 43,
+    "case_report": 43,
+    "client_letter": 43,
+    "attendance_note": 43,
+    "court_form": 43,
+    "pleading": 42
+  },
+  "piiTypes": [
+    "person",
+    "address",
+    "email",
+    "phone",
+    "date",
+    "national_insurance",
+    "passport",
+    "case_reference",
+    "account_number",
+    "organisation",
+    "url",
+    "secret"
+  ],
+  "edgeCases": [
+    "zero_pii",
+    "case_citation_names",
+    "repeated_names"
+  ],
+  "validation": "all offsets verified"
+}

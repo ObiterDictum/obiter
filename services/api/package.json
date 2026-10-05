@@ -1,0 +1,44 @@
+{
+  "name": "@obiter/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server-bun.ts",
+    "dev:bun": "bun --watch src/server-bun.ts",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "start": "bun src/server-bun.ts",
+    "start:bun": "bun src/server-bun.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts",
+    "dev:node": "tsx watch src/server.ts",
+    "start:node": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.0",
+    "@napi-rs/canvas": "^0.1.100",
+    "@obiter/config": "workspace:*",
+    "@obiter/contracts": "workspace:*",
+    "@obiter/legal-schema": "workspace:*",
+    "@obiter/legal-source-provider": "workspace:*",
+    "@obiter/ooxml": "workspace:*",
+    "@obiter/rampart-inference": "workspace:*",
+    "@obiter/redaction-policy": "workspace:*",
+    "@obiter/search-client": "workspace:*",
+    "@obiter/verification-core": "workspace:*",
+    "better-auth": "^1.6.8",
+    "hono": "^4.12.14",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.2",
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.20.0",
+    "resend": "^4.0.1",
+    "tsx": "^4.23.0",
+    "unpdf": "1.6.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "onnxruntime-node": "1.21.0"
+  }
+}

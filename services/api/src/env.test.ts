@@ -1,0 +1,646 @@
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import {
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+} from '@obiter/ooxml'
+import { readApiEnv, readRampartDetectionConfig } from './env'
+import { defaultRampartCacheDir } from './rampart-cache'
+import {
+  DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+  DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+  DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET,
+} from './request-limit-defaults'
+
+const originalEnv = { ...process.env }
+
+const TEST_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+
+function seedDevelopmentEnv() {
+  process.env.NODE_ENV = 'development'
+  process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+}
+
+afterEach(() => {
+  process.env = { ...originalEnv }
+})
+
+// The corpus variables are cleared before every test so a value inherited from
+// the developer's shell cannot decide whether a writer is configured.
+beforeEach(() => {
+  delete process.env.CORPUS_DATABASE_URL
+  delete process.env.CORPUS_WRITE_DATABASE_URL
+})
+
+describe('corpus database resolution', () => {
+  function seedTestEnv() {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_SEARCH_API_KEY = 'test-search-key'
+    process.env.MEILISEARCH_ADMIN_API_KEY = 'test-admin-key'
+    delete process.env.DATABASE_URL
+    delete process.env.CORPUS_DATABASE_URL
+    delete process.env.CORPUS_WRITE_DATABASE_URL
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_test'
+  }
+
+  it('defaults corpus reads to the application database', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    delete process.env.CORPUS_DATABASE_URL
+    delete process.env.CORPUS_WRITE_DATABASE_URL
+
+    const env = readApiEnv()
+
+    // The compatibility seam: with no new variable set, there is no separate
+    // corpus target and the corpus is the application database.
+    expect(env.corpusDatabaseUrl).toBeNull()
+    expect(env.corpusWriteDatabaseUrl).toBeNull()
+  })
+
+  it('reads a dedicated corpus database when one is configured', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    delete process.env.CORPUS_WRITE_DATABASE_URL
+
+    const env = readApiEnv()
+
+    expect(env.corpusDatabaseUrl).toContain('/obiter_corpus')
+    expect(env.corpusDatabaseUrl).not.toBe(env.databaseUrl)
+    // A reader alone is the ordinary lane: no writer, so no write path.
+    expect(env.corpusWriteDatabaseUrl).toBeNull()
+  })
+
+  it('reads a dedicated corpus writer when both variables are configured', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    process.env.CORPUS_WRITE_DATABASE_URL =
+      'postgres://obiter_corpus_writer@localhost:5432/obiter_corpus'
+
+    const env = readApiEnv()
+
+    expect(env.corpusWriteDatabaseUrl).toContain('obiter_corpus_writer')
+    expect(env.corpusWriteDatabaseUrl).not.toBe(env.databaseUrl)
+  })
+
+  it('does not enable the writer from an empty value', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    process.env.CORPUS_WRITE_DATABASE_URL = ''
+
+    expect(readApiEnv().corpusWriteDatabaseUrl).toBeNull()
+  })
+
+  it('refuses a blank or padded corpus writer value', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    process.env.CORPUS_WRITE_DATABASE_URL = '   '
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL must not be blank or padded with whitespace.',
+    )
+  })
+
+  it('refuses a corpus writer with no explicit corpus reader', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    delete process.env.CORPUS_DATABASE_URL
+    process.env.CORPUS_WRITE_DATABASE_URL =
+      'postgres://obiter_corpus_writer@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL requires CORPUS_DATABASE_URL',
+    )
+  })
+
+  it('refuses a test database that is not a *_test database', () => {
+    seedTestEnv()
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_lane_security'
+
+    expect(() => readApiEnv()).toThrow(
+      'TEST_DATABASE_URL must name a *_test database.',
+    )
+  })
+
+  it('resolves corpus reads to the isolated test database', () => {
+    seedTestEnv()
+
+    const env = readApiEnv()
+
+    expect(env.corpusDatabaseUrl).toBeNull()
+    expect(env.databaseUrl).toContain('/obiter_test')
+  })
+
+  it('accepts a corpus URL that is the test database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+
+    expect(readApiEnv().corpusDatabaseUrl).toBe(
+      'postgres://obiter:obiter@localhost:5432/obiter_test',
+    )
+  })
+
+  it('refuses a corpus URL that points a test run at another database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_DATABASE_URL must match TEST_DATABASE_URL.',
+    )
+  })
+
+  it('refuses a corpus writer that points a test run at another database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+    process.env.CORPUS_WRITE_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL must match TEST_DATABASE_URL.',
+    )
+  })
+
+  it('accepts a corpus writer that is the test database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+    process.env.CORPUS_WRITE_DATABASE_URL = process.env.TEST_DATABASE_URL
+
+    expect(readApiEnv().corpusWriteDatabaseUrl).toBe(
+      'postgres://obiter:obiter@localhost:5432/obiter_test',
+    )
+  })
+})
+
+describe('readApiEnv', () => {
+  it('uses local development defaults when BETTER_AUTH_SECRET is configured', () => {
+    seedDevelopmentEnv()
+    delete process.env.DATABASE_URL
+    delete process.env.BETTER_AUTH_URL
+    delete process.env.OBITER_WEB_ORIGIN
+    delete process.env.OBITER_RAMPART_MODEL
+    delete process.env.OBITER_RAMPART_REVISION
+    delete process.env.OBITER_RAMPART_CACHE_DIR
+    delete process.env.OBITER_RAMPART_MIN_SCORE
+    delete process.env.OBITER_RAMPART_CHUNK_TOKENS
+
+    const env = readApiEnv()
+
+    expect(env.databaseUrl).toContain('localhost')
+    expect(env.authSecret).toBe(TEST_AUTH_SECRET)
+    expect(env.authBaseUrl).toBe('http://localhost:3000')
+    expect(env.meilisearchHost).toBe('http://localhost:7700')
+    expect(env.meilisearchSearchApiKey).toBe('dev-key')
+    expect(env.meilisearchAdminApiKey).toBe('dev-key')
+    expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
+    expect(env.mojFindCaseLawBaseUrl).toBe(
+      'https://caselaw.nationalarchives.gov.uk',
+    )
+    expect(env.mojFindCaseLawRateLimit).toBe(1000)
+    expect(env.rampartModel).toBe('qarlus/rampart')
+    expect(env.rampartRevision).toBe('c3221c5cd838eb69a249ab40f8b442483865f233')
+    expect(env.rampartCacheDir).toBe(defaultRampartCacheDir())
+    expect(env.rampartMinScore).toBe(0.4)
+    expect(env.rampartChunkTokens).toBe(400)
+    expect(env.jsonBodyMaxBytes).toBe(DEFAULT_JSON_BODY_MAX_BYTES)
+    expect(env.documentUploadMaxBytes).toBe(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES)
+    expect(env.ooxmlMaxEntries).toBe(OOXML_MAX_ENTRIES)
+    expect(env.ooxmlMaxUncompressedBytes).toBe(OOXML_MAX_UNCOMPRESSED_BYTES)
+    expect(env.ooxmlMaxEntryUncompressedBytes).toBe(
+      OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+    )
+    expect(env.ooxmlMaxCompressionRatio).toBe(OOXML_MAX_COMPRESSION_RATIO)
+    expect(env.ooxmlInflateConcurrency).toBe(OOXML_INFLATE_CONCURRENCY)
+    expect(env.legalSearchHydrationQueueMax).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+    )
+    expect(env.legalSearchHydrationPerClientMax).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+    )
+    expect(env.legalSearchHydrationWindowMs).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+    )
+    expect(env.mojFindCaseLawRequestBudget).toBe(
+      DEFAULT_MOJ_FIND_CASE_LAW_REQUEST_BUDGET,
+    )
+    expect(env.nodeEnv).toBe('development')
+  })
+
+  it('refuses non-test startup when BETTER_AUTH_SECRET is missing', () => {
+    seedDevelopmentEnv()
+    delete process.env.BETTER_AUTH_SECRET
+
+    expect(() => readApiEnv()).toThrow('BETTER_AUTH_SECRET must be configured.')
+  })
+
+  it('rejects unknown NODE_ENV values', () => {
+    process.env.NODE_ENV = 'staging'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+
+    expect(() => readApiEnv()).toThrow(
+      'NODE_ENV must be production, test, or development; got "staging".',
+    )
+  })
+
+  it('rejects unset NODE_ENV without local development opt-in', () => {
+    delete process.env.NODE_ENV
+    delete process.env.OBITER_LOCAL_DEVELOPMENT
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+
+    expect(() => readApiEnv()).toThrow(
+      'NODE_ENV must be production, test, or development.',
+    )
+  })
+
+  it('permits unset NODE_ENV when OBITER_LOCAL_DEVELOPMENT=1 and auth is configured', () => {
+    delete process.env.NODE_ENV
+    process.env.OBITER_LOCAL_DEVELOPMENT = '1'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+
+    const env = readApiEnv()
+
+    expect(env.nodeEnv).toBe('development')
+    expect(env.authSecret).toBe(TEST_AUTH_SECRET)
+  })
+
+  it('treats an empty DATABASE_URL as absent in development', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = ''
+    delete process.env.BETTER_AUTH_URL
+    delete process.env.OBITER_WEB_ORIGIN
+    delete process.env.OBITER_RAMPART_MODEL
+    delete process.env.OBITER_RAMPART_REVISION
+    delete process.env.OBITER_RAMPART_CACHE_DIR
+    delete process.env.OBITER_RAMPART_MIN_SCORE
+    delete process.env.OBITER_RAMPART_CHUNK_TOKENS
+
+    const env = readApiEnv()
+
+    expect(env.databaseUrl).toContain('localhost')
+  })
+
+  it('reads validated Rampart configuration once with the rest of the API environment', () => {
+    seedDevelopmentEnv()
+    process.env.OBITER_RAMPART_MODEL = 'example/rampart-test'
+    process.env.OBITER_RAMPART_REVISION = 'revision-1'
+    process.env.OBITER_RAMPART_CACHE_DIR = '/tmp/rampart-cache'
+    process.env.OBITER_RAMPART_MIN_SCORE = '0.65'
+    process.env.OBITER_RAMPART_CHUNK_TOKENS = '320'
+
+    const env = readApiEnv()
+
+    expect(env).toMatchObject({
+      rampartModel: 'example/rampart-test',
+      rampartRevision: 'revision-1',
+      rampartCacheDir: '/tmp/rampart-cache',
+      rampartMinScore: 0.65,
+      rampartChunkTokens: 320,
+    })
+
+    process.env.OBITER_RAMPART_CACHE_DIR = ''
+    expect(readApiEnv().rampartCacheDir).toBe(defaultRampartCacheDir())
+  })
+
+  it('defaults the model cache outside the workspace so installs do not discard it', () => {
+    seedDevelopmentEnv()
+    delete process.env.OBITER_RAMPART_CACHE_DIR
+
+    const cacheDir = readApiEnv().rampartCacheDir
+
+    expect(cacheDir).not.toContain('node_modules')
+    expect(cacheDir).toBe(defaultRampartCacheDir())
+  })
+
+  it.each([
+    ['OBITER_RAMPART_MODEL', '', 'must not be blank'],
+    ['OBITER_RAMPART_REVISION', ' revision ', 'must not be blank'],
+    ['OBITER_RAMPART_CACHE_DIR', ' ', 'must not be blank'],
+    [
+      'OBITER_RAMPART_MIN_SCORE',
+      'not-a-number',
+      'must be a number between 0 and 1',
+    ],
+    ['OBITER_RAMPART_MIN_SCORE', '1.1', 'must be a number between 0 and 1'],
+    [
+      'OBITER_RAMPART_CHUNK_TOKENS',
+      '64',
+      'must be an integer between 65 and 500',
+    ],
+    [
+      'OBITER_RAMPART_CHUNK_TOKENS',
+      '501',
+      'must be an integer between 65 and 500',
+    ],
+    [
+      'OBITER_RAMPART_CHUNK_TOKENS',
+      '399.5',
+      'must be an integer between 65 and 500',
+    ],
+  ])('rejects invalid %s configuration', (key, value, reason) => {
+    seedDevelopmentEnv()
+    process.env[key] = value
+
+    expect(() => readApiEnv()).toThrow(`${key} ${reason}`)
+  })
+
+  it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_SEARCH_API_KEY = 'test-search-key'
+    process.env.MEILISEARCH_ADMIN_API_KEY = 'test-admin-key'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/prod'
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter_test'
+
+    const env = readApiEnv()
+
+    expect(env.databaseUrl).toBe(
+      'postgres://obiter:obiter@db.example.com:5432/obiter_test',
+    )
+    expect(env.nodeEnv).toBe('test')
+  })
+
+  it('requires Meilisearch keys outside development', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter_test'
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+
+    expect(() => readApiEnv()).toThrow(
+      'MEILISEARCH_SEARCH_API_KEY must be configured.',
+    )
+  })
+
+  it('fails loudly when test mode does not have a separate test database', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/prod'
+    delete process.env.TEST_DATABASE_URL
+
+    expect(() => readApiEnv()).toThrow(
+      'Missing required test environment values',
+    )
+
+    process.env.TEST_DATABASE_URL = process.env.DATABASE_URL
+
+    expect(() => readApiEnv()).toThrow(
+      'TEST_DATABASE_URL must not match DATABASE_URL.',
+    )
+  })
+
+  it('fails loudly when production auth and database values are missing', () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.DATABASE_URL
+    delete process.env.BETTER_AUTH_SECRET
+    delete process.env.BETTER_AUTH_URL
+    delete process.env.OBITER_WEB_ORIGIN
+    delete process.env.MEILISEARCH_HOST
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+    delete process.env.MEILISEARCH_ADMIN_API_KEY
+    delete process.env.LEGAL_AUTHORITIES_INDEX
+
+    expect(() => readApiEnv()).toThrow(
+      'Missing required production environment values',
+    )
+  })
+
+  it('rejects weak production secrets', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.BETTER_AUTH_SECRET = 'short-secret'
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
+
+    expect(() => readApiEnv()).toThrow(
+      'BETTER_AUTH_SECRET must be at least 32 characters in production.',
+    )
+  })
+
+  it('rejects invalid URLs and ports', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'not a url'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
+
+    expect(() => readApiEnv()).toThrow('DATABASE_URL must be a valid URL.')
+
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.PORT = '70000'
+
+    expect(() => readApiEnv()).toThrow(
+      'PORT must be an integer between 1 and 65535.',
+    )
+
+    process.env.PORT = '8787'
+    process.env.MEILISEARCH_HOST = 'not a url'
+
+    expect(() => readApiEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
+
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal authorities'
+
+    expect(() => readApiEnv()).toThrow(
+      'LEGAL_AUTHORITIES_INDEX may only contain letters, numbers, underscores, and hyphens.',
+    )
+
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'not a url'
+
+    expect(() => readApiEnv()).toThrow(
+      'MOJ_FIND_CASE_LAW_BASE_URL must be a valid URL.',
+    )
+
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
+    process.env.MOJ_FIND_CASE_LAW_RATE_LIMIT = '0'
+
+    expect(() => readApiEnv()).toThrow(
+      'MOJ_FIND_CASE_LAW_RATE_LIMIT must be a positive integer.',
+    )
+  })
+
+  it.each([
+    ['JSON_BODY_MAX_BYTES', '0', 'must be a positive integer'],
+    ['DOCUMENT_UPLOAD_MAX_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_ENTRIES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_UNCOMPRESSED_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_INFLATE_CONCURRENCY', '0', 'must be a positive integer'],
+    [
+      'OOXML_MAX_COMPRESSION_RATIO',
+      '0',
+      'must be a positive integer compression ratio',
+    ],
+    ['LEGAL_SEARCH_HYDRATION_QUEUE_MAX', '0', 'must be a positive integer'],
+    [
+      'LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX',
+      '0',
+      'must be a positive integer',
+    ],
+    ['LEGAL_SEARCH_HYDRATION_WINDOW_MS', '0', 'must be a positive integer'],
+    ['MOJ_FIND_CASE_LAW_REQUEST_BUDGET', '0', 'must be a positive integer'],
+  ])('rejects invalid %s configuration', (key, value, reason) => {
+    seedDevelopmentEnv()
+    process.env[key] = value
+
+    expect(() => readApiEnv()).toThrow(`${key} ${reason}`)
+  })
+
+  it('parses valid production configuration', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example/'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example/'
+    process.env.OBITER_DESKTOP_ORIGIN = 'obiter://desktop-auth'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example/'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk/'
+    process.env.MOJ_FIND_CASE_LAW_RATE_LIMIT = '250'
+    process.env.PORT = '8788'
+
+    const env = readApiEnv()
+
+    expect(env.authBaseUrl).toBe('https://api.obiter.example')
+    expect(env.webOrigin).toBe('https://app.obiter.example')
+    expect(env.desktopOrigin).toBe('obiter://desktop-auth')
+    expect(env.resendApiKey).toBe('re_0123456789abcdef0123456789abcdef')
+    expect(env.redactionRendererUrl).toBe('http://redaction-renderer:8080/')
+    expect(env.meilisearchHost).toBe('https://search.obiter.example')
+    expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
+    expect(env.meilisearchAdminApiKey).toBe('0123456789abcdef0123456789abcdef')
+    expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
+    expect(env.mojFindCaseLawBaseUrl).toBe(
+      'https://caselaw.nationalarchives.gov.uk',
+    )
+    expect(env.mojFindCaseLawRateLimit).toBe(250)
+    expect(env.port).toBe(8788)
+  })
+
+  it('requires the redaction renderer URL in production', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
+    delete process.env.OBITER_REDACTION_RENDERER_URL
+
+    expect(() => readApiEnv()).toThrow(
+      'Missing required production environment values: OBITER_REDACTION_RENDERER_URL',
+    )
+  })
+
+  it('does not allow the legacy Meilisearch API key', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
+    process.env.OBITER_REDACTION_RENDERER_URL =
+      'http://redaction-renderer:8080/'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.MEILISEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
+
+    expect(() => readApiEnv()).toThrow(
+      'Missing required production environment values: MEILISEARCH_SEARCH_API_KEY',
+    )
+
+    process.env.NODE_ENV = 'development'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+    delete process.env.MEILISEARCH_ADMIN_API_KEY
+
+    const env = readApiEnv()
+
+    expect(env.meilisearchSearchApiKey).toBe('dev-key')
+    expect(env.meilisearchAdminApiKey).toBe('dev-key')
+  })
+})
+
+describe('readRampartDetectionConfig', () => {
+  it('reads detection settings without requiring the rest of the API environment', () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.DATABASE_URL
+    delete process.env.BETTER_AUTH_SECRET
+    delete process.env.MEILISEARCH_HOST
+    delete process.env.OBITER_RESEND_API_KEY
+    delete process.env.OBITER_RAMPART_MODEL
+    delete process.env.OBITER_RAMPART_REVISION
+    delete process.env.OBITER_RAMPART_MIN_SCORE
+    delete process.env.OBITER_RAMPART_CHUNK_TOKENS
+    process.env.OBITER_RAMPART_CACHE_DIR = '/tmp/rampart-cache'
+
+    // The prefetch script runs where production secrets are absent, so it must
+    // not inherit readApiEnv's requirements.
+    expect(() => readApiEnv()).toThrow(/Missing required production/)
+    expect(readRampartDetectionConfig()).toEqual({
+      model: 'qarlus/rampart',
+      revision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
+      cacheDir: '/tmp/rampart-cache',
+      minScore: 0.4,
+      chunkTokens: 400,
+    })
+  })
+})

@@ -1,0 +1,148 @@
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
+import type { Pool } from 'pg'
+
+import type { createAuth } from '../auth'
+import type { ApiEnv } from '../env'
+import { createTestApiEnv } from '../test-api-env'
+
+const searchClientMock = vi.hoisted(() => ({
+  createClient: vi.fn(() => ({ id: 'meili-client' })),
+  search: vi.fn(),
+  getDocument: vi.fn(),
+}))
+
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterSearchClientModule = { ...(await import('@obiter/search-client')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterSearchClientModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/search-client')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/search-client', () =>
+  Object.assign(
+    { ...obiterSearchClientModuleKeys },
+    (() => ({
+      ...obiterSearchClientModule,
+      ...searchClientMock,
+    }))(),
+  ),
+)
+
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const redactionDetectionModuleKeys = Object.fromEntries(
+  Object.keys(await import('../redaction-detection')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../redaction-detection', () =>
+  Object.assign(
+    { ...redactionDetectionModuleKeys },
+    (() => ({
+      configureRedactionDetector: vi.fn(),
+      detectionMode: () => 'model+supplement',
+      detectRedactionSpans: vi.fn(),
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { createApiApp } = await import('../app')
+
+type Auth = ReturnType<typeof createAuth>
+
+const testEnv: ApiEnv = createTestApiEnv()
+
+const publicHit = {
+  id: 'uksc-2024-3',
+  title: 'Potanina v Potanin',
+  neutralCitation: '[2024] UKSC 3',
+  court: 'uksc',
+  jurisdiction: 'england-and-wales',
+  dateDecided: '2024-01-31',
+  sourceType: 'judgment' as const,
+  sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+}
+
+describe('deliberately public routes', () => {
+  it('allows anonymous callers on deliberately public routes', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    searchClientMock.search.mockResolvedValue({
+      hits: [publicHit],
+      query: 'Potanina',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    searchClientMock.getDocument.mockResolvedValue(publicHit)
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify([
+            {
+              html_url:
+                'https://github.com/ObiterDictum/obiter/releases/tag/v1',
+              name: 'Initial search release',
+              published_at: '2026-05-22T10:00:00Z',
+              tag_name: 'v1',
+            },
+          ]),
+          { status: 200 },
+        ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const app = createApiApp(
+      testEnv,
+      { query: async () => ({ rows: [] }) } as unknown as Pool,
+      { auth },
+    )
+
+    try {
+      const fetchSearch = await app.request('/api/search/fetch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: 'Potanina' }),
+      })
+      const document = await app.request('/api/search/documents/uksc-2024-3')
+      const changelog = await app.request('/api/changelog')
+      const health = await app.request('/api/health')
+
+      expect(fetchSearch.status).toBe(200)
+      expect(document.status).toBe(200)
+      expect(changelog.status).toBe(200)
+      expect(health.status).toBe(200)
+      expect(
+        ((await fetchSearch.json()) as { hits: unknown[] }).hits,
+      ).toHaveLength(1)
+      expect(
+        ((await document.json()) as { document: { id: string } }).document.id,
+      ).toBe('uksc-2024-3')
+      expect(((await changelog.json()) as { source: string }).source).toBe(
+        'github_releases',
+      )
+      expect(await health.json()).toEqual({
+        status: 'ok',
+        service: 'obiter-api',
+        // Booleans derived from configuration: which database corpus reads use
+        // and whether this process may write it. No host, port, database name
+        // or credential, so the public route still discloses nothing.
+        corpus: { colocated: true, readOnly: false },
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
