@@ -6938,6 +6938,30 @@
                     ooxml/parts/stories.ts · document-paragraph-format.ts
                   </td>
                 </tr>
+                <tr>
+                  <td>
+                    <code>set_section_properties</code> edits only the final
+                    body-level section; section and break operations are not
+                    tracked changes
+                  </td>
+                  <td>
+                    E5 patches the body-level <code>w:sectPr</code> only. An
+                    earlier section introduced by
+                    <code>insert_section_break</code> is preserved and paginated
+                    with its own geometry, but is not independently editable,
+                    and its child lookups cut at <code>w:sectPrChange</code> so
+                    tracked history is never falsified. Page setup, page breaks
+                    and section breaks fail closed under track-changes rather
+                    than applying untracked, so a tracked session reports them
+                    refused and the client holds the change. The proper fix is
+                    per-section addressing plus a tracked writer for structural
+                    breaks.
+                  </td>
+                  <td class="id">
+                    ooxml/section-edits.ts ·
+                    app-shell/document-section-format.ts
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

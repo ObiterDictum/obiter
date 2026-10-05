@@ -29,7 +29,6 @@ import {
   applyRunEmphasisRanges,
   type RunEmphasisRange,
 } from './model-run-emphasis'
-import { splitsSurrogate } from './model-run-range-edits'
 import {
   validatePlannedOperations,
   validateTrackedOperations,
@@ -85,6 +84,9 @@ export function applyDocumentEdits(
     : undefined
 
   const insertionCounts = new Map<string, number>()
+  // Page-break offsets are accumulated per run so multiple breaks on one run
+  // materialise as a single replacement instead of overlapping `:text:` writes.
+  const breakOffsets = new Map<string, number[]>()
   // Range emphasis is collected per paragraph and applied after the loop.
   // Every operation in a batch addresses the same paragraph text, so the
   // boundaries from all of them must form one split per run; applying them one
@@ -237,7 +239,12 @@ export function applyDocumentEdits(
     } else if (operation.type === 'insert_break') {
       if (trackedWriter) throw new OoxmlError('model-node-not-editable')
       if (!deletedLater) {
-        insertPageBreak(document, operation.paragraph, operation.offset)
+        insertPageBreak(
+          document,
+          operation.paragraph,
+          operation.offset,
+          breakOffsets,
+        )
       }
     } else if (operation.type === 'insert_section_break') {
       if (trackedWriter) throw new OoxmlError('model-node-not-editable')
@@ -324,9 +331,6 @@ function planOperation(
     operation.type === 'insert_section_break'
   ) {
     const paragraph = requireMainParagraph(document, operation.paragraphId)
-    if (operation.type === 'insert_break') {
-      validateBreakOffset(operation.offset, paragraph)
-    }
     return { ...operation, paragraph }
   }
   if (operation.type === 'set_run_emphasis') {
@@ -412,13 +416,6 @@ function validateNumbering(
     if (!numberingIds.has(operation.numId) || operation.ilvl === undefined) {
       throw new OoxmlError('invalid-document-edit')
     }
-  }
-}
-
-function validateBreakOffset(offset: number, paragraph: ParagraphAnchor) {
-  const text = paragraph.runs.map((run) => run.wire.text).join('')
-  if (offset > text.length || splitsSurrogate(text, offset)) {
-    throw new OoxmlError('invalid-document-edit')
   }
 }
 

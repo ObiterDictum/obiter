@@ -3,7 +3,12 @@ import JSZip from 'jszip'
 
 import { buildOoxmlFixture } from '../fixtures/builder'
 
-import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
+import {
+  applyDocumentEdits,
+  parseDocx,
+  patchSectionPropertiesXml,
+  serialiseDocx,
+} from './index'
 import { createSyntheticDocx } from './synthetic-document'
 
 describe('OOXML section and break edits', () => {
@@ -237,6 +242,143 @@ describe('OOXML section and break edits', () => {
         },
       ]),
     ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
+  it('validates the break offset against the appended effective text', async () => {
+    // The ordinary flow: type to lengthen the run, caret at the end, insert a
+    // break. The plan pass cannot bound this against the pre-batch text.
+    const document = await parseDocx(await createSyntheticDocx(['Hello']))
+    const paragraph = mainParagraphs(document)[0]
+    const run = paragraph?.runs[0]
+    if (!paragraph || !run) throw new Error('Synthetic run is missing.')
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'Hello world' },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 11,
+        kind: 'page',
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).toContain('<w:br w:type="page"/>')
+    expect(
+      mainParagraphs(await parseDocx(await serialiseDocx(document)))[0]
+        ?.runs.map((item) => item.text)
+        .join(''),
+    ).toBe('Hello world')
+  })
+
+  it('rejects a break offset inside a surrogate pair', async () => {
+    const document = await parseDocx(await createSyntheticDocx(['a😀b']))
+    const paragraph = mainParagraphs(document)[0]
+    if (!paragraph) throw new Error('Synthetic paragraph is missing.')
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_break',
+          paragraphId: paragraph.id,
+          offset: 2,
+          kind: 'page',
+        },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
+  it('composes two page breaks in one run without overlapping', async () => {
+    const document = await parseDocx(await createSyntheticDocx(['Hello world']))
+    const paragraph = mainParagraphs(document)[0]
+    if (!paragraph) throw new Error('Synthetic paragraph is missing.')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 3,
+        kind: 'page',
+      },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 6,
+        kind: 'page',
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml.split('<w:br w:type="page"/>').length - 1).toBe(2)
+    expect(
+      mainParagraphs(await parseDocx(await serialiseDocx(document)))[0]
+        ?.runs.map((item) => item.text)
+        .join(''),
+    ).toBe('Hello world')
+  })
+
+  it('composes a run-property write and a page break in one run', async () => {
+    const document = await parseDocx(await createSyntheticDocx(['Hello world']))
+    const paragraph = mainParagraphs(document)[0]
+    const run = paragraph?.runs[0]
+    if (!paragraph || !run) throw new Error('Synthetic run is missing.')
+    // Highlight applied before the break is the order collectFormatOperations
+    // produces; materialising the run must fold the run-property write, not
+    // overlap it.
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'Hello brave world' },
+      { type: 'set_run_emphasis', runId: run.id, highlight: 'yellow' },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 6,
+        kind: 'page',
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).toContain('<w:br w:type="page"/>')
+    expect(xml).toContain('w:highlight w:val="yellow"')
+    expect(
+      mainParagraphs(await parseDocx(await serialiseDocx(document)))[0]
+        ?.runs.map((item) => item.text)
+        .join(''),
+    ).toBe('Hello brave world')
+  })
+
+  it('patches the live section, never the recorded sectPrChange copy', () => {
+    const sect =
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440"/>' +
+      '<w:sectPrChange w:id="1"><w:sectPr><w:pgSz w:w="9000" w:h="9000"/><w:pgMar w:top="100"/></w:sectPr></w:sectPrChange>' +
+      '</w:sectPr>'
+    const next = patchSectionPropertiesXml(sect, { margins: { top: 720 } })
+    // The live section is patchable and the history copy is preserved verbatim.
+    expect(next).toContain('<w:pgMar w:top="720"/>')
+    expect(next).toContain(
+      '<w:sectPrChange w:id="1"><w:sectPr><w:pgSz w:w="9000" w:h="9000"/><w:pgMar w:top="100"/></w:sectPr></w:sectPrChange>',
+    )
+    expect(next).toContain('<w:pgSz w:w="11906" w:h="16838"/>')
+  })
+
+  it('seeds a same-batch section break from the patched section', async () => {
+    const document = await parseDocx(await createSyntheticDocx(['Hello']))
+    const paragraph = mainParagraphs(document)[0]
+    if (!paragraph) throw new Error('Synthetic paragraph is missing.')
+    applyDocumentEdits(document, [
+      { type: 'set_section_properties', margins: { top: 720 } },
+      { type: 'insert_section_break', paragraphId: paragraph.id },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const seeded = xml.match(
+      /<w:pPr><w:sectPr>[\s\S]*?<\/w:sectPr><\/w:pPr>/u,
+    )?.[0]
+    expect(seeded).toContain('w:top="720"')
   })
 })
 

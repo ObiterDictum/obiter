@@ -1,5 +1,5 @@
 import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
-import { resolveRelationshipTarget } from '@obiter/ooxml'
+import { activeSectionXml, resolveRelationshipTarget } from '@obiter/ooxml'
 import {
   A4_HEIGHT_PX,
   A4_WIDTH_PX,
@@ -148,11 +148,7 @@ export type DocumentSection = {
 }
 
 export function sectionXmlInFragment(fragment: string): string {
-  return (
-    fragment.match(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/i)?.[0] ??
-    fragment.match(/<w:sectPr\b[^>]*?\/>/i)?.[0] ??
-    ''
-  )
+  return activeSectionXml(fragment)
 }
 
 /**

@@ -73,6 +73,9 @@ export type PageSession = {
   col: number
   y: number
   broken: boolean
+  /** A pending page break ended the last paragraph, so the empty sheet it
+   * opened must be kept even though no block follows it yet. */
+  trailingBreak: boolean
 }
 
 export function layoutParagraph(
@@ -86,6 +89,8 @@ export function layoutParagraph(
   session: PageSession,
   column: () => ColumnFrame,
   advance: () => void,
+  /** Effective-text offsets of pending page breaks in this paragraph. */
+  pageBreaks: readonly number[] = [],
 ): void {
   const paragraph = effectiveParagraph(
     item.paragraph,
@@ -131,6 +136,11 @@ export function layoutParagraph(
   }
 
   while (!complete) {
+    // A pending page break forces a new sheet at its offset. Truncating the
+    // text at the next break makes this fragment stop there; the advance below
+    // then starts the new sheet, so the break lands at the caret rather than
+    // after the whole paragraph.
+    const nextBreak = pageBreaks.find((at) => at > offset)
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : face.marginTopPx
     const remaining = frame.heightPx - session.y
@@ -146,7 +156,7 @@ export function layoutParagraph(
     place()
     const startY = session.y + before
     const fragment = takeFragment({
-      text,
+      text: nextBreak === undefined ? text : text.slice(0, nextBreak),
       offset,
       startY,
       maxY: widowMaxY(
@@ -217,6 +227,15 @@ export function layoutParagraph(
     offset += fragment.consumed
     complete = fragment.complete
     continuation = true
+    if (fragment.complete && nextBreak !== undefined) {
+      // The break is at (or before) the end of the text: finish the paragraph
+      // on the current sheet, then open the next one so the break shows.
+      complete = nextBreak >= text.length
+      advance()
+      placed = false
+      continuation = false
+      session.trailingBreak = complete
+    }
   }
 }
 

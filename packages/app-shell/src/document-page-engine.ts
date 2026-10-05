@@ -1,5 +1,10 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { flowIds, insertRuns, type LocalInsert } from './document-edits'
+import {
+  flowIds,
+  insertRuns,
+  type BreakDraft,
+  type LocalInsert,
+} from './document-edits'
 import type { ExtraRuns } from './document-word-edits'
 import { documentStory } from './document-model-text'
 import { keepWithNext } from './document-page-keep'
@@ -42,8 +47,17 @@ export function layoutDocument(
    * a pure function of the model, so re-deriving them inside every pagination
    * pass re-parsed the table structure on each keystroke for no change. */
   blocks?: StoryBlock[],
+  /** Pending breaks, folded at their caret offset rather than appended. */
+  pageBreaks: readonly BreakDraft[] = [],
 ): LaidOutPage[] {
   const sections = documentSections(model)
+  const breakOffsets = new Map<string, number[]>()
+  for (const item of pageBreaks) {
+    if (item.kind !== 'page') continue
+    const list = breakOffsets.get(item.paragraphId) ?? []
+    list.push(item.offset)
+    breakOffsets.set(item.paragraphId, list)
+  }
   const geometryFor = (sectionXml: string) => {
     const sectionBox = pageBoxForSection(sectionXml)
     return {
@@ -81,6 +95,7 @@ export function layoutDocument(
     col: 0,
     y: 0,
     broken: false,
+    trailingBreak: false,
   }
 
   const column = () =>
@@ -92,6 +107,7 @@ export function layoutDocument(
       session.col += 1
       session.y = 0
       session.broken = true
+      session.trailingBreak = false
       return
     }
     pages.push(session.page)
@@ -99,6 +115,7 @@ export function layoutDocument(
     session.col = 0
     session.y = 0
     session.broken = true
+    session.trailingBreak = false
   }
 
   let sectionIndex = 0
@@ -116,6 +133,7 @@ export function layoutDocument(
     session.col = 0
     session.y = 0
     session.broken = true
+    session.trailingBreak = false
   }
 
   for (let index = 0; index < source.length; index += 1) {
@@ -150,6 +168,10 @@ export function layoutDocument(
       session,
       advance,
     )
+    const offsets = breakOffsets.get(item.paragraph.id) ?? []
+    // A break at offset zero starts the sheet before the paragraph, matching
+    // the advance the stored-break path takes in `layoutParagraph`.
+    if (offsets.includes(0) && session.y > 0) advance()
     layoutParagraph(
       item,
       model,
@@ -161,6 +183,7 @@ export function layoutDocument(
       session,
       column,
       advance,
+      offsets,
     )
     if (
       sections[sectionIndex]?.endParagraphId === item.paragraph.id &&
@@ -186,6 +209,7 @@ export function layoutDocument(
     session.page.blocks.length > 0 ||
     session.page.floats.length > 0 ||
     session.page.textBoxes.length > 0 ||
+    session.trailingBreak ||
     pages.length === 0
   ) {
     pages.push(session.page)

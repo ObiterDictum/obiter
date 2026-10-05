@@ -50,7 +50,9 @@ export {
 } from './model-property-edits'
 export {
   A4_PAGE_TWIPS,
+  activeSectionXml,
   patchSectionPropertiesXml,
+  splitSectionHistory,
   type SectionMarginPatch,
   type SectionPropertiesPatch,
 } from './section-xml'

@@ -91,9 +91,17 @@ export function useWorkspaceDerivations({
             drafts.inserts,
             drafts.extraRuns,
             blocks,
+            drafts.breaks,
           )
         : [],
-    [broken, blocks, drafts.drafts, drafts.inserts, drafts.extraRuns],
+    [
+      broken,
+      blocks,
+      drafts.drafts,
+      drafts.inserts,
+      drafts.extraRuns,
+      drafts.breaks,
+    ],
   )
   const imageParts = useMemo(
     () => (model ? documentImagePartNames(model) : []),

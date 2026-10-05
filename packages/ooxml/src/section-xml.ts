@@ -64,12 +64,58 @@ export function patchSectionPropertiesXml(
   sectPr: string,
   patch: SectionPropertiesPatch,
 ) {
-  let next = sectPr.trim() === '' ? '<w:sectPr/>' : sectPr
+  const { active, history } = splitSectionHistory(
+    sectPr.trim() === '' ? '<w:sectPr/>' : sectPr,
+  )
+  let next = active
   if (patch.margins !== undefined) next = patchMargins(next, patch.margins)
   if (patch.pageSize !== undefined || patch.orientation !== undefined) {
     next = patchPageSize(next, patch.pageSize, patch.orientation)
   }
-  return next
+  return history ? insertSectionHistory(next, history) : next
+}
+
+/**
+ * Splits a `w:sectPr` at its `w:sectPrChange` history record. `active` is the
+ * live section element (with a closing tag); `history` is the change element
+ * and the original closing tag. Every child lookup must operate on `active`
+ * only: the recorded `<w:sectPr>` inside the change is a copy, and matching it
+ * would patch stale geometry while leaving the live section untouched.
+ */
+export function splitSectionHistory(fragment: string) {
+  const changeStart = fragment.search(/<w:sectPrChange\b/u)
+  if (changeStart === -1) return { active: fragment, history: '' }
+  const closeStart = fragment.lastIndexOf('</w:sectPr>')
+  const active = `${fragment.slice(0, changeStart)}</w:sectPr>`
+  const history =
+    closeStart === -1
+      ? fragment.slice(changeStart)
+      : fragment.slice(changeStart, closeStart)
+  return { active, history }
+}
+
+function insertSectionHistory(fragment: string, history: string) {
+  const closing = '</w:sectPr>'
+  return fragment.endsWith(closing)
+    ? `${fragment.slice(0, -closing.length)}${history}${closing}`
+    : `${fragment}${history}`
+}
+
+/**
+ * The live `w:sectPr` element in a preserved fragment, with any
+ * `w:sectPrChange` history record cut away. The reader must not match the copy
+ * inside the change: it holds pre-change geometry and would report a section
+ * that the document no longer has.
+ */
+export function activeSectionXml(fragment: string): string {
+  const { active } = splitSectionHistory(fragment)
+  const selfClosing = active.match(/<w:sectPr\b[^>]*?\/>/iu)?.[0]
+  if (selfClosing) return selfClosing
+  const open = active.match(/<w:sectPr\b[^>]*>/iu)
+  if (!open || open.index === undefined) return ''
+  const close = active.indexOf('</w:sectPr>', open.index + open[0].length)
+  if (close === -1) return ''
+  return active.slice(open.index, close + '</w:sectPr>'.length)
 }
 
 function patchMargins(sectPr: string, margins: SectionMarginPatch | null) {

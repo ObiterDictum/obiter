@@ -12,7 +12,9 @@ import {
 import { readDocumentDraft, writeDocumentDraft } from './document-draft-store'
 import { MapStorage, scope } from './document-draft-store-test-support'
 import { emptyFormatDrafts } from './document-format-types'
+import { formattedModel } from './document-format-edits'
 import { layoutDocument } from './document-page-engine'
+import { sectionXmlInFragment } from './document-page-layout'
 import {
   hasSectionDraft,
   paintSectionFragments,
@@ -184,18 +186,119 @@ describe('section pagination', () => {
     expect(pages[1]?.blocks).toHaveLength(2)
   })
 
-  it('folds a pending page break into the painted model', () => {
+  it('reads the live section, not the recorded sectPrChange copy', () => {
+    const fragment =
+      '<w:pPr><w:sectPr><w:pgSz w:w="8000" w:h="6000"/><w:pgMar w:top="720"/>' +
+      '<w:sectPrChange w:id="1"><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440"/></w:sectPr></w:sectPrChange>' +
+      '</w:sectPr></w:pPr>'
+    expect(sectionXmlInFragment(fragment)).toBe(
+      '<w:sectPr><w:pgSz w:w="8000" w:h="6000"/><w:pgMar w:top="720"/></w:sectPr>',
+    )
+    const withHistory: DocumentModelWire = {
+      ...model(['p1', 'p2']),
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [
+                {
+                  id: 'p1-r',
+                  text: 'First section',
+                  preservedXmlFragments: [],
+                },
+              ],
+              preservedXmlFragments: [fragment],
+            },
+            paragraph('p2'),
+          ],
+          preservedXmlFragments: [NORMAL],
+        },
+      ],
+    }
+    const pages = layoutDocument(withHistory)
+    expect(pages).toHaveLength(2)
+    expect(pages[0]?.box.widthPx).toBe(533)
+    expect(pages[1]?.box.widthPx).toBe(794)
+  })
+
+  it('folds a pending section break into the painted model', () => {
     const base = model(['p1', 'p2'])
     const broken = withBreakDrafts(base, [
-      { id: 'b1', paragraphId: 'p2', offset: 0, kind: 'page' },
+      { id: 'b1', paragraphId: 'p2', offset: 0, kind: 'section' },
     ])
     const painted = broken.stories[0]?.paragraphs.find(
       (item) => item.id === 'p2',
     )
-    expect(painted?.preservedXmlFragments.join('')).toContain(
-      '<w:br w:type="page"/>',
-    )
+    expect(painted?.preservedXmlFragments.join('')).toContain('<w:sectPr')
     expect(withBreakDrafts(base, [])).toBe(base)
+    // A page break is laid out at its offset, not appended to the paragraph.
+    expect(
+      withBreakDrafts(base, [
+        { id: 'b2', paragraphId: 'p1', offset: 0, kind: 'page' },
+      ]),
+    ).toBe(base)
+  })
+
+  it('starts a new sheet at a pending page break offset', () => {
+    const pages = layoutDocument(
+      model(['p1', 'p2']),
+      undefined,
+      [],
+      {},
+      undefined,
+      [{ id: 'b1', paragraphId: 'p1', offset: 2, kind: 'page' }],
+    )
+    expect(pages).toHaveLength(2)
+    const first = pages[0]?.blocks[0]
+    expect(first?.type).toBe('paragraph')
+    if (first?.type !== 'paragraph') return
+    expect(first.paragraph.id).toBe('p1')
+    expect(first.from).toBe(0)
+    expect(first.to).toBe(2)
+    // The remainder of p1 and the following paragraph start the new sheet.
+    const second = pages[1]?.blocks
+    const secondParagraphs = (second ?? []).flatMap((block) =>
+      block.type === 'paragraph' ? [block.paragraph.id] : [],
+    )
+    expect(secondParagraphs).toEqual(['p1', 'p2'])
+  })
+
+  it('opens a new sheet when the break sits at the end of a paragraph', () => {
+    const pages = layoutDocument(model(['p1']), undefined, [], {}, undefined, [
+      { id: 'b1', paragraphId: 'p1', offset: 4, kind: 'page' },
+    ])
+    expect(pages).toHaveLength(2)
+    expect(pages[0]?.blocks).toHaveLength(1)
+    expect(pages[1]?.blocks).toHaveLength(0)
+  })
+
+  it('seeds a same-batch section break from the pending page setup', () => {
+    const state = {
+      ...emptyDraftState(),
+      format: { ...emptyFormatDrafts, section: { margins: { top: 720 } } },
+      breaks: [
+        { id: 'b1', paragraphId: 'p1', offset: 0, kind: 'section' as const },
+      ],
+    }
+    const model = modelWithSection(NORMAL)
+    const plan = planDocumentSave(model, state)
+    expect(plan.operations).toEqual([
+      { type: 'set_section_properties', margins: { top: 720 } },
+      { type: 'insert_section_break', paragraphId: 'p1' },
+    ])
+    // Paint seeds the same geometry: formattedModel applies the section draft
+    // before the break is folded, so both paths read the new margins.
+    const painted = withBreakDrafts(
+      formattedModel(model, state.format),
+      state.breaks,
+    )
+    const paragraph = painted.stories[0]?.paragraphs[0]
+    expect(paragraph?.preservedXmlFragments.join('')).toContain(
+      '<w:pgMar w:top="720"',
+    )
   })
 })
 

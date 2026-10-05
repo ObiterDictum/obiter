@@ -276,6 +276,24 @@ export function collectEditOperations(
     operations.push(...appendedRunEmphasis(paragraph, extra, drafts))
   }
 
+  // Formatting and page setup are emitted before the breaks: no format operation
+  // changes text offsets, and the section-break seed and any run-property write
+  // must already be pending when the break is applied. The paginator seeds a
+  // section break from the painted section too, so both paths read the same
+  // geometry.
+  const realIds = new Set(
+    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
+  )
+  const insertById = new Map(inserts.map((item) => [item.clientId, item]))
+  operations.push(
+    ...collectFormatOperations(
+      model,
+      format,
+      deletedParagraphIds,
+      new Set(insertById.keys()),
+    ),
+  )
+
   // Breaks are applied after the text replacements above, so their offset
   // addresses the same effective text the client recorded it in.
   for (const item of breaks) {
@@ -295,10 +313,6 @@ export function collectEditOperations(
     }
   }
 
-  const realIds = new Set(
-    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
-  )
-  const insertById = new Map(inserts.map((item) => [item.clientId, item]))
   for (const id of flowParagraphIds(model, inserts, deletedParagraphIds)) {
     const insert = insertById.get(id)
     if (!insert) continue
@@ -326,14 +340,6 @@ export function collectEditOperations(
   for (const paragraphId of emptyReplacements) {
     operations.push({ type: 'delete_paragraph', paragraphId })
   }
-  operations.push(
-    ...collectFormatOperations(
-      model,
-      format,
-      deletedParagraphIds,
-      new Set(insertById.keys()),
-    ),
-  )
 
   return operations
 }
