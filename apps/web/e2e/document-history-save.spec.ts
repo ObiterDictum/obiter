@@ -139,6 +139,8 @@ const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
 const undo = (page: Page) => page.getByRole('button', { name: 'Undo' })
+const saveState = (page: Page) =>
+  page.locator('[data-save-state]').getAttribute('data-save-state')
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
@@ -220,8 +222,11 @@ test('undo after a save persists the reverted text once', async ({
   await saveAndWait(page)
   await shot(page, '02-text-saved')
 
-  // Undo the saved typing against the saved document, then persist it.
-  for (let step = 0; step < ' E50TEXT'.length; step += 1) {
+  // Undo the saved typing against the saved document, then persist it. Typing
+  // coalesces into one undo run, so the number of steps is not the character
+  // count; undo until the marker is gone (bounded).
+  for (let step = 0; step < 12; step += 1) {
+    if (!(await editor(page).inputValue()).includes('E50TEXT')) break
     await undo(page).click()
   }
   await expect(editor(page)).not.toHaveValue(/E50TEXT/)
@@ -257,8 +262,8 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   await page.getByRole('button', { name: 'Insert paragraph' }).click()
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
-  // One character is one history step, so two undos remove the text and then
-  // the insert itself.
+  // The typed character is one step and the insert itself another, so two
+  // undos remove the text and then the insert.
   await pending.pressSequentially('X')
   await shot(page, '05-insert-typed')
   await saveAndWait(page)
@@ -305,9 +310,18 @@ test('undo of a saved tracked edit rejects the change and persists the reversal'
   await shot(page, '07-tracked-typed')
   await saveAndWait(page)
   await shot(page, '08-tracked-saved')
+  // Wait for the save to settle before undoing: an undo that races the in-flight
+  // request is a different interaction, and the tracked rejection this test is
+  // about needs the translated history.
+  await expect
+    .poll(() => saveState(page), { message: 'tracked save settled' })
+    .toBe('saved')
 
   // Undo the saved tracked edit; the reversal is a tracked-change rejection.
-  for (let step = 0; step < ' TRACKED'.length; step += 1) {
+  // Typing coalesces into undo runs, so undo until the control is exhausted
+  // rather than once per character.
+  for (let step = 0; step < 12; step += 1) {
+    if (await undo(page).isDisabled()) break
     await undo(page).click()
   }
   await shot(page, '09-tracked-undone')
@@ -344,6 +358,11 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.pressSequentially('X')
   await saveAndWait(page)
+  // Wait for the tracked save to settle before the undo/redo cycle: a cycle
+  // that races the in-flight request is a different interaction.
+  await expect
+    .poll(() => saveState(page), { message: 'tracked save settled' })
+    .toBe('saved')
 
   // The saved tracked insertion leaves the editor usable: the workspace does
   // not block, and Undo is offered before it is pressed.

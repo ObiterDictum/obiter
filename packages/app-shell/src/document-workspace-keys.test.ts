@@ -175,4 +175,65 @@ describe('document workspace keys', () => {
     expect(undo).toHaveBeenCalledTimes(1)
     expect(undoEvent.preventDefault).toHaveBeenCalled()
   })
+
+  it('routes Ctrl/Cmd+B, I and U to the format toggles', () => {
+    const toggleBold = vi.fn()
+    const toggleItalic = vi.fn()
+    const toggleUnderline = vi.fn()
+    const handlers = {
+      save: vi.fn(),
+      toggleBold,
+      toggleItalic,
+      toggleUnderline,
+    }
+
+    for (const [key, handler] of [
+      ['b', toggleBold],
+      ['i', toggleItalic],
+      ['u', toggleUnderline],
+    ] as const) {
+      const keyEvent = event(key)
+      handleDocumentWorkspaceKeys(keyEvent, handlers)
+      expect(keyEvent.preventDefault).toHaveBeenCalled()
+      expect(handler).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('leaves B/I/U alone in foreign form fields and for Shift chords', () => {
+    const toggleBold = vi.fn()
+    const toggleItalic = vi.fn()
+    const toggleUnderline = vi.fn()
+    const handlers = {
+      save: vi.fn(),
+      toggleBold,
+      toggleItalic,
+      toggleUnderline,
+    }
+
+    for (const field of [
+      document.createElement('input'),
+      document.createElement('textarea'),
+    ]) {
+      for (const key of ['b', 'i', 'u']) {
+        const keyEvent = event(key, { target: field })
+        handleDocumentWorkspaceKeys(keyEvent, handlers)
+        expect(keyEvent.preventDefault).not.toHaveBeenCalled()
+      }
+    }
+    // Ctrl+Shift+B is a browser chord, not the document's Bold.
+    const shiftB = event('b', { shiftKey: true })
+    handleDocumentWorkspaceKeys(shiftB, handlers)
+    expect(shiftB.preventDefault).not.toHaveBeenCalled()
+    expect(toggleBold).not.toHaveBeenCalled()
+    expect(toggleItalic).not.toHaveBeenCalled()
+    expect(toggleUnderline).not.toHaveBeenCalled()
+  })
+
+  it('does not claim B/I/U when the matching toggle is unavailable', () => {
+    const boldEvent = event('b')
+    // The caller omits the handler for a tracked partial-range refusal, so the
+    // keystroke falls through rather than being swallowed.
+    handleDocumentWorkspaceKeys(boldEvent, { save: vi.fn() })
+    expect(boldEvent.preventDefault).not.toHaveBeenCalled()
+  })
 })

@@ -24,6 +24,13 @@ export type ParagraphSelectionBinding = {
   onSplitRange: () => void
   onCopyRange: (clipboard: DataTransfer | null) => void
   onCutRange: (clipboard: DataTransfer | null) => void
+  /**
+   * Plain-text paste from this field, with the field-local selection it applies
+   * to. The workspace decides whether the live document selection replaces it;
+   * a caret paste is split into paragraphs by the same pure path the ribbon
+   * uses. Optional so a read-only render that never pastes need not wire it.
+   */
+  onPasteText?: (text: string, from: number, to: number) => void
   onClear: () => void
   /** Input the editor cannot express as a document-range replacement. */
   onRejectInput: () => void
@@ -33,5 +40,18 @@ export type ParagraphSelectionBinding = {
 
 export type ParagraphSelectionHandlers = Omit<
   ParagraphSelectionBinding,
-  'range' | 'focus'
->
+  'range' | 'focus' | 'onPasteText'
+> & {
+  /**
+   * Plain-text paste from a field, carrying the paragraph it targets because a
+   * drop does not focus the field: resolving the paragraph from the workspace's
+   * selected paragraph would paste into whatever paragraph was last focused.
+   * The offsets are field-local, as for the binding.
+   */
+  onPasteText?: (
+    paragraphId: string,
+    text: string,
+    from: number,
+    to: number,
+  ) => void
+}

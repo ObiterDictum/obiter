@@ -13,6 +13,7 @@ export function PendingInsert({
   selected,
   verticalCaret,
   onSelect,
+  onPasteText,
   onTextChange,
   onInsertParagraph,
   onDeleteParagraph,
@@ -23,7 +24,13 @@ export function PendingInsert({
   insert: LocalInsert
   selected: boolean
   verticalCaret?: VerticalCaretColumn
-  onSelect: () => void
+  onSelect: (offset?: number) => void
+  onPasteText?: (
+    paragraphId: string,
+    text: string,
+    from: number,
+    to: number,
+  ) => void
   onTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
   onDeleteParagraph?: (paragraphId: string) => void
@@ -32,6 +39,7 @@ export function PendingInsert({
   restoreCaret?: { paragraphId: string; offset: number } | null
 }) {
   const field = useRef<HTMLTextAreaElement>(null)
+  const programmaticFocus = useRef(false)
   // A pending insert cannot continue a vertical-column run, so every way of
   // entering or editing it ends the run rather than holding a stale column.
   const clearColumn = () => clearVerticalColumn(verticalCaret)
@@ -45,7 +53,12 @@ export function PendingInsert({
     if (!selected) return
     const node = field.current
     if (!node) return
+    // Focus from this effect is not a user selection: the insert is already the
+    // selected paragraph. Marking it keeps `onFocus` from re-selecting, so a
+    // late effect can never seat the caret back on an insert an undo removed.
+    programmaticFocus.current = true
     node.focus({ preventScroll: true })
+    programmaticFocus.current = false
     if (restore != null) {
       const offset = Math.min(restore, node.value.length)
       node.setSelectionRange(offset, offset)
@@ -58,7 +71,7 @@ export function PendingInsert({
       data-paragraph-id={insert.clientId}
       aria-current={selected ? 'true' : undefined}
       aria-label="Pending paragraph"
-      onClick={onSelect}
+      onClick={() => onSelect(field.current?.selectionStart ?? undefined)}
       className="relative min-h-[1.15em]"
     >
       <textarea
@@ -85,7 +98,34 @@ export function PendingInsert({
         }}
         onFocus={() => {
           clearColumn()
-          onSelect()
+          if (programmaticFocus.current) return
+          onSelect(field.current?.selectionStart ?? undefined)
+        }}
+        onPaste={(event) => {
+          if (!onPasteText) return
+          const data = event.clipboardData?.getData('text/plain') ?? ''
+          if (data.length === 0) return
+          event.preventDefault()
+          clearColumn()
+          onPasteText(
+            insert.clientId,
+            data,
+            event.currentTarget.selectionStart,
+            event.currentTarget.selectionEnd,
+          )
+        }}
+        onDrop={(event) => {
+          if (!onPasteText) return
+          const data = event.dataTransfer?.getData('text/plain') ?? ''
+          if (data.length === 0) return
+          event.preventDefault()
+          clearColumn()
+          onPasteText(
+            insert.clientId,
+            data,
+            event.currentTarget.selectionStart,
+            event.currentTarget.selectionEnd,
+          )
         }}
         onCompositionStart={clearColumn}
         onCompositionEnd={clearColumn}
@@ -142,7 +182,7 @@ export function PendingInsert({
         onClick={(event) => {
           clearColumn()
           event.stopPropagation()
-          onSelect()
+          onSelect(field.current?.selectionStart ?? undefined)
         }}
         className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none print:hidden"
         style={{ lineHeight: '1.15', minHeight: '1.15em' }}

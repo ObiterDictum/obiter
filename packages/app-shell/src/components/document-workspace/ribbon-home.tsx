@@ -26,7 +26,10 @@ import {
   TextUnderline,
   Trash,
 } from '@phosphor-icons/react'
-import type { DocumentFormatToolbar } from './ribbon-types'
+import type {
+  DocumentFormatToolbar,
+  DocumentClipboardToolbar,
+} from './ribbon-types'
 import {
   CaptionButton,
   IconButton,
@@ -72,6 +75,7 @@ export function HomeRibbon({
   canUndo,
   canRedo,
   format,
+  clipboard,
   deleteParagraphReason,
   onUndo,
   onRedo,
@@ -82,6 +86,7 @@ export function HomeRibbon({
   canUndo?: boolean
   canRedo?: boolean
   format?: DocumentFormatToolbar
+  clipboard?: DocumentClipboardToolbar
   /** Set when the effective document has one paragraph: the accessible reason
    * Delete paragraph is unavailable rather than an unexplained disabled state. */
   deleteParagraphReason?: string
@@ -101,15 +106,28 @@ export function HomeRibbon({
         <ToolbarRow>
           <IconButton
             label="Paste"
-            soon
+            soon={!clipboard}
+            disabled={!clipboard?.canPaste}
+            disabledReason={clipboard?.pasteReason}
+            onClick={clipboard?.onPaste}
             icon={<ClipboardText size={16} aria-hidden />}
           />
           <IconButton
             label="Cut"
-            soon
+            soon={!clipboard}
+            disabled={!clipboard?.canCut}
+            disabledReason={clipboard?.cutReason}
+            onClick={clipboard?.onCut}
             icon={<Scissors size={16} aria-hidden />}
           />
-          <IconButton label="Copy" soon icon={<Copy size={16} aria-hidden />} />
+          <IconButton
+            label="Copy"
+            soon={!clipboard}
+            disabled={!clipboard?.canCopy}
+            disabledReason={clipboard?.copyReason}
+            onClick={clipboard?.onCopy}
+            icon={<Copy size={16} aria-hidden />}
+          />
         </ToolbarRow>
       </ToolbarGroup>
       <ToolbarGroup label="Font">
