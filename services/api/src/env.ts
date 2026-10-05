@@ -10,6 +10,7 @@ import { defaultRampartCacheDir } from './rampart-cache'
 import { readCorpusDatabaseUrls } from './env-corpus'
 import type { RedactionDetectionConfig } from './redaction-detection'
 import {
+  DEFAULT_DOCUMENT_EDIT_MAX_BYTES,
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
   DEFAULT_JSON_BODY_MAX_BYTES,
   DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS,
@@ -88,6 +89,7 @@ export interface ApiEnv {
   rampartChunkTokens: number
   jsonBodyMaxBytes: number
   documentUploadMaxBytes: number
+  documentEditMaxBytes: number
   ooxmlMaxEntries: number
   ooxmlMaxUncompressedBytes: number
   ooxmlMaxEntryUncompressedBytes: number
@@ -464,6 +466,10 @@ export function readApiEnv(): ApiEnv {
     documentUploadMaxBytes: readPositiveInteger(
       'DOCUMENT_UPLOAD_MAX_BYTES',
       String(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES),
+    ),
+    documentEditMaxBytes: readPositiveInteger(
+      'DOCUMENT_EDIT_MAX_BYTES',
+      String(DEFAULT_DOCUMENT_EDIT_MAX_BYTES),
     ),
     ooxmlMaxEntries: readPositiveInteger(
       'OOXML_MAX_ENTRIES',

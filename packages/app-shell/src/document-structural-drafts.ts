@@ -218,6 +218,12 @@ export async function readImageInsert(
   file: File,
 ): Promise<ImageInsertFields | { error: string }> {
   const bytes = new Uint8Array(await file.arrayBuffer())
+  // A base64 string encodes 3 bytes per 4 characters; a file past this size
+  // can only produce a draft the contract bound refuses, so reject it as a
+  // typed picker error rather than let the save answer 413.
+  if (bytes.length > (DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH / 4) * 3) {
+    return { error: 'That image is too large to insert.' }
+  }
   const signature = SIGNATURES.find((entry) =>
     entry.bytes.every((value, index) => bytes[index] === value),
   )

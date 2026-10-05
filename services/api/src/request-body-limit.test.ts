@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import type { Pool } from 'pg'
+import { DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH } from '@obiter/contracts'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
 import { createTestApiEnv } from './test-api-env'
+import { DEFAULT_DOCUMENT_EDIT_MAX_BYTES } from './request-limit-defaults'
 
 type Auth = ReturnType<typeof createAuth>
 
@@ -205,6 +207,113 @@ describe('request body limit middleware', () => {
     expect(
       statements.some((sql) => sql.includes('insert into matter_documents')),
     ).toBe(false)
+  })
+
+  it.each([
+    '/api/documents/doc_1/edit',
+    '/api/documents/doc_1/collaboration/merge',
+  ])(
+    'admits an edit payload past the 48 KiB JSON limit on %s',
+    async (path) => {
+      const query = vi.fn(async () => ({ rows: [] }))
+      const auth = {
+        api: {
+          getSession: async () => ({
+            user: {
+              id: 'usr_1',
+              organisationId: 'org_1',
+            },
+            session: { id: 'ses_1' },
+          }),
+        },
+        handler: async () => new Response(null, { status: 404 }),
+      } as unknown as Auth
+
+      const app = createApiApp(testEnv, createPool(query), { auth })
+      const response = await app.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: oversizedJsonBody(),
+      })
+
+      // The document resolves to nothing in the stub pool, but the request
+      // reached the handler — the edit cap admitted it past the 48 KiB gate.
+      expect(response.status).not.toBe(413)
+    },
+  )
+
+  it.each([
+    '/api/documents/doc_1/edit',
+    '/api/documents/doc_1/collaboration/merge',
+  ])('still bounds the edit routes at %s', async (path) => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
+    const response = await app.request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'x'.repeat(DEFAULT_DOCUMENT_EDIT_MAX_BYTES + 1),
+    })
+
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'payload_too_large' },
+    })
+  })
+
+  it('keeps other document routes on the 48 KiB JSON limit', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
+    const response = await app.request('/api/documents/doc_1/restore', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: oversizedJsonBody(),
+    })
+
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'payload_too_large',
+        message: 'Request body exceeds the 48 KiB JSON limit.',
+      },
+    })
+  })
+
+  it('keeps the image contract bound below the edit transport cap', () => {
+    expect(DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH).toBeLessThan(
+      DEFAULT_DOCUMENT_EDIT_MAX_BYTES,
+    )
   })
 
   it('still creates a matter when the JSON body is within the limit', async () => {

@@ -8,11 +8,11 @@ export const DOCUMENT_EDIT_TABLE_MAX_ROWS = 64
 export const DOCUMENT_EDIT_TABLE_MAX_COLUMNS = 64
 
 /**
- * The largest image the contract accepts, as base64 text. The package limit
- * for one entry is 24 MiB uncompressed, so the base64 form cannot exceed
- * 24 MiB * 4/3 characters.
+ * The largest image the contract accepts, as base64 text (8 MiB, encoding at
+ * most 6 MiB of raster). The edit route admits a 12 MiB request body, so a
+ * maximum-sized picture still leaves room for the rest of the batch.
  */
-export const DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH = 33_554_432
+export const DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH = 8_388_608
 export const DOCUMENT_EDIT_IMAGE_DIMENSION_MAX = 16_384
 export const DOCUMENT_EDIT_IMAGE_NAME_MAX_LENGTH = 255
 
@@ -31,17 +31,35 @@ export type DocumentEditImageContentType = z.infer<
   typeof documentEditImageContentTypeSchema
 >
 
+const BASE64_PADDING = 0x3d // '='
+
+/**
+ * Standard padded-base64 membership, checked in one pass. A regex alternative
+ * blows the call stack on the multi-megabyte strings this schema legitimately
+ * carries; a linear scan does not backtrack and costs one read per character.
+ */
+function isBase64(value: string): boolean {
+  const length = value.length
+  if (length === 0 || length % 4 !== 0) return false
+  let body = length
+  if (value.charCodeAt(body - 1) === BASE64_PADDING) body -= 1
+  if (value.charCodeAt(body - 1) === BASE64_PADDING) body -= 1
+  for (let index = 0; index < body; index += 1) {
+    const code = value.charCodeAt(index)
+    const alphanumeric =
+      (code >= 0x30 && code <= 0x39) ||
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a)
+    if (!alphanumeric && code !== 0x2b && code !== 0x2f) return false
+  }
+  return true
+}
+
 const imageDataSchema = z
   .string()
   .min(1)
   .max(DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH)
-  .refine(
-    (value) =>
-      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(
-        value,
-      ),
-    { message: 'Image data must be base64.' },
-  )
+  .refine(isBase64, { message: 'Image data must be base64.' })
 
 const imageDimensionSchema = z
   .number()
