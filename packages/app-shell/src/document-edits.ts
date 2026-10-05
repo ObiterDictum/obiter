@@ -1,5 +1,4 @@
 import {
-  DOCUMENT_EDIT_COLOUR_PATTERN,
   type DocumentEditOperation,
   type DocumentModelWire,
   type DocumentTextRunWire,
@@ -7,7 +6,10 @@ import {
 import { documentStory, paragraphPlainText } from './document-model-text'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 import {
+  runColour,
   runFlag,
+  runFontFamily,
+  runFontSize,
   runHighlight,
   runUnderline,
   runVertAlign,
@@ -61,9 +63,9 @@ export function runPropertiesFromFragments(
     bold: runFlag(xml, 'b'),
     italic: runFlag(xml, 'i'),
     underline: runUnderline(xml),
-    fontFamily: fontFamilyValue(xml),
-    fontSize: fontSizeValue(xml),
-    colour: colourValue(xml),
+    fontFamily: runFontFamily(xml),
+    fontSize: runFontSize(xml),
+    colour: runColour(xml),
     highlight: runHighlight(xml),
     strikethrough: runFlag(xml, 'strike'),
     vertAlign: runVertAlign(xml),
@@ -382,42 +384,6 @@ function appendedRunEmphasis(
     previous = properties
   }
   return operations
-}
-
-function xmlPrefix(xml: string) {
-  return xml.match(/<([A-Za-z_][\w.-]*):/u)?.[1] ?? 'w'
-}
-
-function wordTag(xml: string, localName: string) {
-  const prefix = xmlPrefix(xml)
-  return xml.match(new RegExp(`<${prefix}:${localName}\\b([^>]*)\\/?>`, 'i'))
-}
-
-function wordAttr(attrs: string | undefined, name: string, prefix: string) {
-  return attrs?.match(new RegExp(`(?:${prefix}:)?${name}="([^"]+)"`, 'i'))?.[1]
-}
-
-function fontFamilyValue(xml: string): string | null {
-  const attrs = wordTag(xml, 'rFonts')?.[1]
-  const prefix = xmlPrefix(xml)
-  return (
-    wordAttr(attrs, 'ascii', prefix) ?? wordAttr(attrs, 'hAnsi', prefix) ?? null
-  )
-}
-
-function fontSizeValue(xml: string): number | null {
-  const raw = wordAttr(wordTag(xml, 'sz')?.[1], 'val', xmlPrefix(xml))
-  const size = raw === undefined ? Number.NaN : Number(raw)
-  return Number.isInteger(size) ? size : null
-}
-
-function colourValue(xml: string): string | null {
-  const value = wordAttr(wordTag(xml, 'color')?.[1], 'val', xmlPrefix(xml))
-  return value && isEditColour(value) ? value : null
-}
-
-function isEditColour(value: string) {
-  return DOCUMENT_EDIT_COLOUR_PATTERN.test(value)
 }
 
 export function resolveInsertAnchor(

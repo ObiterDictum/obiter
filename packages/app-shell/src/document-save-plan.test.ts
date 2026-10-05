@@ -262,6 +262,37 @@ describe('draft slot removal', () => {
     ).toEqual(['run:r1'])
   })
 
+  it('fingerprints the font properties a covered emphasis slot holds', () => {
+    const source = model(['p1'], ['r1'])
+    const item = {
+      runId: 'r1',
+      fontFamily: 'Georgia',
+      fontSize: 22,
+      colour: 'FF0000',
+    }
+    const base: DraftState = {
+      ...emptyDraftState(),
+      format: { ...emptyFormatDrafts, emphasis: [item] },
+    }
+    const covered = planDocumentSave(source, base).covered
+    expect(clearableSlots(covered, base, base)).toHaveLength(1)
+
+    // A change to any one font property makes the slot a different value, so
+    // clearing it after the request would drop the newer edit.
+    const edits = [
+      { ...item, fontFamily: 'Arial' },
+      { ...item, fontSize: 28 },
+      { ...item, colour: '0000FF' },
+    ]
+    for (const emphasis of edits) {
+      const edited: DraftState = {
+        ...base,
+        format: { ...base.format, emphasis: [emphasis] },
+      }
+      expect(clearableSlots(covered, base, edited)).toEqual([])
+    }
+  })
+
   it('addresses emphasis by target identity, not array position', () => {
     const first = { runId: 'r1', bold: true }
     const second = { paragraphId: 'p1', from: 0, to: 2, italic: true }

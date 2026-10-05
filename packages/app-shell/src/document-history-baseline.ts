@@ -962,8 +962,12 @@ function emphasisOf(fragments: readonly string[]): PendingEmphasis {
     italic: properties.italic,
     underline: properties.underline,
     strikethrough: properties.strikethrough,
+    fontFamily: properties.fontFamily,
+    fontSize: properties.fontSize,
+    colour: properties.colour,
     highlight: properties.highlight,
     vertAlign: properties.vertAlign,
+    smallCaps: properties.smallCaps,
   }
 }
 

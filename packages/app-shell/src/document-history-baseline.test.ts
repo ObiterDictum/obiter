@@ -587,6 +587,79 @@ describe('lineage-driven identity', () => {
     })
   })
 
+  it('restates the pre-save font properties when undoing a saved change', () => {
+    const from = model([
+      { id: 'para-000001', run: 'text-000001', text: 'Clause' },
+    ])
+    const run = from.stories[0]?.paragraphs[0]?.runs[0]
+    if (run) {
+      run.preservedXmlFragments = [
+        '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:sz w:val="28"/><w:color w:val="FF0000"/><w:smallCaps/></w:rPr>',
+      ]
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      format: {
+        ...emptyDraftState().format,
+        emphasis: [
+          {
+            runId: 'text-000001',
+            fontFamily: 'Arial',
+            fontSize: 24,
+            colour: '00FF00',
+            smallCaps: false,
+          },
+        ],
+      },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [{ kind: 'emphasis', key: 'emph:run:text-000001' }],
+      sent,
+      fromModel: from,
+      toModel: model([
+        { id: 'para-w14-00000001', run: 'text-w14-00000001', text: 'Clause' },
+      ]),
+      lineage: {
+        version: 1,
+        baseVersionId: 'ver_1',
+        versionId: 'ver_2',
+        acceptedOperations: [0],
+        paragraphs: [
+          {
+            fromParagraphId: 'para-000001',
+            toParagraphId: 'para-w14-00000001',
+            runs: [
+              {
+                runIndex: 0,
+                segments: [
+                  { fromRunId: 'text-000001', fromOffset: 0, toOffset: 6 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      versionId: 'ver_2',
+    })
+    // The reversal must carry the whole pre-save character state, or the saved
+    // font properties survive the undo.
+    expect(translated?.format.emphasis).toEqual([
+      {
+        runId: 'text-w14-00000001',
+        bold: null,
+        italic: null,
+        underline: null,
+        strikethrough: null,
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        highlight: null,
+        vertAlign: null,
+        smallCaps: true,
+      },
+    ])
+  })
+
   it('reverses a saved join by restoring the last original run text', () => {
     const from = model([
       { id: 'para-000001', run: 'text-000001', text: 'Hello' },

@@ -4,7 +4,10 @@ import {
 } from '@obiter/contracts'
 import { documentStory, effectiveParagraph } from './document-model-text'
 import {
+  runColour,
   runFlag,
+  runFontFamily,
+  runFontSize,
   runHighlight,
   runUnderline,
   runVertAlign,
@@ -196,6 +199,12 @@ export function formatControlState(
     italic: flagOnCoveredRuns(covered, 'italic'),
     underline: flagOnCoveredRuns(covered, 'underline'),
     strikethrough: flagOnCoveredRuns(covered, 'strikethrough'),
+    // A font control reads the value every covered run agrees on, like
+    // highlight and vertical align: a mixed selection reads unset so one
+    // choice makes it uniform. Null means no direct value or a disagreement.
+    fontFamily: uniformCoveredValue(covered, runFontFamily),
+    fontSize: uniformCoveredValue(covered, runFontSize),
+    colour: uniformCoveredValue(covered, runColour),
     highlight: uniformCoveredValue(covered, runHighlight),
     vertAlign: uniformCoveredValue(
       covered,

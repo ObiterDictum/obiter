@@ -43,8 +43,12 @@ function emphasisProperties(item: PendingEmphasis): EmphasisPatch {
     ...(item.strikethrough !== undefined
       ? { strikethrough: item.strikethrough }
       : {}),
+    ...(item.fontFamily !== undefined ? { fontFamily: item.fontFamily } : {}),
+    ...(item.fontSize !== undefined ? { fontSize: item.fontSize } : {}),
+    ...(item.colour !== undefined ? { colour: item.colour } : {}),
     ...(item.highlight !== undefined ? { highlight: item.highlight } : {}),
     ...(item.vertAlign !== undefined ? { vertAlign: item.vertAlign } : {}),
+    ...(item.smallCaps !== undefined ? { smallCaps: item.smallCaps } : {}),
   }
 }
 

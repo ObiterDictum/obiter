@@ -40,6 +40,37 @@ describe('document draft persistence', () => {
     expect(restored.state.drafts).toEqual({ r1: 'closed tab work' })
   })
 
+  it('recovers a closed tab draft carrying the full emphasis shape', () => {
+    const storage = new MapStorage()
+    const state = stateWithText('formatting')
+    state.format.emphasis = [
+      {
+        runId: 'r1',
+        strikethrough: true,
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        highlight: 'yellow',
+        vertAlign: 'superscript',
+        smallCaps: true,
+      },
+    ]
+    writeDocumentDraft(
+      storage,
+      { ...scope, tabId: 'closed-tab' },
+      { baseVersionId: 'ver_1', state, held: [] },
+    )
+
+    const restored = readDocumentDraft(
+      storage,
+      { ...scope, tabId: 'new-tab' },
+      'ver_1',
+    )
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    expect(restored.state.format.emphasis).toEqual(state.format.emphasis)
+  })
+
   it('does not let a duplicated session identity write the original draft key', () => {
     const storage = new MapStorage()
     const session = new MapStorage()

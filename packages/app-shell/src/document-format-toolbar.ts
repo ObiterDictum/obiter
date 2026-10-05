@@ -176,6 +176,9 @@ export function documentFormatToolbar(
     italic: controls.italic,
     underline: controls.underline,
     strikethrough: controls.strikethrough,
+    fontFamily: controls.fontFamily,
+    fontSize: controls.fontSize,
+    colour: controls.colour,
     highlight: controls.highlight,
     vertAlign: controls.vertAlign,
     canIndent: controls.canIndent,
@@ -221,6 +224,32 @@ export function documentFormatToolbar(
       toggle({
         vertAlign:
           controls.vertAlign === 'subscript' ? 'baseline' : 'subscript',
+      })
+    },
+    onFontFamily: (fontFamily: string | null) => {
+      toggle({ fontFamily })
+    },
+    onFontSize: (fontSize: number | null) => {
+      toggle({ fontSize })
+    },
+    onColour: (colour: string | null) => {
+      toggle({ colour })
+    },
+    // Clear formatting releases every direct character property at once, so
+    // the run inherits its style again. It is the same set_run_emphasis
+    // mechanism, with each property null rather than a new operation.
+    onClearFormatting: () => {
+      toggle({
+        bold: null,
+        italic: null,
+        underline: null,
+        strikethrough: null,
+        fontFamily: null,
+        fontSize: null,
+        colour: null,
+        highlight: null,
+        vertAlign: null,
+        smallCaps: null,
       })
     },
     onIndent: () =>

@@ -11,6 +11,12 @@ export type DocumentFormatToolbar = {
   italic: boolean
   underline: boolean
   strikethrough: boolean
+  /** The direct font family the covered runs agree on, or null when unset. */
+  fontFamily: string | null
+  /** The direct size in half-points, the contract's unit, or null when unset. */
+  fontSize: number | null
+  /** The direct colour as `auto` or six hex digits, or null when unset. */
+  colour: string | null
   highlight: HighlightValue | null
   vertAlign: VertAlignValue | null
   canIndent: boolean
@@ -29,6 +35,10 @@ export type DocumentFormatToolbar = {
   onToggleHighlight: () => void
   onToggleSuperscript: () => void
   onToggleSubscript: () => void
+  onFontFamily: (fontFamily: string | null) => void
+  onFontSize: (fontSize: number | null) => void
+  onColour: (colour: string | null) => void
+  onClearFormatting: () => void
   onIndent: () => void
   onOutdent: () => void
   onContinueList: () => void
