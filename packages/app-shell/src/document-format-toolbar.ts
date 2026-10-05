@@ -10,6 +10,7 @@ import {
   indentationPatch,
   lineSpacingPatch,
   outdentList,
+  paragraphFormatState,
   setParagraphFormatDraft,
   setParagraphStyleDraft,
   toggleEmphasisAtAddress,
@@ -227,11 +228,24 @@ export function documentFormatToolbar(
     },
     onIndentKind: (kind: IndentKind) => {
       if (formatParagraphIds.length === 0) return
-      forEachFormatParagraph((current, id) =>
-        setParagraphFormatDraft(current, id, {
+      forEachFormatParagraph((current, id) => {
+        // None is a special-indent control: it clears only a first-line or
+        // hanging indent and keeps any direct left/right indent. When the
+        // paragraph has no special indent to clear, restate its draft unchanged
+        // so the reference-equal skip in `setFormat` records no history step
+        // and the save emits no operation. `paragraphFormatState` reads the
+        // pending draft over the stored paragraph, so a draft that already
+        // cleared the indent is a no-op too.
+        if (
+          kind === 'none' &&
+          paragraphFormatState(model, current, [id]).indent === 'none'
+        ) {
+          return current
+        }
+        return setParagraphFormatDraft(current, id, {
           indentation: indentationPatch(kind),
-        }),
-      )
+        })
+      })
     },
     onToggleBold: () => {
       toggle({ bold: !controls.bold })

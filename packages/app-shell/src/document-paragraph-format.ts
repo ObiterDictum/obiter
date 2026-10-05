@@ -48,13 +48,18 @@ export function lineSpacingPatch(
   return option ? { line: option.line, lineRule: 'auto' } : undefined
 }
 
-/** The `indentation` value for one indent kind. None releases the whole `ind`. */
+/**
+ * The `indentation` value for one indent kind. None clears the special
+ * first-line/hanging indent but leaves any direct left/right indentation alone,
+ * so it is an instruction that names those two attributes rather than a release
+ * of the whole `ind`.
+ */
 export function indentationPatch(
   kind: IndentKind,
 ): ParagraphFormatDraft['indentation'] {
   if (kind === 'first') return { firstLine: DEFAULT_INDENT_TWIPS }
   if (kind === 'hanging') return { hanging: DEFAULT_INDENT_TWIPS }
-  return null
+  return { firstLine: null, hanging: null }
 }
 
 /**

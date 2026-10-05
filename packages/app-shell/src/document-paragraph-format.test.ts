@@ -5,11 +5,13 @@ import type {
 } from '@obiter/contracts'
 import {
   collectFormatOperations,
+  documentFormatToolbar,
   emptyFormatDrafts,
   formattedModel,
   setParagraphFormatDraft,
 } from './document-format-edits'
 import {
+  indentationPatch,
   paragraphFormatOf,
   paragraphFormatState,
 } from './document-paragraph-format'
@@ -253,11 +255,80 @@ describe('indentation paint and release', () => {
     expect(hanging).toContain('w:hanging="720"')
   })
 
-  it('releases the whole ind element for None, matching the save writer', () => {
-    const released = painted(
-      setParagraphFormatDraft(emptyFormatDrafts, 'p1', { indentation: null }),
-    )
+  it('clears only the special indent for None, preserving left and right', () => {
+    const bothSides = modelWith([
+      paragraph(
+        'p1',
+        '<w:pPr><w:ind w:left="720" w:right="360" w:firstLine="720"/></w:pPr>',
+      ),
+    ])
+    const released =
+      formattedModel(
+        bothSides,
+        setParagraphFormatDraft(emptyFormatDrafts, 'p1', {
+          indentation: indentationPatch('none'),
+        }),
+      ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
+    expect(released).toContain('w:left="720"')
+    expect(released).toContain('w:right="360"')
+    expect(released).not.toMatch(/w:(firstLine|hanging)=/u)
+  })
+
+  it('removes an empty ind element when None clears the only indent', () => {
+    const specialOnly = modelWith([
+      paragraph('p1', '<w:pPr><w:ind w:firstLine="720"/></w:pPr>'),
+    ])
+    const released =
+      formattedModel(
+        specialOnly,
+        setParagraphFormatDraft(emptyFormatDrafts, 'p1', {
+          indentation: indentationPatch('none'),
+        }),
+      ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
     expect(released).not.toMatch(/<w:ind\b/u)
+  })
+})
+
+describe('indentation None no-op', () => {
+  // A paragraph whose only direct indent is left/right has no special indent
+  // for None to clear, so None must not draft, record history, or save.
+  const leftOnly = modelWith([
+    paragraph('p1', '<w:pPr><w:ind w:left="720"/></w:pPr>'),
+  ])
+
+  function toolbarWith(model: DocumentModelWire) {
+    let format = emptyFormatDrafts
+    let historySteps = 0
+    const toolbar = documentFormatToolbar(model, format, 'p1', (update) => {
+      const next = update(format)
+      if (next !== format) historySteps += 1
+      format = next
+    })
+    return {
+      historySteps: () => historySteps,
+      format: () => format,
+      toolbar,
+    }
+  }
+
+  it('does not draft, record history, or emit an operation', () => {
+    const state = toolbarWith(leftOnly)
+    state.toolbar.onIndentKind('none')
+    expect(state.format()).toBe(emptyFormatDrafts)
+    expect(state.historySteps()).toBe(0)
+    expect(collectFormatOperations(leftOnly, state.format(), [])).toEqual([])
+  })
+
+  it('replaces a pending special indent with the clear', () => {
+    const state = toolbarWith(leftOnly)
+    state.toolbar.onIndentKind('first')
+    expect(state.format().paragraphFormats.p1).toEqual({
+      indentation: { firstLine: 720 },
+    })
+    state.toolbar.onIndentKind('none')
+    expect(state.format().paragraphFormats.p1).toEqual({
+      indentation: { firstLine: null, hanging: null },
+    })
   })
 })
 
