@@ -10,6 +10,11 @@ export function twipToPx(twips: number): number {
   return (twips * PX_PER_INCH) / TWIPS_PER_INCH
 }
 
+/** The inverse of `twipToPx`, rounded to the integer twips the edit contract allows. */
+export function pxToTwip(px: number): number {
+  return Math.round((px * TWIPS_PER_INCH) / PX_PER_INCH)
+}
+
 export function emuToPx(emu: number): number {
   return emu / EMU_PER_PX
 }

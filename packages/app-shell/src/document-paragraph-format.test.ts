@@ -11,6 +11,7 @@ import {
   setParagraphFormatDraft,
 } from './document-format-edits'
 import {
+  DEFAULT_INDENT_TWIPS,
   indentationPatch,
   paragraphFormatOf,
   paragraphFormatState,
@@ -329,6 +330,92 @@ describe('indentation None no-op', () => {
     expect(state.format().paragraphFormats.p1).toEqual({
       indentation: { firstLine: null, hanging: null },
     })
+  })
+})
+
+describe('hanging indent body anchor', () => {
+  function toolbarWith(model: DocumentModelWire) {
+    let format = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(model, format, 'p1', (update) => {
+      format = update(format)
+    })
+    return { format: () => format, toolbar }
+  }
+
+  it('adds the default half-inch left indent to an unindented paragraph', () => {
+    const state = toolbarWith(plain)
+    state.toolbar.onIndentKind('hanging')
+    expect(state.format().paragraphFormats.p1).toEqual({
+      indentation: {
+        left: DEFAULT_INDENT_TWIPS,
+        hanging: DEFAULT_INDENT_TWIPS,
+      },
+    })
+    const xml =
+      formattedModel(
+        plain,
+        state.format(),
+      ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
+    expect(xml).toContain(`w:left="${String(DEFAULT_INDENT_TWIPS)}"`)
+    expect(xml).toContain(`w:hanging="${String(DEFAULT_INDENT_TWIPS)}"`)
+  })
+
+  it('keeps a larger existing left indent', () => {
+    const wide = modelWith([
+      paragraph('p1', '<w:pPr><w:ind w:left="1440"/></w:pPr>'),
+    ])
+    const state = toolbarWith(wide)
+    state.toolbar.onIndentKind('hanging')
+    expect(state.format().paragraphFormats.p1).toEqual({
+      indentation: { left: 1440, hanging: DEFAULT_INDENT_TWIPS },
+    })
+  })
+})
+
+describe('paragraph layout on a pending insert', () => {
+  // A pending insert is not a stored paragraph: its layout cannot be sent as
+  // its own operation, so a control acting on it would only leave a draft that
+  // never paints and blocks the save.
+  function toolbarFor(paragraphId: string, model: DocumentModelWire = plain) {
+    let format = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      model,
+      format,
+      paragraphId,
+      (update) => {
+        format = update(format)
+      },
+    )
+    return { format: () => format, toolbar }
+  }
+
+  it('does not draft layout for a caret in a pending insert', () => {
+    const state = toolbarFor('insert-1')
+    state.toolbar.onAlignment('center')
+    state.toolbar.onLineSpacing('1.5')
+    state.toolbar.onIndentKind('hanging')
+    expect(state.format()).toBe(emptyFormatDrafts)
+  })
+
+  it('formats only the stored paragraphs of a mixed selection', () => {
+    let format = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      plain,
+      format,
+      'p1',
+      (update) => {
+        format = update(format)
+      },
+      {
+        kind: 'selection',
+        ranges: [
+          { paragraphId: 'p1', from: 0, to: 0 },
+          { paragraphId: 'insert-1', from: 0, to: 0 },
+        ],
+      },
+    )
+    toolbar.onAlignment('center')
+    expect(format.paragraphFormats).toEqual({ p1: { alignment: 'center' } })
   })
 })
 

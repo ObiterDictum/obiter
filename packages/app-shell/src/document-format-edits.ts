@@ -35,6 +35,7 @@ export {
   LINE_SPACING_OPTIONS,
   lineSpacingPatch,
   paragraphFormatState,
+  paragraphIndentLeftPx,
   setParagraphFormatDraft,
 } from './document-paragraph-format'
 export type {
