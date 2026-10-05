@@ -1,8 +1,9 @@
-import type {
-  OoxmlDocument,
-  ParagraphAnchor,
-  TextRunAnchor,
-  XmlElementRange,
+import {
+  OoxmlError,
+  type OoxmlDocument,
+  type ParagraphAnchor,
+  type TextRunAnchor,
+  type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import {
@@ -12,6 +13,7 @@ import {
 } from './model-properties'
 import { insertPropertyChild, stripPropertyChild } from './property-xml'
 import { escapeXmlAttribute } from './parts/overlay'
+import { hasPendingBreakSplice } from './run-break-splices'
 
 export type RunEmphasis = {
   bold?: boolean | null
@@ -45,6 +47,14 @@ export function setRunEmphasis(
   emphasis: RunEmphasis,
 ) {
   const part = requireEditablePart(document, anchor.partName)
+  // A whole-run property write cannot compose with a page-break splice that
+  // already reopened the run: the write lands on the first sibling while the
+  // tail keeps its parse-time property snapshot, so the wire would claim the
+  // whole run is styled while the saved tail is not. Fail closed with a typed
+  // edit error instead of saving a mismatch.
+  if (hasPendingBreakSplice(part.overlay, anchor.runRange)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
   writePropertyChildren(part.overlay, {
     id: anchor.wire.id,
     nodeRange: anchor.runRange,

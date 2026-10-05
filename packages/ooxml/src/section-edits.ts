@@ -207,7 +207,11 @@ function shouldMaterialiseRun(overlay: XmlOverlay, runId: string) {
  * source-slicing path preserves it and is used whenever the run has no pending
  * overlay; a run whose text a `replace_run_text` rewrote no longer has a
  * source-to-model mapping for its children, so the reorder is confined to that
- * already-rewritten case.
+ * already-rewritten case. The run-properties fragment(s) are always emitted
+ * first, ahead of the remaining preserved children, because `CT_Run` requires
+ * `w:rPr` before any structural child: a property write that appended an
+ * `w:rPr` after an existing break or tab would otherwise rebuild a run whose
+ * first child is not its properties.
  */
 function materialiseRunWithBreaks(
   overlay: XmlOverlay,
@@ -220,7 +224,11 @@ function materialiseRunWithBreaks(
   const source = overlay.source
   const openRun = source.slice(run.runRange.start, run.runRange.startTagEnd)
   const closeRun = source.slice(run.runRange.endTagStart, run.runRange.end)
-  const properties = run.wire.preservedXmlFragments.join('')
+  const preserved = run.wire.preservedXmlFragments
+  const properties = [
+    ...preserved.filter((fragment) => /<w:rPr\b/u.test(fragment)),
+    ...preserved.filter((fragment) => !/<w:rPr\b/u.test(fragment)),
+  ].join('')
   const prefix = /^<([^:>\s]+):/u.exec(openRun)?.[1] ?? 'w'
   let cursor = 0
   let inner = ''
@@ -231,13 +239,20 @@ function materialiseRunWithBreaks(
   }
   inner += wordRunInnerTextXml(prefix, text.slice(cursor))
   for (const [pendingKey, replacement] of overlay.replacements) {
-    if (
-      pendingKey.startsWith(`${run.wire.id}:`) &&
+    const insideRun =
       replacement.start >= run.runRange.start &&
-      replacement.end <= run.runRange.end
-    ) {
-      overlay.replacements.delete(pendingKey)
+      replacement.end <= run.runRange.end &&
+      replacement.start < run.runRange.end
+    if (!insideRun) continue
+    // A non-run-keyed replacement inside the run is a paragraph-keyed splice
+    // this rebuild would silently drop, losing the break it carries. The
+    // run-keyed writers refuse a splice, so this is unreachable in a valid
+    // batch; fail closed as a typed edit error rather than let serialisation
+    // hit the overlay's plain overlap error.
+    if (!pendingKey.startsWith(`${run.wire.id}:`)) {
+      throw new OoxmlError('invalid-document-edit')
     }
+    overlay.replacements.delete(pendingKey)
   }
   setOverlayReplacement(overlay, key, {
     start: run.runRange.start,

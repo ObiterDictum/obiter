@@ -14,7 +14,7 @@ import { MapStorage, scope } from './document-draft-store-test-support'
 import { emptyFormatDrafts } from './document-format-types'
 import { formattedModel } from './document-format-edits'
 import { layoutDocument } from './document-page-engine'
-import { sectionXmlInFragment } from './document-page-layout'
+import { documentSections, sectionXmlInFragment } from './document-page-layout'
 import {
   hasSectionDraft,
   paintSectionFragments,
@@ -298,6 +298,49 @@ describe('section pagination', () => {
     expect(layoutDocument(doubled)).toHaveLength(layoutDocument(single).length)
   })
 
+  it('merges a pending section break into an existing paragraph properties fragment', () => {
+    // The writer inserts the section into the paragraph's live `w:pPr`, so the
+    // painted model must merge there too instead of appending a second
+    // properties fragment the save would never produce.
+    const base = modelWithParagraphFragments({
+      p1: ['<w:pPr><w:jc w:val="center"/></w:pPr>'],
+    })
+    const painted = withBreakDrafts(base, [
+      { id: 'b1', paragraphId: 'p1', offset: 0, kind: 'section' },
+    ])
+    const fragments =
+      painted.stories[0]?.paragraphs[0]?.preservedXmlFragments ?? []
+    expect(fragments.join('').match(/<w:pPr\b/gu)).toHaveLength(1)
+    const properties =
+      fragments.find((fragment) => /<w:pPr\b/u.test(fragment)) ?? ''
+    expect(properties).toContain('<w:jc w:val="center"/>')
+    expect(properties).toContain('<w:sectPr')
+    // `w:sectPr` is last in `CT_PPr`, after `w:jc`.
+    expect(properties.indexOf('<w:sectPr')).toBeGreaterThan(
+      properties.indexOf('<w:jc'),
+    )
+  })
+
+  it('leaves a paragraph that already ends a section unpainted', () => {
+    // The writer refuses a second section on this paragraph, so painting one
+    // would register a phantom section the save never writes.
+    const existing =
+      '<w:pPr><w:sectPr><w:pgSz w:w="8000" w:h="6000"/><w:pgMar w:top="720"/></w:sectPr></w:pPr>'
+    const base = modelWithParagraphFragments({ p1: [existing], p2: [] })
+    const painted = withBreakDrafts(base, [
+      { id: 'b1', paragraphId: 'p1', offset: 0, kind: 'section' },
+    ])
+    const paragraph = painted.stories[0]?.paragraphs.find(
+      (item) => item.id === 'p1',
+    )
+    expect(paragraph?.preservedXmlFragments).toEqual([existing])
+    expect(
+      paragraph?.preservedXmlFragments.join('').match(/<w:sectPr\b/gu),
+    ).toHaveLength(1)
+    // The existing section and the body-level section: no phantom third.
+    expect(documentSections(painted)).toHaveLength(2)
+  })
+
   it('starts a new sheet at a pending page break offset', () => {
     const pages = layoutDocument(
       model(['p1', 'p2']),
@@ -394,6 +437,26 @@ function paragraph(id: string): DocumentParagraphWire {
     id,
     runs: [{ id: `${id}-r`, text: 'text', preservedXmlFragments: [] }],
     preservedXmlFragments: [],
+  }
+}
+
+function modelWithParagraphFragments(
+  fragments: Record<string, string[]>,
+): DocumentModelWire {
+  const ids = Object.keys(fragments)
+  return {
+    ...model(ids),
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: ids.map((id) => ({
+          ...paragraph(id),
+          preservedXmlFragments: fragments[id] ?? [],
+        })),
+        preservedXmlFragments: [NORMAL],
+      },
+    ],
   }
 }
 

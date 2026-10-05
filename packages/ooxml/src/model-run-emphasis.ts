@@ -28,6 +28,7 @@ import {
   type XmlOverlay,
 } from './parts/overlay'
 import { isTextWrappingBreak } from './parts/xml-elements'
+import { hasPendingBreakSplice } from './run-break-splices'
 import { decodeXmlReferences } from './xml-lexemes'
 
 export type RunEmphasisRange = RunEmphasis & { from: number; to: number }
@@ -98,7 +99,7 @@ export function applyRunEmphasisRanges(
       const length = run.wire.text.length
       if (
         local.every((range) => range.from === 0 && range.to === length) &&
-        !hasPendingBreakSplice(part.overlay, run)
+        !hasPendingBreakSplice(part.overlay, run.runRange)
       ) {
         setRunEmphasis(
           document,
@@ -356,29 +357,6 @@ function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
 function hasPendingOverlay(overlay: XmlOverlay, run: TextRunAnchor) {
   const { start, end } = run.runRange
   for (const [key, replacement] of overlay.replacements) {
-    if (key.startsWith(`${run.wire.id}:`)) return true
-    if (
-      replacement.start >= start &&
-      replacement.end <= end &&
-      replacement.start < end
-    ) {
-      return true
-    }
-  }
-  return false
-}
-
-/**
- * Whether a page-break splice already owns part of the run. The whole-run
- * emphasis fast path cannot take this branch: it would write the run's
- * properties while leaving the splice's reopened tail on its parse-time
- * snapshot, so the tail would save unstyled. Materialising instead rebuilds
- * both halves from the effective properties.
- */
-function hasPendingBreakSplice(overlay: XmlOverlay, run: TextRunAnchor) {
-  const { start, end } = run.runRange
-  for (const [key, replacement] of overlay.replacements) {
-    if (!key.includes('page-break')) continue
     if (key.startsWith(`${run.wire.id}:`)) return true
     if (
       replacement.start >= start &&
