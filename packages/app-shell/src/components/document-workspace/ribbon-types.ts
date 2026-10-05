@@ -8,6 +8,8 @@ import type {
 
 export type DocumentFormatToolbar = {
   paragraphStyleId: string
+  /** True when the target paragraphs do not all carry one style. */
+  paragraphStyleMixed: boolean
   paragraphStyles: ReadonlyArray<{ styleId: string; name: string }>
   /** The alignment every target paragraph agrees on, or null when mixed. */
   alignment: AlignmentValue | null
@@ -30,6 +32,9 @@ export type DocumentFormatToolbar = {
   canIndent: boolean
   canOutdent: boolean
   canContinue: boolean
+  canRestart: boolean
+  /** True when every numbered target carries a start override. */
+  listRestarted: boolean
   listKind: ListKind | null
   canApplyBullet: boolean
   canApplyNumber: boolean
@@ -53,6 +58,7 @@ export type DocumentFormatToolbar = {
   onIndent: () => void
   onOutdent: () => void
   onContinueList: () => void
+  onRestartList: () => void
   onToggleList: (kind: ListKind) => void
 }
 

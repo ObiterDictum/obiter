@@ -2,7 +2,10 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { toggleParagraphList, type ListKind } from './document-list-toggle'
+import {
+  toggleParagraphListOnTargets,
+  type ListKind,
+} from './document-list-toggle'
 import {
   continueList,
   emphasisAddress,
@@ -12,6 +15,7 @@ import {
   outdentList,
   paragraphFormatState,
   paragraphIndentLeftPx,
+  restartList,
   setParagraphFormatDraft,
   setParagraphStyleDraft,
   toggleEmphasisAtAddress,
@@ -193,6 +197,7 @@ export function documentFormatToolbar(
         ? { emphasisUnavailable: NOTHING_TO_FORMAT }
         : {}),
     paragraphStyleId: controls.paragraphStyleId,
+    paragraphStyleMixed: controls.paragraphStyleMixed,
     paragraphStyles: controls.paragraphStyles,
     alignment: controls.alignment,
     lineSpacing: controls.lineSpacing,
@@ -209,6 +214,8 @@ export function documentFormatToolbar(
     canIndent: controls.canIndent,
     canOutdent: controls.canOutdent,
     canContinue: controls.canContinue,
+    canRestart: controls.canRestart,
+    listRestarted: controls.listRestarted,
     listKind: controls.listKind,
     canApplyBullet: controls.canApplyBullet,
     canApplyNumber: controls.canApplyNumber,
@@ -328,12 +335,20 @@ export function documentFormatToolbar(
         const target = selectedParagraph(model, id)
         return target ? continueList(current, model, target) : current
       }),
-    onToggleList: (kind: ListKind) =>
+    onRestartList: () =>
       forEachParagraph((current, id) => {
         const target = selectedParagraph(model, id)
-        return target
-          ? toggleParagraphList(current, model, target, kind)
-          : current
+        return target ? restartList(current, model, target) : current
       }),
+    onToggleList: (kind: ListKind) => {
+      const targets = controls.paragraphIds.flatMap((id) => {
+        const target = selectedParagraph(model, id)
+        return target ? [target] : []
+      })
+      if (targets.length === 0) return
+      setFormat((current) =>
+        toggleParagraphListOnTargets(current, model, targets, kind),
+      )
+    },
   }
 }

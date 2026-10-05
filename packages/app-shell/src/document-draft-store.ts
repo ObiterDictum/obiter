@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { documentTextRunWireSchema } from '@obiter/contracts'
 import { pendingEmphasisSchema } from './document-draft-emphasis'
+import { numberingDraftSchema } from './document-draft-numbering'
 import { paragraphFormatDraftSchema } from './document-draft-paragraph-format'
 import type { DraftState } from './document-save-plan'
 import {
@@ -57,12 +58,6 @@ export const localInsertSchema = z
   })
   .strict()
 
-const numberingDraftSchema = z
-  .object({
-    numId: z.string().min(1).nullable(),
-    ilvl: z.number().int().min(0).max(8).optional(),
-  })
-  .strict()
 const trackedRejectionSchema = z
   .object({
     key: z.string().min(1),

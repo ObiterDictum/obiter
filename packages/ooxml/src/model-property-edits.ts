@@ -7,11 +7,10 @@ import type {
 import { requireEditablePart } from './model-edit-overlay'
 import {
   activePropertiesContent,
-  expandSelfClosingProperties,
   findChildRange,
-  propertyChildInsertPosition,
   writePropertyChildren,
 } from './model-properties'
+import { insertPropertyChild, stripPropertyChild } from './property-xml'
 import { escapeXmlAttribute } from './parts/overlay'
 
 export type RunEmphasis = {
@@ -25,11 +24,6 @@ export type RunEmphasis = {
   strikethrough?: boolean | null
   vertAlign?: string | null
   smallCaps?: boolean | null
-}
-
-export type ParagraphNumbering = {
-  numId: string | null
-  ilvl?: number
 }
 
 export type ParagraphFormat = {
@@ -62,31 +56,6 @@ export function setRunEmphasis(
     anchor.wire,
     (xml) => patchRunEmphasisXml(xml, emphasis),
     '<w:rPr/>',
-  )
-  part.dirty = true
-}
-
-export function setParagraphNumbering(
-  document: OoxmlDocument,
-  anchor: ParagraphAnchor,
-  numbering: ParagraphNumbering,
-) {
-  const part = requireEditablePart(document, anchor.partName)
-  const instruction =
-    numbering.numId === null
-      ? ''
-      : `<w:numPr><w:ilvl w:val="${String(numbering.ilvl ?? 0)}"/><w:numId w:val="${escapeXmlAttribute(numbering.numId)}"/></w:numPr>`
-  writePropertyChildren(part.overlay, {
-    id: anchor.wire.id,
-    nodeRange: anchor.paragraphRange,
-    propertiesRange: anchor.paragraphPropertiesRange,
-    propertiesName: 'pPr',
-    children: [{ localName: 'numPr', instruction, apply: true }],
-  })
-  patchWireFragments(
-    anchor.wire,
-    (xml) => patchParagraphNumberingXml(xml, numbering),
-    '<w:pPr/>',
   )
   part.dirty = true
 }
@@ -143,21 +112,6 @@ export function patchRunEmphasisXml(fragment: string, emphasis: RunEmphasis) {
   return next
 }
 
-export function patchParagraphNumberingXml(
-  fragment: string,
-  numbering: ParagraphNumbering,
-) {
-  const base =
-    fragment.trim() === '' ? '<w:pPr/>' : stripChild(fragment, 'numPr')
-  if (numbering.numId === null) return base
-  const ilvl = numbering.ilvl ?? 0
-  return insertChild(
-    base,
-    'numPr',
-    `<w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="${escapeXmlAttribute(numbering.numId)}"/></w:numPr>`,
-  )
-}
-
 export function patchParagraphFormatXml(
   fragment: string,
   format: ParagraphFormat,
@@ -166,7 +120,7 @@ export function patchParagraphFormatXml(
   if (format.alignment !== undefined) {
     next =
       format.alignment === null
-        ? stripChild(next, 'jc')
+        ? stripPropertyChild(next, 'jc')
         : upsertValElement(next, 'jc', format.alignment)
   }
   if (
@@ -177,12 +131,12 @@ export function patchParagraphFormatXml(
     const spacing = spacingInstruction(spacingAttrsFromFragment(next), format)
     next = spacing
       ? upsertElement(next, 'spacing', spacing)
-      : stripChild(next, 'spacing')
+      : stripPropertyChild(next, 'spacing')
   }
   if (format.indentation !== undefined) {
     next =
       format.indentation === null
-        ? stripChild(next, 'ind')
+        ? stripPropertyChild(next, 'ind')
         : upsertElement(
             next,
             'ind',
@@ -426,9 +380,9 @@ function upsertFlag(
   localName: 'b' | 'i' | 'strike' | 'smallCaps',
   value: boolean | null,
 ) {
-  const without = stripChild(fragment, localName)
+  const without = stripPropertyChild(fragment, localName)
   if (value === null) return without
-  return insertChild(
+  return insertPropertyChild(
     without,
     localName,
     value ? `<w:${localName}/>` : `<w:${localName} w:val="0"/>`,
@@ -436,9 +390,9 @@ function upsertFlag(
 }
 
 function upsertUnderline(fragment: string, value: boolean | null) {
-  const without = stripChild(fragment, 'u')
+  const without = stripPropertyChild(fragment, 'u')
   if (value === null) return without
-  return insertChild(
+  return insertPropertyChild(
     without,
     'u',
     value ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>',
@@ -446,10 +400,10 @@ function upsertUnderline(fragment: string, value: boolean | null) {
 }
 
 function upsertFontFamily(fragment: string, value: string | null) {
-  const without = stripChild(fragment, 'rFonts')
+  const without = stripPropertyChild(fragment, 'rFonts')
   if (value === null) return without
   const name = escapeXmlAttribute(value)
-  return insertChild(
+  return insertPropertyChild(
     without,
     'rFonts',
     `<w:rFonts w:ascii="${name}" w:hAnsi="${name}"/>`,
@@ -457,11 +411,11 @@ function upsertFontFamily(fragment: string, value: string | null) {
 }
 
 function upsertFontSize(fragment: string, value: number | null) {
-  let next = stripChild(fragment, 'sz')
-  next = stripChild(next, 'szCs')
+  let next = stripPropertyChild(fragment, 'sz')
+  next = stripPropertyChild(next, 'szCs')
   if (value === null) return next
-  next = insertChild(next, 'sz', `<w:sz w:val="${String(value)}"/>`)
-  return insertChild(next, 'szCs', `<w:szCs w:val="${String(value)}"/>`)
+  next = insertPropertyChild(next, 'sz', `<w:sz w:val="${String(value)}"/>`)
+  return insertPropertyChild(next, 'szCs', `<w:szCs w:val="${String(value)}"/>`)
 }
 
 function upsertValElement(
@@ -469,9 +423,9 @@ function upsertValElement(
   localName: string,
   value: string | null,
 ) {
-  const without = stripChild(fragment, localName)
+  const without = stripPropertyChild(fragment, localName)
   if (value === null) return without
-  return insertChild(
+  return insertPropertyChild(
     without,
     localName,
     `<w:${localName} w:val="${escapeXmlAttribute(value)}"/>`,
@@ -483,34 +437,9 @@ function upsertElement(
   localName: string,
   instruction: string,
 ) {
-  const without = stripChild(fragment, localName)
+  const without = stripPropertyChild(fragment, localName)
   if (!instruction) return without
-  return insertChild(without, localName, instruction)
-}
-
-function stripChild(fragment: string, localName: string) {
-  const changeStart = fragment.search(/<w:(?:pPr|rPr)Change\b/u)
-  const active =
-    changeStart === -1 ? fragment : activePropertiesContent(fragment)
-  const tail = changeStart === -1 ? '' : fragment.slice(changeStart)
-  return `${active.replace(
-    new RegExp(
-      `<w:${localName}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${localName}>)`,
-      'u',
-    ),
-    '',
-  )}${tail}`
-}
-
-function insertChild(fragment: string, localName: string, instruction: string) {
-  if (/\/\s*>$/u.test(fragment)) {
-    const name = /<w:(pPr|rPr)\b/u.exec(fragment)?.[1]
-    if (name === 'pPr' || name === 'rPr') {
-      return expandSelfClosingProperties(fragment, 'w', name, instruction)
-    }
-  }
-  const position = propertyChildInsertPosition(fragment, localName)
-  return `${fragment.slice(0, position)}${instruction}${fragment.slice(position)}`
+  return insertPropertyChild(without, localName, instruction)
 }
 
 function patchWireFragments(
