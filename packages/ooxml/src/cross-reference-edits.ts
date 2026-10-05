@@ -1,11 +1,7 @@
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
 import type { LineageRecorder } from './document-lineage'
-import {
-  OoxmlError,
-  type OoxmlDocument,
-  type ParagraphAnchor,
-} from './model'
+import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { allocateModelId } from './model-paragraph-edits'
 import {
@@ -14,11 +10,7 @@ import {
   parseXmlElements,
   setOverlayReplacement,
 } from './parts/overlay'
-import {
-  attributeValue,
-  isWord,
-  WORD_NAMESPACE,
-} from './parts/xml-elements'
+import { attributeValue, isWord, WORD_NAMESPACE } from './parts/xml-elements'
 import { spliceInlineXml, spliceRunWires } from './structure-splice'
 
 const BOOKMARK_NAME_PREFIX = '_Ref_'
@@ -229,7 +221,10 @@ function refuseCoveringReplacement(
 /** A bookmark name Word accepts, derived deterministically from the wire id. */
 function bookmarkName(wireId: string) {
   const sanitised = wireId.replace(/[^A-Za-z0-9_]/gu, '_')
-  return `${BOOKMARK_NAME_PREFIX}${sanitised}`.slice(0, BOOKMARK_NAME_MAX_LENGTH)
+  return `${BOOKMARK_NAME_PREFIX}${sanitised}`.slice(
+    0,
+    BOOKMARK_NAME_MAX_LENGTH,
+  )
 }
 
 /** The lowest unused `w:id` among the part's existing bookmarkStarts. */

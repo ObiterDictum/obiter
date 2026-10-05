@@ -13,11 +13,7 @@ import {
   stylesXml,
 } from '../fixtures/fixture-parts'
 
-import {
-  applyDocumentEdits,
-  parseDocx,
-  serialiseDocx,
-} from './index'
+import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
 
@@ -53,9 +49,7 @@ describe('hyperlink edits', () => {
     )?.[0]
     expect(relationship).toContain('/relationships/hyperlink')
     expect(relationship).toContain('TargetMode="External"')
-    expect(relationship).toContain(
-      'Target="https://example.co.uk/authority"',
-    )
+    expect(relationship).toContain('Target="https://example.co.uk/authority"')
 
     const reparsed = mainParagraphs(await parseDocx(output))
     const paragraph = reparsed.find((item) => item.id === anchor.id)
@@ -95,9 +89,8 @@ describe('hyperlink edits', () => {
       xml.indexOf('B1B2C3D4'),
       xml.indexOf('</w:p>', xml.indexOf('B1B2C3D4')),
     )
-    const links = paragraphXml.match(
-      /<w:hyperlink\b[\s\S]*?<\/w:hyperlink>/gu,
-    ) ?? []
+    const links =
+      paragraphXml.match(/<w:hyperlink\b[\s\S]*?<\/w:hyperlink>/gu) ?? []
     expect(links).toHaveLength(1)
     const link = links[0] ?? ''
     // Interior markup is preserved byte-for-byte: the boundary pieces keep
@@ -152,9 +145,7 @@ describe('hyperlink edits', () => {
       'See the report today',
     )
     expect(
-      document.model.relationships.some(
-        (wire) => wire.id === 'rId50',
-      ),
+      document.model.relationships.some((wire) => wire.id === 'rId50'),
     ).toBe(false)
   })
 
@@ -232,12 +223,10 @@ describe('cross-reference edits', () => {
     const bookmarkStart = `<w:bookmarkStart w:id="5" w:name="${bookmark}"/>`
     expect(xml).toContain(bookmarkStart)
     const targetOpen = xml.indexOf('Restarted list')
-    expect(xml.lastIndexOf(bookmarkStart, targetOpen)).toBeLessThan(
-      targetOpen,
-    )
-    expect(xml.indexOf('<w:bookmarkEnd w:id="5"/>', targetOpen)).toBeGreaterThan(
-      targetOpen,
-    )
+    expect(xml.lastIndexOf(bookmarkStart, targetOpen)).toBeLessThan(targetOpen)
+    expect(
+      xml.indexOf('<w:bookmarkEnd w:id="5"/>', targetOpen),
+    ).toBeGreaterThan(targetOpen)
 
     const reparsed = mainParagraphs(await parseDocx(output))
     const targetWire = reparsed.find((item) => item.id === target.id)
@@ -428,13 +417,12 @@ async function parseFixture() {
  */
 async function parseMultiRunFixture() {
   const zip = new JSZip()
-  const fixed = documentXml
-    .replace(
+  const fixed = documentXml.replace(
+    '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
+    '<w:p w14:paraId="B1B2C3D4"><w:r><w:t>Alpha </w:t></w:r><w:r><w:t>bravo</w:t></w:r><w:r><w:t> charlie</w:t></w:r></w:p>' +
+      '<w:p w14:paraId="B1B2C3D5"><w:r><w:t>See </w:t></w:r><w:hyperlink r:id="rId50"><w:r><w:t>the report</w:t></w:r></w:hyperlink><w:r><w:t> today</w:t></w:r></w:p>' +
       '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
-      '<w:p w14:paraId="B1B2C3D4"><w:r><w:t>Alpha </w:t></w:r><w:r><w:t>bravo</w:t></w:r><w:r><w:t> charlie</w:t></w:r></w:p>' +
-        '<w:p w14:paraId="B1B2C3D5"><w:r><w:t>See </w:t></w:r><w:hyperlink r:id="rId50"><w:r><w:t>the report</w:t></w:r></w:hyperlink><w:r><w:t> today</w:t></w:r></w:p>' +
-        '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
-    )
+  )
   zip.file('[Content_Types].xml', contentTypesXml)
   zip.file('_rels/.rels', rootRelationshipsXml)
   zip.file('word/document.xml', fixed)
