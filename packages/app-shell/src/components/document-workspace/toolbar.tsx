@@ -184,7 +184,7 @@ export function DocumentWorkspaceToolbar({
           />
         </TabsContent>
         <TabsContent value="layout" className="min-w-0 flex-1 pt-0">
-          <LayoutRibbon />
+          <LayoutRibbon format={format} />
         </TabsContent>
         <TabsContent value="references" className="min-w-0 flex-1 pt-0">
           <ReferencesRibbon

@@ -66,7 +66,9 @@ describe('run and paragraph property families', () => {
     const written = await parseDocx(await serialiseDocx(document))
     const writtenRun = mainParagraphs(written)[1]?.runs[0]
     if (!writtenRun) throw new Error('Written run is missing.')
-    expect(writtenRun.preservedXmlFragments.join('')).toContain('Times New Roman')
+    expect(writtenRun.preservedXmlFragments.join('')).toContain(
+      'Times New Roman',
+    )
 
     applyDocumentEdits(written, [
       documentEditOperationSchema.parse({
@@ -85,8 +87,8 @@ describe('run and paragraph property families', () => {
       }),
     ])
     const reparsed =
-      mainParagraphs(await parseDocx(await serialiseDocx(written)))[1]?.runs
-        .map((item) => item.preservedXmlFragments.join(''))
+      mainParagraphs(await parseDocx(await serialiseDocx(written)))[1]
+        ?.runs.map((item) => item.preservedXmlFragments.join(''))
         .join('') ?? ''
 
     for (const element of [

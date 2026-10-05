@@ -111,6 +111,7 @@ describe('text draft and range emphasis share one string', () => {
       emphasis: [{ paragraphId: 'p1', from: 0, to: 2, bold: true }],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     }
     const painted = formattedModel(model, format).stories[0]?.paragraphs[0]
     if (!painted) throw new Error('painted paragraph missing')
