@@ -3360,7 +3360,11 @@
                 <code>/api/matters/:matterId/documents</code> and
                 <code>/api/redaction-runs</code> use
                 <code>DOCUMENT_UPLOAD_MAX_BYTES</code> only when
-                <code>c.get('user')</code> is set. This includes
+                <code>c.get('user')</code> is set. The two document-edit routes
+                — <code>POST /api/documents/:id/edit</code> and
+                <code>/api/documents/:id/collaboration/merge</code> — alone use
+                <code>DOCUMENT_EDIT_MAX_BYTES</code> (12 MiB by default), since
+                edit batches carry base64 picture payloads. This includes
                 <code>/api/auth/*</code>; Better Auth sees only the replaced
                 bounded <code>Request</code>.</span
               >
@@ -4596,11 +4600,15 @@
                 </tr>
                 <tr>
                   <td class="id">
-                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES
+                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES ·
+                    DOCUMENT_EDIT_MAX_BYTES
                   </td>
                   <td>
-                    Request body caps for JSON routes and multipart document or
-                    redact uploads. Enforced globally in
+                    Request body caps for JSON routes, multipart document or
+                    redact uploads, and the two document-edit routes (<code
+                      >POST /api/documents/:id/edit</code
+                    >, <code>/api/documents/:id/collaboration/merge</code>; 12
+                    MiB by default). Enforced globally in
                     <code>createApiApp</code> middleware, not only on routes
                     that call <code>readLimitedJsonBody</code> or
                     <code>readLimitedFormData</code>.
@@ -6575,7 +6583,7 @@
                   <code
                     >packages/app-shell/src/document-history-baseline.ts</code
                   >
-                  (1223)
+                  (1317)
                 </li>
                 <li>
                   <code>packages/app-shell/src/views/home.tsx</code> (1161)
@@ -6646,7 +6654,7 @@
                   <code>packages/ooxml/src/model-property-edits.ts</code> (531)
                 </li>
                 <li><code>services/api/src/pdf-glyph-layout.ts</code> (516)</li>
-                <li><code>services/api/src/env.ts</code> (508)</li>
+                <li><code>services/api/src/env.ts</code> (514)</li>
                 <li>
                   <code>tools/oxlint/anti-slop/shared/dictionary-types.ts</code>
                   (502)
@@ -6960,6 +6968,32 @@
                   <td class="id">
                     ooxml/section-edits.ts ·
                     app-shell/document-section-format.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    E6a inserts a plain table grid and inline pictures only, and
+                    structure is not a tracked change
+                  </td>
+                  <td>
+                    <code>insert_table</code> emits an empty
+                    <code>w:tblPr</code>/<code>w:tblGrid</code> grid rather than
+                    a <code>gridSpan</code>/<code>vMerge</code> layout it cannot
+                    address afterwards, so merged cells and nested tables are
+                    not offered; <code>insert_image</code> emits
+                    <code>wp:inline</code> only, so a picture sits at its caret
+                    offset and never floats. Both fail closed under
+                    track-changes, because a <code>w:ins</code> cannot express a
+                    new package part or relationship, so a tracked session
+                    reports them refused and the client holds the change. A
+                    table at the end of a body, or directly before another
+                    table, also gains a separator paragraph the format requires
+                    between adjacent tables, which is a paragraph the author did
+                    not type. The proper fix is a merge/nest writer, a floating
+                    anchor, and a tracked structural writer.
+                  </td>
+                  <td class="id">
+                    ooxml/table-edits.ts · ooxml/image-edits.ts
                   </td>
                 </tr>
               </tbody>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   AlignBottom,
   AlignCenterVertical,
@@ -23,7 +24,11 @@ import {
   PAGE_SIZE_OPTIONS,
   SECTION_MARGINS_OPTIONS,
 } from '../../document-section-format'
-import type { DocumentFormatToolbar } from './ribbon-types'
+import { InsertTableDialog } from './insert-table-dialog'
+import type {
+  DocumentFormatToolbar,
+  DocumentStructureToolbar,
+} from './ribbon-types'
 
 const MARGIN_OPTIONS = [
   { value: '', label: 'Custom' },
@@ -52,6 +57,7 @@ export function InsertRibbon({
   onPageBreak,
   onSectionBreak,
   breakUnavailable,
+  structure,
 }: {
   commentsOpen: boolean
   commentCount: number
@@ -60,8 +66,11 @@ export function InsertRibbon({
   onSectionBreak: () => void
   /** Set when a break cannot be placed at the current caret. */
   breakUnavailable?: string
+  /** The table and picture controls; absent while the document is unloaded. */
+  structure?: DocumentStructureToolbar
 }) {
   const breaksDisabled = Boolean(breakUnavailable)
+  const [tableOpen, setTableOpen] = useState(false)
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -89,14 +98,19 @@ export function InsertRibbon({
       <ToolbarGroup label="Tables">
         <IconButton
           label="Insert table"
-          soon
+          disabled={!structure || Boolean(structure.tableUnavailable)}
+          disabledReason={structure?.tableUnavailable}
+          onClick={() => setTableOpen(true)}
           icon={<Table size={16} aria-hidden />}
         />
+        {structure?.picturePicker}
       </ToolbarGroup>
       <ToolbarGroup label="Exhibits">
         <IconButton
           label="Picture"
-          soon
+          disabled={!structure || Boolean(structure.pictureUnavailable)}
+          disabledReason={structure?.pictureUnavailable}
+          onClick={structure?.onInsertPicture}
           icon={<ImageIcon size={16} aria-hidden />}
         />
       </ToolbarGroup>
@@ -137,6 +151,11 @@ export function InsertRibbon({
           icon={<ChatText size={16} aria-hidden />}
         />
       </ToolbarGroup>
+      <InsertTableDialog
+        open={tableOpen}
+        onOpenChange={setTableOpen}
+        onInsert={(rows, columns) => structure?.onInsertTable(rows, columns)}
+      />
     </div>
   )
 }

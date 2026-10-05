@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { ListKind } from '../../document-list-toggle'
 import type { IndentKind } from '../../document-paragraph-format'
 import type {
@@ -92,6 +93,27 @@ export type DocumentClipboardToolbar = {
   onCopy: () => void
   onCut: () => void
   onPaste: () => void
+}
+
+/**
+ * The Insert ribbon's structural controls: a table after the caret's
+ * paragraph and a picture at the caret. A disabled control carries the reason
+ * its accessible name publishes, matching the other ribbons' availability
+ * messaging.
+ */
+export type DocumentStructureToolbar = {
+  /** The reason a table cannot be inserted at the caret, when it cannot. */
+  tableUnavailable?: string
+  /** The reason a picture cannot be inserted at the caret, when it cannot. */
+  pictureUnavailable?: string
+  onInsertTable: (rows: number, columns: number) => void
+  /** Opens the picture file picker; the picked file becomes the insertion. */
+  onInsertPicture: () => void
+  /**
+   * The hidden file input the Picture button forwards clicks to. Mounted by
+   * the ribbon so the picked file becomes the insertion.
+   */
+  picturePicker?: ReactNode
 }
 
 export type DocumentFindToolbar = {

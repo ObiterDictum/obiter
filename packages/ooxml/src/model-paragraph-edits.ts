@@ -81,6 +81,7 @@ export function insertParagraphAfter(
       lineage.intentId,
     )
   }
+  return paragraph
 }
 
 export function deleteParagraph(

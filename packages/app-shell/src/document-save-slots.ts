@@ -55,6 +55,9 @@ export function splitDraftSlots(
   const breakIds = new Set(
     slots.flatMap((slot) => (slot.kind === 'break' ? [slot.id] : [])),
   )
+  const structureIds = new Set(
+    slots.flatMap((slot) => (slot.kind === 'structure' ? [slot.id] : [])),
+  )
   const rejections = {
     kept: state.trackedRejections.filter((group) => !drop.has(group.key)),
     taken: state.trackedRejections.filter((group) => drop.has(group.key)),
@@ -70,6 +73,7 @@ export function splitDraftSlots(
       ),
       extraRuns: extraRuns.kept,
       breaks: state.breaks.filter((item) => !breakIds.has(item.id)),
+      structures: state.structures.filter((item) => !structureIds.has(item.id)),
       trackedRejections: rejections.kept,
       format: {
         paragraphStyles: paragraphStyles.kept,
@@ -87,6 +91,7 @@ export function splitDraftSlots(
       ),
       extraRuns: extraRuns.taken,
       breaks: state.breaks.filter((item) => breakIds.has(item.id)),
+      structures: state.structures.filter((item) => structureIds.has(item.id)),
       trackedRejections: rejections.taken,
       format: {
         paragraphStyles: paragraphStyles.taken,
@@ -132,6 +137,7 @@ export function hasDraftState(state: DraftState) {
     Object.keys(state.format.paragraphFormats).length > 0 ||
     hasSectionDraft(state.format.section) ||
     state.breaks.length > 0 ||
+    state.structures.length > 0 ||
     state.trackedRejections.length > 0
   )
 }
@@ -182,6 +188,10 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
       return JSON.stringify(state.format.section)
     case 'break':
       return JSON.stringify(state.breaks.find((item) => item.id === slot.id))
+    case 'structure':
+      return JSON.stringify(
+        state.structures.find((item) => item.id === slot.id),
+      )
     case 'tracked-reject':
       return JSON.stringify(
         state.trackedRejections.find((group) => group.key === slot.key),
@@ -212,6 +222,8 @@ export function slotLabel(slot: DraftSlot): string {
       return 'page setup'
     case 'break':
       return slot.breakKind === 'page' ? 'a page break' : 'a section break'
+    case 'structure':
+      return slot.structureKind === 'table' ? 'a table' : 'a picture'
     case 'tracked-reject':
       return 'a tracked change'
   }

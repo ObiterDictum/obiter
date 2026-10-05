@@ -1,10 +1,22 @@
 import { z } from 'zod'
 
 import { isValidXmlText } from './xml-text'
-import { documentVersionLineageSchema } from './document-lineage'
+import {
+  characterOffsetSchema,
+  DOCUMENT_EDIT_TEXT_MAX_LENGTH,
+  editIdSchema,
+} from './document-edit-shared'
+import {
+  insertImageOperationSchema,
+  insertTableOperationSchema,
+} from './document-edit-structural'
 
-export const DOCUMENT_EDIT_ID_MAX_LENGTH = 255
-export const DOCUMENT_EDIT_TEXT_MAX_LENGTH = 1_000_000
+export {
+  DOCUMENT_EDIT_ID_MAX_LENGTH,
+  DOCUMENT_EDIT_TEXT_MAX_LENGTH,
+  editIdSchema,
+} from './document-edit-shared'
+
 export const DOCUMENT_EDIT_OPERATION_MAX_COUNT = 100
 export const DOCUMENT_EDIT_RUN_MAX_COUNT = 4_096
 export const DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH = 64
@@ -52,14 +64,6 @@ export const documentEditAlignmentSchema = z.enum([
 export const documentEditLineRuleSchema = z.enum(['auto', 'exact', 'atLeast'])
 export const documentEditOrientationSchema = z.enum(['portrait', 'landscape'])
 
-export const editIdSchema = z
-  .string()
-  .min(1)
-  .max(DOCUMENT_EDIT_ID_MAX_LENGTH)
-  .refine((value) => value.trim().length > 0, {
-    message: 'Document edit identifiers must not be blank.',
-  })
-
 const editTextSchema = z
   .string()
   .max(DOCUMENT_EDIT_TEXT_MAX_LENGTH)
@@ -104,11 +108,6 @@ const twipSchema = z
   .int()
   .min(DOCUMENT_EDIT_TWIP_MIN)
   .max(DOCUMENT_EDIT_TWIP_MAX)
-const characterOffsetSchema = z
-  .number()
-  .int()
-  .min(0)
-  .max(DOCUMENT_EDIT_TEXT_MAX_LENGTH)
 
 const runPropertyFields = {
   bold: z.boolean().nullable().optional(),
@@ -477,6 +476,8 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
       paragraphId: editIdSchema,
     })
     .strict(),
+  insertTableOperationSchema,
+  insertImageOperationSchema,
 ])
 export type DocumentEditOperation = z.infer<typeof documentEditOperationSchema>
 
@@ -492,32 +493,6 @@ export function insertParagraphRuns(
 /**
  * Batch semantics - the coordinate space operations address, replacement
  * precedence, overlap resolution and atomic failure - are normative in
- * docs/architecture.md, "Document edit operation batches".
+ * docs/architecture.md, "Document edit operation batches". The request and
+ * response envelopes live in `document-edit-request.ts`.
  */
-export const documentEditOperationsSchema = z
-  .array(documentEditOperationSchema)
-  .min(1)
-  .max(DOCUMENT_EDIT_OPERATION_MAX_COUNT)
-
-export const documentEditRequestSchema = z
-  .object({
-    baseVersionId: editIdSchema,
-    operations: documentEditOperationsSchema,
-    trackChanges: z.boolean().optional().default(false),
-  })
-  .strict()
-export type DocumentEditRequest = z.infer<typeof documentEditRequestSchema>
-
-export const documentEditResponseSchema = z
-  .object({
-    documentId: editIdSchema,
-    versionId: editIdSchema,
-    versionNumber: z.number().int().positive(),
-    /**
-     * E50: how the accepted batch transformed the base version. Optional for
-     * compatibility with servers that predate cross-version lineage.
-     */
-    lineage: documentVersionLineageSchema.optional(),
-  })
-  .strict()
-export type DocumentEditResponse = z.infer<typeof documentEditResponseSchema>

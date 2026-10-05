@@ -7,18 +7,20 @@ import {
   prepareCommentsPackage,
 } from './comments-package'
 import { OoxmlError, type OoxmlDocument, type SourcePart } from './model'
+import { assertOoxmlPackageCentralDirectory } from './package-loader'
 import { serialiseOverlay } from './parts/overlay'
 
 const encoder = new TextEncoder()
 
 export async function serialiseDocx(document: OoxmlDocument) {
+  let bytes: Uint8Array
   try {
     const zip = new JSZip()
     for (const part of document.sourceParts.values()) {
       const payload = serialisePart(part)
       zip.file(part.name, payload, { binary: true })
     }
-    return await zip.generateAsync({
+    bytes = await zip.generateAsync({
       type: 'uint8array',
       compression: 'DEFLATE',
       platform: 'DOS',
@@ -26,6 +28,12 @@ export async function serialiseDocx(document: OoxmlDocument) {
   } catch {
     throw new OoxmlError('serialisation-failed')
   }
+  // A published version must be a package the reader accepts: an insertion
+  // can add parts (a media part, a relationships part) and grow dirty XML
+  // beyond what the original payload sizes accounted for, so the loader's
+  // limits are enforced against the completed archive before it is returned.
+  assertOoxmlPackageCentralDirectory(bytes)
+  return bytes
 }
 
 export async function serialiseDocxWithComments(

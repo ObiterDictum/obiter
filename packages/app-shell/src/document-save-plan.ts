@@ -4,109 +4,29 @@ import {
   flowParagraphIds,
   LAST_PARAGRAPH_MESSAGE,
   resolveInsertAnchor,
-  type BreakDraft,
-  type LocalInsert,
 } from './document-edits'
-import type { FormatDrafts } from './document-format-edits'
+import {
+  emptyDraftState,
+  isPendingBaselineId,
+  type BlockedDraft,
+  type DraftSlot,
+  type DraftState,
+} from './document-draft-state'
 import { emphasisSlotKey } from './document-save-slots'
 import { sectionDraftFields } from './document-section-format'
 import { documentStory } from './document-model-text'
-import type { ExtraRuns } from './document-word-edits'
 
-/**
- * The draft state that a save request is derived from.
- */
-export type DraftState = {
-  drafts: Record<string, string>
-  inserts: LocalInsert[]
-  deletedParagraphIds: string[]
-  extraRuns: ExtraRuns
-  format: FormatDrafts
-  /** Page and section breaks held before save, caret-anchored per paragraph. */
-  breaks: BreakDraft[]
-  /**
-   * Tracked changes a saved edit left behind, grouped by the history step that
-   * created them. A tracked text replacement removes its run from the reparsed
-   * model, so its reversal is a tracked-change rejection addressed by persisted
-   * `w:id`, never a run id. Each group is rejected as one unit.
-   */
-  trackedRejections: TrackedRejection[]
-}
-
-/** One history step's tracked changes, rejected together. */
-export type TrackedRejection = {
-  /** Stable key for clearing/looking up this group. */
-  key: string
-  /** Persisted OOXML change ids (`w:id`) to reject as a unit. */
-  ooxmlIds: string[]
-  /**
-   * Persisted paragraph ids (`para-w14-<value>`) whose empty tracked-insert
-   * shell this rejection removes in the same decision. A tracked paragraph
-   * insertion wraps its content in `w:ins`, so rejecting it alone would leave
-   * an empty paragraph behind.
-   */
-  removeParagraphIds?: string[]
-}
-
-/**
- * A structural reversal a save boundary has not been able to address yet,
- * because the reloaded model has not named the paragraph it created or removed.
- * It is not user work: the planner never sends it and never reports it blocked,
- * and the boundary resolves it to a real identity when the model arrives. See
- * `document-history-baseline.ts`.
- */
-export const PENDING_BASELINE_PREFIX = 'pending-baseline:'
-
-export function isPendingBaselineId(id: string) {
-  return id.startsWith(PENDING_BASELINE_PREFIX)
-}
-
-/**
- * A fresh draft state. `format` is built here rather than reused from
- * `emptyFormatDrafts`: planDocumentSave fills a copy in place, so sharing the
- * module singleton would leak one workspace's paragraph styles into every
- * other one.
- */
-export function emptyDraftState(): DraftState {
-  return {
-    drafts: {},
-    inserts: [],
-    deletedParagraphIds: [],
-    extraRuns: {},
-    format: {
-      emphasis: [],
-      paragraphStyles: {},
-      numbering: {},
-      paragraphFormats: {},
-      section: {},
-    },
-    breaks: [],
-    trackedRejections: [],
-  }
-}
-
-/**
- * A named region of draft state. Slots are the unit of clearing after a save
- * and of discarding a change the server will not accept.
- */
-export type DraftSlot =
-  | { kind: 'run-text'; key: string; runId: string }
-  | { kind: 'extra-runs'; key: string; paragraphId: string }
-  | { kind: 'insert'; key: string; clientId: string }
-  | { kind: 'delete'; key: string; paragraphId: string }
-  | { kind: 'paragraph-style'; key: string; paragraphId: string }
-  | { kind: 'numbering'; key: string; paragraphId: string }
-  | { kind: 'paragraph-format'; key: string; paragraphId: string }
-  | { kind: 'emphasis'; key: string }
-  | { kind: 'section'; key: string }
-  | { kind: 'break'; key: string; id: string; breakKind: 'page' | 'section' }
-  | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
-
-export type BlockedDraft = {
-  slot: DraftSlot
-  reason: string
-  label: string
-}
+export {
+  emptyDraftState,
+  isPendingBaselineId,
+  PENDING_BASELINE_PREFIX,
+} from './document-draft-state'
+export type {
+  BlockedDraft,
+  DraftSlot,
+  DraftState,
+  TrackedRejection,
+} from './document-draft-state'
 
 export type SavePlan = {
   /** Addressable operations, safe to send as one batch. */
@@ -249,6 +169,49 @@ export function planDocumentSave(
     }
     keep.deletedParagraphIds.push(paragraphId)
     covered.push({ kind: 'delete', key: `delete:${paragraphId}`, paragraphId })
+  }
+
+  // A runless paragraph with typed text pending is replaced by an insert plus
+  // a delete in the same batch (`emptyReplacements`), so a structure anchored
+  // to it would anchor a paragraph the batch removes — the writer would drop
+  // the insertion silently. Block it instead.
+  const replacedEmptyAnchors = new Set(
+    (story?.paragraphs ?? [])
+      .filter(
+        (paragraph) =>
+          paragraph.runs.length === 0 &&
+          (state.extraRuns[paragraph.id] ?? []).some(
+            (run) => (state.drafts[run.id] ?? run.text).length > 0,
+          ),
+      )
+      .map((paragraph) => paragraph.id),
+  )
+  for (const structure of state.structures) {
+    const deletedAnchor =
+      keep.deletedParagraphIds.includes(structure.paragraphId) ||
+      replacedEmptyAnchors.has(structure.paragraphId)
+    if (!paragraphIds.has(structure.paragraphId) || deletedAnchor) {
+      blocked.push({
+        slot: {
+          kind: 'structure',
+          key: `structure:${structure.id}`,
+          id: structure.id,
+          structureKind: structure.kind,
+        },
+        reason: deletedAnchor
+          ? 'The paragraph this was placed after is marked for deletion.'
+          : 'The paragraph this was placed in is no longer in the document.',
+        label: structure.kind === 'table' ? 'a table' : 'a picture',
+      })
+      continue
+    }
+    keep.structures.push(structure)
+    covered.push({
+      kind: 'structure',
+      key: `structure:${structure.id}`,
+      id: structure.id,
+      structureKind: structure.kind,
+    })
   }
 
   for (const item of state.breaks) {
@@ -466,6 +429,7 @@ export function planDocumentSave(
       keep.extraRuns,
       keep.format,
       keep.breaks,
+      keep.structures,
     ),
     covered,
     blocked,

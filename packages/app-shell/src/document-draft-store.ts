@@ -4,6 +4,7 @@ import { pendingEmphasisSchema } from './document-draft-emphasis'
 import { numberingDraftSchema } from './document-draft-numbering'
 import { paragraphFormatDraftSchema } from './document-draft-paragraph-format'
 import { breakDraftSchema, sectionDraftSchema } from './document-draft-section'
+import { structuralDraftsFieldSchema } from './document-structural-drafts'
 import type { DraftState } from './document-save-plan'
 import {
   CLAIM_PREFIX,
@@ -87,9 +88,11 @@ export const draftStateSchema = z
         section: sectionDraftSchema.optional().default({}),
       })
       .strict(),
-    // A page or section break introduced by E5. Absent in older persisted
-    // drafts, which parse to no pending breaks.
+    // E5 page or section break; absent in older drafts, which parse to none.
     breaks: z.array(breakDraftSchema).optional().default([]),
+    // E6a table and image insertions; absent in older persisted drafts, and
+    // lenient on a malformed slot so it cannot drop the rest of the payload.
+    structures: structuralDraftsFieldSchema,
     // A tracked-change rejection group introduced by E50 undo. Absent in older
     // persisted drafts, which parse to no pending rejections.
     trackedRejections: z.array(trackedRejectionSchema).optional().default([]),

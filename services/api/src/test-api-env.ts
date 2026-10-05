@@ -1,5 +1,6 @@
 import type { ApiEnv } from './env'
 import {
+  DEFAULT_DOCUMENT_EDIT_MAX_BYTES,
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
   DEFAULT_JSON_BODY_MAX_BYTES,
   DEFAULT_LEGAL_SEARCH_HYDRATION_LEASE_MS,
@@ -49,6 +50,7 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     rampartChunkTokens: 400,
     jsonBodyMaxBytes: DEFAULT_JSON_BODY_MAX_BYTES,
     documentUploadMaxBytes: DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+    documentEditMaxBytes: DEFAULT_DOCUMENT_EDIT_MAX_BYTES,
     ooxmlMaxEntries: OOXML_MAX_ENTRIES,
     ooxmlMaxUncompressedBytes: OOXML_MAX_UNCOMPRESSED_BYTES,
     ooxmlMaxEntryUncompressedBytes: OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,

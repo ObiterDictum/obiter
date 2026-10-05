@@ -3,7 +3,7 @@ import type { DocumentRelationshipWire } from '@obiter/contracts'
 import { elementFragment, parseXmlElements } from './overlay'
 import { attributeValue, requiredAttribute } from './xml-elements'
 
-const RELATIONSHIPS_NAMESPACE =
+export const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships'
 
 export type RelationshipPart = {

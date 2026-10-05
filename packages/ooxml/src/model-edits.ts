@@ -1,11 +1,9 @@
 import {
   documentEditOperationsSchema,
   insertParagraphRuns,
-  type DocumentEditOperation,
+  type DocumentParagraphWire,
 } from '@obiter/contracts'
-// Range planning stays next to the other operation planners. Split if a third
-// addressing mode lands on this dispatcher.
-import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
+import { OoxmlError, type ParagraphAnchor } from './model'
 import {
   recordReplacedRun,
   recordTrackedChanges,
@@ -13,13 +11,20 @@ import {
   touchParagraph,
   type LineageRecorder,
 } from './document-lineage'
+import { insertImage } from './image-edits'
+import {
+  isSectionOperation,
+  planOperation,
+  runEmphasisFields,
+  trackedRunIdOf,
+} from './model-edit-plan'
+import {
+  validatePlannedOperations,
+  validateTrackedOperations,
+} from './model-edit-validation'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
 import { setParagraphNumbering } from './numbering-edits'
-import {
-  setParagraphFormat,
-  setRunEmphasis,
-  type RunEmphasis,
-} from './model-property-edits'
+import { setParagraphFormat, setRunEmphasis } from './model-property-edits'
 import {
   insertPageBreak,
   insertSectionBreak,
@@ -29,12 +34,8 @@ import {
   applyRunEmphasisRanges,
   type RunEmphasisRange,
 } from './model-run-emphasis'
-import {
-  validatePlannedOperations,
-  validateTrackedOperations,
-  type PlannedOperation,
-} from './model-edit-validation'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
+import { insertTable } from './table-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import {
   createTrackedEditWriter,
@@ -44,8 +45,8 @@ import {
 export type { TrackedEditContext } from './tracked-edits'
 
 export function applyDocumentEdits(
-  document: OoxmlDocument,
-  operations: readonly DocumentEditOperation[],
+  document: import('./model').OoxmlDocument,
+  operations: readonly import('@obiter/contracts').DocumentEditOperation[],
   tracking?: TrackedEditContext,
   lineage?: LineageRecorder,
 ) {
@@ -84,6 +85,20 @@ export function applyDocumentEdits(
     : undefined
 
   const insertionCounts = new Map<string, number>()
+  // Post-anchor insertions chain in operation order at the same source
+  // offset: overlay keys emit in insertion order, so the wire model must
+  // splice each new paragraph or table after the wire the previous insertion
+  // appended. `postAnchorCounts` counts every wire appended after an anchor —
+  // paragraph inserts, cell wires, separators and a table's trailing
+  // paragraph — and `postAnchorTails` names the last of them, so a paragraph
+  // insert after a table and a table after a paragraph insert both land where
+  // the serialised output puts them.
+  const postAnchorCounts = new Map<string, number>()
+  const postAnchorTails = new Map<string, DocumentParagraphWire>()
+  // Per-anchor occurrence counters keep each table's overlay key and
+  // separator decision distinct and each image's splice key unique.
+  const tableCounts = new Map<string, number>()
+  const imageCounts = new Map<string, number>()
   // Page-break offsets are accumulated per run, run-local, so multiple breaks
   // on one run materialise as a single replacement instead of overlapping
   // `:text:` writes.
@@ -180,8 +195,11 @@ export function applyDocumentEdits(
     ) {
       const position =
         operation.type === 'insert_paragraph_before' ? 'before' : 'after'
-      const count = insertionCounts.get(operation.paragraphId) ?? 0
       if (trackedWriter) {
+        // A tracked batch cannot carry structural insertions, so the
+        // post-anchor maps stay empty and the tracked insert chains count on
+        // their own.
+        const count = insertionCounts.get(operation.paragraphId) ?? 0
         trackedWriter.insertParagraphAfter(
           mainStory,
           operation.paragraph,
@@ -198,8 +216,13 @@ export function applyDocumentEdits(
             : undefined,
           position,
         )
+        insertionCounts.set(operation.paragraphId, count + 1)
       } else {
-        insertParagraphAfter(
+        const count =
+          position === 'after'
+            ? (postAnchorCounts.get(operation.paragraphId) ?? 0)
+            : (insertionCounts.get(operation.paragraphId) ?? 0)
+        const inserted = insertParagraphAfter(
           document,
           mainStory,
           operation.paragraph,
@@ -215,8 +238,13 @@ export function applyDocumentEdits(
               }
             : undefined,
         )
+        if (position === 'after') {
+          postAnchorCounts.set(operation.paragraphId, count + 1)
+          postAnchorTails.set(operation.paragraphId, inserted)
+        } else {
+          insertionCounts.set(operation.paragraphId, count + 1)
+        }
       }
-      insertionCounts.set(operation.paragraphId, count + 1)
     } else if (operation.type === 'delete_paragraph') {
       if (trackedWriter) {
         trackedWriter.deleteParagraph(
@@ -250,6 +278,68 @@ export function applyDocumentEdits(
     } else if (operation.type === 'insert_section_break') {
       if (trackedWriter) throw new OoxmlError('model-node-not-editable')
       if (!deletedLater) insertSectionBreak(document, operation.paragraph)
+    } else if (operation.type === 'insert_table') {
+      // Structural insertions have no tracked form; validateTrackedOperations
+      // refuses them before any write. Keep the guard here so a future
+      // tracked path cannot slip through silently.
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = tableCounts.get(key) ?? 0
+        // `postAnchorTails` is the last wire appended after the anchor — a
+        // same-batch paragraph insert or a previous table's last cell — so the
+        // new cell wires land where the zero-width overlays serialise.
+        const inserted = insertTable(
+          document,
+          mainStory,
+          operation.paragraph,
+          operation.rows,
+          operation.columns,
+          postAnchorTails.get(key),
+          occurrence,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
+        )
+        postAnchorTails.set(key, inserted.lastCell)
+        postAnchorCounts.set(
+          key,
+          (postAnchorCounts.get(key) ?? 0) + inserted.appended,
+        )
+        // The trailing paragraph's overlay is deleted and re-set on every
+        // table op, so it serialises after all content appended at this
+        // anchor so far — move its wire to the end of the appended region to
+        // match. Paragraph inserts do not re-park it: their overlay key stays
+        // ahead of the re-set key in serialisation order only when they ran
+        // before the last table op. The lookup must be by id: a repeated
+        // insert dedupes the wire but mints a fresh object, so an identity
+        // search would miss and park a second copy. The wire already parked —
+        // not the fresh object — is what moves, so its lineage provenance
+        // (keyed by identity) survives the relocation.
+        if (inserted.trailingWire) {
+          const trailing = inserted.trailingWire
+          const from = mainStory.paragraphs.findIndex(
+            (paragraph) => paragraph.id === trailing.id,
+          )
+          const wire = from === -1 ? trailing : mainStory.paragraphs[from]
+          if (from !== -1) mainStory.paragraphs.splice(from, 1)
+          const at = mainStory.paragraphs.indexOf(inserted.lastCell)
+          mainStory.paragraphs.splice(at + 1, 0, wire ?? trailing)
+        }
+        tableCounts.set(key, occurrence + 1)
+      }
+    } else if (operation.type === 'insert_image') {
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = imageCounts.get(key) ?? 0
+        insertImage(
+          document,
+          operation.paragraph,
+          operation,
+          occurrence,
+          lineage,
+        )
+        imageCounts.set(key, occurrence + 1)
+      }
     } else {
       throw new OoxmlError('invalid-document-edit')
     }
@@ -272,219 +362,4 @@ export function applyDocumentEdits(
   for (const [paragraph, ranges] of rangeEmphasis) {
     applyRunEmphasisRanges(document, paragraph, ranges, lineage)
   }
-}
-
-function runEmphasisFields(
-  operation: Extract<DocumentEditOperation, { type: 'set_run_emphasis' }>,
-): RunEmphasis {
-  return {
-    ...(operation.bold !== undefined ? { bold: operation.bold } : {}),
-    ...(operation.italic !== undefined ? { italic: operation.italic } : {}),
-    ...(operation.underline !== undefined
-      ? { underline: operation.underline }
-      : {}),
-    ...(operation.fontFamily !== undefined
-      ? { fontFamily: operation.fontFamily }
-      : {}),
-    ...(operation.fontSize !== undefined
-      ? { fontSize: operation.fontSize }
-      : {}),
-    ...(operation.colour !== undefined ? { colour: operation.colour } : {}),
-    ...(operation.highlight !== undefined
-      ? { highlight: operation.highlight }
-      : {}),
-    ...(operation.strikethrough !== undefined
-      ? { strikethrough: operation.strikethrough }
-      : {}),
-    ...(operation.vertAlign !== undefined
-      ? { vertAlign: operation.vertAlign }
-      : {}),
-    ...(operation.smallCaps !== undefined
-      ? { smallCaps: operation.smallCaps }
-      : {}),
-  }
-}
-
-/** The base run a tracked operation's reversal is keyed to, when run-keyed. */
-function trackedRunIdOf(operation: PlannedOperation): string | null {
-  if (operation.type === 'replace_run_text') return operation.run.wire.id
-  if (operation.type === 'set_run_style') return operation.run.wire.id
-  if (operation.type === 'set_run_emphasis') {
-    return operation.run?.wire.id ?? null
-  }
-  return null
-}
-
-function planOperation(
-  document: OoxmlDocument,
-  runParagraphs: ReadonlyMap<string, ParagraphAnchor>,
-  operation: DocumentEditOperation,
-  styleIds: ReadonlySet<string>,
-  numberingIds: ReadonlySet<string>,
-): PlannedOperation {
-  validateStyle(operation, styleIds)
-  validateEmphasis(operation)
-  validateParagraphFormat(operation)
-  validateNumbering(operation, numberingIds)
-  if (operation.type === 'set_section_properties') return operation
-  if (
-    operation.type === 'insert_break' ||
-    operation.type === 'insert_section_break'
-  ) {
-    const paragraph = requireMainParagraph(document, operation.paragraphId)
-    return { ...operation, paragraph }
-  }
-  if (operation.type === 'set_run_emphasis') {
-    const runId = operation.runId
-    if (runId === undefined) {
-      if (
-        operation.paragraphId === undefined ||
-        operation.from === undefined ||
-        operation.to === undefined
-      ) {
-        throw new OoxmlError('invalid-document-edit')
-      }
-      return {
-        ...operation,
-        paragraph: requireMainParagraph(document, operation.paragraphId),
-      }
-    }
-    const run = requireMainRun(document, runParagraphs, runId, false)
-    const paragraph = runParagraphs.get(runId)
-    if (!paragraph) throw new OoxmlError('model-node-not-editable')
-    return { ...operation, run, paragraph }
-  }
-  if (
-    operation.type === 'replace_run_text' ||
-    operation.type === 'set_run_style'
-  ) {
-    const run = requireMainRun(
-      document,
-      runParagraphs,
-      operation.runId,
-      operation.type === 'replace_run_text',
-    )
-    const paragraph = runParagraphs.get(operation.runId)
-    if (!paragraph) throw new OoxmlError('model-node-not-editable')
-    return { ...operation, run, paragraph }
-  }
-  return {
-    ...operation,
-    paragraph: requireMainParagraph(document, operation.paragraphId),
-  }
-}
-
-const RUN_EMPHASIS_KEYS = [
-  'bold',
-  'italic',
-  'underline',
-  'fontFamily',
-  'fontSize',
-  'colour',
-  'highlight',
-  'strikethrough',
-  'vertAlign',
-  'smallCaps',
-] as const
-
-function validateEmphasis(operation: DocumentEditOperation) {
-  if (operation.type !== 'set_run_emphasis') return
-  if (!RUN_EMPHASIS_KEYS.some((key) => operation[key] !== undefined)) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-}
-
-function validateParagraphFormat(operation: DocumentEditOperation) {
-  if (operation.type !== 'set_paragraph_format') return
-  const keys = [
-    'alignment',
-    'lineSpacing',
-    'spaceBefore',
-    'spaceAfter',
-    'indentation',
-  ] as const
-  if (!keys.some((key) => operation[key] !== undefined)) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-}
-
-function validateNumbering(
-  operation: DocumentEditOperation,
-  numberingIds: ReadonlySet<string>,
-) {
-  if (operation.type !== 'set_paragraph_numbering') return
-  if (operation.numId !== null) {
-    if (!numberingIds.has(operation.numId) || operation.ilvl === undefined) {
-      throw new OoxmlError('invalid-document-edit')
-    }
-  }
-}
-
-function isSectionOperation(operation: PlannedOperation) {
-  return (
-    operation.type === 'set_section_properties' ||
-    operation.type === 'insert_break' ||
-    operation.type === 'insert_section_break'
-  )
-}
-
-function validateStyle(
-  operation: DocumentEditOperation,
-  styleIds: ReadonlySet<string>,
-) {
-  if (
-    'styleId' in operation &&
-    operation.styleId !== null &&
-    operation.styleId !== undefined &&
-    !styleIds.has(operation.styleId)
-  ) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-  if (
-    operation.type !== 'insert_paragraph_after' &&
-    operation.type !== 'insert_paragraph_before'
-  ) {
-    return
-  }
-  if (!operation.runs) return
-  for (const run of operation.runs) {
-    if (run.styleId && !styleIds.has(run.styleId)) {
-      throw new OoxmlError('invalid-document-edit')
-    }
-  }
-}
-
-function requireMainRun(
-  document: OoxmlDocument,
-  runParagraphs: ReadonlyMap<string, ParagraphAnchor>,
-  id: string,
-  requireText: boolean,
-) {
-  const run = document.textRunAnchors.get(id)
-  if (!run) throw new OoxmlError('model-node-not-found')
-  const paragraph = runParagraphs.get(id)
-  const story = paragraph
-    ? document.model.stories.find((item) =>
-        item.paragraphs.includes(paragraph.wire),
-      )
-    : undefined
-  if (
-    story?.kind !== 'document' ||
-    (requireText && run.textRanges.length === 0)
-  ) {
-    throw new OoxmlError('model-node-not-editable')
-  }
-  return run
-}
-
-function requireMainParagraph(document: OoxmlDocument, id: string) {
-  const paragraph = document.paragraphAnchors.get(id)
-  if (!paragraph) throw new OoxmlError('model-node-not-found')
-  const story = document.model.stories.find((item) =>
-    item.paragraphs.includes(paragraph.wire),
-  )
-  if (story?.kind !== 'document') {
-    throw new OoxmlError('model-node-not-editable')
-  }
-  return paragraph
 }

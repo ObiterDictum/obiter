@@ -3,12 +3,8 @@ import type {
   DocumentStoryWire,
 } from '@obiter/contracts'
 import { paragraphPlainText } from './document-model-text'
-import {
-  drawingHasPicture,
-  drawingShapeFill,
-  paragraphHasImage,
-  paragraphImageXml,
-} from './document-page-media'
+import { drawingShapeFill } from './document-page-media'
+import { bindMarginTable } from './document-page-table-margins'
 import { twipToPx } from './document-page-units'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -21,6 +17,13 @@ export type DisplayTableCell = {
   widthPct?: number
   minHeightPx?: number
   paragraphIds: string[]
+  /**
+   * The `w:p` count inside the cell, including paragraphs that carry no
+   * `w14:paraId`. Positional binding needs it: a legacy cell still owns its
+   * terminal paragraph even when no id names it. Populated by the table
+   * fragment parser; hand-built cells fall back to `paragraphIds.length`.
+   */
+  paragraphCount?: number
 }
 
 export type DisplayTable = {
@@ -117,189 +120,24 @@ export function storyBlocks(story: DocumentStoryWire): StoryBlock[] {
   return blocks
 }
 
-function bindMarginTable(
-  table: DisplayTable,
-  paragraphs: DocumentParagraphWire[],
-  kind: 'header' | 'footer',
-): DisplayTable {
-  return kind === 'header'
-    ? paintEmptyHeaderCells(nestHeaderImages(table, paragraphs), paragraphs)
-    : nestFooterContent(table, paragraphs)
-}
-
-function paragraphContent(
-  paragraphs: DocumentParagraphWire[],
-  id: string,
-): DocumentParagraphWire | undefined {
-  return paragraphs.find((paragraph) => paragraph.id === id)
-}
-
-function cellHasContent(
-  cell: DisplayTableCell,
-  paragraphs: DocumentParagraphWire[],
-): boolean {
-  return cell.paragraphIds.some((id) => {
-    const paragraph = paragraphContent(paragraphs, id)
-    if (!paragraph) return false
-    return (
-      paragraphPlainText(paragraph).trim().length > 0 ||
-      paragraphHasImage(paragraph)
-    )
-  })
-}
-
-function nestHeaderImages(
-  table: DisplayTable,
-  paragraphs: DocumentParagraphWire[],
-): DisplayTable {
-  if (table.rows.length === 0) return table
-  const bound = new Set(
-    table.paragraphIds.filter((id) =>
-      cellHasContent({ paragraphIds: [id], span: 1 }, paragraphs),
-    ),
-  )
-  const unbound = paragraphs.filter(
-    (paragraph) =>
-      !bound.has(paragraph.id) &&
-      paragraphImageXml(paragraph).some(drawingHasPicture),
-  )
-  if (unbound.length === 0) return table
-  const first = table.rows[0]
-  if (!first) return table
-  const empty = first.cells
-    .map((cell, cellIndex) => ({ cell, cellIndex }))
-    .filter(({ cell }) => !cellHasContent(cell, paragraphs))
-  if (empty.length === 0) return table
-  const target =
-    unbound.length === 1 && empty.length >= 2
-      ? empty[Math.floor(empty.length / 2)]
-      : empty[0]
-  const image = unbound[0]
-  if (!target || !image) return table
-  const rows = table.rows.map((row, rowIndex) => ({
-    cells: row.cells.map((cell, cellIndex) =>
-      rowIndex === 0 && cellIndex === target.cellIndex
-        ? { ...cell, paragraphIds: [image.id] }
-        : cellHasContent(cell, paragraphs)
-          ? cell
-          : { ...cell, paragraphIds: [] },
-    ),
-  }))
-  return {
-    ...table,
-    rows,
-    paragraphIds: rows.flatMap((row) =>
-      row.cells.flatMap((cell) => cell.paragraphIds),
-    ),
+/**
+ * The paragraph ids bound inside the story's tables. Cell paragraphs are
+ * story paragraphs, but the writer refuses them as anchors — a nested `w:tbl`
+ * is not a body-level block — so the ribbon must refuse them too, and the
+ * structural fold must know the wire after an insertion site belongs to an
+ * existing table. Reads the same `storyBlocks` binding the paint uses, so
+ * paraId-less stored tables resolve by position exactly as they render.
+ */
+export function storyTableCellIds(
+  story: DocumentStoryWire | undefined,
+): Set<string> {
+  const ids = new Set<string>()
+  if (!story) return ids
+  for (const block of storyBlocks(story)) {
+    if (block.type !== 'table') continue
+    for (const id of block.table.paragraphIds) ids.add(id)
   }
-}
-
-const LETTERHEAD_GREY = '#A6A6A6'
-
-function paintEmptyHeaderCells(
-  table: DisplayTable,
-  paragraphs: DocumentParagraphWire[],
-): DisplayTable {
-  const equal = withEqualColumns(table)
-  const fill =
-    paragraphs
-      .flatMap((paragraph) =>
-        paragraph.runs.flatMap((run) => run.preservedXmlFragments),
-      )
-      .map(drawingShapeFill)
-      .find((value) => value) ??
-    (equal.rows[0]?.cells.length === 3 ? LETTERHEAD_GREY : undefined)
-  if (!fill) return equal
-  const rows = equal.rows.map((row) => ({
-    ...row,
-    cells: row.cells.map((cell) => {
-      if (cell.fill || cellHasContent(cell, paragraphs)) return cell
-      return { ...cell, fill, minHeightPx: cell.minHeightPx ?? 48 }
-    }),
-  }))
-  return {
-    ...equal,
-    rows,
-    paragraphIds: rows.flatMap((row) =>
-      row.cells.flatMap((cell) => cell.paragraphIds),
-    ),
-  }
-}
-
-function withEqualColumns(table: DisplayTable): DisplayTable {
-  const first = table.rows[0]
-  if (!first || first.cells.some((cell) => cell.widthPct)) return table
-  const widthPct = 100 / first.cells.length
-  return {
-    ...table,
-    rows: table.rows.map((row) => ({
-      ...row,
-      cells: row.cells.map((cell) => ({
-        ...cell,
-        widthPct: cell.widthPct ?? widthPct,
-      })),
-    })),
-  }
-}
-
-function nestFooterContent(
-  table: DisplayTable,
-  paragraphs: DocumentParagraphWire[],
-): DisplayTable {
-  const storyIds = new Set(paragraphs.map((paragraph) => paragraph.id))
-  const matchedText = table.paragraphIds.some((id) => {
-    const paragraph = paragraphContent(paragraphs, id)
-    return paragraph ? paragraphPlainText(paragraph).trim().length > 0 : false
-  })
-  if (matchedText && table.paragraphIds.every((id) => storyIds.has(id))) {
-    return paintTableFromShapes(table, paragraphs)
-  }
-  const unusedText = paragraphs.filter(
-    (paragraph) => paragraphPlainText(paragraph).trim().length > 0,
-  )
-  let index = 0
-  const rows = table.rows.map((row) => ({
-    cells: row.cells.map((cell) => {
-      if (cellHasContent(cell, paragraphs)) return cell
-      const take = Math.max(cell.paragraphIds.length, 1)
-      const paragraphIds = unusedText
-        .slice(index, index + take)
-        .map((item) => item.id)
-      index += take
-      return { ...cell, paragraphIds }
-    }),
-  }))
-  return paintTableFromShapes(
-    {
-      ...table,
-      rows,
-      paragraphIds: rows.flatMap((row) =>
-        row.cells.flatMap((cell) => cell.paragraphIds),
-      ),
-    },
-    paragraphs,
-  )
-}
-
-function paintTableFromShapes(
-  table: DisplayTable,
-  paragraphs: DocumentParagraphWire[],
-): DisplayTable {
-  if (table.rows.some((row) => row.cells.some((cell) => cell.fill)))
-    return table
-  const fill = paragraphs
-    .flatMap((paragraph) =>
-      paragraph.runs.flatMap((run) => run.preservedXmlFragments),
-    )
-    .map(drawingShapeFill)
-    .find((value) => value)
-  if (!fill) return table
-  return {
-    ...table,
-    rows: table.rows.map((row) => ({
-      cells: row.cells.map((cell) => ({ ...cell, fill })),
-    })),
-  }
+  return ids
 }
 
 function bindTableParagraphs(
@@ -324,7 +162,14 @@ function bindTableParagraphs(
   let index = 0
   const rows = table.rows.map((row) => ({
     cells: row.cells.map((cell) => {
-      const take = cell.paragraphIds.length
+      // Bind every paragraph the cell owns — a cell must end in one — so a
+      // legacy table whose cells carry no `w14:paraId` still consumes its
+      // wires instead of leaving them to paint as body paragraphs.
+      const take = Math.max(
+        cell.paragraphCount ?? cell.paragraphIds.length,
+        cell.paragraphIds.length,
+        1,
+      )
       const paragraphIds = unused
         .slice(index, index + take)
         .map((item) => item.id)
@@ -376,6 +221,7 @@ function parseWordTable(xml: string): DisplayTable | undefined {
         return {
           span: safeSpan,
           paragraphIds: paragraphIdsInCell(tc),
+          paragraphCount: paragraphCountInCell(tc),
           ...(fill ? { fill } : {}),
           ...(widthPct > 0 ? { widthPct } : {}),
           ...(heightPx ? { minHeightPx: heightPx } : {}),
@@ -436,13 +282,20 @@ function shdFill(shd: Element | undefined): string | undefined {
 }
 
 function paragraphIdsInCell(cell: Element): string[] {
-  return [...cell.getElementsByTagName('*')]
-    .filter(
-      (element) => element.localName === 'p' && nearest(element, 'tc') === cell,
-    )
+  return cellParagraphs(cell)
     .map((paragraph) => attr(paragraph, 'paraId'))
     .filter((id): id is string => Boolean(id))
     .map((id) => `para-w14-${id}`)
+}
+
+function paragraphCountInCell(cell: Element): number {
+  return cellParagraphs(cell).length
+}
+
+function cellParagraphs(cell: Element): Element[] {
+  return [...cell.getElementsByTagName('*')].filter(
+    (element) => element.localName === 'p' && nearest(element, 'tc') === cell,
+  )
 }
 
 function hexFill(value: string | undefined): string | undefined {

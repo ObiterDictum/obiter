@@ -25,23 +25,36 @@ const WORD_NAMESPACE =
 const WORD_2010_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordml'
 
-export type SyntheticParagraph = string | { text: string; paraId?: string }
+export type SyntheticParagraph =
+  | string
+  | { text: string; paraId?: string }
+  | { table: { rows: number; columns: number } }
 
 /**
  * Builds a minimal, valid DOCX whose document body is one paragraph per entry,
- * with an optional `w14:paraId` on each. Tests that exercise the first-save
- * transition for a legacy document need real bytes with positional identities,
- * and identity tests need to control the ids exactly.
+ * with an optional `w14:paraId` on each, or a table whose cells hold one
+ * unparaId'd paragraph apiece — the shape a legacy document carries. Tests
+ * that exercise the first-save transition for a legacy document need real
+ * bytes with positional identities, and identity tests need to control the
+ * ids exactly.
  */
 export async function createSyntheticDocx(
   paragraphs: readonly SyntheticParagraph[],
 ): Promise<Uint8Array> {
   const declaresW14 = paragraphs.some(
-    (entry) => typeof entry !== 'string' && entry.paraId !== undefined,
+    (entry) =>
+      typeof entry !== 'string' &&
+      'paraId' in entry &&
+      entry.paraId !== undefined,
   )
   const namespace = declaresW14 ? ` xmlns:w14="${WORD_2010_NAMESPACE}"` : ''
   const body = paragraphs
     .map((entry) => {
+      if (typeof entry !== 'string' && 'table' in entry) {
+        const cell = '<w:tc><w:tcPr/><w:p/></w:tc>'
+        const row = `<w:tr>${cell.repeat(entry.table.columns)}</w:tr>`
+        return `<w:tbl><w:tblPr/><w:tblGrid>${'<w:gridCol/>'.repeat(entry.table.columns)}</w:tblGrid>${row.repeat(entry.table.rows)}</w:tbl>`
+      }
       const text = typeof entry === 'string' ? entry : entry.text
       const id =
         typeof entry === 'string' || entry.paraId === undefined
