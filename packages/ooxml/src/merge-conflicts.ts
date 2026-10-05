@@ -43,6 +43,26 @@ export function operationConflicts(
       changes.paragraphRunChanges.has(operation.paragraphId)
     )
   }
+  if (operation.type === 'set_hyperlink') {
+    // A range mark addresses this paragraph's text, so a text edit to the
+    // same paragraph in the current version moves the covered range; refuse
+    // rather than wrap the wrong runs.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId) ||
+      changes.paragraphRunChanges.has(operation.paragraphId)
+    )
+  }
+  if (operation.type === 'insert_cross_reference') {
+    // The offset addresses this paragraph's text, and the target must survive
+    // to carry the bookmark — both footprints apply.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      !changes.paragraphIds.has(operation.targetParagraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId) ||
+      changes.paragraphRunChanges.has(operation.paragraphId)
+    )
+  }
   if (operation.type === 'delete_paragraph') return true
   if (operation.type === 'set_paragraph_style') {
     return (
