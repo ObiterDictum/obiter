@@ -14,6 +14,7 @@ import {
   multiParagraphModel,
   openRibbonTab,
   paragraph,
+  tabledBodyModel,
 } from './docx-workspace-harness'
 import {
   bodyField,
@@ -58,6 +59,23 @@ function renderedParagraphIds(): string[] {
       ),
     ),
   ]
+}
+
+function pendingField(): HTMLTextAreaElement {
+  const node = screen.getByLabelText('Pending paragraph text')
+  if (!(node instanceof HTMLTextAreaElement)) {
+    throw new Error('expected a pending insert editor')
+  }
+  return node
+}
+
+function pendingFields(): HTMLTextAreaElement[] {
+  return screen.getAllByLabelText('Pending paragraph text').map((node) => {
+    if (!(node instanceof HTMLTextAreaElement)) {
+      throw new Error('expected a pending insert editor')
+    }
+    return node
+  })
 }
 
 describe('the clipboard ribbon controls', () => {
@@ -133,10 +151,7 @@ describe('the clipboard ribbon controls', () => {
     fireEvent.click(control('Paste'))
     await waitFor(() => expect(renderedParagraphIds()).toHaveLength(3))
     // The caret lands in the pasted second paragraph, which is a pending insert.
-    expect(
-      (screen.getByLabelText('Pending paragraph text') as HTMLTextAreaElement)
-        .value,
-    ).toBe('B')
+    expect(pendingField().value).toBe('B')
 
     // One paste is one history entry, however many paragraphs it created.
     fireEvent.click(control('Undo'))
@@ -159,9 +174,7 @@ describe('the clipboard ribbon controls', () => {
     mountWorkspace({ models: { doc_1: model() } })
     clickParagraph('p1')
     fireEvent.click(control('Insert paragraph'))
-    const pending = screen.getByLabelText(
-      'Pending paragraph text',
-    ) as HTMLTextAreaElement
+    const pending = pendingField()
     await waitFor(() => expect(document.activeElement).toBe(pending))
 
     fireEvent.paste(pending, {
@@ -170,13 +183,7 @@ describe('the clipboard ribbon controls', () => {
 
     // The insert splits into two pending paragraphs, not one with a hard break.
     await waitFor(() => expect(renderedParagraphIds()).toHaveLength(4))
-    expect(
-      (
-        screen.getAllByLabelText(
-          'Pending paragraph text',
-        ) as HTMLTextAreaElement[]
-      ).map((field) => field.value),
-    ).toEqual(['A', 'B'])
+    expect(pendingFields().map((field) => field.value)).toEqual(['A', 'B'])
 
     // One paste is one history step: a single undo restores the pre-paste
     // insert rather than leaving the two the paste created.
@@ -189,18 +196,54 @@ describe('the clipboard ribbon controls', () => {
     stubClipboard({ readText: vi.fn().mockResolvedValue('Z') })
     mountWorkspace({ models: { doc_1: model() } })
     clickParagraph('p1')
-    nativeSelect(1, 4)
-
     fireEvent.click(control('Insert paragraph'))
-    const pending = () =>
-      screen.getByLabelText('Pending paragraph text') as HTMLTextAreaElement
-    fireEvent.change(pending(), { target: { value: 'xy' } })
-    await waitFor(() => expect(document.activeElement).toBe(pending()))
+    fireEvent.change(pendingField(), { target: { value: 'ab' } })
+
+    // Select in the body paragraph so its format range is live, then click into
+    // the insert: that click must reseat the range on the insert's own caret,
+    // not leave the body paragraph's range as a phantom the ribbon paste
+    // replaces. The insert must keep both characters.
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+    fireEvent.click(pendingField())
 
     fireEvent.click(control('Paste'))
-    // The old paragraph's selection must not survive: the insert keeps both
-    // characters and the paste lands at its caret.
-    await waitFor(() => expect(pending().value).toBe('xyZ'))
+    await waitFor(() => expect(pendingField().value).toBe('abZ'))
+  })
+
+  it('drops onto an unfocused pending insert, not the live selection', async () => {
+    mountWorkspace({ models: { doc_1: model() } })
+    clickParagraph('p1')
+    fireEvent.click(control('Insert paragraph'))
+    // Select in the body paragraph again, so the insert is rendered but not the
+    // selected paragraph: a drop on it must target the insert, not the range.
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+
+    fireEvent.drop(pendingField(), { dataTransfer: { getData: () => 'Z' } })
+
+    await waitFor(() => expect(pendingField().value).toBe('Z'))
+    // The body paragraph's text is untouched: the drop did not replace its
+    // live selection with the payload.
+    expect(
+      document.querySelector('[data-paragraph-id="p1"]')?.textContent ?? '',
+    ).toContain('Hello')
+  })
+
+  it('refuses a multi-line ribbon paste into a table cell', async () => {
+    stubClipboard({ readText: vi.fn().mockResolvedValue('A\nB') })
+    mountWorkspace({ models: { doc_1: tabledBodyModel() } })
+    clickParagraph('para-w14-CELL0001')
+    const before = renderedParagraphIds().length
+
+    fireEvent.click(control('Paste'))
+    // A split there would render siblings as body text while the save writes
+    // them inside the cell, so it is refused with the structure reason.
+    await waitFor(() =>
+      expect(selectionStatus()).toMatch(/cannot cross a table/),
+    )
+    expect(renderedParagraphIds()).toHaveLength(before)
+    expect(screen.queryByLabelText('Pending paragraph text')).toBeNull()
   })
 
   it('says why when the clipboard read is denied', async () => {

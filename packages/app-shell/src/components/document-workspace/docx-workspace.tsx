@@ -188,14 +188,12 @@ export function DocxWorkspace({
     onSplitRange: splitSelectionRange,
     onCopyRange: copySelection,
     onCutRange: cutSelection,
-    onPasteText: (text, from, to) => pasteText(text, { from, to }),
+    onPasteText: (paragraphId, text, from, to) =>
+      pasteText(text, { paragraphId, from, to }),
     onClear: clearSelection,
     onRejectInput: rejectSelectionInput,
     onEscapeBlur: blurParagraph,
   }
-  const selectionStatus =
-    selectionNotice ?? selectionAnnouncement(selectionSegments.size)
-
   // Print reports only refusal or absence; printing itself saves nothing.
   const transientBanner = printBanner ?? save.notice ?? banner
 
@@ -305,7 +303,7 @@ export function DocxWorkspace({
           state and any refusal is announced rather than only painted. No
           role="status" so the transient banner stays the only status region. */}
       <p className="sr-only" aria-live="polite" data-selection-status>
-        {selectionStatus}
+        {selectionNotice ?? selectionAnnouncement(selectionSegments.size)}
       </p>
     </WorkspaceRibbon>
   )
@@ -365,9 +363,7 @@ export function DocxWorkspace({
                       pageTextBoxes={laid.textBoxes}
                       pageColumns={laid.columns}
                       selectedParagraphId={selectedParagraphId}
-                      onSelectParagraph={(paragraphId, offset) =>
-                        selectParagraph(paragraphId, offset)
-                      }
+                      onSelectParagraph={selectParagraph}
                       onTextSelection={(paragraphId, from, to, direction) => {
                         setFormatRange({ from, to })
                         mirrorSelection(paragraphId, from, to, direction)

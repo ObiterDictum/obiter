@@ -139,6 +139,8 @@ const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
 const undo = (page: Page) => page.getByRole('button', { name: 'Undo' })
+const saveState = (page: Page) =>
+  page.locator('[data-save-state]').getAttribute('data-save-state')
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
@@ -308,9 +310,18 @@ test('undo of a saved tracked edit rejects the change and persists the reversal'
   await shot(page, '07-tracked-typed')
   await saveAndWait(page)
   await shot(page, '08-tracked-saved')
+  // Wait for the save to settle before undoing: an undo that races the in-flight
+  // request is a different interaction, and the tracked rejection this test is
+  // about needs the translated history.
+  await expect
+    .poll(() => saveState(page), { message: 'tracked save settled' })
+    .toBe('saved')
 
   // Undo the saved tracked edit; the reversal is a tracked-change rejection.
-  for (let step = 0; step < ' TRACKED'.length; step += 1) {
+  // Typing coalesces into undo runs, so undo until the control is exhausted
+  // rather than once per character.
+  for (let step = 0; step < 12; step += 1) {
+    if (await undo(page).isDisabled()) break
     await undo(page).click()
   }
   await shot(page, '09-tracked-undone')

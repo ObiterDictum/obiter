@@ -25,7 +25,12 @@ export function PendingInsert({
   selected: boolean
   verticalCaret?: VerticalCaretColumn
   onSelect: (offset?: number) => void
-  onPasteText?: (text: string, from: number, to: number) => void
+  onPasteText?: (
+    paragraphId: string,
+    text: string,
+    from: number,
+    to: number,
+  ) => void
   onTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
   onDeleteParagraph?: (paragraphId: string) => void
@@ -103,6 +108,7 @@ export function PendingInsert({
           event.preventDefault()
           clearColumn()
           onPasteText(
+            insert.clientId,
             data,
             event.currentTarget.selectionStart,
             event.currentTarget.selectionEnd,
@@ -115,6 +121,7 @@ export function PendingInsert({
           event.preventDefault()
           clearColumn()
           onPasteText(
+            insert.clientId,
             data,
             event.currentTarget.selectionStart,
             event.currentTarget.selectionEnd,

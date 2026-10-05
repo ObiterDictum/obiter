@@ -239,7 +239,12 @@ export function ModelParagraph({
             ),
           onPasteText: selectionHandlers.onPasteText
             ? (text, from, to) =>
-                selectionHandlers.onPasteText?.(text, start + from, start + to)
+                selectionHandlers.onPasteText?.(
+                  paragraph.id,
+                  text,
+                  start + from,
+                  start + to,
+                )
             : undefined,
         }
       : undefined
