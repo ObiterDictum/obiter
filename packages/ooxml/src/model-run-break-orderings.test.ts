@@ -127,6 +127,78 @@ describe('run-keyed writes listed after a page break splice', () => {
     expect(runs.map((item) => item.text).join('')).toBe('Hello world')
     expect(runs.every((item) => flag(item, 'bold'))).toBe(true)
   })
+
+  // Review round 5 finding 1: a break at a run's text-start boundary is placed
+  // before the run tag and does not reopen the run, so it composes with a
+  // run-keyed write. The narrowed detector must not treat that exact boundary
+  // as inside, while every genuinely-inside splice (and the run-keyed whole-run
+  // rebuild) still refuses.
+  it('saves a run-keyed write after a break at the run start boundary', async () => {
+    // Offset 5 is the second run's start. `locateOffset` returns the run's
+    // opening offset without a split, so the standalone break run lands before
+    // the tag and never reopens the run the write styles.
+    const { document, paragraph } = await loadRun(
+      '<w:r><w:t>Hello</w:t></w:r><w:r><w:t> world</w:t></w:r>',
+    )
+    const target = paragraph.runs[1]
+    if (!target) throw new Error('Fixture is missing.')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 5,
+        kind: 'page',
+      },
+      { type: 'set_run_emphasis', runId: target.id, bold: true },
+    ])
+    const xml = await documentXml(document)
+    expect(xml.split(PAGE_BREAK).length - 1).toBe(1)
+    const runs = paragraphs(await save(document))[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello world')
+    // The break run sits before the second run, so the styled run is found by
+    // its text rather than by index.
+    const bold = runs.filter((item) => flag(item, 'bold'))
+    expect(bold.map((item) => item.text)).toEqual([' world'])
+  })
+
+  it('still refuses a run-keyed write after a break strictly inside the run', async () => {
+    const { document, paragraph, run } = await loadRun(
+      '<w:r><w:t>Hello world</w:t></w:r>',
+    )
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_break',
+          paragraphId: paragraph.id,
+          offset: 5,
+          kind: 'page',
+        },
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
+  it('still refuses a run-keyed write over a materialised whole-run break', async () => {
+    // A run-keyed write before the break materialises the run as a
+    // `...:page-break-run` whole-run replacement. It starts at the run's start
+    // but is not zero-width, so the narrowed boundary must still refuse a later
+    // run-keyed write rather than style a stale tail.
+    const { document, paragraph, run } = await loadRun(
+      '<w:r><w:t>Hello world</w:t></w:r>',
+    )
+    expect(() =>
+      applyDocumentEdits(document, [
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+        {
+          type: 'insert_break',
+          paragraphId: paragraph.id,
+          offset: 5,
+          kind: 'page',
+        },
+        { type: 'set_run_style', runId: run.id, styleId: 'Heading1Char' },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
 })
 
 // Review round 4 finding 2: materialising a run folds its preserved children
