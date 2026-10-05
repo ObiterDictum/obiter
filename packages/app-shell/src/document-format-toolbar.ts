@@ -25,6 +25,14 @@ import {
   selectedParagraph,
 } from './document-format-controls'
 import { effectiveParagraph } from './document-model-text'
+import {
+  sectionFormatState,
+  setSectionMarginsDraft,
+  setSectionPageSizeDraft,
+  toggleSectionOrientation,
+  type PageSizeKind,
+  type SectionMarginsKind,
+} from './document-section-format'
 import type {
   AlignmentValue,
   EmphasisPatch,
@@ -103,6 +111,7 @@ export function documentFormatToolbar(
     drafts,
     extraRuns,
   )
+  const section = sectionFormatState(model, format.section)
   const nothingSelected = target.kind === 'selection' && emphasis.length === 0
   // A tracked change records a single run, so partial formatting of a range is
   // not representable yet; fail closed rather than dropping the tracking.
@@ -196,6 +205,11 @@ export function documentFormatToolbar(
       : nothingSelected
         ? { emphasisUnavailable: NOTHING_TO_FORMAT }
         : {}),
+    ...(trackChanges
+      ? {
+          layoutUnavailable: 'Page setup is not recorded as a tracked change',
+        }
+      : {}),
     paragraphStyleId: controls.paragraphStyleId,
     paragraphStyleMixed: controls.paragraphStyleMixed,
     paragraphStyles: controls.paragraphStyles,
@@ -220,6 +234,9 @@ export function documentFormatToolbar(
     canApplyBullet: controls.canApplyBullet,
     canApplyNumber: controls.canApplyNumber,
     canApplyMultilevel: controls.canApplyMultilevel,
+    marginsKind: section.marginsKind,
+    orientation: section.orientation,
+    pageSizeKind: section.pageSizeKind,
     onParagraphStyle: (styleId: string | null) => {
       if (controls.paragraphIds.length === 0) return
       forEachParagraph((current, id) =>
@@ -349,6 +366,15 @@ export function documentFormatToolbar(
       setFormat((current) =>
         toggleParagraphListOnTargets(current, model, targets, kind),
       )
+    },
+    onMargins: (kind: SectionMarginsKind) => {
+      setFormat((current) => setSectionMarginsDraft(current, kind))
+    },
+    onOrientation: () => {
+      setFormat((current) => toggleSectionOrientation(current, model))
+    },
+    onPageSize: (kind: PageSizeKind) => {
+      setFormat((current) => setSectionPageSizeDraft(current, model, kind))
     },
   }
 }

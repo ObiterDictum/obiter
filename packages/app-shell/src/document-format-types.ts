@@ -71,11 +71,35 @@ export type ParagraphFormatDraft = Partial<{
   indentation: ParagraphIndentationDraft | null
 }>
 
+/** Direct margin overrides in twips; a null field releases the attribute. */
+export type SectionMarginDraft = Partial<{
+  top: number | null
+  right: number | null
+  bottom: number | null
+  left: number | null
+  header: number | null
+  footer: number | null
+  gutter: number | null
+}>
+
+/**
+ * The body-level section layout the Layout ribbon can set. It mirrors the
+ * contract's `set_section_properties` fields exactly so paint, save and the
+ * exported DOCX read one description. `{}` leaves the section untouched.
+ */
+export type SectionDraft = Partial<{
+  margins: SectionMarginDraft | null
+  orientation: 'portrait' | 'landscape' | null
+  pageSize: { width: number; height: number } | null
+}>
+
 export type FormatDrafts = {
   emphasis: PendingEmphasis[]
   paragraphStyles: Record<string, string | null>
   numbering: Record<string, NumberingDraft>
   paragraphFormats: Record<string, ParagraphFormatDraft>
+  /** Body-level page setup; `{}` when the section is untouched. */
+  section: SectionDraft
 }
 
 export const emptyFormatDrafts: FormatDrafts = {
@@ -83,4 +107,5 @@ export const emptyFormatDrafts: FormatDrafts = {
   paragraphStyles: {},
   numbering: {},
   paragraphFormats: {},
+  section: {},
 }

@@ -10,12 +10,15 @@ import {
   type LocalInsert,
 } from './document-edits'
 import { mergeEmphasis, paragraphNumPr } from './document-format-edits'
-import { paragraphFormatOf } from './document-paragraph-format'
 import type {
   ParagraphFormatDraft,
   PendingEmphasis,
+  SectionDraft,
 } from './document-format-types'
 import { documentStory } from './document-model-text'
+import { documentSectionXml } from './document-page-layout'
+import { xmlNumber, xmlTagAttrs } from './document-page-units'
+import { paragraphFormatOf } from './document-paragraph-format'
 import {
   emphasisSlotKey,
   isPendingBaselineId,
@@ -264,6 +267,10 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
     })),
     deletedParagraphIds: state.deletedParagraphIds.map(remapParagraph),
     extraRuns: remapRecordKeys(state.extraRuns, remapParagraph),
+    breaks: state.breaks.map((item) => ({
+      ...item,
+      paragraphId: remapParagraph(item.paragraphId),
+    })),
     format: {
       ...state.format,
       paragraphStyles: remapRecordKeys(
@@ -951,6 +958,27 @@ export function translateSnapshot(
         if (pre !== undefined) next.drafts[targetRunId] = pre
         break
       }
+      case 'section': {
+        // A saved page-setup change is reversed by restating the pre-save
+        // section over the same families the request wrote. The pre-save
+        // answer is read from the stored model, never the snapshot's own
+        // pending draft (the shared limitation of `emphasis` and `numbering`).
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        const sent = baseline.sent.format.section
+        const inverse = sectionReversal(baseline.fromModel, sent)
+        if (inverse) next.format.section = inverse
+        break
+      }
+      case 'break': {
+        // There is no operation that removes a break. A snapshot that holds
+        // the saved break as pending work cannot be re-expressed against the
+        // saved document, so the boundary blocks rather than claiming the
+        // reversal; a snapshot that predates the break simply forgets the
+        // covered slot, since the document without it already lacks the break.
+        if (snapshot.breaks.some((item) => item.id === slot.id)) return null
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        break
+      }
       default: {
         // Any other slot (there is none the editor produces today): a snapshot
         // that still holds it loses it to the new baseline and never replays
@@ -960,6 +988,47 @@ export function translateSnapshot(
     }
   }
   return next
+}
+
+/**
+ * The `set_section_properties` patch that restores the pre-save section for
+ * each family the request wrote. `pageSize` alone restores both dimensions and
+ * orientation, because the writer derives `w:orient` from an explicit size; a
+ * missing pre-save size releases `w:pgSz` with an explicit null. Every margin
+ * attribute is named, so a `w:pgMar` attribute the save added is released
+ * instead of surviving its own reversal.
+ */
+function sectionReversal(
+  model: DocumentModelWire,
+  sent: SectionDraft,
+): SectionDraft | null {
+  const sect = documentSectionXml(model)
+  if (!sect) return null
+  const size = xmlTagAttrs(sect, 'pgSz')
+  const margin = xmlTagAttrs(sect, 'pgMar')
+  const width = xmlNumber(size, 'w')
+  const height = xmlNumber(size, 'h')
+  const preSize =
+    width !== undefined && height !== undefined ? { width, height } : null
+  const readMargin = (name: string) => xmlNumber(margin, name) ?? null
+  return {
+    ...(sent.margins !== undefined
+      ? {
+          margins: {
+            top: readMargin('top'),
+            right: readMargin('right'),
+            bottom: readMargin('bottom'),
+            left: readMargin('left'),
+            header: readMargin('header'),
+            footer: readMargin('footer'),
+            gutter: readMargin('gutter'),
+          },
+        }
+      : {}),
+    ...(sent.pageSize !== undefined || sent.orientation !== undefined
+      ? { pageSize: preSize }
+      : {}),
+  }
 }
 
 /**

@@ -216,10 +216,18 @@ export function useWorkspaceCaret({
   /**
    * Focus without moving the caret. A paragraph editor that takes focus as part
    * of an existing selection must not be mistaken for a request to place the
-   * caret, which would drop the selection being extended.
+   * caret, which would drop the selection being extended. A focus on a
+   * different paragraph also ends any format range, so a later break insert
+   * cannot address a stale offset. A focus that re-enters the paragraph already
+   * holding the caret keeps its resolved range: pagination remounts the editor
+   * after a page break, and dropping the range there would send the next break
+   * to offset zero.
    */
   function focusParagraph(paragraphId: string) {
     setSelectedParagraphId(paragraphId)
+    setFormatRange((current) =>
+      selectedParagraphId === paragraphId ? current : null,
+    )
   }
 
   function extendSelection(

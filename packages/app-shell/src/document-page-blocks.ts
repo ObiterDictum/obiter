@@ -73,6 +73,9 @@ export type PageSession = {
   col: number
   y: number
   broken: boolean
+  /** A pending page break ended the last paragraph, so the empty sheet it
+   * opened must be kept even though no block follows it yet. */
+  trailingBreak: boolean
 }
 
 export function layoutParagraph(
@@ -86,6 +89,8 @@ export function layoutParagraph(
   session: PageSession,
   column: () => ColumnFrame,
   advance: () => void,
+  /** Effective-text offsets of pending page breaks in this paragraph. */
+  pageBreaks: readonly number[] = [],
 ): void {
   const paragraph = effectiveParagraph(
     item.paragraph,
@@ -93,6 +98,12 @@ export function layoutParagraph(
     extraRuns[item.paragraph.id] ?? [],
   )
   const text = paragraphPlainText(paragraph)
+  // A stored break is addressed by text offset exactly like a pending one, so
+  // both merge into one ordered set. Only the pending path used to split, which
+  // left a reloaded break rendering as a single sheet.
+  const breaks = [
+    ...new Set([...pageBreaks, ...storedPageBreakOffsets(paragraph)]),
+  ].sort((left, right) => left - right)
   const face = paragraphFace(paragraph, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx
@@ -114,7 +125,7 @@ export function layoutParagraph(
     placed = true
   }
 
-  if (hasPageBreak(paragraph) && session.y > 0) advance()
+  if (breaks.includes(0) && session.y > 0) advance()
 
   if (imagePx > 0) {
     if (session.y > 0 && imagePx + linePx > frame.heightPx - session.y) {
@@ -131,6 +142,11 @@ export function layoutParagraph(
   }
 
   while (!complete) {
+    // A pending page break forces a new sheet at its offset. Truncating the
+    // text at the next break makes this fragment stop there; the advance below
+    // then starts the new sheet, so the break lands at the caret rather than
+    // after the whole paragraph.
+    const nextBreak = breaks.find((at) => at > offset)
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : face.marginTopPx
     const remaining = frame.heightPx - session.y
@@ -146,7 +162,7 @@ export function layoutParagraph(
     place()
     const startY = session.y + before
     const fragment = takeFragment({
-      text,
+      text: nextBreak === undefined ? text : text.slice(0, nextBreak),
       offset,
       startY,
       maxY: widowMaxY(
@@ -217,6 +233,15 @@ export function layoutParagraph(
     offset += fragment.consumed
     complete = fragment.complete
     continuation = true
+    if (fragment.complete && nextBreak !== undefined) {
+      // The break is at (or before) the end of the text: finish the paragraph
+      // on the current sheet, then open the next one so the break shows.
+      complete = nextBreak >= text.length
+      advance()
+      placed = false
+      continuation = false
+      session.trailingBreak = complete
+    }
   }
 }
 
@@ -243,12 +268,34 @@ function placeAnchors(
   }
 }
 
-function hasPageBreak(paragraph: DocumentParagraphWire): boolean {
-  const xml = [
-    ...paragraph.preservedXmlFragments,
-    ...paragraph.runs.flatMap((run) => run.preservedXmlFragments),
-  ].join('')
-  if (/<w:br\b[^>]*w:type="page"/i.test(xml)) return true
+/**
+ * Effective-text offsets of the page breaks already stored in a paragraph. A
+ * break run between text runs maps to the offset the text before it ends at;
+ * `w:pageBreakBefore` (and a paragraph-level break) maps to the paragraph
+ * start. A break inside a run that still carries text is addressed at that
+ * run's start, the only boundary the run list can recover.
+ */
+function storedPageBreakOffsets(paragraph: DocumentParagraphWire): number[] {
+  const offsets: number[] = []
+  const paragraphXml = paragraph.preservedXmlFragments.join('')
+  if (pageBreakBefore(paragraphXml) || hasPageBreakElement(paragraphXml)) {
+    offsets.push(0)
+  }
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    if (hasPageBreakElement(run.preservedXmlFragments.join(''))) {
+      offsets.push(cursor)
+    }
+    cursor += run.text.length
+  }
+  return offsets
+}
+
+function hasPageBreakElement(xml: string): boolean {
+  return /<w:br\b[^>]*w:type="page"/i.test(xml)
+}
+
+function pageBreakBefore(xml: string): boolean {
   const before = xml.match(/<w:pageBreakBefore\b([^>]*)\/?>/i)
   if (!before) return false
   const val = before[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()

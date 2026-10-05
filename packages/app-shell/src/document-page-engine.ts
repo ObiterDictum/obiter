@@ -1,13 +1,18 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { flowIds, insertRuns, type LocalInsert } from './document-edits'
+import {
+  flowIds,
+  insertRuns,
+  type BreakDraft,
+  type LocalInsert,
+} from './document-edits'
 import type { ExtraRuns } from './document-word-edits'
 import { documentStory } from './document-model-text'
 import { keepWithNext } from './document-page-keep'
 import { drawingFloat, paragraphAnchorXml } from './document-page-floats'
 import {
   contentFrame,
-  documentPageBox,
-  documentSectionXml,
+  documentSections,
+  pageBoxForSection,
   sectionColumns,
   type ColumnFrame,
   type ContentFrame,
@@ -42,13 +47,36 @@ export function layoutDocument(
    * a pure function of the model, so re-deriving them inside every pagination
    * pass re-parsed the table structure on each keystroke for no change. */
   blocks?: StoryBlock[],
+  /** Pending breaks, folded at their caret offset rather than appended. */
+  pageBreaks: readonly BreakDraft[] = [],
 ): LaidOutPage[] {
-  const box = documentPageBox(model)
-  const frame = contentFrame(box, marginBandHeights(model))
-  const columns = sectionColumns(box, documentSectionXml(model))
+  const sections = documentSections(model)
+  const breakOffsets = new Map<string, number[]>()
+  for (const item of pageBreaks) {
+    if (item.kind !== 'page') continue
+    const list = breakOffsets.get(item.paragraphId) ?? []
+    list.push(item.offset)
+    breakOffsets.set(item.paragraphId, list)
+  }
+  // Draft order is insertion order, not text order. `layoutParagraph` picks the
+  // first offset after the current one, so an unsorted list would skip an
+  // earlier break inserted later.
+  for (const list of breakOffsets.values()) {
+    list.sort((left, right) => left - right)
+  }
+  const geometryFor = (sectionXml: string) => {
+    const sectionBox = pageBoxForSection(sectionXml)
+    return {
+      box: sectionBox,
+      frame: contentFrame(sectionBox, marginBandHeights(model)),
+      columns: sectionColumns(sectionBox, sectionXml),
+    }
+  }
+  const geometries = sections.map((section) => geometryFor(section.xml))
+  let geometry = geometries[0] ?? geometryFor('')
   const story = documentStory(model)
   if (!story || story.paragraphs.length === 0) {
-    return [emptyPage(box, frame, columns)]
+    return [emptyPage(geometry.box, geometry.frame, geometry.columns)]
   }
 
   const boxed = new Set<string>()
@@ -69,27 +97,49 @@ export function layoutDocument(
   )
   const pages: LaidOutPage[] = []
   const session: PageSession = {
-    page: emptyPage(box, frame, columns),
+    page: emptyPage(geometry.box, geometry.frame, geometry.columns),
     col: 0,
     y: 0,
     broken: false,
+    trailingBreak: false,
   }
 
   const column = () =>
-    columns[session.col] ?? columns[0] ?? { left: 0, widthPx: frame.widthPx }
+    geometry.columns[session.col] ??
+    geometry.columns[0] ?? { left: 0, widthPx: geometry.frame.widthPx }
 
   const advance = () => {
-    if (session.col + 1 < columns.length) {
+    if (session.col + 1 < geometry.columns.length) {
       session.col += 1
       session.y = 0
       session.broken = true
+      session.trailingBreak = false
       return
     }
     pages.push(session.page)
-    session.page = emptyPage(box, frame, columns)
+    session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
     session.col = 0
     session.y = 0
     session.broken = true
+    session.trailingBreak = false
+  }
+
+  let sectionIndex = 0
+  const startSection = () => {
+    sectionIndex += 1
+    geometry = geometries[sectionIndex] ?? geometry
+    if (
+      session.page.blocks.length > 0 ||
+      session.page.floats.length > 0 ||
+      session.page.textBoxes.length > 0
+    ) {
+      pages.push(session.page)
+    }
+    session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
+    session.col = 0
+    session.y = 0
+    session.broken = true
+    session.trailingBreak = false
   }
 
   for (let index = 0; index < source.length; index += 1) {
@@ -102,14 +152,15 @@ export function layoutDocument(
         extraRuns,
         column().widthPx,
       )
-      if (session.y > 0 && heightPx > frame.heightPx - session.y) advance()
+      if (session.y > 0 && heightPx > geometry.frame.heightPx - session.y)
+        advance()
       session.page.blocks.push({
         type: 'table',
         table: item.table,
         column: session.col,
       })
       session.y += heightPx
-      if (session.y >= frame.heightPx) advance()
+      if (session.y >= geometry.frame.heightPx) advance()
       continue
     }
     keepWithNext(
@@ -118,23 +169,31 @@ export function layoutDocument(
       model,
       drafts,
       extraRuns,
-      frame,
+      geometry.frame,
       column(),
       session,
       advance,
     )
+    const offsets = breakOffsets.get(item.paragraph.id) ?? []
     layoutParagraph(
       item,
       model,
       drafts,
       extraRuns,
       hosts,
-      box,
-      frame,
+      geometry.box,
+      geometry.frame,
       session,
       column,
       advance,
+      offsets,
     )
+    if (
+      sections[sectionIndex]?.endParagraphId === item.paragraph.id &&
+      sectionIndex + 1 < sections.length
+    ) {
+      startSection()
+    }
   }
 
   layoutNotes(
@@ -142,8 +201,8 @@ export function layoutDocument(
     drafts,
     extraRuns,
     hosts,
-    box,
-    frame,
+    geometry.box,
+    geometry.frame,
     session,
     column,
     advance,
@@ -153,6 +212,7 @@ export function layoutDocument(
     session.page.blocks.length > 0 ||
     session.page.floats.length > 0 ||
     session.page.textBoxes.length > 0 ||
+    session.trailingBreak ||
     pages.length === 0
   ) {
     pages.push(session.page)

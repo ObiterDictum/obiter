@@ -1554,6 +1554,19 @@ faithfully, including a run whose anchors do not reconstruct its model text,
 fails closed with `validation_failed` rather than misformatting; invalid
 bounds are never clamped to nearby text.
 
+Inline page and column breaks compose with same-batch run edits. A break
+inserted into a run with no pending run-keyed write splices the run at the
+caret as a paragraph-keyed zero-width replacement, so the run's structural
+children (a tab, a drawing, a field) stay byte-identical. A run-keyed write
+(`replace_run_text`, a whole-run `set_run_emphasis`, `set_run_style`) listed
+_before_ such a break materialises the run with every accumulated break inline,
+which is the order `collectEditOperations` produces. Listed _after_ a splice it
+cannot compose: the splice reopens the run from its parse-time property
+snapshot, so a property write would style only the first sibling and a text
+replacement would overlap the splice point. The writer fails closed with the
+same `validation_failed` (400) rather than serialising an overlap (500) or
+saving a tail that does not match the wire.
+
 ### Document drafts: addressability, containment and reload persistence (14 September 2026)
 
 Context: applying a paragraph style to a paragraph that had been inserted but
