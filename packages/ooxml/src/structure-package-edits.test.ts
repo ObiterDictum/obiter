@@ -204,9 +204,7 @@ describe('package limits against the finished archive', () => {
     // parts (media plus rels) — one more than the reserved check allows.
     expect(() =>
       applyDocumentEdits(document, [imageOperation(anchor.id, 0)]),
-    ).toThrowError(
-      expect.objectContaining({ code: 'package-limits-exceeded' }),
-    )
+    ).toThrowError(expect.objectContaining({ code: 'package-limits-exceeded' }))
   })
 
   it('enforces entry limits on the completed archive at serialise time', async () => {
@@ -315,9 +313,7 @@ describe('media content types and raster bytes', () => {
       applyDocumentEdits(document, [
         { ...imageOperation(anchor.id, 0), contentType: 'image/jpeg' },
       ]),
-    ).toThrowError(
-      expect.objectContaining({ code: 'invalid-document-edit' }),
-    )
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
   })
 })
 

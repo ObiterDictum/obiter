@@ -9,11 +9,7 @@ import {
   type InsertionPoint,
 } from './comment-anchors'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
-import {
-  OoxmlError,
-  type ParagraphAnchor,
-  type TextRunAnchor,
-} from './model'
+import { OoxmlError, type ParagraphAnchor, type TextRunAnchor } from './model'
 import { splitsSurrogate } from './model-run-range-edits'
 import {
   applyFragmentReplacements,

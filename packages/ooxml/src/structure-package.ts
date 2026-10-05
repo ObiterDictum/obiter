@@ -189,9 +189,9 @@ export function addMediaPart(
   }
   // SAFETY: the `in` check just proved `contentType` is one of the map's
   // keys, which are exactly the DocumentEditImageContentType union.
-  const extension =
-    IMAGE_EXTENSION_BY_CONTENT_TYPE[contentType as DocumentEditImageContentType]
-  if (!matchesImageSignature(contentType as DocumentEditImageContentType, bytes)) {
+  const imageType = contentType as DocumentEditImageContentType
+  const extension = IMAGE_EXTENSION_BY_CONTENT_TYPE[imageType]
+  if (!matchesImageSignature(imageType, bytes)) {
     throw new OoxmlError('invalid-document-edit')
   }
   const reserved = reservedPartNames.filter(
@@ -224,12 +224,12 @@ export function addMediaPart(
 }
 
 /** The byte signature each supported raster type must actually carry. */
-const IMAGE_SIGNATURES: Record<DocumentEditImageContentType, readonly number[]> = {
+const IMAGE_SIGNATURES = {
   'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
   'image/jpeg': [0xff, 0xd8, 0xff],
   'image/gif': [0x47, 0x49, 0x46, 0x38],
   'image/bmp': [0x42, 0x4d],
-}
+} satisfies Record<DocumentEditImageContentType, readonly number[]>
 
 /**
  * The declared content type is a client claim; the bytes are the truth. A
@@ -279,7 +279,12 @@ function insertRootChild(
     (element) => element.parent === undefined && element.localName === rootName,
   )
   if (!root) throw new OoxmlError('invalid-document-edit')
-  const childXml = qualifiedChildXml(root, childName, attributesXml, namespaceUri)
+  const childXml = qualifiedChildXml(
+    root,
+    childName,
+    attributesXml,
+    namespaceUri,
+  )
   if (root.selfClosing) {
     const ownerKey = `${rootName}:children`
     const close = `</${root.qualifiedName}>`
@@ -329,8 +334,7 @@ function qualifiedChildXml(
   if (colon !== -1) {
     return `<${root.qualifiedName.slice(0, colon)}:${childName} ${attributesXml}/>`
   }
-  const declaration =
-    root.namespaceUri === '' ? ` xmlns="${namespaceUri}"` : ''
+  const declaration = root.namespaceUri === '' ? ` xmlns="${namespaceUri}"` : ''
   return `<${childName}${declaration} ${attributesXml}/>`
 }
 
@@ -375,8 +379,7 @@ export function nextSyntheticParaId(source: CounterSource) {
   }
 }
 
-const PENDING_PARA_ID =
-  /\b[\w.-]+:paraId\s*=\s*["']([0-9A-Fa-f]{8})["']/gu
+const PENDING_PARA_ID = /\b[\w.-]+:paraId\s*=\s*["']([0-9A-Fa-f]{8})["']/gu
 const PARA_ID_VALUE = /^[0-9A-Fa-f]{8}$/u
 
 const paraIdsInSource = new WeakMap<CounterSource, ReadonlySet<string>>()

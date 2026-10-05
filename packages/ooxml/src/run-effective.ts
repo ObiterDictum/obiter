@@ -1,13 +1,6 @@
-import type {
-  ParagraphAnchor,
-  TextRunAnchor,
-  XmlElementRange,
-} from './model'
+import type { ParagraphAnchor, TextRunAnchor, XmlElementRange } from './model'
 import { OoxmlError } from './model'
-import {
-  mergeSiblingRuns,
-  parseWrappedRun,
-} from './model-run-range-edits'
+import { mergeSiblingRuns, parseWrappedRun } from './model-run-range-edits'
 import { elementFragment, type XmlOverlay } from './parts/overlay'
 import { elementRange, isTextWrappingBreak } from './parts/xml-elements'
 import { decodeXmlReferences } from './xml-lexemes'
