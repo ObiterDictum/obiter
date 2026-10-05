@@ -1,0 +1,25 @@
+{
+  "name": "@obiter/legal-ingestor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun src/index.ts",
+    "bulk:ingest": "bun src/bulk-ingest.ts",
+    "legislation:ingest": "bun src/legislation-ingest.ts",
+    "withdrawal:check": "bun src/withdrawal-check.ts",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@obiter/config": "workspace:*",
+    "@obiter/legal-schema": "workspace:*",
+    "@obiter/legal-source-provider": "workspace:*",
+    "@obiter/search-client": "workspace:*",
+    "meilisearch": "^0.51.0",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
+  }
+}

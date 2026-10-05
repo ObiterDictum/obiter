@@ -1,0 +1,337 @@
+name: CI
+
+# Minimal token permissions: nothing here writes to the repository. This also
+# answers the CodeQL "Workflow does not contain permissions" finding raised on
+# this pull request's workflow changes.
+permissions:
+  contents: read
+
+on:
+  # Deliberately unfiltered by base branch. Stacked PRs target the branch below
+  # them rather than dev, so a `branches:` filter here silently gives every
+  # stacked PR no CI at all.
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    name: Typecheck, format, lint, test
+    runs-on: ubuntu-latest
+    env:
+      FONTCONFIG_FILE: ${{ github.workspace }}/.github/fontconfig-liberation.conf
+    services:
+      meilisearch:
+        image: getmeili/meilisearch:v1.53.1
+        env:
+          MEILI_MASTER_KEY: obiter-local-dev-key
+          MEILI_NO_ANALYTICS: 'true'
+        ports:
+          - 7700:7700
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: obiter
+          POSTGRES_PASSWORD: obiter
+          POSTGRES_DB: obiter_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U obiter -d obiter_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Runner forensics for the pdf-glyph-layout flake (two stable outcomes,
+      # alternating per run): GitHub mixes CPU generations in the pool and a
+      # rendering path that differs by instruction set would produce exactly
+      # that. Early and unconditional so failing runs always carry it.
+      - name: Runner diagnostics
+        run: |
+          echo "runner.name=${{ runner.name }}"
+          echo "runner.arch=${{ runner.arch }}"
+          echo "runner.os=${{ runner.os }}"
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          uname -a
+          lscpu || cat /proc/cpuinfo
+
+      # Bun is the toolchain: setup-bun provides the pinned runtime from
+      # .bun-version, and every gate below runs with `bun --bun run` so the
+      # scripts themselves execute on Bun. Node stays installed because
+      # third-party package lifecycle scripts run it (esbuild's postinstall)
+      # and because the toolchain still ships Node rollback paths.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # bun has no cache flag in setup-bun; cache its download store keyed on
+      # the lockfile so a warm run skips re-downloading the workspace graph.
+      - name: Cache bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun --bun run typecheck
+
+      # Prettier formatting — rejects unformatted code. Keeps the tree free of
+      # formatter churn (no agent's prettier run should ever produce a diff).
+      - name: Format check
+        run: bun --bun run format:check
+
+      # Two-stage lint: oxlint (fast correctness pass) then eslint (owns the
+      # icon-pack no-restricted-imports ban and the hex-color-in-styles rule).
+      - name: Lint
+        run: bun --bun run lint
+
+      # The web production build is a gate of its own: TanStack Start's
+      # import-protection plugin only rejects a server-only import reaching
+      # client code while building, so the failure typechecks, formats, lints
+      # and tests clean (#121 did exactly that on 29 August and every PR since
+      # merged green). Keep it in this job so it stays part of the required
+      # check rather than a separate workflow someone has to remember.
+      - name: Build web
+        run: bun --bun run --filter @obiter/web build
+
+      # Deterministic bundle budget over the build output the step above just
+      # produced: the files the root route preloads on every page, and the lazy
+      # chunks. Measured budgets with documented headroom; see
+      # scripts/perf/bundle-budget.mjs for what is counted.
+      - name: Bundle budget
+        run: bun --bun run perf:bundle-budget
+
+      # The build wrote dist/.obiter-build.json. Verify it names this commit and
+      # a production React build, so a marker that silently rots fails here
+      # rather than at measurement time.
+      - name: Build provenance
+        run: bun apps/web/build-provenance.mjs verify --expect-commit "$GITHUB_SHA" --allow-dirty
+
+      # Desktop had the same gap P1.32 had for web: electron-vite build ran only
+      # on push to main, so a broken desktop entry point could merge green. The
+      # budget below needs the build on every PR anyway, and the build resolves
+      # the Electron package the frozen-lockfile install already fetched, so it
+      # adds no dependency install of its own.
+      - name: Build desktop
+        run: bun --bun run --filter @obiter/desktop build
+
+      # Deterministic desktop size budget over that build: the initial renderer
+      # graph, lazy chunks and largest lazy chunk, the PDF worker, product font
+      # assets, main/preload, and the application payload the packager reads.
+      # Raw bytes, not gzip: the packaged renderer is read from the local asar
+      # over obiter://, never downloaded. See scripts/perf/desktop-budget.mjs.
+      - name: Desktop budget
+        run: bun --bun run perf:desktop-budget
+
+      - name: Apply database migrations
+        env:
+          PGPASSWORD: obiter
+        run: |
+          # fontconfig + Liberation match scripts/ci-local.sh: pdf.js maps
+          # base-14 fonts to them, and pdf-glyph-layout.test.ts measures cover
+          # against rendered ink. Without them the runner substitutes a different
+          # face and the contain checks fail by fractions of a point.
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client fontconfig fonts-liberation
+          mkdir -p /tmp/obiter-fontconfig-cache
+          fc-cache -f
+          LIBERATION=$(fc-list 2>/dev/null | grep -ci liberation || true)
+          if ! command -v fc-list >/dev/null 2>&1 || [ "${LIBERATION:-0}" -eq 0 ]; then
+            echo "Liberation fonts did not resolve after install (fontconfig / fonts-liberation)." >&2
+            echo "pdf.js will substitute a different face and pdf-glyph-layout.test.ts will fail by covering less ink than it should." >&2
+            echo "fc-list | grep -i liberation is empty. Install the packages, then run: fc-cache -f with FONTCONFIG_FILE=.github/fontconfig-liberation.conf" >&2
+            echo "fc-match Times: $(fc-match Times 2>/dev/null || true)" >&2
+            echo "fc-match 'Times New Roman': $(fc-match 'Times New Roman' 2>/dev/null || true)" >&2
+            echo "fc-match Helvetica: $(fc-match Helvetica 2>/dev/null || true)" >&2
+            echo "fc-match Courier: $(fc-match Courier 2>/dev/null || true)" >&2
+            exit 1
+          fi
+          echo "fc-match Times: $(fc-match Times)"
+          echo "fc-match Times New Roman: $(fc-match 'Times New Roman')"
+          echo "fc-match Times-Roman: $(fc-match Times-Roman)"
+          echo "fc-match Liberation Serif: $(fc-match 'Liberation Serif')"
+          echo "fc-match Helvetica: $(fc-match Helvetica)"
+          echo "fc-match Courier: $(fc-match Courier)"
+          TIMES_MATCH=$(fc-match Times)
+          TNR_MATCH=$(fc-match 'Times New Roman')
+          if ! printf '%s' "$TIMES_MATCH" | grep -qi 'Liberation Serif' || ! printf '%s' "$TNR_MATCH" | grep -qi 'Liberation Serif'; then
+            echo "Times / Times New Roman must resolve to Liberation Serif (pdf.js local() order)." >&2
+            echo "Times: $TIMES_MATCH" >&2
+            echo "Times New Roman: $TNR_MATCH" >&2
+            exit 1
+          fi
+          for f in packages/database/migrations/*.sql; do
+            psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      # The redaction-renderer suite launches the Playwright Chromium it ships
+      # against. Playwright fetches browsers on demand, not during install, so
+      # without this step the worker's real-render tests have no browser.
+      - name: Install Playwright Chromium
+        run: bun --bun playwright install --with-deps chromium
+
+      - name: Test
+        env:
+          TEST_DATABASE_URL: postgres://obiter:obiter@localhost:5432/obiter_test
+        run: bun run test
+
+      - name: Search correctness benchmark
+        env:
+          SEARCH_BENCHMARK_API_KEY: obiter-local-dev-key
+          SEARCH_BENCHMARK_HOST: http://127.0.0.1:7700
+          SEARCH_BENCHMARK_REPORT_PATH: ${{ runner.temp }}/search-benchmark.json
+        run: bun run benchmark:search
+
+      - name: Upload search benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-correctness-benchmark
+          path: ${{ runner.temp }}/search-benchmark.json
+          if-no-files-found: ignore
+
+  # The unit suite runs on Bun (bun test); this job additionally drives the
+  # shipped server itself: it starts the real Bun.serve entry point (and the
+  # Node rollback entry point, spawned as real `node`) against its own Postgres
+  # and runs scripts/api-runtime/runtime-integration.mjs over HTTP. The Bun
+  # version is pinned by .bun-version.
+  bun-api:
+    name: Bun API runtime integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: obiter
+          POSTGRES_PASSWORD: obiter
+          POSTGRES_DB: obiter_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U obiter -d obiter_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node stays: the rollback adapter is spawned as a real `node` process by
+      # the harness. The pin lives in .bun-version so the image, CI and a
+      # developer machine cannot disagree about which Bun is reviewed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Cache bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Bun version
+        run: bun --version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The API applies its own migrations at startup behind an advisory lock,
+      # which is the production path and what this job should exercise. Applying
+      # them here with psql -f first would leave schema_migrations empty and make
+      # the API re-run migrations that are not idempotent. psql itself is still
+      # needed: the harness provisions fixtures through scripts/load/psql.mjs.
+      - name: Install harness prerequisites
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          # The harness generates genuine python-docx fixtures through
+          # scripts/load/make-upload-fixtures.py. Ubuntu 24.04 marks the system
+          # Python externally managed, hence the explicit flag.
+          python3 -m pip install --break-system-packages python-docx
+
+      # Starts both entry points on their own ports against obiter_test and
+      # asserts auth, tenancy, body limits, transactions, streaming,
+      # verification, native CPU inference and bounded SIGTERM shutdown. The
+      # harness prefetches the detection model into a task-owned cache first.
+      - name: API runtime integration (Bun and Node rollback)
+        env:
+          TEST_DATABASE_URL: postgres://obiter:obiter@localhost:5432/obiter_test
+        run: |
+          bun scripts/api-runtime/runtime-integration.mjs \
+            --runtime both \
+            --database-url "$TEST_DATABASE_URL" \
+            --json-out "$RUNNER_TEMP/api-runtime-integration.json"
+
+      - name: Upload runtime integration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-runtime-integration
+          path: ${{ runner.temp }}/api-runtime-integration.json
+          if-no-files-found: ignore
+
+  # Deployable images build only on pushes to main (the release branch).
+  # dev is the integration branch; promote dev -> main to cut a deploy.
+  # Both server images build here: apps/web, and services/api below (Bun
+  # default target plus the Node rollback target). Marketing lives in its own
+  # repo; desktop ships as Electron installers, not server images.
+  docker-web:
+    name: Build web image
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Context is the repo root — the web Dockerfile's COPY paths span the
+      # workspace, and the root .dockerignore (with its .env* exclusions) only
+      # applies at the context root. See docs/specs/deployment.md.
+      - name: Build apps/web image
+        # Pass the checked-out commit and a truthful clean flag so the image's
+        # dist/.obiter-build.json names the artifact it was built from. Without
+        # these the marker records commit:null and no deployed image can ever
+        # satisfy the measurement harness's --expect-artifact-commit.
+        # GITHUB_SHA is the pushed commit and the Actions checkout is clean, so
+        # OBITER_BUILD_DIRTY=0. See docs/specs/deployment.md.
+        run: |
+          docker build -f apps/web/Dockerfile -t obiter-web:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" \
+            --build-arg OBITER_BUILD_DIRTY=0 \
+            .
+
+  # Both API adapters are built from one Dockerfile. Bun is the default target
+  # (last stage); the Node rollback is the same application code behind
+  # --target runtime-node. The build stage is shared, so the second target
+  # reuses its layers. Push-only for the same cost reason as docker-web, but
+  # the Bun target is also build-verified locally before this PR is raised.
+  docker-api:
+    name: Build API images
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Bun API image (default target)
+        run: |
+          docker build -f services/api/Dockerfile -t obiter-api-bun:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" .
+
+      - name: Build Node API image (rollback target)
+        run: |
+          docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" .

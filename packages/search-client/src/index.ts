@@ -1,0 +1,1584 @@
+import { MeiliSearch } from 'meilisearch'
+import {
+  LegalAuthoritySchema,
+  legalAuthoritiesSchema,
+  LegalAuthoritySummarySchema,
+  type LegalAuthority,
+  type LegalAuthoritySummary,
+  type LegalSourceType,
+} from '@obiter/legal-schema'
+import {
+  meilisearchDocumentPayloadMaxBytes,
+  partitionByUtf8JsonPayload,
+} from './document-payload-batches'
+
+export { meilisearchDocumentPayloadMaxBytes } from './document-payload-batches'
+
+interface EngineRankingHit {
+  _rankingScore?: number
+}
+
+export type LegalSearchDocument = LegalAuthority
+export interface LegalSearchSnippet {
+  evidenceId: string
+  paragraphNumber: number
+  text: string
+  matchedTerms: string[]
+  matchReason: LegalSearchMatchReason
+}
+export type LegalSearchMatchReason =
+  | 'exact_document_id'
+  | 'exact_neutral_citation'
+  | 'title_match'
+  // One distinctive query term in the title (rank tier 4). Labelled apart
+  // from 'title_match' so a card never claims a full title match on
+  // single-term evidence; see getLegalSearchMatchReason in the API's
+  // response-utils for the wording rationale.
+  | 'partial_title_match'
+  | 'body_text_match'
+  | 'keyword_match'
+export type LegalSearchHit = LegalAuthoritySummary & {
+  paragraphs?: LegalAuthority['paragraphs']
+  snippets?: LegalSearchSnippet[]
+  engineRankingScore?: number
+}
+export type LegalSearchFilters = Partial<{
+  court: string
+  jurisdiction: string
+  sourceType: LegalSourceType
+  dateFrom: string
+  dateTo: string
+}>
+
+export interface SearchIndexOptions {
+  primaryKey?: 'id'
+  /**
+   * Continue when the server does not support one of the index settings, and
+   * report which. Off by default: a Meilisearch that cannot apply a setting is
+   * not running the configuration this package defines, and a caller that has
+   * not said it can live with that should be told rather than served silently.
+   *
+   * The one real case is `prefixSearch`, which Meilisearch added in 1.12.
+   * A 1.8 server has no `settings/prefix-search` route and answers 404, so
+   * prefix search stays on and short queries match on prefixes. That materially
+   * changes short-word precision, which is why this is opt-in and reported
+   * rather than assumed harmless.
+   */
+  allowUnsupportedSettings?: boolean
+}
+
+export interface SearchIndexResult {
+  taskUid?: number
+  /**
+   * Settings the server could not apply, empty when everything applied. A run
+   * that measures anything must put this in its report: a number measured under
+   * a configuration the report does not name cannot be compared with one that
+   * was.
+   */
+  unsupportedSettings: string[]
+}
+
+export interface SearchIndexDocumentsResult {
+  indexedCount: number
+  failedCount: number
+  errors: Array<{ recordId: string | null; message: string }>
+}
+
+export interface IndexDocumentsProgress {
+  batchNumber: number
+  batchCount: number
+  batchDocumentCount: number
+  indexedCount: number
+  totalDocuments: number
+}
+
+export interface IndexDocumentsOptions {
+  /**
+   * UTF-8 byte cap for `JSON.stringify(batch)` sent to addDocuments.
+   * Defaults to {@link meilisearchDocumentPayloadMaxBytes}. Tests pass a
+   * smaller value so batching can be asserted without 80 MB fixtures.
+   */
+  maxPayloadBytes?: number
+  onProgress?: (progress: IndexDocumentsProgress) => void
+}
+
+// Optional timings for diagnostics, not product behaviour.
+export interface LegalSearchDiagnostics {
+  providerSearchTimeMs: number
+  clientProcessingTimeMs: number
+}
+
+export interface LegalSearchResult {
+  hits: LegalSearchHit[]
+  query: string
+  estimatedTotalHits: number
+  processingTimeMs: number
+  diagnostics?: LegalSearchDiagnostics
+}
+
+export interface LegalSearchOptions {
+  // With both of these false the request omits paragraphs, so ranking has no
+  // body text to read and the body match tiers cannot fire.
+  includeParagraphs?: boolean
+  includeSnippets?: boolean
+  limit?: number
+  // Set null to disable the relevance floor when recall matters more than precision.
+  rankingScoreThreshold?: number | null
+  matchingStrategy?: 'all' | 'frequency'
+  /**
+   * Recognised citation surface form. When set, the engine query becomes an
+   * exact phrase for that citation instead of the keyword query, so an
+   * absent citation returns nothing rather than keyword neighbours. Snippet
+   * extraction and tier ranking still read the original query.
+   */
+  exactPhrase?: string
+}
+
+interface SearchIndexingTask {
+  uid?: number
+  taskUid?: number
+  status?: string
+  details?: {
+    receivedDocuments?: number
+    indexedDocuments?: number
+  }
+  error?: {
+    code?: string
+    type?: string
+  } | null
+}
+
+class SearchTaskError extends Error {
+  constructor(task: SearchIndexingTask) {
+    const taskId = task.uid ?? task.taskUid
+    const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
+    const errorCode = task.error?.code ?? task.error?.type
+    const errorLabel = errorCode ? ` (${errorCode})` : ''
+
+    super(
+      `Meilisearch task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`,
+    )
+    this.name = 'SearchTaskError'
+  }
+}
+
+type SearchEnqueuedTaskPromise = Promise<{ taskUid: number }> & {
+  waitTask(options?: {
+    timeout?: number
+    interval?: number
+  }): Promise<SearchIndexingTask>
+}
+
+type IndexLike = {
+  updateSearchableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
+  updateFilterableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
+  updateSortableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
+  updateRankingRules(rules: string[]): SearchEnqueuedTaskPromise
+  updatePrefixSearch(
+    prefixSearch: 'disabled' | 'indexingTime',
+  ): SearchEnqueuedTaskPromise
+  /** Read-only support probe. See `applyOptionalSetting`. */
+  getPrefixSearch(): Promise<string>
+  updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
+  updateTypoTolerance(settings: {
+    minWordSizeForTypos: { oneTypo: number; twoTypos: number }
+  }): SearchEnqueuedTaskPromise
+  addDocuments(
+    documents: LegalSearchDocument[],
+    options: { primaryKey: 'id' },
+  ): SearchEnqueuedTaskPromise
+  search(
+    query: string,
+    options: {
+      filter?: string[]
+      sort?: string[]
+      attributesToRetrieve?: string[]
+      limit?: number
+      matchingStrategy?: 'all' | 'frequency'
+      rankingScoreThreshold?: number
+      showRankingScore?: boolean
+    },
+  ): Promise<{
+    hits: unknown[]
+    query?: string
+    estimatedTotalHits?: number
+    processingTimeMs?: number
+  }>
+}
+
+type IndexSetupClient = {
+  createIndex(
+    indexName: string,
+    options: { primaryKey: 'id' },
+  ): SearchEnqueuedTaskPromise
+  index(indexName: string): IndexLike
+}
+
+type DocumentIndexClient = {
+  index(indexName: string): Pick<IndexLike, 'addDocuments'>
+}
+
+type DocumentReadClient = {
+  index(indexName: string): {
+    getDocument(documentId: string): Promise<LegalAuthority>
+  }
+}
+
+type SearchClient = {
+  index(indexName: string): Pick<IndexLike, 'search'>
+}
+
+const searchableAttributes = [
+  'id',
+  'title',
+  'neutralCitation',
+  'paragraphs.text',
+]
+
+/**
+ * Meilisearch comparison operators take numeric operands only, so a range
+ * filter cannot read the ISO `dateDecided` string. The index carries this
+ * derived companion field for range filtering; `dateDecided` remains the
+ * authority and the only date the domain schema and callers ever see.
+ */
+const dateDecidedTimestampField = 'dateDecidedTimestamp'
+
+/**
+ * Midnight UTC for an ISO `YYYY-MM-DD` date. Every indexed value lands on a day
+ * boundary, so an inclusive `dateTo` needs no end-of-day adjustment: a document
+ * decided on the boundary day compares equal, not greater.
+ */
+function toDateDecidedTimestamp(isoDate: string): number | null {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const timestamp = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  )
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+/**
+ * Projects a validated authority into the shape sent to the engine. The schema
+ * has already guaranteed `dateDecided` is an ISO date, so a null here means the
+ * two have drifted apart rather than that a caller passed something odd.
+ */
+function toIndexedLegalAuthority(document: LegalAuthority) {
+  const timestamp = toDateDecidedTimestamp(document.dateDecided)
+
+  if (timestamp === null) {
+    throw new Error(
+      `Cannot derive ${dateDecidedTimestampField} for document ${document.id}: dateDecided "${document.dateDecided}" passed schema validation but is not an ISO date.`,
+    )
+  }
+
+  return { ...document, [dateDecidedTimestampField]: timestamp }
+}
+
+const filterableAttributes = [
+  'court',
+  'jurisdiction',
+  'sourceType',
+  'dateDecided',
+  dateDecidedTimestampField,
+]
+const sortableAttributes = ['dateDecided']
+const legalStopWords = [
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'by',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'of',
+  'on',
+  'or',
+  'that',
+  'the',
+  'this',
+  'to',
+  'was',
+  'were',
+  'with',
+]
+const legalStopWordSet = new Set(legalStopWords)
+const searchSummaryAttributes = [
+  'id',
+  'title',
+  'neutralCitation',
+  'court',
+  'jurisdiction',
+  'dateDecided',
+  'sourceType',
+  'sourceUrl',
+]
+const rankingRules = [
+  'words',
+  'typo',
+  'proximity',
+  'attribute',
+  'exactness',
+  'sort',
+]
+/**
+ * The settings createIndex applies, plus the defaults search falls back to,
+ * held in one place so callers can report exactly what ran. The benchmark
+ * embeds this verbatim, which is what stops a reported tuning decision from
+ * quietly disagreeing with the committed value.
+ */
+export const legalSearchIndexSettings = {
+  minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
+  prefixSearch: 'disabled',
+  matchingStrategy: 'all',
+  // Swept across the full benchmark at null, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45
+  // and 0.5. Everything from 0.2 to 0.35 beats 0.5 on top-1 and top-3 and is
+  // worse on nothing, because the only case the floor is load-bearing for is
+  // "claimnt", whose sole candidate scores 0.0928. The lowest legitimate typo
+  // match measured is "Rizwun" at 0.3655. 0.25 sits near the middle of that
+  // gap, leaving 0.157 of headroom over the junk match and 0.116 under the
+  // recall one. The other three no-answer cases return nothing even with the
+  // floor removed entirely, so they do not constrain this value.
+  //
+  // Those scores come from the synthetic benchmark fixture, and ranking scores
+  // depend on corpus statistics, so re-measure this on a real corpus before
+  // trusting it. See the calibration note in the package README.
+  rankingScoreThreshold: 0.25,
+  stopWordCount: legalStopWords.length,
+} as const
+
+const indexSetupTaskTimeoutMs = 10 * 60_000
+const documentIndexingTaskTimeoutMs = 30 * 60_000
+
+export function createClient(host: string, apiKey: string): MeiliSearch {
+  return new MeiliSearch({ host, apiKey })
+}
+
+/**
+ * Search-time parameters this server rejects as unknown.
+ *
+ * `createIndex` can only discover what an old server cannot be *configured*
+ * with. This finds what it cannot be *asked* for, which is a separate gap and
+ * was the larger one: Meilisearch added `rankingScoreThreshold` in 1.9, and a
+ * 1.8 server answers "Unknown field `rankingScoreThreshold`" to every non-empty
+ * query. Left undetected that is 51 of 54 benchmark cases failing as search
+ * errors, which looks like a broken index rather than an old server.
+ *
+ * One probe query, run once, rather than a per-search retry: a retry loop would
+ * hide the gap inside every call site and make the numbers depend on which
+ * queries happened to be tried.
+ */
+export async function detectUnsupportedSearchFeatures(
+  client: SearchClient,
+  indexName: string,
+): Promise<string[]> {
+  try {
+    await client.index(indexName).search('', {
+      limit: 1,
+      rankingScoreThreshold: legalSearchIndexSettings.rankingScoreThreshold,
+    })
+    return []
+  } catch (error) {
+    // MeiliSearchApiError puts the provider's message on `message` itself; the
+    // `cause` is the parsed error body, not a string.
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('rankingScoreThreshold')) {
+      return ['rankingScoreThreshold']
+    }
+    throw wrapSearchError('Search feature probe failed.', error)
+  }
+}
+
+export async function createIndex(
+  client: IndexSetupClient,
+  indexName: string,
+  options: SearchIndexOptions = {},
+): Promise<SearchIndexResult> {
+  return setupIndexWithSettings(
+    client,
+    indexName,
+    {
+      searchableAttributes,
+      filterableAttributes,
+      sortableAttributes,
+      rankingRules,
+      prefixSearch: legalSearchIndexSettings.prefixSearch,
+      stopWords: legalStopWords,
+      minWordSizeForTypos: {
+        ...legalSearchIndexSettings.minWordSizeForTypos,
+      },
+    },
+    options,
+  )
+}
+
+/**
+ * Index settings bundle for a product index other than legal_authorities.
+ * createIndex above is this function with the judgment settings; the
+ * legislation provisions index passes its own. One code path applies
+ * settings so the two indexes cannot drift in how they handle old servers.
+ */
+export interface ProductIndexSettings {
+  searchableAttributes: string[]
+  filterableAttributes: string[]
+  sortableAttributes: string[]
+  rankingRules: string[]
+  prefixSearch: 'disabled' | 'indexingTime'
+  stopWords: string[]
+  minWordSizeForTypos: { oneTypo: number; twoTypos: number }
+}
+
+export async function setupIndexWithSettings(
+  client: IndexSetupClient,
+  indexName: string,
+  settings: ProductIndexSettings,
+  options: SearchIndexOptions = {},
+): Promise<SearchIndexResult> {
+  let taskUid: number | undefined
+  const unsupportedSettings: string[] = []
+
+  try {
+    const primaryKey = options.primaryKey ?? 'id'
+    const createTask = client.createIndex(indexName, { primaryKey })
+    const task = await createTask
+    taskUid = task.taskUid
+    await waitForSucceededTask(createTask, indexSetupTaskTimeoutMs)
+  } catch (error) {
+    if (!isIndexAlreadyExistsError(error)) {
+      throw wrapSearchError('Search index setup failed.', error)
+    }
+  }
+
+  try {
+    const index = client.index(indexName)
+    await waitForSucceededTask(
+      index.updateSearchableAttributes(settings.searchableAttributes),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateFilterableAttributes(settings.filterableAttributes),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateSortableAttributes(settings.sortableAttributes),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateRankingRules(settings.rankingRules),
+      indexSetupTaskTimeoutMs,
+    )
+    // Optional only in the sense that an older server cannot be given it. It is
+    // load-bearing where it applies: `minimumShortWordPrecision` in the
+    // benchmark baseline rests on prefix search being off.
+    await applyOptionalSetting(
+      'prefixSearch',
+      () => index.getPrefixSearch(),
+      () => index.updatePrefixSearch(settings.prefixSearch),
+      options.allowUnsupportedSettings ?? false,
+      unsupportedSettings,
+    )
+    await waitForSucceededTask(
+      index.updateStopWords(settings.stopWords),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateTypoTolerance({
+        minWordSizeForTypos: { ...settings.minWordSizeForTypos },
+      }),
+      indexSetupTaskTimeoutMs,
+    )
+
+    return { taskUid, unsupportedSettings }
+  } catch (error) {
+    throw wrapSearchError('Search index setup failed.', error)
+  }
+}
+
+export async function indexDocuments(
+  client: DocumentIndexClient,
+  indexName: string,
+  documents: unknown[],
+  options: IndexDocumentsOptions = {},
+): Promise<SearchIndexDocumentsResult> {
+  const parsed = legalAuthoritiesSchema.safeParse(documents)
+
+  if (!parsed.success) {
+    return validationFailure(
+      documents,
+      parsed.error.issues.map((issue) => issue.message),
+    )
+  }
+
+  const indexable = parsed.data.map(toIndexedLegalAuthority)
+  const capBytes = options.maxPayloadBytes ?? meilisearchDocumentPayloadMaxBytes
+  const batches = partitionByUtf8JsonPayload(indexable, capBytes)
+
+  if (batches.length === 0) {
+    return { indexedCount: 0, failedCount: 0, errors: [] }
+  }
+
+  const index = client.index(indexName)
+  let indexedCount = 0
+
+  try {
+    for (const [batchIndex, batch] of batches.entries()) {
+      options.onProgress?.({
+        batchNumber: batchIndex + 1,
+        batchCount: batches.length,
+        batchDocumentCount: batch.length,
+        indexedCount,
+        totalDocuments: parsed.data.length,
+      })
+
+      const task = await index
+        .addDocuments(batch, {
+          primaryKey: 'id',
+        })
+        .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
+
+      if (task.status !== 'succeeded') {
+        const remaining = parsed.data.length - indexedCount
+        return indexingTaskFailure(remaining, task, indexedCount)
+      }
+
+      const batchIndexed =
+        typeof task.details?.indexedDocuments === 'number'
+          ? task.details.indexedDocuments
+          : batch.length
+      indexedCount += batchIndexed
+      const batchFailed = Math.max(batch.length - batchIndexed, 0)
+      if (batchFailed > 0) {
+        return {
+          indexedCount,
+          failedCount: parsed.data.length - indexedCount,
+          errors: [
+            {
+              recordId: null,
+              message:
+                'Indexing task completed without indexing every document.',
+            },
+          ],
+        }
+      }
+    }
+
+    return {
+      indexedCount,
+      failedCount: Math.max(parsed.data.length - indexedCount, 0),
+      errors:
+        parsed.data.length - indexedCount > 0
+          ? [
+              {
+                recordId: null,
+                message:
+                  'Indexing task completed without indexing every document.',
+              },
+            ]
+          : [],
+    }
+  } catch (error) {
+    if (isTaskWaitTimeout(error)) {
+      throw new Error(
+        'Document indexing status timed out. The Meilisearch task may still be running.',
+        { cause: error },
+      )
+    }
+    throw wrapSearchError('Document indexing failed.', error)
+  }
+}
+
+type DocumentDeleteClient = {
+  index(indexName: string): {
+    deleteDocuments(documentIds: string[]): SearchEnqueuedTaskPromise
+  }
+}
+
+export interface SearchIndexDeleteResult {
+  taskUid?: number
+  deletedCount: number
+}
+
+/**
+ * Removes documents from the derived product index. Postgres stays the
+ * record: callers mark the row withdrawn there first and call this to drop
+ * the derived copy, never the reverse. A no-op for an empty id list so
+ * callers need no length guard.
+ */
+export async function deleteDocuments(
+  client: DocumentDeleteClient,
+  indexName: string,
+  documentIds: string[],
+): Promise<SearchIndexDeleteResult> {
+  if (documentIds.length === 0) return { deletedCount: 0 }
+
+  try {
+    const task = await client
+      .index(indexName)
+      .deleteDocuments(documentIds)
+      .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
+
+    if (task.status !== 'succeeded') {
+      throw new SearchTaskError(task)
+    }
+
+    return {
+      taskUid: task.uid ?? task.taskUid,
+      deletedCount: documentIds.length,
+    }
+  } catch (error) {
+    if (error instanceof SearchTaskError) throw error
+    if (isTaskWaitTimeout(error)) {
+      throw new Error(
+        'Document deletion status timed out. The Meilisearch task may still be running.',
+        { cause: error },
+      )
+    }
+    throw wrapSearchError('Document deletion failed.', error)
+  }
+}
+
+type DocumentListClient = {
+  index(indexName: string): {
+    // fields is the literal this helper ever fetches, not a general string:
+    // the engine client is generic over the document shape, and a wide
+    // string[] does not satisfy its per-shape field union.
+    getDocuments(params?: {
+      limit?: number
+      offset?: number
+      fields?: Array<'id'>
+    }): Promise<{ results: Array<{ id: string }> }>
+  }
+}
+
+/**
+ * Lists every document id in the index, oldest first, for the parity
+ * reconciler. Only the primary key is fetched; the record of what should be
+ * indexed lives in Postgres, so the index is never asked for content here.
+ */
+export async function listDocumentIds(
+  client: DocumentListClient,
+  indexName: string,
+  pageSize = 1000,
+): Promise<string[]> {
+  const ids: string[] = []
+  try {
+    for (;;) {
+      const page = await client.index(indexName).getDocuments({
+        limit: pageSize,
+        offset: ids.length,
+        fields: ['id'],
+      })
+      ids.push(...page.results.map((document) => document.id))
+      if (page.results.length < pageSize) return ids
+    }
+  } catch (error) {
+    throw wrapSearchError('Document listing failed.', error)
+  }
+}
+
+interface EngineSearchOptions {
+  filter?: string[]
+  sort?: string[]
+  attributesToRetrieve?: string[]
+  limit?: number
+  matchingStrategy?: 'all' | 'frequency'
+  rankingScoreThreshold?: number
+  showRankingScore?: boolean
+}
+
+export async function search(
+  client: SearchClient,
+  indexName: string,
+  query: string,
+  filters: LegalSearchFilters = {},
+  options: LegalSearchOptions = {},
+): Promise<LegalSearchResult> {
+  // Built before the try: a malformed filter is the caller's input error, and
+  // wrapping it as a provider failure would hide which filter was wrong behind
+  // a generic "Search failed."
+  const filter = toMeiliFilters(filters)
+
+  try {
+    const searchOptions: EngineSearchOptions = {
+      filter,
+      sort: ['dateDecided:desc'],
+      matchingStrategy:
+        options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
+      showRankingScore: true,
+      attributesToRetrieve:
+        options.includeParagraphs || options.includeSnippets
+          ? [...searchSummaryAttributes, 'paragraphs']
+          : searchSummaryAttributes,
+    }
+    if (typeof options.limit === 'number') searchOptions.limit = options.limit
+    if (query && options.rankingScoreThreshold !== null) {
+      searchOptions.rankingScoreThreshold =
+        options.rankingScoreThreshold ??
+        legalSearchIndexSettings.rankingScoreThreshold
+    }
+
+    const providerSearchStartedAt = performance.now()
+    // A recognised citation searches as a phrase: the caller already knows
+    // what it is looking for, so keyword neighbours are noise, not recall.
+    const trimmedPhrase = options.exactPhrase?.trim()
+    const engineQuery = trimmedPhrase
+      ? toExactPhraseQuery(trimmedPhrase)
+      : query
+    const result = await client
+      .index(indexName)
+      .search(engineQuery, searchOptions)
+    const providerSearchTimeMs = performance.now() - providerSearchStartedAt
+    const clientProcessingStartedAt = performance.now()
+    const hits: LegalSearchHit[] = result.hits.map((hit) => {
+      const parsedHit =
+        options.includeParagraphs || options.includeSnippets
+          ? LegalAuthoritySchema.parse(hit)
+          : LegalAuthoritySummarySchema.parse(hit)
+      // SAFETY: Meilisearch hit is external JSON; _rankingScore is engine metadata outside LegalAuthority schema, read via named EngineRankingHit interface after schema parse
+      const engineRankingScore = readEngineRankingScore(hit as EngineRankingHit)
+      return engineRankingScore === undefined
+        ? parsedHit
+        : { ...parsedHit, engineRankingScore }
+    })
+    const rankedHits = rankLegalSearchHitsByExactMatch(
+      hits.map((hit) => ({
+        ...hit,
+        snippets: options.includeSnippets
+          ? extractLegalSearchSnippets(hit, query)
+          : undefined,
+      })),
+      query,
+    ).map((hit) => {
+      if (options.includeParagraphs) return hit
+      const { paragraphs: _paragraphs, ...summary } = hit
+      return summary
+    })
+
+    return {
+      hits: rankedHits,
+      // Echo the caller's query, not the engine phrase form of it.
+      query: trimmedPhrase ? query : (result.query ?? query),
+      estimatedTotalHits: result.estimatedTotalHits ?? rankedHits.length,
+      processingTimeMs: result.processingTimeMs ?? 0,
+      diagnostics: {
+        providerSearchTimeMs,
+        clientProcessingTimeMs: performance.now() - clientProcessingStartedAt,
+      },
+    }
+  } catch (error) {
+    throw wrapSearchError('Search failed.', error)
+  }
+}
+
+export function extractLegalSearchSnippets(
+  hit: LegalSearchHit,
+  query: string,
+): LegalSearchSnippet[] {
+  const paragraphs = hit.paragraphs ?? []
+  const normalizedQuery = normalizeExactMatchValue(query)
+  const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
+  // Normalizing is the expensive part on real judgments, so each paragraph is
+  // normalized once here and the result carried through to the mapping step.
+  const selectedParagraphs =
+    tokens.length > 0
+      ? paragraphs
+          .map((paragraph, index) => {
+            const normalizedText = normalizeExactMatchValue(paragraph.text)
+            return {
+              paragraph,
+              index,
+              normalizedText,
+              score: snippetMatchScore(normalizedText, normalizedQuery, tokens),
+            }
+          })
+          .filter(({ score }) => score > 0)
+          .sort(
+            (left, right) =>
+              right.score - left.score || left.index - right.index,
+          )
+          .slice(0, 2)
+      : []
+
+  return selectedParagraphs.map(({ paragraph, index, normalizedText }) => ({
+    evidenceId: createJudgmentParagraphEvidenceId(hit.id, index + 1),
+    paragraphNumber: paragraph.paragraphNumber,
+    // Excerpting reads the raw text so the returned snippet keeps its original
+    // casing and punctuation.
+    text: trimSnippetText(paragraph.text, normalizedText, tokens),
+    matchedTerms: matchedSnippetTerms(normalizedText, normalizedQuery, tokens),
+    matchReason: 'body_text_match',
+  }))
+}
+
+/**
+ * Anchors evidence to a paragraph's position in the document, not to the number
+ * the judgment prints beside it.
+ *
+ * Those are not the same thing. LegalDocML marks block-quoted paragraphs from a
+ * cited judgment as paragraphs in their own right, carrying the quoted case's
+ * numbering, and appendices restart at 1. Both put duplicate `paragraphNumber`
+ * values in one document — measured at 22 duplicates in a 159-paragraph UKSC
+ * judgment, and in 6 of 15 sampled documents across courts. Keying evidence on
+ * that number gives two different paragraphs the same evidence id, so a
+ * citation cannot identify what it cites.
+ *
+ * `ordinal` is 1-based position in the document's paragraph array, which the
+ * parsers already assign uniquely. `paragraphNumber` is unchanged and remains
+ * what a reader is shown, because "at [42]" has to say what the judgment says.
+ */
+export function createJudgmentParagraphEvidenceId(
+  documentId: string,
+  ordinal: number,
+) {
+  return `${documentId}:judgment_paragraph:${ordinal}`
+}
+
+function matchedSnippetTerms(
+  normalizedText: string,
+  normalizedQuery: string,
+  tokens: string[],
+) {
+  if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
+    return [normalizedQuery]
+  }
+
+  return tokens.filter((token) => containsWholeTerm(normalizedText, token))
+}
+
+function snippetMatchScore(
+  normalizedText: string,
+  normalizedQuery: string,
+  tokens: string[],
+) {
+  if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
+    return 3
+  }
+  if (tokens.every((token) => containsWholeTerm(normalizedText, token)))
+    return 2
+  if (tokens.some((token) => containsWholeTerm(normalizedText, token))) return 1
+  return 0
+}
+
+/**
+ * Body match tiers read `paragraphs`, falling back to `snippets`. A caller that
+ * retrieves neither leaves every hit on tier 0 for body text, so ranking
+ * collapses onto the engine score. Pass `includeParagraphs` or `includeSnippets`
+ * to `search` if body tiers should participate.
+ */
+export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
+  hits: T[],
+  query: string,
+): T[] {
+  const normalizedQuery = normalizeExactMatchValue(query)
+  if (!normalizedQuery) return hits
+
+  return (
+    hits
+      .map((hit, index) => ({
+        hit,
+        index,
+        matchTier: legalSearchMatchTier(hit, normalizedQuery),
+        courtSeniority: courtSeniorityForRanking(hit.court),
+        engineRankingScore:
+          validEngineRankingScore(hit.engineRankingScore) ?? 0,
+      }))
+      // Legal match tiers express user intent. Within a tier the higher
+      // court goes first: for an ambiguous party name the apex-court
+      // decision is usually the wanted one, and a bare surname otherwise
+      // drowns it under dozens of same-tier lower-court title matches.
+      // Engine scores break remaining ties, then ties preserve the
+      // caller's or engine's supplied order. An
+      // equal engine score is not equal engine relevance: it is one lossy number
+      // summarising the words, typo, proximity, attribute, exactness and sort
+      // cascade, so the supplied order still carries signal the score has lost.
+      .sort(
+        (left, right) =>
+          right.matchTier - left.matchTier ||
+          right.courtSeniority - left.courtSeniority ||
+          right.engineRankingScore - left.engineRankingScore ||
+          left.index - right.index,
+      )
+      .map(({ hit }) => hit)
+  )
+}
+
+/**
+ * Precedent hierarchy for within-tier ranking: UKSC, then the Privy Council,
+ * then the Court of Appeal divisions, then the High Court, then anything
+ * else (unreported and unknown courts). Only ever a tiebreak inside one
+ * match tier, so an exact citation or id match never loses to it.
+ */
+function courtSeniorityForRanking(court: string | null | undefined) {
+  const normalized = court?.trim().toLowerCase() ?? ''
+  if (normalized === 'uksc') return 4
+  if (normalized === 'ukpc') return 3
+  if (normalized.startsWith('ewca')) return 2
+  if (normalized.startsWith('ewhc')) return 1
+  return 0
+}
+
+function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
+  const normalizedTitle = normalizeExactMatchValue(hit.title)
+
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 9
+  if (
+    normalizeCitationValue(hit.neutralCitation) ===
+    normalizeCitationValue(normalizedQuery)
+  )
+    return 8
+  if (normalizedTitle === normalizedQuery) return 7
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 6
+  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 5
+  // A title carrying one distinctive query term outranks any body mention.
+  // A misspelled party query defeats every whole-title tier, and without
+  // this the title-bearing judgment ties the body mentions and loses on the
+  // seniority tiebreak. Title evidence still ranks below every whole-title
+  // tier, so full title matches keep their priority.
+  if (titleContainsAnySearchableQueryTerm(normalizedTitle, normalizedQuery))
+    return 4
+
+  const bodySegments = hit.paragraphs?.length
+    ? hit.paragraphs.map(({ text }) => text)
+    : (hit.snippets?.map(({ text }) => text) ?? [])
+  const normalizedSegments = bodySegments.map(normalizeExactMatchValue)
+  if (
+    normalizedSegments.some((text) => containsWholeTerm(text, normalizedQuery))
+  ) {
+    return 3
+  }
+
+  const normalizedBody = normalizedSegments.join(' ')
+  if (containsEveryNormalizedQueryTerm(normalizedBody, normalizedQuery))
+    return 2
+  if (containsAnyNormalizedQueryTerm(normalizedBody, normalizedQuery)) return 1
+  return 0
+}
+
+function readEngineRankingScore(hit: EngineRankingHit) {
+  return validEngineRankingScore(hit._rankingScore)
+}
+
+function validEngineRankingScore(value: unknown) {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+    ? value
+    : undefined
+}
+
+export const exactMatchPunctuationFolds = [
+  ['‘', "'"],
+  ['’', "'"],
+  ['“', '"'],
+  ['”', '"'],
+  ['‐', '-'],
+  ['‑', '-'],
+  ['‒', '-'],
+  ['–', '-'],
+  ['—', '-'],
+  ['―', '-'],
+] as const
+
+export function normalizeExactMatchValue(value: string | null | undefined) {
+  const punctuationFolded = exactMatchPunctuationFolds.reduce(
+    (normalized, [from, to]) => normalized.replaceAll(from, to),
+    value?.normalize('NFKC') ?? '',
+  )
+
+  return punctuationFolded
+    .trim()
+    .toLocaleLowerCase('en-GB')
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * Citation-strength normalization: everything `normalizeExactMatchValue` does,
+ * plus dropping leading zeros from digit runs.
+ *
+ * Tribunals pad the number in a neutral citation and the senior courts do not.
+ * Find Case Law returns `[2024] UKUT 00236 (IAC)` and `[2024] UKFTT 001074 (TC)`
+ * alongside `[2024] UKSC 22`. A reader types the unpadded form, because that is
+ * what the tribunal's own headnote and every citing judgment print, so exact
+ * citation matching missed every padded citation and quietly degraded to
+ * keyword search across UKUT and UKFTT.
+ *
+ * Applied to both sides of a citation comparison, never to titles: a title may
+ * legitimately contain a zero-padded number that is part of a name.
+ */
+export function normalizeCitationValue(value: string | null | undefined) {
+  return normalizeExactMatchValue(value).replace(
+    /(?<![\p{L}\p{M}\p{N}_])0+(\d)/gu,
+    '$1',
+  )
+}
+
+/**
+ * Normalizes both arguments before checking that every whitespace-delimited
+ * query term appears as a whole term.
+ */
+export function containsEveryQueryTerm(value: string, query: string) {
+  return containsEveryNormalizedQueryTerm(
+    normalizeExactMatchValue(value),
+    normalizeExactMatchValue(query),
+  )
+}
+
+function containsEveryNormalizedQueryTerm(
+  normalizedValue: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return (
+    terms.length > 0 &&
+    terms.every((term) => containsWholeTerm(normalizedValue, term))
+  )
+}
+
+/**
+ * Title form of the every-term check (rank tier 5): a term also matches as
+ * the initials of consecutive title words. Parties are routinely cited by
+ * acronym (FCA for the Financial Conduct Authority), and the acronym never
+ * appears in the decision's own title, so a literal-only check caps such
+ * queries at the body tiers while dozens of citing judgments carry the
+ * literal phrase and outrank the decision itself. Title-only: prose throws
+ * up accidental initialisms everywhere, so body matching stays literal.
+ *
+ * Both arguments must already be normalized with `normalizeExactMatchValue`.
+ * Exported so the API's served match-reason labels read the same title
+ * evidence the rank tiers do; a second local definition would let ranking
+ * and labels drift.
+ */
+export function titleContainsEveryQueryTerm(
+  normalizedTitle: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  if (terms.length === 0) return false
+  const titleWords = normalizedTitle.split(' ').filter(Boolean)
+  return terms.every(
+    (term) =>
+      containsWholeTerm(normalizedTitle, term) ||
+      isTitleAcronym(term, titleWords),
+  )
+}
+
+/**
+ * Title-partial check (rank tier 4): one distinctive query term in the
+ * title. Stop words and single-character terms never count, so the "v"
+ * every party name carries cannot promote a title on its own. Title-only,
+ * like the every-term check it refines: prose throws up accidental matches.
+ *
+ * Both arguments must already be normalized with `normalizeExactMatchValue`.
+ * Exported for served-label parity, as `titleContainsEveryQueryTerm` is.
+ */
+export function titleContainsAnySearchableQueryTerm(
+  normalizedTitle: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return terms.some(
+    (term) =>
+      term.length > 1 &&
+      !legalStopWordSet.has(term) &&
+      containsWholeTerm(normalizedTitle, term),
+  )
+}
+
+/** A term of two or more letters matching the first letters of that many
+ * consecutive title words: FCA against financial conduct authority. */
+function isTitleAcronym(term: string, titleWords: string[]) {
+  if (term.length < 2) return false
+  return titleWords.some((_, start) =>
+    term
+      .split('')
+      .every((letter, offset) => titleWords[start + offset]?.[0] === letter),
+  )
+}
+
+function containsAnyNormalizedQueryTerm(
+  normalizedValue: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return terms.some((term) => containsWholeTerm(normalizedValue, term))
+}
+
+// Terms come from user queries, so the key space is unbounded and the cache
+// needs an explicit ceiling.
+const wholeTermPatterns = new Map<string, RegExp>()
+const wholeTermPatternLimit = 500
+
+function wholeTermPattern(term: string) {
+  const cached = wholeTermPatterns.get(term)
+  if (cached) return cached
+
+  // No `g` or `y` flag, so the pattern holds no `lastIndex` state and stays
+  // safe to reuse across calls.
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
+    'u',
+  )
+  wholeTermPatterns.set(term, pattern)
+
+  const oldestTerm = wholeTermPatterns.keys().next().value
+  if (wholeTermPatterns.size > wholeTermPatternLimit && oldestTerm) {
+    wholeTermPatterns.delete(oldestTerm)
+  }
+
+  return pattern
+}
+
+/**
+ * Checks normalized text and term values for a whole-term match. Normalize
+ * both inputs with `normalizeExactMatchValue` before calling this helper.
+ */
+export function containsWholeTerm(value: string, term: string) {
+  if (!term) return false
+  return wholeTermPattern(term).test(value)
+}
+
+function firstWholeTermIndex(value: string, terms: string[]) {
+  const indexes = terms
+    .map((term) =>
+      term ? (wholeTermPattern(term).exec(value)?.index ?? -1) : -1,
+    )
+    .filter((index) => index >= 0)
+
+  return indexes.length > 0 ? Math.min(...indexes) : -1
+}
+
+function escapeRegularExpression(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function trimSnippetText(text: string, matchText: string, tokens: string[]) {
+  const displayText = text.replace(/\s+/g, ' ').trim()
+  const maxLength = 240
+  if (displayText.length <= maxLength) return displayText
+
+  // Locating the excerpt with indexOf would centre the window on a substring
+  // hit such as "test" inside "testimony", which is the defect whole-term
+  // matching removed everywhere else. matchText has already received the
+  // index normalization during paragraph selection.
+  const matchIndex = Math.max(firstWholeTermIndex(matchText, tokens), 0)
+  const normalizedStart = Math.max(matchIndex - 80, 0)
+  const matchPrefix = displayText.slice(0, matchIndex)
+  // ASCII, precomposed Latin-1 letters, and the folded punctuation are
+  // length-preserving under this normalization. For other text, verify that
+  // the normalized prefix still maps one-to-one before slicing.
+  const offsetsAlign =
+    /^[\x20-\x7E\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF‘’“”‐‑‒–—―]*$/u.test(
+      matchPrefix,
+    ) || normalizeExactMatchValue(`${matchPrefix}x`).length - 1 === matchIndex
+  const start = offsetsAlign
+    ? normalizedStart
+    : normalizedSnippetOffset(displayText, normalizedStart)
+  const end = Math.min(start + maxLength, displayText.length)
+  const excerpt = displayText.slice(start, end).trim()
+
+  return `${start > 0 ? '...' : ''}${excerpt}${end < displayText.length ? '...' : ''}`
+}
+
+function normalizedSnippetOffset(text: string, offset: number) {
+  let low = 0
+  let high = text.length
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (normalizeExactMatchValue(text.slice(0, middle)).length < offset) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+
+  return low
+}
+
+function validationFailure(
+  documents: unknown[],
+  messages: string[],
+): SearchIndexDocumentsResult {
+  const first = documents[0]
+  const recordId =
+    typeof first === 'object' && first !== null && 'id' in first
+      ? first.id
+      : undefined
+
+  return {
+    indexedCount: 0,
+    failedCount: documents.length,
+    errors: [
+      {
+        recordId: typeof recordId === 'string' ? recordId : null,
+        message: messages.join('; '),
+      },
+    ],
+  }
+}
+
+export async function getDocument(
+  client: DocumentReadClient,
+  indexName: string,
+  documentId: string,
+): Promise<LegalAuthority> {
+  try {
+    const document = await client.index(indexName).getDocument(documentId)
+    return LegalAuthoritySchema.parse(document)
+  } catch (error) {
+    throw wrapSearchError('Document lookup failed.', error)
+  }
+}
+
+export type SearchIndexStatus = 'ready' | 'empty' | 'missing' | 'unreachable'
+
+export interface SearchIndexState {
+  status: SearchIndexStatus
+  /** False for unreachable too: the index was not confirmed present. */
+  exists: boolean
+  /** Null when the probe failed before the server answered. */
+  documentCount: number | null
+  /** Provider error code (for example `index_not_found`, `invalid_api_key`)
+   * or `timeout` / `connection_failed`. Codes only, never key material. */
+  reason?: string
+}
+
+type IndexStatsClient = {
+  index(indexName: string): {
+    getStats(): Promise<{ numberOfDocuments: number }>
+  }
+}
+
+class SearchIndexProbeTimeout extends Error {
+  constructor(timeoutMs: number) {
+    super(`Search index probe timed out after ${timeoutMs}ms.`)
+    this.name = 'SearchIndexProbeTimeout'
+  }
+}
+
+/**
+ * Readiness probe for the product index: does it exist and roughly how many
+ * documents does it hold. Never rejects — every failure mode is returned as
+ * data so readiness and the boot check can report it instead of throwing it.
+ */
+export async function getIndexStatus(
+  client: IndexStatsClient,
+  indexName: string,
+  timeoutMs = 2000,
+): Promise<SearchIndexState> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new SearchIndexProbeTimeout(timeoutMs)),
+      timeoutMs,
+    )
+    timer.unref?.()
+  })
+
+  try {
+    const stats = await Promise.race([
+      client.index(indexName).getStats(),
+      timeout,
+    ])
+    return stats.numberOfDocuments > 0
+      ? {
+          status: 'ready',
+          exists: true,
+          documentCount: stats.numberOfDocuments,
+        }
+      : { status: 'empty', exists: true, documentCount: 0 }
+  } catch (error) {
+    if (error instanceof SearchIndexProbeTimeout) {
+      return {
+        status: 'unreachable',
+        exists: false,
+        documentCount: null,
+        reason: 'timeout',
+      }
+    }
+    const code = searchProviderCode(error)
+    if (code === 'index_not_found') {
+      return {
+        status: 'missing',
+        exists: false,
+        documentCount: 0,
+        reason: code,
+      }
+    }
+    return {
+      status: 'unreachable',
+      exists: false,
+      documentCount: null,
+      reason:
+        error instanceof TypeError ? 'connection_failed' : (code ?? 'unknown'),
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+type SearchProviderErrorBody = {
+  code?: string
+  message?: string
+  cause?: SearchProviderErrorBody
+}
+
+function searchProviderErrorBody(
+  error: unknown,
+): SearchProviderErrorBody | null {
+  if (typeof error !== 'object' || error === null) return null
+
+  const body: SearchProviderErrorBody = {}
+  if ('code' in error && typeof error.code === 'string') {
+    body.code = error.code
+  }
+  if ('message' in error && typeof error.message === 'string') {
+    body.message = error.message
+  }
+  if ('cause' in error) {
+    const nested = searchProviderErrorBody(error.cause)
+    if (nested) body.cause = nested
+  }
+  return body
+}
+
+/** Meilisearch error code off the error or its cause; null when neither carries one. */
+function searchProviderCode(error: unknown): string | null {
+  const body = searchProviderErrorBody(error)
+  return body?.code ?? body?.cause?.code ?? null
+}
+
+/**
+ * A settings route the server does not have, as opposed to a request it
+ * rejected. Meilisearch answers 404 for a route that does not exist in its
+ * version, and that is the only shape treated as "unsupported": a 400 means the
+ * value was wrong, which is a bug here rather than an old server.
+ */
+function isUnsupportedSettingError(error: unknown) {
+  // MeiliSearchApiError carries the raw Response. A 404 from a settings route
+  // means the route is absent from this server's version.
+  return (
+    error instanceof Error &&
+    'response' in error &&
+    error.response instanceof Response &&
+    error.response.status === 404
+  )
+}
+
+/**
+ * Applies a setting the server may not have, checking with a read first.
+ *
+ * The read is not politeness. Writing to a settings route Meilisearch 1.8.3 does
+ * not have returns 404 and then wedges the index: measured with plain curl, a
+ * `stop-words` write succeeds 5 times out of 5 on its own at 67ms, and times out
+ * 4 times out of 5 when it follows a `prefix-search` write to the absent route.
+ * A read of the same absent route is harmless — 5 out of 5, same 67ms — so
+ * support is established by reading and the unsupported write is never sent.
+ *
+ * Catching the write's 404 is therefore not enough. The damage is done by
+ * issuing it, and it lands on whatever request comes next, which makes it look
+ * like an unrelated flake somewhere downstream.
+ */
+async function applyOptionalSetting(
+  name: string,
+  probe: () => Promise<string>,
+  task: () => SearchEnqueuedTaskPromise,
+  allowUnsupported: boolean,
+  unsupported: string[],
+) {
+  if (allowUnsupported) {
+    try {
+      await probe()
+    } catch (error) {
+      if (!isUnsupportedSettingError(error)) throw error
+      unsupported.push(name)
+      return
+    }
+  }
+
+  await waitForSucceededTask(task(), indexSetupTaskTimeoutMs)
+}
+
+function isTaskWaitTimeout(error: unknown) {
+  return error instanceof Error && /timed out|timeout/i.test(error.message)
+}
+
+async function waitForSucceededTask(
+  task: SearchEnqueuedTaskPromise,
+  timeout = 30_000,
+): Promise<SearchIndexingTask> {
+  const completed = await task.waitTask({ timeout, interval: 100 })
+  if (completed.status !== 'succeeded') {
+    throw new SearchTaskError(completed)
+  }
+  return completed
+}
+
+function indexingTaskFailure(
+  failedCount: number,
+  task: SearchIndexingTask,
+  indexedCount = 0,
+): SearchIndexDocumentsResult {
+  const taskId = task.uid ?? task.taskUid
+  const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
+  const errorCode = task.error?.code ?? task.error?.type
+  const errorLabel = errorCode ? ` (${errorCode})` : ''
+
+  return {
+    indexedCount,
+    failedCount,
+    errors: [
+      {
+        recordId: null,
+        message: `Indexing task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`,
+      },
+    ],
+  }
+}
+
+function toMeiliFilters(filters: LegalSearchFilters): string[] | undefined {
+  const clauses: string[] = []
+
+  if (filters.court) clauses.push(`court = ${quoteFilter(filters.court)}`)
+  if (filters.jurisdiction)
+    clauses.push(`jurisdiction = ${quoteFilter(filters.jurisdiction)}`)
+  if (filters.sourceType)
+    clauses.push(`sourceType = ${quoteFilter(filters.sourceType)}`)
+  if (filters.dateFrom)
+    clauses.push(
+      `${dateDecidedTimestampField} >= ${toFilterTimestamp('dateFrom', filters.dateFrom)}`,
+    )
+  if (filters.dateTo)
+    clauses.push(
+      `${dateDecidedTimestampField} <= ${toFilterTimestamp('dateTo', filters.dateTo)}`,
+    )
+
+  return clauses.length > 0 ? clauses : undefined
+}
+
+/**
+ * A malformed bound is rejected rather than dropped. Dropping it would widen the
+ * result set past what the caller asked for and return dates outside the
+ * requested range as though they belonged.
+ */
+function toFilterTimestamp(
+  field: 'dateFrom' | 'dateTo',
+  value: string,
+): number {
+  const timestamp = toDateDecidedTimestamp(value)
+
+  if (timestamp === null) {
+    throw new Error(`Search filter ${field} must be an ISO date (YYYY-MM-DD).`)
+  }
+
+  return timestamp
+}
+
+function quoteFilter(value: string) {
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+/**
+ * Builds a Meilisearch exact-phrase query from a recognised citation.
+ *
+ * Folds case, punctuation, and whitespace with the same function the
+ * citation comparison tier is built on, so the phrase and the tier agree on
+ * what a citation looks like. Leading zeros are deliberately kept: the index
+ * stores padded tribunal citations (`[2024] UKUT 00236 (IAC)`), and stripping
+ * them here would make a padded citation unfindable as a phrase while the
+ * comparison tier still calls it exact.
+ */
+export function toExactPhraseQuery(phrase: string) {
+  const normalized = normalizeExactMatchValue(phrase)
+  const escaped = normalized.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+  return `"${escaped}"`
+}
+
+function searchProviderMessage(error: unknown): string | null {
+  const body = searchProviderErrorBody(error)
+  const message = body?.message ?? body?.cause?.message
+  return typeof message === 'string' && message.length > 0
+    ? message.replace(/\.+$/, '')
+    : null
+}
+
+// The cause keeps the full provider object for diagnostics such as the
+// benchmark report. The wrapped message names the provider code and message
+// so operators can see payload_too_large; it must not include judgment text.
+function wrapSearchError(message: string, error: unknown): Error {
+  if (error instanceof SearchTaskError) {
+    return new Error(`${message} ${error.message}`, { cause: error })
+  }
+
+  const code = searchProviderCode(error)
+  const providerMessage = searchProviderMessage(error)
+  const isMeilisearchApiError =
+    error instanceof Error && error.name === 'MeiliSearchApiError'
+
+  if (code || isMeilisearchApiError) {
+    const detail = [code, providerMessage]
+      .filter((part): part is string => typeof part === 'string' && part !== '')
+      .join(': ')
+    const named = detail.length > 0 ? detail : 'MeiliSearchApiError'
+    return new Error(`${message} Search provider error: ${named}.`, {
+      cause: error,
+    })
+  }
+
+  const detail = error instanceof Error ? error.name : typeof error
+  return new Error(`${message} Search provider error: ${detail}.`, {
+    cause: error,
+  })
+}
+
+function isIndexAlreadyExistsError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+
+  if ('code' in error && error.code === 'index_already_exists') {
+    return true
+  }
+
+  const cause = 'cause' in error ? error.cause : undefined
+  if (
+    typeof cause === 'object' &&
+    cause !== null &&
+    'code' in cause &&
+    cause.code === 'index_already_exists'
+  ) {
+    return true
+  }
+
+  // Meilisearch v1.53 enqueues index creation, so a duplicate surfaces as a
+  // failed waitTask: SearchTaskError('Meilisearch task <n> failed
+  // (index_already_exists).') with no .code/.cause. Match the async form here.
+  return error instanceof Error && /index_already_exists/.test(error.message)
+}
+
+export {
+  createLegislationIndex,
+  getLegislationProvision,
+  indexLegislationProvisions,
+  isLegislationProvisionDocument,
+  legislationSearchIndexSettings as legislationIndexSettings,
+  normalizeLegislationQuery,
+  searchLegislation,
+} from './legislation-index'
+export type {
+  AppliedLegislationSearchParameters,
+  LegislationProvisionDocument,
+  LegislationSearchHit,
+  LegislationSearchOptions,
+  LegislationSearchResult,
+} from './legislation-index'

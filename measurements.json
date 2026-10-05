@@ -1,0 +1,391 @@
+[
+  {
+    "stage": "baseline",
+    "data": {
+      "sheetCount": 1,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "794px",
+          "styleHeightPx": "1123px",
+          "rectW": 794,
+          "rectH": 1123,
+          "textHead": "IN THE HIGH COURT OF JUSTICE KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKEL"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "602px",
+          "styleMarginLeftPx": "96px",
+          "styleHeightPx": "931px",
+          "rectW": 602
+        }
+      ],
+      "controls": {
+        "margins": "",
+        "pageSize": "",
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "margins-narrow",
+    "data": {
+      "sheetCount": 1,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "794px",
+          "styleHeightPx": "1123px",
+          "rectW": 794,
+          "rectH": 1123,
+          "textHead": "IN THE HIGH COURT OF JUSTICE KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKEL"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "698px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1027px",
+          "rectW": 698
+        }
+      ],
+      "controls": {
+        "margins": "narrow",
+        "pageSize": "",
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "orientation-landscape",
+    "data": {
+      "sheetCount": 1,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "1123px",
+          "styleHeightPx": "794px",
+          "rectW": 1123,
+          "rectH": 794,
+          "textHead": "IN THE HIGH COURT OF JUSTICE KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKEL"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "1027px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "698px",
+          "rectW": 1027
+        }
+      ],
+      "controls": {
+        "margins": "narrow",
+        "pageSize": "a4",
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "orientation-portrait",
+    "data": {
+      "sheetCount": 1,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "794px",
+          "styleHeightPx": "1123px",
+          "rectW": 794,
+          "rectH": 1123,
+          "textHead": "IN THE HIGH COURT OF JUSTICE KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKEL"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "698px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1027px",
+          "rectW": 698
+        }
+      ],
+      "controls": {
+        "margins": "narrow",
+        "pageSize": "a4",
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "pagesize-legal",
+    "data": {
+      "sheetCount": 1,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "IN THE HIGH COURT OF JUSTICE KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKEL"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        }
+      ],
+      "controls": {
+        "margins": "narrow",
+        "pageSize": "legal",
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "caret-after-focus",
+    "data": {
+      "activeTag": "TEXTAREA",
+      "activeLabel": "Paragraph text",
+      "paragraphId": "para-000001",
+      "selectionStart": 28,
+      "selectionEnd": 28,
+      "inputValueHead": "IN THE HIGH COURT OF JUSTICE",
+      "pageBreakDisabled": null,
+      "pageBreakCount": 0,
+      "pageBreakEnabled": null,
+      "sectionBreakEnabled": null
+    }
+  },
+  {
+    "stage": "caret-after-insert-tab",
+    "data": {
+      "activeTag": "BUTTON",
+      "activeLabel": null,
+      "paragraphId": null,
+      "selectionStart": null,
+      "selectionEnd": null,
+      "inputValueHead": null,
+      "pageBreakDisabled": null,
+      "pageBreakCount": 1,
+      "pageBreakEnabled": true,
+      "sectionBreakEnabled": true
+    }
+  },
+  {
+    "stage": "page-break-poll",
+    "data": {
+      "sheetsBefore": 1,
+      "afterPageBreak": 1,
+      "increased": false
+    }
+  },
+  {
+    "stage": "page-break",
+    "data": {
+      "sheetCount": 1,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "IN THE HIGH COURT OF JUSTICE KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKEL"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        }
+      ],
+      "controls": {
+        "margins": null,
+        "pageSize": null,
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "section-break-poll",
+    "data": {
+      "before": 1,
+      "afterSectionBreak": 2,
+      "increased": true
+    }
+  },
+  {
+    "stage": "section-break",
+    "data": {
+      "sheetCount": 2,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "IN THE HIGH COURT OF JUSTICE"
+        },
+        {
+          "index": 2,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKELETON ARGUMENT OF THE CLAIMANT"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        },
+        {
+          "index": 2,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        }
+      ],
+      "controls": {
+        "margins": null,
+        "pageSize": null,
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "saved",
+    "data": {
+      "sheetCount": 2,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "IN THE HIGH COURT OF JUSTICE"
+        },
+        {
+          "index": 2,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKELETON ARGUMENT OF THE CLAIMANT"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        },
+        {
+          "index": 2,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        }
+      ],
+      "controls": {
+        "margins": null,
+        "pageSize": null,
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "reloaded",
+    "data": {
+      "sheetCount": 2,
+      "sheets": [
+        {
+          "index": 1,
+          "styleWidthPx": "794px",
+          "styleHeightPx": "1123px",
+          "rectW": 794,
+          "rectH": 1123,
+          "textHead": "IN THE HIGH COURT OF JUSTICE"
+        },
+        {
+          "index": 2,
+          "styleWidthPx": "816px",
+          "styleHeightPx": "1344px",
+          "rectW": 816,
+          "rectH": 1344,
+          "textHead": "KING'S BENCH DIVISION Claim No: REF/2024/0123 BETWEEN: Mr James Cartwright (Claimant) and Mrs Sarah Chen (Defendant) SKELETON ARGUMENT OF THE CLAIMANT"
+        }
+      ],
+      "bodies": [
+        {
+          "index": 1,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        },
+        {
+          "index": 2,
+          "styleWidthPx": "720px",
+          "styleMarginLeftPx": "48px",
+          "styleHeightPx": "1248px",
+          "rectW": 720
+        }
+      ],
+      "controls": {
+        "margins": "narrow",
+        "pageSize": "legal",
+        "orientationPressed": null
+      },
+      "headingSheetIndex": 1
+    }
+  },
+  {
+    "stage": "consoleErrors",
+    "data": []
+  },
+  {
+    "stage": "failedRequests",
+    "data": [
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED",
+      "PUT http://localhost:3005/api/documents/doc_d948e125-93ca-48bd-ba81-865b0bc76520/collaboration/presence :: net::ERR_ABORTED"
+    ]
+  }
+]

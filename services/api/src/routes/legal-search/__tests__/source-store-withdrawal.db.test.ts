@@ -1,0 +1,96 @@
+import { createTestPool } from '../../../test-database.test-support'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { createPostgresLegalAuthoritySourceStore } from '../source-store'
+
+/**
+ * Withdrawal surfacing against the real Postgres record store: a row marked
+ * withdrawn (the checker writes provider_json.withdrawn, simulated here with
+ * the same merge) still reads back by id with its flag set, so the document
+ * route can answer with the banner instead of full text. Requires
+ * TEST_DATABASE_URL.
+ */
+
+const documentId = 'db-test-withdrawn-2026-1'
+
+const authority = {
+  id: documentId,
+  title: 'Withdrawn Test Judgment Concerning Fiduciary Appendix',
+  neutralCitation: null,
+  court: 'uksc',
+  jurisdiction: 'england-and-wales',
+  dateDecided: '2026-01-15',
+  sourceType: 'judgment' as const,
+  sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2026/1',
+  paragraphs: [
+    {
+      id: `${documentId}-p1`,
+      documentId,
+      paragraphNumber: 1,
+      text: 'The fiduciary appendix sets out the duties owed in this withdrawn test judgment.',
+    },
+  ],
+}
+
+const provider = {
+  documentUri: '/uksc/2026/1',
+  sourceUri: '/uksc/2026/1',
+  xmlUri: '/uksc/2026/1/data.xml',
+  pdfUri: null,
+  contentHash: 'dbtest123',
+  rawAtomEntry: '<entry />',
+}
+
+const withdrawn = {
+  at: '2026-09-01T00:00:00.000Z',
+  checkedUris: ['/uksc/2026/1', '/uksc/2026/1/data.xml'],
+  runIds: ['run-0', 'run-1'],
+}
+
+describe('postgres legal authority source store withdrawals', () => {
+  const pool = createTestPool()
+  const store = createPostgresLegalAuthoritySourceStore(pool)
+
+  beforeAll(async () => {
+    await store.upsertDocument(authority, provider)
+  })
+
+  afterAll(async () => {
+    await pool.query(
+      'delete from legal_source_withdrawal_audits where document_id = $1',
+      [documentId],
+    )
+    await pool.query(
+      'delete from legal_source_documents where document_id = $1',
+      [documentId],
+    )
+    await pool.end()
+  })
+
+  it('reads the row by id without a flag before withdrawal', async () => {
+    const record = await store.get(documentId)
+
+    expect(record?.document?.id).toBe(documentId)
+    expect(record?.withdrawn).toBeNull()
+  })
+
+  it('reports the withdrawn flag on get so the document route can banner it', async () => {
+    await pool.query(
+      `update legal_source_documents
+        set provider_json = legal_source_documents.provider_json || $2::jsonb,
+          updated_at = now()
+        where document_id = $1`,
+      [documentId, JSON.stringify({ withdrawn })],
+    )
+
+    const record = await store.get(documentId)
+    expect(record?.withdrawn).toEqual(withdrawn)
+    expect(record?.document?.id).toBe(documentId)
+  })
+
+  it('preserves the withdrawn flag across re-ingest upserts', async () => {
+    await store.upsertDocument(authority, provider)
+
+    const record = await store.get(documentId)
+    expect(record?.withdrawn).toEqual(withdrawn)
+  })
+})

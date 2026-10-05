@@ -1,0 +1,152 @@
+# legal-ingestor
+
+Bulk ingestion from Find Case Law into Postgres `legal_source_documents`
+only. The Meilisearch product index (`legal_authorities`) is derived and
+populated only by `bun run rebuild:search-index`; this service never writes it.
+The fixture seeder (`src/index.ts`) stays on `legal_authorities_fixtures`.
+
+## Configuration
+
+Both the API and this service read configuration through `@obiter/config`, so
+they fail on exactly the same input. `NODE_ENV` must be `production`, `test`, or
+`development`; a missing or unrecognised value stops the run before any write,
+unless `OBITER_LOCAL_DEVELOPMENT=1` opts into local development. Production
+additionally requires `MEILISEARCH_HOST`, `MEILISEARCH_ADMIN_API_KEY` and
+`LEGAL_AUTHORITIES_INDEX`. The `dev-key` Meilisearch fallback applies only in
+development.
+
+This service's `DATABASE_URL` is its own corpus writer connection. In the
+shared-corpus deployment it points at the shared corpus with the writer
+credential, and it is deliberately separate from the API's read-only
+`CORPUS_DATABASE_URL` and from the API's `CORPUS_WRITE_DATABASE_URL`, which is
+scoped to `obiter-live` hydration. No lane receives a corpus writer credential.
+
+## Legislation ingest (Stage 1)
+
+UK Public General Acts into Postgres `legislation_documents` /
+`legislation_provisions`. The script exists only in this package: run it
+from `services/legal-ingestor`, not the repo root.
+
+```bash
+# One Act (with the affected-changes effects pass)
+DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter bun run legislation:ingest --act=ukpga/2023/29
+
+# Whole years (default: 2020 through the current year)
+DATABASE_URL=... bun run legislation:ingest --years=2020,2021
+
+# Verification slice without the effects pass
+DATABASE_URL=... bun run legislation:ingest --years=2023 --max-acts=2 --skip-effects
+```
+
+Flags: `--act=ukpga/YYYY/N`, `--years=Y1,Y2`, `--max-acts=N`,
+`--gap-ms=MS` (default 5000, never below the site's Crawl-delay),
+`--skip-effects` (bare or `=1`),
+`--force-reparse` (bare or `=1`). `bun run legislation:ingest --help`
+prints usage and exits without touching env, the database, or upstream.
+Unknown flags fail with usage instead of being ignored.
+
+One sequential loop at the settled 5 s gap; re-runs compare content
+hashes per Act, so unchanged Acts report skipped-unchanged (provisions
+untouched, though the count note is re-derived from the re-fetched body
+so a stale flag from an older check clears). `--force-reparse` re-parses
+and re-stores even unchanged Acts, going through the same effects pass as
+a changed Act; it exists for parser changes that alter what rows are
+emitted (e.g. when container rows were added). Rows are only replaced
+after the effects pass has succeeded: a failed feed aborts before any
+write (old rows and their known-good withheld flags stay intact), and an
+unreadable feed (404 first page) is treated as "no information", never
+"no effects", so the replacement preserves known-good flags and defaults
+new rows to withheld. `--skip-effects` likewise defaults unchecked new
+rows to withheld (fail-closed), and preserves known-good flags on
+rewrites. A P1-count gap fully explained by BlockAmendment quoted
+inserts is healthy and stores unflagged; anything else (tokenizer drift,
+a no-IdURI P1 outside BlockAmendment, an addressable P1 with no row)
+stores flagged in `provision_count_note` and lands in the per-year
+mismatch list.
+
+## Commands (Find Case Law)
+
+```bash
+# Full measured scope (~38k docs, ~6h at the settled rate)
+DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter bun run bulk:ingest
+
+# Bounded slice (verification, trial runs)
+DATABASE_URL=... bun run bulk:ingest --court=uksc --max-pages=2
+DATABASE_URL=... bun run bulk:ingest --court=ewhc-kb --from-date=2024-01-01 --max-docs=200
+```
+
+Flags: `--court` (repeatable comma list, slash or dash form),
+`--from-date` / `--to-date` (apply when `--court` is given),
+`--max-pages`, `--max-docs`, `--gap-ms` (default 600).
+
+Default scope: UKSC, UKPC, EWCA-Civ, EWCA-Crim complete; EWHC divisions
+decided from 2020-01-01. Older EWHC is backfilled later by moving one date
+parameter.
+
+## Politeness
+
+Sequential loop, 600 ms between upstream requests (~1.5-2/s), the shared
+`createMojRateLimiter` sliding window as a backstop, `retry-after` honoured
+on 429. Well under the published 1000 requests per rolling 5 minutes, so a
+shared office IP never gets blocked; slow is cheaper than blocked.
+
+## Resume and idempotency
+
+`legal_ingestor_progress` records the last completed atom page per scope; a
+re-run continues from there. Documents compare `content_hash` before
+fetching bodies, so completed work is skipped without re-fetch. Corrections
+upstream land automatically: a changed hash re-fetches and upserts.
+
+Run summary counts per court: stored, skipped-unchanged, skipped-no-fulltext
+with reason, failed with reason. PDF-only judgments are stored as summaries
+so the rebuild still indexes them, and counted as skipped, never silently
+dropped.
+
+## Incremental catch-up
+
+The Find Case Law Atom feed is newest-first: judgments published since the
+last run land on page 1, ahead of the stored page cursor. Every run
+therefore re-polls pages 1..cursor before continuing past it. Stored
+documents compare `content_hash` before fetching bodies, so the re-poll
+costs only Atom page fetches plus one hash lookup per document — bodies
+are not re-fetched. Re-running the same command is the poller. Suggested
+schedule: weekly via cron or the existing job runner, e.g.
+
+```cron
+0 2 * * 0  cd /srv/obiter/sargassum/services/legal-ingestor && NODE_ENV=production DATABASE_URL=... bun run bulk:ingest
+```
+
+Name `NODE_ENV=production` in the job rather than inheriting it: a server
+worktree carrying a `NODE_ENV=development` `.env` would otherwise run the
+weekly write under development defaults, which is the case the fail-closed
+rule exists to stop. Production also requires `MEILISEARCH_HOST`,
+`MEILISEARCH_ADMIN_API_KEY` and `LEGAL_AUTHORITIES_INDEX` (from the worktree
+`.env` or the job environment).
+
+then `bun run rebuild:search-index` from the repo root.
+
+## Withdrawals (implemented, not scheduled, not authorised as a poll)
+
+`withdrawal:check` re-fetches stored document URIs from Find Case Law and, on a
+two-observation confirmation at least 24h apart, marks `provider_json.withdrawn`
+with an audit trail and removes the derived index copy. It never deletes the
+stored row. It is a real Archives-polling job. No systemd unit, timer, cron
+entry or container schedules it, and the corpus-only API decision
+(`docs/architecture.md`, 30 September 2026) does not authorise a standalone
+Archives poll: National Archives access is permitted only during an explicit
+indexing run. The unresolved product/licence decision is whether withdrawal
+detection folds into that indexing run or is handled another way. Until it is
+made, do not schedule this command. This is the TNA licence clause (a)(iii)
+obligation to remove material no longer published; it is not solved by
+leaving the command unscheduled.
+
+## Licensing provenance
+
+Every row carries `provider_json.provider=find-case-law`,
+`licenceClass=tna-transactional-2026-07-15`, `acquiredAt`, `sourceUrl`.
+Serving-side follow-ups (not in this service): render the acknowledgement
+"Crown copyright material reproduced by permission of The National Archives.
+The contents of the judgment can be used under the Open Justice - Licence.",
+keep judgment content out of search-engine indexing (robots/noindex), remove
+withdrawn material from publication on withdrawal handling, and state that
+coverage is partial.

@@ -1,0 +1,222 @@
+import {
+  AlignBottom,
+  AlignCenterVertical,
+  AlignTop,
+  ChatText,
+  Hash,
+  Image as ImageIcon,
+  Link,
+  LinkSimple,
+  SquareSplitHorizontal,
+  Swap,
+  Table,
+} from '@phosphor-icons/react'
+import {
+  CaptionButton,
+  IconButton,
+  RibbonSelect,
+  ToolbarGroup,
+  ToolbarRow,
+} from './ribbon-primitives'
+import { INDENT_OPTIONS } from '../../document-paragraph-format'
+import {
+  PAGE_SIZE_OPTIONS,
+  SECTION_MARGINS_OPTIONS,
+} from '../../document-section-format'
+import type { DocumentFormatToolbar } from './ribbon-types'
+
+const MARGIN_OPTIONS = [
+  { value: '', label: 'Custom' },
+  ...SECTION_MARGINS_OPTIONS,
+]
+
+const PAGE_SIZE_SELECT_OPTIONS = [
+  { value: '', label: 'Custom' },
+  ...PAGE_SIZE_OPTIONS,
+]
+
+const DOCUMENT_KINDS = [
+  { value: 'advice', label: 'Advice' },
+  { value: 'letter', label: 'Letter before action' },
+  { value: 'particulars', label: 'Particulars of claim' },
+  { value: 'defence', label: 'Defence' },
+  { value: 'witness', label: 'Witness statement' },
+  { value: 'skeleton', label: 'Skeleton argument' },
+  { value: 'order', label: 'Order' },
+]
+
+export function InsertRibbon({
+  commentsOpen,
+  commentCount,
+  onToggleComments,
+  onPageBreak,
+  onSectionBreak,
+  breakUnavailable,
+}: {
+  commentsOpen: boolean
+  commentCount: number
+  onToggleComments: () => void
+  onPageBreak: () => void
+  onSectionBreak: () => void
+  /** Set when a break cannot be placed at the current caret. */
+  breakUnavailable?: string
+}) {
+  const breaksDisabled = Boolean(breakUnavailable)
+  return (
+    <div
+      className="flex min-w-0 flex-wrap items-stretch"
+      role="toolbar"
+      aria-label="Insert"
+    >
+      <ToolbarGroup label="Breaks">
+        <ToolbarRow>
+          <IconButton
+            label="Page break"
+            disabled={breaksDisabled}
+            disabledReason={breakUnavailable}
+            onClick={onPageBreak}
+            icon={<AlignCenterVertical size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Section break"
+            disabled={breaksDisabled}
+            disabledReason={breakUnavailable}
+            onClick={onSectionBreak}
+            icon={<SquareSplitHorizontal size={16} aria-hidden />}
+          />
+        </ToolbarRow>
+      </ToolbarGroup>
+      <ToolbarGroup label="Tables">
+        <IconButton
+          label="Insert table"
+          soon
+          icon={<Table size={16} aria-hidden />}
+        />
+      </ToolbarGroup>
+      <ToolbarGroup label="Exhibits">
+        <IconButton
+          label="Picture"
+          soon
+          icon={<ImageIcon size={16} aria-hidden />}
+        />
+      </ToolbarGroup>
+      <ToolbarGroup label="Links">
+        <ToolbarRow>
+          <IconButton label="Link" soon icon={<Link size={16} aria-hidden />} />
+          <IconButton
+            label="Cross-reference"
+            soon
+            icon={<LinkSimple size={16} aria-hidden />}
+          />
+        </ToolbarRow>
+      </ToolbarGroup>
+      <ToolbarGroup label="Header and footer">
+        <ToolbarRow>
+          <IconButton
+            label="Header"
+            soon
+            icon={<AlignTop size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Footer"
+            soon
+            icon={<AlignBottom size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Page number"
+            soon
+            icon={<Hash size={16} aria-hidden />}
+          />
+        </ToolbarRow>
+      </ToolbarGroup>
+      <ToolbarGroup label="Comments">
+        <IconButton
+          label={commentCount > 0 ? `Comments (${commentCount})` : 'Comments'}
+          pressed={commentsOpen}
+          onClick={onToggleComments}
+          icon={<ChatText size={16} aria-hidden />}
+        />
+      </ToolbarGroup>
+    </div>
+  )
+}
+
+export function LayoutRibbon({ format }: { format?: DocumentFormatToolbar }) {
+  return (
+    <div
+      className="flex min-w-0 flex-wrap items-stretch"
+      role="toolbar"
+      aria-label="Layout"
+    >
+      <ToolbarGroup label="Page setup">
+        <ToolbarRow>
+          <RibbonSelect
+            label="Margins"
+            className="w-[5.5rem]"
+            value={format?.marginsKind ?? ''}
+            options={MARGIN_OPTIONS}
+            disabled={!format || Boolean(format.layoutUnavailable)}
+            disabledReason={format?.layoutUnavailable}
+            onChange={(value) => {
+              const option = SECTION_MARGINS_OPTIONS.find(
+                (item) => item.value === value,
+              )
+              if (option) format?.onMargins(option.value)
+            }}
+          />
+          <IconButton
+            label="Orientation"
+            pressed={format?.orientation === 'landscape'}
+            disabled={!format || Boolean(format.layoutUnavailable)}
+            disabledReason={format?.layoutUnavailable}
+            onClick={() => format?.onOrientation()}
+            icon={<Swap size={16} aria-hidden />}
+          />
+          <RibbonSelect
+            label="Page size"
+            className="w-20"
+            value={format?.pageSizeKind ?? ''}
+            options={PAGE_SIZE_SELECT_OPTIONS}
+            disabled={!format || Boolean(format.layoutUnavailable)}
+            disabledReason={format?.layoutUnavailable}
+            onChange={(value) => {
+              const option = PAGE_SIZE_OPTIONS.find(
+                (item) => item.value === value,
+              )
+              if (option) format?.onPageSize(option.value)
+            }}
+          />
+        </ToolbarRow>
+      </ToolbarGroup>
+      <ToolbarGroup label="Document">
+        <RibbonSelect
+          label="Document type"
+          soon
+          className="w-[11rem]"
+          value="advice"
+          options={DOCUMENT_KINDS}
+        />
+      </ToolbarGroup>
+      <ToolbarGroup label="Marking">
+        <ToolbarRow>
+          <CaptionButton label="Draft" soon />
+          <CaptionButton label="Privileged" soon />
+          <CaptionButton label="Without prejudice" soon />
+        </ToolbarRow>
+      </ToolbarGroup>
+      <ToolbarGroup label="Paragraph">
+        <RibbonSelect
+          label="Indent"
+          className="w-[6.5rem]"
+          value={format?.indentKind ?? ''}
+          options={INDENT_OPTIONS}
+          disabled={!format}
+          onChange={(value) => {
+            const option = INDENT_OPTIONS.find((item) => item.value === value)
+            if (option) format?.onIndentKind(option.value)
+          }}
+        />
+      </ToolbarGroup>
+    </div>
+  )
+}
