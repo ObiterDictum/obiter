@@ -1,0 +1,5 @@
+{
+  "file": "/tmp/e5-shots-r4/p1-run-break.docx",
+  "expected": "BBBBBB|BBBBBBBBBBBBBBBBBBBBBB",
+  "mask": "BBBBBB|BBBBBBBBBBBBBBBBBBBBBB"
+}

@@ -1,0 +1,13 @@
+{
+  "file": "/tmp/e5-shots-r4/p4-empty-section-page.docx",
+  "brTags": [
+    "<w:br w:type=\"page\"/>"
+  ],
+  "sectParas": [
+    {
+      "index": 3,
+      "text": "",
+      "sect": true
+    }
+  ]
+}

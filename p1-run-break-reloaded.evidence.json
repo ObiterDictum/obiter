@@ -1,0 +1,10 @@
+{
+  "spans": [
+    {
+      "text": "IN THE HIGH COURT OF JUSTICE",
+      "weight": "700"
+    }
+  ],
+  "text": "IN THE HIGH COURT OF JUSTICE",
+  "mask": "BBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+}
