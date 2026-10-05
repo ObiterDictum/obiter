@@ -147,6 +147,16 @@ export function selectedParagraphIds(
   return [...new Set(ranges.map((range) => range.paragraphId))]
 }
 
+/** The numbering instance a target names, including its pending draft. */
+function numberedInstance(
+  model: DocumentModelWire,
+  format: FormatDrafts,
+  item: DocumentParagraphWire,
+) {
+  const numPr = format.numbering[item.id] ?? paragraphNumPr(item, model.styles)
+  return findNumberingInstance(model, numPr?.numId)
+}
+
 export function formatControlState(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -210,19 +220,18 @@ export function formatControlState(
   })
   // Restart acts on every stored target paragraph, not just the caret's, so
   // the control is available when any target names a valid numbering instance.
-  const canRestart = targetParagraphs.some((item) => {
-    const targetNumPr =
-      format.numbering[item.id] ?? paragraphNumPr(item, model.styles)
-    return Boolean(findNumberingInstance(model, targetNumPr?.numId))
-  })
-  const numberedTargets = targetParagraphs.filter(
-    (item) => paragraphStartOverride(model, format, item) !== undefined,
+  const numberedTargets = targetParagraphs.filter((item) =>
+    Boolean(numberedInstance(model, format, item)),
   )
+  const canRestart = numberedTargets.length > 0
+  // Pressed only when every numbered target carries an override, so a mixed
+  // selection reads unpressed and one click makes the whole selection restart.
   const listRestarted =
     numberedTargets.length > 0 &&
-    numberedTargets.every(
-      (item) => (paragraphStartOverride(model, format, item) ?? null) !== null,
-    )
+    numberedTargets.every((item) => {
+      const override = paragraphStartOverride(model, format, item)
+      return override !== undefined && override !== null
+    })
   const paragraphFormat = paragraphFormatState(model, format, paragraphIds)
   return {
     paragraph,

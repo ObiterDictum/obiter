@@ -1388,6 +1388,84 @@ describe('list and style hardening', () => {
     expect(documentListMarkers(painted).get('p1')?.text).toBe('1.')
   })
 
+  it('paints one sequence for paragraphs restarted together', () => {
+    const story = twoParagraphs.stories[0]
+    if (!story) throw new Error('test model story is missing')
+    const listed: DocumentModelWire = {
+      ...twoParagraphs,
+      stories: [
+        {
+          ...story,
+          paragraphs: ['p1', 'p2', 'p3'].map((id) => ({
+            id,
+            runs: [{ id: `${id}-r`, text: id, preservedXmlFragments: [] }],
+            preservedXmlFragments: [
+              '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+            ],
+          })),
+        },
+      ],
+    }
+    const [first, second, third] = listed.stories[0]?.paragraphs ?? []
+    if (!first || !second || !third) {
+      throw new Error('test target paragraphs are missing')
+    }
+    let format = restartList(emptyFormatDrafts, listed, second)
+    format = restartList(format, listed, third)
+    // Both drafts still name the source; the paint must synthesise one shared
+    // instance, so the two restarted paragraphs count 1., 2. like the save.
+    expect(format.numbering.p2).toEqual({
+      numId: '1',
+      ilvl: 0,
+      startOverride: 1,
+    })
+    expect(format.numbering.p3).toEqual({
+      numId: '1',
+      ilvl: 0,
+      startOverride: 1,
+    })
+    const markers = documentListMarkers(formattedModel(listed, format))
+    expect(markers.get('p1')?.text).toBe('1.')
+    expect(markers.get('p2')?.text).toBe('1.')
+    expect(markers.get('p3')?.text).toBe('2.')
+  })
+
+  it('reads restart unpressed when only some numbered targets carry an override', () => {
+    const story = twoParagraphs.stories[0]
+    if (!story) throw new Error('test model story is missing')
+    const bothNumbered: DocumentModelWire = {
+      ...twoParagraphs,
+      stories: [
+        {
+          ...story,
+          paragraphs: ['p1', 'p2'].map((id) => ({
+            id,
+            runs: [{ id: `${id}-r`, text: id, preservedXmlFragments: [] }],
+            preservedXmlFragments: [
+              '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+            ],
+          })),
+        },
+      ],
+    }
+    const [first, second] = bothNumbered.stories[0]?.paragraphs ?? []
+    if (!first || !second) {
+      throw new Error('test target paragraphs are missing')
+    }
+    const ranges = [
+      { paragraphId: 'p1', from: 0, to: 0 },
+      { paragraphId: 'p2', from: 0, to: 0 },
+    ]
+    let format = restartList(emptyFormatDrafts, bothNumbered, first)
+    expect(
+      formatControlState(bothNumbered, format, 'p1', ranges).listRestarted,
+    ).toBe(false)
+    format = restartList(format, bothNumbered, second)
+    expect(
+      formatControlState(bothNumbered, format, 'p1', ranges).listRestarted,
+    ).toBe(true)
+  })
+
   it('enables restart when any target paragraph is a list, not only the caret', () => {
     const ranges = [
       { paragraphId: 'p1', from: 0, to: 0 },

@@ -1487,9 +1487,13 @@ override for the same level, otherwise it appends a new `w:num` to
 `word/numbering.xml` and registers it on the model so validation and later
 operations in the batch see it. The tracked writer resolves the same instance
 before building its `w:pPrChange`, so the current state and the recorded change
-name one instance. The Home Paragraph group adds a Restart numbering toggle
-that applies the override to every numbered target and reads pressed when every
-target carries one; one history step, one save operation.
+name one instance. The created `w:lvlOverride` emits `w:startOverride` before
+any nested `w:lvl` (the order CT_NumLvl requires). When the source redefined the
+target level, that nested `w:lvl` is kept so the restart does not silently change
+formatting, with its own `w:start` rewritten to the restart value so the two
+cannot disagree. The Home Paragraph group adds a Restart numbering toggle
+that applies the override to every numbered target and reads pressed only when
+every numbered target carries one; one history step, one save operation.
 
 Rejected: a per-paragraph list toggle; a second style or numbering owner; a
 writer that rewrites unrelated numbering content; clearing a restart by

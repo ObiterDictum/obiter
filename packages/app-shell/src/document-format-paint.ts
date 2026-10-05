@@ -4,6 +4,7 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import {
+  buildOverrideFragment,
   hasPureStartOverride,
   patchParagraphFormatXml,
   patchRunEmphasisXml,
@@ -60,14 +61,39 @@ function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
     if (!source) continue
     const ilvl = draft.ilvl ?? 0
     if (hasPureStartOverride(source.sourceFragment, ilvl, start)) continue
+    const abstractId = source.abstractNumberingId
+    // The server reuses an instance that already carries a pure override for
+    // the same abstract numbering, level and start. Searching the model and
+    // the instances synthesised earlier in this pass the same way makes two
+    // paragraphs restarted in one action share one counter (1., 2.), not paint
+    // one counter each (1., 1.) and diverge from the save.
+    const matching = abstractId
+      ? [...model.numbering, ...instances].find(
+          (instance) =>
+            instance.abstractNumberingId === abstractId &&
+            hasPureStartOverride(instance.sourceFragment, ilvl, start),
+        )
+      : undefined
+    if (matching) {
+      drafts[paragraphId] = { ...draft, numId: matching.numberingId }
+      continue
+    }
     const numberingId = `draft:${paragraphId}`
     instances.push({
       numberingId,
-      ...(source.abstractNumberingId
-        ? { abstractNumberingId: source.abstractNumberingId }
-        : {}),
+      ...(abstractId ? { abstractNumberingId: abstractId } : {}),
       startOverride: start,
-      sourceFragment: source.sourceFragment,
+      // Mirror the server's created instance with the same builder, so a later
+      // paragraph with this resolution tuple recognises it as reusable exactly
+      // as the server recognises the instance it created.
+      sourceFragment: buildOverrideFragment(
+        source.sourceFragment,
+        'w',
+        abstractId ?? '',
+        numberingId,
+        ilvl,
+        start,
+      ),
       ...(source.levels
         ? {
             levels: source.levels.map((level) =>
