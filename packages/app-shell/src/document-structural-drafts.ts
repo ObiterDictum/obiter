@@ -71,6 +71,22 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
     .strict(),
 ])
 
+/**
+ * The persisted `structures` field: a malformed slot is dropped on its own
+ * rather than failing the whole snapshot, so unrelated work — typed drafts
+ * especially — survives a slot the writer no longer produces.
+ */
+export const structuralDraftsFieldSchema = z
+  .array(z.unknown())
+  .optional()
+  .default([])
+  .transform((entries): StructuralDraft[] =>
+    entries.filter(
+      (entry): entry is StructuralDraft =>
+        structuralDraftSchema.safeParse(entry).success,
+    ),
+  )
+
 /** The save operations the covered structural drafts produce, in draft order. */
 export function structuralEditOperations(
   structures: readonly StructuralDraft[],
@@ -177,6 +193,22 @@ const SIGNATURES: Array<{
 const PICTURE_MAX_WIDTH_PX = 600
 
 /**
+ * Scales a picked image to the page column and bounds both dimensions by the
+ * contract's maximum. Width alone is not enough: a 1×20000 file scales to
+ * 600×12,000,000 and would produce a draft the schema refuses, silently
+ * deleting itself — and every sibling draft — on the next restore.
+ */
+export function scaleImageInsertSize(widthPx: number, heightPx: number) {
+  const scale = Math.min(1, PICTURE_MAX_WIDTH_PX / widthPx)
+  const clamp = (value: number) =>
+    Math.min(
+      DOCUMENT_EDIT_IMAGE_DIMENSION_MAX,
+      Math.max(1, Math.round(value * scale)),
+    )
+  return { widthPx: clamp(widthPx), heightPx: clamp(heightPx) }
+}
+
+/**
  * Reads a picked image file into the fields an `insert_image` draft carries.
  * The declared type and the magic bytes must agree — a renamed file would
  * store bytes under the wrong content type — and the size is clamped to the
@@ -204,13 +236,11 @@ export async function readImageInsert(
     new Blob([bytes.buffer as ArrayBuffer], { type: signature.contentType }),
   )
   if (!size) return { error: 'That file did not read as an image.' }
-  const scale = Math.min(1, PICTURE_MAX_WIDTH_PX / size.widthPx)
   const name = file.name.trim() || 'Picture'
   return {
     contentType: signature.contentType,
     dataBase64,
-    widthPx: Math.max(1, Math.round(size.widthPx * scale)),
-    heightPx: Math.max(1, Math.round(size.heightPx * scale)),
+    ...scaleImageInsertSize(size.widthPx, size.heightPx),
     name: name.slice(0, DOCUMENT_EDIT_IMAGE_NAME_MAX_LENGTH),
   }
 }

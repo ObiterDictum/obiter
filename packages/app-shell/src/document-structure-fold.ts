@@ -9,6 +9,7 @@ import {
   buildTableXml,
   IMAGE_RELATIONSHIP_TYPE,
 } from '@obiter/ooxml'
+import { storyTableCellIds } from './document-page-tables'
 import {
   pendingImageTarget,
   type StructuralDraft,
@@ -114,7 +115,12 @@ function foldStory(
 ) {
   const paragraphs = [...story.paragraphs]
   const fragments = [...story.preservedXmlFragments]
-  const tableCellIds = tableParagraphIds(fragments)
+  // Which wires belong to an existing table is decided by the one binding
+  // `storyBlocks` computes — the same binding the paint and the ribbon read —
+  // so a paraId-less stored table's cells are found by position exactly as
+  // the writer finds the sibling `w:tbl`. Pending cell wires join the set as
+  // they fold, so a later anchor can also see a not-yet-saved table.
+  const tableCellIds = storyTableCellIds(story)
   // Per-anchor chaining mirrors the writer's `tableTailWires`: the next table
   // at one anchor splices after the previous table's last cell, and the
   // separator paragraph keeps adjacent tables from merging.
@@ -148,6 +154,7 @@ function foldStory(
           paragraphWire(nextParaId()),
         )
       }
+      for (const id of cellParaIds) tableCellIds.add(`para-w14-${id}`)
       fragments.push(buildTableXml(draft.rows, draft.columns, cellParaIds))
       tails.set(draft.paragraphId, wires[wires.length - 1] ?? anchor)
       changed = true
@@ -197,31 +204,15 @@ function tailAnchor(
 }
 
 /**
- * The paragraph ids every story-level `w:tbl` fragment names, so a pending
- * table can tell that the paragraph after its anchor belongs to an existing
- * table and needs the boundary paragraph between them.
- */
-function tableParagraphIds(fragments: readonly string[]) {
-  const ids = new Set<string>()
-  for (const fragment of fragments) {
-    if (!fragment.includes('<w:tbl')) continue
-    for (const match of fragment.matchAll(/w14:paraId="([^"]+)"/gu)) {
-      if (match[1]) ids.add(`para-w14-${match[1]}`)
-    }
-  }
-  return ids
-}
-
-/**
  * Splices the drawing run into the paragraph wire at the effective-text
  * offset, splitting the run that contains it — the wire counterpart of the
  * writer's `spliceInlineXml` + `spliceRunWires`.
  *
- * The offset addresses effective text (typed drafts included). A run the
- * draft state replaces wholesale has no base position inside it, so the
- * splice lands after that run rather than at a guessed interior offset: the
- * paint is exact for every untouched run and one run late for a mid-draft
- * caret, which resolves on save.
+ * The offset addresses effective text (typed drafts included), exactly as the
+ * writer's whole-run replacement composes the drawing into the pending text.
+ * A run the draft state replaces wholesale splits the same way, but neither
+ * half can keep the run's id: the drafts map would repaint the full
+ * replacement text on whichever half kept it.
  */
 function spliceDrawingRun(
   paragraph: DocumentParagraphWire,
@@ -247,19 +238,17 @@ function spliceDrawingRun(
       return { ...paragraph, runs }
     }
     if (draft.offset < end) {
-      if (drafts[run.id] !== undefined) {
-        runs.splice(index + 1, 0, drawingRun)
-        return { ...paragraph, runs }
-      }
       const within = draft.offset - cursor
+      const drafted = drafts[run.id] !== undefined
       const head: DocumentTextRunWire = {
         ...run,
-        text: run.text.slice(0, within),
+        ...(drafted ? { id: `${draft.id}:head` } : {}),
+        text: effective.slice(0, within),
       }
       const tail: DocumentTextRunWire = {
         ...run,
         id: `${draft.id}:tail`,
-        text: run.text.slice(within),
+        text: effective.slice(within),
         preservedXmlFragments: run.preservedXmlFragments.filter((fragment) =>
           /^<w:rPr\b/u.test(fragment),
         ),
