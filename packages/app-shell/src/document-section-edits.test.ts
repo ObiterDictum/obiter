@@ -224,6 +224,41 @@ describe('section pagination', () => {
     expect(pages[1]?.box.widthPx).toBe(794)
   })
 
+  it('ignores a section recorded only in a paragraph pPrChange history', () => {
+    const fragment =
+      '<w:pPr><w:pPrChange w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+      '<w:pPr><w:sectPr><w:pgSz w:w="8000" w:h="6000"/><w:pgMar w:top="720"/></w:sectPr></w:pPr>' +
+      '</w:pPrChange></w:pPr>'
+    expect(sectionXmlInFragment(fragment)).toBe('')
+    const withHistory: DocumentModelWire = {
+      ...model(['p1', 'p2']),
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [
+                {
+                  id: 'p1-r',
+                  text: 'Historic section',
+                  preservedXmlFragments: [],
+                },
+              ],
+              preservedXmlFragments: [fragment],
+            },
+            paragraph('p2'),
+          ],
+          preservedXmlFragments: [NORMAL],
+        },
+      ],
+    }
+    // The recorded section is history, so the body stays one section:
+    // anything else registers a phantom break at p1 and splits the pages.
+    expect(layoutDocument(withHistory)).toHaveLength(1)
+  })
+
   it('folds a pending section break into the painted model', () => {
     const base = model(['p1', 'p2'])
     const broken = withBreakDrafts(base, [
@@ -273,6 +308,18 @@ describe('section pagination', () => {
     expect(pages).toHaveLength(2)
     expect(pages[0]?.blocks).toHaveLength(1)
     expect(pages[1]?.blocks).toHaveLength(0)
+  })
+
+  it('paints two page breaks on one paragraph in text order, not insertion order', () => {
+    // 'p1' is 'text': out-of-order drafts 3 then 1 must still split at 1 first.
+    const pages = layoutDocument(model(['p1']), undefined, [], {}, undefined, [
+      { id: 'b1', paragraphId: 'p1', offset: 3, kind: 'page' },
+      { id: 'b2', paragraphId: 'p1', offset: 1, kind: 'page' },
+    ])
+    expect(pages).toHaveLength(3)
+    expect(pages[0]?.blocks[0]).toMatchObject({ from: 0, to: 1 })
+    expect(pages[1]?.blocks[0]).toMatchObject({ from: 1, to: 3 })
+    expect(pages[2]?.blocks[0]).toMatchObject({ from: 3, to: 4 })
   })
 
   it('seeds a same-batch section break from the pending page setup', () => {

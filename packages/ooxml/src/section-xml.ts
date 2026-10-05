@@ -108,7 +108,13 @@ function insertSectionHistory(fragment: string, history: string) {
  * that the document no longer has.
  */
 export function activeSectionXml(fragment: string): string {
-  const { active } = splitSectionHistory(fragment)
+  // A paragraph's tracked history (`w:pPrChange`) can carry the section it had
+  // before the change. The reader must see only the live properties, so cut
+  // that history before locating the live `w:sectPr`, or the recorded copy
+  // reports a phantom section.
+  const change = fragment.search(/<w:pPrChange\b/u)
+  const live = change === -1 ? fragment : fragment.slice(0, change)
+  const { active } = splitSectionHistory(live)
   const selfClosing = active.match(/<w:sectPr\b[^>]*?\/>/iu)?.[0]
   if (selfClosing) return selfClosing
   const open = active.match(/<w:sectPr\b[^>]*>/iu)

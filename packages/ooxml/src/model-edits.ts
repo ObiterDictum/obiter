@@ -84,8 +84,9 @@ export function applyDocumentEdits(
     : undefined
 
   const insertionCounts = new Map<string, number>()
-  // Page-break offsets are accumulated per run so multiple breaks on one run
-  // materialise as a single replacement instead of overlapping `:text:` writes.
+  // Page-break offsets are accumulated per run, run-local, so multiple breaks
+  // on one run materialise as a single replacement instead of overlapping
+  // `:text:` writes.
   const breakOffsets = new Map<string, number[]>()
   // Range emphasis is collected per paragraph and applied after the loop.
   // Every operation in a batch addresses the same paragraph text, so the

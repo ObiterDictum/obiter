@@ -58,6 +58,12 @@ export function layoutDocument(
     list.push(item.offset)
     breakOffsets.set(item.paragraphId, list)
   }
+  // Draft order is insertion order, not text order. `layoutParagraph` picks the
+  // first offset after the current one, so an unsorted list would skip an
+  // earlier break inserted later.
+  for (const list of breakOffsets.values()) {
+    list.sort((left, right) => left - right)
+  }
   const geometryFor = (sectionXml: string) => {
     const sectionBox = pageBoxForSection(sectionXml)
     return {

@@ -102,7 +102,7 @@ export function applyRunEmphasisRanges(
           mergeRunEmphasis(local.map((range) => range.emphasis)),
         )
       } else {
-        const materialise = hasPendingOverlay(part.overlay, run.wire.id)
+        const materialise = hasPendingOverlay(part.overlay, run)
         pending.push({
           runIndex,
           ...splitRun(
@@ -240,8 +240,14 @@ function effectiveView(
   const folded = materialiseRun(overlay, run)
   const source = folded.xml
   const elements = parseWrappedRun(overlay.source, source)
-  const root = elements.find((element) => element.depth === 0)
-  if (!root) throw new OoxmlError('invalid-document-edit')
+  // A fold can introduce sibling runs: a page-break splice closes and reopens
+  // the run around the break. The effective run spans every top-level run so
+  // the split machinery sees the whole reconstructed sequence, not just the
+  // first run.
+  const runElements = elements.filter((element) => element.depth === 0)
+  const first = runElements[0]
+  const last = runElements.at(-1)
+  if (!first || !last) throw new OoxmlError('invalid-document-edit')
   const children = elements.filter((element) => element.depth === 1)
   const textElements = children
     .filter((element) => element.localName === 't' && !element.selfClosing)
@@ -269,10 +275,16 @@ function effectiveView(
       (element) => element.localName !== 't' && !isTextWrappingBreak(element),
     )
     .map((element) => elementFragment(source, element))
+  const runRange: XmlElementRange = {
+    start: first.start,
+    startTagEnd: first.startTagEnd,
+    endTagStart: last.endTagStart,
+    end: last.end,
+  }
   const effectiveRun: TextRunAnchor = {
     partName: run.partName,
     wire: run.wire,
-    runRange: elementRange(root),
+    runRange,
     textRanges: textElements.map(({ startTagEnd, endTagStart }) => ({
       start: startTagEnd,
       end: endTagStart,
@@ -287,7 +299,7 @@ function effectiveView(
     paragraph: {
       ...paragraph,
       runs: [effectiveRun],
-      paragraphRange: elementRange(root),
+      paragraphRange: runRange,
     },
     offsetBase: 0,
     fragments,
@@ -325,9 +337,26 @@ function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
   return { xml: result, keys }
 }
 
-function hasPendingOverlay(overlay: XmlOverlay, runId: string) {
-  for (const key of overlay.replacements.keys()) {
-    if (key.startsWith(`${runId}:`)) return true
+/**
+ * Whether the run's text or structure already lives in the overlay. Any
+ * replacement whose range sits inside the run — a run-keyed text or property
+ * write, or a paragraph-keyed page-break splice — means the run's source no
+ * longer maps to its model text, so a range emphasis must materialise the run
+ * before splitting it rather than write a second replacement over that range.
+ * A zero-width insertion exactly at the run's end belongs to the following
+ * boundary (the next run's start, or the paragraph end), not to this run.
+ */
+function hasPendingOverlay(overlay: XmlOverlay, run: TextRunAnchor) {
+  const { start, end } = run.runRange
+  for (const [key, replacement] of overlay.replacements) {
+    if (key.startsWith(`${run.wire.id}:`)) return true
+    if (
+      replacement.start >= start &&
+      replacement.end <= end &&
+      replacement.start < end
+    ) {
+      return true
+    }
   }
   return false
 }

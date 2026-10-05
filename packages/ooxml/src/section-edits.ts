@@ -15,6 +15,7 @@ import {
 } from './parts/overlay'
 import { isWord } from './parts/xml-elements'
 import {
+  activeSectionXml,
   patchSectionPropertiesXml,
   type SectionPropertiesPatch,
 } from './section-xml'
@@ -65,6 +66,19 @@ export function insertSectionBreak(
   paragraph: ParagraphAnchor,
 ) {
   const part = requireEditablePart(document, paragraph.partName)
+  // A paragraph that already carries a `w:sectPr` is the end paragraph of an
+  // existing section, holding its geometry and header/footer references. There
+  // is no second section that can end at the same paragraph, and rewriting it
+  // from the body seed would silently discard the existing section's
+  // definition, so refuse the ambiguous edit. `activeSectionXml` ignores a
+  // section recorded only in the paragraph's `w:pPrChange` history.
+  if (
+    paragraph.wire.preservedXmlFragments.some(
+      (fragment) => activeSectionXml(fragment).length > 0,
+    )
+  ) {
+    throw new OoxmlError('invalid-document-edit')
+  }
   // The seed is the final section's current definition, including any pending
   // section draft applied earlier in the same batch.
   const { sectPr } = bodySection(part.overlay)
@@ -100,7 +114,7 @@ export function insertPageBreak(
   const overlay = part.overlay
   validateBreakOffset(paragraph, offset)
   const target = locateEffectiveRun(paragraph, offset)
-  if (!target.run) {
+  if (!target) {
     const point = locateOffset(overlay.source, paragraph, offset)
     setOverlayReplacement(
       overlay,
@@ -108,7 +122,14 @@ export function insertPageBreak(
       pageBreakInsertion(overlay.source, point),
     )
   } else if (shouldMaterialiseRun(overlay, target.run.wire.id)) {
-    const offsets = [...(breakOffsets.get(target.run.wire.id) ?? []), offset]
+    // The requested offset addresses the paragraph's effective text, but a
+    // materialised run is rebuilt from its own text, so convert to run-local
+    // before accumulating it.
+    const localOffset = offset - target.start
+    const offsets = [
+      ...(breakOffsets.get(target.run.wire.id) ?? []),
+      localOffset,
+    ]
     breakOffsets.set(target.run.wire.id, offsets)
     materialiseRunWithBreaks(
       overlay,
@@ -128,25 +149,27 @@ export function insertPageBreak(
 }
 
 type EffectiveRunTarget = {
-  run?: ParagraphAnchor['runs'][number]
+  run: ParagraphAnchor['runs'][number]
+  start: number
 }
 
 /**
- * Finds the run the effective-text offset sits strictly inside. A boundary
- * offset is handled by `locateOffset` at the caller.
+ * Finds the run the effective-text offset sits strictly inside, with the
+ * paragraph-level offset the run starts at. A boundary offset is handled by
+ * `locateOffset` at the caller.
  */
 function locateEffectiveRun(
   paragraph: ParagraphAnchor,
   offset: number,
-): EffectiveRunTarget {
+): EffectiveRunTarget | undefined {
   let start = 0
   for (const run of paragraph.runs) {
     if (offset > start && offset < start + run.wire.text.length) {
-      return { run }
+      return { run, start }
     }
     start += run.wire.text.length
   }
-  return {}
+  return undefined
 }
 
 /**
@@ -178,7 +201,15 @@ function textIndex(key: string): number {
  * run-property write already patched onto `wire.preservedXmlFragments`) and its
  * effective text, then clears every in-run replacement before claiming the
  * whole run range, so the breaks compose with the text and property writes
- * instead of overlapping them.
+ * instead of overlapping them. `offsets` are run-local, not paragraph offsets.
+ *
+ * Limitation: the preserved non-text children are emitted before the text, so
+ * a run that interleaves a structural child (a tab, a drawing, a field) with
+ * text and is materially rebuilt here loses that interleaving. The
+ * source-slicing path preserves it and is used whenever the run has no pending
+ * overlay; a run whose text a `replace_run_text` rewrote no longer has a
+ * source-to-model mapping for its children, so the reorder is confined to that
+ * already-rewritten case.
  */
 function materialiseRunWithBreaks(
   overlay: XmlOverlay,
