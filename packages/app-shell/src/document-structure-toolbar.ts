@@ -15,8 +15,7 @@ export { storyTableCellIds } from './document-page-tables'
  * on the next restore, so an invalid draft is impossible to create.
  */
 export type StructuralInsertOutcome =
-  | { inserted: true }
-  | { inserted: false; reason: string }
+  { inserted: true } | { inserted: false; reason: string }
 
 type SetStructures = (
   update: (current: StructuralDraft[]) => StructuralDraft[],
