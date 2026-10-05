@@ -49,6 +49,12 @@ export {
   patchParagraphFormatXml,
 } from './model-property-edits'
 export {
+  A4_PAGE_TWIPS,
+  patchSectionPropertiesXml,
+  type SectionMarginPatch,
+  type SectionPropertiesPatch,
+} from './section-xml'
+export {
   buildOverrideFragment,
   hasPureStartOverride,
   levelStartOverride,

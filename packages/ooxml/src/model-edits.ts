@@ -21,9 +21,15 @@ import {
   type RunEmphasis,
 } from './model-property-edits'
 import {
+  insertPageBreak,
+  insertSectionBreak,
+  setSectionProperties,
+} from './section-edits'
+import {
   applyRunEmphasisRanges,
   type RunEmphasisRange,
 } from './model-run-emphasis'
+import { splitsSurrogate } from './model-run-range-edits'
 import {
   validatePlannedOperations,
   validateTrackedOperations,
@@ -85,9 +91,11 @@ export function applyDocumentEdits(
   // at a time would let each split overwrite the previous run structure.
   const rangeEmphasis = new Map<ParagraphAnchor, RunEmphasisRange[]>()
   for (const [operationIndex, operation] of planned.entries()) {
-    const deletedLater = deletedIds.has(operation.paragraph.wire.id)
-    if (lineage)
-      touchParagraph(lineage, operation.paragraph.wire, operationIndex)
+    const paragraph = 'paragraph' in operation ? operation.paragraph : undefined
+    const deletedLater = paragraph ? deletedIds.has(paragraph.wire.id) : false
+    if (lineage && paragraph && !isSectionOperation(operation)) {
+      touchParagraph(lineage, paragraph.wire, operationIndex)
+    }
     if (operation.type === 'replace_run_text') {
       if (deletedLater) continue
       if (lineage) seedRunOrigins(lineage, operation.run.wire)
@@ -220,6 +228,20 @@ export function applyDocumentEdits(
           lineage ? { recorder: lineage, operationIndex } : undefined,
         )
       }
+    } else if (operation.type === 'set_section_properties') {
+      // Section properties and breaks are not recorded as tracked changes yet.
+      // Fail closed rather than apply untracked while the client asked for a
+      // tracked edit; the save reports the refusal and holds the change.
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      setSectionProperties(document, operation)
+    } else if (operation.type === 'insert_break') {
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        insertPageBreak(document, operation.paragraph, operation.offset)
+      }
+    } else if (operation.type === 'insert_section_break') {
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) insertSectionBreak(document, operation.paragraph)
     } else {
       throw new OoxmlError('invalid-document-edit')
     }
@@ -227,12 +249,12 @@ export function applyDocumentEdits(
     // A tracked operation names its reversal by the persisted `w:id`s it just
     // created. Taking them per operation keeps each history step's reversal a
     // unit: a replacement's `del`/`ins` pair is never split from its run.
-    if (trackedWriter && lineage) {
+    if (trackedWriter && lineage && paragraph) {
       const created = trackedWriter.takeChanges()
       if (created.length > 0) {
         recordTrackedChanges(lineage, created, {
           operationIndex,
-          fromParagraphId: operation.paragraph.wire.id,
+          fromParagraphId: paragraph.wire.id,
           fromRunId: trackedRunIdOf(operation),
         })
       }
@@ -296,6 +318,17 @@ function planOperation(
   validateEmphasis(operation)
   validateParagraphFormat(operation)
   validateNumbering(operation, numberingIds)
+  if (operation.type === 'set_section_properties') return operation
+  if (
+    operation.type === 'insert_break' ||
+    operation.type === 'insert_section_break'
+  ) {
+    const paragraph = requireMainParagraph(document, operation.paragraphId)
+    if (operation.type === 'insert_break') {
+      validateBreakOffset(operation.offset, paragraph)
+    }
+    return { ...operation, paragraph }
+  }
   if (operation.type === 'set_run_emphasis') {
     const runId = operation.runId
     if (runId === undefined) {
@@ -380,6 +413,21 @@ function validateNumbering(
       throw new OoxmlError('invalid-document-edit')
     }
   }
+}
+
+function validateBreakOffset(offset: number, paragraph: ParagraphAnchor) {
+  const text = paragraph.runs.map((run) => run.wire.text).join('')
+  if (offset > text.length || splitsSurrogate(text, offset)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+}
+
+function isSectionOperation(operation: PlannedOperation) {
+  return (
+    operation.type === 'set_section_properties' ||
+    operation.type === 'insert_break' ||
+    operation.type === 'insert_section_break'
+  )
 }
 
 function validateStyle(

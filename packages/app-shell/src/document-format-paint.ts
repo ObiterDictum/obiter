@@ -10,6 +10,7 @@ import {
   patchRunEmphasisXml,
 } from '@obiter/ooxml'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
+import { paintSectionFragments } from './document-section-format'
 import type {
   FormatDrafts,
   NumberingDraft,
@@ -31,12 +32,22 @@ export function formattedModel(
     numbering: numbering.instances.length
       ? [...model.numbering, ...numbering.instances]
       : model.numbering,
-    stories: model.stories.map((story) => ({
-      ...story,
-      paragraphs: story.paragraphs.map((paragraph) =>
-        formattedParagraph(paragraph, paintedFormat, emphasisByRun),
-      ),
-    })),
+    stories: model.stories.map((story) => {
+      const painted = {
+        ...story,
+        paragraphs: story.paragraphs.map((paragraph) =>
+          formattedParagraph(paragraph, paintedFormat, emphasisByRun),
+        ),
+      }
+      if (story.kind !== 'document') return painted
+      return {
+        ...painted,
+        preservedXmlFragments: paintSectionFragments(
+          story.preservedXmlFragments,
+          format.section,
+        ),
+      }
+    }),
   }
 }
 

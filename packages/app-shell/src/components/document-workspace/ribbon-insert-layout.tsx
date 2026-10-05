@@ -19,18 +19,20 @@ import {
   ToolbarRow,
 } from './ribbon-primitives'
 import { INDENT_OPTIONS } from '../../document-paragraph-format'
+import {
+  PAGE_SIZE_OPTIONS,
+  SECTION_MARGINS_OPTIONS,
+} from '../../document-section-format'
 import type { DocumentFormatToolbar } from './ribbon-types'
 
-const PAGE_SIZES = [
-  { value: 'a4', label: 'A4' },
-  { value: 'a5', label: 'A5' },
+const MARGIN_OPTIONS = [
+  { value: '', label: 'Custom' },
+  ...SECTION_MARGINS_OPTIONS,
 ]
 
-const MARGINS = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'narrow', label: 'Narrow' },
-  { value: 'moderate', label: 'Moderate' },
-  { value: 'wide', label: 'Wide' },
+const PAGE_SIZE_SELECT_OPTIONS = [
+  { value: '', label: 'Custom' },
+  ...PAGE_SIZE_OPTIONS,
 ]
 
 const DOCUMENT_KINDS = [
@@ -47,11 +49,19 @@ export function InsertRibbon({
   commentsOpen,
   commentCount,
   onToggleComments,
+  onPageBreak,
+  onSectionBreak,
+  breakUnavailable,
 }: {
   commentsOpen: boolean
   commentCount: number
   onToggleComments: () => void
+  onPageBreak: () => void
+  onSectionBreak: () => void
+  /** Set when a break cannot be placed at the current caret. */
+  breakUnavailable?: string
 }) {
+  const breaksDisabled = Boolean(breakUnavailable)
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -62,12 +72,16 @@ export function InsertRibbon({
         <ToolbarRow>
           <IconButton
             label="Page break"
-            soon
+            disabled={breaksDisabled}
+            disabledReason={breakUnavailable}
+            onClick={onPageBreak}
             icon={<AlignCenterVertical size={16} aria-hidden />}
           />
           <IconButton
             label="Section break"
-            soon
+            disabled={breaksDisabled}
+            disabledReason={breakUnavailable}
+            onClick={onSectionBreak}
             icon={<SquareSplitHorizontal size={16} aria-hidden />}
           />
         </ToolbarRow>
@@ -138,22 +152,39 @@ export function LayoutRibbon({ format }: { format?: DocumentFormatToolbar }) {
         <ToolbarRow>
           <RibbonSelect
             label="Margins"
-            soon
             className="w-[5.5rem]"
-            value="normal"
-            options={MARGINS}
+            value={format?.marginsKind ?? ''}
+            options={MARGIN_OPTIONS}
+            disabled={!format || Boolean(format.layoutUnavailable)}
+            disabledReason={format?.layoutUnavailable}
+            onChange={(value) => {
+              const option = SECTION_MARGINS_OPTIONS.find(
+                (item) => item.value === value,
+              )
+              if (option) format?.onMargins(option.value)
+            }}
           />
           <IconButton
             label="Orientation"
-            soon
+            pressed={format?.orientation === 'landscape'}
+            disabled={!format || Boolean(format.layoutUnavailable)}
+            disabledReason={format?.layoutUnavailable}
+            onClick={() => format?.onOrientation()}
             icon={<Swap size={16} aria-hidden />}
           />
           <RibbonSelect
             label="Page size"
-            soon
-            className="w-12"
-            value="a4"
-            options={PAGE_SIZES}
+            className="w-20"
+            value={format?.pageSizeKind ?? ''}
+            options={PAGE_SIZE_SELECT_OPTIONS}
+            disabled={!format || Boolean(format.layoutUnavailable)}
+            disabledReason={format?.layoutUnavailable}
+            onChange={(value) => {
+              const option = PAGE_SIZE_OPTIONS.find(
+                (item) => item.value === value,
+              )
+              if (option) format?.onPageSize(option.value)
+            }}
           />
         </ToolbarRow>
       </ToolbarGroup>

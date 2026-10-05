@@ -26,8 +26,11 @@ export type PlannedOperation =
           | 'insert_paragraph_after'
           | 'insert_paragraph_before'
           | 'delete_paragraph'
+          | 'insert_break'
+          | 'insert_section_break'
       }
     > & { paragraph: ParagraphAnchor })
+  | Extract<DocumentEditOperation, { type: 'set_section_properties' }>
 
 export function validatePlannedOperations(
   paragraphCount: number,
@@ -63,6 +66,7 @@ export function validatePlannedOperations(
   const alreadyDeleted = new Set<string>()
   for (const operation of planned) {
     if (
+      'paragraph' in operation &&
       operation.type !== 'delete_paragraph' &&
       alreadyDeleted.has(operation.paragraph.wire.id)
     ) {
@@ -93,6 +97,7 @@ export function validateTrackedOperations(
   const paragraphNumberingTargets = new Set<string>()
   const paragraphFormatTargets = new Set<string>()
   for (const operation of planned) {
+    if (!('paragraph' in operation)) continue
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (operation.type === 'replace_run_text') {
       if (

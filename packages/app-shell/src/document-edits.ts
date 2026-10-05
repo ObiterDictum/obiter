@@ -36,6 +36,18 @@ export type LocalInsert = {
 }
 
 /**
+ * A break the workspace holds before save. `offset` addresses the paragraph's
+ * effective text; a section break takes no offset — Word places it after the
+ * paragraph whose `w:pPr` carries the section.
+ */
+export type BreakDraft = {
+  id: string
+  paragraphId: string
+  offset: number
+  kind: 'page' | 'section'
+}
+
+/**
  * The run properties the edit contract can restate, read from a run's preserved
  * fragments. `null` means the run does not set the property directly, which is
  * the value a range emphasis needs to strip an inherited direct setting. One
@@ -221,6 +233,7 @@ export function collectEditOperations(
   deletedParagraphIds: string[],
   extraRuns: Record<string, DocumentTextRunWire[]> = {},
   format: FormatDrafts = emptyFormatDrafts,
+  breaks: BreakDraft[] = [],
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
   const story = documentStory(model)
@@ -261,6 +274,25 @@ export function collectEditOperations(
     // would paint it with that run's formatting. Restate each moved run's own
     // properties over its slice so the save keeps what the editor painted.
     operations.push(...appendedRunEmphasis(paragraph, extra, drafts))
+  }
+
+  // Breaks are applied after the text replacements above, so their offset
+  // addresses the same effective text the client recorded it in.
+  for (const item of breaks) {
+    if (deleted.has(item.paragraphId)) continue
+    if (item.kind === 'page') {
+      operations.push({
+        type: 'insert_break',
+        paragraphId: item.paragraphId,
+        offset: item.offset,
+        kind: 'page',
+      })
+    } else {
+      operations.push({
+        type: 'insert_section_break',
+        paragraphId: item.paragraphId,
+      })
+    }
   }
 
   const realIds = new Set(

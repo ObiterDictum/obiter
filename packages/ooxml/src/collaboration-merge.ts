@@ -142,6 +142,8 @@ export function remapMergeOperations(
       case 'delete_paragraph':
       case 'insert_paragraph_after':
       case 'insert_paragraph_before':
+      case 'insert_break':
+      case 'insert_section_break':
         return { ...operation, paragraphId: paragraph(operation.paragraphId) }
       default:
         return operation
@@ -380,6 +382,25 @@ function operationConflicts(
       changes.paragraphOpaque.has(operation.paragraphId)
     )
   }
+  if (operation.type === 'insert_break') {
+    // The offset addresses this paragraph's text, so a text edit to the same
+    // paragraph in the current version moves the break; refuse rather than
+    // place it at a stale offset.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId) ||
+      changes.paragraphRunChanges.has(operation.paragraphId)
+    )
+  }
+  if (operation.type === 'insert_section_break') {
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId)
+    )
+  }
+  // A section-properties edit is document-wide and carries no paragraph or run
+  // address, so it has no footprint to conflict with in E5.
+  if (operation.type === 'set_section_properties') return false
   if (operation.type === 'set_run_emphasis') {
     if (operation.runId !== undefined) {
       return (

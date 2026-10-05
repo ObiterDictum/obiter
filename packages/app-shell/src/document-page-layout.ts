@@ -84,7 +84,11 @@ export function sectionColumns(box: PageBox, sectXml: string): ColumnFrame[] {
 }
 
 export function documentPageBox(model: DocumentModelWire): PageBox {
-  const sect = documentSectionXml(model)
+  return pageBoxForSection(documentSectionXml(model))
+}
+
+/** The page box one `w:sectPr` fragment describes, with Word's defaults. */
+export function pageBoxForSection(sect: string): PageBox {
   const size = xmlTagAttrs(sect, 'pgSz')
   const margin = xmlTagAttrs(sect, 'pgMar')
   return {
@@ -127,18 +131,50 @@ export function marginStories(
 }
 
 export function documentSectionXml(model: DocumentModelWire): string {
-  const story = model.stories.find((item) => item.kind === 'document')
-  const xml = [
-    ...(story?.preservedXmlFragments ?? []),
-    ...(story?.paragraphs.flatMap(
-      (paragraph) => paragraph.preservedXmlFragments,
-    ) ?? []),
-  ].join('')
+  const sections = documentSections(model)
+  for (let index = sections.length - 1; index >= 0; index -= 1) {
+    const xml = sections[index]?.xml
+    if (xml) return xml
+  }
+  return ''
+}
+
+/** One section in body order: the paragraph it ends at, and its `w:sectPr`. */
+export type DocumentSection = {
+  /** The paragraph whose `w:pPr` carries this section's `w:sectPr`, or null
+   * for the final body-level section. */
+  endParagraphId: string | null
+  xml: string
+}
+
+export function sectionXmlInFragment(fragment: string): string {
   return (
-    xml.match(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/i)?.[0] ??
-    xml.match(/<w:sectPr\b[^>]*\/>/i)?.[0] ??
+    fragment.match(/<w:sectPr\b[\s\S]*?<\/w:sectPr>/i)?.[0] ??
+    fragment.match(/<w:sectPr\b[^>]*?\/>/i)?.[0] ??
     ''
   )
+}
+
+/**
+ * Every section in body order. A paragraph-level `w:sectPr` defines the
+ * section that ends at that paragraph; the body-level `w:sectPr` (always the
+ * last entry) governs the final section. E5 reads each section's geometry so a
+ * section break starts a new page with that section's page setup.
+ */
+export function documentSections(model: DocumentModelWire): DocumentSection[] {
+  const story = model.stories.find((item) => item.kind === 'document')
+  const sections: DocumentSection[] = []
+  for (const paragraph of story?.paragraphs ?? []) {
+    for (const fragment of paragraph.preservedXmlFragments) {
+      const xml = sectionXmlInFragment(fragment)
+      if (xml) sections.push({ endParagraphId: paragraph.id, xml })
+    }
+  }
+  const body = (story?.preservedXmlFragments ?? [])
+    .map(sectionXmlInFragment)
+    .find((xml) => xml.length > 0)
+  sections.push({ endParagraphId: null, xml: body ?? '' })
+  return sections
 }
 
 function sectionReferenceIds(

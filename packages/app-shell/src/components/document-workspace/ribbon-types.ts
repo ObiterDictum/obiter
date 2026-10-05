@@ -1,6 +1,10 @@
 import type { ListKind } from '../../document-list-toggle'
 import type { IndentKind } from '../../document-paragraph-format'
 import type {
+  PageSizeKind,
+  SectionMarginsKind,
+} from '../../document-section-format'
+import type {
   AlignmentValue,
   HighlightValue,
   VertAlignValue,
@@ -39,6 +43,13 @@ export type DocumentFormatToolbar = {
   canApplyBullet: boolean
   canApplyNumber: boolean
   canApplyMultilevel: boolean
+  /** The page-margin preset every target agrees on, or '' when custom/mixed. */
+  marginsKind: SectionMarginsKind
+  orientation: 'portrait' | 'landscape'
+  /** The page-size preset the section matches, or '' when custom. */
+  pageSizeKind: PageSizeKind
+  /** Set when tracked changes are on: page setup is not recorded as tracked. */
+  layoutUnavailable?: string
   onParagraphStyle: (styleId: string | null) => void
   onAlignment: (alignment: AlignmentValue) => void
   onLineSpacing: (value: string) => void
@@ -60,6 +71,9 @@ export type DocumentFormatToolbar = {
   onContinueList: () => void
   onRestartList: () => void
   onToggleList: (kind: ListKind) => void
+  onMargins: (kind: SectionMarginsKind) => void
+  onOrientation: () => void
+  onPageSize: (kind: PageSizeKind) => void
 }
 
 /**
