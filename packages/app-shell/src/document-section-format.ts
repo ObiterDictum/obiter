@@ -247,11 +247,15 @@ export function withBreakDrafts(
         paragraphs: story.paragraphs.map((paragraph) => {
           const list = byParagraph.get(paragraph.id)
           if (!list || list.length === 0) return paragraph
+          // The writer refuses a second section break on a paragraph that
+          // already ends a section, so paint one fragment per paragraph: two
+          // pending breaks on one paragraph must not register a phantom
+          // section and skew the geometry index for later sections.
           return {
             ...paragraph,
             preservedXmlFragments: [
               ...paragraph.preservedXmlFragments,
-              ...list.map(() => breakFragment(bodySection)),
+              breakFragment(bodySection),
             ],
           }
         }),

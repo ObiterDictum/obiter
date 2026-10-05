@@ -277,6 +277,27 @@ describe('section pagination', () => {
     ).toBe(base)
   })
 
+  it('paints one section fragment for two pending section breaks on one paragraph', () => {
+    const base = model(['p1', 'p2'])
+    const single = withBreakDrafts(base, [
+      { id: 'b1', paragraphId: 'p2', offset: 0, kind: 'section' },
+    ])
+    const doubled = withBreakDrafts(base, [
+      { id: 'b1', paragraphId: 'p2', offset: 0, kind: 'section' },
+      { id: 'b2', paragraphId: 'p2', offset: 0, kind: 'section' },
+    ])
+    const painted = doubled.stories[0]?.paragraphs.find(
+      (item) => item.id === 'p2',
+    )
+    // The writer refuses a second section break on the same paragraph, so the
+    // preview must register exactly one section or later sections' geometry
+    // index shifts.
+    expect(
+      painted?.preservedXmlFragments.join('').match(/<w:sectPr\b/gu),
+    ).toHaveLength(1)
+    expect(layoutDocument(doubled)).toHaveLength(layoutDocument(single).length)
+  })
+
   it('starts a new sheet at a pending page break offset', () => {
     const pages = layoutDocument(
       model(['p1', 'p2']),

@@ -113,6 +113,14 @@ export function insertPageBreak(
   const part = requireEditablePart(document, paragraph.partName)
   const overlay = part.overlay
   validateBreakOffset(paragraph, offset)
+  // A truly empty paragraph has no run to splice: the break run and any section
+  // properties share one paragraph-owned replacement so they compose in schema
+  // order instead of two full-node (or same-offset) replacements colliding.
+  if (isBlankParagraph(paragraph)) {
+    insertRunIntoEmptyParagraph(overlay, paragraph, PAGE_BREAK_RUN)
+    part.dirty = true
+    return
+  }
   const target = locateEffectiveRun(paragraph, offset)
   if (!target) {
     const point = locateOffset(overlay.source, paragraph, offset)
@@ -173,26 +181,16 @@ function locateEffectiveRun(
 }
 
 /**
- * Whether the run already owns a pending overlay write. A text replacement or
- * an earlier materialised break means the run's text and structure live in the
- * overlay, so a new break must rebuild the run rather than splice a second
- * replacement into it.
+ * Whether the run already owns a pending overlay write. Any run-keyed key — a
+ * text replacement, a run-property write, or an earlier materialised break —
+ * means the run's text and structure live in the overlay, so a new break must
+ * rebuild the run from its effective properties rather than reopen its tail
+ * from the parse-time `runProperties` snapshot.
  */
 function shouldMaterialiseRun(overlay: XmlOverlay, runId: string) {
-  if (overlay.replacements.has(`${runId}:page-break-run`)) return true
-  return pendingTextKeys(overlay, runId).length > 0
-}
-
-/** The `:text:` replacements one run's text writer left, in element order. */
-function pendingTextKeys(overlay: XmlOverlay, runId: string): string[] {
-  const pattern = new RegExp(`^${escapeRegExp(runId)}:text:(\\d+)$`, 'u')
-  return [...overlay.replacements.keys()]
-    .filter((key) => pattern.test(key))
-    .sort((left, right) => textIndex(left) - textIndex(right))
-}
-
-function textIndex(key: string): number {
-  return Number(key.slice(key.lastIndexOf(':') + 1))
+  return [...overlay.replacements.keys()].some((key) =>
+    key.startsWith(`${runId}:`),
+  )
 }
 
 /**
@@ -265,6 +263,8 @@ function pageBreakInsertion(
       value: PAGE_BREAK_RUN,
     }
   }
+  // A truly empty paragraph is intercepted by `insertPageBreak`; this branch
+  // keeps the located-point contract total if a future caller reaches it.
   if (point.split.kind === 'empty-paragraph') {
     const { paragraph } = point.split
     const opening = source
@@ -299,6 +299,58 @@ function pageBreakInsertion(
 }
 
 const PAGE_BREAK = '<w:br w:type="page"/>'
+
+/**
+ * A paragraph with no runs and no paragraph properties: the only shape where a
+ * page break and a section break both claim the same node.
+ */
+function isBlankParagraph(paragraph: ParagraphAnchor) {
+  return (
+    paragraph.runs.length === 0 &&
+    paragraph.paragraphPropertiesRange === undefined
+  )
+}
+
+/**
+ * Appends a run into a blank paragraph, reusing the paragraph-owned `<w:pPr>`
+ * replacement a property writer (style, section break) may already have
+ * created. One replacement per paragraph is what lets a page break and a
+ * section break compose in schema order — `w:pPr` first, then the break run —
+ * instead of two full-node replacements colliding or two same-offset inserts
+ * racing for order.
+ */
+function insertRunIntoEmptyParagraph(
+  overlay: XmlOverlay,
+  paragraph: ParagraphAnchor,
+  runXml: string,
+) {
+  const range = paragraph.paragraphRange
+  const key = `${paragraph.wire.id}:pPr`
+  const existing = overlay.replacements.get(key)
+  if (existing && /^<w:p\b/u.test(existing.value)) {
+    setOverlayReplacement(overlay, key, {
+      ...existing,
+      value: existing.value.replace(/<\/w:p>$/u, `${runXml}</w:p>`),
+    })
+    return
+  }
+  const opening = overlay.source
+    .slice(range.start, range.startTagEnd)
+    .replace(/\/\s*>$/u, '>')
+  if (existing && /^<w:pPr\b/u.test(existing.value)) {
+    setOverlayReplacement(overlay, key, {
+      start: range.start,
+      end: range.end,
+      value: `${opening}${existing.value}${runXml}</w:p>`,
+    })
+    return
+  }
+  setOverlayReplacement(overlay, key, {
+    start: range.start,
+    end: range.end,
+    value: `${opening}${runXml}</w:p>`,
+  })
+}
 
 /**
  * Validates the offset against the paragraph's effective text. The plan pass
@@ -351,8 +403,4 @@ function mirrorParagraphSection(
   )
   if (index === -1) wire.preservedXmlFragments.push(next)
   else wire.preservedXmlFragments[index] = next
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
