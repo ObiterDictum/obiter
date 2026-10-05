@@ -175,9 +175,16 @@ describe('synthetic paragraph-id allocation', () => {
       await serialiseDocx(document),
       'word/document.xml',
     )
+    // The prefix class must allow digits — `w14` is the binding the writer
+    // emits. A letters-only class collects `alias:paraId` but never the
+    // generated ids, so the uniqueness assertion could not see a collision.
     const allocated = [
-      ...xml.matchAll(/[A-Za-z_.-]+:paraId\s*=\s*['"]([0-9A-Fa-f]{8})['"]/gu),
+      ...xml.matchAll(/\b[\w.-]+:paraId\s*=\s*['"]([0-9A-Fa-f]{8})['"]/gu),
     ].map((match) => match[1]?.toUpperCase())
+    // The alias paragraph contributes E6000001; the table's generated ids
+    // must actually be in the collected set for the uniqueness check to
+    // mean anything.
+    expect(allocated.length).toBeGreaterThan(1)
     expect(new Set(allocated).size).toBe(allocated.length)
     expect(allocated.filter((id) => id === 'E6000001')).toHaveLength(1)
   })
