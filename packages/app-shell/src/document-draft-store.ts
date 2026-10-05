@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { documentTextRunWireSchema } from '@obiter/contracts'
+import { pendingEmphasisSchema } from './document-draft-emphasis'
 import type { DraftState } from './document-save-plan'
 import {
   CLAIM_PREFIX,
@@ -52,18 +53,6 @@ export const localInsertSchema = z
     beforeParagraphId: z.string().min(1).optional(),
     text: z.string(),
     runs: z.array(documentTextRunWireSchema).optional(),
-  })
-  .strict()
-
-const pendingEmphasisSchema = z
-  .object({
-    runId: z.string().min(1).optional(),
-    paragraphId: z.string().min(1).optional(),
-    from: z.number().int().min(0).optional(),
-    to: z.number().int().min(0).optional(),
-    bold: z.boolean().nullable().optional(),
-    italic: z.boolean().nullable().optional(),
-    underline: z.boolean().nullable().optional(),
   })
   .strict()
 

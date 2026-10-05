@@ -77,6 +77,40 @@ describe('document draft persistence', () => {
     expect(restored.held).toEqual(held)
   })
 
+  it('round-trips a draft carrying the full character-formatting emphasis', () => {
+    const storage = new MapStorage()
+    const state = stateWithText('hello')
+    state.format.emphasis = [
+      {
+        runId: 'r1',
+        bold: true,
+        italic: false,
+        underline: null,
+        strikethrough: true,
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        highlight: 'yellow',
+        vertAlign: 'superscript',
+        smallCaps: true,
+      },
+    ]
+    expect(
+      writeDocumentDraft(storage, scope, {
+        baseVersionId: 'ver_1',
+        state,
+        held: [],
+      }),
+    ).toBe(true)
+
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    // A schema that rejected any of these keys would fail the parse and delete
+    // the payload, silently destroying the whole unsaved draft.
+    expect(restored.state.format.emphasis).toEqual(state.format.emphasis)
+  })
+
   it('reports a draft recorded against another stored version as stale and keeps it', () => {
     const storage = new MapStorage()
     writeDocumentDraft(storage, scope, {
