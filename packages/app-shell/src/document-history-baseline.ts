@@ -979,6 +979,18 @@ export function translateSnapshot(
         Object.assign(next, removeDraftSlots(next, [slot]))
         break
       }
+      case 'structure': {
+        // There is no operation that removes a table or a picture, the same
+        // constraint as `break`: a snapshot holding the saved structure as
+        // pending work would resend the insertion, so the boundary drops the
+        // snapshot rather than claiming the reversal; a snapshot that
+        // predates it forgets the covered slot.
+        if (snapshot.structures.some((item) => item.id === slot.id)) {
+          return null
+        }
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        break
+      }
       default: {
         // Any other slot (there is none the editor produces today): a snapshot
         // that still holds it loses it to the new baseline and never replays

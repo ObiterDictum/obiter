@@ -93,3 +93,34 @@ export function handleDocumentWorkspaceKeys(
     }
   }
 }
+
+export type WorkspaceKeySources = {
+  save: () => void
+  undo?: () => void
+  redo?: () => void
+  print?: () => void
+  format?: {
+    emphasisUnavailable?: string
+    onToggleBold: () => void
+    onToggleItalic: () => void
+    onToggleUnderline: () => void
+  }
+}
+
+/** Binds the workspace's command sources to the key handler table. */
+export function documentWorkspaceKeyDown(
+  event: WorkspaceKeyEvent,
+  { save, undo, redo, print, format }: WorkspaceKeySources,
+) {
+  const emphasis = format && !format.emphasisUnavailable ? format : undefined
+  handleDocumentWorkspaceKeys(event, {
+    save,
+    undo,
+    redo,
+    print,
+    focusFind: () => document.getElementById('document-find')?.focus(),
+    toggleBold: emphasis?.onToggleBold,
+    toggleItalic: emphasis?.onToggleItalic,
+    toggleUnderline: emphasis?.onToggleUnderline,
+  })
+}

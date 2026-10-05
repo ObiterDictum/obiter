@@ -36,6 +36,13 @@ export {
   requestedImagePartName,
 } from './package-part'
 export { resolveRelationshipTarget } from './parts/rels'
+export { imageExtensionForContentType } from './structure-package'
+export {
+  buildInlineDrawingXml,
+  buildTableParagraphXml,
+  buildTableXml,
+  IMAGE_RELATIONSHIP_TYPE,
+} from './structure-xml'
 export { decodeXmlReferences, findXmlTagEnd } from './xml-lexemes'
 export * from './collaboration-merge'
 export * from './document-identity'

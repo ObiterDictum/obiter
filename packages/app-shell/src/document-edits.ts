@@ -20,6 +20,8 @@ import {
   emptyFormatDrafts,
   type FormatDrafts,
 } from './document-format-edits'
+import { structuralEditOperations } from './document-structural-drafts'
+import type { StructuralDraft } from './document-structural-drafts'
 
 export type LocalInsert = {
   clientId: string
@@ -234,6 +236,7 @@ export function collectEditOperations(
   extraRuns: Record<string, DocumentTextRunWire[]> = {},
   format: FormatDrafts = emptyFormatDrafts,
   breaks: BreakDraft[] = [],
+  structures: StructuralDraft[] = [],
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
   const story = documentStory(model)
@@ -333,6 +336,12 @@ export function collectEditOperations(
       ...(style ? { styleId: style } : {}),
     })
   }
+
+  // Structural insertions run after the paragraph inserts: a table chains
+  // after any paragraph the same batch inserted at its anchor, matching the
+  // order the pending fold paints, and still before the deletions that close
+  // the batch so a deleted anchor cannot silently swallow an insertion.
+  operations.push(...structuralEditOperations(structures, deleted))
 
   for (const paragraphId of deletedParagraphIds) {
     operations.push({ type: 'delete_paragraph', paragraphId })

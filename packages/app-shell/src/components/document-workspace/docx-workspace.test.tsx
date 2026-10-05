@@ -80,8 +80,17 @@ describe('DocxWorkspace ribbon', () => {
       screen.getByRole('button', { name: 'Multilevel numbering' }),
     ).toHaveProperty('disabled', true)
     openRibbonTab('Insert')
+    // Table and picture are real controls; with no caret paragraph they
+    // report an honest reason instead of a placeholder label.
     expect(
-      screen.getByRole('button', { name: 'Insert table (not available yet)' }),
+      screen.getByRole('button', {
+        name: 'Insert table: Place the cursor in a paragraph to insert',
+      }),
+    ).toHaveProperty('disabled', true)
+    expect(
+      screen.getByRole('button', {
+        name: 'Picture: Place the cursor in a paragraph to insert',
+      }),
     ).toHaveProperty('disabled', true)
     openRibbonTab('Layout')
     expect(
