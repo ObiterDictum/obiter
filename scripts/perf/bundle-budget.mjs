@@ -27,9 +27,20 @@ import { join } from 'node:path'
 // largest lazy chunk (the document workspace) 146.6 kB gzip. Budgets carry
 // roughly 10% headroom so an ordinary addition does not fail the check, while
 // a return to the previous shape (initial 409.9 kB gzip) is refused.
+//
+// The lazy budget was re-baselined from 385 kB to 400 kB on 2026-10-05. The
+// document-editor programme landed a large amount of client code in the lazy
+// workspace chunk, which the 385 kB figure predated: the base head 3e95127
+// already measured 388.1 kB against it, and the E6a head a475354 measures
+// 391.2 kB, with the workspace chunk at 169.5 kB and still inside its own
+// budget. 400 kB is the smallest value that admits that deliberate growth
+// while refusing anything beyond a few kilobytes more. The initial budget is
+// deliberately unchanged: an E6a defect briefly pushed it to 236.2 kB, the
+// fix restored it to 183.0 kB, so 212 kB retains real headroom and is not
+// being loosened.
 export const BUDGETS = {
   initialGzipBytes: 212 * 1024,
-  lazyGzipBytes: 385 * 1024,
+  lazyGzipBytes: 400 * 1024,
   largestLazyChunkGzipBytes: 200 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,
 }
