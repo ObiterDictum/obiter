@@ -206,10 +206,21 @@ function addMarker(
   }
 }
 
+/**
+ * `afterBoundaryContent` chooses which side of a text-element boundary an
+ * interior offset resolves to. Boundary-hugging callers — comment markers,
+ * emphasis cuts, page breaks — keep the default `after-element` answer (the
+ * preceding element's close). Splice insertions pass `true` so the point is
+ * the next editable element's start, after any non-editable siblings the
+ * batch already placed at that effective offset: the wire model lands
+ * repeated inserts at one offset in operation order (it skips zero-length
+ * runs), and the source splice must order identically.
+ */
 export function locateOffset(
   source: string,
   paragraph: ParagraphAnchor,
   offset: number,
+  afterBoundaryContent = false,
 ): InsertionPoint {
   const totalLength = paragraph.runs.reduce(
     (length, run) => length + run.wire.text.length,
@@ -237,7 +248,12 @@ export function locateOffset(
       return { sourceOffset: run.runRange.start }
     }
     if (offset > runStart && offset < runEnd) {
-      return locateInsideRun(source, run, offset - runStart)
+      return locateInsideRun(
+        source,
+        run,
+        offset - runStart,
+        afterBoundaryContent,
+      )
     }
     runStart = runEnd
   }
@@ -263,6 +279,7 @@ function locateInsideRun(
   source: string,
   run: TextRunAnchor,
   localOffset: number,
+  afterBoundaryContent: boolean,
 ): InsertionPoint {
   const nodes = editableTextNodes(run).map((node) => ({
     ...node,
@@ -308,7 +325,7 @@ function locateInsideRun(
         },
       }
     }
-    if (localOffset === textEnd) {
+    if (localOffset === textEnd && !afterBoundaryContent) {
       return {
         sourceOffset: node.range.end,
         split: {
