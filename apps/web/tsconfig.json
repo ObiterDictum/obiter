@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    // vite.config.ts imports readPort from lane-target.mjs so a supplied but
+    // invalid OBITER_WEB_PORT is refused, while an absent one keeps the shared
+    // default. allowJs infers those types from the real source; checkJs stays
+    // off so lane-target.mjs is not newly typechecked by this change.
+    "allowJs": true
+  },
+  "include": ["src", "vite.config.ts"]
+}

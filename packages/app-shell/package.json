@@ -1,0 +1,37 @@
+{
+  "name": "@obiter/app-shell",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./document-render": "./src/document-render.tsx",
+    "./views/legal-search": "./src/views/LegalSearchView.tsx",
+    "./views/case-law-document": "./src/views/CaseLawDocumentView.tsx",
+    "./views/case-law-document-query": "./src/views/case-law-document-query.ts"
+  },
+  "dependencies": {
+    "@obiter/contracts": "workspace:*",
+    "@obiter/ooxml": "workspace:*",
+    "@obiter/ui": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.100.1",
+    "@tanstack/react-router": "^1.168.23",
+    "better-auth": "^1.6.8",
+    "react": "^19.2.0",
+    "zod": "^4.3.6"
+  },
+  "scripts": {
+    "test": "bun test --isolate --parallel=2 --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@obiter/test-dom": "workspace:*",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.3",
+    "react-dom": "^19.2.5"
+  }
+}

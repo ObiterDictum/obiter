@@ -1,0 +1,576 @@
+import { readFile } from 'node:fs/promises'
+import JSZip from 'jszip'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
+import { supplementSpans } from '@obiter/redaction-policy'
+
+const unpdf = vi.hoisted(() => ({ getDocumentProxy: vi.fn() }))
+
+// The real unpdf namespace, snapshotted before mock.module patches it in
+// place below: the factory runs at registration time, so its spread already
+// captured the real exports; this keeps them for the tests that need the
+// real getDocumentProxy behind the mocked one.
+const unpdfActual = { ...(await import('unpdf')) }
+
+// The real module, snapshotted before mock.module registers: a factory that
+// awaited its own specifier re-entered the in-flight mock registration and
+// deadlocked under bun's module registry.
+const unpdfModule = { ...(await import('unpdf')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const unpdfKeys = Object.fromEntries(
+  Object.keys(await import('unpdf')).map((key) => [key, undefined]),
+)
+mock.module('unpdf', () =>
+  Object.assign(
+    { ...unpdfKeys },
+    {
+      ...unpdfModule,
+      getDocumentProxy: unpdf.getDocumentProxy,
+    },
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const {
+  DocumentExtractionError,
+  extractDocumentText,
+  IMAGE_ONLY_DOCX_MESSAGE,
+  prepareLaidChars,
+  UNREADABLE_DOCX_MESSAGE,
+} = await import('./document-extraction')
+
+import { layoutFromLaidChars, type LaidChar } from './document-layout'
+import { createRedactionDetector } from './redaction-detection'
+
+beforeEach(async () => {
+  const actual = unpdfActual
+  unpdf.getDocumentProxy.mockReset()
+  unpdf.getDocumentProxy.mockImplementation(actual.getDocumentProxy)
+})
+
+async function createMinimalDocx(
+  options: {
+    imageOnly?: boolean
+    supplementalImage?: 'header' | 'footer'
+  } = {},
+) {
+  const archive = new JSZip()
+  const supplementalPart = options.supplementalImage
+  const supplementalName = supplementalPart ? `${supplementalPart}1.xml` : null
+  archive.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${supplementalName ? `<Override PartName="/word/${supplementalName}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${supplementalPart}+xml"/>` : ''}</Types>`,
+  )
+  archive.file(
+    '_rels/.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  )
+  archive.file(
+    'word/document.xml',
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${options.imageOnly ? '<w:p><w:r><w:drawing><pic:pic/></w:drawing></w:r></w:p>' : '<w:p/>'}${supplementalPart ? `<w:sectPr><w:${supplementalPart}Reference w:type="default" r:id="rIdSupplemental"/></w:sectPr>` : ''}</w:body></w:document>`,
+  )
+  const documentRelationships = options.imageOnly
+    ? '<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+    : supplementalPart
+      ? `<Relationship Id="rIdSupplemental" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${supplementalPart}" Target="${supplementalName}"/>`
+      : ''
+  archive.file(
+    'word/_rels/document.xml.rels',
+    `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${documentRelationships}</Relationships>`,
+  )
+  if (supplementalPart && supplementalName) {
+    const root = supplementalPart === 'header' ? 'hdr' : 'ftr'
+    archive.file(
+      `word/${supplementalName}`,
+      `<?xml version="1.0"?><w:${root} xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:p><w:r><w:drawing><pic:pic/></w:drawing></w:r></w:p></w:${root}>`,
+    )
+    archive.file(
+      `word/_rels/${supplementalName}.rels`,
+      '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/></Relationships>',
+    )
+  }
+  if (options.imageOnly || supplementalPart)
+    archive.file('word/media/image1.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  return archive.generateAsync({ type: 'nodebuffer' })
+}
+
+/** Minimal DOCX carrying one footnote and one endnote, each after a
+ *  self-closing separator placeholder. */
+async function createNotesDocx() {
+  const archive = new JSZip()
+  archive.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/><Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/></Types>`,
+  )
+  archive.file(
+    '_rels/.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  )
+  archive.file(
+    'word/document.xml',
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Body paragraph one.</w:t><w:footnoteReference w:id="5"/><w:endnoteReference w:id="7"/></w:r></w:p></w:body></w:document>`,
+  )
+  archive.file(
+    'word/_rels/document.xml.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>',
+  )
+  archive.file(
+    'word/footnotes.xml',
+    `<?xml version="1.0"?><w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:footnote w:type="separator" w:id="0"/><w:footnote w:id="5"><w:p><w:r><w:t>Footnote body five.</w:t></w:r></w:p></w:footnote></w:footnotes>`,
+  )
+  archive.file(
+    'word/endnotes.xml',
+    `<?xml version="1.0"?><w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:endnote w:type="separator" w:id="0"/><w:endnote w:id="7"><w:p><w:r><w:t>Endnote body seven.</w:t></w:r></w:p></w:endnote></w:endnotes>`,
+  )
+  return archive.generateAsync({ type: 'nodebuffer' })
+}
+
+describe('extractDocumentText', () => {
+  it('extracts text from the checked-in DOCX demo fixture', async () => {
+    const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
+    await expect(extractDocumentText('docx', fixture)).resolves.toContain(
+      'Mr James Cartwright',
+    )
+  })
+
+  it('keeps readable body text when optional header/footer parsing fails', async () => {
+    const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const text = await extractDocumentText('docx', fixture, {
+      extractDocxSupplementalContent: async () => {
+        throw new Error('supplemental parser failed')
+      },
+    })
+
+    expect(text).toContain('Mr James Cartwright')
+    expect(warn).toHaveBeenCalledWith('DOCX header/footer extraction warning', {
+      reason: 'supplemental parser failed',
+    })
+    warn.mockRestore()
+  })
+
+  it('rejects an empty DOCX as unreadable, not image-only, when parsing fails', async () => {
+    const fixture = await createMinimalDocx()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(
+      extractDocumentText('docx', fixture, {
+        extractDocxSupplementalContent: async () => {
+          throw new Error('supplemental parser failed')
+        },
+      }),
+    ).rejects.toThrow(UNREADABLE_DOCX_MESSAGE)
+    expect(warn).toHaveBeenCalledWith('DOCX header/footer extraction warning', {
+      reason: 'supplemental parser failed',
+    })
+    warn.mockRestore()
+  })
+
+  it('rejects an image-only DOCX instead of presenting a clean zero-span run', async () => {
+    const fixture = await createMinimalDocx({ imageOnly: true })
+
+    await expect(extractDocumentText('docx', fixture)).rejects.toThrow(
+      IMAGE_ONLY_DOCX_MESSAGE,
+    )
+  })
+
+  it.each(['header', 'footer'] as const)(
+    'rejects a DOCX whose only content is an image in its %s',
+    async (supplementalImage) => {
+      const fixture = await createMinimalDocx({ supplementalImage })
+
+      await expect(extractDocumentText('docx', fixture)).rejects.toThrow(
+        IMAGE_ONLY_DOCX_MESSAGE,
+      )
+    },
+  )
+
+  it('allows a genuinely empty DOCX and produces zero detection spans', async () => {
+    const fixture = await createMinimalDocx()
+    const text = await extractDocumentText('docx', fixture)
+    const detection = await createRedactionDetector({
+      log: () => undefined,
+    })(text)
+
+    expect(text).toBe('')
+    expect(detection.spans).toEqual([])
+  })
+
+  it('extracts DOCX body, table, header and footer text', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/docx-edge-cases-fixture.docx',
+    )
+
+    const text = await extractDocumentText('docx', fixture)
+
+    expect(text).toContain('Header: Alice Example')
+    expect(text).toContain('Body: Jane Example')
+    expect(text).toContain('Table: Sarah Example')
+    expect(text).toContain('Footer: Bob Example')
+  })
+
+  it('appends footnote bodies as a labelled trailing region, after the body', async () => {
+    const fixture = await readFile(
+      'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
+    )
+
+    const text = await extractDocumentText('docx', fixture)
+
+    // Both note bodies, including the one after the self-closing separator.
+    expect(text).toContain('Three Rivers')
+    expect(text).toContain('disclosure timetable agreed on 2 May')
+    expect(text).toContain('[Footnote 2]')
+    expect(text).toContain('[Footnote 3]')
+    // Notes sit after the last body paragraph, so body offsets are stable.
+    const notesStart = text.indexOf('[Footnote 2]')
+    expect(notesStart).toBeGreaterThan(text.indexOf('Footnote reference 9.'))
+    expect(text.slice(0, notesStart)).not.toContain(
+      'disclosure timetable agreed on 2 May',
+    )
+  })
+
+  it('keeps body offsets stable when note extraction is added', async () => {
+    const fixture = await readFile(
+      'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const baseline = await extractDocumentText('docx', fixture, {
+      extractDocxSupplementalContent: async () => ({
+        header: [],
+        footer: [],
+        notes: [],
+        visualContent: 'absent',
+      }),
+    })
+    const full = await extractDocumentText('docx', fixture)
+
+    // Notes are appended, never interleaved: every pre-existing offset holds.
+    expect(full.startsWith(baseline)).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('extracts endnote bodies with addressable labels', async () => {
+    const fixture = await createNotesDocx()
+
+    const text = await extractDocumentText('docx', fixture)
+
+    expect(text).toContain('Body paragraph one.')
+    expect(text).toContain('[Footnote 5] Footnote body five.')
+    expect(text).toContain('[Endnote 7] Endnote body seven.')
+    expect(text.indexOf('[Footnote 5]')).toBeGreaterThan(
+      text.indexOf('Body paragraph one.'),
+    )
+  })
+
+  it('joins text-layer PDF pages and preserves known PII without detaching the source buffer', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-text-layer-fixture.pdf',
+    )
+    const source = Buffer.from(fixture)
+    await expect(extractDocumentText('pdf', source)).resolves.toContain(
+      'NI: QQ 12 34 56 C',
+    )
+    await expect(extractDocumentText('pdf', source)).resolves.toContain(
+      'Please contact Mr Amina Rahman',
+    )
+    await expect(extractDocumentText('pdf', source)).resolves.toContain(
+      'amina.rahman@example.test',
+    )
+    expect(source).toEqual(fixture)
+  })
+
+  it('normalises per-character PDF spacing before UK supplement detection', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-spaced-pii-fixture.pdf',
+    )
+    const text = await extractDocumentText('pdf', fixture)
+    expect(text).toContain('QQ123456C')
+    expect(text).toContain('amina@example.test')
+    expect(text).toContain('I am a QC')
+    expect(supplementSpans(text)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'national_insurance',
+          text: 'QQ123456C',
+        }),
+        expect.objectContaining({
+          category: 'email',
+          text: 'amina@example.test',
+        }),
+      ]),
+    )
+  })
+
+  it('collapses letterspaced PDF headings and keeps layout offsets aligned', async () => {
+    const headingFixture = Buffer.from('%PDF-placeholder')
+    unpdf.getDocumentProxy.mockResolvedValue({
+      numPages: 1,
+      getPage: async () => ({
+        getViewport: () => ({ width: 612, height: 792 }),
+        getTextContent: async () => ({
+          items: [
+            {
+              str: 'T H E F I V E S U R FA C E S',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 700],
+              width: 200,
+              height: 12,
+            },
+            {
+              str: 'Atlas',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 680],
+              width: 40,
+              height: 12,
+            },
+            {
+              str: 'The open legal source layer.',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 660],
+              width: 180,
+              height: 12,
+            },
+          ],
+        }),
+      }),
+      destroy: async () => undefined,
+    })
+
+    const { extractDocumentContent } = await import('./document-extraction')
+    const content = await extractDocumentContent('pdf', headingFixture)
+    expect(content.text).toContain('THEFIVESURFACES')
+    expect(content.text).toContain('Atlas')
+    expect(content.text).not.toContain('T H E F I V E')
+    expect(content.layout?.pages).toEqual([{ width: 612, height: 792 }])
+    expect(content.layout?.segments.length).toBeGreaterThan(0)
+    const headingStart = content.text.indexOf('THEFIVESURFACES')
+    expect(headingStart).toBeGreaterThanOrEqual(0)
+    const heading = content.layout?.segments.find(
+      (segment) => segment.start === headingStart,
+    )
+    expect(heading?.pageIndex).toBe(0)
+    expect(content.text.slice(heading!.start, heading!.end)).toBe('T')
+  })
+
+  it('allows a short one-page text-layer PDF', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-short-text-layer-fixture.pdf',
+    )
+    await expect(extractDocumentText('pdf', fixture)).resolves.toBe(
+      'Brief note.',
+    )
+  })
+
+  it('rejects scanned-like PDFs with no text, sparse multi-page text, or zero-width padding', async () => {
+    const emptyFixture = await readFile(
+      '../../data/evals/redact/pdf-scanned-like-fixture.pdf',
+    )
+    const lowTextFixture = await readFile(
+      '../../data/evals/redact/pdf-low-text-multipage-fixture.pdf',
+    )
+    const zeroWidthFixture = await readFile(
+      '../../data/evals/redact/pdf-zero-width-scanned-fixture.pdf',
+    )
+    for (const fixture of [emptyFixture, lowTextFixture, zeroWidthFixture])
+      await expect(extractDocumentText('pdf', fixture)).rejects.toThrow(
+        'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.',
+      )
+  })
+
+  it('preserves successful extraction when PDF cleanup fails', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-short-text-layer-fixture.pdf',
+    )
+    const actual = unpdfActual
+    const pdf = await actual.getDocumentProxy(new Uint8Array(fixture))
+    vi.spyOn(pdf, 'destroy').mockRejectedValue(new Error('cleanup failed'))
+    unpdf.getDocumentProxy.mockResolvedValue(pdf)
+
+    await expect(extractDocumentText('pdf', fixture)).resolves.toBe(
+      'Brief note.',
+    )
+  })
+
+  it('preserves the scanned-PDF error when PDF cleanup fails', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-scanned-like-fixture.pdf',
+    )
+    const actual = unpdfActual
+    const pdf = await actual.getDocumentProxy(new Uint8Array(fixture))
+    vi.spyOn(pdf, 'destroy').mockRejectedValue(new Error('cleanup failed'))
+    unpdf.getDocumentProxy.mockResolvedValue(pdf)
+
+    await expect(extractDocumentText('pdf', fixture)).rejects.toThrow(
+      'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.',
+    )
+  })
+
+  it('turns corrupt DOCX bytes into a deliberate extraction error', async () => {
+    await expect(
+      extractDocumentText('docx', Buffer.from('not a docx')),
+    ).rejects.toBeInstanceOf(DocumentExtractionError)
+  })
+
+  it('preserves TXT content', async () => {
+    await expect(
+      extractDocumentText('txt', Buffer.from('No PII here.')),
+    ).resolves.toBe('No PII here.')
+  })
+})
+
+describe('prepareLaidChars', () => {
+  it('strips format characters and keeps layout offsets aligned with text', () => {
+    const chars: LaidChar[] = [
+      {
+        ch: 'A',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 10,
+        y: 100,
+        width: 7,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u00ad',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 17,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'l',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 17,
+        y: 100,
+        width: 4,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u200b',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 21,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'i',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 21,
+        y: 100,
+        width: 3,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u202e',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 24,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'c',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 24,
+        y: 100,
+        width: 6,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'e',
+        pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
+        x: 30,
+        y: 100,
+        width: 7,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+    ]
+
+    const prepared = prepareLaidChars(chars)
+    const text = prepared.map((item) => item.ch).join('')
+    expect(text).toBe('Alice')
+    expect(text).not.toMatch(/[\u00ad\u200b\u202e]/u)
+
+    const layout = layoutFromLaidChars(prepared, [{ width: 200, height: 200 }])
+    const surviving = prepared.filter((item) => item.ch !== '\n')
+    expect(
+      layout.segments.reduce(
+        (sum, segment) => sum + (segment.end - segment.start),
+        0,
+      ),
+    ).toBe(surviving.length)
+
+    const offset = text.indexOf('c')
+    expect(offset).toBeGreaterThanOrEqual(0)
+    expect(text[offset]).toBe(prepared[offset]!.ch)
+    const segment = layout.segments.find(
+      (item) => item.start <= offset && offset < item.end,
+    )
+    expect(segment).toBeDefined()
+    expect(segment!.pageIndex).toBe(prepared[offset]!.pageIndex)
+    expect(segment!.y).toBe(prepared[offset]!.y)
+    expect(text.slice(segment!.start, segment!.end)).toContain('c')
+  })
+
+  it('normalises carriage returns the way the old page-text path did', () => {
+    const base = {
+      pageIndex: 0,
+      baselineX: 1,
+      baselineY: 0,
+      x: 0,
+      y: 100,
+      width: 1,
+      height: 12,
+      ascent: 10,
+      descent: 2,
+    }
+    const prepared = prepareLaidChars([
+      { ...base, ch: 'a' },
+      { ...base, ch: '\r' },
+      { ...base, ch: '\n' },
+      { ...base, ch: 'b' },
+      { ...base, ch: '\r' },
+      { ...base, ch: 'c' },
+    ])
+    expect(prepared.map((item) => item.ch).join('')).toBe('a\nb\nc')
+  })
+})

@@ -1,0 +1,42 @@
+import { z } from 'zod'
+import {
+  LegalSourceFamilySchema,
+  LegalSourceTypeSchema,
+} from '@obiter/legal-schema'
+import { normalizeCourtCode } from './court-utils'
+
+const legalSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/)
+  .transform(normalizeCourtCode)
+
+export const legalFetchRequestSchema = z.object({
+  query: z.string().trim().max(2048),
+  sourceType: LegalSourceTypeSchema.optional(),
+  sourceFamily: LegalSourceFamilySchema.optional(),
+  court: legalSlugSchema.optional(),
+  jurisdiction: legalSlugSchema.optional(),
+  legalDomain: legalSlugSchema.optional(),
+  provider: legalSlugSchema.optional(),
+  topic: z.string().trim().min(1).max(120).optional(),
+  dateFrom: z.string().date().optional(),
+  dateTo: z.string().date().optional(),
+  asAtDate: z.string().date().optional(),
+  legislationVersion: z.string().trim().min(1).max(80).optional(),
+  // Deprecated and ignored. The API is corpus-only: it never contacts Find
+  // Case Law, so requesting foreground live results changes nothing. Accepted
+  // so an older desktop or web client that still sends it is not rejected; a
+  // request that sends `true` is answered with
+  // `diagnostics.foregroundLiveIgnored: true` so the client can tell the flag
+  // had no effect.
+  foregroundLiveResults: z.boolean().optional(),
+})
+
+export type LegalFetchRequest = z.infer<typeof legalFetchRequestSchema>
+
+export const legalDocumentIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)

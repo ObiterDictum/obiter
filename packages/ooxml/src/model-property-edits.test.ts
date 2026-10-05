@@ -1,0 +1,947 @@
+import JSZip from 'jszip'
+import { describe, expect, it } from 'bun:test'
+
+import { buildOoxmlFixture } from '../fixtures/builder'
+import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
+
+describe('run emphasis and paragraph numbering edits', () => {
+  it('writes bold, italic, and underline without dropping run style', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_style', runId: run.id, styleId: 'Heading1Char' },
+      {
+        type: 'set_run_emphasis',
+        runId: run.id,
+        bold: true,
+        italic: true,
+        underline: true,
+      },
+    ])
+    const xml = await storyXml(document)
+    const reparsed = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )
+    const edited = reparsed[1]?.runs[0]?.preservedXmlFragments.join('') ?? ''
+
+    expect(xml).toContain('<w:b/>')
+    expect(xml).toContain('<w:i/>')
+    expect(xml).toContain('<w:u w:val="single"/>')
+    expect(edited).toContain('Heading1Char')
+    expect(edited).toContain('<w:b/>')
+  })
+
+  it('indents, outdents, and clears list numbering without dropping paragraph style', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 1,
+      },
+    ])
+    const indented = await storyXml(document)
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: null,
+      },
+    ])
+    const cleared = await storyXml(document)
+
+    const firstXml = (xml: string) =>
+      xml.match(/<w:p w14:paraId="A1B2C3D4"[\s\S]*?<\/w:p>/u)?.[0] ?? ''
+
+    expect(firstXml(indented)).toContain('<w:ilvl w:val="1"/>')
+    expect(firstXml(indented)).toContain('<w:numId w:val="1"/>')
+    expect(firstXml(indented)).toContain('<w:pStyle w:val="Heading1"/>')
+    expect(firstXml(cleared)).not.toContain('<w:numPr>')
+    expect(firstXml(cleared)).toContain('<w:pStyle w:val="Heading1"/>')
+  })
+
+  it('rejects empty emphasis and unknown numbering instances before writing', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    const run = first?.runs[0]
+    if (!first || !run) throw new Error('Fixture model is missing.')
+
+    expect(() =>
+      applyDocumentEdits(document, [
+        { type: 'set_run_emphasis', runId: run.id },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'set_paragraph_numbering',
+          paragraphId: first.id,
+          numId: '99',
+          ilvl: 0,
+        },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+    expect(
+      [...document.sourceParts.values()].every(({ dirty }) => !dirty),
+    ).toBe(true)
+
+    const removable = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const removableRun = mainParagraphs(removable)[0]?.runs[0]
+    if (!removableRun) throw new Error('Fixture run is missing.')
+    expect(() =>
+      applyDocumentEdits(removable, [
+        { type: 'set_run_emphasis', runId: removableRun.id, bold: null },
+      ]),
+    ).not.toThrow()
+  })
+
+  it('merges style and numbering in one batch into a single pPr for every pPr shape', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const cases: Array<{
+      name: string
+      bytes: Uint8Array
+      paragraphId: string
+    }> = []
+    const base = await zipText(fixture, 'word/document.xml')
+    const plain = mainParagraphs(await parseDocx(fixture)).find((paragraph) =>
+      paragraph.preservedXmlFragments.some((fragment) =>
+        /<w:pPr\b/u.test(fragment),
+      ),
+    )
+    if (!plain) throw new Error('Fixture paragraph is missing.')
+    cases.push({ name: 'rich pPr', bytes: fixture, paragraphId: plain.id })
+    cases.push({
+      name: 'no pPr',
+      bytes: await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '',
+        ),
+      ),
+      paragraphId: plain.id,
+    })
+    cases.push({
+      name: 'self-closing pPr',
+      bytes: await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '<w:pPr/>',
+        ),
+      ),
+      paragraphId: plain.id,
+    })
+
+    for (const { name, bytes, paragraphId } of cases) {
+      for (const tracking of [false, true]) {
+        const document = await parseDocx(bytes)
+        const paragraph = mainParagraphs(document).find(
+          (candidate) => candidate.id === paragraphId,
+        )
+        if (!paragraph) throw new Error('Paragraph is missing.')
+        applyDocumentEdits(
+          document,
+          [
+            {
+              type: 'set_paragraph_style',
+              paragraphId,
+              styleId: 'Base',
+            },
+            {
+              type: 'set_paragraph_numbering',
+              paragraphId,
+              numId: '1',
+              ilvl: 1,
+            },
+          ],
+          tracking
+            ? { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' }
+            : undefined,
+        )
+        const xml = await zipText(
+          await serialiseDocx(document),
+          'word/document.xml',
+        )
+        const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+        const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+        const label = `${name} tracked=${String(tracking)}`
+        expect(para, label).toContain('<w:pStyle w:val="Base"/>')
+        expect(para, label).toContain('<w:numPr>')
+        // never two sibling properties elements
+        expect(para, label).not.toContain('</w:pPr><w:pPr>')
+        if (tracking) {
+          expect(para, label).toMatch(
+            /<w:pPrChange[^>]*>[\s\S]*?<\/w:pPrChange>/u,
+          )
+          const reparsed = await parseDocx(await serialiseDocx(document))
+          const edited = mainParagraphs(reparsed).find(
+            (candidate) => candidate.id === paragraphId,
+          )
+          expect(edited?.styleId, label).toBe('Base')
+        } else {
+          const reparsed = await parseDocx(await serialiseDocx(document))
+          const edited = mainParagraphs(reparsed).find(
+            (candidate) => candidate.id === paragraphId,
+          )
+          expect(
+            edited?.preservedXmlFragments.filter((fragment) =>
+              /<w:pPr\b/u.test(fragment),
+            ),
+            label,
+          ).toHaveLength(1)
+          expect(edited?.styleId, label).toBe('Base')
+        }
+      }
+    }
+  })
+
+  it('edits the active rPr without touching an existing rPrChange record', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const document = await parseDocx(fixture)
+    const run = mainParagraphs(document)
+      .flatMap((paragraph) => paragraph.runs)
+      .find((candidate) => candidate.text.includes('Tracked formatting'))
+    if (!run) throw new Error('Tracked-formatting run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: false },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const rPrs = xml.match(/<w:rPr>[\s\S]*?<\/w:rPr>/gu) ?? []
+    const edited = rPrs.find((fragment) =>
+      fragment.includes('rPrChange w:id="15"'),
+    )
+    if (!edited) throw new Error('Edited rPr is missing.')
+    const active = edited.slice(0, edited.indexOf('<w:rPrChange'))
+    const change = edited.slice(edited.indexOf('<w:rPrChange'))
+    // toggle-off lands in the active rPr, before the change record
+    expect(active).toContain('<w:b w:val="0"/>')
+    // the recorded pre-change state is untouched
+    expect(change).toContain('<w:b/>')
+    expect(change).not.toContain('w:val="0"')
+  })
+
+  it('inserts emphasis into the active rPr before an existing rPrChange', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(fixture)
+    const base = (await zip.file('word/document.xml')?.async('string')) ?? ''
+    zip.file(
+      'word/document.xml',
+      base.replace(
+        '<w:r><w:rPr><w:rPrChange w:id="15"',
+        '<w:r><w:rPr><w:rFonts w:ascii="Calibri"/><w:rPrChange w:id="15"',
+      ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const run = mainParagraphs(document)
+      .flatMap((paragraph) => paragraph.runs)
+      .find((candidate) => candidate.text.includes('Tracked formatting'))
+    if (!run) throw new Error('Tracked-formatting run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const rPrs = xml.match(/<w:rPr>[\s\S]*?<\/w:rPr>/gu) ?? []
+    const edited = rPrs.find((fragment) =>
+      fragment.includes('rPrChange w:id="15"'),
+    )
+    if (!edited) throw new Error('Edited rPr is missing.')
+    const active = edited.slice(0, edited.indexOf('<w:rPrChange'))
+    expect(active.indexOf('Calibri')).toBeLessThan(active.indexOf('<w:b/>'))
+  })
+
+  it('keeps pStyle first when numbering inserts into a rich pPr', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const story = document.model.stories.find((s) => s.kind === 'document')
+    const overlay = document.sourceParts.get(story?.partName ?? '')?.overlay
+    const anchor = document.paragraphAnchors.get(first.id)
+    if (!overlay || !anchor?.paragraphPropertiesRange) {
+      throw new Error('Fixture pPr is missing.')
+    }
+    const range = anchor.paragraphPropertiesRange
+    overlay.source =
+      overlay.source.slice(0, range.start) +
+      '<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>' +
+      overlay.source.slice(range.end)
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:pStyle w:val="Heading1"/>')).toBeLessThan(
+      para.indexOf('<w:numPr>'),
+    )
+  })
+
+  it('inserts emphasis after rFonts and before sz in the untracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:r><w:t>Alice Example overview</w:t></w:r>',
+          '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>Alice Example overview</w:t></w:r>',
+        ),
+      ),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:r><w:rPr>')
+    const runXml = xml.slice(start, xml.indexOf('</w:r>', start) + 6)
+    expect(runXml.indexOf('Calibri')).toBeLessThan(runXml.indexOf('<w:b/>'))
+  })
+
+  it('inserts numbering after keepNext in the untracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '<w:pPr><w:keepNext/></w:pPr>',
+        ),
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:keepNext/>')).toBeLessThan(
+      para.indexOf('<w:numPr>'),
+    )
+  })
+
+  it('inserts emphasis before sz in the tracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:r><w:t>Alice Example overview</w:t></w:r>',
+          '<w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:t>Alice Example overview</w:t></w:r>',
+        ),
+      ),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [{ type: 'set_run_emphasis', runId: run.id, bold: true }],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:r><w:rPr>')
+    const runXml = xml.slice(start, xml.indexOf('</w:r>', start) + 6)
+    expect(runXml.indexOf('<w:b/>')).toBeLessThan(runXml.indexOf('<w:sz'))
+  })
+
+  it('inserts numbering before spacing in the tracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>',
+        ),
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        {
+          type: 'set_paragraph_numbering',
+          paragraphId: first.id,
+          numId: '1',
+          ilvl: 0,
+        },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:numPr>')).toBeLessThan(para.indexOf('<w:spacing'))
+  })
+
+  it('keeps rStyle first when emphasis inserts into a rich rPr', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:r><w:t>Alice Example overview</w:t></w:r>',
+          '<w:r><w:rPr><w:rStyle w:val="Heading1Char"/></w:rPr><w:t>Alice Example overview</w:t></w:r>',
+        ),
+      ),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:r><w:rPr>')
+    const runXml = xml.slice(start, xml.indexOf('</w:r>', start) + 6)
+    expect(runXml.indexOf('Heading1Char')).toBeLessThan(
+      runXml.indexOf('<w:b/>'),
+    )
+  })
+
+  it('keeps rStyle first when a tracked style merges after emphasis', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+        { type: 'set_run_style', runId: run.id, styleId: 'Heading1Char' },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const rPrs = xml.match(/<w:rPr>[\s\S]*?<\/w:rPr>/gu) ?? []
+    const edited = rPrs.find((fragment) => fragment.includes('Heading1Char'))
+    if (!edited) throw new Error('Edited rPr is missing.')
+    expect(edited.indexOf('Heading1Char')).toBeLessThan(
+      edited.indexOf('<w:b/>'),
+    )
+  })
+
+  it('keeps pStyle before numPr when numbering is written first', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const paragraph = mainParagraphs(document).find(
+      (candidate) =>
+        !candidate.preservedXmlFragments.some((fragment) =>
+          /<w:pPr\b/u.test(fragment),
+        ),
+    )
+    if (!paragraph) throw new Error('No pPr-less paragraph.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: paragraph.id,
+        numId: '1',
+        ilvl: 0,
+      },
+      {
+        type: 'set_paragraph_style',
+        paragraphId: paragraph.id,
+        styleId: 'Heading1',
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p>')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:pStyle w:val="Heading1"/>')).toBeLessThan(
+      para.indexOf('<w:numPr>'),
+    )
+  })
+
+  it('merges run style and emphasis in one batch into a single rPr', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_style', runId: run.id, styleId: 'Heading1Char' },
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const edited = mainParagraphs(reparsed)[1]?.runs[0]
+    const rPrs =
+      edited?.preservedXmlFragments.filter((fragment) =>
+        /<w:rPr\b/u.test(fragment),
+      ) ?? []
+    expect(rPrs).toHaveLength(1)
+    expect(rPrs.join('')).toContain('Heading1Char')
+    expect(rPrs.join('')).toContain('<w:b/>')
+    expect(xml).toContain('<w:b/>')
+  })
+
+  it('merges paragraph style and numbering into one tracked change when tracking', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'set_paragraph_style', paragraphId: first.id, styleId: 'Base' },
+        {
+          type: 'set_paragraph_numbering',
+          paragraphId: first.id,
+          numId: '1',
+          ilvl: 1,
+        },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    // one outer pPr carrying both edits, one pPr inside the pPrChange
+    // holding the original, never two sibling pPr elements
+    expect(para).not.toContain('</w:pPr><w:pPr>')
+    expect(para.match(/<w:pPrChange/g) ?? []).toHaveLength(1)
+    expect(para).toContain('<w:pStyle w:val="Base"/>')
+    expect(para).toContain('<w:numPr>')
+  })
+  it('creates a numbering instance with a start override and reloads it', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 3,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 3,
+    )
+    expect(created?.numberingId).not.toBe('1')
+    expect(created?.abstractNumberingId).toBe('0')
+    expect(created?.levels?.[0]?.start).toBe(3)
+
+    const numberingXml = await zipText(
+      await serialiseDocx(document),
+      'word/numbering.xml',
+    )
+    expect(numberingXml).toContain(`<w:num w:numId="${created?.numberingId}">`)
+    expect(numberingXml).toContain('<w:startOverride w:val="3"/>')
+
+    const reloaded = await parseDocx(await serialiseDocx(document))
+    const paragraph = mainParagraphs(reloaded)[0]
+    expect(paragraph?.preservedXmlFragments.join('')).toContain(
+      `<w:numId w:val="${created?.numberingId}"/>`,
+    )
+    expect(
+      reloaded.model.numbering.find(
+        (instance) => instance.numberingId === created?.numberingId,
+      )?.startOverride,
+    ).toBe(3)
+  })
+
+  it('reuses an existing matching start override and de-duplicates a new one', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const [first, second] = mainParagraphs(document)
+    if (!first || !second) throw new Error('Fixture paragraphs are missing.')
+
+    // The fixture's num 2 already carries `ilvl 0` `startOverride 1`.
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 1,
+      },
+    ])
+    expect(
+      mainParagraphs(document)[0]?.preservedXmlFragments.join(''),
+    ).toContain('<w:numId w:val="2"/>')
+
+    // Two paragraphs asking for the same fresh override share one instance.
+    const before = document.model.numbering.length
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 4,
+      },
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: second.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 4,
+      },
+    ])
+    const created = document.model.numbering.filter(
+      (instance) => instance.startOverride === 4,
+    )
+    expect(document.model.numbering.length).toBe(before + 1)
+    expect(created).toHaveLength(1)
+    const xml = await storyXml(document)
+    expect(
+      xml.match(
+        new RegExp(`<w:numId w:val="${created[0]?.numberingId}"/>`, 'gu'),
+      ),
+    ).toHaveLength(2)
+  })
+
+  it('leaves the numbering instance untouched without a start override', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const before = document.model.numbering.length
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+      },
+    ])
+    expect(document.model.numbering).toHaveLength(before)
+    expect(await storyXml(document)).toContain('<w:numId w:val="1"/>')
+  })
+
+  it('folds a start override into a tracked pPrChange', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    applyDocumentEdits(
+      document,
+      [
+        {
+          type: 'set_paragraph_numbering',
+          paragraphId: first.id,
+          numId: '1',
+          ilvl: 0,
+          startOverride: 2,
+        },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 2,
+    )
+    const xml = await storyXml(document)
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para).toContain('<w:pPrChange')
+    expect(para).toContain(`<w:numId w:val="${created?.numberingId}"/>`)
+  })
+
+  it('copies the source level overrides the new num does not replace', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0">' +
+      '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>' +
+      '<w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%3."/></w:lvl>' +
+      '</w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="2"><w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="upperLetter"/><w:lvlText w:val="%3)"/></w:lvl></w:lvlOverride></w:num>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>' +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 3,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 3,
+    )
+    if (!created) throw new Error('created numbering instance is missing.')
+
+    const reloaded = await parseDocx(await serialiseDocx(document))
+    const parsed = reloaded.model.numbering.find(
+      (instance) => instance.numberingId === created.numberingId,
+    )
+    // The reloaded model is what the emitted XML actually carries; the edit's
+    // model entry must describe the same levels, including the source's
+    // override at the other level.
+    expect(parsed?.levels).toEqual(created.levels)
+    expect(parsed?.levels?.find((level) => level.ilvl === 2)?.numFmt).toBe(
+      'upperLetter',
+    )
+  })
+
+  it('restarts a level the source instance redefined with a nested w:lvl', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:lvl w:ilvl="0"><w:start w:val="5"/><w:numFmt w:val="upperLetter"/><w:lvlText w:val="%1)"/></w:lvl></w:lvlOverride></w:num>' +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 3,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 3,
+    )
+    if (!created) throw new Error('created numbering instance is missing.')
+
+    const serialised = await serialiseDocx(document)
+    const numberingXml = await zipText(serialised, 'word/numbering.xml')
+    const numAt = numberingXml.indexOf(
+      `<w:num w:numId="${created.numberingId}">`,
+    )
+    const fragment = numberingXml.slice(
+      numAt,
+      numberingXml.indexOf('</w:num>', numAt) + 8,
+    )
+    // CT_NumLvl orders startOverride before lvl, and the nested level's own
+    // start must agree with it so the restart holds whichever one a consumer
+    // reads.
+    expect(fragment.indexOf('<w:startOverride')).toBeGreaterThan(-1)
+    expect(fragment.indexOf('<w:startOverride')).toBeLessThan(
+      fragment.indexOf('<w:lvl '),
+    )
+    expect(fragment).toContain('<w:start w:val="3"/>')
+    expect(fragment).not.toContain('<w:start w:val="5"/>')
+
+    const reloaded = await parseDocx(serialised)
+    const parsed = reloaded.model.numbering.find(
+      (instance) => instance.numberingId === created.numberingId,
+    )
+    const level = parsed?.levels?.find((item) => item.ilvl === 0)
+    expect(level?.start).toBe(3)
+    // The formatting the source override defined survives, so the edit's model
+    // entry and the reloaded part describe the same level.
+    expect(level?.lvlText).toBe('%1)')
+    expect(level?.numFmt).toBe('upperLetter')
+    expect(parsed?.levels).toEqual(created.levels)
+  })
+
+  it('inserts a new num before a trailing numIdMacAtCleanup', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="0"/></w:num>' +
+      '<w:numIdMacAtCleanup w:val="2"/>' +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 4,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 4,
+    )
+    if (!created) throw new Error('created numbering instance is missing.')
+
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/numbering.xml',
+    )
+    const numAt = xml.indexOf(`<w:num w:numId="${created.numberingId}">`)
+    const cleanupAt = xml.indexOf('<w:numIdMacAtCleanup')
+    expect(numAt).toBeGreaterThan(-1)
+    expect(cleanupAt).toBeGreaterThan(-1)
+    expect(numAt).toBeLessThan(cleanupAt)
+  })
+
+  it('reuses an override written with single-quoted attributes', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      "<w:num w:numId='2'><w:abstractNumId w:val='0'/><w:lvlOverride w:ilvl='0'><w:startOverride w:val='1'/></w:lvlOverride></w:num>" +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const before = document.model.numbering.length
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 1,
+      },
+    ])
+    expect(document.model.numbering).toHaveLength(before)
+    expect(
+      mainParagraphs(document)[0]?.preservedXmlFragments.join(''),
+    ).toContain('<w:numId w:val="2"/>')
+  })
+})
+
+async function zipText(input: Uint8Array, partName: string) {
+  const zip = await JSZip.loadAsync(input)
+  const part = zip.file(partName)
+  if (!part) throw new Error(`${partName} is missing.`)
+  return part.async('string')
+}
+
+async function withDocumentXml(input: Uint8Array, documentXml: string) {
+  const zip = await JSZip.loadAsync(input)
+  zip.file('word/document.xml', documentXml)
+  return zip.generateAsync({ type: 'uint8array' })
+}
+
+async function withNumberingXml(input: Uint8Array, numberingXml: string) {
+  const zip = await JSZip.loadAsync(input)
+  zip.file('word/numbering.xml', numberingXml)
+  return zip.generateAsync({ type: 'uint8array' })
+}
+
+function mainParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {
+  return (
+    document.model.stories.find((story) => story.kind === 'document')
+      ?.paragraphs ?? []
+  )
+}
+
+async function storyXml(document: Awaited<ReturnType<typeof parseDocx>>) {
+  const zip = await JSZip.loadAsync(await serialiseDocx(document))
+  const part = zip.file('word/document.xml')
+  if (!part) throw new Error('document.xml is missing.')
+  return part.async('string')
+}

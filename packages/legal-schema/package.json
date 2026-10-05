@@ -1,0 +1,16 @@
+{
+  "name": "@obiter/legal-schema",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts src/legal-schema.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}
