@@ -367,7 +367,7 @@ export function DocxWorkspace({
                       pageBlocks={laid.blocks}
                       pageFloats={laid.floats}
                       pageTextBoxes={laid.textBoxes}
-                      pageColumns={laid.columns}
+                      pageLayout={laid}
                       selectedParagraphId={selectedParagraphId}
                       onSelectParagraph={selectParagraph}
                       onTextSelection={(paragraphId, from, to, direction) => {

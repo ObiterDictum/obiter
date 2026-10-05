@@ -58,7 +58,7 @@ export function StaticDocumentPages({
                 pageBlocks={laid.blocks}
                 pageFloats={laid.floats}
                 pageTextBoxes={laid.textBoxes}
-                pageColumns={laid.columns}
+                pageLayout={laid}
                 selectedParagraphId={null}
                 onSelectParagraph={NO_SELECTION}
                 imageUrls={imageUrls}

@@ -445,6 +445,23 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
         context,
         'At least one section property must be assigned.',
       )
+      // An explicit size and an orientation cannot contradict: the writer
+      // emits `w:orient` alongside the dimensions, and readers disagree on
+      // which wins. The dimensions are authoritative, matching the writer's
+      // own derivation.
+      const size = operation.pageSize
+      const orientation = operation.orientation
+      if (size && orientation !== undefined && orientation !== null) {
+        const derived = size.width > size.height ? 'landscape' : 'portrait'
+        if (derived !== orientation) {
+          context.addIssue({
+            code: 'custom',
+            path: ['orientation'],
+            message:
+              'orientation contradicts the explicit pageSize dimensions.',
+          })
+        }
+      }
     }),
   z
     .object({

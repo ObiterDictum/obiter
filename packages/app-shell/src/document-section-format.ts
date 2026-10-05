@@ -216,18 +216,21 @@ function orientSize(
 }
 
 /**
- * A copy of the model with pending breaks folded into the paragraphs they
- * address, so the paginator sees a page break's `w:br` and a section break's
- * paragraph-level `w:sectPr` before the save writes them. Returns the same
- * model when there is nothing to fold, so pagination memoisation still holds.
+ * A copy of the model with pending section breaks folded into the paragraphs
+ * they address, so the paginator sees a section break's paragraph-level
+ * `w:sectPr` before the save writes it. Page breaks consume no text offset and
+ * are laid out at their caret offset by `layoutDocument`, so they are not
+ * appended here. Returns the same model when there is nothing to fold, so
+ * pagination memoisation still holds.
  */
 export function withBreakDrafts(
   model: DocumentModelWire,
   breaks: readonly BreakDraft[],
 ): DocumentModelWire {
-  if (breaks.length === 0) return model
+  const sections = breaks.filter((item) => item.kind === 'section')
+  if (sections.length === 0) return model
   const byParagraph = new Map<string, BreakDraft[]>()
-  for (const item of breaks) {
+  for (const item of sections) {
     const list = byParagraph.get(item.paragraphId) ?? []
     list.push(item)
     byParagraph.set(item.paragraphId, list)
@@ -248,7 +251,7 @@ export function withBreakDrafts(
             ...paragraph,
             preservedXmlFragments: [
               ...paragraph.preservedXmlFragments,
-              ...list.map((item) => breakFragment(item, bodySection)),
+              ...list.map(() => breakFragment(bodySection)),
             ],
           }
         }),
@@ -257,8 +260,7 @@ export function withBreakDrafts(
   }
 }
 
-function breakFragment(item: BreakDraft, bodySection: string) {
-  if (item.kind === 'page') return '<w:r><w:br w:type="page"/></w:r>'
+function breakFragment(bodySection: string) {
   return `<w:pPr>${bodySection || '<w:sectPr/>'}</w:pPr>`
 }
 

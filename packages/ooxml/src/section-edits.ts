@@ -3,6 +3,7 @@ import type { DocumentStoryWire } from '@obiter/contracts'
 import { locateOffset, preserveTextOpeningTag } from './comment-anchors'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
+import { splitsSurrogate } from './model-run-range-edits'
 import { writePropertyChildren } from './model-properties'
 import { insertPropertyChild, stripPropertyChild } from './property-xml'
 import {
@@ -85,87 +86,78 @@ export function insertSectionBreak(
 /**
  * Inserts `<w:br w:type="page"/>` in a run at the paragraph character offset,
  * splitting the run when the offset falls inside it. The offset addresses the
- * paragraph's effective text: text replacements planned earlier in the batch
- * are read back and, when the containing run was rewritten, the run is
- * materialised with the break inline rather than overlapping the replacement.
+ * paragraph's effective text: a text replacement earlier in the batch has
+ * already updated `wire.text`, and a run it rewrote is materialised with every
+ * accumulated break inline rather than overlapping the replacement.
  */
 export function insertPageBreak(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
   offset: number,
+  breakOffsets: Map<string, number[]> = new Map(),
 ) {
   const part = requireEditablePart(document, paragraph.partName)
   const overlay = part.overlay
-  const target = locateEffectiveRun(overlay, paragraph, offset)
-  const key = `${paragraph.wire.id}:page-break:${offset}`
+  validateBreakOffset(paragraph, offset)
+  const target = locateEffectiveRun(paragraph, offset)
   if (!target.run) {
     const point = locateOffset(overlay.source, paragraph, offset)
     setOverlayReplacement(
       overlay,
-      key,
-      pageBreakReplacement(overlay.source, point),
+      `${paragraph.wire.id}:page-break:${offset}`,
+      pageBreakInsertion(overlay.source, point),
+    )
+  } else if (shouldMaterialiseRun(overlay, target.run.wire.id)) {
+    const offsets = [...(breakOffsets.get(target.run.wire.id) ?? []), offset]
+    breakOffsets.set(target.run.wire.id, offsets)
+    materialiseRunWithBreaks(
+      overlay,
+      target.run,
+      offsets,
+      `${target.run.wire.id}:page-break-run`,
     )
   } else {
-    const { run, localOffset } = target
-    if (pendingTextKeys(overlay, run.wire.id).length > 0) {
-      materialiseRunWithBreak(overlay, run, localOffset, key)
-    } else {
-      const original = locateOffset(
-        overlay.source,
-        paragraph,
-        target.originalRunStart + localOffset,
-      )
-      setOverlayReplacement(
-        overlay,
-        key,
-        pageBreakReplacement(overlay.source, original),
-      )
-    }
+    const point = locateOffset(overlay.source, paragraph, offset)
+    setOverlayReplacement(
+      overlay,
+      `${paragraph.wire.id}:page-break:${offset}`,
+      pageBreakInsertion(overlay.source, point),
+    )
   }
-  paragraph.wire.preservedXmlFragments.push(PAGE_BREAK_RUN)
   part.dirty = true
 }
 
 type EffectiveRunTarget = {
   run?: ParagraphAnchor['runs'][number]
-  localOffset: number
-  originalRunStart: number
 }
 
 /**
- * Finds the run the effective-text offset sits strictly inside, with its
- * original source offset. A boundary offset is handled by `locateOffset` at
- * the caller.
+ * Finds the run the effective-text offset sits strictly inside. A boundary
+ * offset is handled by `locateOffset` at the caller.
  */
 function locateEffectiveRun(
-  overlay: XmlOverlay,
   paragraph: ParagraphAnchor,
   offset: number,
 ): EffectiveRunTarget {
-  let originalStart = 0
-  let effectiveStart = 0
+  let start = 0
   for (const run of paragraph.runs) {
-    const text = effectiveRunText(overlay, run)
-    if (offset > effectiveStart && offset < effectiveStart + text.length) {
-      return {
-        run,
-        localOffset: offset - effectiveStart,
-        originalRunStart: originalStart,
-      }
+    if (offset > start && offset < start + run.wire.text.length) {
+      return { run }
     }
-    originalStart += run.wire.text.length
-    effectiveStart += text.length
+    start += run.wire.text.length
   }
-  return { localOffset: 0, originalRunStart: 0 }
+  return {}
 }
 
-function effectiveRunText(
-  overlay: XmlOverlay,
-  run: ParagraphAnchor['runs'][number],
-) {
-  const keys = pendingTextKeys(overlay, run.wire.id)
-  if (keys.length === 0) return run.wire.text
-  return keys.map((key) => overlay.replacements.get(key)?.value ?? '').join('')
+/**
+ * Whether the run already owns a pending overlay write. A text replacement or
+ * an earlier materialised break means the run's text and structure live in the
+ * overlay, so a new break must rebuild the run rather than splice a second
+ * replacement into it.
+ */
+function shouldMaterialiseRun(overlay: XmlOverlay, runId: string) {
+  if (overlay.replacements.has(`${runId}:page-break-run`)) return true
+  return pendingTextKeys(overlay, runId).length > 0
 }
 
 /** The `:text:` replacements one run's text writer left, in element order. */
@@ -180,38 +172,58 @@ function textIndex(key: string): number {
   return Number(key.slice(key.lastIndexOf(':') + 1))
 }
 
-/** Rewrites a run whose text a pending replacement already owns, with the
- * break inline, so the two edits do not overlap at serialise time. */
-function materialiseRunWithBreak(
+/**
+ * Rewrites a run whose overlay already owns its text or properties, with every
+ * pending page break inline. It folds the run's non-text children (including a
+ * run-property write already patched onto `wire.preservedXmlFragments`) and its
+ * effective text, then clears every in-run replacement before claiming the
+ * whole run range, so the breaks compose with the text and property writes
+ * instead of overlapping them.
+ */
+function materialiseRunWithBreaks(
   overlay: XmlOverlay,
   run: ParagraphAnchor['runs'][number],
-  localOffset: number,
+  offsets: readonly number[],
   key: string,
 ) {
-  const text = effectiveRunText(overlay, run)
-  for (const pending of pendingTextKeys(overlay, run.wire.id)) {
-    overlay.replacements.delete(pending)
-  }
+  const text = run.wire.text
+  const ordered = [...new Set(offsets)].sort((left, right) => left - right)
   const source = overlay.source
   const openRun = source.slice(run.runRange.start, run.runRange.startTagEnd)
   const closeRun = source.slice(run.runRange.endTagStart, run.runRange.end)
-  const properties = run.runProperties.join('')
+  const properties = run.wire.preservedXmlFragments.join('')
   const prefix = /^<([^:>\s]+):/u.exec(openRun)?.[1] ?? 'w'
-  const left = text.slice(0, localOffset)
-  const right = text.slice(localOffset)
+  let cursor = 0
+  let inner = ''
+  for (const at of ordered) {
+    inner += wordRunInnerTextXml(prefix, text.slice(cursor, at))
+    inner += PAGE_BREAK
+    cursor = at
+  }
+  inner += wordRunInnerTextXml(prefix, text.slice(cursor))
+  for (const [pendingKey, replacement] of overlay.replacements) {
+    if (
+      pendingKey.startsWith(`${run.wire.id}:`) &&
+      replacement.start >= run.runRange.start &&
+      replacement.end <= run.runRange.end
+    ) {
+      overlay.replacements.delete(pendingKey)
+    }
+  }
   setOverlayReplacement(overlay, key, {
     start: run.runRange.start,
     end: run.runRange.end,
-    value: `${openRun}${properties}${wordRunInnerTextXml(prefix, left)}<w:br w:type="page"/>${wordRunInnerTextXml(prefix, right)}${closeRun}`,
+    value: `${openRun}${properties}${inner}${closeRun}`,
   })
 }
 
 /**
- * The break replacement for a located point. Mid-text splits the same way the
- * comment-anchor writer does: the replacement ends at the split offset so the
- * original closing tag of the first half is replayed by the untouched tail.
+ * The zero-width break insertion for a located point. Every point in one text
+ * element is spliced independently (the enclosing run and text are closed and
+ * reopened around the break), so two breaks in the same run never overlap at
+ * serialise time.
  */
-function pageBreakReplacement(
+function pageBreakInsertion(
   source: string,
   point: ReturnType<typeof locateOffset>,
 ): OverlayReplacement {
@@ -238,22 +250,34 @@ function pageBreakReplacement(
   const openRun = source.slice(run.runRange.start, run.runRange.startTagEnd)
   const properties = run.runProperties.join('')
   if (position === 'content' && textElement) {
-    const openText = source.slice(textElement.start, textElement.startTagEnd)
     const closeText = source.slice(textElement.endTagStart, textElement.end)
-    const firstHalf = `${openText}${source.slice(
-      textElement.startTagEnd,
-      point.sourceOffset,
-    )}`
+    const openText = preserveTextOpeningTag(
+      source.slice(textElement.start, textElement.startTagEnd),
+    )
     return {
-      start: textElement.start,
+      start: point.sourceOffset,
       end: point.sourceOffset,
-      value: `${firstHalf}${closeText}${closeRun}${PAGE_BREAK_RUN}${openRun}${properties}${preserveTextOpeningTag(openText)}`,
+      value: `${closeText}${closeRun}${PAGE_BREAK_RUN}${openRun}${properties}${openText}`,
     }
   }
   return {
     start: point.sourceOffset,
     end: point.sourceOffset,
     value: `${closeRun}${PAGE_BREAK_RUN}${openRun}${properties}`,
+  }
+}
+
+const PAGE_BREAK = '<w:br w:type="page"/>'
+
+/**
+ * Validates the offset against the paragraph's effective text. The plan pass
+ * cannot do this: a same-batch `replace_run_text` changes the text length, and
+ * `wire.text` only holds the effective text once that operation has run.
+ */
+function validateBreakOffset(paragraph: ParagraphAnchor, offset: number) {
+  const text = paragraph.runs.map((run) => run.wire.text).join('')
+  if (offset > text.length || splitsSurrogate(text, offset)) {
+    throw new OoxmlError('invalid-document-edit')
   }
 }
 
@@ -288,7 +312,7 @@ function mirrorParagraphSection(
   const index = wire.preservedXmlFragments.findIndex((fragment) =>
     /<w:pPr\b/u.test(fragment),
   )
-  const base = index === -1 ? '<w:pPr/>' : wire.preservedXmlFragments[index]!
+  const base = wire.preservedXmlFragments[index] ?? '<w:pPr/>'
   const next = insertPropertyChild(
     stripPropertyChild(base, 'sectPr'),
     'sectPr',
