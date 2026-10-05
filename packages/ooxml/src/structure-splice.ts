@@ -49,7 +49,7 @@ export function spliceInlineXml(
     spliceIntoPendingRun(overlay, paragraph, holder, offset, xml, key)
     return
   }
-  const point = locateOffset(overlay.source, paragraph, offset)
+  const point = locateOffset(overlay.source, paragraph, offset, true)
   assertNoPendingAt(overlay, point.sourceOffset)
   setOverlayReplacement(
     overlay,
@@ -86,7 +86,12 @@ function spliceIntoPendingRun(
 ) {
   const { run, runStart } = holder
   const view = effectiveRunView(overlay, run, paragraph)
-  const point = locateOffset(view.source, view.paragraph, offset - runStart)
+  const point = locateOffset(
+    view.source,
+    view.paragraph,
+    offset - runStart,
+    true,
+  )
   const serialised = applyFragmentReplacements(view.source, [
     spliceReplacement(view.source, point, xml),
   ])
