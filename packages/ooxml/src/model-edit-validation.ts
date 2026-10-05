@@ -28,6 +28,8 @@ export type PlannedOperation =
           | 'delete_paragraph'
           | 'insert_break'
           | 'insert_section_break'
+          | 'insert_table'
+          | 'insert_image'
       }
     > & { paragraph: ParagraphAnchor })
   | Extract<DocumentEditOperation, { type: 'set_section_properties' }>
@@ -99,6 +101,15 @@ export function validateTrackedOperations(
   for (const operation of planned) {
     if (!('paragraph' in operation)) continue
     if (deletedIds.has(operation.paragraph.wire.id)) continue
+    // Structural insertions have no tracked form yet — a `w:ins` cannot
+    // express a new package part or relationship. Fail closed before any
+    // write rather than apply untracked while the client asked for tracking.
+    if (
+      operation.type === 'insert_table' ||
+      operation.type === 'insert_image'
+    ) {
+      throw new OoxmlError('model-node-not-editable')
+    }
     if (operation.type === 'replace_run_text') {
       if (
         containsTrackedChange(

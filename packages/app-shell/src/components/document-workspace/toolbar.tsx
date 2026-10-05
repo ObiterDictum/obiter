@@ -14,12 +14,14 @@ import type {
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
+  DocumentStructureToolbar,
 } from './ribbon-types'
 
 export type {
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
+  DocumentStructureToolbar,
 }
 
 export function DocumentWorkspaceToolbar({
@@ -53,6 +55,7 @@ export function DocumentWorkspaceToolbar({
   onPageBreak,
   onSectionBreak,
   breakUnavailable,
+  structure,
   canEdit,
   canUndo,
   canRedo,
@@ -93,6 +96,8 @@ export function DocumentWorkspaceToolbar({
   onSectionBreak: () => void
   /** The reason a break cannot be inserted at the caret, when it cannot. */
   breakUnavailable?: string
+  /** The table and picture controls; absent while the document is unloaded. */
+  structure?: DocumentStructureToolbar
   canEdit: boolean
   canUndo?: boolean
   canRedo?: boolean
@@ -191,6 +196,7 @@ export function DocumentWorkspaceToolbar({
             onPageBreak={onPageBreak}
             onSectionBreak={onSectionBreak}
             breakUnavailable={breakUnavailable}
+            structure={structure}
           />
         </TabsContent>
         <TabsContent value="layout" className="min-w-0 flex-1 pt-0">

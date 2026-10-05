@@ -152,6 +152,7 @@ describe('workspace draft history', () => {
       extraRuns: {},
       format: emptyFormatDrafts,
       breaks: [],
+      structures: [],
       trackedRejections: [],
     }
     const second = { ...first, drafts: { r1: 'B' } }
@@ -183,6 +184,7 @@ describe('workspace draft history', () => {
       extraRuns: {},
       format: emptyFormatDrafts,
       breaks: [],
+      structures: [],
       trackedRejections: [],
     }
     const history = pushWorkspaceDraft([], snapshot)

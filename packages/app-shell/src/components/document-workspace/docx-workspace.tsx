@@ -7,9 +7,8 @@ import {
 } from '../../document-format-edits'
 import { findMatchLabel } from '../../document-find'
 import { documentStory } from '../../document-model-text'
-import { documentBreakToolbar } from '../../document-break-toolbar'
 import { documentDefaultFace } from '../../document-page-style'
-import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
+import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import {
   useDocumentComments,
   useDocumentModel,
@@ -112,9 +111,6 @@ export function DocxWorkspace({
       setSavedVersion(version ? { documentId, versionId: version } : null),
   })
 
-  const { painted, pages, authorities, imageUrls, deleteParagraphReason } =
-    useWorkspaceDerivations({ documentId, model, drafts })
-
   // Verification reads the stored version, so it must stay disabled while any
   // work is off-server: editable operations, a blocked or held change, or a
   // recoverable draft. `useDocumentSave` owns that truth as `saveState`; the
@@ -177,6 +173,24 @@ export function DocxWorkspace({
         from: formatRange?.from ?? 0,
         to: formatRange?.to ?? 0,
       }
+  const {
+    painted,
+    pages,
+    authorities,
+    imageUrls,
+    deleteParagraphReason,
+    insert,
+  } = useWorkspaceDerivations({
+    documentId,
+    model,
+    drafts,
+    insert: {
+      caret: formatTarget,
+      offset: formatRange?.to ?? null,
+      trackChanges,
+      onImageError: setBanner,
+    },
+  })
   const selectionHandlers: ParagraphSelectionHandlers = {
     active: selectionActive,
     direction: selectionDirection,
@@ -225,14 +239,7 @@ export function DocxWorkspace({
         presence={presence}
         currentUserId={me?.user.id}
         canEdit
-        {...documentBreakToolbar({
-          paragraphId: selectedParagraphId,
-          model: painted ?? model,
-          offset: formatRange?.to ?? null,
-          selectionActive,
-          trackChanges,
-          setBreaks: drafts.setBreaks,
-        })}
+        {...insert}
         canUndo={drafts.canUndo}
         canRedo={drafts.canRedo}
         onToggleComments={() => setCommentsOpen((value) => !value)}
@@ -318,24 +325,12 @@ export function DocxWorkspace({
     <WorkspaceShell
       layout={layout}
       onKeyDown={(event) =>
-        handleDocumentWorkspaceKeys(event, {
+        documentWorkspaceKeyDown(event, {
           save: save.save,
           undo: undoDocument,
           redo: redoDocument,
           print: printDocument,
-          focusFind: () => document.getElementById('document-find')?.focus(),
-          toggleBold:
-            format && !format.emphasisUnavailable
-              ? format.onToggleBold
-              : undefined,
-          toggleItalic:
-            format && !format.emphasisUnavailable
-              ? format.onToggleItalic
-              : undefined,
-          toggleUnderline:
-            format && !format.emphasisUnavailable
-              ? format.onToggleUnderline
-              : undefined,
+          format,
         })
       }
     >
