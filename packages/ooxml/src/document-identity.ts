@@ -4,7 +4,11 @@ import type {
 } from '@obiter/contracts'
 
 import type { OoxmlDocument } from './model'
-import { parseXmlElements, setOverlayReplacement } from './parts/overlay'
+import {
+  parseXmlElements,
+  setOverlayReplacement,
+  type XmlOverlay,
+} from './parts/overlay'
 import { requireEditablePart } from './model-edit-overlay'
 
 export const WORD_2010_NAMESPACE =
@@ -82,6 +86,22 @@ export function canonicaliseParagraphIdentities(
       const part = requireEditablePart(document, story.partName)
       const anchor = document.paragraphAnchors.get(paragraph.id)
       if (anchor) {
+        // A structural edit can already own the paragraph's opening tag (for
+        // example a section break expanding a self-closing `<w:p/>`). Inject
+        // the identity into that replacement rather than writing a second
+        // replacement over the same range, which would fail to serialise.
+        const covering = coveringReplacement(
+          part.overlay,
+          anchor.paragraphRange,
+        )
+        if (covering) {
+          setOverlayReplacement(part.overlay, covering.key, {
+            ...covering.replacement,
+            value: injectIntoOpeningTag(covering.replacement.value, value),
+          })
+          part.dirty = true
+          continue
+        }
         const startTag = part.overlay.source.slice(
           anchor.paragraphRange.start,
           anchor.paragraphRange.startTagEnd,
@@ -127,6 +147,28 @@ function injectIntoOpeningTag(fragment: string, value: string) {
   const match = fragment.match(/^<[^>]*>/u)
   if (!match) return fragment
   return `${injectAttribute(match[0], 'w14:paraId', value)}${fragment.slice(match[0].length)}`
+}
+
+/**
+ * The overlay replacement that already owns a paragraph's opening tag, if any.
+ * Only a replacement whose value opens with the paragraph element is a
+ * candidate: a tracked-delete wrapper also spans the range but its opening tag
+ * is `w:del`, and injecting the identity there would corrupt the markup.
+ */
+function coveringReplacement(
+  overlay: XmlOverlay,
+  range: { start: number; startTagEnd: number },
+) {
+  for (const [key, replacement] of overlay.replacements) {
+    if (
+      replacement.start <= range.start &&
+      replacement.end >= range.startTagEnd &&
+      /^<w:p\b/u.test(replacement.value)
+    ) {
+      return { key, replacement }
+    }
+  }
+  return undefined
 }
 
 function ensureWord2010Namespace(overlay: {

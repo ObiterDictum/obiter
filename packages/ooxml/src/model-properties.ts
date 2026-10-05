@@ -43,10 +43,14 @@ export function writePropertyChildren(
       return
     }
     if (!inner) return
+    const n = input.nodeRange
+    const selfClosing = n.startTagEnd === n.end // start-tag end is past it
     setOverlayReplacement(overlay, key, {
-      start: input.nodeRange.startTagEnd,
-      end: input.nodeRange.startTagEnd,
-      value: `<w:${input.propertiesName}>${inner}</w:${input.propertiesName}>`,
+      start: selfClosing ? n.start : n.startTagEnd,
+      end: selfClosing ? n.end : n.startTagEnd,
+      value: selfClosing
+        ? `${overlay.source.slice(n.start, n.startTagEnd).replace(/\/\s*>$/u, '>')}<w:${input.propertiesName}>${inner}</w:${input.propertiesName}></w:${input.propertiesName === 'pPr' ? 'p' : 'r'}>`
+        : `<w:${input.propertiesName}>${inner}</w:${input.propertiesName}>`,
     })
     return
   }

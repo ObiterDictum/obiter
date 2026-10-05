@@ -5,10 +5,17 @@ import { buildOoxmlFixture } from '../fixtures/builder'
 
 import {
   applyDocumentEdits,
+  canonicaliseParagraphIdentities,
   parseDocx,
   patchSectionPropertiesXml,
   serialiseDocx,
 } from './index'
+import {
+  documentXml,
+  load,
+  paragraphs as paragraphWires,
+  save,
+} from './model-run-emphasis.test-support'
 import { createSyntheticDocx } from './synthetic-document'
 
 describe('OOXML section and break edits', () => {
@@ -380,6 +387,122 @@ describe('OOXML section and break edits', () => {
     )?.[0]
     expect(seeded).toContain('w:top="720"')
   })
+
+  it('places a page break at the exact offset inside a later run', async () => {
+    const document = await load(
+      '<w:p><w:r><w:t>Hello </w:t></w:r><w:r><w:t>world</w:t></w:r></w:p>',
+    )
+    const paragraph = paragraphWires(document)[0]
+    const runs = paragraph?.runs ?? []
+    if (!paragraph || !runs[1]) throw new Error('Fixture is missing.')
+    // Rewriting the second run's text means the break materialises it, so the
+    // paragraph-level offset must be converted to a run-local one.
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: runs[1].id, text: 'worldly' },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 9,
+        kind: 'page',
+      },
+    ])
+    const xml = await documentXml(document)
+    expect(xml).toContain(
+      '<w:r><w:t>wor</w:t><w:br w:type="page"/><w:t>ldly</w:t></w:r>',
+    )
+    expect(
+      paragraphWires(await save(document))[0]
+        ?.runs.map((run) => run.text)
+        .join(''),
+    ).toBe('Hello worldly')
+  })
+
+  it('places two materialised page breaks across runs at their offsets', async () => {
+    const document = await load(
+      '<w:p><w:r><w:t>Hello </w:t></w:r><w:r><w:t>world</w:t></w:r></w:p>',
+    )
+    const paragraph = paragraphWires(document)[0]
+    const runs = paragraph?.runs ?? []
+    if (!paragraph || !runs[0] || !runs[1]) throw new Error('Fixture missing.')
+    // Both runs are rewritten, so each break takes the materialise path; the
+    // offsets 3 and 9 are inside the first and second run respectively.
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: runs[0].id, text: 'Hello ' },
+      { type: 'replace_run_text', runId: runs[1].id, text: 'worldly' },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 9,
+        kind: 'page',
+      },
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 3,
+        kind: 'page',
+      },
+    ])
+    const xml = await documentXml(document)
+    expect(xml.split('<w:br w:type="page"/>').length - 1).toBe(2)
+    expect(xml).toContain(
+      '<w:r><w:t>Hel</w:t><w:br w:type="page"/><w:t xml:space="preserve">lo </w:t></w:r>',
+    )
+    expect(xml).toContain(
+      '<w:r><w:t>wor</w:t><w:br w:type="page"/><w:t>ldly</w:t></w:r>',
+    )
+    expect(
+      paragraphWires(await save(document))[0]
+        ?.runs.map((run) => run.text)
+        .join(''),
+    ).toBe('Hello worldly')
+  })
+
+  it('expands a self-closing empty paragraph to hold a section break', async () => {
+    const document = await load('<w:p/>')
+    const paragraph = paragraphWires(document)[0]
+    if (!paragraph) throw new Error('Fixture is missing.')
+    applyDocumentEdits(document, [
+      { type: 'insert_section_break', paragraphId: paragraph.id },
+    ])
+    const xml = await documentXml(document)
+    expect(xml).toContain('<w:p><w:pPr><w:sectPr/></w:pPr></w:p>')
+    expect(xml).not.toContain('<w:p/><w:pPr>')
+    const reloaded = await save(document)
+    expect(
+      paragraphWires(reloaded)[0]?.preservedXmlFragments.join(''),
+    ).toContain('<w:sectPr')
+  })
+
+  it('keeps paragraph identity when a section break expands a self-closing paragraph', async () => {
+    const document = await loadDeclaring('<w:p w14:paraId="AABBCCDD"/>')
+    const paragraph = paragraphWires(document)[0]
+    if (!paragraph) throw new Error('Fixture is missing.')
+    applyDocumentEdits(document, [
+      { type: 'insert_section_break', paragraphId: paragraph.id },
+    ])
+    // A save canonicalises identity after the edit; the identity must fold into
+    // the expansion instead of writing a second replacement over the same
+    // range, which would fail to serialise.
+    canonicaliseParagraphIdentities(document)
+    const xml = await documentXml(document)
+    expect(xml).toContain(
+      '<w:p w14:paraId="AABBCCDD"><w:pPr><w:sectPr/></w:pPr></w:p>',
+    )
+  })
+
+  it('refuses a section break on a paragraph that already ends a section', async () => {
+    const document = await load(
+      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="8000" w:h="6000"/></w:sectPr></w:pPr>' +
+        '<w:r><w:t>Hello</w:t></w:r></w:p>',
+    )
+    const paragraph = paragraphWires(document)[0]
+    if (!paragraph) throw new Error('Fixture is missing.')
+    expect(() =>
+      applyDocumentEdits(document, [
+        { type: 'insert_section_break', paragraphId: paragraph.id },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
 })
 
 function documentStory(document: Awaited<ReturnType<typeof parseDocx>>) {
@@ -395,6 +518,19 @@ async function zipText(input: Uint8Array, partName: string) {
   const part = zip.file(partName)
   if (!part) throw new Error(`${partName} is missing.`)
   return part.async('string')
+}
+
+/** Parses a body with `w14` declared, so a `w14:paraId` fixture is valid. */
+async function loadDeclaring(paragraphXml: string) {
+  const base = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+  const zip = await JSZip.loadAsync(base)
+  const documentXml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">' +
+    `<w:body>${paragraphXml}</w:body></w:document>`
+  zip.file('word/document.xml', documentXml)
+  return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
 }
 
 async function partBytes(input: Uint8Array) {

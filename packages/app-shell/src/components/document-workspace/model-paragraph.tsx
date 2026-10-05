@@ -381,7 +381,11 @@ export function ModelParagraph({
                   color: 'transparent',
                   backgroundColor: 'transparent',
                 }}
-                onSelect={() => onSelectParagraph(paragraph.id)}
+                onSelect={(local) =>
+                  local == null
+                    ? onSelectParagraph(paragraph.id)
+                    : onSelectParagraph(paragraph.id, start + local)
+                }
                 onChangeText={(next) => {
                   const diff = textDiff(sliceText, next)
                   if (onWordEdit) {

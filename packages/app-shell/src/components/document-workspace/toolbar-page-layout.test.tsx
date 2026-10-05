@@ -16,7 +16,7 @@ import {
   openRibbonTab,
   paragraph,
 } from './docx-workspace-harness'
-import { clickParagraph } from './paragraph-selection-harness'
+import { clickParagraph, bodyField } from './paragraph-selection-harness'
 
 function helloModel() {
   return multiParagraphModel([
@@ -126,6 +126,25 @@ describe('the break controls', () => {
     await save(editAsync)
     expect(operations(editAsync, 'insert_break')).toEqual([
       { type: 'insert_break', paragraphId: 'p1', offset: 0, kind: 'page' },
+    ])
+  })
+
+  it('inserts a page break at the offset of a mouse-placed caret', async () => {
+    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
+    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
+    // Focus the paragraph, then click inside its field so the caret sits at a
+    // non-zero offset. A mouse click must carry that offset, not reset to 0.
+    clickParagraph('p1')
+    const field = bodyField()
+    field.setSelectionRange(3, 3)
+    fireEvent.click(field)
+
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+
+    await save(editAsync)
+    expect(operations(editAsync, 'insert_break')).toEqual([
+      { type: 'insert_break', paragraphId: 'p1', offset: 3, kind: 'page' },
     ])
   })
 

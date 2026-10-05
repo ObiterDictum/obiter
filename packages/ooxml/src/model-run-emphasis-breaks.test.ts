@@ -70,6 +70,37 @@ describe('replacement composed with range emphasis across w:br', () => {
     expect(emphasised(runs)).toEqual(['XYcd'])
   })
 
+  it('keeps a page break and formats the text before it', async () => {
+    const { document, paragraph } = await loadRun(
+      '<w:r><w:t>Hello world</w:t></w:r>',
+    )
+    // A pending page-break splice is paragraph-keyed, not run-keyed, so the
+    // emphasis pass must still see it and materialise the run; otherwise it
+    // writes a whole-run replacement over the splice and serialising throws.
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 5,
+        kind: 'page',
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: 0,
+        to: 4,
+        bold: true,
+      },
+    ])
+
+    const xml = await documentXml(document)
+    expect(count(xml, PAGE_BREAK)).toBe(1)
+    const reparsed = await save(document)
+    const runs = paragraphs(reparsed)[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello world')
+    expect(emphasised(runs)).toEqual(['Hell'])
+  })
+
   it('keeps a column break and formats the text after it', async () => {
     const { document, paragraph, run } = await loadRun(
       `<w:r><w:t>ab</w:t>${COLUMN_BREAK}<w:t>cd</w:t></w:r>`,
