@@ -1,10 +1,12 @@
 import '@obiter/test-dom'
+import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
 
+import { useWorkspaceDraftHistory } from './document-editor-history'
 import { translateSnapshot } from './document-history-baseline'
 import type { StructuralDraft } from './document-structural-drafts'
 import {
@@ -44,19 +46,19 @@ const model = (paragraphs: DocumentParagraphWire[]): DocumentModelWire => ({
   changes: [],
 })
 
-describe('translateSnapshot structure slots', () => {
-  const fromModel = model([paragraph('p1')])
-  const slot: DraftSlot = {
-    kind: 'structure',
-    key: 'structure:s1',
-    id: 's1',
-    structureKind: 'table',
-  }
-  const sent: DraftState = {
-    ...emptyDraftState(),
-    structures: [tableDraft('s1', 'p1')],
-  }
+const fromModel = model([paragraph('p1')])
+const slot: DraftSlot = {
+  kind: 'structure',
+  key: 'structure:s1',
+  id: 's1',
+  structureKind: 'table',
+}
+const sent: DraftState = {
+  ...emptyDraftState(),
+  structures: [tableDraft('s1', 'p1')],
+}
 
+describe('translateSnapshot structure slots', () => {
   it('translates a snapshot holding the saved structure, keeping its text', () => {
     const snapshot: DraftState = {
       ...sent,
@@ -83,5 +85,76 @@ describe('translateSnapshot structure slots', () => {
         fromModel,
       }),
     ).toBeNull()
+  })
+})
+
+describe('history stacks across a structure save', () => {
+  const boundary = { covered: [slot], sent, fromModel }
+
+  it('reports unsupported and keeps every snapshot, including unrelated history', () => {
+    const { result } = renderHook(() => useWorkspaceDraftHistory())
+    // The older snapshot predates the table draft but carries typed text;
+    // the newer holds the saved table as pending work.
+    const predating: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'p1-r': 'typed text' },
+    }
+    const holding: DraftState = {
+      ...predating,
+      structures: [tableDraft('s1', 'p1')],
+    }
+    act(() => result.current.record(predating))
+    act(() => result.current.record(holding))
+
+    const outcome: { value: { translated: boolean } | undefined } = {
+      value: undefined,
+    }
+    act(() => {
+      outcome.value = result.current.translate((snapshot) =>
+        translateSnapshot(snapshot, boundary),
+      )
+    })
+    expect(outcome.value?.translated).toBe(false)
+
+    // Transactional: neither stack was rewritten or dropped. Undo still
+    // restores the table-holding snapshot, then the text-only one.
+    const captured: { value: DraftState | null } = { value: null }
+    act(() => {
+      captured.value = result.current.stepBack(emptyDraftState())
+    })
+    expect(captured.value?.structures).toHaveLength(1)
+    expect(captured.value?.drafts).toEqual({ 'p1-r': 'typed text' })
+    act(() => {
+      captured.value = result.current.stepBack(emptyDraftState())
+    })
+    expect(captured.value?.drafts).toEqual({ 'p1-r': 'typed text' })
+    expect(result.current.canUndo).toBe(false)
+  })
+
+  it('still rewrites the stacks when every snapshot translates', () => {
+    const { result } = renderHook(() => useWorkspaceDraftHistory())
+    const holding: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'p1-r': 'typed text' },
+      structures: [tableDraft('s1', 'p1')],
+    }
+    act(() => result.current.record(holding))
+
+    const outcome: { value: { translated: boolean } | undefined } = {
+      value: undefined,
+    }
+    act(() => {
+      outcome.value = result.current.translate((snapshot) =>
+        translateSnapshot(snapshot, boundary),
+      )
+    })
+    expect(outcome.value?.translated).toBe(true)
+
+    const captured: { value: DraftState | null } = { value: null }
+    act(() => {
+      captured.value = result.current.stepBack(emptyDraftState())
+    })
+    expect(captured.value?.structures).toEqual([])
+    expect(captured.value?.drafts).toEqual({ 'p1-r': 'typed text' })
   })
 })
