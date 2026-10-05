@@ -41,6 +41,7 @@ import type {
 } from './paragraph-editor'
 import { ParagraphEditor } from './paragraph-editor'
 import { ParagraphRunPaint, type ParagraphSelectionRange } from './model-run'
+import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
 
 export type ParagraphWordEdit = {
   type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
@@ -89,6 +90,7 @@ export function ModelParagraph({
   noteMark,
   noteKind,
   story,
+  linkOverlay,
 }: {
   paragraph: DocumentParagraphWire
   changes: DocumentChangeWire[]
@@ -139,6 +141,7 @@ export function ModelParagraph({
    * unique inside their story, so verification anchoring needs the story on the
    * element, not only the paragraph. */
   story?: { kind: string; partName: string }
+  linkOverlay?: ParagraphLinkOverlay
 }) {
   const carets = (presence ?? []).filter(
     (item) =>
@@ -261,6 +264,7 @@ export function ModelParagraph({
       linePx={linePx}
       wrapWidthPx={wrapWidthPx}
       selection={paintSelection}
+      linkOverlay={linkOverlay}
       carets={carets}
       continuation={continuation}
     />

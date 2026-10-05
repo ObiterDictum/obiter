@@ -10,6 +10,7 @@ import type {
   HighlightValue,
   VertAlignValue,
 } from '../../document-format-types'
+import type { StructuralInsertOutcome } from '../../document-structure-toolbar'
 
 export type DocumentFormatToolbar = {
   paragraphStyleId: string
@@ -106,7 +107,17 @@ export type DocumentStructureToolbar = {
   tableUnavailable?: string
   /** The reason a picture cannot be inserted at the caret, when it cannot. */
   pictureUnavailable?: string
+  /** The reason no selection can take a hyperlink, when it cannot. */
+  linkUnavailable?: string
+  /** The reason no cross-reference can be inserted, when it cannot. */
+  crossReferenceUnavailable?: string
+  /** The paragraphs a cross-reference can point at, in story order. */
+  crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
   onInsertTable: (rows: number, columns: number) => void
+  /** Applies a pending hyperlink to the current selection's range. */
+  onInsertLink: (target: string) => StructuralInsertOutcome
+  /** Holds a pending cross-reference at the caret to the target paragraph. */
+  onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
   /** Opens the picture file picker; the picked file becomes the insertion. */
   onInsertPicture: () => void
   /**
