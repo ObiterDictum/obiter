@@ -58,7 +58,7 @@ function pformatSlot(paragraphId: string): DraftSlot {
   }
 }
 
-function sentFormat(
+function formatState(
   paragraphId: string,
   draft: DraftState['format']['paragraphFormats'][string],
 ): DraftState {
@@ -95,7 +95,7 @@ describe('paragraph-format reversal', () => {
     ])
     const baseline: SaveBaseline = {
       covered: [pformatSlot('p1')],
-      sent: sentFormat('p1', { indentation: { firstLine: 720 } }),
+      sent: formatState('p1', { indentation: { firstLine: 720 } }),
       fromModel,
     }
 
@@ -121,7 +121,7 @@ describe('paragraph-format reversal', () => {
     ])
     const translated = translateSnapshot(emptyDraftState(), {
       covered: [pformatSlot('p1')],
-      sent: sentFormat('p1', {
+      sent: formatState('p1', {
         alignment: 'right',
         lineSpacing: { line: 240, lineRule: 'auto' },
       }),
@@ -136,9 +136,54 @@ describe('paragraph-format reversal', () => {
   it('releases an alignment the paragraph did not carry before the save', () => {
     const translated = translateSnapshot(emptyDraftState(), {
       covered: [pformatSlot('p1')],
-      sent: sentFormat('p1', { alignment: 'center' }),
+      sent: formatState('p1', { alignment: 'center' }),
       fromModel: model([paragraph('p1', '<w:pPr/>')]),
     } satisfies SaveBaseline)
     expect(translated?.format.paragraphFormats.p1).toEqual({ alignment: null })
+  })
+
+  it('keeps a pending alignment the snapshot held instead of releasing it', () => {
+    // Align centre, then type a character. The snapshot recorded for the
+    // keystroke still holds the pending alignment and the save stores it, so
+    // undoing the save must not release the saved centring.
+    const fromModel = model([paragraph('p1', '<w:pPr/>')])
+    const savedModel = model([
+      paragraph('p1', '<w:pPr><w:jc w:val="center"/></w:pPr>'),
+    ])
+    const translated = translateSnapshot(
+      formatState('p1', { alignment: 'center' }),
+      {
+        covered: [pformatSlot('p1')],
+        sent: formatState('p1', { alignment: 'center' }),
+        fromModel,
+      } satisfies SaveBaseline,
+    )
+    // The snapshot already describes what the save stored, so the reversal is
+    // dropped rather than releasing the alignment to null.
+    expect(translated?.format.paragraphFormats.p1).toBeUndefined()
+    // The painted paragraph keeps its saved centring.
+    const xml =
+      formattedModel(
+        savedModel,
+        translated?.format ?? emptyFormatDrafts,
+      ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
+    expect(xml).toContain('w:jc w:val="center"')
+  })
+
+  it('restores the pending alignment over the stored one', () => {
+    // The snapshot predates a later change the save stored. Its pending centre
+    // is the pre-save answer to restore, not the stored paragraph's absent
+    // alignment (which would release to null) nor the save's right.
+    const translated = translateSnapshot(
+      formatState('p1', { alignment: 'center' }),
+      {
+        covered: [pformatSlot('p1')],
+        sent: formatState('p1', { alignment: 'right' }),
+        fromModel: model([paragraph('p1', '<w:pPr/>')]),
+      } satisfies SaveBaseline,
+    )
+    expect(translated?.format.paragraphFormats.p1).toEqual({
+      alignment: 'center',
+    })
   })
 })

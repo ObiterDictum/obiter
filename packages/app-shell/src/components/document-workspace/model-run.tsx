@@ -95,7 +95,14 @@ export function ParagraphRunPaint({
       <div
         key={`${paragraph.id}-${line.from}-${index}`}
         className="whitespace-pre"
-        style={{ lineHeight: `${linePx}px`, height: linePx }}
+        style={{
+          lineHeight: `${linePx}px`,
+          height: linePx,
+          // The wrapper inherits the paragraph's text-indent, which would then
+          // apply to the first line of every one of these wrapped blocks and so
+          // indent every line. Only the first block keeps it; the rest reset it.
+          textIndent: index === 0 ? undefined : 0,
+        }}
         data-line-from={start + line.from}
         data-line-to={start + line.to}
       >
