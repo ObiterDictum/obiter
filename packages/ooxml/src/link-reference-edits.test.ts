@@ -187,13 +187,14 @@ describe('hyperlink edits', () => {
 })
 
 describe('cross-reference edits', () => {
-  it('inserts a REF field and a derived bookmark on the target', async () => {
+  it('inserts a REF field and a part-allocated bookmark on the target', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
     const anchor = paragraphs[0]
     const target = paragraphs[1]
     if (!anchor || !target) throw new Error('Fixture model is missing.')
-    const bookmark = bookmarkName(target.id)
+    // The fixture holds no _Ref_* name, so the first allocation is _Ref_1.
+    const bookmark = '_Ref_1'
     expect(target.runs.map((run) => run.text).join('')).toBe('Restarted list')
 
     applyDocumentEdits(document, [
@@ -249,7 +250,7 @@ describe('cross-reference edits', () => {
     ).toBe(true)
   })
 
-  it('reuses the derived bookmark for a second reference to one target', async () => {
+  it('reuses the same bookmark for a second reference to one target', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
     const anchor = paragraphs[0]
@@ -258,7 +259,7 @@ describe('cross-reference edits', () => {
     if (!anchor || !other || !target) {
       throw new Error('Fixture model is missing.')
     }
-    const bookmark = bookmarkName(target.id)
+    const bookmark = '_Ref_1'
 
     applyDocumentEdits(document, [
       {
@@ -278,6 +279,122 @@ describe('cross-reference edits', () => {
     const xml = await zipText(output, 'word/document.xml')
     expect(xml.match(new RegExp(`w:name="${bookmark}"`, 'gu'))).toHaveLength(1)
     expect(xml.match(/<w:instrText/gu)).toHaveLength(2)
+  })
+
+  it('gives distinct bookmark ids to two references in one batch', async () => {
+    const document = await parseFixture()
+    const paragraphs = mainParagraphs(document)
+    const first = paragraphs[0]
+    const second = paragraphs[1]
+    const target = paragraphs[5]
+    const otherTarget = paragraphs[6]
+    if (!first || !second || !target || !otherTarget) {
+      throw new Error('Fixture model is missing.')
+    }
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_cross_reference',
+        paragraphId: first.id,
+        offset: 0,
+        targetParagraphId: target.id,
+      },
+      {
+        type: 'insert_cross_reference',
+        paragraphId: second.id,
+        offset: 0,
+        targetParagraphId: otherTarget.id,
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+
+    const ids = [
+      ...xml.matchAll(/<w:bookmarkStart[^>]*\bw:id="(\d+)"[^>]*\bw:name="_Ref_/gu),
+    ].map((match) => match[1])
+    expect(ids).toHaveLength(2)
+    expect(ids[0]).not.toBe(ids[1])
+    // Each REF instruction resolves its own bookmark.
+    const fields = [...xml.matchAll(/REF (_Ref_\d+) /gu)].map(
+      (match) => match[1],
+    )
+    expect(new Set(fields).size).toBe(2)
+  })
+
+  it('allocates bookmark names that survive an encounter-order id shift', async () => {
+    // Without w14:paraId the wire ids are encounter-order para-NNNNNN, so a
+    // paragraph inserted before the target shifts every later id on the next
+    // parse. A name derived from the wire id would then be written a second
+    // time on a different paragraph.
+    const first = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-without-w14-ids'),
+    )
+    const firstParagraphs = mainParagraphs(first)
+    const host = firstParagraphs[0]
+    const target = firstParagraphs[1]
+    if (!host || !target) throw new Error('Fixture model is missing.')
+    const shiftedId = target.id
+    applyDocumentEdits(first, [
+      {
+        type: 'insert_cross_reference',
+        paragraphId: host.id,
+        offset: 0,
+        targetParagraphId: target.id,
+      },
+    ])
+    const saved = await serialiseDocx(first)
+
+    const second = await parseDocx(saved)
+    const insertBefore = mainParagraphs(second).find(
+      (paragraph) => paragraph.id === shiftedId,
+    )
+    if (!insertBefore) throw new Error('Target paragraph is missing.')
+    applyDocumentEdits(second, [
+      {
+        type: 'insert_paragraph_before',
+        paragraphId: insertBefore.id,
+        text: 'Inserted before the target',
+      },
+    ])
+    const shifted = await serialiseDocx(second)
+
+    const third = await parseDocx(shifted)
+    const thirdParagraphs = mainParagraphs(third)
+    const nowHoldingId = thirdParagraphs.find(
+      (paragraph) => paragraph.id === shiftedId,
+    )
+    const thirdHost = thirdParagraphs.find(
+      (paragraph) => paragraph.id === host.id,
+    )
+    if (!nowHoldingId || !thirdHost) {
+      throw new Error('Fixture model is missing.')
+    }
+    // The wire id moved: this is a different paragraph than the save-1 target.
+    expect(nowHoldingId.runs.map((run) => run.text).join('')).toBe(
+      'Inserted before the target',
+    )
+    applyDocumentEdits(third, [
+      {
+        type: 'insert_cross_reference',
+        paragraphId: thirdHost.id,
+        offset: 0,
+        targetParagraphId: nowHoldingId.id,
+      },
+    ])
+    const output = await serialiseDocx(third)
+    const xml = await zipText(output, 'word/document.xml')
+
+    const starts = [
+      ...xml.matchAll(/<w:bookmarkStart[^>]*\bw:name="(_Ref_[^"]*)"/gu),
+    ]
+    expect(starts).toHaveLength(2)
+    expect(starts[0]?.[1]).not.toBe(starts[1]?.[1])
+    // Each bookmarkStart sits inside a different paragraph.
+    const positions = starts.map((match) => match.index)
+    const paragraphOf = (index: number) =>
+      xml.slice(0, index).split('</w:p>').length
+    expect(paragraphOf(positions[0] ?? 0)).not.toBe(
+      paragraphOf(positions[1] ?? 0),
+    )
   })
 
   it('rejects a cross-reference whose target was deleted earlier in the batch', async () => {
@@ -401,10 +518,6 @@ describe('structural link and reference refusals', () => {
     }
   })
 })
-
-function bookmarkName(wireId: string) {
-  return `_Ref_${wireId.replace(/[^A-Za-z0-9_]/gu, '_')}`.slice(0, 40)
-}
 
 async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
