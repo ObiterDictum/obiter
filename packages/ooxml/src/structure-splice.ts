@@ -9,9 +9,18 @@ import {
   type InsertionPoint,
 } from './comment-anchors'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
-import { OoxmlError, type ParagraphAnchor } from './model'
+import {
+  OoxmlError,
+  type ParagraphAnchor,
+  type TextRunAnchor,
+} from './model'
 import { splitsSurrogate } from './model-run-range-edits'
-import { setOverlayReplacement, type XmlOverlay } from './parts/overlay'
+import {
+  applyFragmentReplacements,
+  setOverlayReplacement,
+  type XmlOverlay,
+} from './parts/overlay'
+import { effectiveRunView, runHasPendingOverlay } from './run-effective'
 
 /**
  * Splices paragraph-level or run-level content into a paragraph at an
@@ -36,6 +45,14 @@ export function spliceInlineXml(
     spliceIntoBlankParagraph(overlay, paragraph, xml)
     return
   }
+  // The offset addresses effective text, and a run already rewritten in this
+  // batch no longer maps to a source offset: compose into the pending run
+  // replacement so the content lands inside the text the batch wrote.
+  const holder = runHoldingOffset(paragraph, offset)
+  if (holder && runHasPendingOverlay(overlay, holder.run)) {
+    spliceIntoPendingRun(overlay, paragraph, holder, offset, xml, key)
+    return
+  }
   const point = locateOffset(overlay.source, paragraph, offset)
   assertNoPendingAt(overlay, point.sourceOffset)
   setOverlayReplacement(
@@ -43,6 +60,59 @@ export function spliceInlineXml(
     key,
     spliceReplacement(overlay.source, point, xml),
   )
+}
+
+/** The run whose effective text strictly contains `offset`, if any. */
+function runHoldingOffset(paragraph: ParagraphAnchor, offset: number) {
+  let runStart = 0
+  for (const run of paragraph.runs) {
+    const runEnd = runStart + run.wire.text.length
+    if (offset > runStart && offset < runEnd) return { run, runStart }
+    runStart = runEnd
+  }
+  return undefined
+}
+
+/**
+ * Splices into a run that pending replacements already rewrote: fold them
+ * into the run's effective XML, locate the offset in that text, and write one
+ * whole-run replacement that supersedes the folded keys. Anything still
+ * overlapping the run range afterwards cannot compose, so the edit refuses
+ * rather than emit overlapping ranges at serialise time.
+ */
+function spliceIntoPendingRun(
+  overlay: XmlOverlay,
+  paragraph: ParagraphAnchor,
+  holder: { run: TextRunAnchor; runStart: number },
+  offset: number,
+  xml: string,
+  key: string,
+) {
+  const { run, runStart } = holder
+  const view = effectiveRunView(overlay, run, paragraph)
+  const point = locateOffset(view.source, view.paragraph, offset - runStart)
+  const serialised = applyFragmentReplacements(view.source, [
+    spliceReplacement(view.source, point, xml),
+  ])
+  if (serialised === undefined) throw new OoxmlError('invalid-document-edit')
+  const consumed = new Set(view.consumedKeys)
+  for (const [pendingKey, pending] of overlay.replacements) {
+    if (
+      !consumed.has(pendingKey) &&
+      pending.start < run.runRange.end &&
+      pending.end > run.runRange.start
+    ) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+  }
+  for (const pendingKey of consumed) {
+    overlay.replacements.delete(pendingKey)
+  }
+  setOverlayReplacement(overlay, key, {
+    start: run.runRange.start,
+    end: run.runRange.end,
+    value: serialised,
+  })
 }
 
 /**
