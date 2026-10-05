@@ -11,7 +11,12 @@ import type { XmlOverlay } from './parts/overlay'
  * which the overlay serialiser rejects as a plain error).
  *
  * A zero-width insertion exactly at the run's end belongs to the following
- * boundary (the next run's start, or the paragraph end), not to this run.
+ * boundary (the next run's start, or the paragraph end), not to this run. A
+ * zero-width insertion exactly at the run's start likewise belongs to the
+ * preceding boundary: `locateOffset` places the standalone break run *before*
+ * the run tag, so the run is neither closed nor reopened and a run-keyed write
+ * serialises alongside it. A replacement that starts at the run's start but is
+ * not zero-width is the run-keyed whole-run rebuild and still counts.
  */
 export function hasPendingBreakSplice(
   overlay: XmlOverlay,
@@ -22,7 +27,14 @@ export function hasPendingBreakSplice(
     if (
       replacement.start >= runRange.start &&
       replacement.end <= runRange.end &&
-      replacement.start < runRange.end
+      replacement.start < runRange.end &&
+      // Only a zero-width splice at the start is the before-tag boundary
+      // break; a non-zero-width replacement from the start is the whole-run
+      // rebuild, which repaints every character and must keep failing closed.
+      !(
+        replacement.start === runRange.start &&
+        replacement.end === runRange.start
+      )
     ) {
       return true
     }
