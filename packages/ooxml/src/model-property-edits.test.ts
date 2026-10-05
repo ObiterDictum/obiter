@@ -730,6 +730,126 @@ describe('run emphasis and paragraph numbering edits', () => {
     expect(para).toContain('<w:pPrChange')
     expect(para).toContain(`<w:numId w:val="${created?.numberingId}"/>`)
   })
+
+  it('copies the source level overrides the new num does not replace', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0">' +
+      '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>' +
+      '<w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/><w:lvlText w:val="%3."/></w:lvl>' +
+      '</w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="2"><w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="upperLetter"/><w:lvlText w:val="%3)"/></w:lvl></w:lvlOverride></w:num>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>' +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 3,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 3,
+    )
+    if (!created) throw new Error('created numbering instance is missing.')
+
+    const reloaded = await parseDocx(await serialiseDocx(document))
+    const parsed = reloaded.model.numbering.find(
+      (instance) => instance.numberingId === created.numberingId,
+    )
+    // The reloaded model is what the emitted XML actually carries; the edit's
+    // model entry must describe the same levels, including the source's
+    // override at the other level.
+    expect(parsed?.levels).toEqual(created.levels)
+    expect(parsed?.levels?.find((level) => level.ilvl === 2)?.numFmt).toBe(
+      'upperLetter',
+    )
+  })
+
+  it('inserts a new num before a trailing numIdMacAtCleanup', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="0"/></w:num>' +
+      '<w:numIdMacAtCleanup w:val="2"/>' +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 4,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 4,
+    )
+    if (!created) throw new Error('created numbering instance is missing.')
+
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/numbering.xml',
+    )
+    const numAt = xml.indexOf(`<w:num w:numId="${created.numberingId}">`)
+    const cleanupAt = xml.indexOf('<w:numIdMacAtCleanup')
+    expect(numAt).toBeGreaterThan(-1)
+    expect(cleanupAt).toBeGreaterThan(-1)
+    expect(numAt).toBeLessThan(cleanupAt)
+  })
+
+  it('reuses an override written with single-quoted attributes', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      "<w:num w:numId='2'><w:abstractNumId w:val='0'/><w:lvlOverride w:ilvl='0'><w:startOverride w:val='1'/></w:lvlOverride></w:num>" +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const before = document.model.numbering.length
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 1,
+      },
+    ])
+    expect(document.model.numbering).toHaveLength(before)
+    expect(
+      mainParagraphs(document)[0]?.preservedXmlFragments.join(''),
+    ).toContain('<w:numId w:val="2"/>')
+  })
 })
 
 async function zipText(input: Uint8Array, partName: string) {
@@ -742,6 +862,12 @@ async function zipText(input: Uint8Array, partName: string) {
 async function withDocumentXml(input: Uint8Array, documentXml: string) {
   const zip = await JSZip.loadAsync(input)
   zip.file('word/document.xml', documentXml)
+  return zip.generateAsync({ type: 'uint8array' })
+}
+
+async function withNumberingXml(input: Uint8Array, numberingXml: string) {
+  const zip = await JSZip.loadAsync(input)
+  zip.file('word/numbering.xml', numberingXml)
   return zip.generateAsync({ type: 'uint8array' })
 }
 

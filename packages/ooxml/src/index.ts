@@ -48,6 +48,7 @@ export {
   patchRunEmphasisXml,
   patchParagraphFormatXml,
 } from './model-property-edits'
+export { hasPureStartOverride } from './numbering-edits'
 export * from './model-json'
 export * from './parse'
 export * from './serialise'

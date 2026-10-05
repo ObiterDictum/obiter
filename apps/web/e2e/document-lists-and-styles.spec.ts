@@ -131,6 +131,16 @@ async function focusParagraph(page: Page, text: string) {
   throw new Error(`could not focus the paragraph containing "${text}"`)
 }
 
+/**
+ * Presses a key once the editor that owns the focus has it. A ribbon button
+ * click moves DOM focus to the button, so a shortcut pressed straight after
+ * one never reaches the textarea.
+ */
+async function pressKey(page: Page, key: string) {
+  await expect(editor(page)).toBeFocused()
+  await page.keyboard.press(key)
+}
+
 async function saveAndWait(page: Page) {
   await save(page).click()
   await expect(save(page)).toBeDisabled({ timeout: 30_000 })
@@ -170,7 +180,10 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
 
   // A selection spanning paragraphs with different styles is a defined mixed
   // state: no chip is pressed and the select names it instead of one style.
-  await page.keyboard.press('Control+a')
+  // Re-focus the editor first: clicking the chip moved focus to the button, so
+  // the shortcut would otherwise never reach the textarea.
+  await focusParagraph(page, 'E4 Heading')
+  await pressKey(page, 'Control+a')
   await expect(page.locator('[data-selection-status]')).toContainText(
     'paragraphs selected',
   )

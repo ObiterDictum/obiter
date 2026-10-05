@@ -105,16 +105,22 @@ function createNumberingOverride(
   const part = requireEditablePart(document, numberingPartName(document))
   const prefix = numberingPrefix(part.overlay.source)
   const numberingId = nextNumberingId(document)
-  const sourceFragment =
-    `<${prefix}:num ${prefix}:numId="${numberingId}">` +
-    `<${prefix}:abstractNumId ${prefix}:val="${escapeXmlAttribute(abstractId)}"/>` +
-    `<${prefix}:lvlOverride ${prefix}:ilvl="${String(ilvl)}">` +
-    `<${prefix}:startOverride ${prefix}:val="${String(start)}"/>` +
-    `</${prefix}:lvlOverride>` +
-    `</${prefix}:num>`
-  const close = `</${prefix}:numbering>`
-  const at = part.overlay.source.lastIndexOf(close)
-  if (at === -1) throw new OoxmlError('invalid-document-edit')
+  const sourceFragment = buildOverrideFragment(
+    source.sourceFragment,
+    prefix,
+    abstractId,
+    numberingId,
+    ilvl,
+    start,
+  )
+  const close = `</${qualify(prefix, 'numbering')}>`
+  const closeAt = part.overlay.source.lastIndexOf(close)
+  if (closeAt === -1) throw new OoxmlError('invalid-document-edit')
+  const at = insertionBeforeCleanup(
+    part.overlay.source,
+    closeAt,
+    qualify(prefix, 'numIdMacAtCleanup'),
+  )
   setOverlayReplacement(part.overlay, `numbering:num:${numberingId}`, {
     start: at,
     end: at,
@@ -137,8 +143,94 @@ function createNumberingOverride(
   return numberingId
 }
 
+/**
+ * The `w:num` a restart points at. It carries the new `w:lvlOverride` for the
+ * restarted level plus a verbatim copy of the source instance's other
+ * overrides, so the emitted XML and the model entry the caller registers
+ * describe the same levels. Omitting them would make the model claim
+ * formatting the saved part does not carry.
+ */
+function buildOverrideFragment(
+  sourceFragment: string,
+  prefix: string,
+  abstractId: string,
+  numberingId: string,
+  ilvl: number,
+  start: number,
+) {
+  const num = qualify(prefix, 'num')
+  const numId = qualify(prefix, 'numId')
+  const abstractNumId = qualify(prefix, 'abstractNumId')
+  const val = qualify(prefix, 'val')
+  const lvlOverride = qualify(prefix, 'lvlOverride')
+  const startOverride = qualify(prefix, 'startOverride')
+  const overrides = sourceLevelOverrides(sourceFragment)
+  const target = overrides.find((override) => override.ilvl === ilvl)
+  const nested = target ? nestedLevelXml(target.xml) : undefined
+  const copied = overrides
+    .filter((override) => override.ilvl !== ilvl)
+    .map((override) => override.xml)
+    .join('')
+  return (
+    `<${num} ${numId}="${numberingId}">` +
+    `<${abstractNumId} ${val}="${escapeXmlAttribute(abstractId)}"/>` +
+    `<${lvlOverride} ${qualify(prefix, 'ilvl')}="${String(ilvl)}">` +
+    (nested ?? '') +
+    `<${startOverride} ${val}="${String(start)}"/>` +
+    `</${lvlOverride}>` +
+    copied +
+    `</${num}>`
+  )
+}
+
+function sourceLevelOverrides(fragment: string) {
+  return [
+    ...fragment.matchAll(
+      /<(?:\w+:)?lvlOverride\b[^>]*>[\s\S]*?<\/(?:\w+:)?lvlOverride>/gu,
+    ),
+  ].flatMap((match) => {
+    const level = Number(match[0].match(/\bilvl\s*=\s*["'](\d+)["']/u)?.[1])
+    return Number.isInteger(level) ? [{ ilvl: level, xml: match[0] }] : []
+  })
+}
+
+function nestedLevelXml(overrideXml: string) {
+  return overrideXml.match(
+    /<(?:\w+:)?lvl\b[^>]*>[\s\S]*?<\/(?:\w+:)?lvl>/u,
+  )?.[0]
+}
+
+/**
+ * Insert a new `w:num` before a trailing `w:numIdMacAtCleanup`. `CT_Numbering`
+ * orders `num` elements before that element, so appending at the closing tag
+ * would be schema-invalid when the part carries one; without it the insertion
+ * point is the closing tag.
+ */
+function insertionBeforeCleanup(
+  source: string,
+  closeAt: number,
+  cleanupName: string,
+) {
+  const before = source.slice(0, closeAt)
+  const trailing = before.match(
+    new RegExp(
+      `<${cleanupName}\\b[^>]*(?:/>|>[\\s\\S]*?</${cleanupName}>)\\s*$`,
+      'u',
+    ),
+  )
+  return trailing ? before.length - trailing[0].length : closeAt
+}
+
+function qualify(prefix: string, name: string) {
+  return prefix ? `${prefix}:${name}` : name
+}
+
 /** The color of a clean override: one level override that changes only start. */
-function hasPureStartOverride(fragment: string, ilvl: number, start: number) {
+export function hasPureStartOverride(
+  fragment: string,
+  ilvl: number,
+  start: number,
+) {
   const overrides = [
     ...fragment.matchAll(
       /<(?:\w+:)?lvlOverride\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?lvlOverride>/gu,
@@ -147,14 +239,16 @@ function hasPureStartOverride(fragment: string, ilvl: number, start: number) {
   if (overrides.length !== 1) return false
   const attributes = overrides[0]?.[1] ?? ''
   const body = overrides[0]?.[2] ?? ''
-  if (!new RegExp(`\\bilvl\\s*=\\s*"${String(ilvl)}"`, 'u').test(attributes)) {
+  if (
+    !new RegExp(`\\bilvl\\s*=\\s*["']${String(ilvl)}["']`, 'u').test(attributes)
+  ) {
     return false
   }
   // A nested `w:lvl` overrides the level's formatting, not just its start, so
   // it is not a pure restart instance and must not be reused.
   if (/<(?:\w+:)?lvl\b/u.test(body)) return false
   return new RegExp(
-    `<(?:\\w+:)?startOverride\\b[^>]*\\bval\\s*=\\s*"${String(start)}"`,
+    `<(?:\\w+:)?startOverride\\b[^>]*\\bval\\s*=\\s*["']${String(start)}["']`,
     'u',
   ).test(body)
 }

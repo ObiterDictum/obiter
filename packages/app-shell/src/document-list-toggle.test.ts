@@ -142,7 +142,16 @@ describe('list toggle', () => {
     const restarted: DocumentModelWire = {
       ...model,
       numbering: [
-        { ...model.numbering[0], startOverride: 5 },
+        {
+          ...model.numbering[0],
+          startOverride: 5,
+          sourceFragment:
+            '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="5"/></w:lvlOverride></w:num>',
+          levels: [
+            { ilvl: 0, start: 5, numFmt: 'decimal' },
+            { ilvl: 1, start: 1, numFmt: 'lowerLetter' },
+          ],
+        },
         ...model.numbering.slice(1),
       ],
     }
@@ -154,5 +163,39 @@ describe('list toggle', () => {
       numbering: { p1: { numId: '1', ilvl: 0, startOverride: 1 } },
     }
     expect(paragraphStartOverride(restarted, draft, paragraph)).toBe(1)
+  })
+
+  it('reads the override for the level the paragraph actually uses', () => {
+    const paragraph = (id: string, ilvl: number): DocumentParagraphWire => ({
+      id,
+      runs: [{ id: `${id}-r`, text: 'Hello', preservedXmlFragments: [] }],
+      preservedXmlFragments: [
+        `<w:pPr><w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="1"/></w:numPr></w:pPr>`,
+      ],
+    })
+    const perLevel: DocumentModelWire = {
+      ...model,
+      numbering: [
+        {
+          ...model.numbering[0],
+          startOverride: 7,
+          sourceFragment:
+            '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="2"><w:startOverride w:val="7"/></w:lvlOverride></w:num>',
+          levels: [
+            { ilvl: 0, start: 1, numFmt: 'decimal' },
+            { ilvl: 1, start: 1, numFmt: 'lowerLetter' },
+            { ilvl: 2, start: 7, numFmt: 'lowerRoman' },
+          ],
+        },
+        ...model.numbering.slice(1),
+      ],
+    }
+    // The instance's first override is at ilvl 2, so ilvl 0 must not read it.
+    expect(
+      paragraphStartOverride(perLevel, emptyFormatDrafts, paragraph('p0', 0)),
+    ).toBeUndefined()
+    expect(
+      paragraphStartOverride(perLevel, emptyFormatDrafts, paragraph('p2', 2)),
+    ).toBe(7)
   })
 })
