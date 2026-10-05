@@ -67,12 +67,31 @@ export function projectRangeEmphasis(
 }
 
 export function paragraphStyleOptions(model: DocumentModelWire) {
-  return model.styles.flatMap((style) => {
-    if (!/w:type\s*=\s*"paragraph"/i.test(style.sourceFragment)) return []
-    const name =
-      xmlAttr(xmlTagAttrs(style.sourceFragment, 'name'), 'val') ?? style.styleId
-    return [{ styleId: style.styleId, name }]
-  })
+  const seen = new Set<string>()
+  const options: Array<{ styleId: string; name: string }> = []
+  for (const style of model.styles) {
+    if (seen.has(style.styleId)) continue
+    if (!isParagraphStyle(style.sourceFragment)) continue
+    seen.add(style.styleId)
+    options.push({
+      styleId: style.styleId,
+      name:
+        xmlAttr(xmlTagAttrs(style.sourceFragment, 'name'), 'val') ??
+        style.styleId,
+    })
+  }
+  return options
+}
+
+/**
+ * A `w:style` is a paragraph style unless it explicitly names another kind.
+ * OOXML defaults an omitted `w:type` to paragraph, so requiring the attribute
+ * would drop a valid style; excluding the named non-paragraph kinds keeps a
+ * character style out of the gallery.
+ */
+function isParagraphStyle(sourceFragment: string) {
+  const type = sourceFragment.match(/w:type\s*=\s*"([^"]*)"/iu)?.[1]
+  return type === undefined || type === 'paragraph'
 }
 function paintRangeEmphasis(
   paragraph: DocumentParagraphWire,
