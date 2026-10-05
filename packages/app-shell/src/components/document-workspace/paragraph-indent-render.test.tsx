@@ -18,7 +18,7 @@ afterEach(() => {
  * wrapped line shifts and the paragraph paints as if it had no indent.
  */
 
-function indentedModel(indentAttr: string) {
+function indentedModel(indentAttr: string, continuation = false) {
   const paragraph: DocumentParagraphWire = {
     id: 'p1',
     runs: [
@@ -49,7 +49,9 @@ function indentedModel(indentAttr: string) {
   const { container } = render(
     <DocumentModelPage
       model={model}
-      pageBlocks={[{ type: 'paragraph', paragraph, wrapWidthPx: 420 }]}
+      pageBlocks={[
+        { type: 'paragraph', paragraph, wrapWidthPx: 420, continuation },
+      ]}
       selectedParagraphId={null}
       onSelectParagraph={() => undefined}
       editing
@@ -72,6 +74,15 @@ describe('wrapped paragraph indent painting', () => {
       expect(first.style.textIndent).toBe('')
       // Later blocks reset it so only the first line is indented.
       for (const row of rest) expect(row.style.textIndent).toBe('0px')
+    })
+
+    it(`resets the ${label} indent on every line of a continuation block`, () => {
+      // A continuation block resumes mid-paragraph after a page break, so no
+      // line on it is the paragraph's first and none carries the special
+      // indent, including the block's own first wrapped line.
+      const rows = indentedModel(attr, true)
+      expect(rows.length).toBeGreaterThan(1)
+      for (const row of rows) expect(row.style.textIndent).toBe('0px')
     })
   }
 })

@@ -912,6 +912,17 @@ export function translateSnapshot(
         if (sameParagraphFormat(inverse, saved)) break
         const targetParagraphId =
           identities.paragraphIds.get(slot.paragraphId) ?? slot.paragraphId
+        // Mirror the paragraph-style branch: the same batch deleted this
+        // paragraph from the saved model, so there is no result paragraph to
+        // hold the reversal. The slot was already dropped by removeDraftSlots;
+        // writing the inverse anyway would leave a draft the next save can
+        // never send and would block permanently.
+        if (
+          baseline.toModel &&
+          storyParagraph(baseline.toModel, targetParagraphId) === undefined
+        ) {
+          break
+        }
         next.format.paragraphFormats[targetParagraphId] = inverse
         break
       }
