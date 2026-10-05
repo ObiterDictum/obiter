@@ -3,7 +3,7 @@ import type {
   DocumentNumberingWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { hasPureStartOverride } from '@obiter/ooxml'
+import { hasPureStartOverride, levelStartOverride } from '@obiter/ooxml'
 import type { FormatDrafts } from './document-format-edits'
 import { paragraphNumPr } from './document-page-lists'
 
@@ -98,30 +98,6 @@ export function paragraphStartOverride(
   const instance = findNumberingInstance(model, numPr.numId)
   if (!instance) return undefined
   return levelStartOverride(instance.sourceFragment, numPr.ilvl ?? 0)
-}
-
-/**
- * The `w:startOverride` an instance declares for one level, read from its raw
- * `w:num`. The instance-level `startOverride` the parser exposes is its first
- * descendant override at any level, so it cannot answer this per-level read.
- */
-function levelStartOverride(
-  sourceFragment: string,
-  ilvl: number,
-): number | undefined {
-  const override = sourceFragment.match(
-    new RegExp(
-      `<(?:(?:\\w+):)?lvlOverride\\b[^>]*\\bilvl\\s*=\\s*["']${String(ilvl)}["'][^>]*>[\\s\\S]*?</(?:\\w+:)?lvlOverride>`,
-      'u',
-    ),
-  )?.[0]
-  if (!override) return undefined
-  const value = override.match(
-    /<(?:\w+:)?startOverride\b[^>]*\bval\s*=\s*["'](\d+)["']/u,
-  )?.[1]
-  if (value === undefined) return undefined
-  const start = Number(value)
-  return Number.isInteger(start) && start > 0 ? start : undefined
 }
 
 /**

@@ -198,4 +198,36 @@ describe('list toggle', () => {
       paragraphStartOverride(perLevel, emptyFormatDrafts, paragraph('p2', 2)),
     ).toBe(7)
   })
+
+  it('does not read a later override as a self-closing one', () => {
+    const paragraph = (id: string, ilvl: number): DocumentParagraphWire => ({
+      id,
+      runs: [{ id: `${id}-r`, text: 'Hello', preservedXmlFragments: [] }],
+      preservedXmlFragments: [
+        `<w:pPr><w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="1"/></w:numPr></w:pPr>`,
+      ],
+    })
+    const overridden: DocumentModelWire = {
+      ...model,
+      numbering: [
+        {
+          numberingId: '1',
+          sourceFragment:
+            '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"/><w:lvlOverride w:ilvl="2"><w:startOverride w:val="7"/></w:lvlOverride></w:num>',
+          levels: [
+            { ilvl: 0, start: 1, numFmt: 'decimal' },
+            { ilvl: 2, start: 7, numFmt: 'lowerRoman' },
+          ],
+        },
+      ],
+    }
+    // The self-closing override at ilvl 0 has no start, so the ilvl-2 value
+    // must not be read for it.
+    expect(
+      paragraphStartOverride(overridden, emptyFormatDrafts, paragraph('p0', 0)),
+    ).toBeUndefined()
+    expect(
+      paragraphStartOverride(overridden, emptyFormatDrafts, paragraph('p2', 2)),
+    ).toBe(7)
+  })
 })

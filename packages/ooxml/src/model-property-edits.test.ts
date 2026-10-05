@@ -777,6 +777,67 @@ describe('run emphasis and paragraph numbering edits', () => {
     )
   })
 
+  it('restarts a level the source instance redefined with a nested w:lvl', async () => {
+    const numbering =
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:lvl w:ilvl="0"><w:start w:val="5"/><w:numFmt w:val="upperLetter"/><w:lvlText w:val="%1)"/></w:lvl></w:lvlOverride></w:num>' +
+      '</w:numbering>'
+    const document = await parseDocx(
+      await withNumberingXml(
+        await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+        numbering,
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+        startOverride: 3,
+      },
+    ])
+    const created = document.model.numbering.find(
+      (instance) => instance.startOverride === 3,
+    )
+    if (!created) throw new Error('created numbering instance is missing.')
+
+    const serialised = await serialiseDocx(document)
+    const numberingXml = await zipText(serialised, 'word/numbering.xml')
+    const numAt = numberingXml.indexOf(
+      `<w:num w:numId="${created.numberingId}">`,
+    )
+    const fragment = numberingXml.slice(
+      numAt,
+      numberingXml.indexOf('</w:num>', numAt) + 8,
+    )
+    // CT_NumLvl orders startOverride before lvl, and the nested level's own
+    // start must agree with it so the restart holds whichever one a consumer
+    // reads.
+    expect(fragment.indexOf('<w:startOverride')).toBeGreaterThan(-1)
+    expect(fragment.indexOf('<w:startOverride')).toBeLessThan(
+      fragment.indexOf('<w:lvl '),
+    )
+    expect(fragment).toContain('<w:start w:val="3"/>')
+    expect(fragment).not.toContain('<w:start w:val="5"/>')
+
+    const reloaded = await parseDocx(serialised)
+    const parsed = reloaded.model.numbering.find(
+      (instance) => instance.numberingId === created.numberingId,
+    )
+    const level = parsed?.levels?.find((item) => item.ilvl === 0)
+    expect(level?.start).toBe(3)
+    // The formatting the source override defined survives, so the edit's model
+    // entry and the reloaded part describe the same level.
+    expect(level?.lvlText).toBe('%1)')
+    expect(level?.numFmt).toBe('upperLetter')
+    expect(parsed?.levels).toEqual(created.levels)
+  })
+
   it('inserts a new num before a trailing numIdMacAtCleanup', async () => {
     const numbering =
       '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
