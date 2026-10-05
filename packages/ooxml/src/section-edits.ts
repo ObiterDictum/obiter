@@ -244,11 +244,26 @@ function materialiseRunWithBreaks(
       replacement.end <= run.runRange.end &&
       replacement.start < run.runRange.end
     if (!insideRun) continue
-    // A non-run-keyed replacement inside the run is a paragraph-keyed splice
-    // this rebuild would silently drop, losing the break it carries. The
-    // run-keyed writers refuse a splice, so this is unreachable in a valid
-    // batch; fail closed as a typed edit error rather than let serialisation
-    // hit the overlay's plain overlap error.
+    // A zero-width replacement exactly at the run's start belongs to the
+    // preceding boundary, exactly as `hasPendingBreakSplice` already treats it
+    // for the run-keyed writers. The paragraph-keyed page-break splice emits
+    // its standalone break run before the run tag, so it neither closes nor
+    // reopens this run; the rebuild leaves it in place and the overlay orders
+    // the zero-width splice before the rebuilt run. Without this skip the
+    // splice satisfies `insideRun` and a batch that is otherwise serialisable —
+    // a break at the run start, a run-keyed write there, then a break strictly
+    // inside the same run — is over-refused.
+    if (
+      replacement.start === run.runRange.start &&
+      replacement.end === run.runRange.start
+    ) {
+      continue
+    }
+    // A non-run-keyed replacement strictly inside the run is a splice this
+    // rebuild would silently drop, losing the break it carries. Fail closed as
+    // a typed edit error rather than let serialisation hit the overlay's plain
+    // overlap error. (A non-zero-width replacement from the run's start is the
+    // whole-run rebuild and is folded like any other run-keyed write.)
     if (!pendingKey.startsWith(`${run.wire.id}:`)) {
       throw new OoxmlError('invalid-document-edit')
     }
