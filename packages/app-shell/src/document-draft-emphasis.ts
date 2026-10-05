@@ -6,15 +6,17 @@ import {
   DOCUMENT_EDIT_SIZE_HALF_POINTS_MIN,
   documentEditHighlightSchema,
   documentEditVertAlignSchema,
+  isValidXmlText,
 } from '@obiter/contracts'
 
 /**
  * The persisted shape of one pending character-formatting draft. It must admit
  * every `EmphasisPatch` property, because `writeDocumentDraft` serialises the
  * in-memory entries verbatim and `scanPayloads` deletes a payload it cannot
- * parse, which would destroy the whole unsaved draft. Bounds come from the edit
- * contract so persistence and save cannot disagree. Lives beside the draft
- * store rather than inside it to keep that file under the source ceiling.
+ * parse, which would destroy the whole unsaved draft. Bounds and XML-text
+ * validity come from the edit contract so persistence and save cannot disagree.
+ * Lives beside the draft store rather than inside it to keep that file under the
+ * source ceiling.
  */
 export const pendingEmphasisSchema = z
   .object({
@@ -30,6 +32,9 @@ export const pendingEmphasisSchema = z
       .string()
       .min(1)
       .max(DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH)
+      .refine(isValidXmlText, {
+        message: 'Font family contains an unsupported XML character.',
+      })
       .nullable()
       .optional(),
     fontSize: z

@@ -1,8 +1,11 @@
 import {
+  DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH,
+  DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX,
+  DOCUMENT_EDIT_SIZE_HALF_POINTS_MIN,
   documentEditHighlightSchema,
   documentEditVertAlignSchema,
 } from '@obiter/contracts'
-import { findXmlTagEnd } from '@obiter/ooxml'
+import { decodeXmlReferences, findXmlTagEnd } from '@obiter/ooxml'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 
 /**
@@ -243,9 +246,14 @@ export function runFontFamily(xml: string): string | null {
   const current = withoutTrackedRunProperties(xml)
   const prefix = xmlPrefix(current)
   const fonts = tagAttrs(current, prefix, 'rFonts')
-  return (
-    wordAttr(fonts, 'ascii', prefix) ?? wordAttr(fonts, 'hAnsi', prefix) ?? null
-  )
+  const raw =
+    wordAttr(fonts, 'ascii', prefix) ?? wordAttr(fonts, 'hAnsi', prefix)
+  if (raw === undefined) return null
+  const decoded = decodeAttributeReferences(raw)
+  return decoded !== null &&
+    decoded.length <= DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH
+    ? decoded
+    : null
 }
 
 /** The run's size in half-points, the unit the edit contract carries. */
@@ -254,8 +262,26 @@ export function runFontSize(xml: string): number | null {
   const prefix = xmlPrefix(current)
   const value = wordAttr(tagAttrs(current, prefix, 'sz'), 'val', prefix)
   if (value === undefined) return null
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : null
+  const size = Number(value)
+  return Number.isInteger(size) &&
+    size >= DOCUMENT_EDIT_SIZE_HALF_POINTS_MIN &&
+    size <= DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX
+    ? size
+    : null
+}
+
+/**
+ * Decodes XML attribute references, returning null when the value is not a
+ * well-formed attribute value. The reference decoder is the shared OOXML lexer
+ * one; a malformed reference is exotic source content, so dropping only the
+ * property keeps the reader and the draft that consumes it from failing on it.
+ */
+function decodeAttributeReferences(value: string): string | null {
+  try {
+    return decodeXmlReferences(value)
+  } catch {
+    return null
+  }
 }
 
 /**
