@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
-import type { LocalInsert } from '../../document-edits'
+import type { BreakDraft, LocalInsert } from '../../document-edits'
 import {
   adoptDocumentDraft,
   clearDocumentDraft,
@@ -316,6 +316,15 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     })
   }
 
+  function setBreaks(update: (current: BreakDraft[]) => BreakDraft[]) {
+    setBundle((current) => {
+      const next = update(current.state.breaks)
+      if (next === current.state.breaks) return current
+      history.record(current.state)
+      return { ...current, state: { ...current.state, breaks: next } }
+    })
+  }
+
   return {
     state: bundle.state,
     drafts: bundle.state.drafts,
@@ -323,6 +332,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     deletedParagraphIds: bundle.state.deletedParagraphIds,
     extraRuns: bundle.state.extraRuns,
     format: bundle.state.format,
+    breaks: bundle.state.breaks,
     latestState: () => bundleRef.current.state,
     setDrafts: (
       update: (current: Record<string, string>) => Record<string, string>,
@@ -331,6 +341,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setInserts: (update: (current: LocalInsert[]) => LocalInsert[]) =>
       setState((current) => ({ ...current, inserts: update(current.inserts) })),
     setFormat,
+    setBreaks,
     resetDrafts,
     clearSlots,
     commitSaveBoundary,

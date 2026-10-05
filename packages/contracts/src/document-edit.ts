@@ -50,6 +50,7 @@ export const documentEditAlignmentSchema = z.enum([
   'both',
 ])
 export const documentEditLineRuleSchema = z.enum(['auto', 'exact', 'atLeast'])
+export const documentEditOrientationSchema = z.enum(['portrait', 'landscape'])
 
 export const editIdSchema = z
   .string()
@@ -153,6 +154,30 @@ const lineSpacingSchema = z
   .object({
     line: twipSchema,
     lineRule: documentEditLineRuleSchema.optional(),
+  })
+  .strict()
+
+/**
+ * Direct page-margin overrides in twips. A field leaves the attribute alone when
+ * absent and releases it to its inherited/default value when null. `margins:
+ * null` releases the whole `w:pgMar` element.
+ */
+const sectionMarginsSchema = z
+  .object({
+    top: twipSchema.nullable().optional(),
+    right: twipSchema.nullable().optional(),
+    bottom: twipSchema.nullable().optional(),
+    left: twipSchema.nullable().optional(),
+    header: twipSchema.nullable().optional(),
+    footer: twipSchema.nullable().optional(),
+    gutter: twipSchema.nullable().optional(),
+  })
+  .strict()
+
+const sectionPageSizeSchema = z
+  .object({
+    width: twipSchema,
+    height: twipSchema,
   })
   .strict()
 
@@ -402,6 +427,36 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('delete_paragraph'),
+      paragraphId: editIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('set_section_properties'),
+      margins: sectionMarginsSchema.nullable().optional(),
+      orientation: documentEditOrientationSchema.nullable().optional(),
+      pageSize: sectionPageSizeSchema.nullable().optional(),
+    })
+    .strict()
+    .superRefine((operation, context) => {
+      requireAssigned(
+        operation,
+        ['margins', 'orientation', 'pageSize'],
+        context,
+        'At least one section property must be assigned.',
+      )
+    }),
+  z
+    .object({
+      type: z.literal('insert_break'),
+      paragraphId: editIdSchema,
+      offset: characterOffsetSchema,
+      kind: z.literal('page'),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('insert_section_break'),
       paragraphId: editIdSchema,
     })
     .strict(),

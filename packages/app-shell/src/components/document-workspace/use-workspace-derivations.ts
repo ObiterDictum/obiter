@@ -7,6 +7,7 @@ import {
 import { formattedModel } from '../../document-format-edits'
 import { flowParagraphIds, LAST_PARAGRAPH_MESSAGE } from '../../document-edits'
 import { documentStory } from '../../document-model-text'
+import { withBreakDrafts } from '../../document-section-format'
 import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
 import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
@@ -15,7 +16,12 @@ import type { useWorkspaceDrafts } from './use-workspace-drafts'
 
 type DraftState = Pick<
   ReturnType<typeof useWorkspaceDrafts>,
-  'drafts' | 'inserts' | 'extraRuns' | 'format' | 'deletedParagraphIds'
+  | 'drafts'
+  | 'inserts'
+  | 'extraRuns'
+  | 'format'
+  | 'deletedParagraphIds'
+  | 'breaks'
 >
 
 /**
@@ -69,18 +75,25 @@ export function useWorkspaceDerivations({
     const story = painted ? documentStory(painted) : undefined
     return story ? storyBlocks(story) : []
   }, [painted])
+  // Pending breaks are structure, not text: they are folded into a copy of the
+  // painted model so pagination sees the same page and section breaks the save
+  // will write, without changing what the page renders.
+  const broken = useMemo(
+    () => (painted ? withBreakDrafts(painted, drafts.breaks) : undefined),
+    [painted, drafts.breaks],
+  )
   const pages = useMemo(
     () =>
-      painted
+      broken
         ? layoutDocument(
-            painted,
+            broken,
             drafts.drafts,
             drafts.inserts,
             drafts.extraRuns,
             blocks,
           )
         : [],
-    [painted, blocks, drafts.drafts, drafts.inserts, drafts.extraRuns],
+    [broken, blocks, drafts.drafts, drafts.inserts, drafts.extraRuns],
   )
   const imageParts = useMemo(
     () => (model ? documentImagePartNames(model) : []),

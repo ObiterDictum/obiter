@@ -4,10 +4,12 @@ import {
   flowParagraphIds,
   LAST_PARAGRAPH_MESSAGE,
   resolveInsertAnchor,
+  type BreakDraft,
   type LocalInsert,
 } from './document-edits'
 import type { FormatDrafts } from './document-format-edits'
 import { emphasisSlotKey } from './document-save-slots'
+import { sectionDraftFields } from './document-section-format'
 import { documentStory } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
 
@@ -20,6 +22,8 @@ export type DraftState = {
   deletedParagraphIds: string[]
   extraRuns: ExtraRuns
   format: FormatDrafts
+  /** Page and section breaks held before save, caret-anchored per paragraph. */
+  breaks: BreakDraft[]
   /**
    * Tracked changes a saved edit left behind, grouped by the history step that
    * created them. A tracked text replacement removes its run from the reparsed
@@ -74,7 +78,9 @@ export function emptyDraftState(): DraftState {
       paragraphStyles: {},
       numbering: {},
       paragraphFormats: {},
+      section: {},
     },
+    breaks: [],
     trackedRejections: [],
   }
 }
@@ -92,6 +98,8 @@ export type DraftSlot =
   | { kind: 'numbering'; key: string; paragraphId: string }
   | { kind: 'paragraph-format'; key: string; paragraphId: string }
   | { kind: 'emphasis'; key: string }
+  | { kind: 'section'; key: string }
+  | { kind: 'break'; key: string; id: string; breakKind: 'page' | 'section' }
   | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 
 export type BlockedDraft = {
@@ -243,6 +251,30 @@ export function planDocumentSave(
     covered.push({ kind: 'delete', key: `delete:${paragraphId}`, paragraphId })
   }
 
+  for (const item of state.breaks) {
+    if (!paragraphIds.has(item.paragraphId)) {
+      blocked.push({
+        slot: {
+          kind: 'break',
+          key: `break:${item.id}`,
+          id: item.id,
+          breakKind: item.kind,
+        },
+        reason:
+          'The paragraph this break was placed in is no longer in the document.',
+        label: item.kind === 'page' ? 'a page break' : 'a section break',
+      })
+      continue
+    }
+    keep.breaks.push(item)
+    covered.push({
+      kind: 'break',
+      key: `break:${item.id}`,
+      id: item.id,
+      breakKind: item.kind,
+    })
+  }
+
   for (const [paragraphId, styleId] of Object.entries(
     state.format.paragraphStyles,
   )) {
@@ -333,6 +365,12 @@ export function planDocumentSave(
         ? 'paragraph formatting on a new paragraph'
         : 'paragraph formatting',
     })
+  }
+
+  const sectionFields = sectionDraftFields(state.format.section)
+  if (sectionFields) {
+    keep.format.section = state.format.section
+    covered.push({ kind: 'section', key: 'section' })
   }
 
   state.format.emphasis.forEach((item) => {
@@ -427,6 +465,7 @@ export function planDocumentSave(
       keep.deletedParagraphIds,
       keep.extraRuns,
       keep.format,
+      keep.breaks,
     ),
     covered,
     blocked,

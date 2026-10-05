@@ -7,6 +7,7 @@ import {
 } from '../../document-format-edits'
 import { findMatchLabel } from '../../document-find'
 import { documentStory } from '../../document-model-text'
+import { documentBreakToolbar } from '../../document-break-toolbar'
 import { documentDefaultFace } from '../../document-page-style'
 import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
 import {
@@ -166,7 +167,6 @@ export function DocxWorkspace({
   } = useWorkspaceCaret({ documentId, model, drafts })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
-
   // The toolbar acts on the document selection's ranges, or on the caret's
   // own paragraph when there is none.
   const formatTarget: FormatTarget = selectionActive
@@ -196,7 +196,6 @@ export function DocxWorkspace({
   }
   // Print reports only refusal or absence; printing itself saves nothing.
   const transientBanner = printBanner ?? save.notice ?? banner
-
   const format = painted
     ? documentFormatToolbar(
         painted,
@@ -209,7 +208,6 @@ export function DocxWorkspace({
         drafts.extraRuns,
       )
     : undefined
-
   const ribbon = (
     <WorkspaceRibbon>
       <DocumentWorkspaceToolbar
@@ -227,6 +225,14 @@ export function DocxWorkspace({
         presence={presence}
         currentUserId={me?.user.id}
         canEdit
+        {...documentBreakToolbar({
+          paragraphId: selectedParagraphId,
+          model: painted ?? model,
+          offset: formatRange?.to ?? 0,
+          selectionActive,
+          trackChanges,
+          setBreaks: drafts.setBreaks,
+        })}
         canUndo={drafts.canUndo}
         canRedo={drafts.canRedo}
         onToggleComments={() => setCommentsOpen((value) => !value)}

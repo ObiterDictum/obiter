@@ -6,8 +6,8 @@ import { keepWithNext } from './document-page-keep'
 import { drawingFloat, paragraphAnchorXml } from './document-page-floats'
 import {
   contentFrame,
-  documentPageBox,
-  documentSectionXml,
+  documentSections,
+  pageBoxForSection,
   sectionColumns,
   type ColumnFrame,
   type ContentFrame,
@@ -43,12 +43,20 @@ export function layoutDocument(
    * pass re-parsed the table structure on each keystroke for no change. */
   blocks?: StoryBlock[],
 ): LaidOutPage[] {
-  const box = documentPageBox(model)
-  const frame = contentFrame(box, marginBandHeights(model))
-  const columns = sectionColumns(box, documentSectionXml(model))
+  const sections = documentSections(model)
+  const geometryFor = (sectionXml: string) => {
+    const sectionBox = pageBoxForSection(sectionXml)
+    return {
+      box: sectionBox,
+      frame: contentFrame(sectionBox, marginBandHeights(model)),
+      columns: sectionColumns(sectionBox, sectionXml),
+    }
+  }
+  const geometries = sections.map((section) => geometryFor(section.xml))
+  let geometry = geometries[0] ?? geometryFor('')
   const story = documentStory(model)
   if (!story || story.paragraphs.length === 0) {
-    return [emptyPage(box, frame, columns)]
+    return [emptyPage(geometry.box, geometry.frame, geometry.columns)]
   }
 
   const boxed = new Set<string>()
@@ -69,24 +77,42 @@ export function layoutDocument(
   )
   const pages: LaidOutPage[] = []
   const session: PageSession = {
-    page: emptyPage(box, frame, columns),
+    page: emptyPage(geometry.box, geometry.frame, geometry.columns),
     col: 0,
     y: 0,
     broken: false,
   }
 
   const column = () =>
-    columns[session.col] ?? columns[0] ?? { left: 0, widthPx: frame.widthPx }
+    geometry.columns[session.col] ??
+    geometry.columns[0] ?? { left: 0, widthPx: geometry.frame.widthPx }
 
   const advance = () => {
-    if (session.col + 1 < columns.length) {
+    if (session.col + 1 < geometry.columns.length) {
       session.col += 1
       session.y = 0
       session.broken = true
       return
     }
     pages.push(session.page)
-    session.page = emptyPage(box, frame, columns)
+    session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
+    session.col = 0
+    session.y = 0
+    session.broken = true
+  }
+
+  let sectionIndex = 0
+  const startSection = () => {
+    sectionIndex += 1
+    geometry = geometries[sectionIndex] ?? geometry
+    if (
+      session.page.blocks.length > 0 ||
+      session.page.floats.length > 0 ||
+      session.page.textBoxes.length > 0
+    ) {
+      pages.push(session.page)
+    }
+    session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
     session.col = 0
     session.y = 0
     session.broken = true
@@ -102,14 +128,15 @@ export function layoutDocument(
         extraRuns,
         column().widthPx,
       )
-      if (session.y > 0 && heightPx > frame.heightPx - session.y) advance()
+      if (session.y > 0 && heightPx > geometry.frame.heightPx - session.y)
+        advance()
       session.page.blocks.push({
         type: 'table',
         table: item.table,
         column: session.col,
       })
       session.y += heightPx
-      if (session.y >= frame.heightPx) advance()
+      if (session.y >= geometry.frame.heightPx) advance()
       continue
     }
     keepWithNext(
@@ -118,7 +145,7 @@ export function layoutDocument(
       model,
       drafts,
       extraRuns,
-      frame,
+      geometry.frame,
       column(),
       session,
       advance,
@@ -129,12 +156,18 @@ export function layoutDocument(
       drafts,
       extraRuns,
       hosts,
-      box,
-      frame,
+      geometry.box,
+      geometry.frame,
       session,
       column,
       advance,
     )
+    if (
+      sections[sectionIndex]?.endParagraphId === item.paragraph.id &&
+      sectionIndex + 1 < sections.length
+    ) {
+      startSection()
+    }
   }
 
   layoutNotes(
@@ -142,8 +175,8 @@ export function layoutDocument(
     drafts,
     extraRuns,
     hosts,
-    box,
-    frame,
+    geometry.box,
+    geometry.frame,
     session,
     column,
     advance,

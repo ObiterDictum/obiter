@@ -7,6 +7,7 @@ import { documentStory, paragraphPlainText } from './document-model-text'
 import { snapEmphasisRange } from './document-format-paint'
 import { paragraphFormatFields } from './document-paragraph-format'
 import { paragraphNumPr } from './document-page-lists'
+import { sectionDraftFields } from './document-section-format'
 import {
   findNumberingInstance,
   findRestartInstance,
@@ -155,6 +156,10 @@ export function collectFormatOperations(
       paragraphId,
       ...fields,
     })
+  }
+  const section = sectionDraftFields(format.section ?? {})
+  if (section) {
+    operations.push({ type: 'set_section_properties', ...section })
   }
   return operations
 }
