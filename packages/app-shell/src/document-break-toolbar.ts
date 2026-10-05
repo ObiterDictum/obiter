@@ -32,7 +32,8 @@ export function documentBreakToolbar({
   paragraphId: string | null
   /** The painted model, to tell a stored paragraph from a pending insert. */
   model: DocumentModelWire | undefined
-  offset: number
+  /** The caret's paragraph offset, or null when no caret is resolved there. */
+  offset: number | null
   selectionActive: boolean
   trackChanges: boolean
   setBreaks: SetBreaks
@@ -50,9 +51,11 @@ export function documentBreakToolbar({
         ? 'Place the cursor in a paragraph to insert a break'
         : !paragraphExists
           ? 'Save the new paragraph before adding a break'
-          : undefined
+          : offset == null
+            ? 'Place the cursor in the paragraph text to insert a break'
+            : undefined
   const add = (kind: BreakDraft['kind']) => {
-    if (breakUnavailable || !paragraphId) return
+    if (breakUnavailable || !paragraphId || offset == null) return
     setBreaks((current) =>
       current.some(
         (item) =>

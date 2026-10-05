@@ -175,9 +175,6 @@ export function layoutDocument(
       advance,
     )
     const offsets = breakOffsets.get(item.paragraph.id) ?? []
-    // A break at offset zero starts the sheet before the paragraph, matching
-    // the advance the stored-break path takes in `layoutParagraph`.
-    if (offsets.includes(0) && session.y > 0) advance()
     layoutParagraph(
       item,
       model,

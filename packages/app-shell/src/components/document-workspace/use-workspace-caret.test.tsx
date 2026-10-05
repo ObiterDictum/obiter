@@ -64,6 +64,16 @@ describe('useWorkspaceCaret', () => {
     expect(result.current.formatRange).toBeNull()
   })
 
+  it('keeps the format range when the caret paragraph regains focus', () => {
+    const { result } = renderHook(() => useCaretHarness('doc_1'))
+
+    act(() => result.current.selectParagraph('p1', 3))
+    // Pagination remounts the editor after a break; that focus must not drop
+    // the resolved offset, or the next break would land at zero.
+    act(() => result.current.focusParagraph('p1'))
+    expect(result.current.formatRange).toEqual({ from: 3, to: 3 })
+  })
+
   it('clears the column and pending delivery when the document changes', () => {
     const { result, rerender } = renderHook(
       ({ documentId }: { documentId: string }) => useCaretHarness(documentId),
