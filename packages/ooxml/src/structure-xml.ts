@@ -23,6 +23,62 @@ const DRAWING_NAMESPACES =
  */
 
 /**
+ * The neighbourhood a table insert is decided against, expressed so both the
+ * writer (parsed XML siblings) and the fold (wire paragraphs) can compute it
+ * from their own representation.
+ */
+export type TablePlacementContext = {
+  /**
+   * Earlier inserts in this batch parked a tail behind the anchor — a prior
+   * table's last cell or an inserted paragraph — that the new table chains
+   * after to keep operation order.
+   */
+  hasPendingTail: boolean
+  /** A block follows the anchor's pending region in the body. */
+  hasFollowingBlock: boolean
+  /**
+   * The following block is a table: two adjacent `w:tbl` elements merge in
+   * Word, so the boundary needs a paragraph between them.
+   */
+  followingIsTable: boolean
+  /** The following block is the body `w:sectPr` — a body cannot end on a table. */
+  followingIsSectionProperties: boolean
+  /** Tables this anchor already produced in the batch. */
+  occurrence: number
+}
+
+/** The placement decisions for one table insert. */
+export type TablePlacement = {
+  /** Splice after the parked tail rather than the anchor paragraph. */
+  chainAfterPendingTail: boolean
+  /** Emit the separator paragraph keeping two same-anchor tables distinct. */
+  needsSeparatorParagraph: boolean
+  /**
+   * Emit the trailing paragraph OOXML requires after a body-final table or
+   * before an adjacent one.
+   */
+  needsTrailingParagraph: boolean
+}
+
+/**
+ * The placement rules for a body-level table insert — the single source both
+ * the save writer and the pending fold apply, so a painted draft cannot
+ * drift from what save/reload produces.
+ */
+export function decideTablePlacement(
+  context: TablePlacementContext,
+): TablePlacement {
+  return {
+    chainAfterPendingTail: context.hasPendingTail,
+    needsSeparatorParagraph: context.occurrence > 0,
+    needsTrailingParagraph:
+      !context.hasFollowingBlock ||
+      context.followingIsTable ||
+      context.followingIsSectionProperties,
+  }
+}
+
+/**
  * An empty paragraph carrying a `w14:paraId`. It is a table cell's mandatory
  * last child, the separator Word writes between adjacent tables, and the
  * trailing paragraph OOXML requires after a body-final table. The `w14`

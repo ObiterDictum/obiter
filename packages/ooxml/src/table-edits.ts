@@ -12,7 +12,11 @@ import { requireEditablePart } from './model-edit-overlay'
 import { parseXmlElements, setOverlayReplacement } from './parts/overlay'
 import { isWord } from './parts/xml-elements'
 import { nextSyntheticParaId } from './structure-package'
-import { buildTableParagraphXml, buildTableXml } from './structure-xml'
+import {
+  buildTableParagraphXml,
+  buildTableXml,
+  decideTablePlacement,
+} from './structure-xml'
 
 /**
  * A bordered, full-width table: `w:tbl` carrying `w:tblPr`/`w:tblGrid`, each
@@ -64,13 +68,17 @@ export function insertTable(
   }
   const siblings = elements.filter((element) => element.parent === parent)
   const nextSibling = siblings[siblings.indexOf(paragraphElement) + 1]
-  // OOXML requires a paragraph after a table at the end of a body; emit the
-  // trailing empty paragraph Word itself writes, so the document stays
-  // editable when the anchor is the last body paragraph. A paragraph is
-  // likewise emitted before an existing table: two adjacent `w:tbl` elements
-  // render as one merged table in Word, so the boundary needs a paragraph.
-  const trailingParagraph =
-    !nextSibling || isWord(nextSibling, 'sectPr') || isWord(nextSibling, 'tbl')
+  // The placement rules are shared with the pending fold
+  // (`decideTablePlacement`): the writer derives the descriptor from the
+  // anchor's parsed siblings, the fold from the wires after the parked tail.
+  const placement = decideTablePlacement({
+    hasPendingTail: afterWire !== undefined,
+    hasFollowingBlock: nextSibling !== undefined,
+    followingIsTable: nextSibling !== undefined && isWord(nextSibling, 'tbl'),
+    followingIsSectionProperties:
+      nextSibling !== undefined && isWord(nextSibling, 'sectPr'),
+    occurrence,
+  })
 
   // Every cell gets its own paragraph id: `paragraphIdsInCell` binds cell
   // paragraphs to `para-w14-…` wires, so two cells sharing an id would bind to
@@ -78,12 +86,9 @@ export function insertTable(
   const paraIds = Array.from({ length: rows * columns }, () =>
     nextSyntheticParaId(part.overlay),
   )
-  // A second table at the same anchor serialises immediately after the first
-  // (the overlays share a zero-width offset), which would merge them into one
-  // table — so the splice carries the separator paragraph Word writes between
-  // adjacent tables.
-  const separatorParaId =
-    occurrence > 0 ? nextSyntheticParaId(part.overlay) : undefined
+  const separatorParaId = placement.needsSeparatorParagraph
+    ? nextSyntheticParaId(part.overlay)
+    : undefined
   const separatorXml = separatorParaId
     ? buildTableParagraphXml(separatorParaId, true)
     : ''
@@ -100,7 +105,7 @@ export function insertTable(
   })
 
   let trailingWire: DocumentParagraphWire | undefined
-  if (trailingParagraph) {
+  if (placement.needsTrailingParagraph) {
     // The trailing paragraph must serialise after every table at this anchor:
     // a re-insert deletes and re-sets its key so map order puts it last again.
     // Its paraId is read back from the pending replacement so the re-emitted
@@ -126,8 +131,8 @@ export function insertTable(
   }
   part.dirty = true
 
-  const after = afterWire ?? anchor.wire
-  const index = story.paragraphs.indexOf(after)
+  const after = placement.chainAfterPendingTail ? afterWire : undefined
+  const index = story.paragraphs.indexOf(after ?? anchor.wire)
   const cellWires: DocumentParagraphWire[] = []
   if (separatorParaId) {
     cellWires.push({
