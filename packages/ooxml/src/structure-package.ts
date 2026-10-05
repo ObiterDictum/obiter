@@ -1,6 +1,8 @@
-import type {
-  DocumentEditImageContentType,
-  DocumentRelationshipWire,
+import {
+  documentEditImageContentTypeSchema,
+  imageExtensionForContentType,
+  type DocumentEditImageContentType,
+  type DocumentRelationshipWire,
 } from '@obiter/contracts'
 
 import { WORD_2010_NAMESPACE } from './document-identity'
@@ -33,18 +35,7 @@ const CONTENT_TYPES_PART = '[Content_Types].xml'
 const RELATIONSHIPS_ROOT_OPEN = `<Relationships xmlns="${RELATIONSHIPS_NAMESPACE}">`
 const encoder = new TextEncoder()
 
-const IMAGE_EXTENSION_BY_CONTENT_TYPE = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/gif': 'gif',
-  'image/bmp': 'bmp',
-} satisfies Record<DocumentEditImageContentType, string>
-
-export function imageExtensionForContentType(
-  contentType: DocumentEditImageContentType,
-) {
-  return IMAGE_EXTENSION_BY_CONTENT_TYPE[contentType]
-}
+export { imageExtensionForContentType }
 
 export function relationshipsPartName(sourcePartName: string) {
   const slash = sourcePartName.lastIndexOf('/')
@@ -184,14 +175,12 @@ export function addMediaPart(
   bytes: Uint8Array,
   reservedPartNames: readonly string[] = [],
 ) {
-  if (!(contentType in IMAGE_EXTENSION_BY_CONTENT_TYPE)) {
+  const parsed = documentEditImageContentTypeSchema.safeParse(contentType)
+  if (!parsed.success) {
     throw new OoxmlError('invalid-document-edit')
   }
-  // SAFETY: the `in` check just proved `contentType` is one of the map's
-  // keys, which are exactly the DocumentEditImageContentType union.
-  const imageType = contentType as DocumentEditImageContentType
-  const extension = IMAGE_EXTENSION_BY_CONTENT_TYPE[imageType]
-  if (!matchesImageSignature(imageType, bytes)) {
+  const extension = imageExtensionForContentType(parsed.data)
+  if (!matchesImageSignature(parsed.data, bytes)) {
     throw new OoxmlError('invalid-document-edit')
   }
   const reserved = reservedPartNames.filter(
