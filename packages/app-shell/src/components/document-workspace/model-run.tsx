@@ -50,6 +50,7 @@ export function ParagraphRunPaint({
   wrapWidthPx,
   selection,
   carets = [],
+  continuation = false,
 }: {
   paragraph: DocumentParagraphWire
   drafts?: Record<string, string>
@@ -63,6 +64,8 @@ export function ParagraphRunPaint({
   wrapWidthPx?: number
   selection?: ParagraphSelectionRange
   carets?: DocumentPresence[]
+  /** True when this block resumes a paragraph split across a page break. */
+  continuation?: boolean
 }) {
   const paint = (slices: RunSlice[]) => {
     if (slices.length === 0) {
@@ -95,7 +98,17 @@ export function ParagraphRunPaint({
       <div
         key={`${paragraph.id}-${line.from}-${index}`}
         className="whitespace-pre"
-        style={{ lineHeight: `${linePx}px`, height: linePx }}
+        style={{
+          lineHeight: `${linePx}px`,
+          height: linePx,
+          // The wrapper inherits the paragraph's text-indent, which would then
+          // apply to the first line of every one of these wrapped blocks and so
+          // indent every line. Only the paragraph's first block keeps it; the
+          // rest reset it. A continuation block resumes mid-paragraph at a page
+          // break, so no line on it carries the special first-line/hanging
+          // indent, including its first.
+          textIndent: index === 0 && !continuation ? undefined : 0,
+        }}
         data-line-from={start + line.from}
         data-line-to={start + line.to}
       >

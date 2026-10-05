@@ -29,6 +29,7 @@ import type {
   DocumentFormatToolbar,
   DocumentClipboardToolbar,
 } from './ribbon-types'
+import { LINE_SPACING_OPTIONS } from '../../document-paragraph-format'
 import {
   CaptionButton,
   IconButton,
@@ -76,13 +77,6 @@ const FONT_COLOURS = [
 const DEFAULT_FONT = { value: '', label: 'Default font' }
 const DEFAULT_SIZE = { value: '', label: 'Default size' }
 const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
-
-const LINE_SPACING = [
-  { value: '1', label: '1.0' },
-  { value: '1.15', label: '1.15' },
-  { value: '1.5', label: '1.5' },
-  { value: '2', label: '2.0' },
-]
 
 export function HomeRibbon({
   canEdit,
@@ -293,30 +287,39 @@ export function HomeRibbon({
         <ToolbarRow>
           <IconButton
             label="Align left"
-            soon
+            pressed={format?.alignment === 'left'}
+            disabled={!editing}
+            onClick={() => format?.onAlignment('left')}
             icon={<TextAlignLeft size={16} aria-hidden />}
           />
           <IconButton
             label="Align centre"
-            soon
+            pressed={format?.alignment === 'center'}
+            disabled={!editing}
+            onClick={() => format?.onAlignment('center')}
             icon={<TextAlignCenter size={16} aria-hidden />}
           />
           <IconButton
             label="Align right"
-            soon
+            pressed={format?.alignment === 'right'}
+            disabled={!editing}
+            onClick={() => format?.onAlignment('right')}
             icon={<TextAlignRight size={16} aria-hidden />}
           />
           <IconButton
             label="Justify"
-            soon
+            pressed={format?.alignment === 'both'}
+            disabled={!editing}
+            onClick={() => format?.onAlignment('both')}
             icon={<TextAlignJustify size={16} aria-hidden />}
           />
           <RibbonSelect
             label="Line spacing"
-            soon
             className="w-14"
-            value="1.15"
-            options={LINE_SPACING}
+            value={format?.lineSpacing ?? ''}
+            options={LINE_SPACING_OPTIONS}
+            disabled={!editing}
+            onChange={(value) => format?.onLineSpacing(value)}
           />
         </ToolbarRow>
       </ToolbarGroup>

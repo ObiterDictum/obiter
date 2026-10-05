@@ -113,6 +113,35 @@ describe('document draft persistence', () => {
     expect(restored.state.format.emphasis).toEqual(state.format.emphasis)
   })
 
+  it('round-trips a draft carrying pending paragraph layout', () => {
+    const storage = new MapStorage()
+    const state = stateWithText('hello')
+    state.format.paragraphFormats = {
+      p1: {
+        alignment: 'center',
+        lineSpacing: { line: 360, lineRule: 'auto' },
+        indentation: { left: 720, right: null, firstLine: null, hanging: 720 },
+      },
+      p2: { indentation: { firstLine: null, hanging: null } },
+    }
+    expect(
+      writeDocumentDraft(storage, scope, {
+        baseVersionId: 'ver_1',
+        state,
+        held: [],
+      }),
+    ).toBe(true)
+
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    // A schema that rejected any of these keys would fail the parse and delete
+    // the payload, silently destroying the whole unsaved draft.
+    expect(restored.state.format.paragraphFormats).toEqual(
+      state.format.paragraphFormats,
+    )
+  })
+
   it('round-trips a draft whose emphasis came from an out-of-contract run', () => {
     const storage = new MapStorage()
     const state = stateWithText('hello')

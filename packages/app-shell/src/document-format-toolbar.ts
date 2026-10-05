@@ -7,7 +7,12 @@ import {
   continueList,
   emphasisAddress,
   indentList,
+  indentationPatch,
+  lineSpacingPatch,
   outdentList,
+  paragraphFormatState,
+  paragraphIndentLeftPx,
+  setParagraphFormatDraft,
   setParagraphStyleDraft,
   toggleEmphasisAtAddress,
 } from './document-format-edits'
@@ -17,10 +22,12 @@ import {
 } from './document-format-controls'
 import { effectiveParagraph } from './document-model-text'
 import type {
+  AlignmentValue,
   EmphasisPatch,
   FormatDrafts,
   HighlightValue,
 } from './document-format-types'
+import type { IndentKind } from './document-paragraph-format'
 import type { ExtraRuns } from './document-word-edits'
 
 export type ParagraphRange = {
@@ -161,6 +168,21 @@ export function documentFormatToolbar(
       controls.paragraphIds.reduce((next, id) => apply(next, id), current),
     )
   }
+  // Paragraph layout is whole-paragraph, so a caret in no paragraph (an empty
+  // id) is not a target; unlike run emphasis it does not need covered text.
+  // A pending insert's clientId is not a stored paragraph, so formatting it
+  // could only write a draft that never paints and blocks the save; the save
+  // plan already excludes a pending insert the same way.
+  const formatParagraphIds = controls.paragraphIds.filter(
+    (id) => id.length > 0 && selectedParagraph(model, id) !== undefined,
+  )
+  const forEachFormatParagraph = (
+    apply: (current: FormatDrafts, paragraphId: string) => FormatDrafts,
+  ) => {
+    setFormat((current) =>
+      formatParagraphIds.reduce((next, id) => apply(next, id), current),
+    )
+  }
   return {
     ...(trackedRange
       ? {
@@ -172,6 +194,9 @@ export function documentFormatToolbar(
         : {}),
     paragraphStyleId: controls.paragraphStyleId,
     paragraphStyles: controls.paragraphStyles,
+    alignment: controls.alignment,
+    lineSpacing: controls.lineSpacing,
+    indentKind: controls.indentKind,
     bold: controls.bold,
     italic: controls.italic,
     underline: controls.underline,
@@ -193,6 +218,42 @@ export function documentFormatToolbar(
       forEachParagraph((current, id) =>
         setParagraphStyleDraft(current, id, styleId),
       )
+    },
+    onAlignment: (alignment: AlignmentValue) => {
+      if (formatParagraphIds.length === 0) return
+      forEachFormatParagraph((current, id) =>
+        setParagraphFormatDraft(current, id, { alignment }),
+      )
+    },
+    onLineSpacing: (value: string) => {
+      const lineSpacing = lineSpacingPatch(value)
+      if (!lineSpacing || formatParagraphIds.length === 0) return
+      forEachFormatParagraph((current, id) =>
+        setParagraphFormatDraft(current, id, { lineSpacing }),
+      )
+    },
+    onIndentKind: (kind: IndentKind) => {
+      if (formatParagraphIds.length === 0) return
+      forEachFormatParagraph((current, id) => {
+        // None is a special-indent control: it clears only a first-line or
+        // hanging indent and keeps any direct left/right indent. When the
+        // paragraph has no special indent to clear, restate its draft unchanged
+        // so the reference-equal skip in `setFormat` records no history step
+        // and the save emits no operation. `paragraphFormatState` reads the
+        // pending draft over the stored paragraph, so a draft that already
+        // cleared the indent is a no-op too.
+        if (
+          kind === 'none' &&
+          paragraphFormatState(model, current, [id]).indent === 'none'
+        ) {
+          return current
+        }
+        return setParagraphFormatDraft(current, id, {
+          indentation: indentationPatch(kind, {
+            leftPx: paragraphIndentLeftPx(model, current, id),
+          }),
+        })
+      })
     },
     onToggleBold: () => {
       toggle({ bold: !controls.bold })

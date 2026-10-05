@@ -5,6 +5,7 @@ import type {
 } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
 import { snapEmphasisRange } from './document-format-paint'
+import { paragraphFormatFields } from './document-paragraph-format'
 import { paragraphNumPr } from './document-page-lists'
 import type {
   EmphasisPatch,
@@ -27,6 +28,20 @@ export {
   selectedParagraphIds,
 } from './document-format-controls'
 export { formattedModel, paragraphStyleOptions } from './document-format-paint'
+export {
+  DEFAULT_INDENT_TWIPS,
+  INDENT_OPTIONS,
+  indentationPatch,
+  LINE_SPACING_OPTIONS,
+  lineSpacingPatch,
+  paragraphFormatState,
+  paragraphIndentLeftPx,
+  setParagraphFormatDraft,
+} from './document-paragraph-format'
+export type {
+  IndentKind,
+  ParagraphFormatState,
+} from './document-paragraph-format'
 export { documentFormatToolbar } from './document-format-toolbar'
 export type { FormatTarget, ParagraphRange } from './document-format-toolbar'
 
@@ -117,6 +132,20 @@ export function collectFormatOperations(
       paragraphId,
       numId: numbering.numId,
       ...(numbering.ilvl !== undefined ? { ilvl: numbering.ilvl } : {}),
+    })
+  }
+  for (const [paragraphId, paragraphFormat] of Object.entries(
+    format.paragraphFormats,
+  )) {
+    if (deleted.has(paragraphId) || omitParagraphIds.has(paragraphId)) continue
+    const fields = paragraphFormatFields(paragraphFormat)
+    // The contract requires at least one assigned field, so an all-undefined
+    // draft (a cleared entry) is a no-op rather than an invalid operation.
+    if (Object.keys(fields).length === 0) continue
+    operations.push({
+      type: 'set_paragraph_format',
+      paragraphId,
+      ...fields,
     })
   }
   return operations
