@@ -33,11 +33,12 @@ import { join } from 'node:path'
 // workspace chunk, which the 385 kB figure predated: the base head 3e95127
 // already measured 388.1 kB against it, and the E6a head a475354 measures
 // 391.2 kB, with the workspace chunk at 169.5 kB and still inside its own
-// budget. 400 kB is the smallest value that admits that deliberate growth
-// while refusing anything beyond a few kilobytes more. The initial budget is
-// deliberately unchanged: an E6a defect briefly pushed it to 236.2 kB, the
-// fix restored it to 183.0 kB, so 212 kB retains real headroom and is not
-// being loosened.
+// budget. 400 kB was chosen deliberately: it leaves roughly 2.2% headroom
+// over the measurement, enough that an ordinary addition does not fail the
+// check, while anything beyond a few kilobytes more still does. The initial
+// budget is deliberately unchanged: an E6a defect briefly pushed it to
+// 236.2 kB, the fix restored it to 183.0 kB, so 212 kB retains real headroom
+// and is not being loosened.
 export const BUDGETS = {
   initialGzipBytes: 212 * 1024,
   lazyGzipBytes: 400 * 1024,
