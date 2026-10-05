@@ -76,6 +76,11 @@ export function indentationPatch(
       hanging: DEFAULT_INDENT_TWIPS,
     }
   }
+  // Known limitation: this nulls only the direct attributes. `indentKind` reads
+  // the merged (style-inclusive) face, so a `firstLine`/`hanging` inherited from
+  // the paragraph style still paints First line/Hanging while this click dirties
+  // the document without changing what is painted; clearing it would need to
+  // name the style's value rather than release the direct one.
   return { firstLine: null, hanging: null }
 }
 

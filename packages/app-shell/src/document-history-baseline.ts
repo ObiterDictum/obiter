@@ -804,6 +804,11 @@ export function translateSnapshot(
         // Reverse the saved formatting by restating the pre-save properties at
         // the result address, instead of merely dropping the slot (which left
         // the saved formatting in place).
+        //
+        // Known limitation, shared with `numbering`: the inverse reads only the
+        // stored pre-save model, never the snapshot's own pending emphasis, so
+        // a property the snapshot held pending is not consulted. Paragraph
+        // format (below) is E3 scope; the fix here would be the same pattern.
         const sent = baseline.sent.format.emphasis.find(
           (item) => emphasisSlotKey(item) === slot.key,
         )
@@ -862,6 +867,10 @@ export function translateSnapshot(
         // fragments (see paragraphFormatOf), so a pre-save numbering inside one
         // is not visible here: the same wire-model blind spot, recorded in the
         // Known divergences table.
+        //
+        // Known limitation, shared with `emphasis`: the inverse reads only the
+        // stored pre-save model, never the snapshot's own pending numbering, so
+        // a snapshot that held one is not consulted.
         Object.assign(next, removeDraftSlots(next, [slot]))
         const reversal = identities.paragraphReversals.get(slot.paragraphId)
         if (reversal) {
@@ -880,9 +889,11 @@ export function translateSnapshot(
       }
       case 'paragraph-format': {
         // Reverse a saved paragraph-layout change by restating the pre-save
-        // answer at the result paragraph. A family the save wrote that the
-        // paragraph did not carry before is released with an explicit null, so
-        // undo clears it rather than leaving the saved value.
+        // answer at the result paragraph. The snapshot's own pending layout is
+        // that pre-save answer; the stored paragraph is only the fallback for a
+        // snapshot recorded before the pending edit. A family the save wrote
+        // that neither carried is released with an explicit null, so undo
+        // clears it rather than leaving the saved value.
         Object.assign(next, removeDraftSlots(next, [slot]))
         const reversal = identities.paragraphReversals.get(slot.paragraphId)
         if (reversal) {
@@ -893,29 +904,12 @@ export function translateSnapshot(
         const sent = baseline.sent.format.paragraphFormats[slot.paragraphId]
         if (!paragraph || !sent) break
         const before = paragraphFormatOf(paragraph)
-        const inverse: ParagraphFormatDraft = {
-          ...(sent.alignment !== undefined
-            ? { alignment: before.alignment ?? null }
-            : {}),
-          ...(sent.lineSpacing !== undefined
-            ? { lineSpacing: before.lineSpacing ?? null }
-            : {}),
-          ...(sent.indentation !== undefined
-            ? {
-                // A complete snapshot, with explicit nulls for the attributes
-                // the paragraph did not carry: the writer merges `w:ind`, so a
-                // partial object would let an attribute the save added survive
-                // its own reversal.
-                indentation: {
-                  left: before.indentation?.left ?? null,
-                  right: before.indentation?.right ?? null,
-                  firstLine: before.indentation?.firstLine ?? null,
-                  hanging: before.indentation?.hanging ?? null,
-                },
-              }
-            : {}),
-        }
-        if (Object.keys(inverse).length === 0) break
+        const pending = snapshot.format.paragraphFormats[slot.paragraphId]
+        // The sibling convention: when what the reversal restores is exactly
+        // what the save stored, there is nothing to change and the slot drops.
+        const inverse = reversalParagraphFormat(pending, before, sent)
+        const saved = reversalParagraphFormat(sent, before, sent)
+        if (sameParagraphFormat(inverse, saved)) break
         const targetParagraphId =
           identities.paragraphIds.get(slot.paragraphId) ?? slot.paragraphId
         next.format.paragraphFormats[targetParagraphId] = inverse
@@ -955,6 +949,92 @@ export function translateSnapshot(
     }
   }
   return next
+}
+
+/**
+ * The paragraph layout a reversal restates. `source` is the answer to restore
+ * (the snapshot's pending layout, or the save's own for comparison), `stored`
+ * is the direct pre-save layout it falls back to, and `sent` names the families
+ * the save wrote and so must be reversed. A family the paragraph did not carry
+ * before is released with an explicit null, and every `w:ind` attribute is
+ * named because the writer merges `w:ind`: a partial object would let an
+ * attribute the save added survive its own reversal.
+ */
+function reversalParagraphFormat(
+  source: ParagraphFormatDraft | undefined,
+  stored: ParagraphFormatDraft,
+  sent: ParagraphFormatDraft,
+): ParagraphFormatDraft {
+  const indentation = (attr: 'left' | 'right' | 'firstLine' | 'hanging') => {
+    const value = source?.indentation?.[attr]
+    return value !== undefined ? value : (stored.indentation?.[attr] ?? null)
+  }
+  return {
+    ...(sent.alignment !== undefined
+      ? {
+          alignment:
+            source?.alignment !== undefined
+              ? source.alignment
+              : (stored.alignment ?? null),
+        }
+      : {}),
+    ...(sent.lineSpacing !== undefined
+      ? {
+          // A pre-save spacing with no rule cannot clear a rule the save added:
+          // the contract's `lineSpacingSchema` has no nullable `lineRule`. E3
+          // only ever writes `auto` (the default), so the UI cannot reach it.
+          lineSpacing:
+            source?.lineSpacing !== undefined
+              ? source.lineSpacing
+              : (stored.lineSpacing ?? null),
+        }
+      : {}),
+    ...(sent.indentation !== undefined
+      ? {
+          indentation: {
+            left: indentation('left'),
+            right: indentation('right'),
+            firstLine: indentation('firstLine'),
+            hanging: indentation('hanging'),
+          },
+        }
+      : {}),
+  }
+}
+
+/** Whether two complete reversal layouts name the same paragraph layout. */
+function sameParagraphFormat(
+  a: ParagraphFormatDraft,
+  b: ParagraphFormatDraft,
+): boolean {
+  return (
+    a.alignment === b.alignment &&
+    sameLineSpacing(a.lineSpacing, b.lineSpacing) &&
+    sameIndentation(a.indentation, b.indentation)
+  )
+}
+
+function sameLineSpacing(
+  a: ParagraphFormatDraft['lineSpacing'],
+  b: ParagraphFormatDraft['lineSpacing'],
+): boolean {
+  if (a === undefined || b === undefined) return a === b
+  if (a === null || b === null) return a === b
+  return a.line === b.line && a.lineRule === b.lineRule
+}
+
+function sameIndentation(
+  a: ParagraphFormatDraft['indentation'],
+  b: ParagraphFormatDraft['indentation'],
+): boolean {
+  if (a === undefined || b === undefined) return a === b
+  if (a === null || b === null) return a === b
+  return (
+    a.left === b.left &&
+    a.right === b.right &&
+    a.firstLine === b.firstLine &&
+    a.hanging === b.hanging
+  )
 }
 
 /** Adds a tracked-change rejection group once, keyed by its change ids. */
