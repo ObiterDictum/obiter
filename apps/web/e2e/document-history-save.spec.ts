@@ -358,6 +358,11 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.pressSequentially('X')
   await saveAndWait(page)
+  // Wait for the tracked save to settle before the undo/redo cycle: a cycle
+  // that races the in-flight request is a different interaction.
+  await expect
+    .poll(() => saveState(page), { message: 'tracked save settled' })
+    .toBe('saved')
 
   // The saved tracked insertion leaves the editor usable: the workspace does
   // not block, and Undo is offered before it is pressed.

@@ -70,7 +70,10 @@ export function useWorkspaceClipboard({
     start: SelectionEndpoint
     end: SelectionEndpoint
   } | null
-  replaceSelection: (text: string) => void
+  replaceSelection: (
+    text: string,
+    range?: { start: SelectionEndpoint; end: SelectionEndpoint },
+  ) => void
   selectedParagraphId: string | null
   /** The paragraphs a live document selection covers, so a paste can tell a
    * selection replacement from a paste into another (unfocused) paragraph. */
@@ -132,7 +135,9 @@ export function useWorkspaceClipboard({
       setRefusal('clipboard')
       return
     }
-    replaceSelection('')
+    // Delete exactly the range the clipboard now holds: a selection changed
+    // during the await must not be removed for text that was never copied.
+    replaceSelection('', range)
   }
 
   /** The paragraph and offsets a paste targets. Absent the ribbon, a field
@@ -164,11 +169,23 @@ export function useWorkspaceClipboard({
     if (!paragraphId) return null
     // A split paste creates sibling paragraphs, which a table cell or a text
     // box cannot hold: the flow would render them as body text while the save
-    // writes them inside the cell. Refuse with the selection's own structure
-    // reason rather than producing edits the document cannot represent.
+    // writes them inside the cell. Refuse structural targets with the
+    // selection's own structure reason rather than producing edits the
+    // document cannot represent. This refuses a single-line in-cell ribbon
+    // paste too (the native in-cell path still applies it), which is the
+    // announced side of an otherwise silent render/save divergence.
     if (isStructuralParagraph(paragraphId)) return 'structure'
-    const from = target?.from ?? formatRange?.from ?? restoreCaret?.offset ?? 0
-    const to = target?.to ?? formatRange?.to ?? from
+    const from =
+      target?.from ??
+      (paragraphId === selectedParagraphId ? formatRange?.from : undefined) ??
+      (restoreCaret?.paragraphId === paragraphId
+        ? restoreCaret.offset
+        : undefined) ??
+      0
+    const to =
+      target?.to ??
+      (paragraphId === selectedParagraphId ? formatRange?.to : undefined) ??
+      from
     return from === to
       ? { kind: 'caret', caret: { paragraphId, offset: from } }
       : {
