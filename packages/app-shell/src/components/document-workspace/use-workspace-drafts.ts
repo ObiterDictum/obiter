@@ -16,7 +16,6 @@ import {
   type RecoverableDraft,
 } from '../../document-draft-store'
 import { useWorkspaceDraftHistory } from '../../document-editor-history'
-import { holdSlotBundle, type DraftBundle } from './document-draft-holds'
 import {
   draftStorage,
   resolveDraftScope,
@@ -41,6 +40,9 @@ import type {
 import { createWorkspaceDraftEdits } from './workspace-draft-edits'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
+
+/** Live drafts plus held changes restored from older snapshots. */
+type DraftBundle = { state: DraftState; held: HeldChange[] }
 
 export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const [bundle, setBundle] = useState<DraftBundle>({
@@ -222,39 +224,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     }))
   }
 
-  /**
-   * Moves a slot the server rejected out of the draft state and into a held
-   * change, so the next save cannot resend it and the user can still see and
-   * discard it. Content is preserved, never silently dropped. The split always
-   * reads the latest bundle so typing during a request is not overwritten.
-   *
-   * When `sent` (the state the rejected request was planned from) is given
-   * and the slot changed after planning, the held record keeps the sent
-   * content while the newer typing stays editable: holding the slot's latest
-   * content would swallow text the rejection never saw, stranding it in held
-   * limbo with no reapply path. The next save may re-send that newer text and
-   * be rejected again, which then holds it cleanly; that round trip costs a
-   * request, silently eating the typing would cost the work.
-   */
-  function holdSlot(
-    slot: DraftSlot,
-    label: string,
-    reason: string,
-    sent?: DraftState,
-  ): HeldChange {
-    const record: HeldChange = {
-      id: crypto.randomUUID(),
-      label,
-      reason,
-      createdAt: new Date().toISOString(),
-      state: emptyDraftState(),
-    }
-    setBundle(
-      (current) => holdSlotBundle(current, slot, record, sent) ?? current,
-    )
-    return record
-  }
-
   function discardHeld(ids: readonly string[]) {
     const drop = new Set(ids)
     setBundle((current) => ({
@@ -360,7 +329,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     clearSlots,
     commitSaveBoundary,
     resetHistoryAfterDecision,
-    holdSlot,
     held: bundle.held,
     discardHeld,
     persistence,
