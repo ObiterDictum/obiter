@@ -220,16 +220,26 @@ export function partitionDraftState(
   // disclose the same reason rather than blaming a missing anchor paragraph.
   const blockedStructureReasons = new Map<string, string>()
   // The table-of-contents facts the shared refusal predicate reads, computed
-  // lazily so a save holding no such draft does not re-parse the tables.
+  // lazily so a save holding no such draft does not re-parse the tables. The
+  // heading set is the painted view restricted to stored paragraphs: a
+  // paragraph deleted earlier in the batch is gone, and a `set_paragraph_style`
+  // the same batch carries is already applied — the writer sees both when it
+  // captures entries, so a freshly styled heading must count.
   let tocFacts:
     | { cellIds: ReadonlySet<string>; headings: DocumentParagraphWire[] }
     | undefined
   const tableOfContentsFacts = () => {
+    const story = documentStory(model)
     tocFacts ??= {
-      cellIds: storyTableCellIds(documentStory(model)),
-      headings: (documentStory(model)?.paragraphs ?? []).filter((paragraph) =>
-        isTableOfContentsHeading(paragraph, model.styles),
-      ),
+      cellIds: storyTableCellIds(story),
+      headings: (story?.paragraphs ?? []).filter((paragraph) => {
+        if (keep.deletedParagraphIds.includes(paragraph.id)) return false
+        const pendingStyle = state.format.paragraphStyles[paragraph.id]
+        const effective = { ...paragraph }
+        if (pendingStyle === null) delete effective.styleId
+        else if (pendingStyle !== undefined) effective.styleId = pendingStyle
+        return isTableOfContentsHeading(effective, model.styles)
+      }),
     }
     return tocFacts
   }
