@@ -331,6 +331,26 @@ describe('footnote save partitioning', () => {
     )
   })
 
+  it('blocks a page number anchored in a note paragraph', () => {
+    const draft: StructuralDraft = {
+      id: 's1',
+      kind: 'page-number',
+      paragraphId: 'n2a',
+      offset: 0,
+    }
+    const plan = planDocumentSave(
+      model([bodyStory([paragraph('p1', 'text')]), footnotesStory()]),
+      { ...emptyDraftState(), structures: [draft] },
+    )
+    // A restored draft the ribbon never got to refuse is still held back
+    // here rather than failing the whole save at the writer.
+    expect(plan.operations).toEqual([])
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['structure'])
+    expect(plan.blocked[0]?.reason).toBe(
+      'A page number needs a page of its own: the body, a header or a footer.',
+    )
+  })
+
   it('blocks pending note runs whose structure cannot save', () => {
     const noteId = footnoteNoteParagraphId({ id: 's1' })
     const state = {
@@ -485,6 +505,27 @@ describe('the footnote insert control', () => {
       toolbar({ paragraphId: 'para-w14-AABB0001' }, cells).api
         .footnoteUnavailable,
     ).toContain('cell')
+  })
+
+  it('refuses a page number with the caret in a note paragraph', () => {
+    const notes = model([
+      bodyStory([paragraph('p1', 'text')]),
+      footnotesStory(),
+    ])
+    // The ribbon applies the writer's story-kind rule: a note has no page
+    // for the field to resolve, so the refusal names the real reason.
+    const { api } = toolbar({ paragraphId: 'n2a' }, notes)
+    expect(api.pageNumberUnavailable).toBe(
+      'A page number needs a page of its own: the body, a header or a footer.',
+    )
+    expect(api.insertPageNumber()).toEqual({
+      inserted: false,
+      reason:
+        'A page number needs a page of its own: the body, a header or a footer.',
+    })
+    expect(
+      toolbar({ paragraphId: 'p1' }, notes).api.pageNumberUnavailable,
+    ).toBeUndefined()
   })
 
   it('refuses a second splice inside the run an earlier footnote opened', () => {

@@ -1,4 +1,4 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
 import type { ParagraphRange } from './document-format-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
 import {
@@ -166,23 +166,30 @@ export function documentStructureToolbar({
       : offset == null || !paragraphId
         ? 'Place the cursor in the paragraph text to insert a footnote'
         : conflictWith({ kind: 'footnote', paragraphId, offset }))
-  // A page number anchors in whichever editable story the caret sits in —
-  // body, header or footer — not just the body. A selection has no single
-  // insertion point, and a pending insert has no server id yet.
-  const editableAnchor = Boolean(
-    paragraphId && model && editableParagraph(model, paragraphId),
-  )
+  // A page number anchors in whichever story a `PAGE` field resolves in —
+  // body, header or footer — not just the body. A note story has no page of
+  // its own, so a caret there refuses honestly rather than drafting a field
+  // the save plan must block. A selection has no single insertion point,
+  // and a pending insert has no server id yet.
+  const anchorStory =
+    paragraphId && model
+      ? model.stories.find((story) =>
+          story.paragraphs.some((paragraph) => paragraph.id === paragraphId),
+        )
+      : undefined
   const pageNumberUnavailable = trackChanges
     ? 'Insertions are not recorded as a tracked change'
     : selectionActive
       ? 'Collapse the selection to insert a page number'
       : !paragraphId
         ? 'Place the cursor in a paragraph to insert a page number'
-        : !editableAnchor
-          ? 'Save the new paragraph before inserting into it'
-          : offset == null
-            ? 'Place the cursor in the paragraph text to insert a page number'
-            : conflictWith({ kind: 'page-number', paragraphId, offset })
+        : anchorStory && !PAGE_STORY_KINDS.has(anchorStory.kind)
+          ? 'A page number needs a page of its own: the body, a header or a footer.'
+          : !anchorStory
+            ? 'Save the new paragraph before inserting into it'
+            : offset == null
+              ? 'Place the cursor in the paragraph text to insert a page number'
+              : conflictWith({ kind: 'page-number', paragraphId, offset })
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.

@@ -6897,7 +6897,11 @@
                     <code>w:p</code>, so the last-paragraph invariant also holds
                     inside each entry. Endnotes and comments are painted but not
                     editable, and the insertion fails closed under tracked
-                    changes like the other structural operations.
+                    changes like the other structural operations. A
+                    <code>PAGE</code> field is refused at the ribbon, the save
+                    partition and the writer alike when the anchor is a note
+                    story — a note has no page of its own for the field to
+                    resolve.
                   </td>
                   <td class="id">
                     ooxml/footnote-edits.ts ·
