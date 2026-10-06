@@ -40,7 +40,8 @@ import {
 
 const FOOTNOTE_REFERENCE_STYLE = 'FootnoteReference'
 const FOOTNOTE_TEXT_STYLE = 'FootnoteText'
-const PENDING_FOOTNOTE_ID = /<w:footnote\b[^>]*\bw:id="(-?\d+)"/gu
+const FOOTNOTE_ID =
+  /<w:footnote\b[^>]*\bw:id="(-?\d+)"|<w:footnoteReference\b[^>]*\bw:id="(-?\d+)"/gu
 
 /**
  * Splices a `w:footnoteReference` run at `offset` in the body `paragraph`
@@ -68,7 +69,10 @@ export function insertFootnote(
     throw new OoxmlError('model-node-not-editable')
   }
   const footnotes = ensureFootnotesStory(document, lineage)
-  const footnoteId = nextFootnoteId(footnotes.part.overlay)
+  const footnoteId = nextFootnoteId(
+    document.model.stories,
+    footnotes.part.overlay,
+  )
   const paraId = nextSyntheticParaId(footnotes.part.overlay)
   const entryXml = withDeclaredNamespaces(
     footnotes.part,
@@ -278,25 +282,43 @@ function noteParagraphWire(
 }
 
 /**
- * One more than the highest `w:id` among the part's `w:footnote` entries —
- * source and pending replacements, since a same-batch entry exists only as
- * a pending value. Separator ids are negative or zero, so real notes always
- * allocate from 1; taking the maximum never recycles an id an orphaned
- * `w:footnoteReference` elsewhere might still name.
+ * One more than the highest `w:id` the package still names: the part's
+ * `w:footnote` entries — source and pending replacements, since a
+ * same-batch entry exists only as a pending value — plus every
+ * `w:footnoteReference` the stories' preserved fragments carry, the same
+ * rule the fold's `nextPendingFootnoteId` applies. Separator ids are
+ * negative or zero, so real notes allocate from 1. The reference scan is
+ * load-bearing: a `w:footnote` entry can be removed while a mark naming it
+ * survives, and recycling that id would silently re-point the stored mark
+ * at the new note.
  */
-function nextFootnoteId(overlay: XmlOverlay) {
+function nextFootnoteId(
+  stories: readonly DocumentStoryWire[],
+  overlay: XmlOverlay,
+) {
   let next = 1
   const consider = (raw: string | undefined) => {
     const value = raw === undefined ? Number.NaN : Number.parseInt(raw, 10)
     if (Number.isInteger(value) && value >= next) next = value + 1
+  }
+  const considerXml = (xml: string) => {
+    for (const match of xml.matchAll(FOOTNOTE_ID)) {
+      consider(match[1] ?? match[2])
+    }
   }
   for (const element of parseXmlElements(overlay.source)) {
     if (!isWord(element, 'footnote')) continue
     consider(attributeValue(element, WORD_NAMESPACE, 'id'))
   }
   for (const replacement of overlay.replacements.values()) {
-    for (const match of replacement.value.matchAll(PENDING_FOOTNOTE_ID)) {
-      consider(match[1])
+    considerXml(replacement.value)
+  }
+  for (const story of stories) {
+    for (const fragment of story.preservedXmlFragments) considerXml(fragment)
+    for (const paragraph of story.paragraphs) {
+      for (const run of paragraph.runs) {
+        for (const fragment of run.preservedXmlFragments) considerXml(fragment)
+      }
     }
   }
   return next

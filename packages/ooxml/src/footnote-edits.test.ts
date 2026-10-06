@@ -153,6 +153,43 @@ describe('footnote edits', () => {
     expect(notes).toContain('<w:t>Third note</w:t>')
   })
 
+  it('allocates above an orphaned reference whose entry was removed', async () => {
+    // A stored w:footnoteReference can outlive its w:footnote entry; the
+    // next note must allocate above the id the orphaned mark still names,
+    // or the stored mark silently re-points at the new note.
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const stored = await zip.file('word/footnotes.xml')?.async('string')
+    if (!stored) throw new Error('Fixture part is missing.')
+    zip.file(
+      'word/footnotes.xml',
+      stored.replace(/<w:footnote w:id="1">.*?<\/w:footnote>/u, ''),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 0,
+        text: 'New note',
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const body = await zipText(output, 'word/document.xml')
+    const notes = await zipText(output, 'word/footnotes.xml')
+
+    // The orphaned mark keeps id 1; the new note allocates 2, not 1.
+    expect(body.match(/<w:footnoteReference w:id="1"\/>/gu)).toHaveLength(1)
+    expect(body).toContain('<w:footnoteReference w:id="2"/>')
+    expect(notes).toMatch(/<w:footnote\b[^>]*w:id="2">/u)
+  })
+
   it('escapes note text and keeps every other part byte for byte', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document)[0]
@@ -336,10 +373,12 @@ async function parseFixture() {
 }
 
 /**
- * The fixture package with the footnotes part, its content-type override and
- * its document relationship stripped — the state a first footnote must
- * repair. Rewriting the two declaring parts keeps every other byte as the
- * builder produced it.
+ * The fixture package with the footnotes part, its content-type override,
+ * its document relationship and the body mark that named an entry stripped —
+ * the state a first footnote must repair. The `w:footnoteReference` has to
+ * go with the part: a mark without an entry still reserves its `w:id`, so
+ * leaving it would make the allocator skip id 1. Rewriting the declaring
+ * parts keeps every other byte as the builder produced it.
  */
 async function fixtureWithoutFootnotes() {
   const zip = await JSZip.loadAsync(
@@ -349,7 +388,12 @@ async function fixtureWithoutFootnotes() {
   zip.remove('word/_rels/footnotes.xml.rels')
   const rels = await zip.file('word/_rels/document.xml.rels')?.async('string')
   const types = await zip.file('[Content_Types].xml')?.async('string')
-  if (!rels || !types) throw new Error('Fixture part is missing.')
+  const body = await zip.file('word/document.xml')?.async('string')
+  if (!rels || !types || !body) throw new Error('Fixture part is missing.')
+  zip.file(
+    'word/document.xml',
+    body.replace('<w:footnoteReference w:id="1"/>', ''),
+  )
   zip.file(
     'word/_rels/document.xml.rels',
     rels.replace(/<Relationship[^>]*relationships\/footnotes[^>]*\/>/u, ''),
