@@ -134,7 +134,8 @@ export function marginStories(
  * The story the workspace edits when `kind` is open: the document story for
  * the body, or the header/footer story the body's final section references —
  * the same story the margin band paints. A multi-section document's other
- * header/footer parts stay preserved and painted but are not editable.
+ * header/footer parts are preserved in the package but neither painted nor
+ * editable.
  */
 export function editingStoryFor(
   model: DocumentModelWire,
