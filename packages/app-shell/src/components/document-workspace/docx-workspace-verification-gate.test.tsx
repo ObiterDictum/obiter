@@ -136,7 +136,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(screen.getByText(/Save before verification/)).toBeTruthy()
   })
 
-  it('keeps verification disabled when a rejected save holds the only work', async () => {
+  it('keeps verification disabled while a refused save leaves work pending', async () => {
     const editAsync = vi.fn().mockRejectedValue(validationFailed)
     mountGate({ editAsync })
     edit('Hello edited')
@@ -147,11 +147,11 @@ describe('V5 verification gate against the E45 save owner', () => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
 
-    // Nothing is left to send, so the workspace reports unsaved for the held
-    // work rather than clean. A clean signal here would let verification run
-    // against a stored version that is missing the user's edit.
+    // The refused slot stays pending, so the workspace reports unsaved rather
+    // than clean and Save stays live to retry it. A clean signal here would
+    // let verification run against a stored version missing the user's edit.
     await waitFor(() => expect(saveState()).toBe('unsaved'))
-    expect(saveButton().disabled).toBe(true)
+    expect(saveButton().disabled).toBe(false)
     expect(verifyButton().disabled).toBe(true)
     expect(screen.getByText(/Save before verification/)).toBeTruthy()
   })
@@ -212,8 +212,9 @@ describe('V5 verification gate against the E45 save owner', () => {
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync.mock.calls.length).toBeGreaterThan(1))
 
-    // The typed text reached the server; the deletion is held. The editor is
-    // still not on the stored version, so verification stays disabled.
+    // The typed text reached the server; the deletion stayed pending after
+    // the refusal. The editor is still not on the stored version, so
+    // verification stays disabled.
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     expect(verifyButton().disabled).toBe(true)
     expect(screen.getByText(/Save before verification/)).toBeTruthy()

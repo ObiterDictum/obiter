@@ -51,14 +51,18 @@ const EMPTY_PLAN: SavePlan = {
   rejections: [],
 }
 
+const NO_REFUSED: readonly DraftSlot[] = []
+
 /**
  * The save state machine for the DOCX workspace.
  *
  * E45: a rejected operation used to stay in the draft state, so every later
  * save recomputed and resent it and legitimate work never reached the server.
- * Here a batch is planned from addressable slots only, a rejected batch is
- * contained by holding one slot back and retrying the rest, and the failure is
- * reported as unsaved rather than as a generic invalid request.
+ * Here a batch is planned from addressable slots only; a rejected batch is
+ * contained by retrying without one slot at a time until the rest commits.
+ * The refused slot then stays pending in the drafts — still painted, still
+ * resent by the next save — with a banner naming it, so a refused batch can
+ * never read as a successful save with an operation quietly dropped.
  */
 export function useDocumentSave({
   documentId,
@@ -90,6 +94,15 @@ export function useDocumentSave({
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
+  /**
+   * Slots a refused batch identified as the cause; they stay pending. `sent`
+   * is the state the refused request was planned from, so discarding can
+   * clear only what the server saw and keep typing done after the refusal.
+   */
+  const [refused, setRefused] = useState<{
+    slots: readonly DraftSlot[]
+    sent: DraftState
+  } | null>(null)
   const inFlight = useRef(false)
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
@@ -104,6 +117,7 @@ export function useDocumentSave({
     setStale(false)
     setFailure(null)
     setNotice(null)
+    setRefused(null)
     onSaved(null)
     await queryClient.invalidateQueries({
       queryKey: workspaceKeys.model(documentId),
@@ -185,6 +199,7 @@ export function useDocumentSave({
       )
     setFailure(null)
     setStale(false)
+    setRefused(null)
     if (merged) {
       setNotice(
         "Your changes were saved as a new version to avoid overwriting a colleague's work",
@@ -194,9 +209,11 @@ export function useDocumentSave({
 
   /**
    * Removes one slot at a time and retries the rest, so a change the server
-   * will not accept is held back instead of blocking every later save. The
-   * first batch that commits wins; the removed slot moves to the held list
-   * untouched, so nothing typed is deleted.
+   * will not accept cannot block the batch's other work. The isolated slot
+   * stays in the drafts — pending, still painted, and resent by the next
+   * save, where it often lands alone and succeeds — and the refused banner
+   * names it with a discard affordance, so a refused batch can never report
+   * success while an operation quietly disappears.
    */
   async function containRejection(
     source: DocumentModelWire,
@@ -204,12 +221,7 @@ export function useDocumentSave({
     sent: DraftState,
   ) {
     if (candidates.length === 1 && candidates[0]) {
-      drafts.holdSlot(
-        candidates[0],
-        slotLabel(candidates[0]),
-        'The server rejected this change.',
-        sent,
-      )
+      setRefused({ slots: [candidates[0]], sent })
       return true
     }
     for (const candidate of candidates.slice(0, MAX_ISOLATION_ATTEMPTS)) {
@@ -219,12 +231,9 @@ export function useDocumentSave({
       if (attempt.operations.length === 0) continue
       try {
         const result = await sendBatch(attempt.operations)
-        drafts.holdSlot(
-          candidate,
-          slotLabel(candidate),
-          'The server rejected this change.',
-          sent,
-        )
+        // The candidate is left out of `without` only for this request; it
+        // was never cleared from the draft state, so it stays pending while
+        // the rest of the batch commits.
         commit(
           attempt.covered,
           without,
@@ -233,6 +242,7 @@ export function useDocumentSave({
           result.merged,
           result.lineage,
         )
+        setRefused({ slots: [candidate], sent: latest })
         return true
       } catch (error) {
         if (error instanceof ApiError && error.code === 'conflict_detected') {
@@ -397,6 +407,7 @@ export function useDocumentSave({
   return {
     blocked,
     held,
+    refused: refused?.slots ?? NO_REFUSED,
     dirty,
     saving,
     persistence: drafts.persistence,
@@ -410,6 +421,13 @@ export function useDocumentSave({
     reload: () => void reload(),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
+    discardRefused: () => {
+      // Only slots unchanged since the refused request was planned clear:
+      // a slot the user edited after the refusal keeps the newer work, the
+      // same way the held path kept the live state when the slot moved.
+      if (refused) drafts.clearSlots(refused.slots, refused.sent)
+      setRefused(null)
+    },
     blockedHistoryMessage: blockedHistoryMessage(drafts.blockedReason),
   }
 }
@@ -433,6 +451,20 @@ function messageFor(error: unknown) {
     return `Your changes have not been saved. ${error.message}`
   }
   return 'Your changes have not been saved. The request failed before the server committed anything.'
+}
+
+/**
+ * One sentence naming what the server refused. The slot stays pending in the
+ * drafts, so the next save retries it; the only way it disappears is the
+ * discard affordance next to this message.
+ */
+export function refusedSummary(refused: readonly DraftSlot[]) {
+  if (refused.length === 0) return null
+  if (refused.length === 1) {
+    const label = refused[0] ? slotLabel(refused[0]) : 'a change'
+    return `The server rejected ${label}; it stays in your drafts and the next save will try it again.`
+  }
+  return `${String(refused.length)} changes were rejected by the server; they stay in your drafts and the next save will try them again.`
 }
 
 /** One sentence naming what could not be sent and what to do about it. */

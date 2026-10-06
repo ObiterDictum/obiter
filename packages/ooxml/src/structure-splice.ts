@@ -13,9 +13,11 @@ import { OoxmlError, type ParagraphAnchor, type TextRunAnchor } from './model'
 import { splitsSurrogate } from './model-run-range-edits'
 import {
   applyFragmentReplacements,
+  parseXmlElements,
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
+import { isWord } from './parts/xml-elements'
 import { effectiveRunView, runHasPendingOverlay } from './run-effective'
 
 /**
@@ -27,7 +29,9 @@ import { effectiveRunView, runHasPendingOverlay } from './run-effective'
  *
  * A splice that lands inside a pending replacement would corrupt the overlay,
  * so a run already rewritten in this batch refuses the edit rather than emit
- * overlapping ranges at serialise time.
+ * overlapping ranges at serialise time. A splice strictly inside a stored
+ * `w:hyperlink` is refused the same way: the content would nest inside the
+ * element and its result text would silently join the link's anchor.
  */
 export function spliceInlineXml(
   overlay: XmlOverlay,
@@ -46,11 +50,23 @@ export function spliceInlineXml(
   // replacement so the content lands inside the text the batch wrote.
   const holder = runHoldingOffset(paragraph, offset)
   if (holder && runHasPendingOverlay(overlay, holder.run)) {
+    // A linked run's pending replacement still sits inside the `w:hyperlink`
+    // element, so a splice into it would nest inside the link. The element
+    // check catches a stored link — an internal `w:anchor` or a target the
+    // parse allowlist dropped leaves nothing on the wire — and a run nested
+    // in one always starts strictly inside it. The wire check is still what
+    // catches a wrap written earlier in this batch: that element exists only
+    // inside the pending replacement, not in `overlay.source`.
+    refuseInsideStoredHyperlink(overlay, holder.run.runRange.start)
+    if (holder.run.wire.hyperlinkTarget !== undefined) {
+      throw new OoxmlError('invalid-document-edit')
+    }
     spliceIntoPendingRun(overlay, paragraph, holder, offset, xml, key)
     return
   }
   const point = locateOffset(overlay.source, paragraph, offset, true)
   assertNoPendingAt(overlay, point.sourceOffset)
+  refuseInsideStoredHyperlink(overlay, point.sourceOffset)
   setOverlayReplacement(
     overlay,
     key,
@@ -136,6 +152,28 @@ export function validateEffectiveOffset(
 export function assertNoPendingAt(overlay: XmlOverlay, sourceOffset: number) {
   for (const pending of overlay.replacements.values()) {
     if (pending.start < sourceOffset && sourceOffset < pending.end) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+  }
+}
+
+/**
+ * A point inside a stored `w:hyperlink` element would nest the spliced field
+ * or drawing inside the link. In effective-text terms the check is half-open
+ * over the linked runs: the leading boundary opens the first linked run's
+ * text element and refuses, while the trailing boundary lands at the next
+ * element and composes — matching the client's half-open stored-link rule.
+ */
+function refuseInsideStoredHyperlink(
+  overlay: XmlOverlay,
+  sourceOffset: number,
+) {
+  for (const element of parseXmlElements(overlay.source)) {
+    if (
+      isWord(element, 'hyperlink') &&
+      element.start < sourceOffset &&
+      sourceOffset < element.end
+    ) {
       throw new OoxmlError('invalid-document-edit')
     }
   }

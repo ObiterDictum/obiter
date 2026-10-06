@@ -4,6 +4,10 @@ export const W14_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordml'
 export const IMAGE_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
+export const HYPERLINK_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
+export const RELATIONSHIPS_NAMESPACE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 export const EMU_PER_PX = 9525
 

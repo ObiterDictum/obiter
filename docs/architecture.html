@@ -6650,14 +6650,14 @@
                   <code>services/legal-ingestor/src/withdrawal-check.ts</code>
                   (547)
                 </li>
-                <li>
-                  <code>packages/ooxml/src/model-property-edits.ts</code> (531)
-                </li>
                 <li><code>services/api/src/pdf-glyph-layout.ts</code> (516)</li>
                 <li><code>services/api/src/env.ts</code> (514)</li>
                 <li>
                   <code>tools/oxlint/anti-slop/shared/dictionary-types.ts</code>
                   (502)
+                </li>
+                <li>
+                  <code>packages/contracts/src/document-edit.ts</code> (502)
                 </li>
               </ul>
             </li>
@@ -6995,6 +6995,54 @@
                   <td class="id">
                     ooxml/table-edits.ts · ooxml/image-edits.ts
                   </td>
+                </tr>
+                <tr>
+                  <td>
+                    A pending cross-reference paints as a zero-width marker, not
+                    the field result
+                  </td>
+                  <td>
+                    <code>insert_cross_reference</code> writes a real
+                    <code>REF</code> field whose saved result is the target's
+                    text, but the pending draft adds no characters to the
+                    editable stream: the run overlay paints a chip at the caret
+                    offset so typing, selection and pending offsets stay
+                    consistent until save/reload reveals the resolved text. The
+                    same choice makes <code>set_hyperlink</code> an overlay
+                    range rather than a model fold. A second structural
+                    operation inside a pending hyperlink fails closed with a
+                    typed error rather than folding through the
+                    <code>w:hyperlink</code> wrapper, so overlapping pending
+                    link and picture/table edits cannot compose. The client
+                    enforces the same run-level rule before save:
+                    <code>document-structure-conflicts.ts</code> is the single
+                    predicate both the Insert ribbon's disabled reasons and the
+                    save plan's blocked set consult, so an uncomposable pair is
+                    refused — or held back with a named reason — rather than
+                    failing the whole save with a generic 400.
+                  </td>
+                  <td class="id">
+                    ooxml/hyperlink-edits.ts · ooxml/cross-reference-edits.ts ·
+                    app-shell/document-structure-conflicts.ts ·
+                    app-shell/model-run.tsx
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A stored hyperlink whose target is not in the write-path
+                    allowlist is preserved but not painted as a link
+                  </td>
+                  <td>
+                    Resolving a <code>w:hyperlink</code> relationship onto the
+                    wire applies the edit contract's scheme allowlist and length
+                    bound, so a stored target that is not http, https or mailto
+                    — or is longer than 2,048 characters — leaves the run's
+                    <code>hyperlinkTarget</code> unset and the link unpainted in
+                    the editor. The source <code>.rels</code> stay
+                    byte-preserved, so the file itself is unchanged and Word
+                    still opens the stored link.
+                  </td>
+                  <td class="id">ooxml/parts/stories.ts</td>
                 </tr>
               </tbody>
             </table>

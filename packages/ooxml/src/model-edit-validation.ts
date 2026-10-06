@@ -30,8 +30,13 @@ export type PlannedOperation =
           | 'insert_section_break'
           | 'insert_table'
           | 'insert_image'
+          | 'set_hyperlink'
       }
     > & { paragraph: ParagraphAnchor })
+  | (Extract<DocumentEditOperation, { type: 'insert_cross_reference' }> & {
+      paragraph: ParagraphAnchor
+      targetParagraph: ParagraphAnchor
+    })
   | Extract<DocumentEditOperation, { type: 'set_section_properties' }>
 
 export function validatePlannedOperations(
@@ -74,6 +79,14 @@ export function validatePlannedOperations(
     ) {
       throw new OoxmlError('invalid-document-edit')
     }
+    // A reference to a paragraph deleted earlier in the batch would write a
+    // bookmark the delete then removes — the REF dangles, so refuse instead.
+    if (
+      operation.type === 'insert_cross_reference' &&
+      alreadyDeleted.has(operation.targetParagraph.wire.id)
+    ) {
+      throw new OoxmlError('invalid-document-edit')
+    }
     if (operation.type === 'delete_paragraph') {
       alreadyDeleted.add(operation.paragraph.wire.id)
     }
@@ -106,7 +119,9 @@ export function validateTrackedOperations(
     // write rather than apply untracked while the client asked for tracking.
     if (
       operation.type === 'insert_table' ||
-      operation.type === 'insert_image'
+      operation.type === 'insert_image' ||
+      operation.type === 'set_hyperlink' ||
+      operation.type === 'insert_cross_reference'
     ) {
       throw new OoxmlError('model-node-not-editable')
     }

@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
@@ -92,7 +92,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     expect(screen.getByText(/rejected a paragraph deletion/i)).toBeTruthy()
   })
 
-  it('does not discard it when the save is rejected and then retried', async () => {
+  it('resends a refused slot on retry and does not discard it', async () => {
     const editAsync = vi
       .fn()
       .mockRejectedValueOnce(validationFailed)
@@ -110,11 +110,16 @@ describe('E45 a rejected save must not poison later saves', () => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
     expect(editAsync).toHaveBeenCalledTimes(1)
+
+    // The refused slot is still pending, so the retry carries it. When the
+    // resend commits the banner clears and the save reports clean.
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(editAsync).toHaveBeenCalledTimes(1)
-    expect(bodyEditor().value).toBe('Hello')
-    expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
+    expect(editAsync.mock.calls[1]?.[0].operations).toEqual([
+      { type: 'replace_run_text', runId: 'r1', text: 'Hello world' },
+    ])
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByText(/rejected typed text/i)).toBeNull()
   })
 
   it('keeps text typed while a save was in flight', async () => {
@@ -213,11 +218,12 @@ describe('E45 a rejected save must not poison later saves', () => {
     await waitFor(() => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
-    expect(screen.getByText(/not been saved|held here/i)).toBeTruthy()
+    expect(screen.getByText(/stays in your drafts/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry save' })).toBeTruthy()
     expect(saveState()).toBe('unsaved')
   })
 
-  it('holds a single rejected slot and does not resend it on retry', async () => {
+  it('keeps a single rejected slot pending and resends it on retry', async () => {
     const editAsync = vi.fn().mockRejectedValue(validationFailed)
     mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
@@ -230,9 +236,67 @@ describe('E45 a rejected save must not poison later saves', () => {
     })
     expect(editAsync).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(editAsync).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
+    // The slot was refused again and is still pending: the banner stays up
+    // and the workspace never reports the save as clean.
+    expect(screen.getByText(/stays in your drafts/i)).toBeTruthy()
+    expect(saveState()).toBe('unsaved')
     expect(screen.queryByText(/could not be identified/i)).toBeNull()
+  })
+
+  it('keeps a refused structural operation pending instead of dropping it', async () => {
+    const editAsync = vi.fn(
+      async (input: { operations: DocumentEditOperation[] }) => {
+        if (input.operations.some((op) => op.type === 'insert_table')) {
+          throw validationFailed
+        }
+        return { documentId: 'doc_1', versionId: 'ver_2', versionNumber: 2 }
+      },
+    )
+    mountSaveWorkspace({ editAsync, paragraphs: ['Hello', 'Second'] })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Insert' }))
+    fireEvent.click(screen.getByRole('button', { name: /Insert table/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    // The batch is refused; containment retries without the table and the
+    // typed text commits.
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(screen.getByText(/rejected a table/i)).toBeTruthy(),
+    )
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    const contained = editAsync.mock.calls[1]?.[0].operations
+    expect(
+      contained?.some((operation) => operation.type === 'insert_table'),
+    ).toBe(false)
+
+    // The refused slot stays pending: the next save resends it rather than
+    // letting the partial commit read as a clean save with the table gone.
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(3))
+    const retried = editAsync.mock.calls[2]?.[0].operations
+    expect(
+      retried?.some((operation) => operation.type === 'insert_table'),
+    ).toBe(true)
+    expect(screen.getByText(/rejected a table/i)).toBeTruthy()
+
+    // The discard affordance drops only the refused slot; the save is clean
+    // only once nothing remains pending.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard rejected change' }),
+    )
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Discard rejected change',
+      }),
+    )
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByText(/rejected a table/i)).toBeNull()
   })
 
   it('keeps text typed while a containment probe is in flight', async () => {
@@ -293,7 +357,8 @@ describe('E45 a rejected save must not poison later saves', () => {
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
     // The same rejected slot is extended while the request is in flight.
-    // Holding the slot must keep the newer typing editable, not swallow it.
+    // Keeping the refused slot pending must keep the newer typing editable,
+    // not swallow it.
     fireEvent.change(bodyEditor(), {
       target: { value: 'Hello doomed plus newer typing' },
     })
@@ -301,7 +366,52 @@ describe('E45 a rejected save must not poison later saves', () => {
       rejectFirst(validationFailed)
     })
 
-    await waitFor(() => expect(screen.getByText(/held here/i)).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText(/stays in your drafts/i)).toBeTruthy(),
+    )
+    expect(bodyEditor().value).toBe('Hello doomed plus newer typing')
+    expect(saveState()).toBe('unsaved')
+  })
+
+  it('keeps edits made to a refused slot when the refused work is discarded', async () => {
+    const editAsync = vi
+      .fn()
+      .mockRejectedValueOnce(validationFailed)
+      .mockResolvedValue({
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+      })
+    mountSaveWorkspace({ editAsync })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello doomed' } })
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(screen.getByText(/rejected typed text/i)).toBeTruthy(),
+    )
+
+    // The slot is edited after the refusal: discarding the refused work must
+    // not take typing the rejection never saw with it.
+    fireEvent.change(bodyEditor(), {
+      target: { value: 'Hello doomed plus newer typing' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard rejected change' }),
+    )
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+    // The copy does not promise a deletion: an edited slot is kept.
+    expect(
+      within(screen.getByRole('dialog')).getByText(
+        /edited it since the rejection/i,
+      ),
+    ).toBeTruthy()
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Discard rejected change',
+      }),
+    )
+
     expect(bodyEditor().value).toBe('Hello doomed plus newer typing')
     expect(saveState()).toBe('unsaved')
   })

@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 
 import { documentBreakToolbar } from '../../document-break-toolbar'
 import type { BreakDraft } from '../../document-edits'
@@ -43,6 +43,10 @@ export function useInsertRibbon(
   offset: number | null,
   trackChanges: boolean,
   drafts: {
+    deletedParagraphIds: string[]
+    drafts: Record<string, string>
+    extraRuns: Record<string, DocumentTextRunWire[]>
+    structures: StructuralDraft[]
     setBreaks: (update: (current: BreakDraft[]) => BreakDraft[]) => void
     setStructures: (
       update: (current: StructuralDraft[]) => StructuralDraft[],
@@ -57,13 +61,24 @@ export function useInsertRibbon(
   )
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
   const selectionActive = caret.kind === 'selection'
+  // A hyperlink marks a single-paragraph selection; a selection covering
+  // several paragraphs carries one range per paragraph and is refused.
+  const selectionRange =
+    caret.kind === 'selection' && caret.ranges.length === 1
+      ? (caret.ranges[0] ?? null)
+      : null
   const structure = documentStructureToolbar({
     paragraphId,
     model,
     cellParagraphIds,
     offset,
     selectionActive,
+    selectionRange,
+    deletedParagraphIds: new Set(drafts.deletedParagraphIds),
     trackChanges,
+    structures: drafts.structures,
+    drafts: drafts.drafts,
+    extraRuns: drafts.extraRuns,
     setStructures: drafts.setStructures,
   })
   return {
@@ -78,7 +93,13 @@ export function useInsertRibbon(
     structure: {
       tableUnavailable: structure.tableUnavailable,
       pictureUnavailable: structure.pictureUnavailable,
+      linkUnavailable: structure.linkUnavailable,
+      crossReferenceUnavailable: structure.crossReferenceUnavailable,
+      crossReferenceTargets: structure.crossReferenceTargets,
       onInsertTable: (rows, columns) => structure.insertTable(rows, columns),
+      onInsertLink: (target) => structure.insertLink(target),
+      onInsertCrossReference: (targetParagraphId) =>
+        structure.insertCrossReference(targetParagraphId),
       onInsertPicture: () => pictureInput.current?.click(),
       picturePicker: (
         <input

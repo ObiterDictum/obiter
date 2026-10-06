@@ -287,6 +287,11 @@ function splitReplacedRun(
   const wires = parts.map((part, index) => ({
     id: index === 0 ? run.wire.id : nextId(),
     ...(run.wire.styleId ? { styleId: run.wire.styleId } : {}),
+    // A text edit leaves the run inside any stored hyperlink, so every
+    // piece the split produces keeps the target.
+    ...(run.wire.hyperlinkTarget
+      ? { hyperlinkTarget: run.wire.hyperlinkTarget }
+      : {}),
     text: part.text,
     preservedXmlFragments: [...fragments],
   }))
@@ -340,6 +345,11 @@ export function parseWrappedRun(partSource: string, runXml: string) {
 export function mergeSiblingRuns(partSource: string, runXml: string) {
   const elements = parseWrappedRun(partSource, runXml)
   const runs = elements.filter((element) => element.depth === 0)
+  // A fold can legitimately hold non-run siblings — a pending hyperlink wrap
+  // emits `<w:hyperlink>` around the pieces — and merging those as if they
+  // were runs would produce malformed XML. Returning the fold unchanged lets
+  // the caller's one-run check refuse the edit with a typed error instead.
+  if (runs.some((element) => element.localName !== 'r')) return runXml
   const first = runs[0]
   const last = runs.at(-1)
   if (!first || !last || runs.length <= 1) return runXml
