@@ -373,6 +373,43 @@ describe('E45 a rejected save must not poison later saves', () => {
     expect(saveState()).toBe('unsaved')
   })
 
+  it('keeps edits made to a refused slot when the refused work is discarded', async () => {
+    const editAsync = vi
+      .fn()
+      .mockRejectedValueOnce(validationFailed)
+      .mockResolvedValue({
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+      })
+    mountSaveWorkspace({ editAsync })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello doomed' } })
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(screen.getByText(/rejected typed text/i)).toBeTruthy(),
+    )
+
+    // The slot is edited after the refusal: discarding the refused work must
+    // not take typing the rejection never saw with it.
+    fireEvent.change(bodyEditor(), {
+      target: { value: 'Hello doomed plus newer typing' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard rejected change' }),
+    )
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Discard rejected change',
+      }),
+    )
+
+    expect(bodyEditor().value).toBe('Hello doomed plus newer typing')
+    expect(saveState()).toBe('unsaved')
+  })
+
   it('asks for confirmation before reload-and-discard destroys unsaved work', async () => {
     const editAsync = vi
       .fn()
