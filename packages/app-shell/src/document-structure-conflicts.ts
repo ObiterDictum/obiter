@@ -128,9 +128,11 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
 }
 
 /**
- * A splice strictly inside a run whose wire carries a stored link's target
- * lands inside the `w:hyperlink` element, so it conflicts like a pending
- * wrap does. Answered as a link placement so the reason names a hyperlink.
+ * A splice at or inside a run whose wire carries a stored link's target
+ * lands inside the `w:hyperlink` element — the leading boundary opens the
+ * run's text element rather than landing between elements — so the span is
+ * half-open here, matching the writer's element check exactly. Answered as
+ * a link placement so the reason names a hyperlink.
  */
 function storedLinkConflict(
   paragraph: DocumentParagraphWire,
@@ -143,7 +145,7 @@ function storedLinkConflict(
   const index = spans.findIndex(
     (span, runIndex) =>
       paragraph.runs[runIndex]?.hyperlinkTarget !== undefined &&
-      span.start < candidate.offset &&
+      span.start <= candidate.offset &&
       candidate.offset < span.end,
   )
   const span = spans[index]
