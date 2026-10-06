@@ -45,11 +45,16 @@ export function paragraphOutlineLevel(
   while (styleId !== undefined && !seen.has(styleId)) {
     seen.add(styleId)
     const style = byId.get(styleId)
-    if (!style) return undefined
-    const level = outlineLevelOf(style.sourceFragment)
-    if (level !== undefined) return level
+    if (style) {
+      const level = outlineLevelOf(style.sourceFragment)
+      if (level !== undefined) return level
+    }
+    // A referenced style with no explicit level still claims its built-in
+    // identifier's level — `w:latentStyles` gives `Heading1` its outline
+    // level whether `styles.xml` carries the definition or not.
     const builtin = BUILTIN_HEADING.exec(styleId)
     if (builtin) return Number.parseInt(builtin[1] ?? '1', 10) - 1
+    if (!style) return undefined
     styleId = style.basedOnStyleId
   }
   return undefined
@@ -84,7 +89,5 @@ function outlineLevelOf(xml: string): number | undefined {
   const match = OUTLINE_LEVEL.exec(xml)
   if (!match) return undefined
   const level = Number.parseInt(match[1] ?? '', 10)
-  return Number.isInteger(level) && level >= 0 && level <= 9
-    ? level
-    : undefined
+  return Number.isInteger(level) && level >= 0 && level <= 9 ? level : undefined
 }

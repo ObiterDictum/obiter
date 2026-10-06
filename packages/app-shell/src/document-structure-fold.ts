@@ -14,6 +14,7 @@ import { storyTableCellIds } from './document-page-tables'
 import { foldFootnoteDrafts, spliceRunAtOffset } from './document-footnote-fold'
 import { pendingImageTarget } from './document-image-inserts'
 import type { StructuralDraft } from './document-structural-drafts'
+import { createTableOfContentsFold } from './document-toc-fold'
 
 /**
  * Folds pending table and image drafts into a copy of the model, mutating the
@@ -31,8 +32,13 @@ import type { StructuralDraft } from './document-structural-drafts'
  *   the same code as a stored picture. The bytes surface through
  *   `pendingImageUrls`, keyed by the part name the folded relationship
  *   resolves to.
+ * - A table of contents splits its anchor wire at the offset, splices one
+ *   entry wire per heading between the head and a tail that opens with the
+ *   field's `end` run, and stamps `_Toc` bookmark fragments on the heading
+ *   wires, so `PAGEREF` fields resolve pending entries through the same
+ *   bookmark→page map a reloaded document uses.
  *
- * Both fragments come from the same `structure-xml` builders the writers
+ * All fragments come from the same `structure-xml` builders the writers
  * call, so the pending model holds the writer's own output — only the
  * server-allocated ids differ on reload.
  */
@@ -84,19 +90,27 @@ export function withStructuralDrafts(
     }
   }
 
+  const foldToc = createTableOfContentsFold(model, drafts, nextParaId)
   const stories = model.stories.map((story) => {
     if (story.kind !== 'document') return story
-    const result = foldStory(story, active, drafts, nextParaId, (draft) => {
-      const relId = nextRelId()
-      relationships.push({
-        sourcePartName: story.partName,
-        id: relId,
-        type: IMAGE_RELATIONSHIP_TYPE,
-        target: pendingImageTarget(draft),
-        sourceFragment: `<Relationship Id="${relId}" Type="${IMAGE_RELATIONSHIP_TYPE}" Target="${pendingImageTarget(draft)}"/>`,
-      })
-      return relId
-    })
+    const result = foldStory(
+      story,
+      active,
+      drafts,
+      nextParaId,
+      (draft) => {
+        const relId = nextRelId()
+        relationships.push({
+          sourcePartName: story.partName,
+          id: relId,
+          type: IMAGE_RELATIONSHIP_TYPE,
+          target: pendingImageTarget(draft),
+          sourceFragment: `<Relationship Id="${relId}" Type="${IMAGE_RELATIONSHIP_TYPE}" Target="${pendingImageTarget(draft)}"/>`,
+        })
+        return relId
+      },
+      foldToc,
+    )
     changed ||= result.changed
     return result.story
   })
@@ -122,6 +136,11 @@ function foldStory(
   drafts: Record<string, string>,
   nextParaId: () => string,
   nextRelationshipId: (draft: StructuralDraft & { kind: 'image' }) => string,
+  foldToc: (
+    paragraphs: DocumentParagraphWire[],
+    draft: StructuralDraft & { kind: 'table-of-contents' },
+    tails: Map<string, DocumentParagraphWire>,
+  ) => boolean,
 ) {
   const paragraphs = [...story.paragraphs]
   const fragments = [...story.preservedXmlFragments]
@@ -187,6 +206,13 @@ function foldStory(
       fragments.push(buildTableXml(draft.rows, draft.columns, cellParaIds))
       tails.set(draft.paragraphId, wires[wires.length - 1] ?? anchor)
       changed = true
+      continue
+    }
+    // A table of contents splices its field and entry wires into the story
+    // exactly as the writer splices the field and entry paragraphs — same
+    // head/entry/tail shape, painted through the same `PAGEREF` resolution.
+    if (draft.kind === 'table-of-contents') {
+      changed = foldToc(paragraphs, draft, tails) || changed
       continue
     }
     // A link or cross-reference folds nothing into the model: the link is an
