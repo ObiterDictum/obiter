@@ -188,20 +188,17 @@ export function insertTableOfContents(
  * The heading paragraphs the entry list is captured from: every document-
  * story paragraph the entry collector reports, mapped to its anchor and
  * bookmarked `_Toc<n>` — the bookmarks the entries' `PAGEREF` fields point
- * at. A heading with tracked changes cannot hold a bookmark safely, so the
- * whole insertion fails closed rather than drop it from the list.
+ * at. A paragraph the same batch inserted, or the tail an earlier same-batch
+ * split created, exists only as pending XML and cannot carry a stored
+ * bookmark yet, so it is skipped — the field lists the headings that were
+ * stored. A heading with tracked changes cannot hold a bookmark safely, so
+ * the whole insertion fails closed rather than drop it from the list.
  */
 function headingEntries(document: OoxmlDocument): TocEntry[] {
   const entries: TocEntry[] = []
   for (const entry of tableOfContentsEntries(document.model)) {
     const anchor = document.paragraphAnchors.get(entry.paragraphId)
-    // A paragraph the same batch inserted, or the tail an earlier
-    // same-batch split created, exists only as pending XML and cannot
-    // carry a stored bookmark yet, so the field captures the headings
-    // that were stored.
     if (!anchor) continue
-    // A heading with tracked changes cannot hold a bookmark safely, so the
-    // whole insertion fails closed rather than drop it from the list.
     if (anchor.hasTrackedChanges) {
       throw new OoxmlError('model-node-not-editable')
     }
