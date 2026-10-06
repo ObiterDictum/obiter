@@ -309,7 +309,9 @@ describe('cross-reference edits', () => {
     const xml = await zipText(output, 'word/document.xml')
 
     const ids = [
-      ...xml.matchAll(/<w:bookmarkStart[^>]*\bw:id="(\d+)"[^>]*\bw:name="_Ref_/gu),
+      ...xml.matchAll(
+        /<w:bookmarkStart[^>]*\bw:id="(\d+)"[^>]*\bw:name="_Ref_/gu,
+      ),
     ].map((match) => match[1])
     expect(ids).toHaveLength(2)
     expect(ids[0]).not.toBe(ids[1])

@@ -172,7 +172,11 @@ describe('link and cross-reference drafts', () => {
         name: 'a second link in the same run',
         structures: [
           link,
-          { ...linkDraft('s2', 'p1', 'https://other.example.com'), from: 10, to: 15 },
+          {
+            ...linkDraft('s2', 'p1', 'https://other.example.com'),
+            from: 10,
+            to: 15,
+          },
         ],
       },
       {
@@ -234,7 +238,10 @@ describe('link and cross-reference drafts', () => {
     const cases: Array<{ name: string; structures: StructuralDraft[] }> = [
       {
         name: 'a cross-reference in an uncovered run',
-        structures: [link, { ...crossReferenceDraft('s2', 'p1', 'p2'), offset: 8 }],
+        structures: [
+          link,
+          { ...crossReferenceDraft('s2', 'p1', 'p2'), offset: 8 },
+        ],
       },
       {
         name: 'a picture then a cross-reference',
@@ -257,7 +264,11 @@ describe('link and cross-reference drafts', () => {
         name: 'links on disjoint runs',
         structures: [
           link,
-          { ...linkDraft('s2', 'p1', 'https://other.example.com'), from: 5, to: 10 },
+          {
+            ...linkDraft('s2', 'p1', 'https://other.example.com'),
+            from: 5,
+            to: 10,
+          },
         ],
       },
       {
@@ -497,9 +508,9 @@ describe('documentStructureToolbar links', () => {
       selectionActive: false,
       selectionRange: null,
     })
-    expect(
-      api.crossReferenceTargets.some((target) => target.id === 'p1'),
-    ).toBe(false)
+    expect(api.crossReferenceTargets.some((target) => target.id === 'p1')).toBe(
+      false,
+    )
     expect(api.insertCrossReference('p1')).toEqual({
       inserted: false,
       reason: 'A reference cannot point at the paragraph holding it.',
