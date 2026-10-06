@@ -1256,9 +1256,10 @@ describe('saving a margin story', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
     await clickSaveAndSettle(document, 1)
 
-    // The field insert creates five new runs in the margin paragraph; the
-    // boundary must reconcile them against the reloaded model the way a body
-    // save does, not leave pending run addresses that force a reload.
+    // A snapshot predating the saved field used to block the whole boundary:
+    // no operation removes a stored splice, so the translation refused it.
+    // For a page number the stored field is baseline content, so the
+    // boundary must reconcile and the save settle without a reload.
     await waitFor(() => expect(saveState()).toBe('saved'))
     expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
 
