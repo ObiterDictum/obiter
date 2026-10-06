@@ -107,6 +107,23 @@ function pendingUnresolvedRunId(baseRunId: string) {
   return `${PENDING_BASELINE_PREFIX}run-unresolved:${baseRunId}`
 }
 
+/**
+ * One result run that continues a base run: where the lineage puts it and
+ * which slice of the base run's saved text it carries. A mid-run structure
+ * splice splits one base run into several continuing result runs, and the
+ * slices index the text the run carried into the result — its replacement
+ * text when the batch replaced it. Ordered by result position.
+ */
+type RunContinuation = {
+  address: RunAddress
+  /** The result run's model id, once the reloaded model names it. */
+  runId: string | undefined
+  /** Start of this run's slice of the base run's saved text. */
+  from: number
+  /** End of that slice. */
+  to: number
+}
+
 function parsePendingRunAddress(key: string): RunAddress | null {
   const prefix = `${PENDING_BASELINE_PREFIX}run-address:`
   if (!key.startsWith(prefix)) return null
@@ -135,12 +152,13 @@ type SavedIdentities = {
   /** Base paragraph id -> result paragraph id (authoritative lineage only). */
   paragraphIds: Map<string, string>
   /**
-   * Base run id -> its result address in the lineage. This is available as
-   * soon as the lineage is, before the reloaded model names the run.
+   * Base run id -> every result run continuing it, in result order. A run the
+   * save spliced around an inline structure continues as several; keeping the
+   * whole list is what lets a reversal distribute the pre-save text across
+   * the parts instead of writing it to the first and duplicating the tail's
+   * saved text beside it.
    */
-  runAddresses: Map<string, RunAddress>
-  /** Base run id -> the result run model id (only once the model is loaded). */
-  runIds: Map<string, string>
+  runContinuations: Map<string, RunContinuation[]>
   /**
    * Base run id -> persisted change ids whose rejection reverses a tracked
    * operation on it. A tracked text replacement removes its run from the
@@ -179,8 +197,7 @@ function emptyIdentities(): SavedIdentities {
     restoredAnchors: new Map(),
     restoredBeforeAnchors: new Map(),
     paragraphIds: new Map(),
-    runAddresses: new Map(),
-    runIds: new Map(),
+    runContinuations: new Map(),
     runReversals: new Map(),
     paragraphReversals: new Map(),
     insertReversals: new Map(),
@@ -242,22 +259,42 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
       drafts[key] = value
       continue
     }
-    const mapped = identities.runIds.get(key)
-    if (mapped) {
-      drafts[mapped] = value
+    // A draft that raced a save which split its run still names the run's
+    // whole text, so it distributes across the continuing parts the same way
+    // a reversal does — writing it to the first alone would duplicate the
+    // tail's saved text beside it.
+    if (identities.runContinuations.get(key)?.length) {
+      for (const [targetRunId, text] of reversalRunTexts(
+        identities,
+        key,
+        value,
+      )) {
+        drafts[targetRunId] = text
+      }
       continue
     }
     if (fromRunIds.has(key)) unresolved = true
     drafts[key] = value
   }
 
-  const emphasis = state.format.emphasis.map((item) => {
-    const runId = item.runId ? identities.runIds.get(item.runId) : undefined
-    if (runId) return { ...item, runId }
-    if (item.runId && fromRunIds.has(item.runId)) unresolved = true
-    return item.paragraphId
-      ? { ...item, paragraphId: remapParagraph(item.paragraphId) }
-      : item
+  const emphasis = state.format.emphasis.flatMap((item) => {
+    if (item.runId) {
+      const continuations = identities.runContinuations.get(item.runId)
+      if (continuations?.length) {
+        // A run the save split inherits the pending styling on every part.
+        return continuations.map((continuation) => ({
+          ...item,
+          runId:
+            continuation.runId ?? pendingRunAddressId(continuation.address),
+        }))
+      }
+      if (fromRunIds.has(item.runId)) unresolved = true
+    }
+    return [
+      item.paragraphId
+        ? { ...item, paragraphId: remapParagraph(item.paragraphId) }
+        : item,
+    ]
   })
 
   const remapped: DraftState = {
@@ -454,8 +491,9 @@ export function lineageCoversCoveredSlots(
 /**
  * Reads identity from the server's authoritative lineage. A base run may map
  * to several result runs (a split) or a result run may compose several base
- * runs (a merge); the first result run that continues a base run is its
- * address for a reversal, and a paragraph maps directly.
+ * runs (a merge); the lineage's own segments name every continuing result
+ * run with the slice of the base run's text it carries, and a paragraph maps
+ * directly.
  */
 function lineageIdentities(
   lineage: DocumentVersionLineage,
@@ -467,33 +505,45 @@ function lineageIdentities(
   const restoredAnchors = new Map<string, string>()
   const restoredBeforeAnchors = new Map<string, string>()
   const paragraphIds = new Map<string, string>()
-  const runAddresses = new Map<string, RunAddress>()
-  const runIds = new Map<string, string>()
+  const runContinuations = new Map<string, RunContinuation[]>()
 
   for (const entry of lineage.paragraphs) {
     if (entry.fromParagraphId && entry.toParagraphId) {
       paragraphIds.set(entry.fromParagraphId, entry.toParagraphId)
     }
     if (!entry.toParagraphId) continue
+    const paragraph = toModel
+      ? storyParagraph(toModel, entry.toParagraphId)
+      : undefined
     for (const run of entry.runs) {
+      // One continuing run may owe several segments to the same base run (a
+      // move or re-join); its slice of the base run's saved text is the span
+      // they cover together.
+      const spans = new Map<string, { from: number; to: number }>()
       for (const segment of run.segments) {
-        if (segment.fromRunId && !runAddresses.has(segment.fromRunId)) {
-          runAddresses.set(segment.fromRunId, {
-            paragraphId: entry.toParagraphId,
-            runIndex: run.runIndex,
+        if (segment.fromRunId === null) continue
+        const span = spans.get(segment.fromRunId)
+        if (span) {
+          span.from = Math.min(span.from, segment.fromOffset)
+          span.to = Math.max(span.to, segment.toOffset)
+        } else {
+          spans.set(segment.fromRunId, {
+            from: segment.fromOffset,
+            to: segment.toOffset,
           })
         }
       }
-    }
-    if (!toModel) continue
-    const paragraph = storyParagraph(toModel, entry.toParagraphId)
-    for (const run of entry.runs) {
-      const resultRunId = paragraph?.runs[run.runIndex]?.id
-      if (!resultRunId) continue
-      for (const segment of run.segments) {
-        if (segment.fromRunId && !runIds.has(segment.fromRunId)) {
-          runIds.set(segment.fromRunId, resultRunId)
-        }
+      for (const [fromRunId, span] of spans) {
+        const continuations = runContinuations.get(fromRunId) ?? []
+        continuations.push({
+          address: {
+            paragraphId: entry.toParagraphId,
+            runIndex: run.runIndex,
+          },
+          runId: paragraph?.runs[run.runIndex]?.id,
+          ...span,
+        })
+        runContinuations.set(fromRunId, continuations)
       }
     }
   }
@@ -590,8 +640,7 @@ function lineageIdentities(
     restoredAnchors,
     restoredBeforeAnchors,
     paragraphIds,
-    runAddresses,
-    runIds,
+    runContinuations,
     runReversals,
     paragraphReversals,
     insertReversals,
@@ -637,6 +686,39 @@ function runText(model: DocumentModelWire, runId: string) {
     }
   }
   return undefined
+}
+
+/**
+ * Re-expresses a pre-save run text across every result run that continues the
+ * base run: a mid-run splice left the head of the text in the first result
+ * run and the tail in the last, so each takes the slice at its own recorded
+ * range — writing the whole text to the first alone would leave the tail's
+ * saved text beside the restored head, and the next save persists that
+ * duplication. The first also takes anything before its range and the last
+ * anything after it, so no character the snapshot held is dropped. A run the
+ * lineage does not continue keeps the whole text at a pending identity that
+ * stays unresolved — and blocks — if no result run can be named for it.
+ */
+function reversalRunTexts(
+  identities: SavedIdentities,
+  baseRunId: string,
+  text: string,
+): [string, string][] {
+  const continuations = identities.runContinuations.get(baseRunId)
+  if (!continuations || continuations.length === 0) {
+    return [[pendingUnresolvedRunId(baseRunId), text]]
+  }
+  return continuations.map((continuation, index): [string, string] => {
+    const from = index === 0 ? 0 : continuation.from
+    const value =
+      index === continuations.length - 1
+        ? text.slice(from)
+        : text.slice(from, continuation.to)
+    return [
+      continuation.runId ?? pendingRunAddressId(continuation.address),
+      value,
+    ]
+  })
 }
 
 /**
@@ -697,14 +779,8 @@ export function translateSnapshot(
           break
         }
         // Never fall back to the base run id: it names unrelated content once
-        // a save shifts run positions. The lineage address is the only reason
-        // a reversal can be addressed before the model reloads.
-        const address = identities.runAddresses.get(slot.runId)
-        const targetRunId =
-          identities.runIds.get(slot.runId) ??
-          (address
-            ? pendingRunAddressId(address)
-            : pendingUnresolvedRunId(slot.runId))
+        // a save shifts run positions. The lineage's continuing runs are the
+        // only reason a reversal can be addressed before the model reloads.
         const pre =
           snapshot.drafts[slot.runId] ?? runText(baseline.fromModel, slot.runId)
         const post =
@@ -715,7 +791,13 @@ export function translateSnapshot(
           break
         }
         delete next.drafts[slot.runId]
-        next.drafts[targetRunId] = pre
+        for (const [targetRunId, text] of reversalRunTexts(
+          identities,
+          slot.runId,
+          pre,
+        )) {
+          next.drafts[targetRunId] = text
+        }
         break
       }
       case 'paragraph-style': {
@@ -873,28 +955,36 @@ export function translateSnapshot(
               )
             : null
         if (!inverse) break
-        const sentRunAddress = sent.runId
-          ? identities.runAddresses.get(sent.runId)
-          : undefined
-        const address: PendingEmphasis = sent.runId
-          ? {
-              runId:
-                identities.runIds.get(sent.runId) ??
-                (sentRunAddress
-                  ? pendingRunAddressId(sentRunAddress)
-                  : pendingUnresolvedRunId(sent.runId)),
-            }
-          : {
-              paragraphId:
-                identities.paragraphIds.get(sent.paragraphId ?? '') ??
-                sent.paragraphId,
-              from: sent.from,
-              to: sent.to,
-            }
-        next.format.emphasis = mergeEmphasis(next.format.emphasis, {
-          ...address,
-          ...inverse,
-        })
+        // A mid-run splice fanned the run out to several result runs, each
+        // inheriting the saved character properties, so the inverse is
+        // restated on every one — or the tail keeps the saved formatting.
+        if (sent.runId) {
+          const continuations =
+            identities.runContinuations.get(sent.runId) ?? []
+          const runIds =
+            continuations.length === 0
+              ? [pendingUnresolvedRunId(sent.runId)]
+              : continuations.map(
+                  (continuation) =>
+                    continuation.runId ??
+                    pendingRunAddressId(continuation.address),
+                )
+          for (const runId of runIds) {
+            next.format.emphasis = mergeEmphasis(next.format.emphasis, {
+              runId,
+              ...inverse,
+            })
+          }
+        } else {
+          next.format.emphasis = mergeEmphasis(next.format.emphasis, {
+            paragraphId:
+              identities.paragraphIds.get(sent.paragraphId ?? '') ??
+              sent.paragraphId,
+            from: sent.from,
+            to: sent.to,
+            ...inverse,
+          })
+        }
         break
       }
       case 'numbering': {
@@ -976,16 +1066,18 @@ export function translateSnapshot(
           addTrackedRejection(next, reversal)
           break
         }
-        const lastAddress = identities.runAddresses.get(lastOriginal.id)
-        const targetRunId =
-          identities.runIds.get(lastOriginal.id) ??
-          (lastAddress
-            ? pendingRunAddressId(lastAddress)
-            : pendingUnresolvedRunId(lastOriginal.id))
         const pre =
           snapshot.drafts[lastOriginal.id] ??
           runText(baseline.fromModel, lastOriginal.id)
-        if (pre !== undefined) next.drafts[targetRunId] = pre
+        if (pre !== undefined) {
+          for (const [targetRunId, text] of reversalRunTexts(
+            identities,
+            lastOriginal.id,
+            pre,
+          )) {
+            next.drafts[targetRunId] = text
+          }
+        }
         break
       }
       case 'section': {
