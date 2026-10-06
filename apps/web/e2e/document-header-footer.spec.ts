@@ -209,9 +209,9 @@ test('header text and page number survive save, reload and export', async ({
   await saveAndWait(page)
   // A save whose edit history could not be reconciled surfaces a
   // reload-required banner; the spec must fail while that defect is live.
-  await expect(
-    page.getByText('Reloading is required to continue'),
-  ).toHaveCount(0)
+  await expect(page.getByText('Reloading is required to continue')).toHaveCount(
+    0,
+  )
   await shot(page, '04-saved')
 
   // A fresh context reads the stored version: the header band still shows

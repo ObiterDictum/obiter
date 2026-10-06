@@ -180,7 +180,10 @@ function paintSlices(
     cursor = end
     const display = runDisplayText(run, pageNumber)
     if (display !== run.text) {
-      if (start >= from && (start < to || (start === length && to === length))) {
+      if (
+        start >= from &&
+        (start < to || (start === length && to === length))
+      ) {
         slices.push({ run, text: display, from: start })
       }
       continue
