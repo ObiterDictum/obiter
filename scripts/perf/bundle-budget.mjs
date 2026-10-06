@@ -18,9 +18,12 @@
  *
  *   node scripts/perf/bundle-budget.mjs [--dist apps/web/dist]
  */
+import { execFileSync } from 'node:child_process'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
 // Measured on origin/dev at 13587cd after the initial-load change: initial
 // 186.4 kB gzip, lazy route chunks 348.2 kB gzip, PDF worker 283.1 kB gzip,
@@ -38,7 +41,9 @@ import { join } from 'node:path'
 // check, while anything beyond a few kilobytes more still does. The initial
 // budget is deliberately unchanged: an E6a defect briefly pushed it to
 // 236.2 kB, the fix restored it to 183.0 kB, so 212 kB retains real headroom
-// and is not being loosened.
+// and is not being loosened. E6b (links and cross-references) measured at its
+// head is initial 184.0 kB, lazy 392.7 kB, largest chunk 171.1 kB, pdf worker
+// 286.6 kB — inside every budget.
 export const BUDGETS = {
   initialGzipBytes: 212 * 1024,
   lazyGzipBytes: 400 * 1024,
@@ -70,6 +75,39 @@ function arg(name, fallback) {
 }
 
 const dist = arg('dist', 'apps/web/dist')
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
+
+/**
+ * Refuse a dist built from a different commit than the checkout: a stale
+ * build measures the previous source while reporting this head's budget.
+ * The build stamps `.obiter-build.json` with its commit, so this is a read
+ * and a compare.
+ */
+async function requireCheckoutArtifact() {
+  const marker = await readBuildProvenance(dist)
+  const rebuild = 'run `bun run --filter @obiter/web build` and retry'
+  if (!marker?.commit)
+    throw new Error(
+      `${dist} carries no build provenance commit — it may be stale; ${rebuild}`,
+    )
+  let head = null
+  try {
+    head = execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    // git unavailable or not a checkout: provenance cannot be compared.
+  }
+  if (!head)
+    throw new Error(
+      `cannot resolve the checkout commit to compare ${dist}'s provenance (${marker.commit}) against`,
+    )
+  if (marker.commit !== head)
+    throw new Error(
+      `${dist} was built at ${marker.commit}, but this checkout is ${head} — the artifact is stale; ${rebuild}`,
+    )
+}
 
 /** The root route's preloads are the files loaded on every page. */
 async function rootPreloads(dist_) {
@@ -96,6 +134,7 @@ async function gzipSize(file) {
 }
 
 async function main() {
+  await requireCheckoutArtifact()
   const clientAssets = join(dist, 'client', 'assets')
   const initialNames = await rootPreloads(dist)
   const initial = new Set(initialNames)
