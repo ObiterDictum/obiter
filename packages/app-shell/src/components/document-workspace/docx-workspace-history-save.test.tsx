@@ -1221,6 +1221,54 @@ describe('saving a margin story', () => {
     await waitFor(() => expect(saveState()).toBe('saved'))
     expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
   })
+
+  it('reconciles a body save that inserts a page number so a second save runs', async () => {
+    const document = await server(['Page body'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000001', 'Page body'.length)
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
+    await clickSaveAndSettle(document, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+
+    fireEvent.change(field(), { target: { value: 'Page body edited' } })
+    await clickSaveAndSettle(document, 2)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+  })
+
+  it('reconciles a margin save that inserts a page number so a second save runs', async () => {
+    const document = await server(['Body'], { header: 'Page header' })
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Header' }))
+    clickParagraph(marginParagraphId(), 'Page header'.length)
+    fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
+    await clickSaveAndSettle(document, 1)
+
+    // The field insert creates five new runs in the margin paragraph; the
+    // boundary must reconcile them against the reloaded model the way a body
+    // save does, not leave pending run addresses that force a reload.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+
+    // A second margin save without reloading must reach the server.
+    fireEvent.change(field(), { target: { value: 'Page header edited' } })
+    await clickSaveAndSettle(document, 2)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(document.editAsync).toHaveBeenCalledTimes(2)
+  })
 })
 
 /** The editable band paragraph's id — the only one inside the header band. */
