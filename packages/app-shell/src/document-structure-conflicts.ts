@@ -87,9 +87,13 @@ export function structuralDraftConflict(
 }
 
 /**
- * The first draft already held on `paragraph` that `candidate` cannot compose
- * with, or undefined. `paragraph` is the stored wire — spans are derived
- * under the same effective text the save writers see.
+ * The stored structure or first held draft on `paragraph` that `candidate`
+ * cannot compose with, or undefined. `paragraph` is the stored wire — spans
+ * are derived under the same effective text the save writers see. A stored
+ * `w:hyperlink` predates every draft, so it is checked first: a splice
+ * strictly inside a linked run would nest inside the element, silently making
+ * the field's result or the picture part of the anchor text — the stored twin
+ * of the pending-link rule.
  */
 export function conflictingStructure(
   paragraph: DocumentParagraphWire,
@@ -97,12 +101,15 @@ export function conflictingStructure(
   extraRuns: readonly DocumentTextRunWire[],
   held: readonly StructuralDraft[],
   candidate: StructuralPlacement,
-): StructuralDraft | undefined {
+): StructuralPlacement | undefined {
   const spans = structuralRunSpans(paragraph, drafts, extraRuns)
-  return held.find(
-    (earlier) =>
-      earlier.paragraphId === candidate.paragraphId &&
-      structuralDraftConflict(spans, earlier, candidate),
+  return (
+    storedLinkConflict(paragraph, spans, candidate) ??
+    held.find(
+      (earlier) =>
+        earlier.paragraphId === candidate.paragraphId &&
+        structuralDraftConflict(spans, earlier, candidate),
+    )
   )
 }
 
@@ -118,6 +125,36 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
     case 'cross-reference':
       return 'cross-reference'
   }
+}
+
+/**
+ * A splice strictly inside a run whose wire carries a stored link's target
+ * lands inside the `w:hyperlink` element, so it conflicts like a pending
+ * wrap does. Answered as a link placement so the reason names a hyperlink.
+ */
+function storedLinkConflict(
+  paragraph: DocumentParagraphWire,
+  spans: readonly ParagraphRunSpan[],
+  candidate: StructuralPlacement,
+): StructuralPlacement | undefined {
+  if (candidate.kind !== 'image' && candidate.kind !== 'cross-reference') {
+    return undefined
+  }
+  const index = spans.findIndex(
+    (span, runIndex) =>
+      paragraph.runs[runIndex]?.hyperlinkTarget !== undefined &&
+      span.start < candidate.offset &&
+      candidate.offset < span.end,
+  )
+  const span = spans[index]
+  return span === undefined
+    ? undefined
+    : {
+        kind: 'link',
+        paragraphId: candidate.paragraphId,
+        from: span.start,
+        to: span.end,
+      }
 }
 
 /** Runs whose text span intersects the link's [from, to) range. */

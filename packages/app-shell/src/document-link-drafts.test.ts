@@ -36,6 +36,24 @@ function paragraph(id: string, text = 'text'): DocumentParagraphWire {
   }
 }
 
+/** 'See <the report> today' with the stored link covering the middle run. */
+function linkedParagraph(): DocumentParagraphWire {
+  return {
+    id: 'p1',
+    runs: [
+      { id: 'p1-a', text: 'See ', preservedXmlFragments: [] },
+      {
+        id: 'p1-b',
+        text: 'the report',
+        preservedXmlFragments: [],
+        hyperlinkTarget: 'https://example.co.uk/report',
+      },
+      { id: 'p1-c', text: ' today', preservedXmlFragments: [] },
+    ],
+    preservedXmlFragments: [],
+  }
+}
+
 function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   return {
     version: 1,
@@ -296,6 +314,30 @@ describe('link and cross-reference drafts', () => {
     }
   })
 
+  it('blocks a splice drafted inside a stored hyperlink', () => {
+    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): the stored link
+    // covers the middle run, so 8 nests inside it and 2 lands before it.
+    const base = model([linkedParagraph(), paragraph('p2', 'Target')])
+    const nested = planDocumentSave(base, {
+      ...emptyDraftState(),
+      structures: [{ ...crossReferenceDraft('s1', 'p1', 'p2'), offset: 8 }],
+    })
+    expect(nested.blocked.map((item) => item.slot)).toEqual([
+      expect.objectContaining({ kind: 'structure', id: 's1' }),
+    ])
+    expect(nested.blocked[0]?.reason).toContain('hyperlink')
+    expect(nested.operations).toEqual([])
+
+    const outside = planDocumentSave(base, {
+      ...emptyDraftState(),
+      structures: [{ ...crossReferenceDraft('s1', 'p1', 'p2'), offset: 2 }],
+    })
+    expect(outside.blocked).toEqual([])
+    expect(outside.operations.map((operation) => operation.type)).toEqual([
+      'insert_cross_reference',
+    ])
+  })
+
   it('names link and cross-reference slots for disclosure', () => {
     const link: DraftSlot = {
       kind: 'structure',
@@ -540,6 +582,18 @@ describe('documentStructureToolbar links', () => {
     ).toBe(false)
     expect(api.insertCrossReference('p2').inserted).toBe(false)
     expect(structures).toEqual([])
+  })
+
+  it('refuses a splice inside a stored hyperlink, not beside it', () => {
+    const linkedModel = model([linkedParagraph(), paragraph('p2')])
+    const caret = { selectionActive: false, selectionRange: null }
+    const inside = toolbar({ model: linkedModel, offset: 8, ...caret })
+    expect(inside.api.pictureUnavailable).toContain('hyperlink')
+    expect(inside.api.crossReferenceUnavailable).toContain('hyperlink')
+    expect(inside.api.insertCrossReference('p2').inserted).toBe(false)
+    const outside = toolbar({ model: linkedModel, offset: 2, ...caret })
+    expect(outside.api.pictureUnavailable).toBeUndefined()
+    expect(outside.api.crossReferenceUnavailable).toBeUndefined()
   })
 
   it('refuses a second link over a covered run', () => {
