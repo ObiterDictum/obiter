@@ -98,6 +98,72 @@ describe('table-of-contents edits', () => {
     )
   })
 
+  it('splits a run whose text was replaced earlier in the batch', async () => {
+    const document = await parseFixture()
+    const { xrefAnchor } = tocFixture(document)
+    const run = xrefAnchor.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'replace_run_text',
+        runId: run.id,
+        text: 'Typed replacement text',
+      },
+      {
+        type: 'insert_table_of_contents',
+        paragraphId: xrefAnchor.id,
+        offset: 5,
+      },
+    ])
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const paragraphs = mainParagraphs(reparsed)
+
+    // The field split the effective text: 'Typed' closes the head, the
+    // entry paragraph follows, and the tail opens with the rest of the
+    // typed run ahead of the paragraph's untouched second run. The typed
+    // text keeps the order the caret implied rather than moving wholesale
+    // behind the field.
+    const head = paragraphs.findIndex(
+      (paragraph) =>
+        paragraph.runs.map((item) => item.text).join('') === 'Typed',
+    )
+    expect(head).toBeGreaterThanOrEqual(0)
+    expect(
+      paragraphs[head + 1]?.runs.map((item) => item.text).join(''),
+    ).toBe('Alice Example overview')
+    expect(
+      paragraphs[head + 2]?.runs.map((item) => item.text).join(''),
+    ).toBe(' replacement textJane Example reference')
+  })
+
+  it('captures only stored headings, not a same-batch inserted one', async () => {
+    const document = await parseFixture()
+    const { xrefAnchor, tocAnchor } = tocFixture(document)
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: xrefAnchor.id,
+        text: 'Pending heading',
+        styleId: 'Heading1',
+      },
+      {
+        type: 'insert_table_of_contents',
+        paragraphId: tocAnchor.id,
+        offset: 0,
+      },
+    ])
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const paragraphs = mainParagraphs(reparsed)
+
+    const entries = paragraphs.filter(
+      (paragraph) => paragraph.styleId === 'TOC1',
+    )
+    expect(entries.map((item) => item.runs.map((run) => run.text).join('')))
+      .toEqual(['Alice Example overview'])
+  })
+
   it('captures entries at outline level, not by display text', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document).find(

@@ -30,7 +30,13 @@ import {
 import { isWord } from './parts/xml-elements'
 import { nextSyntheticParaId } from './structure-package'
 import { W14_NAMESPACE } from './structure-xml'
-import { assertNoPendingAt, validateEffectiveOffset } from './structure-splice'
+import { runHasPendingOverlay } from './run-effective'
+import {
+  assertNoPendingAt,
+  runHoldingOffset,
+  spliceIntoPendingRun,
+  validateEffectiveOffset,
+} from './structure-splice'
 import { tableOfContentsEntries } from './table-of-contents-entries'
 import {
   entryParagraphWire,
@@ -137,14 +143,36 @@ export function insertTableOfContents(
       pPrCopy,
     )
   } else {
-    const point = locateOffset(source, paragraph, offset, true)
-    assertNoPendingAt(overlay, point.sourceOffset)
-    refuseInsideStoredHyperlink(overlay, point.sourceOffset)
-    setOverlayReplacement(
-      overlay,
-      `${paragraph.wire.id}:toc:${String(occurrence)}`,
-      tocSpliceReplacement(source, point, `</w:p>${entriesXml}${tailOpen}`),
-    )
+    const insertion = `</w:p>${entriesXml}${tailOpen}`
+    const key = `${paragraph.wire.id}:toc:${String(occurrence)}`
+    // The offset addresses effective text, and a run already rewritten in
+    // this batch no longer maps to a source offset: compose into the
+    // pending run replacement like every other splice, so the field lands
+    // inside the text the batch wrote.
+    const holder = runHoldingOffset(paragraph, offset)
+    if (holder && runHasPendingOverlay(overlay, holder.run)) {
+      refuseInsideStoredHyperlink(overlay, holder.run.runRange.start)
+      if (holder.run.wire.hyperlinkTarget !== undefined) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      spliceIntoPendingRun(
+        overlay,
+        paragraph,
+        holder,
+        offset,
+        insertion,
+        key,
+      )
+    } else {
+      const point = locateOffset(source, paragraph, offset, true)
+      assertNoPendingAt(overlay, point.sourceOffset)
+      refuseInsideStoredHyperlink(overlay, point.sourceOffset)
+      setOverlayReplacement(
+        overlay,
+        key,
+        tocSpliceReplacement(source, point, insertion),
+      )
+    }
   }
   part.dirty = true
 
@@ -171,16 +199,25 @@ export function insertTableOfContents(
  * whole insertion fails closed rather than drop it from the list.
  */
 function headingEntries(document: OoxmlDocument): TocEntry[] {
-  return tableOfContentsEntries(document.model).map((entry) => {
+  const entries: TocEntry[] = []
+  for (const entry of tableOfContentsEntries(document.model)) {
     const anchor = document.paragraphAnchors.get(entry.paragraphId)
-    if (!anchor || anchor.hasTrackedChanges) {
+    // A paragraph the same batch inserted, or the tail an earlier
+    // same-batch split created, exists only as pending XML and cannot
+    // carry a stored bookmark yet, so the field captures the headings
+    // that were stored.
+    if (!anchor) continue
+    // A heading with tracked changes cannot hold a bookmark safely, so the
+    // whole insertion fails closed rather than drop it from the list.
+    if (anchor.hasTrackedChanges) {
       throw new OoxmlError('model-node-not-editable')
     }
-    return {
+    entries.push({
       ...entry,
       bookmark: ensureParagraphBookmark(document, anchor, TOC_BOOKMARK_PREFIX),
-    }
-  })
+    })
+  }
+  return entries
 }
 
 /**
