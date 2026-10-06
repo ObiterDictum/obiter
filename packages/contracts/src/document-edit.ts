@@ -12,6 +12,7 @@ import {
   insertFootnoteOperationSchema,
   insertImageOperationSchema,
   insertPageNumberOperationSchema,
+  insertTableOfContentsOperationSchema,
   insertTableOperationSchema,
   setHyperlinkOperationSchema,
 } from './document-edit-structural'
@@ -470,6 +471,7 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   insertCrossReferenceOperationSchema,
   insertPageNumberOperationSchema,
   insertFootnoteOperationSchema,
+  insertTableOfContentsOperationSchema,
 ])
 export type DocumentEditOperation = z.infer<typeof documentEditOperationSchema>
 
