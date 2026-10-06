@@ -1,0 +1,449 @@
+import { z } from 'zod'
+
+export * from './account'
+export * from './api-error'
+export * from './document-collaboration'
+export * from './document-comments'
+export * from './document-edit'
+export * from './document-edit-request'
+export * from './document-edit-shared'
+export * from './document-edit-structural'
+export * from './document-lineage'
+export * from './document-model'
+export * from './document-tracked-changes'
+// Citation honesty shapes for legal search (additive, optional at the boundary).
+export * from './legal-search'
+export * from './legislation-paths'
+export * from './neutral-citation'
+// Organisation, membership and the authenticated-user view.
+export * from './organisation'
+export * from './xml-text'
+export * from './verification'
+
+export type AppPlatform = 'web' | 'desktop'
+
+export const dataRegionSchema = z.enum(['eu'])
+export type DataRegion = z.infer<typeof dataRegionSchema>
+
+export const matterStatusSchema = z.enum(['active', 'archived', 'deleted'])
+export type MatterStatus = z.infer<typeof matterStatusSchema>
+
+export const matterAccessLevelSchema = z.enum(['view', 'edit'])
+export type MatterAccessLevel = z.infer<typeof matterAccessLevelSchema>
+
+export const matterAccessDecisionSchema = z.enum(['view', 'edit', 'denied'])
+export type MatterAccessDecision = z.infer<typeof matterAccessDecisionSchema>
+
+export const matterShareGrantSchema = z.object({
+  id: z.string().min(1),
+  matterId: z.string().min(1),
+  granteeUserId: z.string().min(1),
+  accessLevel: matterAccessLevelSchema,
+  createdBy: z.string().min(1),
+  createdAt: z.string().datetime({ offset: true }),
+})
+export type MatterShareGrant = z.infer<typeof matterShareGrantSchema>
+
+export const matterShareCreateRequestSchema = z.object({
+  granteeUserId: z.string().min(1),
+  accessLevel: matterAccessLevelSchema,
+})
+export type MatterShareCreateRequest = z.infer<
+  typeof matterShareCreateRequestSchema
+>
+
+export const matterShareListResponseSchema = z.object({
+  ownerUserId: z.string().min(1),
+  shares: z.array(matterShareGrantSchema),
+})
+export type MatterShareListResponse = z.infer<
+  typeof matterShareListResponseSchema
+>
+
+export const matterShareCreateResponseSchema = z.object({
+  share: matterShareGrantSchema,
+})
+export type MatterShareCreateResponse = z.infer<
+  typeof matterShareCreateResponseSchema
+>
+
+export const matterShareRevokeRequestSchema = z.object({
+  shareId: z.string().min(1),
+})
+export type MatterShareRevokeRequest = z.infer<
+  typeof matterShareRevokeRequestSchema
+>
+
+export const matterShareRevokeResponseSchema = z.object({
+  revoked: z.literal(true),
+  shareId: z.string().min(1),
+})
+export type MatterShareRevokeResponse = z.infer<
+  typeof matterShareRevokeResponseSchema
+>
+
+export const documentStatusSchema = z.enum([
+  'queued',
+  'processing',
+  'ready',
+  'failed',
+  'needs_review',
+])
+export type DocumentStatus = z.infer<typeof documentStatusSchema>
+
+export const syncStateSchema = z.enum([
+  'local_only',
+  'queued',
+  'syncing',
+  'synced',
+  'conflict',
+  'failed',
+])
+export type SyncState = z.infer<typeof syncStateSchema>
+
+export const artifactStatusSchema = z.enum([
+  'queued',
+  'generating',
+  'ready',
+  'failed',
+])
+export type ArtifactStatus = z.infer<typeof artifactStatusSchema>
+
+export const artifactTypeSchema = z.enum([
+  'document_text',
+  'upload_receipt',
+  'processing_log',
+  'redaction_report',
+  'redaction_output',
+  'verification_report',
+  'research_memo',
+])
+export type ArtifactType = z.infer<typeof artifactTypeSchema>
+
+export const spanCategorySchema = z.enum([
+  'person_name',
+  'email',
+  'phone',
+  'address',
+  'date',
+  'government_id',
+  'account_number',
+  'passport',
+  'drivers_license',
+  'url',
+  'ip_address',
+  'national_insurance',
+  'case_reference',
+  'organisation_name',
+  'secret',
+])
+export type SpanCategory = z.infer<typeof spanCategorySchema>
+
+export const spanSourceSchema = z.enum([
+  'rampart_model',
+  'rampart_deterministic',
+  'uk_supplement',
+])
+export type SpanSource = z.infer<typeof spanSourceSchema>
+
+export const redactionRunStatusSchema = z.enum([
+  'pending',
+  'detecting',
+  'ready_for_review',
+  'reviewing',
+  'finalized',
+  'failed',
+])
+export type RedactionRunStatus = z.infer<typeof redactionRunStatusSchema>
+
+export const detectionModeSchema = z.enum([
+  'model+supplement',
+  'heuristics+supplement',
+  'unknown',
+])
+export type DetectionMode = z.infer<typeof detectionModeSchema>
+
+export const redactionPolicyModeSchema = z.enum([
+  'internal_ai_minimisation',
+  'external_sharing',
+])
+export type RedactionPolicyMode = z.infer<typeof redactionPolicyModeSchema>
+
+export const spanConfidenceSchema = z.enum(['high', 'medium', 'low'])
+export type SpanConfidence = z.infer<typeof spanConfidenceSchema>
+
+export const spanSuggestionSchema = z.enum(['redact', 'keep'])
+export type SpanSuggestion = z.infer<typeof spanSuggestionSchema>
+
+export const spanDecisionSchema = z.enum([
+  'accept',
+  'reject',
+  'override_redact',
+  'override_keep',
+  'pseudonymise',
+])
+export type SpanDecision = z.infer<typeof spanDecisionSchema>
+
+export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
+export type OutputMode = z.infer<typeof outputModeSchema>
+
+const finiteNumberSchema = z.number().finite()
+const nonNegativeFiniteNumberSchema = finiteNumberSchema.nonnegative()
+const positiveFiniteNumberSchema = finiteNumberSchema.positive()
+
+export const documentTextLayoutSegmentSchema = z
+  .object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().positive(),
+    pageIndex: z.number().int().nonnegative(),
+    x: finiteNumberSchema,
+    y: finiteNumberSchema,
+    width: nonNegativeFiniteNumberSchema,
+    height: positiveFiniteNumberSchema,
+    ascent: nonNegativeFiniteNumberSchema.optional(),
+    descent: nonNegativeFiniteNumberSchema.optional(),
+    /** Origin-to-origin displacement in the run's writing direction. */
+    advances: z.array(nonNegativeFiniteNumberSchema).optional(),
+    /** Drawn-advance overrides where kerning makes placement differ. */
+    glyphWidthOverrides: z
+      .record(
+        z.string().regex(/^(?:0|[1-9]\d*)$/u),
+        nonNegativeFiniteNumberSchema,
+      )
+      .optional(),
+    /** Unit writing direction. Omitted for ordinary left-to-right text. */
+    baselineX: finiteNumberSchema.optional(),
+    baselineY: finiteNumberSchema.optional(),
+  })
+  .superRefine((segment, context) => {
+    const length = segment.end - segment.start
+    if (length <= 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['end'],
+        message: 'Layout segment end must be greater than start.',
+      })
+    }
+    if (segment.advances && segment.advances.length !== length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['advances'],
+        message: 'advances must contain one entry per layout character.',
+      })
+    }
+    for (const index of Object.keys(segment.glyphWidthOverrides ?? {})) {
+      if (Number(index) >= length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['glyphWidthOverrides', index],
+          message: 'Glyph width override index is out of range.',
+        })
+      }
+    }
+    if (
+      (segment.baselineX === undefined) !==
+      (segment.baselineY === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['baselineX'],
+        message: 'Layout baseline direction must include both components.',
+      })
+    }
+    if (
+      segment.baselineX !== undefined &&
+      segment.baselineY !== undefined &&
+      Math.abs(Math.hypot(segment.baselineX, segment.baselineY) - 1) > 0.01
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['baselineX'],
+        message: 'Layout baseline direction must be a unit vector.',
+      })
+    }
+  })
+
+export type DocumentTextLayoutSegment = z.infer<
+  typeof documentTextLayoutSegmentSchema
+>
+
+const documentTextLayoutPageSchema = z.object({
+  width: positiveFiniteNumberSchema,
+  height: positiveFiniteNumberSchema,
+})
+
+/**
+ * Version 1 remains readable and deliberately falls back to interpolation.
+ * Version 2 separates origin placement (`advances`) from sparse drawn-extent
+ * overrides so kerning cannot shorten a redaction cover.
+ */
+export const documentTextLayoutSchema = z
+  .object({
+    version: z.union([z.literal(1), z.literal(2)]),
+    pages: z.array(documentTextLayoutPageSchema).min(1),
+    segments: z.array(documentTextLayoutSegmentSchema),
+  })
+  .superRefine((layout, context) => {
+    layout.segments.forEach((segment, index) => {
+      if (segment.pageIndex >= layout.pages.length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['segments', index, 'pageIndex'],
+          message: 'Layout segment page index is out of range.',
+        })
+      }
+      if (
+        layout.version === 2 &&
+        (segment.advances === undefined ||
+          segment.glyphWidthOverrides === undefined)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['segments', index, 'glyphWidthOverrides'],
+          message:
+            'Version 2 geometry requires placement advances and glyph width overrides.',
+        })
+      }
+      if (
+        layout.version === 1 &&
+        (segment.glyphWidthOverrides !== undefined ||
+          segment.baselineX !== undefined ||
+          segment.baselineY !== undefined)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['segments', index],
+          message: 'Version 1 segments cannot contain version 2 geometry.',
+        })
+      }
+    })
+  })
+
+export type DocumentTextLayout = z.infer<typeof documentTextLayoutSchema>
+
+export const documentPdfViewResponseSchema = z.object({
+  documentId: z.string().min(1),
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  text: z.string(),
+  layout: documentTextLayoutSchema,
+})
+export type DocumentPdfViewResponse = z.infer<
+  typeof documentPdfViewResponseSchema
+>
+
+export const documentTextResponseSchema = z.object({
+  documentId: z.string().min(1),
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  text: z.string(),
+})
+export type DocumentTextResponse = z.infer<typeof documentTextResponseSchema>
+
+export const redactionFinalizeInputSchema = z.object({
+  outputMode: outputModeSchema,
+  degradedDetectionAcknowledged: z.boolean().optional(),
+  unknownDetectionAcknowledged: z.boolean().optional(),
+})
+export type RedactionFinalizeInput = z.infer<
+  typeof redactionFinalizeInputSchema
+>
+
+/**
+ * Metadata for a finalized redaction artifact. The bytes are served separately
+ * by `/output/file` so preview and download read the same stored object; this
+ * response only describes it. `securePdf` marks a hard-redaction PDF produced
+ * by the current rasterized path; a legacy hard-redaction DOCX/TXT artifact
+ * reports `securePdf: false` and keeps its true MIME type and filename.
+ */
+export const redactionOutputResponseSchema = z.object({
+  mimeType: z.string().min(1),
+  filename: z.string().min(1),
+  text: z.string().nullable(),
+  artifactId: z.string().min(1).nullable(),
+  sha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/u)
+    .nullable(),
+  securePdf: z.boolean(),
+})
+export type RedactionOutputResponse = z.infer<
+  typeof redactionOutputResponseSchema
+>
+
+export type Tone = 'ink' | 'sage' | 'amber' | 'rust'
+
+export function createCanonicalCasePath(input: {
+  id: string
+  title: string
+  neutralCitation: string | null
+}) {
+  const documentIdSlug = slugifyCaseText(input.id)
+  const citationSlug = input.neutralCitation
+    ? slugifyCaseCitation(input.neutralCitation)
+    : ''
+  const titleSlug = slugifyCaseText(input.title)
+  const slug = input.id.startsWith('d-')
+    ? [documentIdSlug, titleSlug, citationSlug].filter(Boolean).join('-')
+    : citationSlug
+      ? [titleSlug, citationSlug].filter(Boolean).join('-')
+      : documentIdSlug
+
+  return `/case/${slug}`
+}
+
+export function resolveCaseDocumentIdFromSlug(caseSlug: string) {
+  const normalizedSlug = slugifyCaseText(caseSlug)
+  const stableDocumentId = normalizedSlug
+    .match(
+      /^d-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-|$)/,
+    )?.[0]
+    ?.replace(/-$/, '')
+  if (stableDocumentId) return stableDocumentId
+
+  const parts = normalizedSlug.split('-').filter(Boolean)
+  const citationStart = findCitationSlugStart(parts)
+
+  if (citationStart === -1) return normalizedSlug
+
+  const citationParts = parts.slice(citationStart)
+  const year = citationParts[0]
+  const numberIndex = citationParts.findIndex(
+    (part, index) => index > 1 && /^\d+$/.test(part),
+  )
+  if (!year || numberIndex === -1) return normalizedSlug
+
+  const number = citationParts[numberIndex]
+  const courtParts = [
+    ...citationParts.slice(1, numberIndex),
+    ...citationParts.slice(numberIndex + 1),
+  ]
+
+  return `${courtParts.join('-')}-${year}-${number}`
+}
+
+function findCitationSlugStart(parts: string[]) {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    if (
+      /^\d{4}$/.test(parts[index] ?? '') &&
+      parts.slice(index + 2).some((part) => /^\d+$/.test(part))
+    ) {
+      return index
+    }
+  }
+
+  return -1
+}
+
+function slugifyCaseCitation(value: string) {
+  return slugifyCaseText(value.replace(/[[\]()]/g, ' '))
+}
+
+function slugifyCaseText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}

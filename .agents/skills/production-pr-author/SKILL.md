@@ -1,0 +1,300 @@
+---
+name: production-pr-author
+description: MUST use before creating, opening, updating, or preparing any Obiter pull request, including when the user asks to branch, commit, or write a PR body. Use for PR titles, bodies, summaries, and review-facing updates; require the structure and verification rules below.
+---
+
+# Production PR Author
+
+## Mission
+
+Write PR titles and descriptions that let another engineer review the change safely and quickly. The PR body must explain what changed, why it changed, how it was implemented, how it was verified, and what risks remain.
+
+Do not write marketing copy, vague confidence language, or AI-flavored filler. Be precise, honest, and maintainable.
+
+## Audience
+
+The PR body addresses another engineer reviewing the change. Write for that reader.
+
+- Never address the owner (Karl) by name, and never write owner-directed
+  explanation such as "for Karl" or "in plain language for Karl". The PR body is a
+  permanent, public artefact, and owner-directed prose in it is inappropriate.
+- If a plain-language, non-engineer explanation is useful, give it in the local
+  chat reply or summary you return to the user, not in the PR body or comments.
+
+## Subagent Model Policy
+
+Keep the work in two halves:
+
+1. **Analysis:** the primary Codex model must do the substantive engineering work: inspect the diff, read relevant rules and docs, decide what changed, assess security/data/privacy impact, identify testing gaps, and choose the final claims.
+2. **Prose drafting:** only after those facts are locked, a delegated title/body drafter may turn a minimum sanitized packet into prose. Spawn it with `model: "openai-codex/gpt-5.6-luna"`.
+
+Luna owns prose drafting, not analysis. M9 evidence showed Luna finding important defects that same-model M8 reviewers missed, so it is the better independent voice for review-facing wording; keeping factual analysis in the primary model prevents an ungrounded drafter from inventing implementation or test claims. Do not give the drafter authority to inspect unrelated code, and do not inherit the primary model for post-analysis prose drafting unless the user explicitly overrides this policy.
+
+Give the mini-model subagent only the minimum sanitized packet: branch/base, changed-file summary, locked implementation notes, locked security/data/privacy assessment, exact tests run, known gaps, and wording constraints. Do not give it secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or authority to inspect unrelated code.
+
+The mini-model subagent must return draft text only. The primary model must validate the final PR text before posting: every claim must match the diff and verification evidence, no sensitive data may be disclosed, and no unrun test may be implied.
+
+## Required Context
+
+Before writing a non-trivial PR summary, inspect:
+
+```bash
+git status --short --branch
+git branch --show-current
+git diff --stat <base>...HEAD
+git diff --name-status <base>...HEAD
+git log --oneline <base>..HEAD
+```
+
+If a PR already exists, inspect it:
+
+```bash
+gh pr view --json number,title,baseRefName,headRefName,url,body,reviewDecision,mergeable,statusCheckRollup
+```
+
+Use the actual base branch. For Obiter this is usually `dev` unless explicitly stated.
+
+Also read the relevant project rules:
+
+- `AGENTS.md`
+- `PR.md`
+- `TESTING.md`
+- `RULES.md` when architecture, security, or implementation behavior changed
+- touched-area docs/specs when behavior changed
+
+## PR Title Rules
+
+A good title is specific and implementation/product oriented.
+
+Use:
+
+- `Add production PR review skill`
+- `Refactor sidebar onto Base UI primitives`
+- `Document review knowledge boundaries`
+
+Avoid:
+
+- `Updates`
+- `Fix stuff`
+- `Improve app`
+- agent, tool, or automation prefixes such as `[codex]`
+- hype words such as robust, seamless, comprehensive, enhanced unless technically justified
+- `phase` in Obiter PR titles
+
+## Required PR Body Structure
+
+Use this structure unless the change is truly trivial:
+
+```markdown
+## What Changed
+
+- ...
+
+## Why
+
+- ...
+
+## Implementation Notes
+
+- ...
+
+## Security / Data / Privacy
+
+- ...
+
+## Architecture / Maintainability
+
+- ...
+
+## Testing
+
+- Commands run:
+  - `...`
+- Manual checks:
+  - ...
+- Not tested:
+  - ...
+
+## Risks / Follow-Ups
+
+- ...
+```
+
+For any user-visible change — a screen, a control, an editor behaviour, a
+rendered document, a printed page — add before/after media. This is required,
+not optional:
+
+```markdown
+## Before / After
+
+Before: ![before](...)
+After: ![after](...)
+```
+
+For UI PRs, also add:
+
+```markdown
+## UI / Accessibility
+
+- ...
+```
+
+For API/data/worker/security-sensitive PRs, add as relevant:
+
+```markdown
+## Data Model / Migrations
+
+- ...
+
+## Rollout / Operations
+
+- ...
+```
+
+## What To Include
+
+### What Changed
+
+Explain the concrete behavior, files, packages, or structure changed. Mention important paths. Do not just restate commit titles.
+
+### Why
+
+Explain the engineering, product, security, or maintainability reason for the change. If it supports reviewability, future architecture, or safety, say how.
+
+### Implementation Notes
+
+Explain notable design choices and tradeoffs:
+
+- package boundaries
+- public contract changes
+- new abstractions and why they exist
+- removed/renamed files
+- dependency changes and why they are needed
+- compatibility considerations
+- what was deliberately not changed
+
+### Security / Data / Privacy
+
+Always include this section for Obiter, even if the answer is "no sensitive data path changed." Cover:
+
+- whether private matter data is touched
+- whether auth/session/permissions are touched
+- whether logs, telemetry, prompts, embeddings, object keys, queue payloads, or audit events changed
+- local-vs-hosted processing implications
+- tenant/organisation/matter isolation implications
+- new dependencies, CI permissions, or external services
+
+Never include secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive object keys, or screenshots of private material.
+
+### Architecture / Maintainability
+
+Explain how the change affects future work:
+
+- clearer ownership
+- reduced duplication
+- reusable primitives
+- state/data-flow boundaries
+- docs/spec alignment
+- known limitations
+
+### Testing
+
+Be exact. Include commands actually run. Do not imply checks passed if they were not run.
+
+Good:
+
+```markdown
+- Commands run:
+  - `bun run typecheck` - passed
+  - `bun run test` - passed
+- Manual checks:
+  - Opened the desktop shell and verified sidebar keyboard focus/order.
+- Not tested:
+  - No cross-browser pass; change is limited to shared shell markup/classes.
+```
+
+Bad:
+
+```markdown
+- Tested thoroughly.
+```
+
+### Before / After
+
+Required for any change with a user-visible surface; the test is whether a
+reviewer could look at the result and disagree that it is better. Publish the
+media on the repository's `evidence` branch and paste the block the script
+prints:
+
+```bash
+scripts/pr-evidence.sh before-01-search.png after-01-search.png
+```
+
+Use `.gif` when motion matters. Capture from the lane the provenance block
+names and use synthetic or disposable data only — never a client matter, a real
+name, or a private document on screen. Do not commit media to the feature
+branch: it bloats the diff and the file-size ceiling rejects it. See `PR.md`
+("Before / After").
+
+### Risks / Follow-Ups
+
+State remaining risk plainly:
+
+- missing manual QA
+- migration risk
+- deferred tests
+- known limitations
+- rollout considerations
+- follow-up PRs needed
+
+## PR Creation Workflow
+
+1. Determine base branch and current branch.
+2. Inspect diff, changed files, and commits.
+3. Read relevant rules/docs.
+4. For a user-visible change, capture before/after media and publish it with
+   `scripts/pr-evidence.sh`; keep the block it prints for the body.
+5. Draft title and body.
+6. If asked to create the PR, use GitHub CLI:
+
+```bash
+gh pr create --base <base> --head <branch> --title "<title>" --body-file <body-file>
+```
+
+7. If updating an existing PR:
+
+```bash
+gh pr edit <number-or-url> --title "<title>" --body-file <body-file>
+```
+
+Use a temporary body file for multiline PR text. Delete it after use unless the user asks to keep it.
+
+## Quality Checklist
+
+Before posting, verify the PR body:
+
+- states what changed and why
+- names important files/packages
+- describes implementation choices and tradeoffs
+- includes security/data/privacy assessment
+- includes architecture/maintainability impact
+- includes before/after media for every user-visible change, or says plainly
+  why none applies
+- includes exact tests run and gaps
+- includes risks/follow-ups
+- avoids filler and hype
+- does not disclose sensitive data
+- matches the actual diff
+
+## Output When Not Posting
+
+If only preparing the PR text, output:
+
+```markdown
+Title: ...
+
+Body:
+...
+```
+
+If posting to GitHub, output the PR URL and a short note of what was posted.

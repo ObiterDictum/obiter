@@ -1,0 +1,58 @@
+import { Buffer } from 'node:buffer'
+import {
+  normaliseFileType,
+  type SupportedDocumentType,
+} from './document-extraction'
+import { DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES } from './request-limit-defaults'
+
+/** Bounds buffering and document parsing for authenticated uploads. */
+export const MAX_DOCUMENT_UPLOAD_BYTES = DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES
+
+export class DocumentUploadError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'DocumentUploadError'
+  }
+}
+
+function verifiedType(
+  filename: string,
+  contents: Buffer,
+  declaredType: SupportedDocumentType | null,
+): SupportedDocumentType | null {
+  const extension = filename.toLowerCase().split('.').pop()
+  const isZip = contents.subarray(0, 2).equals(Buffer.from('PK'))
+  const isPdf = contents.subarray(0, 5).equals(Buffer.from('%PDF-'))
+  if (extension === 'docx' && isZip) return 'docx'
+  if (extension === 'pdf' && isPdf) return 'pdf'
+  if (extension === 'txt' && !isZip && !isPdf) return 'txt'
+  if (!filename.includes('.') && declaredType === 'docx' && isZip) return 'docx'
+  if (!filename.includes('.') && declaredType === 'pdf' && isPdf) return 'pdf'
+  if (!filename.includes('.') && declaredType === 'txt' && !isZip && !isPdf)
+    return 'txt'
+  return null
+}
+
+export async function readDocumentUpload(
+  file: File,
+  declaredType: string,
+  maxBytes: number = MAX_DOCUMENT_UPLOAD_BYTES,
+): Promise<{
+  filename: string
+  fileType: SupportedDocumentType
+  contents: Buffer
+}> {
+  const declaredSupported = normaliseFileType(declaredType)
+  if (file.size > maxBytes)
+    throw new DocumentUploadError(
+      `Document uploads must be at most ${maxBytes / 1024 / 1024} MB.`,
+    )
+
+  const contents = Buffer.from(await file.arrayBuffer())
+  const fileType = verifiedType(file.name, contents, declaredSupported)
+  if (!fileType || (declaredSupported && fileType !== declaredSupported))
+    throw new DocumentUploadError(
+      'The filename, declared type, and file content must agree.',
+    )
+  return { filename: file.name, fileType, contents }
+}

@@ -1,0 +1,56 @@
+# Obiter API ingress — Traefik static `entryPoints` for Dokploy.
+#
+# This file is not read by anything automatically. Dokploy generates
+# /etc/dokploy/traefik/traefik.yml once at install and never rewrites it, so
+# these are the values an operator applies to that file. Merging the obiter
+# repository does not change Traefik. See README.md and docs/specs/deployment.md.
+#
+# The addresses are Dokploy's defaults (TRAEFIK_PORT 80, TRAEFIK_SSL_PORT 443).
+# If the server listens on other ports, keep its addresses and merge only the
+# `transport` and `http.maxHeaderBytes` keys into its entryPoints.
+#
+# Validated against Traefik v3.6.25 by scripts/api-ingress, which runs this file
+# verbatim in a disposable proxy. The pin matters: `http.maxHeaderBytes` is
+# absent from Dokploy's own configuration schema, and a Traefik upgrade must
+# re-run the harness before these values are trusted again.
+entryPoints:
+  web:
+    address: ':80'
+    transport:
+      respondingTimeouts:
+        # Whole-request budget: request line, headers and body. Bun exposes no
+        # request deadline of its own, so this is the only bound on a stalled
+        # or slow request. 300s matches the Node adapter's
+        # http.Server.requestTimeout default and admits the 25 MiB upload cap
+        # at any sustained rate above ~85 KiB/s.
+        readTimeout: 300s
+        # Disabled on purpose. A non-zero value truncates any response that
+        # cannot finish inside it (verified), and a long document or artifact
+        # download must not be cut. Bun's own idleTimeout bounds a silent
+        # stream at 30s.
+        writeTimeout: 0s
+        # Traefik's default, stated explicitly so a future default cannot move
+        # under us. Bounds how long a keep-alive connection may sit idle.
+        idleTimeout: 180s
+    http:
+      # Bounds the total request line plus headers, not just header values.
+      # Measured against traefik:v3.6.25 running this fragment: a 16,329 B
+      # header block reaches the origin and ~16,429 B is refused with 431, so
+      # the rejection point is the configured 16 KiB, not that value plus a
+      # read buffer. 16 KiB is the value Node's http.Server already imposed;
+      # Bun's own header cap is not configurable and must not be the only
+      # limit.
+      maxHeaderBytes: 16384
+  websecure:
+    address: ':443'
+    http:
+      maxHeaderBytes: 16384
+      tls:
+        certResolver: letsencrypt
+    http3:
+      advertisedPort: 443
+    transport:
+      respondingTimeouts:
+        readTimeout: 300s
+        writeTimeout: 0s
+        idleTimeout: 180s

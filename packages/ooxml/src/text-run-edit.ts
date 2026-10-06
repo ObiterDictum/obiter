@@ -1,0 +1,160 @@
+import { OoxmlError, type OoxmlDocument, type TextRunAnchor } from './model'
+import {
+  escapeXmlText,
+  setOverlayReplacement,
+  type OverlayReplacement,
+} from './parts/overlay'
+import { hasPendingBreakSplice } from './run-break-splices'
+
+// P10: extracting replaceTextRunText changed overlay keys to the run-scoped
+// `:text:` namespace, added xml:space for whitespace-bounded replacements, and
+// changed an unavailable target from model-node-not-found to model-node-not-editable.
+export function replaceTextRunAtAnchor(
+  document: OoxmlDocument,
+  anchor: TextRunAnchor,
+  text: string,
+) {
+  const part = document.sourceParts.get(anchor.partName)
+  const overlay = part?.overlay
+  if (!part || !overlay || anchor.textRanges.length === 0) return false
+  // A text replacement rewrites the run's text elements, so it cannot compose
+  // with a page-break splice that already reopens the run inside them: the
+  // replacement range strictly contains the splice point and the overlay
+  // serialiser rejects the overlap. Fail closed with a typed edit error so the
+  // batch is a holdable 400 rather than a 500 at serialisation.
+  if (hasPendingBreakSplice(overlay, anchor.runRange)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+
+  const breakReplacements = lineBreakRunReplacements(
+    anchor,
+    text,
+    overlay.source,
+    0,
+  )
+  const replacements =
+    breakReplacements ??
+    anchor.textRanges.map((range, index) => ({
+      ...range,
+      value: index === 0 ? escapeXmlText(text) : '',
+    }))
+  // Positional keys keep a later replacement of the same run overwriting the
+  // earlier ranges instead of leaving a stale one behind.
+  const overlayReplacements = [
+    ...replacements,
+    ...textBreakReplacements(anchor, 0),
+  ]
+  overlayReplacements.forEach((replacement, index) => {
+    setOverlayReplacement(
+      overlay,
+      `${anchor.wire.id}:text:${index}`,
+      replacement,
+    )
+  })
+  const firstTextElement = anchor.textElements[0]
+  if (!breakReplacements && firstTextElement) {
+    const opening = overlay.source.slice(
+      firstTextElement.start,
+      firstTextElement.startTagEnd,
+    )
+    const preservedOpening = preserveTextElementXmlSpace(opening, text)
+    if (preservedOpening !== opening) {
+      setOverlayReplacement(overlay, `${anchor.wire.id}:xml-space`, {
+        start: firstTextElement.start,
+        end: firstTextElement.startTagEnd,
+        value: preservedOpening,
+      })
+    }
+  }
+  anchor.wire.text = text
+  part.dirty = true
+  return true
+}
+
+/**
+ * The run's own text-wrapping breaks are text the replacement supersedes: the
+ * new text re-emits its own w:br elements, so leaving the old ones behind both
+ * duplicates breaks and desynchronises wire.text from the saved XML. Breaks of
+ * any other type are structure and stay where they are.
+ */
+export function textBreakReplacements(
+  anchor: TextRunAnchor,
+  origin: number,
+): OverlayReplacement[] {
+  return anchor.textBreaks.map(({ start, end }) => ({
+    start: start - origin,
+    end: end - origin,
+    value: '',
+  }))
+}
+
+export function wordRunInnerTextXml(prefix: string, text: string) {
+  return text
+    .split(/\r\n|\r|\n/u)
+    .map((line, index) => {
+      const element = textElementXml(prefix, line)
+      return index === 0 ? element : `<${prefix}:br/>${element}`
+    })
+    .join('')
+}
+
+export function lineBreakRunReplacements(
+  anchor: TextRunAnchor,
+  text: string,
+  source: string,
+  origin: number,
+): OverlayReplacement[] | undefined {
+  if (!/[\r\n]/u.test(text)) return undefined
+  const elements = anchor.textElements
+  const first = elements[0]
+  if (!first) return undefined
+  const opening = source.slice(first.start, first.startTagEnd)
+  const prefix = opening.match(/^<([^:>\s]+):/u)?.[1] ?? 'w'
+  const lines = text.split(/\r\n|\r|\n/u)
+  const assigned = Math.min(lines.length, elements.length)
+  return elements.map((element, index) => {
+    if (index >= assigned) {
+      return {
+        start: element.start - origin,
+        end: element.end - origin,
+        value: '',
+      }
+    }
+    const line = lines[index] ?? ''
+    const extra =
+      index === assigned - 1 && lines.length > elements.length
+        ? lines
+            .slice(elements.length)
+            .map((rest) => `<${prefix}:br/>${textElementXml(prefix, rest)}`)
+            .join('')
+        : index < lines.length - 1
+          ? `<${prefix}:br/>`
+          : ''
+    return {
+      start: element.start - origin,
+      end: element.end - origin,
+      value: `${textElementXml(prefix, line)}${extra}`,
+    }
+  })
+}
+
+function textElementXml(prefix: string, text: string) {
+  return `<${prefix}:t${textElementXmlSpaceAttribute(text)}>${escapeXmlText(text)}</${prefix}:t>`
+}
+
+export function textElementXmlSpaceAttribute(text: string) {
+  return requiresPreservedXmlSpace(text) ? ' xml:space="preserve"' : ''
+}
+
+export function preserveTextElementXmlSpace(opening: string, text: string) {
+  if (!requiresPreservedXmlSpace(text)) return opening
+  if (/\s+xml:space\s*=\s*(["'])preserve\1/u.test(opening)) return opening
+  const xmlSpace = /\s+xml:space\s*=\s*(["'])[^"']*\1/u
+  return xmlSpace.test(opening)
+    ? opening.replace(xmlSpace, ' xml:space="preserve"')
+    : opening.replace(/>$/u, ' xml:space="preserve">')
+}
+
+function requiresPreservedXmlSpace(text: string) {
+  return /^\s|\s$/u.test(text)
+}

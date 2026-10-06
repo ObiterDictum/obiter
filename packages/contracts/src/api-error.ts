@@ -1,0 +1,61 @@
+import { z } from 'zod'
+
+export const apiErrorCodeSchema = z.enum([
+  'unauthenticated',
+  'forbidden',
+  'validation_failed',
+  'organisation_not_found',
+  'organisation_not_empty',
+  'invite_not_found',
+  'invite_expired',
+  'invite_revoked',
+  'invite_already_accepted',
+  // An authenticated user with no organisation tried an org-scoped endpoint.
+  // Returned as 403 so the client can distinguish "sign in" from "create org".
+  'no_organisation',
+  'closed_beta_required',
+  'matter_not_found',
+  'matter_share_not_found',
+  'document_not_found',
+  'document_version_not_found',
+  'comment_anchor_unresolved',
+  'artifact_not_found',
+  'upload_failed',
+  'storage_unavailable',
+  // The Meilisearch product index cannot be reached, so search has no query
+  // engine. Distinct from storage_unavailable (Find Case Law or Postgres)
+  // so the UI names the outage instead of blaming the provider.
+  'search_unavailable',
+  // One federated search half failed and the other had no usable hit, so the
+  // request has no trustworthy answer. Distinct from search_unavailable: the
+  // engine may be fine and only the legislation or exact-lookup half failed.
+  'search_incomplete',
+  'job_unavailable',
+  'conflict_detected',
+  'redaction_run_not_found',
+  'span_not_found',
+  'redaction_run_not_reviewable',
+  'redaction_already_finalized',
+  'redaction_detection_failed',
+  'redaction_model_unavailable',
+  'redaction_span_integrity_error',
+  // A new hard-redaction run could not produce its secure PDF. The run stays
+  // unfinalized: there is no silent downgrade to text.
+  'redaction_secure_pdf_failed',
+  'verification_run_not_found',
+  'verification_execution_failed',
+  'extraction_coverage_incomplete',
+  'payload_too_large',
+  'ooxml_limits_exceeded',
+  'hydration_budget_exceeded',
+])
+export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>
+
+export const apiErrorResponseSchema = z.object({
+  error: z.object({
+    code: apiErrorCodeSchema,
+    message: z.string().min(1),
+    requestId: z.string().min(1),
+  }),
+})
+export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>
