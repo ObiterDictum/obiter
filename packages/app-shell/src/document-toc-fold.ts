@@ -152,8 +152,8 @@ export function createTableOfContentsFold(
     )
     paragraphs[index] = { ...anchor, runs: head }
     const previousTail = tails.get(anchor.id)
-    if (previousTail) {
-      const parked = paragraphs.indexOf(previousTail)
+    const parked = previousTail ? paragraphs.indexOf(previousTail) : -1
+    if (previousTail && parked >= 0) {
       paragraphs[parked] = {
         ...previousTail,
         runs: previousTail.runs.slice(0, 1),
