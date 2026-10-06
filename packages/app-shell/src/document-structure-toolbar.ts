@@ -1,6 +1,6 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import type { ParagraphRange } from './document-format-toolbar'
-import { documentStory } from './document-model-text'
+import { documentStory, editableParagraph } from './document-model-text'
 import {
   conflictingStructure,
   structuralKindNoun,
@@ -82,9 +82,9 @@ export function documentStructureToolbar({
   // The same run-level rule the save plan enforces: the reason names the
   // earlier draft a candidate cannot compose with.
   const conflictWith = (candidate: StructuralPlacement) => {
-    const wire = story?.paragraphs.find(
-      (paragraph) => paragraph.id === candidate.paragraphId,
-    )
+    const wire = model
+      ? editableParagraph(model, candidate.paragraphId)
+      : undefined
     const earlier = wire
       ? conflictingStructure(
           wire,
@@ -109,7 +109,9 @@ export function documentStructureToolbar({
       : !paragraphId
         ? 'Place the cursor in a paragraph to insert'
         : !anchor
-          ? 'Save the new paragraph before inserting into it'
+          ? model && editableParagraph(model, paragraphId)
+            ? 'Only the document body can hold this insertion'
+            : 'Save the new paragraph before inserting into it'
           : undefined
   const tableUnavailable =
     baseUnavailable ??
@@ -130,7 +132,9 @@ export function documentStructureToolbar({
       : !story?.paragraphs.some(
             (paragraph) => paragraph.id === selectionRange.paragraphId,
           )
-        ? 'Save the new paragraph before linking its text'
+        ? model && editableParagraph(model, selectionRange.paragraphId)
+          ? 'Only the document body can hold a link'
+          : 'Save the new paragraph before linking its text'
         : conflictWith({
             kind: 'link',
             paragraphId: selectionRange.paragraphId,
@@ -142,6 +146,23 @@ export function documentStructureToolbar({
     (offset == null || !paragraphId
       ? 'Place the cursor in the paragraph text to insert a cross-reference'
       : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
+  // A page number anchors in whichever editable story the caret sits in —
+  // body, header or footer — not just the body. A selection has no single
+  // insertion point, and a pending insert has no server id yet.
+  const editableAnchor = Boolean(
+    paragraphId && model && editableParagraph(model, paragraphId),
+  )
+  const pageNumberUnavailable = trackChanges
+    ? 'Insertions are not recorded as a tracked change'
+    : selectionActive
+      ? 'Collapse the selection to insert a page number'
+      : !paragraphId
+        ? 'Place the cursor in a paragraph to insert a page number'
+        : !editableAnchor
+          ? 'Save the new paragraph before inserting into it'
+          : offset == null
+            ? 'Place the cursor in the paragraph text to insert a page number'
+            : conflictWith({ kind: 'page-number', paragraphId, offset })
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
@@ -161,6 +182,7 @@ export function documentStructureToolbar({
     linkUnavailable,
     crossReferenceUnavailable,
     crossReferenceTargets,
+    pageNumberUnavailable,
     insertTable(rows: number, columns: number) {
       if (tableUnavailable || !paragraphId) return
       setStructures((current) => [
@@ -250,6 +272,28 @@ export function documentStructureToolbar({
         return {
           inserted: false,
           reason: 'That reference cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
+    },
+    insertPageNumber(): StructuralInsertOutcome {
+      if (pageNumberUnavailable || !paragraphId || offset == null) {
+        return {
+          inserted: false,
+          reason: pageNumberUnavailable ?? 'No anchor',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'page-number',
+        paragraphId,
+        offset,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That page number cannot be held as a draft.',
         }
       }
       setStructures((current) => [...current, draft])

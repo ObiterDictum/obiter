@@ -3,7 +3,11 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { documentStory, paragraphPlainText } from './document-model-text'
+import {
+  editableParagraphs,
+  editableStoryOf,
+  paragraphPlainText,
+} from './document-model-text'
 import { snapEmphasisRange } from './document-format-paint'
 import { paragraphFormatFields } from './document-paragraph-format'
 import { paragraphNumPr } from './document-page-lists'
@@ -86,7 +90,7 @@ export function collectFormatOperations(
 ): DocumentEditOperation[] {
   const deleted = new Set(deletedParagraphIds)
   const deletedRuns = new Set(
-    (documentStory(model)?.paragraphs ?? [])
+    editableParagraphs(model)
       .filter((paragraph) => deleted.has(paragraph.id))
       .flatMap((paragraph) => paragraph.runs.map((run) => run.id)),
   )
@@ -390,7 +394,7 @@ export function continueList(
   model: DocumentModelWire,
   paragraph: DocumentParagraphWire,
 ): FormatDrafts {
-  const story = documentStory(model)
+  const story = editableStoryOf(model, paragraph.id)
   if (!story) return format
   const index = story.paragraphs.findIndex((item) => item.id === paragraph.id)
   for (let cursor = index - 1; cursor >= 0; cursor -= 1) {

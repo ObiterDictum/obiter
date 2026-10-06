@@ -7,7 +7,8 @@ import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
 
-const FIELD = /<w:r><w:fldChar w:fldCharType="begin"\/><\/w:r>[\s\S]*?<w:fldChar w:fldCharType="end"\/><\/w:r>/u
+const FIELD =
+  /<w:r><w:fldChar w:fldCharType="begin"\/><\/w:r>[\s\S]*?<w:fldChar w:fldCharType="end"\/><\/w:r>/u
 
 describe('page-number edits', () => {
   it('splices a PAGE field into a footer part at the caret', async () => {
@@ -22,7 +23,9 @@ describe('page-number edits', () => {
     const xml = await zipText(output, 'word/footer2.xml')
 
     const field = xml.match(FIELD)?.[0]
-    expect(field).toContain('<w:instrText xml:space="preserve"> PAGE </w:instrText>')
+    expect(field).toContain(
+      '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
+    )
     expect(field).toContain('w:fldCharType="separate"')
     // The field splits 'Second footer' at offset 7: 'Second ' then 'footer'.
     expect(xml.indexOf('Second ')).toBeLessThan(
@@ -34,9 +37,7 @@ describe('page-number edits', () => {
       await parseDocx(output),
       'word/footer2.xml',
     )[0]
-    expect(reparsed?.runs.map((run) => run.text).join('')).toBe(
-      'Second footer',
-    )
+    expect(reparsed?.runs.map((run) => run.text).join('')).toBe('Second footer')
     expect(
       reparsed?.runs.some((run) =>
         run.preservedXmlFragments.some(
@@ -130,10 +131,11 @@ describe('page-number edits', () => {
       await parseDocx(output),
       'word/footer1.xml',
     )
-    expect(reparsed.map((paragraph) => paragraph.runs.flatMap((run) => run.text).join(''))).toEqual([
-      'First footer',
-      'Second line',
-    ])
+    expect(
+      reparsed.map((paragraph) =>
+        paragraph.runs.flatMap((run) => run.text).join(''),
+      ),
+    ).toEqual(['First footer', 'Second line'])
   })
 
   it('refuses a notes or comments anchor', async () => {

@@ -1,11 +1,14 @@
 import { useEffect, useMemo } from 'react'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
 import {
   extractAuthorities,
   type AuthorityHit,
 } from '../../document-authorities'
 import { formattedModel } from '../../document-format-edits'
-import { flowParagraphIds, LAST_PARAGRAPH_MESSAGE } from '../../document-edits'
+import {
+  LAST_PARAGRAPH_MESSAGE,
+  storyFlowParagraphIds,
+} from '../../document-edits'
 import { documentStory } from '../../document-model-text'
 import { withBreakDrafts } from '../../document-section-format'
 import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
@@ -89,6 +92,15 @@ export function useWorkspaceDerivations({
     offset: number | null
     trackChanges: boolean
     onImageError: (message: string) => void
+    /** The story open for editing — the margin controls' pressed state and
+     * the story the last-paragraph rule is measured on. Undefined means the
+     * body. */
+    editingStory?: DocumentStoryWire
+    margin: {
+      editingKind: 'document' | 'header' | 'footer'
+      onOpen: (kind: 'header' | 'footer') => void
+      onClose: () => void
+    }
   }
 }): WorkspaceDerivations {
   const formatted = useMemo(
@@ -200,6 +212,7 @@ export function useWorkspaceDerivations({
     insert.caret,
     insert.offset,
     insert.trackChanges,
+    insert.margin,
     drafts,
     insert.onImageError,
   )
@@ -212,8 +225,11 @@ export function useWorkspaceDerivations({
     linkOverlays,
     deleteParagraphReason:
       model &&
-      flowParagraphIds(model, drafts.inserts, drafts.deletedParagraphIds)
-        .length <= 1
+      storyFlowParagraphIds(
+        insert.editingStory ?? documentStory(model),
+        drafts.inserts,
+        drafts.deletedParagraphIds,
+      ).length <= 1
         ? LAST_PARAGRAPH_MESSAGE
         : undefined,
   }

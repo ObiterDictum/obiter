@@ -229,7 +229,9 @@ export function slotLabel(slot: DraftSlot): string {
           ? 'a picture'
           : slot.structureKind === 'link'
             ? 'a hyperlink'
-            : 'a cross-reference'
+            : slot.structureKind === 'cross-reference'
+              ? 'a cross-reference'
+              : 'a page number'
     case 'tracked-reject':
       return 'a tracked change'
   }

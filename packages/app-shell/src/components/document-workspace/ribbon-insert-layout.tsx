@@ -141,18 +141,54 @@ export function InsertRibbon({
       <ToolbarGroup label="Header and footer">
         <ToolbarRow>
           <IconButton
-            label="Header"
-            soon
+            label={
+              structure?.editingStoryKind === 'header'
+                ? 'Close header'
+                : 'Header'
+            }
+            pressed={structure?.editingStoryKind === 'header'}
+            disabled={
+              !structure ||
+              (structure.editingStoryKind !== 'header' &&
+                Boolean(structure.headerUnavailable))
+            }
+            disabledReason={structure?.headerUnavailable}
+            onClick={() => {
+              if (structure?.editingStoryKind === 'header') {
+                structure.onCloseStory()
+              } else {
+                structure?.onOpenStory('header')
+              }
+            }}
             icon={<AlignTop size={16} aria-hidden />}
           />
           <IconButton
-            label="Footer"
-            soon
+            label={
+              structure?.editingStoryKind === 'footer'
+                ? 'Close footer'
+                : 'Footer'
+            }
+            pressed={structure?.editingStoryKind === 'footer'}
+            disabled={
+              !structure ||
+              (structure.editingStoryKind !== 'footer' &&
+                Boolean(structure.footerUnavailable))
+            }
+            disabledReason={structure?.footerUnavailable}
+            onClick={() => {
+              if (structure?.editingStoryKind === 'footer') {
+                structure.onCloseStory()
+              } else {
+                structure?.onOpenStory('footer')
+              }
+            }}
             icon={<AlignBottom size={16} aria-hidden />}
           />
           <IconButton
             label="Page number"
-            soon
+            disabled={!structure || Boolean(structure.pageNumberUnavailable)}
+            disabledReason={structure?.pageNumberUnavailable}
+            onClick={structure?.onInsertPageNumber}
             icon={<Hash size={16} aria-hidden />}
           />
         </ToolbarRow>

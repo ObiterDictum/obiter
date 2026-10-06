@@ -1,9 +1,9 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   collectEditOperations,
-  flowParagraphIds,
   LAST_PARAGRAPH_MESSAGE,
   resolveInsertAnchor,
+  storyFlowParagraphIds,
 } from './document-edits'
 import {
   emptyDraftState,
@@ -14,7 +14,7 @@ import {
 } from './document-draft-state'
 import { emphasisSlotKey, slotLabel } from './document-save-slots'
 import { sectionDraftFields } from './document-section-format'
-import { documentStory } from './document-model-text'
+import { editableStories } from './document-model-text'
 import {
   conflictingStructure,
   structuralKindNoun,
@@ -76,13 +76,15 @@ export function planDocumentSave(
   model: DocumentModelWire,
   state: DraftState,
 ): SavePlan {
-  const story = documentStory(model)
+  const editable = editableStories(model)
   const paragraphIds = new Set(
-    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
+    editable.flatMap((story) => story.paragraphs.map((item) => item.id)),
   )
   const runIds = new Set(
-    (story?.paragraphs ?? []).flatMap((paragraph) =>
-      paragraph.runs.map((run) => run.id),
+    editable.flatMap((story) =>
+      story.paragraphs.flatMap((paragraph) =>
+        paragraph.runs.map((run) => run.id),
+      ),
     ),
   )
   const insertById = new Map(state.inserts.map((item) => [item.clientId, item]))
@@ -180,7 +182,8 @@ export function planDocumentSave(
   // to it would anchor a paragraph the batch removes — the writer would drop
   // the insertion silently. Block it instead.
   const replacedEmptyAnchors = new Set(
-    (story?.paragraphs ?? [])
+    editable
+      .flatMap((story) => story.paragraphs)
       .filter(
         (paragraph) =>
           paragraph.runs.length === 0 &&
@@ -191,7 +194,9 @@ export function planDocumentSave(
       .map((paragraph) => paragraph.id),
   )
   const paragraphWires = new Map(
-    (story?.paragraphs ?? []).map((paragraph) => [paragraph.id, paragraph]),
+    editable
+      .flatMap((story) => story.paragraphs)
+      .map((paragraph) => [paragraph.id, paragraph]),
   )
   for (const structure of state.structures) {
     const deletedAnchor =
@@ -439,24 +444,41 @@ export function planDocumentSave(
     })
   }
 
-  // A restored or constructed draft state can hold deletions that would leave
-  // no effective paragraph. Block them rather than send a batch the server must
-  // reject; the client guard already stops the editor creating this state, so
-  // this is the save-plan safety net. `flowParagraphIds` is the same canonical
-  // derivation the ribbon and the delete operation use.
-  if (
-    flowParagraphIds(model, keep.inserts, keep.deletedParagraphIds).length < 1
-  ) {
+  // A restored or constructed draft state can hold deletions that would empty
+  // an editable story — the body's last paragraph, or a header/footer's only
+  // one. Block the deletes inside each emptied story rather than send a batch
+  // the server must reject; the client guard already stops the editor creating
+  // this state, so this is the save-plan safety net.
+  const emptiedDeletes = new Set<string>()
+  for (const story of editable) {
+    if (
+      storyFlowParagraphIds(story, keep.inserts, keep.deletedParagraphIds)
+        .length < 1
+    ) {
+      for (const paragraph of story.paragraphs) {
+        if (keep.deletedParagraphIds.includes(paragraph.id)) {
+          emptiedDeletes.add(paragraph.id)
+        }
+      }
+    }
+  }
+  if (emptiedDeletes.size > 0) {
     for (const slot of covered) {
-      if (slot.kind !== 'delete') continue
+      if (slot.kind !== 'delete' || !emptiedDeletes.has(slot.paragraphId)) {
+        continue
+      }
       blocked.push({
         slot,
         reason: LAST_PARAGRAPH_MESSAGE,
         label: 'a deletion',
       })
     }
-    covered = covered.filter((slot) => slot.kind !== 'delete')
-    keep.deletedParagraphIds = []
+    covered = covered.filter(
+      (slot) => slot.kind !== 'delete' || !emptiedDeletes.has(slot.paragraphId),
+    )
+    keep.deletedParagraphIds = keep.deletedParagraphIds.filter(
+      (id) => !emptiedDeletes.has(id),
+    )
   }
 
   return {

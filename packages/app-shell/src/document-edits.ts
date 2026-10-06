@@ -3,7 +3,14 @@ import {
   type DocumentModelWire,
   type DocumentTextRunWire,
 } from '@obiter/contracts'
-import { documentStory, paragraphPlainText } from './document-model-text'
+import {
+  documentStory,
+  editableParagraph,
+  editableParagraphs,
+  editableStories,
+  editableStoryOf,
+  paragraphPlainText,
+} from './document-model-text'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 import {
   runColour,
@@ -200,6 +207,24 @@ export function flowParagraphIds(
   )
 }
 
+/**
+ * The flow order of one story — stored paragraphs with pending inserts woven
+ * at their anchors and deleted paragraphs dropped. The body and each
+ * header/footer story each have their own flow; an insert's anchor decides
+ * which story it joins.
+ */
+export function storyFlowParagraphIds(
+  story: { paragraphs: readonly { id: string }[] } | undefined,
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
+): string[] {
+  return flowIds(
+    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
+    inserts,
+    new Set(deletedParagraphIds),
+  )
+}
+
 /** The one user-facing reason a final-paragraph deletion is refused. */
 export const LAST_PARAGRAPH_MESSAGE =
   'A document must contain at least one paragraph.'
@@ -223,7 +248,22 @@ export function paragraphDeletionRefusal(
   deletedParagraphIds: readonly string[],
   paragraphId: string,
 ): 'last-paragraph' | null {
-  const order = flowParagraphIds(model, inserts, deletedParagraphIds)
+  // The invariant holds inside the story the paragraph belongs to: a header
+  // with no block-level child is as invalid as an empty body. A pending
+  // insert's story is the one its anchor chain resolves to.
+  const insert = inserts.find((item) => item.clientId === paragraphId)
+  const anchorId = insert
+    ? resolveInsertAnchor(
+        insert,
+        new Map(inserts.map((item) => [item.clientId, item])),
+        new Set(editableParagraphs(model).map((item) => item.id)),
+      )
+    : paragraphId
+  const order = storyFlowParagraphIds(
+    editableStoryOf(model, anchorId),
+    inserts,
+    deletedParagraphIds,
+  )
   if (!order.includes(paragraphId)) return null
   return order.length <= 1 ? 'last-paragraph' : null
 }
@@ -239,11 +279,13 @@ export function collectEditOperations(
   structures: StructuralDraft[] = [],
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
-  const story = documentStory(model)
+  // Text edits address every editable story: a header or footer paragraph's
+  // runs carry the same wire ids the batch resolves.
+  const paragraphs = editableStories(model).flatMap((story) => story.paragraphs)
   const deleted = new Set(deletedParagraphIds)
   const emptyReplacements: string[] = []
 
-  for (const paragraph of story?.paragraphs ?? []) {
+  for (const paragraph of paragraphs) {
     if (deleted.has(paragraph.id)) continue
     const extra = extraRuns[paragraph.id] ?? []
     const extraText = extra.map((run) => drafts[run.id] ?? run.text).join('')
@@ -284,9 +326,7 @@ export function collectEditOperations(
   // must already be pending when the break is applied. The paginator seeds a
   // section break from the painted section too, so both paths read the same
   // geometry.
-  const realIds = new Set(
-    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
-  )
+  const realIds = new Set(paragraphs.map((paragraph) => paragraph.id))
   const insertById = new Map(inserts.map((item) => [item.clientId, item]))
   operations.push(
     ...collectFormatOperations(
@@ -316,7 +356,16 @@ export function collectEditOperations(
     }
   }
 
-  for (const id of flowParagraphIds(model, inserts, deletedParagraphIds)) {
+  // Each insert lands in its anchor's story; walking every editable story's
+  // flow emits header and footer paragraphs alongside the body's.
+  const insertOrder = editableStories(model).flatMap((story) =>
+    flowIds(
+      story.paragraphs.map((paragraph) => paragraph.id),
+      inserts,
+      deleted,
+    ),
+  )
+  for (const id of insertOrder) {
     const insert = insertById.get(id)
     if (!insert) continue
     // A pending insert's paragraph style is set by the insert operation itself:
@@ -476,9 +525,7 @@ export function selectedParagraphLength(
   paragraphId: string | null,
 ) {
   if (!paragraphId) return 0
-  const paragraph = documentStory(model)?.paragraphs.find(
-    (item) => item.id === paragraphId,
-  )
+  const paragraph = editableParagraph(model, paragraphId)
   return paragraph ? paragraphPlainText(paragraph).length : 0
 }
 

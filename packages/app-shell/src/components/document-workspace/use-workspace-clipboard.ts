@@ -1,5 +1,4 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { documentStory } from '../../document-model-text'
 import type { PasteTarget } from '../../document-paste'
 import {
   selectionPlainText,
@@ -61,6 +60,7 @@ export function useWorkspaceClipboard({
   placeCaret,
   setRefusal,
   paste,
+  firstParagraphId,
 }: {
   model: DocumentModelWire | undefined
   selection: DocumentSelection | null
@@ -90,6 +90,10 @@ export function useWorkspaceClipboard({
     target: PasteTarget,
     text: string,
   ) => WordEditOutcome | null
+  /** The editing story's first paragraph: the paste target the ribbon falls
+   * back to when no caret is recorded, so a margin paste never lands in the
+   * body while a header or footer is open. */
+  firstParagraphId?: string
 }) {
   /** Native copy event: the browser owns the clipboard, so this only fills it. */
   function copySelection(clipboard: DataTransfer | null) {
@@ -163,9 +167,7 @@ export function useWorkspaceClipboard({
     // record of where the caret is; a paragraph with neither pastes at its
     // start rather than being disabled.
     const paragraphId =
-      target?.paragraphId ??
-      selectedParagraphId ??
-      documentStory(model)?.paragraphs[0]?.id
+      target?.paragraphId ?? selectedParagraphId ?? firstParagraphId
     if (!paragraphId) return null
     // A split paste creates sibling paragraphs, which a table cell or a text
     // box cannot hold: the flow would render them as body text while the save

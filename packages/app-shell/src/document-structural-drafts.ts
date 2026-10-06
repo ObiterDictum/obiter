@@ -72,11 +72,25 @@ export type StructuralCrossReferenceDraft = {
   targetParagraphId: string
 }
 
+/**
+ * A pending `PAGE` field at `offset` in `paragraphId`. Like the
+ * cross-reference it paints as a zero-width marker — the page number exists
+ * only in the saved OOXML and in the margin band's resolved paint, never in
+ * the editable text stream.
+ */
+export type StructuralPageNumberDraft = {
+  id: string
+  kind: 'page-number'
+  paragraphId: string
+  offset: number
+}
+
 export type StructuralDraft =
   | StructuralTableDraft
   | StructuralImageDraft
   | StructuralLinkDraft
   | StructuralCrossReferenceDraft
+  | StructuralPageNumberDraft
 
 /**
  * The persisted form of a structural draft, bounded to exactly the fields the
@@ -127,6 +141,14 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       paragraphId: z.string().min(1),
       offset: z.number().int().min(0),
       targetParagraphId: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('page-number'),
+      paragraphId: z.string().min(1),
+      offset: z.number().int().min(0),
     })
     .strict(),
 ])
@@ -184,6 +206,14 @@ export function structuralEditOperations(
         from: structure.from,
         to: structure.to,
         target: structure.target,
+      })
+      continue
+    }
+    if (structure.kind === 'page-number') {
+      operations.push({
+        type: 'insert_page_number',
+        paragraphId: structure.paragraphId,
+        offset: structure.offset,
       })
       continue
     }
@@ -315,6 +345,13 @@ export function structuralLinkOverlays(
       entry(structure.paragraphId).fieldMarkers.push({
         offset: structure.offset,
         label: crossReferenceTargetLabel(model, structure.targetParagraphId),
+      })
+      continue
+    }
+    if (structure.kind === 'page-number') {
+      entry(structure.paragraphId).fieldMarkers.push({
+        offset: structure.offset,
+        label: 'Page number',
       })
     }
   }
