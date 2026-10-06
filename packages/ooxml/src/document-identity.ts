@@ -1,9 +1,8 @@
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
+import {
+  EDITABLE_STORY_KINDS,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
 } from '@obiter/contracts'
-
-import { EDITABLE_STORY_KINDS } from './editable-story-kinds'
 import type { OoxmlDocument } from './model'
 import {
   parseXmlElements,
@@ -22,7 +21,7 @@ const CANONICAL_PARA_ID = /^[0-9A-Fa-f]{8}$/u
  * applies to `CT_P`). Word preserves it on round-trip, and our parser derives
  * the model id `para-w14-<value>` from it. Canonicalising every paragraph of
  * every editable story in a new version — the body, the header/footer margin
- * stories and the footnotes story — the same set `editable-story-kinds` lists,
+ * stories and the footnotes story, the shared `EDITABLE_STORY_KINDS` set,
  * so endnote and comment stories stay untouched — gives cross-version
  * paragraph identity without a
  * positional guess: a paragraph that already carries a valid, unique id keeps
