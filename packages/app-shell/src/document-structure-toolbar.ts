@@ -7,11 +7,11 @@ import {
   type StructuralPlacement,
 } from './document-structure-conflicts'
 import type { ExtraRuns } from './document-word-edits'
+import type { ImageInsertFields } from './document-image-inserts'
+import { crossReferenceTargetLabel } from './document-structure-overlays'
 import {
-  crossReferenceTargetLabel,
   footnoteNoteParagraphId,
   structuralDraftSchema,
-  type ImageInsertFields,
   type StructuralDraft,
 } from './document-structural-drafts'
 

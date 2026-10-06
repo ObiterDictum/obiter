@@ -22,6 +22,8 @@ import { DOCUMENT_EDIT_IMAGE_DIMENSION_MAX } from '@obiter/contracts'
 import {
   pendingImagePartName,
   scaleImageInsertSize,
+} from './document-image-inserts'
+import {
   structuralDraftSchema,
   type StructuralDraft,
   type StructuralImageDraft,

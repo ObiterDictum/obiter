@@ -11,10 +11,8 @@ import {
   documentStructureToolbar,
   storyTableCellIds,
 } from '../../document-structure-toolbar'
-import {
-  readImageInsert,
-  type StructuralDraft,
-} from '../../document-structural-drafts'
+import { readImageInsert } from '../../document-image-inserts'
+import type { StructuralDraft } from '../../document-structural-drafts'
 import type { DocumentStructureToolbar } from './ribbon-types'
 
 export type InsertRibbonProps = {

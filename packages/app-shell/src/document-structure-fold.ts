@@ -12,10 +12,8 @@ import {
 } from '@obiter/ooxml'
 import { storyTableCellIds } from './document-page-tables'
 import { foldFootnoteDrafts, spliceRunAtOffset } from './document-footnote-fold'
-import {
-  pendingImageTarget,
-  type StructuralDraft,
-} from './document-structural-drafts'
+import { pendingImageTarget } from './document-image-inserts'
+import type { StructuralDraft } from './document-structural-drafts'
 
 /**
  * Folds pending table and image drafts into a copy of the model, mutating the
@@ -258,4 +256,4 @@ function spliceDrawingRun(
   )
 }
 
-export { pendingImagePartName } from './document-structural-drafts'
+export { pendingImagePartName } from './document-image-inserts'

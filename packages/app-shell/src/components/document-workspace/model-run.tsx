@@ -12,7 +12,7 @@ import {
   runChangeKinds,
   type RunSlice,
 } from '../../document-model-text'
-import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
+import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import type { WrappedLine } from '../../document-page-flow'
 import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { runNoteRefs } from '../../document-page-notes'

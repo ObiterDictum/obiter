@@ -41,7 +41,7 @@ import type {
 } from './paragraph-editor'
 import { ParagraphEditor } from './paragraph-editor'
 import { ParagraphRunPaint, type ParagraphSelectionRange } from './model-run'
-import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
+import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 
 export type ParagraphWordEdit = {
   type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
