@@ -54,8 +54,7 @@ describe('table-of-contents edits', () => {
     const reparsed = await parseDocx(output)
     const paragraphs = mainParagraphs(reparsed)
     const anchorIndex = paragraphs.findIndex(
-      (paragraph) =>
-        paragraph.runs.map((run) => run.text).join('') === 'Jane ',
+      (paragraph) => paragraph.runs.map((run) => run.text).join('') === 'Jane ',
     )
     expect(anchorIndex).toBeGreaterThanOrEqual(0)
     const entry = paragraphs[anchorIndex + 1]
@@ -129,12 +128,12 @@ describe('table-of-contents edits', () => {
         paragraph.runs.map((item) => item.text).join('') === 'Typed',
     )
     expect(head).toBeGreaterThanOrEqual(0)
-    expect(
-      paragraphs[head + 1]?.runs.map((item) => item.text).join(''),
-    ).toBe('Alice Example overview')
-    expect(
-      paragraphs[head + 2]?.runs.map((item) => item.text).join(''),
-    ).toBe(' replacement textJane Example reference')
+    expect(paragraphs[head + 1]?.runs.map((item) => item.text).join('')).toBe(
+      'Alice Example overview',
+    )
+    expect(paragraphs[head + 2]?.runs.map((item) => item.text).join('')).toBe(
+      ' replacement textJane Example reference',
+    )
   })
 
   it('captures only stored headings, not a same-batch inserted one', async () => {
@@ -160,15 +159,17 @@ describe('table-of-contents edits', () => {
     const entries = paragraphs.filter(
       (paragraph) => paragraph.styleId === 'TOC1',
     )
-    expect(entries.map((item) => item.runs.map((run) => run.text).join('')))
-      .toEqual(['Alice Example overview'])
+    expect(
+      entries.map((item) => item.runs.map((run) => run.text).join('')),
+    ).toEqual(['Alice Example overview'])
   })
 
   it('captures entries at outline level, not by display text', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document).find(
       (paragraph) =>
-        paragraph.runs.map((run) => run.text).join('') === 'Jane Example referenceJane Example reference',
+        paragraph.runs.map((run) => run.text).join('') ===
+        'Jane Example referenceJane Example reference',
     )
     if (!anchor) throw new Error('Fixture model is missing.')
 
@@ -185,8 +186,9 @@ describe('table-of-contents edits', () => {
     const entries = paragraphs.filter(
       (paragraph) => paragraph.styleId === 'TOC1',
     )
-    expect(entries.map((item) => item.runs.map((run) => run.text).join('')))
-      .toEqual(['Alice Example overview'])
+    expect(
+      entries.map((item) => item.runs.map((run) => run.text).join('')),
+    ).toEqual(['Alice Example overview'])
   })
 
   it('reuses an existing _Toc bookmark for a second field', async () => {
@@ -347,7 +349,11 @@ describe('table-of-contents edits', () => {
     if (!tracked) throw new Error('Tracked paragraph is missing.')
     expect(() =>
       applyDocumentEdits(document, [
-        { type: 'insert_table_of_contents', paragraphId: tracked.id, offset: 0 },
+        {
+          type: 'insert_table_of_contents',
+          paragraphId: tracked.id,
+          offset: 0,
+        },
       ]),
     ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
   })

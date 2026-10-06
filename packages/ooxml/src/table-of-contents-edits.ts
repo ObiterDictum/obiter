@@ -155,14 +155,7 @@ export function insertTableOfContents(
       if (holder.run.wire.hyperlinkTarget !== undefined) {
         throw new OoxmlError('invalid-document-edit')
       }
-      spliceIntoPendingRun(
-        overlay,
-        paragraph,
-        holder,
-        offset,
-        insertion,
-        key,
-      )
+      spliceIntoPendingRun(overlay, paragraph, holder, offset, insertion, key)
     } else {
       const point = locateOffset(source, paragraph, offset, true)
       assertNoPendingAt(overlay, point.sourceOffset)

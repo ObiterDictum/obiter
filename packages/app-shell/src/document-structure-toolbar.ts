@@ -1,7 +1,4 @@
-import {
-  PAGE_STORY_KINDS,
-  type DocumentModelWire,
-} from '@obiter/contracts'
+import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
 import {
   isTableOfContentsHeading,
   tableOfContentsAnchorBlock,
@@ -240,15 +237,15 @@ export function documentStructureToolbar({
       : offset == null || !paragraphId
         ? 'Place the cursor in the paragraph text to insert a table of contents'
         : (tableOfContentsAnchor ??
-            tableOfContentsHeadingsBlock(
-              tableOfContentsHeadings,
-              model?.changes ?? [],
-            ) ??
-            conflictWith({
-              kind: 'table-of-contents',
-              paragraphId,
-              offset,
-            })))
+          tableOfContentsHeadingsBlock(
+            tableOfContentsHeadings,
+            model?.changes ?? [],
+          ) ??
+          conflictWith({
+            kind: 'table-of-contents',
+            paragraphId,
+            offset,
+          })))
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
