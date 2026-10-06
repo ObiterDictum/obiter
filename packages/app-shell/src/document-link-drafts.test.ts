@@ -362,6 +362,18 @@ describe('link and cross-reference drafts', () => {
       { offset: 2, label: 'See section two.' },
     ])
   })
+
+  it('labels a vanished target differently from a genuinely empty one', () => {
+    const base = model([paragraph('p1'), paragraph('p2', '')])
+    const overlays = structuralLinkOverlays(base, [
+      crossReferenceDraft('s1', 'p1', 'gone'),
+      crossReferenceDraft('s2', 'p1', 'p2'),
+    ])
+    expect(overlays.get('p1')?.fieldMarkers).toEqual([
+      { offset: 2, label: '(target no longer in the document)' },
+      { offset: 2, label: '(empty paragraph)' },
+    ])
+  })
 })
 
 describe('documentStructureToolbar links', () => {
