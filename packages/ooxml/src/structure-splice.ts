@@ -158,9 +158,11 @@ export function assertNoPendingAt(overlay: XmlOverlay, sourceOffset: number) {
 }
 
 /**
- * A point strictly inside a stored `w:hyperlink` element would nest the
- * spliced field or drawing inside the link — a boundary point lands between
- * elements and composes, matching the client's strictly-inside-run rule.
+ * A point inside a stored `w:hyperlink` element would nest the spliced field
+ * or drawing inside the link. In effective-text terms the check is half-open
+ * over the linked runs: the leading boundary opens the first linked run's
+ * text element and refuses, while the trailing boundary lands at the next
+ * element and composes — matching the client's half-open stored-link rule.
  */
 function refuseInsideStoredHyperlink(
   overlay: XmlOverlay,

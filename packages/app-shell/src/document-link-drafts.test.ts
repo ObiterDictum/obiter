@@ -338,6 +338,31 @@ describe('link and cross-reference drafts', () => {
     ])
   })
 
+  it("blocks the stored link's leading boundary but not its trailing one", () => {
+    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): a splice at 4 opens
+    // the linked run's text, so it lands inside the w:hyperlink element and
+    // the writer refuses; the client rule must match. At 14 the point lands
+    // at the next unlinked run's start and composes.
+    const base = model([linkedParagraph(), paragraph('p2', 'Target')])
+    const leading = planDocumentSave(base, {
+      ...emptyDraftState(),
+      structures: [{ ...crossReferenceDraft('s1', 'p1', 'p2'), offset: 4 }],
+    })
+    expect(leading.blocked.map((item) => item.slot)).toEqual([
+      expect.objectContaining({ kind: 'structure', id: 's1' }),
+    ])
+    expect(leading.operations).toEqual([])
+
+    const trailing = planDocumentSave(base, {
+      ...emptyDraftState(),
+      structures: [{ ...crossReferenceDraft('s1', 'p1', 'p2'), offset: 14 }],
+    })
+    expect(trailing.blocked).toEqual([])
+    expect(trailing.operations.map((operation) => operation.type)).toEqual([
+      'insert_cross_reference',
+    ])
+  })
+
   it('names link and cross-reference slots for disclosure', () => {
     const link: DraftSlot = {
       kind: 'structure',
