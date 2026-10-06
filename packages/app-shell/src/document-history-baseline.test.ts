@@ -273,6 +273,67 @@ describe('translateSnapshot', () => {
     })
   })
 
+  it('restates a saved run emphasis on every run a splice produced', () => {
+    const from = model([{ id: 'p1', run: 'r1', text: 'Hello world' }])
+    const run = from.stories[0]?.paragraphs[0]?.runs[0]
+    if (run) {
+      run.preservedXmlFragments = [
+        '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/></w:rPr>',
+      ]
+    }
+    const splitResult = model([{ id: 'p1', run: 'head', text: 'Hello' }])
+    splitResult.stories[0]?.paragraphs[0]?.runs.push(
+      { id: 'inserted', text: '', preservedXmlFragments: [] },
+      { id: 'tail', text: ' world typed more', preservedXmlFragments: [] },
+    )
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      format: {
+        ...emptyDraftState().format,
+        emphasis: [{ runId: 'r1', bold: true }],
+      },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [{ kind: 'emphasis', key: 'emph:run:r1' }],
+      sent,
+      fromModel: from,
+      toModel: splitResult,
+      lineage: {
+        version: 1,
+        baseVersionId: 'ver_1',
+        versionId: 'ver_2',
+        acceptedOperations: [0],
+        paragraphs: [
+          {
+            fromParagraphId: 'p1',
+            toParagraphId: 'p1',
+            runs: [
+              {
+                runIndex: 0,
+                segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 5 }],
+              },
+              {
+                runIndex: 1,
+                segments: [{ fromRunId: null, fromOffset: 0, toOffset: 0 }],
+              },
+              {
+                runIndex: 2,
+                segments: [{ fromRunId: 'r1', fromOffset: 5, toOffset: 11 }],
+              },
+            ],
+          },
+        ],
+      },
+      versionId: 'ver_2',
+    })
+    // The saved rPr was copied to both halves of the split run, so the
+    // inverse is restated on each — or the tail keeps the saved styling.
+    expect(translated?.format.emphasis.map((item) => item.runId)).toEqual([
+      'head',
+      'tail',
+    ])
+  })
+
   it('drops a covered override a snapshot no longer holds', () => {
     const sent: DraftState = {
       ...emptyDraftState(),
