@@ -266,7 +266,9 @@ export type ParagraphLinkOverlay = {
 /** The longest text a cross-reference chip or chooser row carries. */
 const CROSS_REFERENCE_LABEL_MAX_LENGTH = 60
 
-/** The label a cross-reference draft points at: the target's text, trimmed. */
+/** The label a cross-reference draft points at: the target's text, trimmed.
+ * A target that is no longer in the story gets a distinct label — the chip
+ * must read as unresolvable, not as pointing at a genuinely empty paragraph. */
 export function crossReferenceTargetLabel(
   model: DocumentModelWire | undefined,
   targetParagraphId: string,
@@ -274,7 +276,8 @@ export function crossReferenceTargetLabel(
   const paragraph = (model ? documentStory(model)?.paragraphs : [])?.find(
     (item) => item.id === targetParagraphId,
   )
-  const text = paragraph ? paragraphPlainText(paragraph).trim() : ''
+  if (!paragraph) return '(target no longer in the document)'
+  const text = paragraphPlainText(paragraph).trim()
   if (text.length === 0) return '(empty paragraph)'
   return text.length > CROSS_REFERENCE_LABEL_MAX_LENGTH
     ? `${text.slice(0, CROSS_REFERENCE_LABEL_MAX_LENGTH).trimEnd()}…`
