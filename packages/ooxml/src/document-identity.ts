@@ -17,10 +17,20 @@ export const WORD_2010_NAMESPACE =
 const CANONICAL_PARA_ID = /^[0-9A-Fa-f]{8}$/u
 
 /**
+ * The story kinds the writer can edit: the body and the header/footer margin
+ * stories. They are the only stories whose paragraphs get a persisted
+ * `w14:paraId`; footnote, endnote and comment stories stay untouched.
+ */
+const EDITABLE_STORY_KINDS: ReadonlySet<
+  DocumentModelWire['stories'][number]['kind']
+> = new Set(['document', 'header', 'footer'])
+
+/**
  * `w14:paraId` is the only standard persisted paragraph identity (`AG_Parids`
  * applies to `CT_P`). Word preserves it on round-trip, and our parser derives
- * the model id `para-w14-<value>` from it. Canonicalising every editable
- * paragraph in a new version gives cross-version paragraph identity without a
+ * the model id `para-w14-<value>` from it. Canonicalising every paragraph of
+ * every editable story in a new version — the body and the header/footer
+ * margin stories alike — gives cross-version paragraph identity without a
  * positional guess: a paragraph that already carries a valid, unique id keeps
  * it; an absent, malformed or duplicate one receives a deterministic fresh
  * value, and no two source paragraphs are ever given the same identity.
@@ -50,10 +60,12 @@ export function canonicaliseParagraphIdentities(
 
   const namespaceParts = new Set<string>()
   for (const story of document.model.stories) {
-    // Only the main document story is editable by the supported actions, so
-    // only it needs persisted identity. Other parts keep their bytes and ids
-    // untouched, and their existing w14 values still seed the used set above.
-    if (story.kind !== 'document') continue
+    // Every editable story needs persisted identity: a margin paragraph's
+    // positional `para-NNNNNN` id shifts on the next parse as soon as any
+    // sibling gains a w14 id, so a save that names it in the lineage would
+    // address a paragraph the result does not carry. Read-only stories keep
+    // their bytes and ids untouched, and their w14 values still seed `used`.
+    if (!EDITABLE_STORY_KINDS.has(story.kind)) continue
     for (const paragraph of story.paragraphs) {
       const existing = paragraph.sourceParaId
       const valid =
@@ -78,7 +90,7 @@ export function canonicaliseParagraphIdentities(
     ensureWord2010Namespace(part.overlay)
   }
   for (const story of document.model.stories) {
-    if (story.kind !== 'document') continue
+    if (!EDITABLE_STORY_KINDS.has(story.kind)) continue
     for (const paragraph of story.paragraphs) {
       const value = paragraph.sourceParaId
       if (!value) continue
