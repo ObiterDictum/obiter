@@ -1196,7 +1196,7 @@ describe('saving a margin story', () => {
     })
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Header', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Header' }))
     clickParagraph(marginParagraphId())
     // Two edits leave an undo snapshot holding a margin draft across the
     // boundary: the save must reconcile it against the reloaded model's
