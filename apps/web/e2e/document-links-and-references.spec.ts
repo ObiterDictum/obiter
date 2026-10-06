@@ -134,7 +134,14 @@ async function focusHeading(page: Page) {
       .toBeFocused()
       .then(() => true)
       .catch(() => false)
-    if (focused) return
+    if (focused) {
+      // A centre-click can land the caret at the paragraph end, from where a
+      // shift-extended selection crosses into the next paragraph and the
+      // Link control correctly refuses it. Pin the caret to the paragraph
+      // start so the selection stays inside one paragraph.
+      await page.keyboard.press('Home')
+      return
+    }
   }
   throw new Error('could not focus the fixture heading')
 }
@@ -199,6 +206,9 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await shot(page, '02-pending-reference')
 
   // Undo reverts each pending draft snapshot-first, so both overlays clear.
+  // Undo and Redo live on the Home tab; the draft insertions above leave the
+  // Insert tab active, where no Undo control exists.
+  await openRibbon(page, 'Home')
   await undo(page).click()
   await expect(fieldMarkers(page)).toHaveCount(0)
   await shot(page, '03-undone-reference')
