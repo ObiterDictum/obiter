@@ -1272,6 +1272,43 @@ describe('saving a margin story', () => {
   })
 })
 
+describe('saving a footnote', () => {
+  it('reconciles a body save that inserts a footnote so a second save runs', async () => {
+    const document = await server(['Page body'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000001', 'Page body'.length)
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Footnote' }))
+
+    // The insertion opens the notes story with the caret in the folded
+    // note body, so the field now edits that pending paragraph.
+    fireEvent.change(field(), { target: { value: 'A note' } })
+    await clickSaveAndSettle(document, 1)
+
+    // A snapshot predating the saved footnote used to block the whole
+    // boundary: restoring it would need a removal no operation expresses,
+    // so the translation refused it and every later save demanded a
+    // reload. The stored reference and its note entry are baseline
+    // content, so the boundary must reconcile and the save settle.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+
+    // A second save on the body, after the story closes, must reach the
+    // server without a reload.
+    fireEvent.click(screen.getByRole('button', { name: 'Close footnotes' }))
+    selectBodyParagraph('Page body')
+    fireEvent.change(field(), { target: { value: 'Page body edited' } })
+    await clickSaveAndSettle(document, 2)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(document.editAsync).toHaveBeenCalledTimes(2)
+  })
+})
+
 /** The editable band paragraph's id — the only one inside the header band. */
 function marginParagraphId() {
   const node = screen

@@ -216,6 +216,28 @@ test('a footnote typed into its opened story survives save, reload and export', 
   )
   await shot(page, '03-saved')
 
+  // The reconciled boundary leaves saving live: close the notes story, edit
+  // the body and save again — the unreconciled defect refused this second
+  // save behind the reload banner.
+  await page.getByRole('button', { name: 'Close footnotes' }).click()
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await bodyParagraph(page).click()
+    const focused = await expect(editor(page))
+      .toBeFocused()
+      .then(() => true)
+      .catch(() => false)
+    if (focused) break
+    if (attempt === 2) throw new Error('could not refocus the body paragraph')
+  }
+  await page.keyboard.press('End')
+  await page.keyboard.type(' E7BSECOND')
+  await expect(editor(page)).toHaveValue(new RegExp('E7BSECOND'))
+  await saveAndWait(page)
+  await expect(page.getByText('Reloading is required to continue')).toHaveCount(
+    0,
+  )
+  await shot(page, '03b-second-save')
+
   // A fresh context reads the stored version: the painted note body shows
   // the marker, and clicking it opens the story with the text editable —
   // the same open/close contract the margin band keeps.
