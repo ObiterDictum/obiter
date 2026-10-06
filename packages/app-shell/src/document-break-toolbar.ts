@@ -1,6 +1,6 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import type { BreakDraft } from './document-edits'
-import { documentStory } from './document-model-text'
+import { documentStory, editableParagraph } from './document-model-text'
 
 type SetBreaks = (update: (current: BreakDraft[]) => BreakDraft[]) => void
 
@@ -50,7 +50,9 @@ export function documentBreakToolbar({
       : !paragraphId
         ? 'Place the cursor in a paragraph to insert a break'
         : !paragraphExists
-          ? 'Save the new paragraph before adding a break'
+          ? model && editableParagraph(model, paragraphId)
+            ? 'Only the document body can hold this insertion'
+            : 'Save the new paragraph before adding a break'
           : offset == null
             ? 'Place the cursor in the paragraph text to insert a break'
             : undefined
