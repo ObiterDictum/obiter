@@ -51,6 +51,8 @@ const EMPTY_PLAN: SavePlan = {
   rejections: [],
 }
 
+const NO_REFUSED: readonly DraftSlot[] = []
+
 /**
  * The save state machine for the DOCX workspace.
  *
@@ -92,8 +94,15 @@ export function useDocumentSave({
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
-  /** Slots a refused batch identified as the cause; they stay pending. */
-  const [refused, setRefused] = useState<readonly DraftSlot[]>([])
+  /**
+   * Slots a refused batch identified as the cause; they stay pending. `sent`
+   * is the state the refused request was planned from, so discarding can
+   * clear only what the server saw and keep typing done after the refusal.
+   */
+  const [refused, setRefused] = useState<{
+    slots: readonly DraftSlot[]
+    sent: DraftState
+  } | null>(null)
   const inFlight = useRef(false)
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
@@ -108,7 +117,7 @@ export function useDocumentSave({
     setStale(false)
     setFailure(null)
     setNotice(null)
-    setRefused([])
+    setRefused(null)
     onSaved(null)
     await queryClient.invalidateQueries({
       queryKey: workspaceKeys.model(documentId),
@@ -190,7 +199,7 @@ export function useDocumentSave({
       )
     setFailure(null)
     setStale(false)
-    setRefused([])
+    setRefused(null)
     if (merged) {
       setNotice(
         "Your changes were saved as a new version to avoid overwriting a colleague's work",
@@ -209,9 +218,10 @@ export function useDocumentSave({
   async function containRejection(
     source: DocumentModelWire,
     candidates: readonly DraftSlot[],
+    sent: DraftState,
   ) {
     if (candidates.length === 1 && candidates[0]) {
-      setRefused([candidates[0]])
+      setRefused({ slots: [candidates[0]], sent })
       return true
     }
     for (const candidate of candidates.slice(0, MAX_ISOLATION_ATTEMPTS)) {
@@ -232,7 +242,7 @@ export function useDocumentSave({
           result.merged,
           result.lineage,
         )
-        setRefused([candidate])
+        setRefused({ slots: [candidate], sent: latest })
         return true
       } catch (error) {
         if (error instanceof ApiError && error.code === 'conflict_detected') {
@@ -360,6 +370,7 @@ export function useDocumentSave({
         const isolated = await containRejection(
           model,
           [...current.covered].reverse(),
+          sent,
         )
         if (!isolated) {
           setFailure(
@@ -396,7 +407,7 @@ export function useDocumentSave({
   return {
     blocked,
     held,
-    refused,
+    refused: refused?.slots ?? NO_REFUSED,
     dirty,
     saving,
     persistence: drafts.persistence,
@@ -411,8 +422,11 @@ export function useDocumentSave({
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
     discardRefused: () => {
-      drafts.clearSlots([...refused])
-      setRefused([])
+      // Only slots unchanged since the refused request was planned clear:
+      // a slot the user edited after the refusal keeps the newer work, the
+      // same way the held path kept the live state when the slot moved.
+      if (refused) drafts.clearSlots(refused.slots, refused.sent)
+      setRefused(null)
     },
     blockedHistoryMessage: blockedHistoryMessage(drafts.blockedReason),
   }
