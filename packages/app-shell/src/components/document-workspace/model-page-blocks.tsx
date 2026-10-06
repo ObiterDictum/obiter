@@ -70,6 +70,8 @@ export type BlockContext = {
   noteParagraphIds: Set<string>
   storyOf: (paragraphId: string) => { kind: string; partName: string }
   columnWidthPx: number
+  /** The page this context renders: resolves `PAGE` fields in stored runs. */
+  pageNumber?: number
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
@@ -135,6 +137,7 @@ export function renderBlock(
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
+                pageNumber={ctx.pageNumber}
                 wrapWidthPx={wrapWidthPx}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
@@ -210,6 +213,7 @@ export function renderBlock(
       wrapWidthPx={block.wrapWidthPx}
       continuation={block.continuation}
       pageStart={block.pageStart}
+      pageNumber={ctx.pageNumber}
       listMarker={ctx.listMarkers.get(paragraph.id)}
       noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
@@ -238,6 +242,7 @@ export function PageOverlays({
   imageUrls,
   selectionSegments,
   selectionHandlers,
+  pageNumber = 1,
 }: {
   floats: PageFloat[]
   textBoxes: PageTextBox[]
@@ -251,6 +256,7 @@ export function PageOverlays({
   imageUrls: Record<string, string>
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   selectionHandlers?: ParagraphSelectionHandlers
+  pageNumber?: number
 }) {
   return (
     <>
@@ -308,6 +314,7 @@ export function PageOverlays({
                 drafts={drafts}
                 emphasis={emphasis}
                 editing={false}
+                pageNumber={pageNumber}
                 storyPartName={storyPartName}
                 story={storyOf(paragraph.id)}
                 relationships={model.relationships}

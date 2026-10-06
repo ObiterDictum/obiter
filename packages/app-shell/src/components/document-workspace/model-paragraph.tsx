@@ -86,6 +86,7 @@ export function ModelParagraph({
   wrapWidthPx,
   continuation = false,
   pageStart = false,
+  pageNumber = 1,
   listMarker,
   noteMark,
   noteKind,
@@ -134,6 +135,8 @@ export function ModelParagraph({
   wrapWidthPx?: number
   continuation?: boolean
   pageStart?: boolean
+  /** The page this block paints on: resolves `PAGE` fields in stored runs. */
+  pageNumber?: number
   listMarker?: ListMarker
   noteMark?: string
   noteKind?: NoteKind
@@ -267,6 +270,7 @@ export function ModelParagraph({
       linkOverlay={linkOverlay}
       carets={carets}
       continuation={continuation}
+      pageNumber={pageNumber}
     />
   )
 
