@@ -6,6 +6,7 @@ import type {
   DocumentStoryWire,
 } from '@obiter/contracts'
 
+import { batchParagraphDeletions } from './document-edits'
 import { paragraphPlainText } from './document-model-text'
 import { runDisplayText } from './document-page-media'
 import { layoutDocument } from './document-page-engine'
@@ -271,6 +272,78 @@ describe('table of contents save partitioning', () => {
         paragraphId: 'p2',
         offset: 0,
       },
+    ])
+  })
+
+  it('holds a field whose only heading the batch replaces', () => {
+    // A runless heading carrying typed text saves as an insert plus a
+    // delete: its id lands in the writer's `deletedIds` without ever
+    // appearing in `deletedParagraphIds`. The partition must read the same
+    // effective set — sending the field means the writer captures zero
+    // entries and refuses the whole batch on every retry.
+    const base = model([paragraph('h1', '', 'Heading1'), paragraph('p2', 'x')])
+    const plan = planDocumentSave(base, {
+      ...emptyDraftState(),
+      extraRuns: {
+        h1: [{ id: 'h1-e', text: 'Typed', preservedXmlFragments: [] }],
+      },
+      structures: [tocDraft('s1', 'p2', 0)],
+    })
+    // The replacement still saves; the doomed field is the only slot held.
+    expect(plan.operations).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'h1',
+        text: 'Typed',
+        styleId: 'Heading1',
+      },
+      { type: 'delete_paragraph', paragraphId: 'h1' },
+    ])
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['structure'])
+    expect(plan.blocked[0]?.reason).toContain('no headings')
+  })
+
+  it('lists only the heading that survives a replaced paragraph', () => {
+    // The same implicit delete as above, but a second heading survives: the
+    // field is sent, and the pending fold must capture the survivor alone —
+    // the same set the writer's `deletedIds` exclusion produces — so the
+    // paint never lists a heading the save removes.
+    const base = model([
+      paragraph('h1', '', 'Heading1'),
+      paragraph('h2', 'Surviving', 'Heading1'),
+      paragraph('p3', 'x'),
+    ])
+    const structures = [tocDraft('s1', 'p3', 0)]
+    const extraRuns = {
+      h1: [{ id: 'h1-e', text: 'Typed', preservedXmlFragments: [] }],
+    }
+    const plan = planDocumentSave(base, {
+      ...emptyDraftState(),
+      extraRuns,
+      structures,
+    })
+    expect(plan.blocked).toEqual([])
+    expect(plan.operations).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'h1',
+        text: 'Typed',
+        styleId: 'Heading1',
+      },
+      { type: 'insert_table_of_contents', paragraphId: 'p3', offset: 0 },
+      { type: 'delete_paragraph', paragraphId: 'h1' },
+    ])
+    const folded = withStructuralDrafts(
+      base,
+      structures,
+      {},
+      batchParagraphDeletions(base, [], [], extraRuns, {}).effective,
+    )
+    const entries = (story(folded)?.paragraphs ?? []).filter(
+      (item) => item.styleId === 'TOC1',
+    )
+    expect(entries.map((item) => paragraphPlainText(item))).toEqual([
+      'Surviving',
     ])
   })
 
