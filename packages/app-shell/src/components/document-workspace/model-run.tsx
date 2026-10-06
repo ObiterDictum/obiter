@@ -205,7 +205,14 @@ function ModelRun({
       style={runCss({ ...face, color })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      {rangedParts(text, from, paragraphEnd, selection, linkOverlay)}
+      {rangedParts(
+        text,
+        from,
+        paragraphEnd,
+        selection,
+        linkOverlay,
+        run.hyperlinkTarget,
+      )}
       {notes.map((note) => (
         <sup
           key={`${note.kind}-${note.noteId}-${note.runId}`}
@@ -232,10 +239,19 @@ function rangedParts(
   paragraphEnd: number,
   selection?: ParagraphSelectionRange,
   overlay?: LinkOverlay,
+  storedLinkTarget?: string,
 ) {
-  const links = overlay?.links
   const markers = overlay?.fieldMarkers
-  if (!selection && !links?.length && !markers?.length) return text
+  // A stored w:hyperlink wraps whole runs, so the run's target covers this
+  // slice end to end; pending link drafts keep their explicit ranges and win
+  // where the two overlap.
+  const links = [
+    ...(overlay?.links ?? []),
+    ...(storedLinkTarget
+      ? [{ from, to: from + text.length, target: storedLinkTarget }]
+      : []),
+  ]
+  if (!selection && links.length === 0 && !markers?.length) return text
   const clamp = (offset: number) =>
     Math.max(0, Math.min(offset - from, text.length))
   const cuts = new Set<number>([0, text.length])
@@ -243,7 +259,7 @@ function rangedParts(
     cuts.add(clamp(selection.from))
     cuts.add(clamp(selection.to))
   }
-  for (const link of links ?? []) {
+  for (const link of links) {
     cuts.add(clamp(link.from))
     cuts.add(clamp(link.to))
   }
@@ -278,7 +294,7 @@ function rangedParts(
       selection !== undefined &&
       from + a >= selection.from &&
       from + b <= selection.to
-    const link = (links ?? []).find(
+    const link = links.find(
       (item) => from + a >= item.from && from + b <= item.to,
     )
     if (selected || link) {

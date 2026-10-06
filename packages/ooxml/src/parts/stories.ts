@@ -11,6 +11,7 @@ import type {
   TextRunAnchor,
   TrackedChangeNode,
 } from '../model'
+import { RELATIONSHIPS_NAMESPACE } from '../structure-xml'
 import { decodeXmlReferences } from '../xml-lexemes'
 import { elementFragment, parseXmlElements } from './overlay'
 import {
@@ -51,6 +52,7 @@ export function parseStory(
   kind: DocumentStoryKind,
   source: string,
   identity: IdentityContext,
+  hyperlinkTargets?: ReadonlyMap<string, string>,
 ): ParsedStory {
   const elements = parseXmlElements(source)
   const paragraphs: DocumentParagraphWire[] = []
@@ -70,6 +72,7 @@ export function parseStory(
       elements,
       paragraph,
       identity,
+      hyperlinkTargets,
     )
     paragraphs.push(parsed.paragraph)
     anchors.push(...parsed.anchors)
@@ -109,6 +112,7 @@ function parseParagraph(
   elements: XmlElement[],
   paragraphElement: XmlElement,
   identity: IdentityContext,
+  hyperlinkTargets: ReadonlyMap<string, string> | undefined,
 ) {
   const sourceParaId = attributeValue(
     paragraphElement,
@@ -156,6 +160,7 @@ function parseParagraph(
       runElement,
       index === 0 ? sourceTextId : undefined,
       identity,
+      hyperlinkTargets,
     )
     runs.push(parsed.wire)
     anchors.push(parsed.anchor)
@@ -205,6 +210,7 @@ function parseRun(
   runElement: XmlElement,
   paragraphTextId: string | undefined,
   identity: IdentityContext,
+  hyperlinkTargets: ReadonlyMap<string, string> | undefined,
 ) {
   const sourceTextId =
     attributeValue(runElement, WORD_2010_NAMESPACE, 'textId') ?? paragraphTextId
@@ -247,10 +253,12 @@ function parseRun(
     start: element.startTagEnd,
     end: element.endTagStart,
   }))
+  const hyperlinkTarget = runHyperlinkTarget(runElement, hyperlinkTargets)
   const wire: DocumentTextRunWire = {
     id,
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
+    ...(hyperlinkTarget ? { hyperlinkTarget } : {}),
     text: runPlainText(source, elements, runElement, textElements),
     preservedXmlFragments: elements
       .filter(
@@ -280,6 +288,21 @@ function parseRun(
       ...(styleElement ? { runStyleRange: elementRange(styleElement) } : {}),
     },
   }
+}
+
+/**
+ * A run nested in a stored `w:hyperlink` carries the relationship's target,
+ * resolved on the part that owns the story — an `r:id` means nothing outside
+ * its own `.rels` part. Internal links (`w:anchor`, no `r:id`) carry none.
+ */
+function runHyperlinkTarget(
+  runElement: XmlElement,
+  hyperlinkTargets: ReadonlyMap<string, string> | undefined,
+) {
+  const link = nearestWordAncestor(runElement, 'hyperlink')
+  if (!link) return undefined
+  const relationshipId = attributeValue(link, RELATIONSHIPS_NAMESPACE, 'id')
+  return relationshipId ? hyperlinkTargets?.get(relationshipId) : undefined
 }
 
 function runPlainText(
