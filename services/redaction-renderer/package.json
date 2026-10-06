@@ -1,0 +1,35 @@
+{
+  "name": "@obiter/redaction-renderer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./contract": "./src/contract.ts"
+  },
+  "scripts": {
+    "build": "bun scripts/build-render-assets.ts",
+    "start": "bun src/main.ts",
+    "test": "bun run build && bun test --isolate --preload ../../scripts/test/vitest-compat.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@obiter/app-shell": "workspace:*",
+    "@obiter/contracts": "workspace:*",
+    "@obiter/ooxml": "workspace:*",
+    "playwright": "^1.62.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^0.1.100",
+    "@tailwindcss/node": "^4.3.2",
+    "@tailwindcss/oxide": "^4.3.2",
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
+    "tailwindcss": "^4.3.2",
+    "unpdf": "1.6.2"
+  }
+}

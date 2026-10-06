@@ -1,0 +1,385 @@
+import {
+  documentEditHyperlinkTargetSchema,
+  type DocumentParagraphWire,
+  type DocumentStoryKind,
+  type DocumentStoryWire,
+  type DocumentTextRunWire,
+} from '@obiter/contracts'
+
+import type {
+  ModelIdAllocator,
+  ParagraphAnchor,
+  TextRunAnchor,
+  TrackedChangeNode,
+} from '../model'
+import { RELATIONSHIPS_NAMESPACE } from '../structure-xml'
+import { decodeXmlReferences } from '../xml-lexemes'
+import { elementFragment, parseXmlElements } from './overlay'
+import {
+  containsTrackedChange,
+  hasDeletedParagraphMark,
+  hasTrackedChangeAncestor,
+  isTrackedChange,
+  trackedChange,
+} from './tracked-change-nodes'
+import {
+  attributeValue,
+  elementRange,
+  isDescendantOf,
+  isTextWrappingBreak,
+  isWord,
+  nearestWordAncestor,
+  WORD_NAMESPACE,
+  type XmlElement,
+} from './xml-elements'
+const WORD_2010_NAMESPACE =
+  'http://schemas.microsoft.com/office/word/2010/wordml'
+
+export type IdentityContext = {
+  allocator: ModelIdAllocator
+  usedIds: Set<string>
+  nextChangeId(): string
+}
+
+export type ParsedStory = {
+  story: DocumentStoryWire
+  anchors: TextRunAnchor[]
+  paragraphAnchors: ParagraphAnchor[]
+  trackedChanges: TrackedChangeNode[]
+}
+
+export function parseStory(
+  partName: string,
+  kind: DocumentStoryKind,
+  source: string,
+  identity: IdentityContext,
+  hyperlinkTargets?: ReadonlyMap<string, string>,
+): ParsedStory {
+  const elements = parseXmlElements(source)
+  const paragraphs: DocumentParagraphWire[] = []
+  const anchors: TextRunAnchor[] = []
+  const paragraphAnchors: ParagraphAnchor[] = []
+
+  for (const paragraph of elements.filter(
+    (element) =>
+      isWord(element, 'p') &&
+      !hasTrackedChangeAncestor(element) &&
+      !hasDeletedParagraphMark(element, elements) &&
+      !isInsideFallback(element),
+  )) {
+    const parsed = parseParagraph(
+      partName,
+      source,
+      elements,
+      paragraph,
+      identity,
+      hyperlinkTargets,
+    )
+    paragraphs.push(parsed.paragraph)
+    anchors.push(...parsed.anchors)
+    paragraphAnchors.push(parsed.anchor)
+  }
+
+  const trackedChanges = elements
+    .filter(isTrackedChange)
+    .filter((element) => !hasTrackedChangeAncestor(element))
+    .map((element) =>
+      trackedChange(
+        partName,
+        source,
+        elements,
+        element,
+        paragraphAnchors,
+        identity.nextChangeId(),
+      ),
+    )
+
+  return {
+    story: {
+      partName,
+      kind,
+      paragraphs,
+      preservedXmlFragments: storyStructureFragments(source, elements, kind),
+    },
+    anchors,
+    paragraphAnchors,
+    trackedChanges,
+  }
+}
+
+function parseParagraph(
+  partName: string,
+  source: string,
+  elements: XmlElement[],
+  paragraphElement: XmlElement,
+  identity: IdentityContext,
+  hyperlinkTargets: ReadonlyMap<string, string> | undefined,
+) {
+  const sourceParaId = attributeValue(
+    paragraphElement,
+    WORD_2010_NAMESPACE,
+    'paraId',
+  )
+  const sourceTextId = attributeValue(
+    paragraphElement,
+    WORD_2010_NAMESPACE,
+    'textId',
+  )
+  const id = uniqueId(
+    sourceParaId
+      ? `para-w14-${sourceParaId}`
+      : identity.allocator.nextParagraphId(),
+    identity,
+  )
+  const propertiesElement = elements.find(
+    (element) => element.parent === paragraphElement && isWord(element, 'pPr'),
+  )
+  const styleElement = propertiesElement
+    ? elements.find(
+        (element) =>
+          element.parent === propertiesElement && isWord(element, 'pStyle'),
+      )
+    : undefined
+  const styleId = styleElement
+    ? attributeValue(styleElement, WORD_NAMESPACE, 'val')
+    : undefined
+  const runs: DocumentTextRunWire[] = []
+  const anchors: TextRunAnchor[] = []
+  const runElements = elements.filter(
+    (element) =>
+      isWord(element, 'r') &&
+      nearestWordAncestor(element, 'p') === paragraphElement &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
+  )
+
+  runElements.forEach((runElement, index) => {
+    const parsed = parseRun(
+      partName,
+      source,
+      elements,
+      runElement,
+      index === 0 ? sourceTextId : undefined,
+      identity,
+      hyperlinkTargets,
+    )
+    runs.push(parsed.wire)
+    anchors.push(parsed.anchor)
+  })
+
+  const paragraph: DocumentParagraphWire = {
+    id,
+    ...(sourceParaId ? { sourceParaId } : {}),
+    ...(sourceTextId ? { sourceTextId } : {}),
+    ...(styleId ? { styleId } : {}),
+    runs,
+    preservedXmlFragments: elements
+      .filter(
+        (element) =>
+          element.parent === paragraphElement &&
+          !isWord(element, 'r') &&
+          !containsTrackedChange(element, elements),
+      )
+      .map((element) => elementFragment(source, element)),
+  }
+  return {
+    paragraph,
+    anchors,
+    anchor: {
+      partName,
+      wire: paragraph,
+      paragraphRange: elementRange(paragraphElement),
+      ...(propertiesElement
+        ? { paragraphPropertiesRange: elementRange(propertiesElement) }
+        : {}),
+      ...(styleElement
+        ? { paragraphStyleRange: elementRange(styleElement) }
+        : {}),
+      hasTrackedChanges: elements.some(
+        (element) =>
+          isTrackedChange(element) && isDescendantOf(element, paragraphElement),
+      ),
+      runs: anchors,
+    } satisfies ParagraphAnchor,
+  }
+}
+
+function parseRun(
+  partName: string,
+  source: string,
+  elements: XmlElement[],
+  runElement: XmlElement,
+  paragraphTextId: string | undefined,
+  identity: IdentityContext,
+  hyperlinkTargets: ReadonlyMap<string, string> | undefined,
+) {
+  const sourceTextId =
+    attributeValue(runElement, WORD_2010_NAMESPACE, 'textId') ?? paragraphTextId
+  const id = uniqueId(
+    sourceTextId
+      ? `text-w14-${sourceTextId}`
+      : identity.allocator.nextTextRunId(),
+    identity,
+  )
+  const textElements = elements.filter(
+    (element) =>
+      isWord(element, 't') &&
+      nearestWordAncestor(element, 'r') === runElement &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
+  )
+  const propertiesElements = elements.filter(
+    (element) => element.parent === runElement && isWord(element, 'rPr'),
+  )
+  const propertiesElement = propertiesElements[0]
+  const styleElement = propertiesElement
+    ? elements.find(
+        (element) =>
+          element.parent === propertiesElement && isWord(element, 'rStyle'),
+      )
+    : undefined
+  const styleId = styleElement
+    ? attributeValue(styleElement, WORD_NAMESPACE, 'val')
+    : undefined
+  const anchoredTextElements = textElements
+    .filter((element) => !element.selfClosing)
+    .map(elementRange)
+  const textBreaks = elements
+    .filter(
+      (element) =>
+        element.parent === runElement && isTextWrappingBreak(element),
+    )
+    .map(elementRange)
+  const textRanges = anchoredTextElements.map((element) => ({
+    start: element.startTagEnd,
+    end: element.endTagStart,
+  }))
+  const hyperlinkTarget = runHyperlinkTarget(runElement, hyperlinkTargets)
+  const wire: DocumentTextRunWire = {
+    id,
+    ...(sourceTextId ? { sourceTextId } : {}),
+    ...(styleId ? { styleId } : {}),
+    ...(hyperlinkTarget ? { hyperlinkTarget } : {}),
+    text: runPlainText(source, elements, runElement, textElements),
+    preservedXmlFragments: elements
+      .filter(
+        (element) =>
+          element.parent === runElement &&
+          !isWord(element, 't') &&
+          !isTextWrappingBreak(element) &&
+          !containsTrackedChange(element, elements),
+      )
+      .map((element) => elementFragment(source, element)),
+  }
+  return {
+    wire,
+    anchor: {
+      partName,
+      wire,
+      runRange: elementRange(runElement),
+      textRanges,
+      textElements: anchoredTextElements,
+      textBreaks,
+      runProperties: propertiesElements.map((element) =>
+        elementFragment(source, element),
+      ),
+      ...(propertiesElement
+        ? { runPropertiesRange: elementRange(propertiesElement) }
+        : {}),
+      ...(styleElement ? { runStyleRange: elementRange(styleElement) } : {}),
+    },
+  }
+}
+
+/**
+ * A run nested in a stored `w:hyperlink` carries the relationship's target,
+ * resolved on the part that owns the story — an `r:id` means nothing outside
+ * its own `.rels` part. Internal links (`w:anchor`, no `r:id`) carry none.
+ * A stored target gets the write path's scheme allowlist and length bound at
+ * this point: one a hostile package plants (`javascript:`, an unbounded
+ * string) is never set on the wire, so no consumer can render it as an
+ * address while the part bytes stay untouched.
+ */
+function runHyperlinkTarget(
+  runElement: XmlElement,
+  hyperlinkTargets: ReadonlyMap<string, string> | undefined,
+) {
+  const link = nearestWordAncestor(runElement, 'hyperlink')
+  if (!link) return undefined
+  const relationshipId = attributeValue(link, RELATIONSHIPS_NAMESPACE, 'id')
+  const target = relationshipId
+    ? hyperlinkTargets?.get(relationshipId)
+    : undefined
+  return target !== undefined &&
+    documentEditHyperlinkTargetSchema.safeParse(target).success
+    ? target
+    : undefined
+}
+
+function runPlainText(
+  source: string,
+  elements: readonly XmlElement[],
+  runElement: XmlElement,
+  textElements: readonly XmlElement[],
+) {
+  const textNodes = new Set(
+    textElements.filter((element) => !element.selfClosing),
+  )
+  const parts: string[] = []
+  for (const element of elements) {
+    if (nearestWordAncestor(element, 'r') !== runElement) continue
+    if (hasTrackedChangeAncestor(element) || isInsideFallback(element)) continue
+    if (textNodes.has(element)) {
+      parts.push(
+        decodeXmlReferences(
+          source.slice(element.startTagEnd, element.endTagStart),
+        ),
+      )
+      continue
+    }
+    if (isTextWrappingBreak(element)) parts.push('\n')
+  }
+  return parts.join('')
+}
+
+function storyStructureFragments(
+  source: string,
+  elements: XmlElement[],
+  kind: DocumentStoryKind,
+) {
+  const root = elements.find(({ depth }) => depth === 0)
+  if (!root) return []
+  const container =
+    kind === 'document'
+      ? elements.find(
+          (element) => element.parent === root && isWord(element, 'body'),
+        )
+      : root
+  if (!container) return []
+  return elements
+    .filter(
+      (element) =>
+        element.parent === container &&
+        !isWord(element, 'p') &&
+        !isWord(element, 'body') &&
+        !containsTrackedChange(element, elements),
+    )
+    .map((element) => elementFragment(source, element))
+}
+
+function uniqueId(candidate: string, identity: IdentityContext) {
+  let id = candidate
+  while (identity.usedIds.has(id))
+    id = `${candidate}-${identity.allocator.nextTextRunId()}`
+  identity.usedIds.add(id)
+  return id
+}
+
+function isInsideFallback(element: XmlElement) {
+  let parent = element.parent
+  while (parent) {
+    if (parent.localName === 'Fallback') return true
+    parent = parent.parent
+  }
+  return false
+}
