@@ -434,9 +434,14 @@ export function DocxWorkspace({
                   )
                 }}
                 authorities={authorities}
-                onSelectAuthority={(paragraphId) =>
+                // An authority always names a body paragraph, so selecting
+                // one leaves margin editing the way a body click does before
+                // the caret lands — otherwise the caret parks on an inert
+                // body paragraph the format controls still target.
+                onSelectAuthority={(paragraphId) => {
+                  closeEditingStory()
                   selectParagraph(paragraphId)
-                }
+                }}
               />
             </div>
             <VerificationMarkerLayer model={model} />
