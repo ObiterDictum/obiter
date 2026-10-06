@@ -55,6 +55,11 @@ export {
   tableOfContentsEntries,
   type TableOfContentsEntry,
 } from './table-of-contents-entries'
+export {
+  entryParagraphWire,
+  FALLBACK_TAB_POSITION_TWIPS,
+  type TocEntry,
+} from './table-of-contents-xml'
 export { decodeXmlReferences, findXmlTagEnd } from './xml-lexemes'
 export * from './collaboration-merge'
 export * from './document-identity'

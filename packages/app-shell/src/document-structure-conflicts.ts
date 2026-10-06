@@ -11,21 +11,29 @@ export type ParagraphRunSpan = { start: number; end: number }
 export type StructuralPlacement =
   | { kind: 'table'; paragraphId: string }
   | {
-      kind: 'image' | 'cross-reference' | 'page-number' | 'footnote'
+      kind:
+        | 'image'
+        | 'cross-reference'
+        | 'page-number'
+        | 'footnote'
+        | 'table-of-contents'
       paragraphId: string
       offset: number
     }
   | { kind: 'link'; paragraphId: string; from: number; to: number }
 
 /**
- * A zero-width splice at one offset. A `REF` field, a `PAGE` field and a
- * footnote reference share the same shape — a run cut open for element-only
- * content — so they share the conflict rules: each poisons strictly-inside
- * splices on the run it lands in.
+ * A zero-width splice at one offset. A `REF` field, a `PAGE` field, a
+ * footnote reference and a `TOC` field share the same shape — a run cut
+ * open for element-only content — so they share the conflict rules: each
+ * poisons strictly-inside splices on the run it lands in.
  */
 function isZeroWidthSplice(kind: StructuralPlacement['kind']) {
   return (
-    kind === 'cross-reference' || kind === 'page-number' || kind === 'footnote'
+    kind === 'cross-reference' ||
+    kind === 'page-number' ||
+    kind === 'footnote' ||
+    kind === 'table-of-contents'
   )
 }
 
@@ -148,6 +156,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'page number'
     case 'footnote':
       return 'footnote'
+    case 'table-of-contents':
+      return 'table of contents'
   }
 }
 

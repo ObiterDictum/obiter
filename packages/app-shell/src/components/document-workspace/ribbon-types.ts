@@ -115,6 +115,9 @@ export type DocumentStructureToolbar = {
   pageNumberUnavailable?: string
   /** The reason no footnote can be inserted at the caret, when it cannot. */
   footnoteUnavailable?: string
+  /** The reason no table of contents can be inserted at the caret, when it
+   * cannot. */
+  tableOfContentsUnavailable?: string
   /** The paragraphs a cross-reference can point at, in story order. */
   crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
   /** The non-body story open for editing, when one is — pressed state for
@@ -140,6 +143,11 @@ export type DocumentStructureToolbar = {
   onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
   /** Holds a pending `PAGE` field at the caret in the active story. */
   onInsertPageNumber: () => void
+  /**
+   * Holds a pending `TOC` field at the body caret: the folded model grows
+   * the entry paragraphs the save writes.
+   */
+  onInsertTableOfContents: () => void
   /**
    * Holds a pending footnote reference at the body caret and opens the
    * footnotes story so the note's text is typed into its folded body.

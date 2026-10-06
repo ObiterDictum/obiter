@@ -29,10 +29,7 @@ import {
 import { isWord } from './parts/xml-elements'
 import { nextSyntheticParaId } from './structure-package'
 import { W14_NAMESPACE } from './structure-xml'
-import {
-  assertNoPendingAt,
-  validateEffectiveOffset,
-} from './structure-splice'
+import { assertNoPendingAt, validateEffectiveOffset } from './structure-splice'
 import { tableOfContentsEntries } from './table-of-contents-entries'
 import {
   entryParagraphWire,
@@ -420,7 +417,7 @@ function spliceParagraphWires(
   }
   const entryWires = entries.map((entry, index) =>
     entryParagraphWire(
-      document,
+      nextRunId,
       entry,
       paraIds[index] ?? '',
       index === 0,

@@ -1,4 +1,9 @@
-import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
+import {
+  PAGE_STORY_KINDS,
+  DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES,
+  type DocumentModelWire,
+} from '@obiter/contracts'
+import { paragraphOutlineLevel } from '@obiter/ooxml'
 import type { ParagraphRange } from './document-format-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
 import {
@@ -53,6 +58,7 @@ type SetStructures = (
 export function documentStructureToolbar({
   paragraphId,
   model,
+  painted,
   cellParagraphIds,
   offset,
   selectionActive,
@@ -67,6 +73,12 @@ export function documentStructureToolbar({
   paragraphId: string | null
   /** The stored model — a pending paragraph or cell wire is not an anchor. */
   model: DocumentModelWire | undefined
+  /**
+   * The painted model — headings a pending fold already splices count toward
+   * the entries a table of contents will capture, so availability reads the
+   * same paragraphs the save does.
+   */
+  painted?: DocumentModelWire | undefined
   /**
    * The paragraph ids the story's tables bind — `storyTableCellIds`, memoised
    * by the caller on the model so the block partition is not re-parsed per
@@ -190,6 +202,49 @@ export function documentStructureToolbar({
             : offset == null
               ? 'Place the cursor in the paragraph text to insert a page number'
               : conflictWith({ kind: 'page-number', paragraphId, offset })
+  // A table of contents is a body splice like a table — plus the entries it
+  // captures: a document with no heading the `\o "1-3"` switch covers drafts
+  // a field the writer must refuse, and the stored `w:sectPr` paragraph ends
+  // its section so it cannot split. The heading count reads the painted
+  // story: pending inserts carry their style on the wire exactly as stored
+  // ones do.
+  const paintedStory = painted ? documentStory(painted) : undefined
+  const headingCount = (paintedStory?.paragraphs ?? []).filter((paragraph) => {
+    const level = paragraphOutlineLevel(paragraph, model?.styles ?? [])
+    return level !== undefined && level < 3
+  }).length
+  const anchorWire =
+    paragraphId && story
+      ? story.paragraphs.find((paragraph) => paragraph.id === paragraphId)
+      : undefined
+  const tableOfContentsUnavailable =
+    baseUnavailable ??
+    (inTableCell
+      ? 'A table cell cannot hold a table of contents'
+      : offset == null || !paragraphId
+        ? 'Place the cursor in the paragraph text to insert a table of contents'
+        : anchorWire &&
+            anchorWire.preservedXmlFragments.some(
+              (fragment) =>
+                /^<w:pPr\b/u.test(fragment) && /<w:sectPr\b/u.test(fragment),
+            )
+          ? 'A section-ending paragraph cannot hold a table of contents'
+          : anchorWire &&
+              anchorWire.runs.some((run) =>
+                run.preservedXmlFragments.some((fragment) =>
+                  /<w:(ins|del|moveFrom|moveTo)\b/u.test(fragment),
+                ),
+              )
+            ? 'This paragraph contains tracked changes a table of contents cannot record.'
+            : headingCount === 0
+              ? 'The document has no headings a table of contents can list.'
+              : headingCount > DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES
+                ? `The document has more than ${String(DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES)} headings for a table of contents.`
+                : conflictWith({
+                    kind: 'table-of-contents',
+                    paragraphId,
+                    offset,
+                  }))
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
@@ -211,6 +266,7 @@ export function documentStructureToolbar({
     crossReferenceTargets,
     pageNumberUnavailable,
     footnoteUnavailable,
+    tableOfContentsUnavailable,
     insertTable(rows: number, columns: number) {
       if (tableUnavailable || !paragraphId) return
       setStructures((current) => [
@@ -347,6 +403,28 @@ export function documentStructureToolbar({
         return {
           inserted: false,
           reason: 'That page number cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
+    },
+    insertTableOfContents(): StructuralInsertOutcome {
+      if (tableOfContentsUnavailable || !paragraphId || offset == null) {
+        return {
+          inserted: false,
+          reason: tableOfContentsUnavailable ?? 'No anchor',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'table-of-contents',
+        paragraphId,
+        offset,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That table of contents cannot be held as a draft.',
         }
       }
       setStructures((current) => [...current, draft])

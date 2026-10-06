@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
 import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
 import { editingStoryFor } from '../../document-page-layout'
+import { pageReferenceMap } from '../../document-page-references'
 import type { LaidOutPage } from '../../document-page-engine'
 import { documentDefaultFace } from '../../document-page-style'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
@@ -78,6 +80,12 @@ export function DocxModelPages({
     editingKind === 'document'
       ? undefined
       : editingStoryFor(rendered, editingKind)
+  // `PAGEREF` fields resolve through the laid-out pages, so the map is built
+  // once per layout pass rather than per paragraph render.
+  const pageReferences = useMemo(
+    () => pageReferenceMap(rendered, pages),
+    [rendered, pages],
+  )
   return (
     <>
       {pages.map((laid, index) => (
@@ -94,6 +102,7 @@ export function DocxModelPages({
             onExitMarginEditing={onExitMarginEditing}
             onOpenNoteEditing={onOpenNoteEditing}
             pageNumber={index + 1}
+            pageReferences={pageReferences}
             pageBlocks={laid.blocks}
             pageFloats={laid.floats}
             pageTextBoxes={laid.textBoxes}

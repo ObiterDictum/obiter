@@ -23,7 +23,10 @@ import {
   TextT,
   X,
 } from '@phosphor-icons/react'
-import type { DocumentFindToolbar } from './ribbon-types'
+import type {
+  DocumentFindToolbar,
+  DocumentStructureToolbar,
+} from './ribbon-types'
 import {
   IconButton,
   RibbonSelect,
@@ -38,10 +41,12 @@ export function ReferencesRibbon({
   authoritiesOpen,
   onToggleAuthorities,
   onInsertAuthority,
+  structure,
 }: {
   authoritiesOpen: boolean
   onToggleAuthorities: () => void
   onInsertAuthority: () => void
+  structure?: DocumentStructureToolbar
 }) {
   const verification = useVerificationWorkspace()
   // The one document-level Verify control owns the action; this entry reveals
@@ -131,7 +136,11 @@ export function ReferencesRibbon({
           />
           <IconButton
             label="Table of contents"
-            soon
+            onClick={structure?.onInsertTableOfContents}
+            disabled={
+              !structure || Boolean(structure.tableOfContentsUnavailable)
+            }
+            disabledReason={structure?.tableOfContentsUnavailable}
             icon={<ListChecks size={16} aria-hidden />}
           />
         </ToolbarRow>

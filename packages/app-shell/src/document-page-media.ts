@@ -233,12 +233,25 @@ export function tabColumns(
 export function runDisplayText(
   run: DocumentTextRunWire,
   pageNumber = 1,
+  pageReferences?: ReadonlyMap<string, number>,
 ): string {
   const xml = run.preservedXmlFragments.join('')
-  if (/<w:instrText\b/i.test(xml) && /\bPAGE\b/i.test(xml)) {
-    return String(pageNumber)
+  if (/<w:instrText\b/i.test(xml)) {
+    // `\bPAGE\b` cannot match inside `PAGEREF`, so the checks can share the
+    // instruction test: a `PAGE` field resolves to the page it paints on, a
+    // `PAGEREF` to the page its bookmark's paragraph lays out on. An
+    // unresolvable name paints nothing, matching the empty stored result.
+    if (/\bPAGE\b/i.test(xml)) return String(pageNumber)
+    const reference = /\bPAGEREF\s+(\S+)\s/i.exec(xml)?.[1]
+    if (reference !== undefined) {
+      const target = pageReferences?.get(reference)
+      return target === undefined ? '' : String(target)
+    }
   }
   if (run.text) return run.text
+  // A tab run is element-only: body paint has no column machinery, so it
+  // shows as the character a plain-text export would carry.
+  if (/<w:tab\b/i.test(xml)) return '\t'
   return ''
 }
 

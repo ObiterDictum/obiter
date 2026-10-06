@@ -207,6 +207,7 @@ export function DocumentWorkspaceToolbar({
             authoritiesOpen={authoritiesOpen}
             onToggleAuthorities={onToggleAuthorities}
             onInsertAuthority={onInsertAuthority}
+            structure={structure}
           />
         </TabsContent>
         <TabsContent value="review" className="min-w-0 flex-1 pt-0">

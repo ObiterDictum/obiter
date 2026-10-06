@@ -740,6 +740,10 @@ const STRUCTURE_KIND_REMOVABLE = {
   'cross-reference': false,
   'page-number': false,
   footnote: false,
+  // `insert_table_of_contents` has no inverse either: the generated entry
+  // paragraphs and their bookmarks are baseline content once saved, and the
+  // edit vocabulary has no remove-field operation to reverse them with.
+  'table-of-contents': false,
 } satisfies Record<StructureKind, boolean>
 
 /**

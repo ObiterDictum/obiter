@@ -71,6 +71,7 @@ export function ParagraphRunPaint({
   carets = [],
   continuation = false,
   pageNumber = 1,
+  pageReferences,
 }: {
   paragraph: DocumentParagraphWire
   drafts?: Record<string, string>
@@ -89,6 +90,8 @@ export function ParagraphRunPaint({
   continuation?: boolean
   /** The page this block paints on: resolves `PAGE` fields in stored runs. */
   pageNumber?: number
+  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
+  pageReferences?: ReadonlyMap<string, number>
 }) {
   // A marker exactly at a slice's end belongs to the next slice — except at
   // the paragraph's own end, where nothing follows. The block end alone
@@ -147,12 +150,13 @@ export function ParagraphRunPaint({
             start + line.from,
             start + line.to,
             pageNumber,
+            pageReferences,
           ),
         )}
       </div>
     ))
   }
-  return paint(paintSlices(paragraph, start, end, pageNumber))
+  return paint(paintSlices(paragraph, start, end, pageNumber, pageReferences))
 }
 
 /**
@@ -170,6 +174,7 @@ function paintSlices(
   from: number,
   to: number,
   pageNumber: number,
+  pageReferences?: ReadonlyMap<string, number>,
 ): RunSlice[] {
   const length = paragraph.runs.reduce((n, run) => n + run.text.length, 0)
   const slices: RunSlice[] = []
@@ -178,7 +183,7 @@ function paintSlices(
     const start = cursor
     const end = start + run.text.length
     cursor = end
-    const display = runDisplayText(run, pageNumber)
+    const display = runDisplayText(run, pageNumber, pageReferences)
     if (display !== run.text) {
       if (
         start >= from &&

@@ -233,7 +233,9 @@ export function slotLabel(slot: DraftSlot): string {
               ? 'a cross-reference'
               : slot.structureKind === 'footnote'
                 ? 'a footnote'
-                : 'a page number'
+                : slot.structureKind === 'table-of-contents'
+                  ? 'a table of contents'
+                  : 'a page number'
     case 'tracked-reject':
       return 'a tracked change'
   }

@@ -3,8 +3,6 @@ import type {
   DocumentTextRunWire,
 } from '@obiter/contracts'
 
-import { allocateModelId } from './model-paragraph-edits'
-import type { OoxmlDocument } from './model'
 import { escapeXmlText } from './parts/overlay'
 import {
   attributeValue,
@@ -20,18 +18,16 @@ import { wordRunInnerTextXml } from './text-run-edit'
 export type TocEntry = TableOfContentsEntry & { bookmark: string }
 
 export const TOC_INSTRUCTION = ' TOC \\o "1-3" \\u '
-export const TOC_FIELD_END_RUN =
-  '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+export const TOC_FIELD_END_RUN = '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
 const FIELD_BEGIN_RUN = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
-const FIELD_SEPARATE_RUN =
-  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+const FIELD_SEPARATE_RUN = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
 const TAB_RUN = '<w:r><w:tab/></w:r>'
 
 // The right-aligned dot-leader tab stop an entry line carries, positioned at
 // the section's column width when the part records one and at the synthetic
 // default page's width otherwise. Paint lays the tab out by its own rules;
 // the stored position is for Word.
-const FALLBACK_TAB_POSITION_TWIPS = 9026
+export const FALLBACK_TAB_POSITION_TWIPS = 9026
 
 /**
  * One entry paragraph as it serialises: `TOC<level>` styling with the
@@ -63,15 +59,14 @@ export function entryParagraphXml(
  * paint alike.
  */
 export function entryParagraphWire(
-  document: OoxmlDocument,
+  nextId: () => string,
   entry: TocEntry,
   paraId: string,
   first: boolean,
   tabPosition: number,
 ): DocumentParagraphWire {
-  const id = () => allocateModelId(document, 'text-edit')
   const field = (fragments: string[]): DocumentTextRunWire => ({
-    id: id(),
+    id: nextId(),
     text: '',
     preservedXmlFragments: fragments,
   })
@@ -83,9 +78,9 @@ export function entryParagraphWire(
           field(['<w:fldChar w:fldCharType="separate"/>']),
         ]
       : []),
-    { id: id(), text: entry.text, preservedXmlFragments: [] },
+    { id: nextId(), text: entry.text, preservedXmlFragments: [] },
     field(['<w:tab/>']),
-    ...pageReferenceRunWires(id, entry.bookmark),
+    ...pageReferenceRunWires(nextId, entry.bookmark),
   ]
   return {
     id: `para-w14-${paraId}`,

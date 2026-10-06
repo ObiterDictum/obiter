@@ -82,6 +82,7 @@ export function DocumentModelPage({
   pageTextBoxes = [],
   pageLayout,
   pageNumber = 1,
+  pageReferences,
   selectionSegments = new Map(),
   linkOverlays,
   selectionHandlers,
@@ -131,6 +132,8 @@ export function DocumentModelPage({
     columns: ColumnFrame[]
   }
   pageNumber?: number
+  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
+  pageReferences?: ReadonlyMap<string, number>
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
   /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
@@ -277,6 +280,7 @@ export function DocumentModelPage({
     onFocusParagraph,
     onMoveCaret,
     pageNumber,
+    pageReferences,
   }
   // While a margin story is open the body keeps painting exactly as before
   // but takes no caret, edits, or selection; the band holding the story gets
