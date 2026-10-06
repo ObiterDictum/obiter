@@ -6,7 +6,6 @@ import {
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
   editIdSchema,
   editTextSchema,
-  normaliseEditText,
 } from './document-edit-shared'
 import {
   insertCrossReferenceOperationSchema,
