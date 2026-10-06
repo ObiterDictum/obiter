@@ -113,7 +113,8 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 const ribbon = (page: Page, name: 'Home' | 'Insert' | 'Review') =>
   page.getByRole('tab', { name, exact: true }).first()
 
