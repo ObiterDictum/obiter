@@ -125,11 +125,14 @@ export function validatePlannedOperations(
     ) {
       throw new OoxmlError('invalid-document-edit')
     }
-    // A reference to a paragraph deleted earlier in the batch would write a
+    // A reference to a paragraph deleted anywhere in the batch would write a
     // bookmark the delete then removes — the REF dangles, so refuse instead.
+    // `deletedIds` collects every planned `delete_paragraph`, explicit marks
+    // and empty-replacement deletes alike, and deletes are emitted last, so
+    // `alreadyDeleted` could never see the batch's own deletions.
     if (
       operation.type === 'insert_cross_reference' &&
-      alreadyDeleted.has(operation.targetParagraph.wire.id)
+      deletedIds.has(operation.targetParagraph.wire.id)
     ) {
       throw new OoxmlError('invalid-document-edit')
     }
