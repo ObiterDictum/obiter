@@ -2,6 +2,7 @@ import { Button } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import {
   blockedSummary,
+  refusedSummary,
   type DocumentSave,
   type SaveState,
 } from './use-document-save'
@@ -22,6 +23,7 @@ export function DocumentSaveBanners({
   drafts: WorkspaceDrafts
 }) {
   const blocked = blockedSummary(save.blocked)
+  const refused = refusedSummary(save.refused)
   const plural = save.blocked.length === 1 ? 'change' : 'changes'
   return (
     <div className="flex flex-col gap-2 px-3 pb-2">
@@ -119,6 +121,20 @@ export function DocumentSaveBanners({
             body={`This deletes the ${plural} that no longer match the document. Other unsaved work stays. The server copy is unchanged.`}
             confirmLabel={`Discard ${plural}`}
             onConfirm={save.discardBlocked}
+          />
+        </Banner>
+      ) : null}
+      {refused ? (
+        <Banner tone="warning" body={refused}>
+          <Button variant="secondary" size="sm" onClick={save.retry}>
+            Retry save
+          </Button>
+          <DiscardWorkDialog
+            triggerLabel="Discard rejected change"
+            title="Discard the change the server rejected?"
+            body="This deletes the rejected change from your drafts. Other unsaved work stays. The server copy is unchanged."
+            confirmLabel="Discard rejected change"
+            onConfirm={save.discardRefused}
           />
         </Banner>
       ) : null}
