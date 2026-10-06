@@ -14,10 +14,7 @@ import {
 } from '../../document-model-text'
 import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
 import type { WrappedLine } from '../../document-page-flow'
-import {
-  readableRunColor,
-  runDisplayText,
-} from '../../document-page-media'
+import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace } from '../../document-page-style'
 import type { ParagraphFace } from '../../document-page-style'
@@ -192,10 +189,7 @@ function paintSlices(
     const sliceFrom = start + Math.max(0, from - start)
     slices.push({
       run,
-      text: run.text.slice(
-        Math.max(0, from - start),
-        Math.max(0, to - start),
-      ),
+      text: run.text.slice(Math.max(0, from - start), Math.max(0, to - start)),
       from: sliceFrom,
     })
   }
