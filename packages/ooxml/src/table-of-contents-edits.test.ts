@@ -150,6 +150,64 @@ describe('table-of-contents edits', () => {
     expect(xml.match(/w:name="_Toc1"/gu)?.length).toBe(1)
   })
 
+  it('keeps a cross-reference bookmark and a _Toc bookmark on one heading', async () => {
+    const document = await parseFixture()
+    const { heading, xrefAnchor, tocAnchor } = tocFixture(document)
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_cross_reference',
+        paragraphId: xrefAnchor.id,
+        offset: 0,
+        targetParagraphId: heading.id,
+      },
+      {
+        type: 'insert_table_of_contents',
+        paragraphId: tocAnchor.id,
+        offset: 0,
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+
+    // The heading carries both families' pairs: the _Ref write must not
+    // clobber the _Toc one the PAGEREF names.
+    expect(xml).toContain('w:name="_Ref_1"')
+    expect(xml).toContain('w:name="_Toc1"')
+    expect(xml).toContain(' REF _Ref_1 ')
+    expect(xml).toContain('PAGEREF _Toc1')
+  })
+
+  it('keeps both bookmark families when the field is written first', async () => {
+    const document = await parseFixture()
+    const { heading, xrefAnchor, tocAnchor } = tocFixture(document)
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_table_of_contents',
+        paragraphId: tocAnchor.id,
+        offset: 0,
+      },
+      {
+        type: 'insert_cross_reference',
+        paragraphId: xrefAnchor.id,
+        offset: 0,
+        targetParagraphId: heading.id,
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+
+    expect(xml).toContain('w:name="_Ref_1"')
+    expect(xml).toContain('w:name="_Toc1"')
+    expect(xml).toContain(' REF _Ref_1 ')
+    expect(xml).toContain('PAGEREF _Toc1')
+  })
+
   it('refuses a body anchor inside a table cell or content control', async () => {
     const document = await parseFixture()
     const nested = mainParagraphs(document).find((paragraph) => {
@@ -288,6 +346,21 @@ describe('table-of-contents edits', () => {
 
 async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
+}
+
+function tocFixture(document: Awaited<ReturnType<typeof parseDocx>>) {
+  const paragraphs = mainParagraphs(document)
+  const byText = (text: string) =>
+    paragraphs.find(
+      (paragraph) => paragraph.runs.map((run) => run.text).join('') === text,
+    )
+  const heading = byText('Alice Example overview')
+  const xrefAnchor = byText('Jane Example referenceJane Example reference')
+  const tocAnchor = byText('Commented text')
+  if (!heading || !xrefAnchor || !tocAnchor) {
+    throw new Error('Fixture model is missing.')
+  }
+  return { heading, xrefAnchor, tocAnchor }
 }
 
 function mainParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {
