@@ -85,6 +85,7 @@ export function insertTableOfContents(
   paragraph: ParagraphAnchor,
   offset: number,
   occurrence: number,
+  deletedIds: ReadonlySet<string>,
   lineage?: { recorder: LineageRecorder; operationIndex: number },
 ) {
   const part = requireEditablePart(document, paragraph.partName)
@@ -105,7 +106,7 @@ export function insertTableOfContents(
     throw new OoxmlError('invalid-document-edit')
   }
 
-  const entries = headingEntries(document)
+  const entries = headingEntries(document, deletedIds)
   if (
     entries.length === 0 ||
     entries.length > DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES
@@ -192,11 +193,17 @@ export function insertTableOfContents(
  * split created, exists only as pending XML and cannot carry a stored
  * bookmark yet, so it is skipped — the field lists the headings that were
  * stored. A heading with tracked changes cannot hold a bookmark safely, so
- * the whole insertion fails closed rather than drop it from the list.
+ * the whole insertion fails closed rather than drop it from the list. A
+ * heading the same batch deletes is skipped too: bookmarking it would write
+ * replacements inside the range its delete covers.
  */
-function headingEntries(document: OoxmlDocument): TocEntry[] {
+function headingEntries(
+  document: OoxmlDocument,
+  deletedIds: ReadonlySet<string>,
+): TocEntry[] {
   const entries: TocEntry[] = []
   for (const entry of tableOfContentsEntries(document.model)) {
+    if (deletedIds.has(entry.paragraphId)) continue
     const anchor = document.paragraphAnchors.get(entry.paragraphId)
     if (!anchor) continue
     if (anchor.hasTrackedChanges) {

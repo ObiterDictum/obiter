@@ -175,6 +175,37 @@ describe('withStructuralDrafts table of contents', () => {
     expect(paragraphPlainText(entry)).toBe('Retitled')
   })
 
+  it('lists only headings that survive the batch', () => {
+    // A heading marked for deletion stays on the painted story, but the
+    // writer skips it when it captures entries — so the pending field must
+    // skip it too, or the paint promises an entry the save omits.
+    const base = model([
+      paragraph('h1', 'Doomed', 'Heading1'),
+      paragraph('h2', 'Surviving', 'Heading1'),
+      paragraph('p2', 'Anchor'),
+    ])
+    const folded = withStructuralDrafts(
+      base,
+      [tocDraft('s1', 'p2', 0)],
+      {},
+      new Set(['h1']),
+    )
+    const paragraphs = story(folded)?.paragraphs ?? []
+    expect(paragraphs.map((item) => paragraphPlainText(item))).toEqual([
+      'Doomed',
+      'Surviving',
+      '',
+      'Surviving',
+      'Anchor',
+    ])
+    // No `_Toc` fragment lands on the paragraph the save removes.
+    expect(
+      paragraphs[0]?.preservedXmlFragments.some((fragment) =>
+        fragment.includes('_Toc'),
+      ),
+    ).toBe(false)
+  })
+
   it('folds nothing when the document has no headings', () => {
     const base = model([paragraph('p1', 'Alpha'), paragraph('p2', 'Beta')])
     const folded = withStructuralDrafts(base, [tocDraft('s1', 'p1', 0)])

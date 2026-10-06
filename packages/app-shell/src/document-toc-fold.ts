@@ -31,6 +31,7 @@ type TocDraft = StructuralDraft & { kind: 'table-of-contents' }
 export function createTableOfContentsFold(
   model: DocumentModelWire,
   drafts: Record<string, string>,
+  deletedIds: ReadonlySet<string>,
   nextParaId: () => string,
 ) {
   const styles = model.styles
@@ -91,7 +92,7 @@ export function createTableOfContentsFold(
    * earlier pending fold's head paragraph reports its post-split text.
    */
   const entries = (paragraphs: readonly DocumentParagraphWire[]) =>
-    tableOfContentsEntriesFor(paragraphs, styles, drafts, bookmarkFor)
+    tableOfContentsEntriesFor(paragraphs, styles, drafts, deletedIds, bookmarkFor)
 
   /**
    * Splices one pending `TOC` into `paragraphs` — the wire counterpart of
@@ -192,12 +193,14 @@ type PendingTocEntry = TocEntry & { fragments?: string[] }
  * Heading paragraphs at outline levels 1-3 in painted order — the painted
  * twin of the writer's `tableOfContentsEntries`, reading effective text so
  * a typed heading edit already in the draft shows in the entry it will
- * capture.
+ * capture. A paragraph marked for deletion stays painted but is skipped,
+ * matching the heading set the writer's `deletedIds` exclusion captures.
  */
 function tableOfContentsEntriesFor(
   paragraphs: readonly DocumentParagraphWire[],
   styles: readonly DocumentStyleWire[],
   drafts: Record<string, string>,
+  deletedIds: ReadonlySet<string>,
   bookmarkFor: (paragraph: DocumentParagraphWire) => {
     name: string
     fragments?: string[]
@@ -205,6 +208,7 @@ function tableOfContentsEntriesFor(
 ): PendingTocEntry[] {
   const entries: PendingTocEntry[] = []
   for (const paragraph of paragraphs) {
+    if (deletedIds.has(paragraph.id)) continue
     const level = paragraphOutlineLevel(paragraph, styles)
     if (level === undefined || level >= 3) continue
     const { name, fragments } = bookmarkFor(paragraph)

@@ -426,6 +426,7 @@ export function applyDocumentEdits(
           operation.paragraph,
           operation.offset,
           occurrence,
+          deletedIds,
           lineage ? { recorder: lineage, operationIndex } : undefined,
         )
         structureCounts.set(key, occurrence + 1)

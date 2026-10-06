@@ -164,6 +164,46 @@ describe('table-of-contents edits', () => {
     ).toEqual(['Alice Example overview'])
   })
 
+  it('saves a field when the same batch deletes a heading', async () => {
+    const document = await parseFixture()
+    const { heading, xrefAnchor, tocAnchor } = tocFixture(document)
+
+    // The batch styles a surviving paragraph into a heading, splices the
+    // field, and deletes the stored heading — the order
+    // `collectEditOperations` emits, with every delete last. The captured
+    // entries must skip the doomed heading: bookmarking it would put
+    // replacements inside the range the delete covers.
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_style',
+        paragraphId: tocAnchor.id,
+        styleId: 'Heading1',
+      },
+      {
+        type: 'insert_table_of_contents',
+        paragraphId: xrefAnchor.id,
+        offset: 0,
+      },
+      { type: 'delete_paragraph', paragraphId: heading.id },
+    ])
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const paragraphs = mainParagraphs(reparsed)
+
+    const entries = paragraphs.filter(
+      (paragraph) => paragraph.styleId === 'TOC1',
+    )
+    expect(
+      entries.map((item) => item.runs.map((run) => run.text).join('')),
+    ).toEqual(['Commented text'])
+    expect(
+      paragraphs.some(
+        (paragraph) =>
+          paragraph.runs.map((run) => run.text).join('') ===
+          'Alice Example overview',
+      ),
+    ).toBe(false)
+  })
+
   it('captures entries at outline level, not by display text', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document).find(
