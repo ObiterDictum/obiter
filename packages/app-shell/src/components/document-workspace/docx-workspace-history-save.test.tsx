@@ -1256,10 +1256,10 @@ describe('saving a margin story', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
     await clickSaveAndSettle(document, 1)
 
-    // A snapshot predating the saved field used to block the whole boundary:
-    // no operation removes a stored splice, so the translation refused it.
-    // For a page number the stored field is baseline content, so the
-    // boundary must reconcile and the save settle without a reload.
+    // A snapshot predating the saved field used to block the whole boundary.
+    // Under the general rule — no operation removes a stored field splice —
+    // the page number is baseline content, so the boundary reconciles and
+    // the save settles without a reload.
     await waitFor(() => expect(saveState()).toBe('saved'))
     expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
 
@@ -1290,10 +1290,10 @@ describe('saving a footnote', () => {
     await clickSaveAndSettle(document, 1)
 
     // A snapshot predating the saved footnote used to block the whole
-    // boundary: restoring it would need a removal no operation expresses,
-    // so the translation refused it and every later save demanded a
-    // reload. The stored reference and its note entry are baseline
-    // content, so the boundary must reconcile and the save settle.
+    // boundary and force a reload before any later save. The general rule
+    // applies: the vocabulary has no removal for a stored footnote, so the
+    // reference and its note entry are baseline content and the boundary
+    // must reconcile and the save settle.
     await waitFor(() => expect(saveState()).toBe('saved'))
     expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
 
@@ -1301,6 +1301,85 @@ describe('saving a footnote', () => {
     // server without a reload.
     fireEvent.click(screen.getByRole('button', { name: 'Close footnotes' }))
     selectBodyParagraph('Page body')
+    fireEvent.change(field(), { target: { value: 'Page body edited' } })
+    await clickSaveAndSettle(document, 2)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(document.editAsync).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('saving an inserted structure', () => {
+  it('reconciles a body save that inserts a picture so a second save runs', async () => {
+    const restorePicker = stubImagePicker()
+    try {
+      const document = await server(['Page body'])
+      mountWorkspace({
+        editAsync: document.editAsync,
+        decideAsync: document.decideAsync,
+        modelFor: document.modelFor,
+      })
+      clickParagraph('para-000001', 'Page body'.length)
+      openRibbonTab('Insert')
+      fireEvent.click(screen.getByRole('button', { name: 'Picture' }))
+      insertPictureFile()
+      await waitFor(() => expect(saveState()).toBe('unsaved'))
+
+      await clickSaveAndSettle(document, 1)
+      // A snapshot predating the saved picture used to fail translation and
+      // block every later save behind a reload. No operation removes a
+      // stored drawing, so the picture is baseline content and the boundary
+      // must reconcile instead.
+      await waitFor(() => expect(saveState()).toBe('saved'))
+      expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+      expect(document.editAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operations: expect.arrayContaining([
+            expect.objectContaining({ type: 'insert_image' }),
+          ]),
+        }),
+      )
+
+      // A second save without reloading must reach the server.
+      fireEvent.change(field(), { target: { value: 'Page body edited' } })
+      await clickSaveAndSettle(document, 2)
+      await waitFor(() => expect(saveState()).toBe('saved'))
+      expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+      expect(document.editAsync).toHaveBeenCalledTimes(2)
+    } finally {
+      restorePicker()
+    }
+  })
+
+  it('reconciles a body save that inserts a cross-reference so a second save runs', async () => {
+    const document = await server(['Page body', 'Cited paragraph'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000001', 'Page body'.length)
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Cross-reference' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Cited paragraph' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+
+    await clickSaveAndSettle(document, 1)
+    // The same rule: no operation removes a stored REF field, so the
+    // predating snapshot survives and the boundary settles saved rather
+    // than demanding a reload.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(document.editAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operations: expect.arrayContaining([
+          expect.objectContaining({ type: 'insert_cross_reference' }),
+        ]),
+      }),
+    )
+
+    // A second save without reloading must reach the server.
     fireEvent.change(field(), { target: { value: 'Page body edited' } })
     await clickSaveAndSettle(document, 2)
     await waitFor(() => expect(saveState()).toBe('saved'))
@@ -1335,4 +1414,50 @@ function paintedDecorations(): CSSStyleDeclaration[] {
   return [...document.querySelectorAll('[data-caret-run-overlay] span')]
     .filter((span): span is HTMLElement => span instanceof HTMLElement)
     .map((span) => span.style)
+}
+
+/** A 1x1 synthetic PNG — the same bytes the E6a e2e spec picks. */
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+/**
+ * jsdom does not decode a raster and its Blob is not the one the runtime's
+ * URL.createObjectURL accepts, so the picture picker's two browser
+ * boundaries — natural-size decode and blob URLs — are stubbed. Everything
+ * between the input's change event and the `insert_image` draft is the real
+ * code: byte sniffing, base64 and the draft schema all still run.
+ */
+function stubImagePicker() {
+  const image = globalThis.Image
+  const { createObjectURL, revokeObjectURL } = URL
+  class StubbedImage {
+    naturalWidth = 1
+    naturalHeight = 1
+    onload: (() => void) | null = null
+    onerror: (() => void) | null = null
+    set src(_value: string) {
+      queueMicrotask(() => this.onload?.())
+    }
+  }
+  Object.assign(globalThis, { Image: StubbedImage })
+  Object.assign(URL, {
+    createObjectURL: () => 'blob:pending-image',
+    revokeObjectURL: () => undefined,
+  })
+  return () => {
+    Object.assign(globalThis, { Image: image })
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+  }
+}
+
+/** Feeds one real PNG through the ribbon's hidden file input. */
+function insertPictureFile() {
+  const input = screen.getByLabelText('Insert picture')
+  const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0))
+  const file = new File([bytes], 'figure.png', { type: 'image/png' })
+  // jsdom has no FileList constructor and its files setter rejects a plain
+  // array; the change handler only reads `files?.[0]`, so it is defined
+  // directly.
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+  fireEvent.change(input)
 }
