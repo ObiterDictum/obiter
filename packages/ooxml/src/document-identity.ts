@@ -37,6 +37,11 @@ const EDITABLE_STORY_KINDS: ReadonlySet<
  *
  * The attribute is written through the existing overlay, so it lands only in
  * the document being serialised. Historical versions are never rewritten.
+ * The rule runs on every edit save, not only ones that touch a margin story:
+ * the first save of any kind on a document whose header/footer paragraphs
+ * lack the attribute rewrites those parts once, injecting `xmlns:w14` and
+ * `w14:paraId`. Once canonical the ids persist, so every later save leaves
+ * the margin parts byte-stable.
  */
 export function canonicaliseParagraphIdentities(
   document: OoxmlDocument,
