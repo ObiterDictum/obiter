@@ -60,7 +60,7 @@ export function ensureParagraphBookmark(
     const opening = part.overlay.source
       .slice(range.start, range.startTagEnd)
       .replace(/\/\s*>$/u, '>')
-    setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark`, {
+    setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:${name}`, {
       start: range.start,
       end: range.end,
       value: `${opening}${bookmarkStart}${bookmarkEnd}</w:p>`,
@@ -91,12 +91,12 @@ export function ensureParagraphBookmark(
       throw new OoxmlError('invalid-document-edit')
     }
   }
-  setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:start`, {
+  setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:${name}:start`, {
     start: startPoint,
     end: startPoint,
     value: bookmarkStart,
   })
-  setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:end`, {
+  setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:${name}:end`, {
     start: endPoint,
     end: endPoint,
     value: bookmarkEnd,
