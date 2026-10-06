@@ -320,7 +320,9 @@ describe('footnote save partitioning', () => {
       state,
     )
     // The note text lives and dies with its structure: both are held back
-    // rather than one shipping and the other silently dropping.
+    // rather than one shipping and the other silently dropping, and the
+    // deferred slot discloses the structure's own reason — not a guessed
+    // missing-anchor one.
     expect(plan.operations).toEqual([])
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual([
       'structure',
@@ -329,6 +331,7 @@ describe('footnote save partitioning', () => {
     expect(plan.blocked[0]?.reason).toBe(
       'A footnote can only be placed in the body.',
     )
+    expect(plan.blocked[1]?.reason).toBe(plan.blocked[0]?.reason)
   })
 
   it('blocks a page number anchored in a note paragraph', () => {

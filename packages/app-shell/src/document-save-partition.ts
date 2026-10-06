@@ -206,6 +206,9 @@ export function partitionDraftState(
       story.paragraphs.map((paragraph) => [paragraph.id, story.kind] as const),
     ),
   )
+  // Why each blocked structure was held back, so the deferred note text can
+  // disclose the same reason rather than blaming a missing anchor paragraph.
+  const blockedStructureReasons = new Map<string, string>()
   for (const structure of state.structures) {
     const deletedAnchor =
       keep.deletedParagraphIds.includes(structure.paragraphId) ||
@@ -250,6 +253,18 @@ export function partitionDraftState(
       nonPageAnchor ||
       conflicting
     ) {
+      const reason = nonBodyAnchor
+        ? 'A footnote can only be placed in the body.'
+        : nonPageAnchor
+          ? 'A page number needs a page of its own: the body, a header or a footer.'
+          : missingTarget
+            ? 'The paragraph this references is no longer in the document.'
+            : deletedAnchor
+              ? 'The paragraph this was placed after is marked for deletion.'
+              : conflicting
+                ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+                : 'The paragraph this was placed in is no longer in the document.'
+      blockedStructureReasons.set(structure.id, reason)
       blocked.push({
         slot: {
           kind: 'structure',
@@ -257,17 +272,7 @@ export function partitionDraftState(
           id: structure.id,
           structureKind: structure.kind,
         },
-        reason: nonBodyAnchor
-          ? 'A footnote can only be placed in the body.'
-          : nonPageAnchor
-            ? 'A page number needs a page of its own: the body, a header or a footer.'
-            : missingTarget
-              ? 'The paragraph this references is no longer in the document.'
-              : deletedAnchor
-                ? 'The paragraph this was placed after is marked for deletion.'
-                : conflicting
-                  ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-                  : 'The paragraph this was placed in is no longer in the document.',
+        reason,
         label: slotLabel({
           kind: 'structure',
           key: `structure:${structure.id}`,
@@ -307,6 +312,7 @@ export function partitionDraftState(
         paragraphId: deferred.paragraphId,
       },
       reason:
+        blockedStructureReasons.get(deferred.structureId) ??
         'The paragraph this footnote was placed in is no longer in the document.',
       label: 'note text',
     })
