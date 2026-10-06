@@ -34,9 +34,12 @@ function resolveRun(
   paragraphId: string,
   runIndex: number,
 ) {
-  const paragraph = modelParagraphs(model).find(
-    (item) => item.id === paragraphId,
-  )
+  // The lineage names paragraphs in every editable story — a canonicalised
+  // header or footer paragraph is a legitimate `toParagraphId` — so
+  // resolution searches all of them, not just the body.
+  const paragraph = model.stories
+    .flatMap((story) => story.paragraphs)
+    .find((item) => item.id === paragraphId)
   expect(paragraph).toBeDefined()
   return paragraph?.runs[runIndex]
 }

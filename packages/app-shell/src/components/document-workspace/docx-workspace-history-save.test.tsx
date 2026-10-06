@@ -50,8 +50,11 @@ function toPersisted(model: DocumentModelWire): PersistedParagraph[] {
  * is built by the same pipeline the API uses, so a wrong-target reversal shows
  * up as the wrong persisted text, not just a second request.
  */
-async function server(initial: readonly string[]) {
-  let bytes = await createSyntheticDocx(initial)
+async function server(
+  initial: readonly string[],
+  margins?: Parameters<typeof createSyntheticDocx>[1],
+) {
+  let bytes = await createSyntheticDocx(initial, margins)
   let parsed = await parseDocx(bytes)
   let version = 1
   let paragraphs = toPersisted(parsed.model)
@@ -1182,6 +1185,53 @@ describe('undo across a successful save', () => {
     ])
   })
 })
+
+describe('saving a margin story', () => {
+  it('resolves the history boundary so a second header save needs no reload', async () => {
+    const document = await server(['Body'], { header: 'Page header' })
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Header', exact: true }))
+    clickParagraph(marginParagraphId())
+    // Two edits leave an undo snapshot holding a margin draft across the
+    // boundary: the save must reconcile it against the reloaded model's
+    // margin paragraph identity instead of parking it on a positional id
+    // the reloaded model does not carry.
+    fireEvent.change(field(), { target: { value: 'Page header edited' } })
+    fireEvent.change(field(), { target: { value: 'Page header edited again' } })
+    await clickSaveAndSettle(document, 1)
+
+    // The committed boundary must reconcile against the new version: no
+    // lineageUnresolved banner, and the workspace keeps saving without the
+    // reload the unresolved state used to force between margin saves.
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+
+    // Undo restores the first edit. The reversal is only sendable when the
+    // boundary keyed it to the reloaded header paragraph's run — the stale
+    // positional paragraph id left it a pending placeholder no save can send.
+    openRibbonTab('Home')
+    fireEvent.click(undoButton())
+    await clickSaveAndSettle(document, 2)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+  })
+})
+
+/** The editable band paragraph's id — the only one inside the header band. */
+function marginParagraphId() {
+  const node = screen
+    .getByLabelText('Document header')
+    .querySelector('[data-paragraph-id]')
+  const id = node?.getAttribute('data-paragraph-id')
+  if (!id) throw new Error('no margin paragraph rendered')
+  return id
+}
 
 function paintedBold(paragraphText: string): boolean {
   const target = [...document.querySelectorAll('[data-paragraph-id]')].find(
