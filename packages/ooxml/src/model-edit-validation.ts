@@ -34,6 +34,7 @@ export type PlannedOperation =
           | 'set_hyperlink'
           | 'insert_footnote'
           | 'insert_page_number'
+          | 'insert_table_of_contents'
       }
     > & { paragraph: ParagraphAnchor })
   | (Extract<DocumentEditOperation, { type: 'insert_cross_reference' }> & {
@@ -168,7 +169,8 @@ export function validateTrackedOperations(
       operation.type === 'set_hyperlink' ||
       operation.type === 'insert_cross_reference' ||
       operation.type === 'insert_footnote' ||
-      operation.type === 'insert_page_number'
+      operation.type === 'insert_page_number' ||
+      operation.type === 'insert_table_of_contents'
     ) {
       throw new OoxmlError('model-node-not-editable')
     }

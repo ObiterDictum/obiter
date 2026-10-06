@@ -50,6 +50,11 @@ export {
   type TablePlacement,
   type TablePlacementContext,
 } from './structure-xml'
+export {
+  paragraphOutlineLevel,
+  tableOfContentsEntries,
+  type TableOfContentsEntry,
+} from './table-of-contents-entries'
 export { decodeXmlReferences, findXmlTagEnd } from './xml-lexemes'
 export * from './collaboration-merge'
 export * from './document-identity'

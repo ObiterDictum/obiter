@@ -30,14 +30,16 @@ export function planOperation(
   // they write package parts or block-level structure the margin stories do
   // not carry, or relationships the header/footer parts would each need. A
   // footnote reference joins them: its note lives in the shared footnotes
-  // story, not in whichever part the reference happened to land in.
+  // story, not in whichever part the reference happened to land in. A table
+  // of contents splices paragraph siblings, so it is body-only too.
   if (
     operation.type === 'insert_break' ||
     operation.type === 'insert_section_break' ||
     operation.type === 'insert_table' ||
     operation.type === 'insert_image' ||
     operation.type === 'set_hyperlink' ||
-    operation.type === 'insert_footnote'
+    operation.type === 'insert_footnote' ||
+    operation.type === 'insert_table_of_contents'
   ) {
     const paragraph = requireMainParagraph(document, operation.paragraphId)
     return { ...operation, paragraph }

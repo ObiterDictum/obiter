@@ -97,6 +97,18 @@ export function operationConflicts(
       changes.paragraphRunChanges.has(operation.paragraphId)
     )
   }
+  if (operation.type === 'insert_table_of_contents') {
+    // The offset footprint is shared with the other splices, but the entries
+    // also bookmark every heading paragraph — a deleted or rewritten heading
+    // anywhere in the document changes what the field captures. The
+    // footprint cannot say which changed ids are headings, so any paragraph
+    // change conflicts rather than capture a stale entry list.
+    return (
+      changes.paragraphIds.size > 0 ||
+      changes.paragraphOpaque.size > 0 ||
+      changes.paragraphRunChanges.size > 0
+    )
+  }
   if (operation.type === 'insert_section_break') {
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
