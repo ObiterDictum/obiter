@@ -89,7 +89,7 @@ export function layoutDocument(
       for (const id of spec.textBoxParaIds) boxed.add(id)
     }
   }
-  const source = withInserts(
+  const source = storyBlocksWithInserts(
     (blocks ?? storyBlocks(story)).filter(
       (block) => block.type === 'table' || !boxed.has(block.paragraph.id),
     ),
@@ -254,7 +254,10 @@ function layoutNotes(
   }
 }
 
-function withInserts(
+/** One story's blocks with pending paragraph inserts woven in at their
+ * anchors — the same source the paginator flows, so a margin band and the
+ * body column paint pending paragraphs identically. */
+export function storyBlocksWithInserts(
   blocks: StoryBlock[],
   inserts: LocalInsert[],
 ): StoryBlock[] {

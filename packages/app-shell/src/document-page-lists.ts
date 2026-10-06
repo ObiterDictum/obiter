@@ -4,7 +4,7 @@ import type {
   DocumentParagraphWire,
   DocumentStyleWire,
 } from '@obiter/contracts'
-import { documentStory } from './document-model-text'
+import { editableStories } from './document-model-text'
 import { twipToPx, xmlAttr, xmlTagAttrs } from './document-page-units'
 import { withoutTrackedParagraphProperties } from './document-run-properties'
 
@@ -21,12 +21,14 @@ export function documentListMarkers(
   model: DocumentModelWire,
 ): Map<string, ListMarker> {
   const markers = new Map<string, ListMarker>()
-  const story = documentStory(model)
-  if (!story) return markers
-  const counters = new Map<string, number[]>()
-  for (const paragraph of story.paragraphs) {
-    const marker = paragraphListMarker(paragraph, model, counters)
-    if (marker) markers.set(paragraph.id, marker)
+  // A numbering instance restarts inside each story — the body and each
+  // header/footer number independently — so the counters are per story.
+  for (const story of editableStories(model)) {
+    const counters = new Map<string, number[]>()
+    for (const paragraph of story.paragraphs) {
+      const marker = paragraphListMarker(paragraph, model, counters)
+      if (marker) markers.set(paragraph.id, marker)
+    }
   }
   return markers
 }

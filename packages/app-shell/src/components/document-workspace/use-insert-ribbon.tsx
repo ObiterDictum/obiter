@@ -6,6 +6,7 @@ import { documentBreakToolbar } from '../../document-break-toolbar'
 import type { BreakDraft } from '../../document-edits'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
+import { marginStories } from '../../document-page-layout'
 import {
   documentStructureToolbar,
   storyTableCellIds,
@@ -42,6 +43,12 @@ export function useInsertRibbon(
   caret: FormatTarget,
   offset: number | null,
   trackChanges: boolean,
+  margin: {
+    /** The margin story open for editing, or 'document' for the body. */
+    editingKind: 'document' | 'header' | 'footer'
+    onOpen: (kind: 'header' | 'footer') => void
+    onClose: () => void
+  },
   drafts: {
     deletedParagraphIds: string[]
     drafts: Record<string, string>
@@ -67,6 +74,16 @@ export function useInsertRibbon(
     caret.kind === 'selection' && caret.ranges.length === 1
       ? (caret.ranges[0] ?? null)
       : null
+  // Only the final section's margin story is editable; other parts stay
+  // painted. A document without the part reports why the button is disabled.
+  const headerUnavailable =
+    model && marginStories(model, 'header').length === 0
+      ? 'This document has no header part'
+      : undefined
+  const footerUnavailable =
+    model && marginStories(model, 'footer').length === 0
+      ? 'This document has no footer part'
+      : undefined
   const structure = documentStructureToolbar({
     paragraphId,
     model,
@@ -96,10 +113,21 @@ export function useInsertRibbon(
       linkUnavailable: structure.linkUnavailable,
       crossReferenceUnavailable: structure.crossReferenceUnavailable,
       crossReferenceTargets: structure.crossReferenceTargets,
+      pageNumberUnavailable: structure.pageNumberUnavailable,
+      editingStoryKind:
+        margin.editingKind === 'document' ? undefined : margin.editingKind,
+      headerUnavailable,
+      footerUnavailable,
+      onOpenStory: margin.onOpen,
+      onCloseStory: margin.onClose,
       onInsertTable: (rows, columns) => structure.insertTable(rows, columns),
       onInsertLink: (target) => structure.insertLink(target),
       onInsertCrossReference: (targetParagraphId) =>
         structure.insertCrossReference(targetParagraphId),
+      onInsertPageNumber: () => {
+        const outcome = structure.insertPageNumber()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
       onInsertPicture: () => pictureInput.current?.click(),
       picturePicker: (
         <input

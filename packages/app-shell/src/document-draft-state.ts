@@ -101,7 +101,8 @@ export type DraftSlot =
       kind: 'structure'
       key: string
       id: string
-      structureKind: 'table' | 'image' | 'link' | 'cross-reference'
+      structureKind:
+        'table' | 'image' | 'link' | 'cross-reference' | 'page-number'
     }
   | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 

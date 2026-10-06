@@ -1,4 +1,14 @@
-import type { DocumentStoryWire } from '@obiter/contracts'
+import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
+import {
+  resolveInsertAnchor,
+  storyFlowParagraphIds,
+  type LocalInsert,
+} from './document-edits'
+import {
+  documentStory,
+  editableParagraphs,
+  editableStoryOf,
+} from './document-model-text'
 import { drawingFloat, paragraphAnchorXml } from './document-page-floats'
 import { storyBlocks } from './document-page-tables'
 
@@ -26,4 +36,41 @@ export function storyBodyParagraphIds(story: DocumentStoryWire): Set<string> {
     body.add(block.paragraph.id)
   }
   return body
+}
+
+/**
+ * The story a flow id's order lives in — the paragraph's own editable story,
+ * or, for a pending insert, the story its anchor chain resolves to. A margin
+ * insert anchors on a header/footer paragraph, so it belongs to that story's
+ * flow rather than the body's.
+ */
+export function editingStoryOfFlowId(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  id: string,
+): DocumentStoryWire | undefined {
+  const insert = inserts.find((item) => item.clientId === id)
+  if (!insert) return editableStoryOf(model, id)
+  const insertById = new Map(inserts.map((item) => [item.clientId, item]))
+  const realIds = new Set(
+    editableParagraphs(model).map((paragraph) => paragraph.id),
+  )
+  return editableStoryOf(
+    model,
+    resolveInsertAnchor(insert, insertById, realIds),
+  )
+}
+
+/** `paragraphId`'s flow order inside its own story. */
+export function storyFlowOrder(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
+  paragraphId: string,
+): string[] {
+  return storyFlowParagraphIds(
+    editingStoryOfFlowId(model, inserts, paragraphId) ?? documentStory(model),
+    inserts,
+    deletedParagraphIds,
+  )
 }

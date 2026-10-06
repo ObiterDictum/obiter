@@ -3,10 +3,10 @@ import type {
   DocumentVersionLineage,
 } from '@obiter/contracts'
 import {
-  flowParagraphIds,
   insertPlainText,
   removeInsert,
   runPropertiesFromFragments,
+  storyFlowParagraphIds,
   type LocalInsert,
 } from './document-edits'
 import { mergeEmphasis, paragraphNumPr } from './document-format-edits'
@@ -15,7 +15,11 @@ import type {
   PendingEmphasis,
   SectionDraft,
 } from './document-format-types'
-import { documentStory } from './document-model-text'
+import {
+  editableParagraph,
+  editableParagraphs,
+  editableStoryOf,
+} from './document-model-text'
 import { documentSectionXml } from './document-page-layout'
 import { xmlNumber, xmlTagAttrs } from './document-page-units'
 import { paragraphFormatOf } from './document-paragraph-format'
@@ -225,7 +229,7 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
     : new Map<string, string>()
   const remapParagraph = (id: string) => paragraphMap.get(id) ?? id
   const fromRunIds = new Set(
-    (documentStory(baseline.fromModel)?.paragraphs ?? []).flatMap((paragraph) =>
+    editableParagraphs(baseline.fromModel).flatMap((paragraph) =>
       paragraph.runs.map((run) => run.id),
     ),
   )
@@ -506,15 +510,21 @@ function lineageIdentities(
     if (run) insertedRuns.set(intentId, run.id)
   }
 
-  const fromOrder = flowParagraphIds(baseline.fromModel, [], [])
   const deleted = new Set(
     baseline.covered.flatMap((slot) =>
       slot.kind === 'delete' ? [slot.paragraphId] : [],
     ),
   )
-  const surviving = new Set(fromOrder.filter((id) => !deleted.has(id)))
   for (const slot of baseline.covered) {
     if (slot.kind !== 'delete') continue
+    // The restoration anchor is found inside the deleted paragraph's own
+    // story: a header paragraph restores against its header siblings.
+    const fromOrder = storyFlowParagraphIds(
+      editableStoryOf(baseline.fromModel, slot.paragraphId),
+      [],
+      [],
+    )
+    const surviving = new Set(fromOrder.filter((id) => !deleted.has(id)))
     const anchor = nearestSurvivingPreceding(
       fromOrder,
       surviving,
@@ -616,13 +626,11 @@ function nearestSurvivingFollowing(
 }
 
 function storyParagraph(model: DocumentModelWire, paragraphId: string) {
-  return documentStory(model)?.paragraphs.find(
-    (paragraph) => paragraph.id === paragraphId,
-  )
+  return editableParagraph(model, paragraphId)
 }
 
 function runText(model: DocumentModelWire, runId: string) {
-  for (const paragraph of documentStory(model)?.paragraphs ?? []) {
+  for (const paragraph of editableParagraphs(model)) {
     for (const run of paragraph.runs) {
       if (run.id === runId) return run.text
     }
@@ -1161,7 +1169,7 @@ function preEmphasisForRun(
   model: DocumentModelWire,
   runId: string,
 ): PendingEmphasis | null {
-  for (const paragraph of documentStory(model)?.paragraphs ?? []) {
+  for (const paragraph of editableParagraphs(model)) {
     const run = paragraph.runs.find((item) => item.id === runId)
     if (run) return emphasisOf(run.preservedXmlFragments)
   }
