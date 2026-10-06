@@ -51,8 +51,13 @@ export function spliceInlineXml(
   const holder = runHoldingOffset(paragraph, offset)
   if (holder && runHasPendingOverlay(overlay, holder.run)) {
     // A linked run's pending replacement still sits inside the `w:hyperlink`
-    // element — stored or written by a wrap earlier in this batch — so a
-    // splice into it would nest inside the link.
+    // element, so a splice into it would nest inside the link. The element
+    // check catches a stored link — an internal `w:anchor` or a target the
+    // parse allowlist dropped leaves nothing on the wire — and a run nested
+    // in one always starts strictly inside it. The wire check is still what
+    // catches a wrap written earlier in this batch: that element exists only
+    // inside the pending replacement, not in `overlay.source`.
+    refuseInsideStoredHyperlink(overlay, holder.run.runRange.start)
     if (holder.run.wire.hyperlinkTarget !== undefined) {
       throw new OoxmlError('invalid-document-edit')
     }

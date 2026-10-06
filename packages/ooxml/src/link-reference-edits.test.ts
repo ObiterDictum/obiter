@@ -584,6 +584,42 @@ describe('structural link and reference refusals', () => {
     ).not.toThrow()
   })
 
+  it('refuses a splice into pending text inside a stored link the wire cannot see', async () => {
+    // An internal w:anchor link resolves no r:id, and a non-allowlisted
+    // target is dropped at parse: neither sets hyperlinkTarget on the run's
+    // wire, so only the element check can refuse the pending-path splice.
+    for (const fixture of [internalLinkFixtureBytes, hostileLinkFixtureBytes]) {
+      const document = await parseDocx(await fixture())
+      const paragraphs = mainParagraphs(document)
+      const anchor = paragraphs.find((paragraph) =>
+        paragraph.runs.some((run) => run.text === 'this'),
+      )
+      const target = paragraphs.find(
+        (paragraph) => paragraph.id !== anchor?.id,
+      )
+      const linked = anchor?.runs.find((run) => run.text === 'this')
+      if (!anchor || !target || !linked) {
+        throw new Error('Fixture model is missing.')
+      }
+      expect(linked.hyperlinkTarget).toBeUndefined()
+      // 'Open ' [0,5) 'this' [5,9): 7 stays inside the linked run after the
+      // text edit, so the splice takes the pending-run path.
+      expect(() =>
+        applyDocumentEdits(document, [
+          { type: 'replace_run_text', runId: linked.id, text: 'thas' },
+          {
+            type: 'insert_cross_reference',
+            paragraphId: anchor.id,
+            offset: 7,
+            targetParagraphId: target.id,
+          },
+        ]),
+      ).toThrowError(
+        expect.objectContaining({ code: 'invalid-document-edit' }),
+      )
+    }
+  })
+
   it('fails closed under tracked changes', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
@@ -719,6 +755,26 @@ function multiRunFixtureBytes() {
 
 async function parseMultiRunFixture() {
   return parseDocx(await multiRunFixtureBytes())
+}
+
+/**
+ * An internal `w:anchor` hyperlink carries no `r:id`, so its run carries no
+ * target on the wire while the element still wraps it.
+ */
+function internalLinkFixtureBytes() {
+  const zip = new JSZip()
+  const fixed = documentXml.replace(
+    '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
+    '<w:p w14:paraId="B1B2C3D8"><w:r><w:t>Open </w:t></w:r><w:hyperlink w:anchor="Toc1"><w:r><w:t>this</w:t></w:r></w:hyperlink></w:p>' +
+      '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
+  )
+  zip.file('[Content_Types].xml', contentTypesXml)
+  zip.file('_rels/.rels', rootRelationshipsXml)
+  zip.file('word/document.xml', fixed)
+  zip.file('word/_rels/document.xml.rels', documentRelationshipsXml)
+  zip.file('word/styles.xml', stylesXml)
+  zip.file('word/numbering.xml', numberingXml)
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 
 /**
