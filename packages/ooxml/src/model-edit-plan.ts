@@ -1,7 +1,10 @@
-import type { DocumentEditOperation } from '@obiter/contracts'
+import {
+  EDITABLE_STORY_KINDS,
+  PAGE_STORY_KINDS,
+  type DocumentEditOperation,
+} from '@obiter/contracts'
 
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
-import { EDITABLE_STORY_KINDS, PAGE_STORY_KINDS } from './editable-story-kinds'
 import type { PlannedOperation } from './model-edit-validation'
 import type { RunEmphasis } from './model-property-edits'
 

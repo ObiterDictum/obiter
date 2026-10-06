@@ -1,10 +1,11 @@
-import type {
-  DocumentChangeWire,
-  DocumentCursor,
-  DocumentModelWire,
-  DocumentParagraphWire,
-  DocumentStoryWire,
-  DocumentTextRunWire,
+import {
+  EDITABLE_STORY_KINDS,
+  type DocumentChangeWire,
+  type DocumentCursor,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
+  type DocumentStoryWire,
+  type DocumentTextRunWire,
 } from '@obiter/contracts'
 
 export function documentStory(
@@ -14,23 +15,11 @@ export function documentStory(
   return model.stories.find((story) => story.kind === kind)
 }
 
-/**
- * The story kinds the workspace can edit: the body, the header and footer
- * margin stories, and the footnotes story. Endnote and comment stories stay
- * read-only, matching the writer's editable-story set.
- */
-const EDITABLE_STORY_KINDS: ReadonlySet<DocumentStoryWire['kind']> = new Set([
-  'document',
-  'header',
-  'footer',
-  'footnotes',
-])
-
 export function editableStories(model: DocumentModelWire): DocumentStoryWire[] {
   return model.stories.filter((story) => EDITABLE_STORY_KINDS.has(story.kind))
 }
 
-/** The story — body, header or footer — `paragraphId` belongs to. */
+/** The editable story — body, margin or notes — `paragraphId` belongs to. */
 export function editableStoryOf(
   model: DocumentModelWire,
   paragraphId: string,
