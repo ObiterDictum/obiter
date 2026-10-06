@@ -18,16 +18,23 @@ export function pageReferenceMap(
   model: DocumentModelWire,
   pages: readonly LaidOutPage[],
 ): ReadonlyMap<string, number> {
+  // First wins: a paragraph split across a page break lays out one block
+  // per page, but its bookmark sits on the page the paragraph opens on —
+  // the page `PAGEREF` must name.
   const pageOf = new Map<string, number>()
   pages.forEach((page, index) => {
     for (const block of page.blocks) {
       if (block.type === 'paragraph') {
-        pageOf.set(block.paragraph.id, index + 1)
+        if (!pageOf.has(block.paragraph.id)) {
+          pageOf.set(block.paragraph.id, index + 1)
+        }
         continue
       }
       for (const row of block.table.rows) {
         for (const cell of row.cells) {
-          for (const id of cell.paragraphIds) pageOf.set(id, index + 1)
+          for (const id of cell.paragraphIds) {
+            if (!pageOf.has(id)) pageOf.set(id, index + 1)
+          }
         }
       }
     }

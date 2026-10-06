@@ -515,4 +515,32 @@ describe('PAGEREF paint', () => {
     const base2 = model([first, paragraph('p2', 'Tail')])
     expect(pageReferenceMap(base2, layoutDocument(base2)).get('_Toc9')).toBe(1)
   })
+
+  it('keeps the first page when a paragraph spans a break', () => {
+    // A heading long enough to straddle a page break lays out as two
+    // fragments, one per page. Its bookmark opens the paragraph, so
+    // `PAGEREF` must name the page the paragraph starts on — not the page
+    // its continuation block lands on.
+    const heading = paragraph('h1', 'A heading that runs over', 'Heading1')
+    heading.preservedXmlFragments.push(
+      '<w:bookmarkStart w:id="3" w:name="_Toc3"/>',
+      '<w:bookmarkEnd w:id="3"/>',
+    )
+    const base = model([paragraph('p1', 'Lead'), heading])
+    const pages = layoutDocument(base, {}, [], {}, undefined, [
+      { id: 'b1', kind: 'page', paragraphId: 'h1', offset: 1 },
+    ])
+    const fragmentPages = pages
+      .map((page, index) =>
+        page.blocks.some(
+          (block) =>
+            block.type === 'paragraph' && block.paragraph.id === 'h1',
+        )
+          ? index + 1
+          : 0,
+      )
+      .filter((page) => page > 0)
+    expect(fragmentPages).toHaveLength(2)
+    expect(pageReferenceMap(base, pages).get('_Toc3')).toBe(fragmentPages[0])
+  })
 })
