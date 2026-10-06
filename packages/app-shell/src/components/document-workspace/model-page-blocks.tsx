@@ -14,7 +14,7 @@ import {
 } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
-import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
+import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import {
   contrastFillText,
   imagePartNameForDrawing,

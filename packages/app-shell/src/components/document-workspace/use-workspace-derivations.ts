@@ -19,11 +19,11 @@ import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
 import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
 import { withStructuralDrafts } from '../../document-structure-fold'
+import { pendingImageUrls } from '../../document-image-inserts'
 import {
-  pendingImageUrls,
   structuralLinkOverlays,
   type ParagraphLinkOverlay,
-} from '../../document-structural-drafts'
+} from '../../document-structure-overlays'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'

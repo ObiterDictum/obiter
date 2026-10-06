@@ -13,9 +13,9 @@ import {
   documentStructureToolbar,
   storyTableCellIds,
 } from './document-structure-toolbar'
+import { structuralLinkOverlays } from './document-structure-overlays'
 import {
   structuralDraftSchema,
-  structuralLinkOverlays,
   type StructuralCrossReferenceDraft,
   type StructuralDraft,
   type StructuralLinkDraft,
