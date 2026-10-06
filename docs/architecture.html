@@ -6583,7 +6583,7 @@
                   <code
                     >packages/app-shell/src/document-history-baseline.ts</code
                   >
-                  (1337)
+                  (1348)
                 </li>
                 <li>
                   <code>packages/app-shell/src/views/home.tsx</code> (1161)
@@ -7085,6 +7085,26 @@
                     still opens the stored link.
                   </td>
                   <td class="id">ooxml/parts/stories.ts</td>
+                </tr>
+                <tr>
+                  <td>
+                    A saved structure with no removal operation cannot be undone
+                    away
+                  </td>
+                  <td>
+                    The structural vocabulary is insertion-only —
+                    <code>insert_table</code>, <code>insert_image</code>,
+                    <code>insert_cross_reference</code>,
+                    <code>insert_page_number</code> and
+                    <code>insert_footnote</code> have no inverse — so once one
+                    is saved it is baseline content: a history snapshot that
+                    predates it survives translation, but undo cannot offer its
+                    removal. Only <code>set_hyperlink</code> can remove a stored
+                    structure (a null target unwraps the link), so a snapshot
+                    predating a saved link still blocks history reconciliation
+                    rather than claiming a reversal that is not synthesised.
+                  </td>
+                  <td class="id">app-shell/document-history-baseline.ts</td>
                 </tr>
               </tbody>
             </table>
