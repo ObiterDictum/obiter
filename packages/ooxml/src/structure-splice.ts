@@ -157,7 +157,10 @@ export function assertNoPendingAt(overlay: XmlOverlay, sourceOffset: number) {
  * spliced field or drawing inside the link — a boundary point lands between
  * elements and composes, matching the client's strictly-inside-run rule.
  */
-function refuseInsideStoredHyperlink(overlay: XmlOverlay, sourceOffset: number) {
+function refuseInsideStoredHyperlink(
+  overlay: XmlOverlay,
+  sourceOffset: number,
+) {
   for (const element of parseXmlElements(overlay.source)) {
     if (
       isWord(element, 'hyperlink') &&

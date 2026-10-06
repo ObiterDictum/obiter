@@ -540,9 +540,7 @@ describe('structural link and reference refusals', () => {
     const anchor = paragraphs.find((paragraph) =>
       paragraph.runs.some((run) => run.text.includes('See')),
     )
-    const target = paragraphs.find(
-      (paragraph) => paragraph.id !== anchor?.id,
-    )
+    const target = paragraphs.find((paragraph) => paragraph.id !== anchor?.id)
     if (!anchor || !target) throw new Error('Fixture model is missing.')
     // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): 8 sits inside the
     // stored w:hyperlink, 2 sits before it.
