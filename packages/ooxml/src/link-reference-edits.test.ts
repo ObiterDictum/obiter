@@ -594,9 +594,7 @@ describe('structural link and reference refusals', () => {
       const anchor = paragraphs.find((paragraph) =>
         paragraph.runs.some((run) => run.text === 'this'),
       )
-      const target = paragraphs.find(
-        (paragraph) => paragraph.id !== anchor?.id,
-      )
+      const target = paragraphs.find((paragraph) => paragraph.id !== anchor?.id)
       const linked = anchor?.runs.find((run) => run.text === 'this')
       if (!anchor || !target || !linked) {
         throw new Error('Fixture model is missing.')
@@ -614,9 +612,7 @@ describe('structural link and reference refusals', () => {
             targetParagraphId: target.id,
           },
         ]),
-      ).toThrowError(
-        expect.objectContaining({ code: 'invalid-document-edit' }),
-      )
+      ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
     }
   })
 
