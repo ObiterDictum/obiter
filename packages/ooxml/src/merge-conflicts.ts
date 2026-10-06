@@ -103,8 +103,12 @@ export function operationConflicts(
     // anywhere in the document changes what the field captures. The
     // footprint cannot say which changed ids are headings, so any paragraph
     // change conflicts rather than capture a stale entry list.
+    // `paragraphIds` is the presence set: every aligned paragraph, changed
+    // or not. It answers only whether the anchor survived; the change sets
+    // are `paragraphStyles`, `paragraphOpaque` and `paragraphRunChanges`.
     return (
-      changes.paragraphIds.size > 0 ||
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphStyles.size > 0 ||
       changes.paragraphOpaque.size > 0 ||
       changes.paragraphRunChanges.size > 0
     )
