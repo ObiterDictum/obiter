@@ -388,6 +388,9 @@ describe('documentStructureToolbar', () => {
       selectionRange: null,
       deletedParagraphIds: new Set<string>(),
       trackChanges: false,
+      structures,
+      drafts: {},
+      extraRuns: {},
       setStructures: (update) => {
         structures.push(...update([]))
       },

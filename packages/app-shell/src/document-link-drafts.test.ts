@@ -112,7 +112,7 @@ describe('link and cross-reference drafts', () => {
       ...emptyDraftState(),
       structures: [
         linkDraft('s1', 'p1'),
-        crossReferenceDraft('s2', 'p1', 'p2'),
+        crossReferenceDraft('s2', 'p2', 'p1'),
       ],
     })
     expect(plan.operations).toEqual([
@@ -125,9 +125,9 @@ describe('link and cross-reference drafts', () => {
       },
       {
         type: 'insert_cross_reference',
-        paragraphId: 'p1',
+        paragraphId: 'p2',
         offset: 2,
-        targetParagraphId: 'p2',
+        targetParagraphId: 'p1',
       },
     ])
     expect(plan.blocked).toEqual([])
@@ -159,6 +159,130 @@ describe('link and cross-reference drafts', () => {
     expect(deleted.blocked.map((item) => item.slot)).toEqual([
       expect.objectContaining({ structureKind: 'cross-reference' }),
     ])
+  })
+
+  it('blocks a second structural draft a writer cannot compose in the same run', () => {
+    const base = model([
+      paragraph('p1', 'See the cited sections'),
+      paragraph('p2', 'Target'),
+    ])
+    const link = linkDraft('s1', 'p1') // covers [1,4) of the single run
+    const cases: Array<{ name: string; structures: StructuralDraft[] }> = [
+      {
+        name: 'a second link in the same run',
+        structures: [
+          link,
+          { ...linkDraft('s2', 'p1', 'https://other.example.com'), from: 10, to: 15 },
+        ],
+      },
+      {
+        name: 'a picture inside the linked run',
+        structures: [
+          link,
+          {
+            id: 's2',
+            kind: 'image',
+            paragraphId: 'p1',
+            offset: 8,
+            contentType: 'image/png',
+            dataBase64: 'aGk=',
+            widthPx: 4,
+            heightPx: 4,
+            name: 'x.png',
+          },
+        ],
+      },
+      {
+        name: 'a cross-reference inside the linked run',
+        structures: [link, crossReferenceDraft('s2', 'p1', 'p2')],
+      },
+      {
+        name: 'a second cross-reference in the same run',
+        structures: [
+          crossReferenceDraft('s1', 'p1', 'p2'),
+          { ...crossReferenceDraft('s2', 'p1', 'p2'), offset: 10 },
+        ],
+      },
+    ]
+    for (const { name, structures } of cases) {
+      const plan = planDocumentSave(base, { ...emptyDraftState(), structures })
+      expect(
+        plan.blocked.map((item) => item.slot),
+        name,
+      ).toEqual([expect.objectContaining({ kind: 'structure', id: 's2' })])
+      expect(plan.blocked[0]?.reason, name).toBeTruthy()
+      // The surviving draft still saves.
+      expect(plan.operations).toHaveLength(1)
+    }
+  })
+
+  it('keeps composable same-paragraph structural drafts addressable', () => {
+    // Two runs: 'See ' (0-4) and 'sections' (4-12).
+    const base = model([
+      {
+        id: 'p1',
+        runs: [
+          { id: 'p1-a', text: 'See ', preservedXmlFragments: [] },
+          { id: 'p1-b', text: 'sections', preservedXmlFragments: [] },
+        ],
+        preservedXmlFragments: [],
+      },
+      paragraph('p2', 'Target'),
+      paragraph('p3', 'Other'),
+    ])
+    const link = { ...linkDraft('s1', 'p1'), from: 0, to: 3 }
+    const cases: Array<{ name: string; structures: StructuralDraft[] }> = [
+      {
+        name: 'a cross-reference in an uncovered run',
+        structures: [link, { ...crossReferenceDraft('s2', 'p1', 'p2'), offset: 8 }],
+      },
+      {
+        name: 'a picture then a cross-reference',
+        structures: [
+          {
+            id: 's1',
+            kind: 'image',
+            paragraphId: 'p1',
+            offset: 2,
+            contentType: 'image/png',
+            dataBase64: 'aGk=',
+            widthPx: 4,
+            heightPx: 4,
+            name: 'x.png',
+          },
+          { ...crossReferenceDraft('s2', 'p1', 'p2'), offset: 8 },
+        ],
+      },
+      {
+        name: 'links on disjoint runs',
+        structures: [
+          link,
+          { ...linkDraft('s2', 'p1', 'https://other.example.com'), from: 5, to: 10 },
+        ],
+      },
+      {
+        name: 'cross-references in disjoint runs',
+        structures: [
+          { ...crossReferenceDraft('s1', 'p1', 'p2'), offset: 1 },
+          { ...crossReferenceDraft('s2', 'p1', 'p3'), offset: 8 },
+        ],
+      },
+      {
+        name: 'two references to one target from different paragraphs',
+        structures: [
+          crossReferenceDraft('s1', 'p1', 'p3'),
+          crossReferenceDraft('s2', 'p2', 'p3'),
+        ],
+      },
+    ]
+    for (const { name, structures } of cases) {
+      const plan = planDocumentSave(base, { ...emptyDraftState(), structures })
+      expect(plan.blocked, name).toEqual([])
+      expect(
+        plan.operations.map((operation) => operation.type),
+        name,
+      ).toHaveLength(2)
+    }
   })
 
   it('names link and cross-reference slots for disclosure', () => {
@@ -255,6 +379,9 @@ describe('documentStructureToolbar links', () => {
       selectionRange: { paragraphId: 'p1', from: 1, to: 4 },
       deletedParagraphIds: new Set<string>(),
       trackChanges: false,
+      structures,
+      drafts: {},
+      extraRuns: {},
       setStructures: (update) => {
         structures.push(...update([]))
       },
@@ -354,5 +481,38 @@ describe('documentStructureToolbar links', () => {
   it('hides a paragraph marked for deletion from the chooser', () => {
     const { api } = toolbar({ deletedParagraphIds: new Set(['p2']) })
     expect(api.crossReferenceTargets.map((item) => item.id)).toEqual(['p1'])
+  })
+
+  it('refuses a second structural draft the writers cannot compose', () => {
+    // The held link covers p1's whole single run, so a caret inside it is
+    // unavailable to a picture or a cross-reference.
+    const { api, structures } = toolbar({
+      structures: [linkDraft('s1', 'p1')],
+      offset: 3,
+      selectionActive: false,
+      selectionRange: null,
+    })
+    expect(api.pictureUnavailable).toContain('hyperlink')
+    expect(api.crossReferenceUnavailable).toContain('hyperlink')
+    expect(
+      api.insertImage({
+        contentType: 'image/png',
+        dataBase64: 'aGk=',
+        widthPx: 1,
+        heightPx: 1,
+        name: 'a.png',
+      }).inserted,
+    ).toBe(false)
+    expect(api.insertCrossReference('p2').inserted).toBe(false)
+    expect(structures).toEqual([])
+  })
+
+  it('refuses a second link over a covered run', () => {
+    const { api, structures } = toolbar({
+      structures: [linkDraft('s1', 'p1')],
+    })
+    expect(api.linkUnavailable).toContain('hyperlink')
+    expect(api.insertLink('https://example.com/other').inserted).toBe(false)
+    expect(structures).toEqual([])
   })
 })

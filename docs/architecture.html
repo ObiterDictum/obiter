@@ -7013,10 +7013,17 @@
                     operation inside a pending hyperlink fails closed with a
                     typed error rather than folding through the
                     <code>w:hyperlink</code> wrapper, so overlapping pending
-                    link and picture/table edits cannot compose.
+                    link and picture/table edits cannot compose. The client
+                    enforces the same run-level rule before save:
+                    <code>document-structure-conflicts.ts</code> is the single
+                    predicate both the Insert ribbon's disabled reasons and the
+                    save plan's blocked set consult, so an uncomposable pair is
+                    refused — or held back with a named reason — rather than
+                    failing the whole save with a generic 400.
                   </td>
                   <td class="id">
                     ooxml/hyperlink-edits.ts · ooxml/cross-reference-edits.ts ·
+                    app-shell/document-structure-conflicts.ts ·
                     app-shell/model-run.tsx
                   </td>
                 </tr>
