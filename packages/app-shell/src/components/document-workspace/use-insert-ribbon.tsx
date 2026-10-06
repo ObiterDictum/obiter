@@ -49,7 +49,9 @@ export function useInsertRibbon(
     onClose: () => void
   },
   drafts: {
-    deletedParagraphIds: string[]
+    /** The batch's effective deletions — the shared set the save partition
+     * and the pending fold read, so availability agrees with the save. */
+    deletedParagraphIds: ReadonlySet<string>
     drafts: Record<string, string>
     extraRuns: Record<string, DocumentTextRunWire[]>
     structures: StructuralDraft[]
@@ -91,7 +93,7 @@ export function useInsertRibbon(
     offset,
     selectionActive,
     selectionRange,
-    deletedParagraphIds: new Set(drafts.deletedParagraphIds),
+    deletedParagraphIds: drafts.deletedParagraphIds,
     trackChanges,
     structures: drafts.structures,
     drafts: drafts.drafts,
