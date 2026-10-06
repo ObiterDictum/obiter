@@ -19,8 +19,11 @@ const lineageIdSchema = z.string().min(1).max(255)
  *   paragraph's run list. The paragraph id is persisted in the result version
  *   (`w14:paraId`), so the address resolves against the reparsed model even
  *   though run model ids are reallocated on every parse.
- * - Text offsets are half-open ranges in UTF-16 code units of the *base run's*
- *   text. `fromRunId: null` marks inserted content that has no base origin.
+ * - Text offsets are half-open ranges in UTF-16 code units of the base run's
+ *   text — of the text the batch leaves the run carrying, so for a run whose
+ *   text the batch replaced they index the replacement text and a split still
+ *   names each part's true slice of it. `fromRunId: null` marks inserted
+ *   content that has no base origin.
  *
  * One base run may appear in several result runs (a split); one result run may
  * carry segments from several base runs (a merge or move). The segment list

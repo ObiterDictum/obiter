@@ -177,13 +177,28 @@ export function recordDeletedParagraph(
   }
 }
 
-/** Marks a run's text as changed, so its segments are coarse provenance. */
+/**
+ * Marks a run's text as changed. The run keeps its origins as provenance —
+ * which base runs its text came from — but their ranges are re-expressed over
+ * the text the run now carries, since a replacement no longer lines up with
+ * the stored base text. A later split then slices those ranges further, so a
+ * reversal can distribute a pre-save draft across the parts.
+ */
 export function recordReplacedRun(
   recorder: LineageRecorder,
   run: DocumentTextRunWire,
 ) {
   recorder.replacedRuns.add(run)
   seedRunOrigins(recorder, run)
+  const length = run.text.length
+  recorder.runOrigins.set(
+    run,
+    (recorder.runOrigins.get(run) ?? []).map((segment) =>
+      segment.fromRunId === null
+        ? { fromRunId: null, fromOffset: 0, toOffset: 0 }
+        : { fromRunId: segment.fromRunId, fromOffset: 0, toOffset: length },
+    ),
+  )
 }
 
 /**
@@ -243,9 +258,41 @@ export function sliceRunOrigins(
 }
 
 /**
- * Assigns segments to the parts a split produced. `parts` carry their range in
- * the run's current text. A replaced run cannot be partitioned, so every part
- * inherits the coarse origin set.
+ * The parts of a run whose text was replaced. Every recorded range indexes
+ * the text the run carries, not the stored base text: an origin spanning the
+ * parent's whole current text is a previous part's own range, so a part's
+ * slice shifts by that segment's start; a coarser origin cannot be aligned,
+ * so the part simply claims its own range as provenance.
+ */
+function sliceReplacedRunOrigins(
+  origins: readonly DocumentLineageSegment[],
+  parentLength: number,
+  part: { from: number; to: number },
+): DocumentLineageSegment[] {
+  return origins.map((segment) => {
+    if (segment.fromRunId === null) {
+      return { fromRunId: null, fromOffset: 0, toOffset: 0 }
+    }
+    return segment.toOffset - segment.fromOffset === parentLength
+      ? {
+          fromRunId: segment.fromRunId,
+          fromOffset: segment.fromOffset + part.from,
+          toOffset: segment.fromOffset + part.to,
+        }
+      : {
+          fromRunId: segment.fromRunId,
+          fromOffset: part.from,
+          toOffset: part.to,
+        }
+  })
+}
+
+/**
+ * Assigns segments to the parts a split produced. `parts` carry their range
+ * in the run's current text. An unreplaced run's origins partition that text,
+ * so each part takes its true sub-range; a replaced run's origins index the
+ * replacement text instead, which `sliceReplacedRunOrigins` slices the same
+ * way so a reversal can still distribute a pre-save draft across the parts.
  */
 export function recordSplitRun(
   recorder: LineageRecorder,
@@ -260,7 +307,7 @@ export function recordSplitRun(
     recorder.runOrigins.set(
       part.run,
       replaced
-        ? origins.map((segment) => ({ ...segment }))
+        ? sliceReplacedRunOrigins(origins, parent.text.length, part)
         : sliceRunOrigins(origins, part.from, part.to),
     )
     if (replaced) recorder.replacedRuns.add(part.run)

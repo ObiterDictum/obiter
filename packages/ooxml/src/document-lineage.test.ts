@@ -136,6 +136,56 @@ describe('version lineage resolves against the reparsed DOCX', () => {
     }
   })
 
+  it('slices a replaced-then-split run so each part names its own range', async () => {
+    const document = await load(`<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>`)
+    const recorder = createLineageRecorder(document.model)
+    const paragraph = paragraphs(document)[0]
+    const baseRun = paragraph?.runs[0]
+    if (!paragraph || !baseRun) throw new Error('paragraph')
+    applyDocumentEdits(
+      document,
+      [
+        {
+          type: 'replace_run_text',
+          runId: baseRun.id,
+          text: 'Hello world typed more',
+        },
+        { type: 'insert_page_number', paragraphId: paragraph.id, offset: 5 },
+      ],
+      undefined,
+      recorder,
+    )
+    canonicaliseParagraphIdentities(document)
+    const lineage = buildVersionLineage({
+      recorder,
+      model: document.model,
+      canonicalParagraphIds: new Map(),
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+    })
+    const entry = lineage.paragraphs[0]
+    // The replacement text is what the split cut, so the head and the tail
+    // name their own slices of it — a coarse whole-run origin on every part
+    // would let a reversal write the pre-save text to the head while the
+    // tail kept its saved text, persisting the duplication.
+    const slices = (entry?.runs ?? []).map((run) =>
+      run.segments.map((segment) => [
+        segment.fromRunId,
+        segment.fromOffset,
+        segment.toOffset,
+      ]),
+    )
+    expect(slices).toEqual([
+      [[baseRun.id, 0, 5]],
+      [[null, 0, 0]],
+      [[null, 0, 0]],
+      [[null, 0, 0]],
+      [[null, 0, 0]],
+      [[null, 0, 0]],
+      [[baseRun.id, 5, 22]],
+    ])
+  })
+
   it('keeps duplicate run text distinguishable by lineage', async () => {
     const document = await load(
       `<w:p><w:r><w:t>Same</w:t></w:r><w:r><w:t>Same</w:t></w:r></w:p>`,
