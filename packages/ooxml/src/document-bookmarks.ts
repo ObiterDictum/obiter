@@ -91,16 +91,24 @@ export function ensureParagraphBookmark(
       throw new OoxmlError('invalid-document-edit')
     }
   }
-  setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:${name}:start`, {
-    start: startPoint,
-    end: startPoint,
-    value: bookmarkStart,
-  })
-  setOverlayReplacement(part.overlay, `${target.wire.id}:bookmark:${name}:end`, {
-    start: endPoint,
-    end: endPoint,
-    value: bookmarkEnd,
-  })
+  setOverlayReplacement(
+    part.overlay,
+    `${target.wire.id}:bookmark:${name}:start`,
+    {
+      start: startPoint,
+      end: startPoint,
+      value: bookmarkStart,
+    },
+  )
+  setOverlayReplacement(
+    part.overlay,
+    `${target.wire.id}:bookmark:${name}:end`,
+    {
+      start: endPoint,
+      end: endPoint,
+      value: bookmarkEnd,
+    },
+  )
   part.dirty = true
   target.wire.preservedXmlFragments.push(bookmarkStart, bookmarkEnd)
   return name

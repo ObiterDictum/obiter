@@ -565,8 +565,7 @@ describe('PAGEREF paint', () => {
     const fragmentPages = pages
       .map((page, index) =>
         page.blocks.some(
-          (block) =>
-            block.type === 'paragraph' && block.paragraph.id === 'h1',
+          (block) => block.type === 'paragraph' && block.paragraph.id === 'h1',
         )
           ? index + 1
           : 0,

@@ -679,13 +679,11 @@ describe('bounded collaboration reconciliation', () => {
         paragraph.runs.map((run) => run.text).join('') ===
         'Jane Example referenceJane Example reference',
     )
-    const headingRun = paragraphs
-      .find(
-        (paragraph) =>
-          paragraph.runs.map((run) => run.text).join('') ===
-          'Alice Example overview',
-      )
-      ?.runs[0]
+    const headingRun = paragraphs.find(
+      (paragraph) =>
+        paragraph.runs.map((run) => run.text).join('') ===
+        'Alice Example overview',
+    )?.runs[0]
     if (!anchor || !headingRun) throw new Error('Fixture model is missing.')
     const operation: DocumentEditOperation = {
       type: 'insert_table_of_contents',
