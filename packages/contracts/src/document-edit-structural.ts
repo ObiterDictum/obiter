@@ -260,6 +260,13 @@ export type DocumentEditInsertFootnoteOperation = z.infer<
 >
 
 /**
+ * The most entries a written `TOC` field stores. The operation carries no
+ * entry payload — headings are captured at save — so the writer is what
+ * refuses a document whose heading count would write an unbounded field.
+ */
+export const DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES = 500
+
+/**
  * A `TOC` field whose result is one paragraph per document heading, spliced
  * at `offset` in `paragraphId` — the first multi-paragraph generated
  * structure: the anchor splits into head and tail paragraphs around the
