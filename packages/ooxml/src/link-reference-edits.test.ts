@@ -436,6 +436,57 @@ describe('cross-reference edits', () => {
     )
   })
 
+  it('composes a bookmark on the target with a picture spliced into it', async () => {
+    const document = await parseFixture()
+    const paragraphs = mainParagraphs(document)
+    const anchor = paragraphs[0]
+    const target = paragraphs[1]
+    if (!anchor || !target) throw new Error('Fixture model is missing.')
+    expect(target.runs.map((run) => run.text).join('')).toBe('Restarted list')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_cross_reference',
+        paragraphId: anchor.id,
+        offset: 6,
+        targetParagraphId: target.id,
+      },
+      {
+        type: 'insert_image',
+        paragraphId: target.id,
+        offset: 3,
+        contentType: 'image/png',
+        dataBase64: PNG_BASE64,
+        widthPx: 10,
+        heightPx: 10,
+        name: 'Figure',
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+
+    // The bookmark wraps the target's content and the drawing run survives.
+    expect(xml).toContain('<w:bookmarkStart w:id="5" w:name="_Ref_1"/>')
+    expect(xml).toContain('<w:drawing>')
+    const reparsed = mainParagraphs(await parseDocx(output))
+    const targetWire = reparsed.find((item) => item.id === target.id)
+    expect(
+      targetWire?.runs.some((run) =>
+        run.preservedXmlFragments.some((fragment) =>
+          fragment.includes('<w:drawing'),
+        ),
+      ),
+    ).toBe(true)
+    expect(targetWire?.runs.map((run) => run.text).join('')).toBe(
+      'Restarted list',
+    )
+    expect(
+      targetWire?.preservedXmlFragments.some((fragment) =>
+        fragment.includes('w:name="_Ref_1"'),
+      ),
+    ).toBe(true)
+  })
+
   it('rejects a cross-reference whose target was deleted earlier in the batch', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
