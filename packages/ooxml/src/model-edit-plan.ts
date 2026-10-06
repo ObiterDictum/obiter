@@ -1,6 +1,7 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
+import { EDITABLE_STORY_KINDS, PAGE_STORY_KINDS } from './editable-story-kinds'
 import type { PlannedOperation } from './model-edit-validation'
 import type { RunEmphasis } from './model-property-edits'
 
@@ -24,13 +25,16 @@ export function planOperation(
   if (operation.type === 'set_section_properties') return operation
   // Breaks, tables, pictures, hyperlinks and cross-references stay body-only:
   // they write package parts or block-level structure the margin stories do
-  // not carry, or relationships the header/footer parts would each need.
+  // not carry, or relationships the header/footer parts would each need. A
+  // footnote reference joins them: its note lives in the shared footnotes
+  // story, not in whichever part the reference happened to land in.
   if (
     operation.type === 'insert_break' ||
     operation.type === 'insert_section_break' ||
     operation.type === 'insert_table' ||
     operation.type === 'insert_image' ||
-    operation.type === 'set_hyperlink'
+    operation.type === 'set_hyperlink' ||
+    operation.type === 'insert_footnote'
   ) {
     const paragraph = requireMainParagraph(document, operation.paragraphId)
     return { ...operation, paragraph }
@@ -44,6 +48,17 @@ export function planOperation(
         operation.targetParagraphId,
       ),
     }
+  }
+  if (operation.type === 'insert_page_number') {
+    // The field resolves the page its story belongs to: body, header or
+    // footer. A note story has no page of its own, so the editable-story
+    // catch-all below cannot be the check here.
+    const paragraph = requireEditableParagraph(document, operation.paragraphId)
+    const story = storyOfParagraph(document, paragraph)
+    if (!(story && PAGE_STORY_KINDS.has(story.kind))) {
+      throw new OoxmlError('model-node-not-editable')
+    }
+    return { ...operation, paragraph }
   }
   if (operation.type === 'set_run_emphasis') {
     const runId = operation.runId
@@ -164,13 +179,6 @@ function validateStyle(
     }
   }
 }
-
-/**
- * The story kinds an edit operation may address: the body and the header and
- * footer stories. Footnote/endnote/comment stories are read-only, matching
- * the workspace's editing surface.
- */
-const EDITABLE_STORY_KINDS = new Set(['document', 'header', 'footer'])
 
 export function storyOfParagraph(
   document: OoxmlDocument,
