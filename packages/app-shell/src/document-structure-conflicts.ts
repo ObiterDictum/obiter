@@ -80,9 +80,7 @@ export function structuralDraftConflict(
     // markup; the run's boundaries land in the gap and compose.
     const run = occupiedRun(spans, earlier.offset)
     return (
-      run !== undefined &&
-      run.start < later.offset &&
-      later.offset < run.end
+      run !== undefined && run.start < later.offset && later.offset < run.end
     )
   }
   return false
@@ -127,9 +125,7 @@ function coveredRuns(
   spans: readonly ParagraphRunSpan[],
   link: { from: number; to: number },
 ) {
-  return spans.filter(
-    (span) => span.start < link.to && span.end > link.from,
-  )
+  return spans.filter((span) => span.start < link.to && span.end > link.from)
 }
 
 /**

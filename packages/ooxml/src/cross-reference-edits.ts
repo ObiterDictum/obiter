@@ -252,7 +252,9 @@ function nextRefNameIndex(taken: ReadonlySet<string>) {
   let next = 1
   for (const name of taken) {
     const digits = name.slice(BOOKMARK_NAME_PREFIX.length)
-    const value = /^\d+$/u.test(digits) ? Number.parseInt(digits, 10) : Number.NaN
+    const value = /^\d+$/u.test(digits)
+      ? Number.parseInt(digits, 10)
+      : Number.NaN
     if (Number.isInteger(value) && value >= next) next = value + 1
   }
   return next
