@@ -513,6 +513,28 @@ describe('cross-reference edits', () => {
     ).toBe(true)
   })
 
+  it('rejects a cross-reference whose target is deleted later in the batch', async () => {
+    // The client emits deletions last, so the reference is planned before
+    // the delete that removes its target — the batch-order check must read
+    // the whole planned delete set, not only deletes already applied.
+    const document = await parseFixture()
+    const paragraphs = mainParagraphs(document)
+    const anchor = paragraphs[0]
+    const target = paragraphs[5]
+    if (!anchor || !target) throw new Error('Fixture model is missing.')
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_cross_reference',
+          paragraphId: anchor.id,
+          offset: 0,
+          targetParagraphId: target.id,
+        },
+        { type: 'delete_paragraph', paragraphId: target.id },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
   it('rejects a cross-reference whose target was deleted earlier in the batch', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
