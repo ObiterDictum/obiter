@@ -40,6 +40,7 @@ export function DocxModelPages({
   moveCaret,
   reportJoinRefusal,
   onExitMarginEditing,
+  onOpenNoteEditing,
 }: {
   model: DocumentModelWire
   painted: DocumentModelWire | undefined
@@ -69,6 +70,8 @@ export function DocxModelPages({
   reportJoinRefusal: (refusal: DocumentRangeRefusal) => void
   /** A body click while a margin story is open closes the story. */
   onExitMarginEditing: () => void
+  /** A footnote-body click opens the notes story at that paragraph. */
+  onOpenNoteEditing: (paragraphId: string) => void
 }) {
   const rendered = painted ?? model
   const marginEditing =
@@ -89,6 +92,7 @@ export function DocxModelPages({
             model={rendered}
             marginEditing={marginEditing}
             onExitMarginEditing={onExitMarginEditing}
+            onOpenNoteEditing={onOpenNoteEditing}
             pageNumber={index + 1}
             pageBlocks={laid.blocks}
             pageFloats={laid.floats}

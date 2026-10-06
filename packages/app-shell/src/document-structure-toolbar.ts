@@ -9,6 +9,7 @@ import {
 import type { ExtraRuns } from './document-word-edits'
 import {
   crossReferenceTargetLabel,
+  footnoteNoteParagraphId,
   structuralDraftSchema,
   type ImageInsertFields,
   type StructuralDraft,
@@ -24,6 +25,15 @@ export { storyTableCellIds } from './document-page-tables'
  */
 export type StructuralInsertOutcome =
   { inserted: true } | { inserted: false; reason: string }
+
+/**
+ * A footnote insertion names the folded paragraph the caret should move to —
+ * the pending note body — so the ribbon can open the footnote story and land
+ * the caret where the note's text is typed.
+ */
+export type FootnoteInsertOutcome =
+  | { inserted: true; noteParagraphId: string }
+  | { inserted: false; reason: string }
 
 type SetStructures = (
   update: (current: StructuralDraft[]) => StructuralDraft[],
@@ -146,6 +156,16 @@ export function documentStructureToolbar({
     (offset == null || !paragraphId
       ? 'Place the cursor in the paragraph text to insert a cross-reference'
       : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
+  // A footnote is a body-only splice like a picture, plus the table-cell rule
+  // a block shares: the writer anchors the reference in `word/document.xml`,
+  // and a note on cell text has no entry to hang from in this slice.
+  const footnoteUnavailable =
+    baseUnavailable ??
+    (inTableCell
+      ? 'A table cell cannot hold a footnote'
+      : offset == null || !paragraphId
+        ? 'Place the cursor in the paragraph text to insert a footnote'
+        : conflictWith({ kind: 'footnote', paragraphId, offset }))
   // A page number anchors in whichever editable story the caret sits in —
   // body, header or footer — not just the body. A selection has no single
   // insertion point, and a pending insert has no server id yet.
@@ -183,6 +203,7 @@ export function documentStructureToolbar({
     crossReferenceUnavailable,
     crossReferenceTargets,
     pageNumberUnavailable,
+    footnoteUnavailable,
     insertTable(rows: number, columns: number) {
       if (tableUnavailable || !paragraphId) return
       setStructures((current) => [
@@ -276,6 +297,31 @@ export function documentStructureToolbar({
       }
       setStructures((current) => [...current, draft])
       return { inserted: true }
+    },
+    insertFootnote(): FootnoteInsertOutcome {
+      if (footnoteUnavailable || !paragraphId || offset == null) {
+        return {
+          inserted: false,
+          reason: footnoteUnavailable ?? 'No anchor',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'footnote',
+        paragraphId,
+        offset,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That footnote cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return {
+        inserted: true,
+        noteParagraphId: footnoteNoteParagraphId(draft),
+      }
     },
     insertPageNumber(): StructuralInsertOutcome {
       if (pageNumberUnavailable || !paragraphId || offset == null) {

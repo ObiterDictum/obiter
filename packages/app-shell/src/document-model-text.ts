@@ -15,14 +15,15 @@ export function documentStory(
 }
 
 /**
- * The story kinds the workspace can edit: the body and the header and footer
- * margin stories. Footnote, endnote and comment stories stay read-only,
- * matching the writer's editable-story set.
+ * The story kinds the workspace can edit: the body, the header and footer
+ * margin stories, and the footnotes story. Endnote and comment stories stay
+ * read-only, matching the writer's editable-story set.
  */
 const EDITABLE_STORY_KINDS: ReadonlySet<DocumentStoryWire['kind']> = new Set([
   'document',
   'header',
   'footer',
+  'footnotes',
 ])
 
 export function editableStories(model: DocumentModelWire): DocumentStoryWire[] {
@@ -251,4 +252,27 @@ export function cursorForSelection(
   const run = paragraph?.runs[0]
   if (!paragraph || !run) return null
   return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
+}
+
+/**
+ * Resolves a paragraph id to the story that paints it, indexed once over the
+ * whole model: the body answers for ids no margin or note story claims, so a
+ * lookup stays O(1) instead of walking every story per paragraph.
+ */
+export function paragraphStoryResolver(model: DocumentModelWire) {
+  const storyByParagraph = new Map<string, { kind: string; partName: string }>()
+  let bodyStory = { kind: 'document', partName: '' }
+  for (const item of model.stories) {
+    if (item.kind === 'document') {
+      bodyStory = { kind: 'document', partName: item.partName }
+      continue
+    }
+    for (const paragraph of item.paragraphs) {
+      storyByParagraph.set(paragraph.id, {
+        kind: item.kind,
+        partName: item.partName,
+      })
+    }
+  }
+  return (paragraphId: string) => storyByParagraph.get(paragraphId) ?? bodyStory
 }
