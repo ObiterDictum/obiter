@@ -1,4 +1,8 @@
-import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
+import {
+  PAGE_STORY_KINDS,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
+} from '@obiter/contracts'
 import {
   emptyDraftState,
   isPendingBaselineId,
@@ -6,11 +10,12 @@ import {
   type DraftSlot,
   type DraftState,
 } from './document-draft-state'
-import { editableStories } from './document-model-text'
+import { documentStory, editableStories } from './document-model-text'
 import {
   emptiedParagraphDeletes,
   LAST_PARAGRAPH_MESSAGE,
 } from './document-edits'
+import { storyTableCellIds } from './document-page-tables'
 import { footnoteNoteParagraphId } from './document-structural-drafts'
 import { partitionFormatDrafts } from './document-format-partition'
 import { emphasisSlotKey, slotLabel } from './document-save-slots'
@@ -19,6 +24,11 @@ import {
   conflictingStructure,
   structuralKindNoun,
 } from './document-structure-conflicts'
+import {
+  isTableOfContentsHeading,
+  tableOfContentsAnchorBlock,
+  tableOfContentsHeadingsBlock,
+} from './document-toc-availability'
 
 /**
  * A tracked-change decision the save can send: the group's persisted `w:id`s
@@ -209,6 +219,20 @@ export function partitionDraftState(
   // Why each blocked structure was held back, so the deferred note text can
   // disclose the same reason rather than blaming a missing anchor paragraph.
   const blockedStructureReasons = new Map<string, string>()
+  // The table-of-contents facts the shared refusal predicate reads, computed
+  // lazily so a save holding no such draft does not re-parse the tables.
+  let tocFacts:
+    | { cellIds: ReadonlySet<string>; headings: DocumentParagraphWire[] }
+    | undefined
+  const tableOfContentsFacts = () => {
+    tocFacts ??= {
+      cellIds: storyTableCellIds(documentStory(model)),
+      headings: (documentStory(model)?.paragraphs ?? []).filter((paragraph) =>
+        isTableOfContentsHeading(paragraph, model.styles),
+      ),
+    }
+    return tocFacts
+  }
   for (const structure of state.structures) {
     const deletedAnchor =
       keep.deletedParagraphIds.includes(structure.paragraphId) ||
@@ -237,6 +261,22 @@ export function partitionDraftState(
     // like `replacedEmptyAnchors`, so they are disclosed rather than failing
     // the whole request.
     const wire = paragraphWires.get(structure.paragraphId)
+    // A reloaded table-of-contents draft is refused for every reason the
+    // ribbon would refuse the insertion now: the shared wire-level predicate
+    // keeps the two surfaces from drifting, and anything it cannot see — an
+    // anchor inside `w:sdt` content — stays the writer's last line.
+    const tableOfContentsBlock =
+      structure.kind === 'table-of-contents' && wire !== undefined
+        ? (tableOfContentsAnchorBlock(
+            wire,
+            tableOfContentsFacts().cellIds,
+            model.changes,
+          ) ??
+          tableOfContentsHeadingsBlock(
+            tableOfContentsFacts().headings,
+            model.changes,
+          ))
+        : undefined
     const conflicting = wire
       ? conflictingStructure(
           wire,
@@ -252,6 +292,7 @@ export function partitionDraftState(
       missingTarget ||
       nonBodyAnchor ||
       nonPageAnchor ||
+      tableOfContentsBlock ||
       conflicting
     ) {
       const reason = nonBodyAnchor
@@ -264,9 +305,10 @@ export function partitionDraftState(
             ? 'The paragraph this references is no longer in the document.'
             : deletedAnchor
               ? 'The paragraph this was placed after is marked for deletion.'
-              : conflicting
-                ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-                : 'The paragraph this was placed in is no longer in the document.'
+              : (tableOfContentsBlock ??
+                (conflicting
+                  ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+                  : 'The paragraph this was placed in is no longer in the document.'))
       blockedStructureReasons.set(structure.id, reason)
       blocked.push({
         slot: {

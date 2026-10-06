@@ -242,6 +242,99 @@ describe('table of contents save partitioning', () => {
       },
     ])
   })
+
+  it('blocks a reloaded field for every reason the ribbon refuses', () => {
+    // A draft persisted before the document changed must not be sent to a
+    // writer that will throw — blocking the structure while an unrelated
+    // run draft still goes out is the whole point of the partition.
+    const cellStory = bodyStory([
+      paragraph('h1', 'Overview', 'Heading1'),
+      paragraph('para-w14-CELLP1', 'Cell'),
+      paragraph('p2', 'x'),
+    ])
+    cellStory.preservedXmlFragments = [
+      '<w:tbl><w:tr><w:tc><w:p w14:paraId="CELLP1"><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+    ]
+    const cellPlan = planDocumentSave(
+      { ...model([]), stories: [cellStory] },
+      {
+        ...emptyDraftState(),
+        structures: [tocDraft('s1', 'para-w14-CELLP1', 0)],
+        drafts: { 'p2-r': 'Retyped' },
+      },
+    )
+    expect(cellPlan.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+    ])
+    expect(cellPlan.blocked[0]?.reason).toContain('cell')
+    expect(cellPlan.operations).toEqual([
+      { type: 'replace_run_text', runId: 'p2-r', text: 'Retyped' },
+    ])
+
+    const section = paragraph('s1a', 'Ends here')
+    section.preservedXmlFragments = [
+      '<w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>',
+    ]
+    const sectionPlan = planDocumentSave(
+      model([paragraph('h1', 'Overview', 'Heading1'), section]),
+      { ...emptyDraftState(), structures: [tocDraft('s1', 's1a', 0)] },
+    )
+    expect(sectionPlan.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+    ])
+    expect(sectionPlan.blocked[0]?.reason).toContain('section')
+    expect(sectionPlan.operations).toEqual([])
+
+    const trackedModel = model([
+      paragraph('h1', 'Overview', 'Heading1'),
+      paragraph('t1', 'Changed'),
+    ])
+    trackedModel.changes = [
+      {
+        id: 'c1',
+        kind: 'insert',
+        elementName: 'ins',
+        storyPartName: 'word/document.xml',
+        paragraphId: 't1',
+        text: 'Changed',
+      },
+    ]
+    const trackedPlan = planDocumentSave(trackedModel, {
+      ...emptyDraftState(),
+      structures: [tocDraft('s1', 't1', 0)],
+    })
+    expect(trackedPlan.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+    ])
+    expect(trackedPlan.blocked[0]?.reason).toContain('tracked')
+    expect(trackedPlan.operations).toEqual([])
+
+    const barePlan = planDocumentSave(
+      model([paragraph('p1'), paragraph('p2', 'x')]),
+      { ...emptyDraftState(), structures: [tocDraft('s1', 'p2', 0)] },
+    )
+    expect(barePlan.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+    ])
+    expect(barePlan.blocked[0]?.reason).toContain('no headings')
+    expect(barePlan.operations).toEqual([])
+
+    const many = [
+      ...Array.from({ length: 501 }, (_, index) =>
+        paragraph(`h${String(index)}`, `Heading ${String(index)}`, 'Heading1'),
+      ),
+      paragraph('p2', 'x'),
+    ]
+    const crowdedPlan = planDocumentSave(model(many), {
+      ...emptyDraftState(),
+      structures: [tocDraft('s1', 'p2', 0)],
+    })
+    expect(crowdedPlan.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+    ])
+    expect(crowdedPlan.blocked[0]?.reason).toContain('more than')
+    expect(crowdedPlan.operations).toEqual([])
+  })
 })
 
 describe('table of contents ribbon availability', () => {
@@ -295,6 +388,42 @@ describe('table of contents ribbon availability', () => {
     ).toContain('no headings')
     expect(
       toolbar({ trackChanges: true }).api.tableOfContentsUnavailable,
+    ).toContain('tracked')
+  })
+
+  it('does not count a heading only a pending insert adds', () => {
+    // The painted model carries the inserted paragraph with its Heading1
+    // style, but no stored paragraph can hold its `PAGEREF` bookmark — the
+    // writer skips it, so the count skips it too and a document whose
+    // headings are all pending still refuses.
+    const stored = model([paragraph('p1')])
+    const painted = model([
+      paragraph('p1'),
+      paragraph('pending-h', 'New heading', 'Heading1'),
+    ])
+    expect(
+      toolbar({ model: stored, painted }).api.tableOfContentsUnavailable,
+    ).toContain('no headings')
+  })
+
+  it('refuses an anchor carrying tracked changes', () => {
+    const tracked = model([
+      paragraph('h1', 'Overview', 'Heading1'),
+      paragraph('p1'),
+    ])
+    tracked.changes = [
+      {
+        id: 'c1',
+        kind: 'insert',
+        elementName: 'ins',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'p1',
+        text: 'Inserted text',
+      },
+    ]
+    expect(
+      toolbar({ model: tracked, painted: tracked }).api
+        .tableOfContentsUnavailable,
     ).toContain('tracked')
   })
 

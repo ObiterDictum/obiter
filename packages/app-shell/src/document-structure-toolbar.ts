@@ -1,9 +1,12 @@
 import {
   PAGE_STORY_KINDS,
-  DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES,
   type DocumentModelWire,
 } from '@obiter/contracts'
-import { paragraphOutlineLevel } from '@obiter/ooxml'
+import {
+  isTableOfContentsHeading,
+  tableOfContentsAnchorBlock,
+  tableOfContentsHeadingsBlock,
+} from './document-toc-availability'
 import type { ParagraphRange } from './document-format-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
 import {
@@ -206,45 +209,46 @@ export function documentStructureToolbar({
   // captures: a document with no heading the `\o "1-3"` switch covers drafts
   // a field the writer must refuse, and the stored `w:sectPr` paragraph ends
   // its section so it cannot split. The heading count reads the painted
-  // story: pending inserts carry their style on the wire exactly as stored
-  // ones do.
+  // story restricted to stored paragraphs: a pending insert carries its
+  // style on the wire but cannot hold the stored bookmark an entry needs,
+  // and the writer skips it the same way.
   const paintedStory = painted ? documentStory(painted) : undefined
-  const headingCount = (paintedStory?.paragraphs ?? []).filter((paragraph) => {
-    const level = paragraphOutlineLevel(paragraph, model?.styles ?? [])
-    return level !== undefined && level < 3
-  }).length
+  const storedParagraphIds = new Set(
+    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
+  )
+  const tableOfContentsHeadings = (paintedStory?.paragraphs ?? []).filter(
+    (paragraph) =>
+      storedParagraphIds.has(paragraph.id) &&
+      isTableOfContentsHeading(paragraph, model?.styles ?? []),
+  )
   const anchorWire =
     paragraphId && story
       ? story.paragraphs.find((paragraph) => paragraph.id === paragraphId)
       : undefined
+  const tableOfContentsAnchor =
+    anchorWire === undefined
+      ? undefined
+      : tableOfContentsAnchorBlock(
+          anchorWire,
+          cellParagraphIds,
+          model?.changes ?? [],
+        )
   const tableOfContentsUnavailable =
     baseUnavailable ??
     (inTableCell
       ? 'A table cell cannot hold a table of contents'
       : offset == null || !paragraphId
         ? 'Place the cursor in the paragraph text to insert a table of contents'
-        : anchorWire &&
-            anchorWire.preservedXmlFragments.some(
-              (fragment) =>
-                /^<w:pPr\b/u.test(fragment) && /<w:sectPr\b/u.test(fragment),
-            )
-          ? 'A section-ending paragraph cannot hold a table of contents'
-          : anchorWire &&
-              anchorWire.runs.some((run) =>
-                run.preservedXmlFragments.some((fragment) =>
-                  /<w:(ins|del|moveFrom|moveTo)\b/u.test(fragment),
-                ),
-              )
-            ? 'This paragraph contains tracked changes a table of contents cannot record.'
-            : headingCount === 0
-              ? 'The document has no headings a table of contents can list.'
-              : headingCount > DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES
-                ? `The document has more than ${String(DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES)} headings for a table of contents.`
-                : conflictWith({
-                    kind: 'table-of-contents',
-                    paragraphId,
-                    offset,
-                  }))
+        : (tableOfContentsAnchor ??
+            tableOfContentsHeadingsBlock(
+              tableOfContentsHeadings,
+              model?.changes ?? [],
+            ) ??
+            conflictWith({
+              kind: 'table-of-contents',
+              paragraphId,
+              offset,
+            })))
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
