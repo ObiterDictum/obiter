@@ -143,9 +143,13 @@ export function documentStructureToolbar({
       ? 'Place the cursor in the paragraph text to insert a cross-reference'
       : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
-  // chooser lists the whole story minus paragraphs marked for deletion.
+  // chooser lists the whole story minus paragraphs marked for deletion — and
+  // minus the host paragraph, whose bookmark would wrap the field itself.
   const crossReferenceTargets = (story?.paragraphs ?? [])
-    .filter((paragraph) => !deletedParagraphIds.has(paragraph.id))
+    .filter(
+      (paragraph) =>
+        paragraph.id !== paragraphId && !deletedParagraphIds.has(paragraph.id),
+    )
     .map((paragraph) => ({
       id: paragraph.id,
       label: crossReferenceTargetLabel(model, paragraph.id),
@@ -219,6 +223,12 @@ export function documentStructureToolbar({
         return {
           inserted: false,
           reason: crossReferenceUnavailable ?? 'No anchor',
+        }
+      }
+      if (targetParagraphId === paragraphId) {
+        return {
+          inserted: false,
+          reason: 'A reference cannot point at the paragraph holding it.',
         }
       }
       if (

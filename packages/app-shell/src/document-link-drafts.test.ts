@@ -439,10 +439,7 @@ describe('documentStructureToolbar links', () => {
       selectionRange: null,
     })
     expect(api.crossReferenceUnavailable).toBeUndefined()
-    expect(api.crossReferenceTargets.map((item) => item.id)).toEqual([
-      'p1',
-      'p2',
-    ])
+    expect(api.crossReferenceTargets.map((item) => item.id)).toEqual(['p2'])
     expect(api.insertCrossReference('p2')).toEqual({ inserted: true })
     expect(structures).toEqual([
       {
@@ -480,7 +477,22 @@ describe('documentStructureToolbar links', () => {
 
   it('hides a paragraph marked for deletion from the chooser', () => {
     const { api } = toolbar({ deletedParagraphIds: new Set(['p2']) })
-    expect(api.crossReferenceTargets.map((item) => item.id)).toEqual(['p1'])
+    expect(api.crossReferenceTargets.map((item) => item.id)).toEqual([])
+  })
+
+  it('never offers the host paragraph as its own target', () => {
+    const { api, structures } = toolbar({
+      selectionActive: false,
+      selectionRange: null,
+    })
+    expect(
+      api.crossReferenceTargets.some((target) => target.id === 'p1'),
+    ).toBe(false)
+    expect(api.insertCrossReference('p1')).toEqual({
+      inserted: false,
+      reason: 'A reference cannot point at the paragraph holding it.',
+    })
+    expect(structures).toEqual([])
   })
 
   it('refuses a second structural draft the writers cannot compose', () => {
