@@ -334,6 +334,35 @@ describe('footnote save partitioning', () => {
     expect(plan.blocked[1]?.reason).toBe(plan.blocked[0]?.reason)
   })
 
+  it('carries the reason onto the deferred note text when the anchor is deleted', () => {
+    const draft = footnoteDraft('s1', 'p1', 0)
+    const noteId = footnoteNoteParagraphId(draft)
+    const state = {
+      ...emptyDraftState(),
+      structures: [draft as StructuralDraft],
+      deletedParagraphIds: ['p1'],
+      extraRuns: {
+        [noteId]: [
+          { id: `${noteId}-e`, text: 'A note', preservedXmlFragments: [] },
+        ],
+      },
+    }
+    const plan = planDocumentSave(
+      model([bodyStory([paragraph('p1', 'text'), paragraph('p2')])]),
+      state,
+    )
+    // A second block cause than the story check: the deferred slot must
+    // carry this reason, not fall back to a guessed missing-anchor one.
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+      'extra-runs',
+    ])
+    expect(plan.blocked[0]?.reason).toBe(
+      'The paragraph this was placed after is marked for deletion.',
+    )
+    expect(plan.blocked[1]?.reason).toBe(plan.blocked[0]?.reason)
+  })
+
   it('blocks a page number anchored in a note paragraph', () => {
     const draft: StructuralDraft = {
       id: 's1',
