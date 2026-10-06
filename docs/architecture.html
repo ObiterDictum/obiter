@@ -7027,6 +7027,23 @@
                     app-shell/model-run.tsx
                   </td>
                 </tr>
+                <tr>
+                  <td>
+                    A stored hyperlink whose target is not in the write-path
+                    allowlist is preserved but not painted as a link
+                  </td>
+                  <td>
+                    Resolving a <code>w:hyperlink</code> relationship onto the
+                    wire applies the edit contract's scheme allowlist and
+                    length bound, so a stored target that is not http, https
+                    or mailto — or is longer than 2,048 characters — leaves
+                    the run's <code>hyperlinkTarget</code> unset and the link
+                    unpainted in the editor. The source
+                    <code>.rels</code> stay byte-preserved, so the file itself
+                    is unchanged and Word still opens the stored link.
+                  </td>
+                  <td class="id">ooxml/parts/stories.ts</td>
+                </tr>
               </tbody>
             </table>
           </div>

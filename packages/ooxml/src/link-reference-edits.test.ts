@@ -97,6 +97,32 @@ describe('hyperlink edits', () => {
     ])
   })
 
+  it('leaves a non-allowlisted stored target off the wire untouched', async () => {
+    const input = await hostileLinkFixtureBytes()
+    const document = await parseDocx(input)
+    const hostile = mainParagraphs(document).find((item) =>
+      item.runs.some((run) => run.text === 'this'),
+    )
+    // The javascript: relationship resolves to nothing on the wire, while
+    // the same document's https link still paints.
+    expect(
+      hostile?.runs.find((run) => run.text === 'this')?.hyperlinkTarget,
+    ).toBeUndefined()
+    const linked = mainParagraphs(document).find((item) =>
+      item.runs.some((run) => run.text === 'the report'),
+    )
+    expect(
+      linked?.runs.find((run) => run.text === 'the report')?.hyperlinkTarget,
+    ).toBe('https://example.co.uk/report')
+
+    // The source .rels stay byte-preserved: fidelity is unaffected, only the
+    // painted link is dropped.
+    const output = await serialiseDocx(document)
+    expect(await zipText(output, 'word/_rels/document.xml.rels')).toBe(
+      await zipText(input, 'word/_rels/document.xml.rels'),
+    )
+  })
+
   it('wraps a range spanning several runs in one hyperlink', async () => {
     const document = await parseMultiRunFixture()
     const anchor = mainParagraphs(document).find((paragraph) =>
@@ -670,7 +696,7 @@ async function parseFixture() {
  * a three-run paragraph for span coverage and a stored hyperlink paragraph
  * for unwrap coverage.
  */
-async function parseMultiRunFixture() {
+function multiRunFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(
     '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
@@ -690,9 +716,39 @@ async function parseMultiRunFixture() {
   )
   zip.file('word/styles.xml', stylesXml)
   zip.file('word/numbering.xml', numberingXml)
-  return parseDocx(
-    await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }),
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
+}
+
+async function parseMultiRunFixture() {
+  return parseDocx(await multiRunFixtureBytes())
+}
+
+/**
+ * Two stored links in one document: an allowlisted target and a `javascript:`
+ * target, so the allowlist is proven selective rather than a blanket drop.
+ */
+function hostileLinkFixtureBytes() {
+  const zip = new JSZip()
+  const fixed = documentXml.replace(
+    '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
+    '<w:p w14:paraId="B1B2C3D6"><w:r><w:t>Open </w:t></w:r><w:hyperlink r:id="rId51"><w:r><w:t>this</w:t></w:r></w:hyperlink></w:p>' +
+      '<w:p w14:paraId="B1B2C3D7"><w:r><w:t>See </w:t></w:r><w:hyperlink r:id="rId52"><w:r><w:t>the report</w:t></w:r></w:hyperlink></w:p>' +
+      '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
   )
+  zip.file('[Content_Types].xml', contentTypesXml)
+  zip.file('_rels/.rels', rootRelationshipsXml)
+  zip.file('word/document.xml', fixed)
+  zip.file(
+    'word/_rels/document.xml.rels',
+    documentRelationshipsXml.replace(
+      '</Relationships>',
+      '<Relationship Id="rId51" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="javascript:alert(1)" TargetMode="External"/>' +
+        '<Relationship Id="rId52" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.co.uk/report" TargetMode="External"/></Relationships>',
+    ),
+  )
+  zip.file('word/styles.xml', stylesXml)
+  zip.file('word/numbering.xml', numberingXml)
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 
 function mainParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {
