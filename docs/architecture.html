@@ -6906,6 +6906,36 @@
                   </td>
                 </tr>
                 <tr>
+                  <td>
+                    A table of contents is a write-time snapshot, never
+                    refreshed (PR-E7c)
+                  </td>
+                  <td>
+                    <code>insert_table_of_contents</code> writes a
+                    <code>TOC \o "1-3" \u</code> field whose result is a
+                    paragraph per heading — the first multi-paragraph generated
+                    structure — captured when the save applies, with each
+                    heading bookmarked <code>_Toc&lt;n&gt;</code> and each entry
+                    carrying a <code>PAGEREF</code> to it. There is no field
+                    update operation: restyling or editing a heading leaves the
+                    stored entries as written until the field is reinserted.
+                    Heading membership is by outline level — direct, inherited
+                    through <code>w:basedOn</code>, or the built-in
+                    <code>Heading</code> styleId when the definition is absent
+                    or silent — never display text. The pending fold paints the
+                    same head/entry/tail shape the writer emits, and both paint
+                    paths resolve <code>PAGEREF</code> live from a
+                    bookmark→laid-out-page map rather than a stored result, so
+                    the painted page number is always current even though the
+                    serialised one is not. A body tab run paints as a tab
+                    character, not the right-aligned column stop Word applies.
+                  </td>
+                  <td class="id">
+                    ooxml/table-of-contents-edits.ts ·
+                    app-shell/document-toc-fold.ts
+                  </td>
+                </tr>
+                <tr>
                   <td>Twenty-nine files over the 500-line ceiling</td>
                   <td>The hardest modules to review are the largest</td>
                   <td class="id">RULES.md</td>
@@ -7095,15 +7125,16 @@
                     The structural vocabulary is insertion-only —
                     <code>insert_table</code>, <code>insert_image</code>,
                     <code>insert_cross_reference</code>,
-                    <code>insert_page_number</code> and
-                    <code>insert_footnote</code> have no inverse — so once one
-                    is saved it is baseline content: a history snapshot that
-                    predates it survives translation, but undo cannot offer its
-                    removal. A structure spliced strictly inside a run splits
-                    that run into two continuations in the saved lineage, and a
-                    pre-save run text is re-expressed across every continuing
-                    run; a covered run the lineage cannot name still blocks
-                    rather than persisting a partial reversal. Only
+                    <code>insert_page_number</code>,
+                    <code>insert_footnote</code> and
+                    <code>insert_table_of_contents</code> have no inverse — so
+                    once one is saved it is baseline content: a history snapshot
+                    that predates it survives translation, but undo cannot offer
+                    its removal. A structure spliced strictly inside a run
+                    splits that run into two continuations in the saved lineage,
+                    and a pre-save run text is re-expressed across every
+                    continuing run; a covered run the lineage cannot name still
+                    blocks rather than persisting a partial reversal. Only
                     <code>set_hyperlink</code> can remove a stored structure (a
                     null target unwraps the link), so a snapshot predating a
                     saved link still blocks history reconciliation rather than
