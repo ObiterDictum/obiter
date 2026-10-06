@@ -92,7 +92,13 @@ export function createTableOfContentsFold(
    * earlier pending fold's head paragraph reports its post-split text.
    */
   const entries = (paragraphs: readonly DocumentParagraphWire[]) =>
-    tableOfContentsEntriesFor(paragraphs, styles, drafts, deletedIds, bookmarkFor)
+    tableOfContentsEntriesFor(
+      paragraphs,
+      styles,
+      drafts,
+      deletedIds,
+      bookmarkFor,
+    )
 
   /**
    * Splices one pending `TOC` into `paragraphs` — the wire counterpart of

@@ -473,10 +473,7 @@ describe('table of contents ribbon availability', () => {
     // The painted story still holds the doomed paragraph, but the
     // partition's heading set excludes it — the ribbon must refuse the
     // same field the save would block.
-    const base = model([
-      paragraph('h1', 'Doomed', 'Heading1'),
-      paragraph('p1'),
-    ])
+    const base = model([paragraph('h1', 'Doomed', 'Heading1'), paragraph('p1')])
     expect(
       toolbar({
         model: base,
