@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 
 import { documentBreakToolbar } from '../../document-break-toolbar'
 import type { BreakDraft } from '../../document-edits'
@@ -44,6 +44,9 @@ export function useInsertRibbon(
   trackChanges: boolean,
   drafts: {
     deletedParagraphIds: string[]
+    drafts: Record<string, string>
+    extraRuns: Record<string, DocumentTextRunWire[]>
+    structures: StructuralDraft[]
     setBreaks: (update: (current: BreakDraft[]) => BreakDraft[]) => void
     setStructures: (
       update: (current: StructuralDraft[]) => StructuralDraft[],
@@ -73,6 +76,9 @@ export function useInsertRibbon(
     selectionRange,
     deletedParagraphIds: new Set(drafts.deletedParagraphIds),
     trackChanges,
+    structures: drafts.structures,
+    drafts: drafts.drafts,
+    extraRuns: drafts.extraRuns,
     setStructures: drafts.setStructures,
   })
   return {
