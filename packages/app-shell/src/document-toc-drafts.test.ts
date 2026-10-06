@@ -243,6 +243,38 @@ describe('table of contents save partitioning', () => {
     ])
   })
 
+  it('counts a heading the same batch is still creating', () => {
+    // The heading style is a pending format draft, not a stored style: the
+    // writer applies `set_paragraph_style` before the field captures its
+    // entries, so the partition must read heading-ness off the same batch
+    // rather than the stored wires alone.
+    const plan = planDocumentSave(
+      model([paragraph('h1', 'Overview'), paragraph('p2', 'x')]),
+      {
+        ...emptyDraftState(),
+        structures: [tocDraft('s1', 'p2', 0)],
+        format: {
+          emphasis: [],
+          paragraphStyles: { h1: 'Heading1' },
+          numbering: {},
+          paragraphFormats: {},
+          section: {},
+        },
+      },
+    )
+    expect(plan.blocked).toEqual([])
+    expect(plan.operations).toContainEqual({
+      type: 'set_paragraph_style',
+      paragraphId: 'h1',
+      styleId: 'Heading1',
+    })
+    expect(plan.operations).toContainEqual({
+      type: 'insert_table_of_contents',
+      paragraphId: 'p2',
+      offset: 0,
+    })
+  })
+
   it('blocks a reloaded field for every reason the ribbon refuses', () => {
     // A draft persisted before the document changed must not be sent to a
     // writer that will throw — blocking the structure while an unrelated
