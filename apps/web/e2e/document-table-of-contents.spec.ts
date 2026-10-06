@@ -202,6 +202,21 @@ test('table of contents refuses without headings, then paints, saves and reloads
   await saveAndWait(page)
   await shot(page, '03-saved')
 
+  // The journey must still save after writing the field — earlier slices
+  // shipped a refused-second-save defect that single-save journeys could
+  // not see. Saving is disabled while the workspace is clean, so a small
+  // edit gives the second save real work; the stored field must not
+  // duplicate its entries.
+  await focusParagraph(page, 'Alpha item')
+  await page.keyboard.press('End')
+  await page.keyboard.type(' E7CSECOND')
+  await saveAndWait(page)
+  await expect(page.getByText('Reloading is required to continue')).toHaveCount(
+    0,
+  )
+  await expect(headingParagraphs(page)).toHaveCount(2)
+  await shot(page, '03b-second-save')
+
   const operations = editBodies.flatMap((body) => body.operations ?? [])
   expect(operations).toContainEqual(
     expect.objectContaining({ type: 'insert_table_of_contents' }),
