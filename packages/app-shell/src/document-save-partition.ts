@@ -1,5 +1,4 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { LAST_PARAGRAPH_MESSAGE } from './document-edits'
 import {
   emptyDraftState,
   isPendingBaselineId,
@@ -8,12 +7,14 @@ import {
   type DraftState,
 } from './document-draft-state'
 import { editableStories } from './document-model-text'
-import { emphasisSlotKey, slotLabel } from './document-save-slots'
-import { sectionDraftFields } from './document-section-format'
 import {
-  resolveInsertAnchor,
-  storyFlowParagraphIds,
-} from './document-story-flow'
+  emptiedParagraphDeletes,
+  LAST_PARAGRAPH_MESSAGE,
+} from './document-edits'
+import { footnoteNoteParagraphId } from './document-structural-drafts'
+import { partitionFormatDrafts } from './document-format-partition'
+import { emphasisSlotKey, slotLabel } from './document-save-slots'
+import { resolveInsertAnchor } from './document-story-flow'
 import {
   conflictingStructure,
   structuralKindNoun,
@@ -99,10 +100,26 @@ export function partitionDraftState(
     covered.push({ kind: 'run-text', key: `run:${runId}`, runId })
   }
 
+  // A pending footnote's note text is held as extra runs under a paragraph
+  // id only the painted model carries, so the paragraph-id check cannot
+  // address it: the runs live and die with their structure and are decided
+  // once the structures loop has run.
+  const noteParagraphById = new Map(
+    state.structures
+      .filter((item) => item.kind === 'footnote')
+      .map((item) => [footnoteNoteParagraphId(item), item.id]),
+  )
+  const deferredNoteRuns: { paragraphId: string; structureId: string }[] = []
+
   for (const [paragraphId, runs] of Object.entries(state.extraRuns)) {
     // A persisted draft from before empty lists were dropped may still carry
     // one; it holds nothing, so it is not a slot.
     if (runs.length === 0) continue
+    const structureId = noteParagraphById.get(paragraphId)
+    if (structureId !== undefined) {
+      deferredNoteRuns.push({ paragraphId, structureId })
+      continue
+    }
     if (!paragraphIds.has(paragraphId)) {
       blocked.push({
         slot: {
@@ -184,6 +201,11 @@ export function partitionDraftState(
       .flatMap((story) => story.paragraphs)
       .map((paragraph) => [paragraph.id, paragraph]),
   )
+  const paragraphStoryKind = new Map(
+    editable.flatMap((story) =>
+      story.paragraphs.map((paragraph) => [paragraph.id, story.kind] as const),
+    ),
+  )
   for (const structure of state.structures) {
     const deletedAnchor =
       keep.deletedParagraphIds.includes(structure.paragraphId) ||
@@ -192,6 +214,12 @@ export function partitionDraftState(
       structure.kind === 'cross-reference' &&
       (!paragraphIds.has(structure.targetParagraphId) ||
         keep.deletedParagraphIds.includes(structure.targetParagraphId))
+    // A footnote's reference lives in the body alone: an anchor in any other
+    // editable story is a placement the writer must reject, so it is blocked
+    // here rather than sent to fail.
+    const nonBodyAnchor =
+      structure.kind === 'footnote' &&
+      paragraphStoryKind.get(structure.paragraphId) !== 'document'
     // Same-paragraph pairs a writer cannot compose (a link rewrites whole
     // runs; a field splice poisons its run for a second splice) are held back
     // like `replacedEmptyAnchors`, so they are disclosed rather than failing
@@ -210,6 +238,7 @@ export function partitionDraftState(
       !paragraphIds.has(structure.paragraphId) ||
       deletedAnchor ||
       missingTarget ||
+      nonBodyAnchor ||
       conflicting
     ) {
       blocked.push({
@@ -219,13 +248,15 @@ export function partitionDraftState(
           id: structure.id,
           structureKind: structure.kind,
         },
-        reason: missingTarget
-          ? 'The paragraph this references is no longer in the document.'
-          : deletedAnchor
-            ? 'The paragraph this was placed after is marked for deletion.'
-            : conflicting
-              ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-              : 'The paragraph this was placed in is no longer in the document.',
+        reason: nonBodyAnchor
+          ? 'A footnote can only be placed in the body.'
+          : missingTarget
+            ? 'The paragraph this references is no longer in the document.'
+            : deletedAnchor
+              ? 'The paragraph this was placed after is marked for deletion.'
+              : conflicting
+                ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+                : 'The paragraph this was placed in is no longer in the document.',
         label: slotLabel({
           kind: 'structure',
           key: `structure:${structure.id}`,
@@ -241,6 +272,32 @@ export function partitionDraftState(
       key: `structure:${structure.id}`,
       id: structure.id,
       structureKind: structure.kind,
+    })
+  }
+
+  // The note text deferred above joins the save only when its footnote
+  // structure does — the `insert_footnote` operation carries it — and is
+  // blocked with the same honest reason when the structure could not go.
+  for (const deferred of deferredNoteRuns) {
+    if (keep.structures.some((item) => item.id === deferred.structureId)) {
+      keep.extraRuns[deferred.paragraphId] =
+        state.extraRuns[deferred.paragraphId] ?? []
+      covered.push({
+        kind: 'extra-runs',
+        key: `extra:${deferred.paragraphId}`,
+        paragraphId: deferred.paragraphId,
+      })
+      continue
+    }
+    blocked.push({
+      slot: {
+        kind: 'extra-runs',
+        key: `extra:${deferred.paragraphId}`,
+        paragraphId: deferred.paragraphId,
+      },
+      reason:
+        'The paragraph this footnote was placed in is no longer in the document.',
+      label: 'note text',
     })
   }
 
@@ -268,103 +325,9 @@ export function partitionDraftState(
     })
   }
 
-  for (const [paragraphId, styleId] of Object.entries(
-    state.format.paragraphStyles,
-  )) {
-    if (paragraphIds.has(paragraphId)) {
-      keep.format.paragraphStyles[paragraphId] = styleId
-      covered.push({
-        kind: 'paragraph-style',
-        key: `style:${paragraphId}`,
-        paragraphId,
-      })
-      continue
-    }
-    // A pending insert carries its own paragraph style: the insert operation
-    // sets it, so no separate address is needed. collectEditOperations folds
-    // this entry into the insert and omits it from collectFormatOperations.
-    // It is still a covered slot so a successful save clears it with the insert.
-    if (insertById.has(paragraphId)) {
-      keep.format.paragraphStyles[paragraphId] = styleId
-      covered.push({
-        kind: 'paragraph-style',
-        key: `style:${paragraphId}`,
-        paragraphId,
-      })
-      continue
-    }
-    blocked.push({
-      slot: {
-        kind: 'paragraph-style',
-        key: `style:${paragraphId}`,
-        paragraphId,
-      },
-      reason: 'This paragraph is no longer in the document.',
-      label: 'a paragraph style',
-    })
-  }
-
-  for (const [paragraphId, numbering] of Object.entries(
-    state.format.numbering,
-  )) {
-    if (paragraphIds.has(paragraphId)) {
-      keep.format.numbering[paragraphId] = numbering
-      covered.push({
-        kind: 'numbering',
-        key: `number:${paragraphId}`,
-        paragraphId,
-      })
-      continue
-    }
-    // Numbering is a separate operation with no paragraph id of its own until
-    // the insert has run, so it cannot be composed onto the insert.
-    const onInsert = insertById.has(paragraphId)
-    blocked.push({
-      slot: { kind: 'numbering', key: `number:${paragraphId}`, paragraphId },
-      reason: onInsert
-        ? 'List formatting on a paragraph that has not been saved yet cannot be sent separately.'
-        : 'This paragraph is no longer in the document.',
-      label: onInsert
-        ? 'list formatting on a new paragraph'
-        : 'list formatting',
-    })
-  }
-
-  for (const [paragraphId, paragraphFormat] of Object.entries(
-    state.format.paragraphFormats,
-  )) {
-    if (paragraphIds.has(paragraphId)) {
-      keep.format.paragraphFormats[paragraphId] = paragraphFormat
-      covered.push({
-        kind: 'paragraph-format',
-        key: `pformat:${paragraphId}`,
-        paragraphId,
-      })
-      continue
-    }
-    // Paragraph layout is a separate operation with no paragraph id of its own
-    // until the insert has run, so it cannot be composed onto the insert.
-    const onInsert = insertById.has(paragraphId)
-    blocked.push({
-      slot: {
-        kind: 'paragraph-format',
-        key: `pformat:${paragraphId}`,
-        paragraphId,
-      },
-      reason: onInsert
-        ? 'Paragraph formatting on a paragraph that has not been saved yet cannot be sent separately.'
-        : 'This paragraph is no longer in the document.',
-      label: onInsert
-        ? 'paragraph formatting on a new paragraph'
-        : 'paragraph formatting',
-    })
-  }
-
-  const sectionFields = sectionDraftFields(state.format.section)
-  if (sectionFields) {
-    keep.format.section = state.format.section
-    covered.push({ kind: 'section', key: 'section' })
-  }
+  const format = partitionFormatDrafts(state, paragraphIds, insertById, keep)
+  covered.push(...format.covered)
+  blocked.push(...format.blocked)
 
   state.format.emphasis.forEach((item) => {
     // A run-keyed reversal the save boundary has not named yet is pending: it
@@ -435,19 +398,11 @@ export function partitionDraftState(
   // one. Block the deletes inside each emptied story rather than send a batch
   // the server must reject; the client guard already stops the editor creating
   // this state, so this is the save-plan safety net.
-  const emptiedDeletes = new Set<string>()
-  for (const story of editable) {
-    if (
-      storyFlowParagraphIds(story, keep.inserts, keep.deletedParagraphIds)
-        .length < 1
-    ) {
-      for (const paragraph of story.paragraphs) {
-        if (keep.deletedParagraphIds.includes(paragraph.id)) {
-          emptiedDeletes.add(paragraph.id)
-        }
-      }
-    }
-  }
+  const emptiedDeletes = emptiedParagraphDeletes(
+    model,
+    keep.inserts,
+    keep.deletedParagraphIds,
+  )
   if (emptiedDeletes.size > 0) {
     for (const slot of covered) {
       if (slot.kind !== 'delete' || !emptiedDeletes.has(slot.paragraphId)) {
@@ -455,7 +410,7 @@ export function partitionDraftState(
       }
       blocked.push({
         slot,
-        reason: LAST_PARAGRAPH_MESSAGE,
+        reason: emptiedDeletes.get(slot.paragraphId) ?? LAST_PARAGRAPH_MESSAGE,
         label: 'a deletion',
       })
     }

@@ -2,6 +2,7 @@ import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 import {
   editableParagraph,
   editableParagraphs,
+  editableStories,
   editableStoryOf,
   paragraphPlainText,
 } from './document-model-text'
@@ -10,6 +11,8 @@ import {
   storyFlowParagraphIds,
   type LocalInsert,
 } from './document-story-flow'
+import { isNoteStory, noteEntryResolver } from './document-note-guard'
+import { noteEntryGroups } from './document-page-notes'
 import { collectEditOperations } from './document-edit-operations'
 import { emptyFormatDrafts, type FormatDrafts } from './document-format-edits'
 
@@ -36,16 +39,30 @@ export type { BreakDraft } from './document-draft-state'
 export const LAST_PARAGRAPH_MESSAGE =
   'A document must contain at least one paragraph.'
 
+/** The same reason scoped to a single footnote or endnote entry. */
+export const LAST_NOTE_PARAGRAPH_MESSAGE =
+  'A note must contain at least one paragraph.'
+
+/** The reason a pending structure's folded paragraph cannot be deleted: it is
+ * removed with its insertion, not by deleting a paragraph. */
+export const PENDING_STRUCTURE_MESSAGE =
+  'A pending insertion is removed with Undo, not Delete paragraph.'
+
+/** The refusal a paragraph-deletion request can report: `last-paragraph` is
+ * the story-level invariant, `last-note-paragraph` the same rule scoped to a
+ * single footnote or endnote entry. */
+export type ParagraphDeletionRefusal = 'last-paragraph' | 'last-note-paragraph'
+
 /** The outcome a paragraph-deletion request reports to the editor. A refusal is
  * typed so callers translate it rather than matching an English message, and so
  * the last-paragraph invariant has one name across the ribbon, the deletion
  * operation and the save plan. */
 export type ParagraphDeletionOutcome =
   | { status: 'deleted'; selectId: string | null }
-  | { status: 'refused'; reason: 'last-paragraph'; selectId: null }
+  | { status: 'refused'; reason: ParagraphDeletionRefusal; selectId: null }
 
 /** Why deleting `paragraphId` is refused, or null when the effective document
- * still keeps at least one body paragraph. `flowParagraphIds` is the single
+ * still keeps at least one paragraph. `flowParagraphIds` is the single
  * derivation of that effective flow: it counts stored paragraphs, adds pending
  * inserts and drops paragraphs already marked for deletion, so the ribbon, the
  * deletion operation and the save plan cannot diverge on what remains. */
@@ -54,7 +71,7 @@ export function paragraphDeletionRefusal(
   inserts: readonly LocalInsert[],
   deletedParagraphIds: readonly string[],
   paragraphId: string,
-): 'last-paragraph' | null {
+): ParagraphDeletionRefusal | null {
   // The invariant holds inside the story the paragraph belongs to: a header
   // with no block-level child is as invalid as an empty body. A pending
   // insert's story is the one its anchor chain resolves to.
@@ -66,13 +83,69 @@ export function paragraphDeletionRefusal(
         new Set(editableParagraphs(model).map((item) => item.id)),
       )
     : paragraphId
-  const order = storyFlowParagraphIds(
-    editableStoryOf(model, anchorId),
-    inserts,
-    deletedParagraphIds,
-  )
+  const story = editableStoryOf(model, anchorId)
+  const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
   if (!order.includes(paragraphId)) return null
+  if (isNoteStory(story)) {
+    // The invariant also holds inside each note entry: a `w:footnote` with no
+    // `w:p` child is invalid, so deleting the last surviving paragraph of an
+    // entry is refused even while the story still has others. An insert joins
+    // the entry its anchor resolves into, so it counts as a survivor.
+    const entryIndex = noteEntryResolver(
+      story,
+      inserts,
+      new Set(editableParagraphs(model).map((item) => item.id)),
+    )
+    const entry = entryIndex(paragraphId)
+    if (entry !== -1) {
+      const survivors = order.filter((id) => entryIndex(id) === entry)
+      return survivors.length <= 1 ? 'last-note-paragraph' : null
+    }
+  }
   return order.length <= 1 ? 'last-paragraph' : null
+}
+
+/**
+ * Maps each pending delete that would leave an editable story — or a note
+ * entry inside one — without a surviving paragraph to the reason the save
+ * plan blocks it. `inserts`/`deletedParagraphIds` are the batch's kept
+ * values, so a kept insert anchored inside an entry counts as a survivor.
+ * The client guard already stops the editor creating this state; this is
+ * the same rule restated for a restored or constructed draft.
+ */
+export function emptiedParagraphDeletes(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
+): Map<string, string> {
+  const deletes = new Map<string, string>()
+  const realIds = new Set(editableParagraphs(model).map((item) => item.id))
+  for (const story of editableStories(model)) {
+    if (storyFlowParagraphIds(story, inserts, deletedParagraphIds).length < 1) {
+      for (const paragraph of story.paragraphs) {
+        if (deletedParagraphIds.includes(paragraph.id)) {
+          deletes.set(paragraph.id, LAST_PARAGRAPH_MESSAGE)
+        }
+      }
+    }
+    if (!isNoteStory(story)) continue
+    // The same rule inside each note entry: a `w:footnote` or `w:endnote`
+    // whose surviving `w:p` count would drop to zero cannot be saved, so
+    // the deletes that empty it are blocked like an emptied story.
+    const groups = noteEntryGroups(story)
+    const flow = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
+    const entryIndex = noteEntryResolver(story, inserts, realIds)
+    for (const [index, group] of groups.entries()) {
+      if (group.length === 0) continue
+      if (flow.some((id) => entryIndex(id) === index)) continue
+      for (const id of group) {
+        if (deletedParagraphIds.includes(id)) {
+          deletes.set(id, LAST_NOTE_PARAGRAPH_MESSAGE)
+        }
+      }
+    }
+  }
+  return deletes
 }
 
 export function isDraftDirty(

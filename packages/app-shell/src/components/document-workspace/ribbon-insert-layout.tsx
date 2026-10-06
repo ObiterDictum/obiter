@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Link,
   LinkSimple,
+  Note,
   SquareSplitHorizontal,
   Swap,
   Table,
@@ -137,6 +138,30 @@ export function InsertRibbon({
             icon={<LinkSimple size={16} aria-hidden />}
           />
         </ToolbarRow>
+      </ToolbarGroup>
+      <ToolbarGroup label="Notes">
+        <IconButton
+          label={
+            structure?.editingStoryKind === 'footnotes'
+              ? 'Close footnotes'
+              : 'Footnote'
+          }
+          pressed={structure?.editingStoryKind === 'footnotes'}
+          disabled={
+            !structure ||
+            (structure.editingStoryKind !== 'footnotes' &&
+              Boolean(structure.footnoteUnavailable))
+          }
+          disabledReason={structure?.footnoteUnavailable}
+          onClick={() => {
+            if (structure?.editingStoryKind === 'footnotes') {
+              structure.onCloseStory()
+            } else {
+              structure?.onInsertFootnote()
+            }
+          }}
+          icon={<Note size={16} aria-hidden />}
+        />
       </ToolbarGroup>
       <ToolbarGroup label="Header and footer">
         <ToolbarRow>

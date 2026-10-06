@@ -210,7 +210,9 @@ export function collectEditOperations(
   // after any paragraph the same batch inserted at its anchor, matching the
   // order the pending fold paints, and still before the deletions that close
   // the batch so a deleted anchor cannot silently swallow an insertion.
-  operations.push(...structuralEditOperations(structures, deleted))
+  operations.push(
+    ...structuralEditOperations(structures, deleted, drafts, extraRuns),
+  )
 
   for (const paragraphId of deletedParagraphIds) {
     operations.push({ type: 'delete_paragraph', paragraphId })

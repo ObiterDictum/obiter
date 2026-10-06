@@ -10,6 +10,7 @@ import {
   type DocumentEditImageContentType,
   type DocumentEditOperation,
   type DocumentModelWire,
+  type DocumentTextRunWire,
   imageExtensionForContentType,
 } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
@@ -85,12 +86,36 @@ export type StructuralPageNumberDraft = {
   offset: number
 }
 
+/**
+ * A pending `w:footnoteReference` at `offset` in `paragraphId`, whose note
+ * body is a paragraph the footnotes story folds in for paint. The note's own
+ * text is typed into that paragraph like any pending edit — it is held as
+ * extra runs keyed by `footnoteNoteParagraphId`, not on the draft — and the
+ * save operation carries it as the entry's paragraph text.
+ */
+export type StructuralFootnoteDraft = {
+  id: string
+  kind: 'footnote'
+  paragraphId: string
+  offset: number
+}
+
+/**
+ * The paragraph id the pending footnote's note body folds under. It is not a
+ * stored paragraph and never becomes one: the note's own `w14` id is only
+ * allocated by the save writer.
+ */
+export function footnoteNoteParagraphId(draft: { id: string }) {
+  return `${draft.id}:note`
+}
+
 export type StructuralDraft =
   | StructuralTableDraft
   | StructuralImageDraft
   | StructuralLinkDraft
   | StructuralCrossReferenceDraft
   | StructuralPageNumberDraft
+  | StructuralFootnoteDraft
 
 /**
  * The persisted form of a structural draft, bounded to exactly the fields the
@@ -151,6 +176,14 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       offset: z.number().int().min(0),
     })
     .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('footnote'),
+      paragraphId: z.string().min(1),
+      offset: z.number().int().min(0),
+    })
+    .strict(),
 ])
 
 /**
@@ -173,6 +206,8 @@ export const structuralDraftsFieldSchema = z
 export function structuralEditOperations(
   structures: readonly StructuralDraft[],
   deletedIds: ReadonlySet<string>,
+  drafts: Record<string, string> = {},
+  extraRuns: Record<string, DocumentTextRunWire[]> = {},
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
   for (const structure of structures) {
@@ -214,6 +249,20 @@ export function structuralEditOperations(
         type: 'insert_page_number',
         paragraphId: structure.paragraphId,
         offset: structure.offset,
+      })
+      continue
+    }
+    if (structure.kind === 'footnote') {
+      // The note's text is the typed draft held against the folded note
+      // paragraph — the same effective-text merge the text operations use.
+      const text = (extraRuns[footnoteNoteParagraphId(structure)] ?? [])
+        .map((run) => drafts[run.id] ?? run.text)
+        .join('')
+      operations.push({
+        type: 'insert_footnote',
+        paragraphId: structure.paragraphId,
+        offset: structure.offset,
+        text,
       })
       continue
     }
