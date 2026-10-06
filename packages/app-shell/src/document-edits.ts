@@ -13,7 +13,10 @@ import {
 } from './document-story-flow'
 import { isNoteStory, noteEntryResolver } from './document-note-guard'
 import { noteEntryGroups } from './document-page-notes'
-import { collectEditOperations } from './document-edit-operations'
+import {
+  collectEditOperations,
+  replacedEmptyParagraphIds,
+} from './document-edit-operations'
 import { emptyFormatDrafts, type FormatDrafts } from './document-format-edits'
 
 export {
@@ -29,6 +32,7 @@ export type { LocalInsert } from './document-story-flow'
 export {
   collectEditOperations,
   compactRunProperties,
+  replacedEmptyParagraphIds,
   runPropertiesFromFragments,
   sameRunProperties,
 } from './document-edit-operations'
@@ -146,6 +150,52 @@ export function emptiedParagraphDeletes(
     }
   }
   return deletes
+}
+
+/**
+ * The deleted sets a batch resolves to, computed once so every surface reads
+ * the same answer instead of deriving its own piece of it.
+ *
+ * `emptied` names the marks the emptied-story guard refuses, keyed to its
+ * reason. `applied` is the marks the save will actually write:
+ * `deletedParagraphIds` minus those refusals — a refused mark keeps its
+ * paragraph painted and addressable. `effective` adds the runless paragraphs
+ * a pending replacement deletes implicitly (`replacedEmptyParagraphIds`):
+ * no draft marks them, but the writer's `deletedIds` collects their
+ * `delete_paragraph` ops all the same, so a structural check that reads only
+ * the marks disagrees with the writer.
+ *
+ * Surfaces asking "does this paragraph still paint or still hold text" read
+ * `applied`; surfaces asking "is this paragraph gone after the batch" read
+ * `effective`.
+ */
+export type BatchParagraphDeletions = {
+  /** The marks the emptied-story guard refuses, keyed to the refusal reason. */
+  emptied: ReadonlyMap<string, string>
+  /** The deletions the batch will write: marks minus the refused ones. */
+  applied: ReadonlySet<string>
+  /** Everything the writer treats as gone: `applied` plus implicit replaces. */
+  effective: ReadonlySet<string>
+}
+
+export function batchParagraphDeletions(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
+  extraRuns: Record<string, DocumentTextRunWire[]>,
+  drafts: Record<string, string>,
+): BatchParagraphDeletions {
+  const emptied = emptiedParagraphDeletes(model, inserts, deletedParagraphIds)
+  const applied = new Set(deletedParagraphIds.filter((id) => !emptied.has(id)))
+  const effective = new Set(applied)
+  for (const id of replacedEmptyParagraphIds(
+    editableStories(model).flatMap((story) => story.paragraphs),
+    extraRuns,
+    drafts,
+  )) {
+    effective.add(id)
+  }
+  return { emptied, applied, effective }
 }
 
 export function isDraftDirty(
