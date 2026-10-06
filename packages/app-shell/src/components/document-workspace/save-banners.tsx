@@ -132,7 +132,7 @@ export function DocumentSaveBanners({
           <DiscardWorkDialog
             triggerLabel="Discard rejected change"
             title="Discard the change the server rejected?"
-            body="This deletes the rejected change from your drafts. Other unsaved work stays. The server copy is unchanged."
+            body="This deletes the rejected change from your drafts unless you have edited it since the rejection. An edited change stays so your newer typing is not lost. Other unsaved work stays. The server copy is unchanged."
             confirmLabel="Discard rejected change"
             onConfirm={save.discardRefused}
           />

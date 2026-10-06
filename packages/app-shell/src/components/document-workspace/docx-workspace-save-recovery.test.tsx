@@ -400,6 +400,12 @@ describe('E45 a rejected save must not poison later saves', () => {
       screen.getByRole('button', { name: 'Discard rejected change' }),
     )
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
+    // The copy does not promise a deletion: an edited slot is kept.
+    expect(
+      within(screen.getByRole('dialog')).getByText(
+        /edited it since the rejection/i,
+      ),
+    ).toBeTruthy()
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Discard rejected change',
