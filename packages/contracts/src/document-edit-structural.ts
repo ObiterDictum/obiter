@@ -258,3 +258,26 @@ export const insertFootnoteOperationSchema = z
 export type DocumentEditInsertFootnoteOperation = z.infer<
   typeof insertFootnoteOperationSchema
 >
+
+/**
+ * A `TOC` field whose result is one paragraph per document heading, spliced
+ * at `offset` in `paragraphId` — the first multi-paragraph generated
+ * structure: the anchor splits into head and tail paragraphs around the
+ * caret, the field's begin, instruction and separator open the first entry
+ * paragraph between them, and the end marker opens the tail. The entries
+ * are computed from the document's heading paragraphs when the save
+ * applies the operation — a stored snapshot, never recomputed — so the
+ * operation carries no entry payload. `paragraphId` must name a
+ * body-level paragraph.
+ */
+export const insertTableOfContentsOperationSchema = z
+  .object({
+    type: z.literal('insert_table_of_contents'),
+    paragraphId: editIdSchema,
+    /** Caret offset in the paragraph's effective text. */
+    offset: characterOffsetSchema,
+  })
+  .strict()
+export type DocumentEditInsertTableOfContentsOperation = z.infer<
+  typeof insertTableOfContentsOperationSchema
+>

@@ -59,6 +59,12 @@ const footnote = {
   text: 'Note body text',
 }
 
+const tableOfContents = {
+  type: 'insert_table_of_contents' as const,
+  paragraphId: 'para_1',
+  offset: 4,
+}
+
 const parse = (operations: unknown[]) =>
   documentEditRequestSchema.safeParse({
     baseVersionId: 'ver_1',
@@ -248,6 +254,22 @@ describe('structural edit contracts', () => {
     ],
     ['an extra field', { ...footnote, noteId: 'fn_1' }],
   ])('rejects a footnote with %s', (_label, operation) => {
+    expect(parse([operation]).success).toBe(false)
+  })
+
+  it('accepts a table-of-contents insertion with no entry payload', () => {
+    const parsed = parse([tableOfContents])
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.operations[0]).toEqual(tableOfContents)
+  })
+
+  it.each([
+    ['a negative offset', { ...tableOfContents, offset: -1 }],
+    ['a fractional offset', { ...tableOfContents, offset: 0.5 }],
+    ['an entry payload', { ...tableOfContents, entries: [] }],
+    ['a level bound', { ...tableOfContents, levels: 3 }],
+  ])('rejects a table of contents with %s', (_label, operation) => {
     expect(parse([operation]).success).toBe(false)
   })
 })
