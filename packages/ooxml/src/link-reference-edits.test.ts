@@ -508,6 +508,58 @@ describe('cross-reference edits', () => {
 })
 
 describe('structural link and reference refusals', () => {
+  it('refuses a splice landing inside a stored hyperlink', async () => {
+    const document = await parseMultiRunFixture()
+    const paragraphs = mainParagraphs(document)
+    const anchor = paragraphs.find((paragraph) =>
+      paragraph.runs.some((run) => run.text.includes('See')),
+    )
+    const target = paragraphs.find(
+      (paragraph) => paragraph.id !== anchor?.id,
+    )
+    if (!anchor || !target) throw new Error('Fixture model is missing.')
+    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): 8 sits inside the
+    // stored w:hyperlink, 2 sits before it.
+    const nested: DocumentEditOperation[] = [
+      {
+        type: 'insert_cross_reference',
+        paragraphId: anchor.id,
+        offset: 8,
+        targetParagraphId: target.id,
+      },
+      {
+        type: 'insert_image',
+        paragraphId: anchor.id,
+        offset: 8,
+        contentType: 'image/png',
+        dataBase64: PNG_BASE64,
+        widthPx: 10,
+        heightPx: 10,
+        name: 'Figure',
+      },
+    ]
+    for (const operation of nested) {
+      expect(() => applyDocumentEdits(document, [operation])).toThrowError(
+        expect.objectContaining({ code: 'invalid-document-edit' }),
+      )
+    }
+    // A splice before the link still composes.
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_image',
+          paragraphId: anchor.id,
+          offset: 2,
+          contentType: 'image/png',
+          dataBase64: PNG_BASE64,
+          widthPx: 10,
+          heightPx: 10,
+          name: 'Figure',
+        },
+      ]),
+    ).not.toThrow()
+  })
+
   it('fails closed under tracked changes', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
