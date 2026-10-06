@@ -1,4 +1,4 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
 import {
   emptyDraftState,
   isPendingBaselineId,
@@ -216,10 +216,18 @@ export function partitionDraftState(
         keep.deletedParagraphIds.includes(structure.targetParagraphId))
     // A footnote's reference lives in the body alone: an anchor in any other
     // editable story is a placement the writer must reject, so it is blocked
-    // here rather than sent to fail.
+    // here rather than sent to fail. A page number carries the same rule
+    // against a note-story anchor — the `PAGE` field only resolves in the
+    // body, a header or a footer.
+    const anchorStoryKind = paragraphStoryKind.get(structure.paragraphId)
     const nonBodyAnchor =
       structure.kind === 'footnote' &&
-      paragraphStoryKind.get(structure.paragraphId) !== 'document'
+      anchorStoryKind !== undefined &&
+      anchorStoryKind !== 'document'
+    const nonPageAnchor =
+      structure.kind === 'page-number' &&
+      anchorStoryKind !== undefined &&
+      !PAGE_STORY_KINDS.has(anchorStoryKind)
     // Same-paragraph pairs a writer cannot compose (a link rewrites whole
     // runs; a field splice poisons its run for a second splice) are held back
     // like `replacedEmptyAnchors`, so they are disclosed rather than failing
@@ -239,6 +247,7 @@ export function partitionDraftState(
       deletedAnchor ||
       missingTarget ||
       nonBodyAnchor ||
+      nonPageAnchor ||
       conflicting
     ) {
       blocked.push({
@@ -250,13 +259,15 @@ export function partitionDraftState(
         },
         reason: nonBodyAnchor
           ? 'A footnote can only be placed in the body.'
-          : missingTarget
-            ? 'The paragraph this references is no longer in the document.'
-            : deletedAnchor
-              ? 'The paragraph this was placed after is marked for deletion.'
-              : conflicting
-                ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-                : 'The paragraph this was placed in is no longer in the document.',
+          : nonPageAnchor
+            ? 'A page number needs a page of its own: the body, a header or a footer.'
+            : missingTarget
+              ? 'The paragraph this references is no longer in the document.'
+              : deletedAnchor
+                ? 'The paragraph this was placed after is marked for deletion.'
+                : conflicting
+                  ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+                  : 'The paragraph this was placed in is no longer in the document.',
         label: slotLabel({
           kind: 'structure',
           key: `structure:${structure.id}`,
