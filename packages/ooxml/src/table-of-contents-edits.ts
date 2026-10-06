@@ -24,6 +24,7 @@ import {
   applyFragmentReplacements,
   parseXmlElements,
   setOverlayReplacement,
+  type OverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
 import { isWord } from './parts/xml-elements'
@@ -290,7 +291,7 @@ function tocSpliceReplacement(
   source: string,
   point: InsertionPoint,
   insertion: string,
-): { start: number; end: number; value: string } {
+): OverlayReplacement {
   const split = point.split
   if (!split) {
     return {
