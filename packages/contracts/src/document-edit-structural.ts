@@ -214,3 +214,22 @@ export const insertCrossReferenceOperationSchema = z
 export type DocumentEditInsertCrossReferenceOperation = z.infer<
   typeof insertCrossReferenceOperationSchema
 >
+
+/**
+ * A `PAGE` field spliced at `offset` in `paragraphId`. The field carries an
+ * empty stored result; the reader resolves the number at paint time and Word
+ * recomputes it on repagination, so the operation takes no value. `paragraphId`
+ * may name a paragraph in any editable story — body, header or footer — and
+ * the writer resolves the part the anchor lives in.
+ */
+export const insertPageNumberOperationSchema = z
+  .object({
+    type: z.literal('insert_page_number'),
+    paragraphId: editIdSchema,
+    /** Caret offset in the paragraph's effective text. */
+    offset: characterOffsetSchema,
+  })
+  .strict()
+export type DocumentEditInsertPageNumberOperation = z.infer<
+  typeof insertPageNumberOperationSchema
+>
