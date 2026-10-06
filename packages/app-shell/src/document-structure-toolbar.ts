@@ -216,6 +216,7 @@ export function documentStructureToolbar({
   const tableOfContentsHeadings = (paintedStory?.paragraphs ?? []).filter(
     (paragraph) =>
       storedParagraphIds.has(paragraph.id) &&
+      !deletedParagraphIds.has(paragraph.id) &&
       isTableOfContentsHeading(paragraph, model?.styles ?? []),
   )
   const anchorWire =
