@@ -10,8 +10,21 @@ export type ParagraphRunSpan = { start: number; end: number }
 /** The fields of a structural draft the conflict rule reads. */
 export type StructuralPlacement =
   | { kind: 'table'; paragraphId: string }
-  | { kind: 'image' | 'cross-reference'; paragraphId: string; offset: number }
+  | {
+      kind: 'image' | 'cross-reference' | 'page-number'
+      paragraphId: string
+      offset: number
+    }
   | { kind: 'link'; paragraphId: string; from: number; to: number }
+
+/**
+ * A zero-width field splice at one offset. A `REF` field and a `PAGE` field
+ * share the same five-run shape, so they share the conflict rules: each
+ * poisons strictly-inside splices on the run it lands in.
+ */
+function isFieldSplice(kind: StructuralPlacement['kind']) {
+  return kind === 'cross-reference' || kind === 'page-number'
+}
 
 /**
  * The paragraph's run boundaries in effective-text coordinates: a typed draft
@@ -67,7 +80,7 @@ export function structuralDraftConflict(
   if (later.kind === 'link') {
     if (earlier.kind === 'table') return false
     const covered = coveredRuns(spans, later)
-    if (earlier.kind === 'cross-reference') {
+    if (isFieldSplice(earlier.kind)) {
       // The field's zero-width splice counts as pending on the run it opens
       // at, so a boundary offset poisons the following run too.
       const occupied = occupiedRun(spans, earlier.offset)
@@ -75,7 +88,11 @@ export function structuralDraftConflict(
     }
     return insideAnyRun(covered, earlier.offset)
   }
-  if (earlier.kind === 'cross-reference' && later.kind !== 'table') {
+  if (
+    earlier.kind !== 'table' &&
+    isFieldSplice(earlier.kind) &&
+    later.kind !== 'table'
+  ) {
     // A second splice strictly inside the field's run cannot fold the field
     // markup; the run's boundaries land in the gap and compose.
     const run = occupiedRun(spans, earlier.offset)
@@ -124,6 +141,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'hyperlink'
     case 'cross-reference':
       return 'cross-reference'
+    case 'page-number':
+      return 'page number'
   }
 }
 
@@ -139,7 +158,10 @@ function storedLinkConflict(
   spans: readonly ParagraphRunSpan[],
   candidate: StructuralPlacement,
 ): StructuralPlacement | undefined {
-  if (candidate.kind !== 'image' && candidate.kind !== 'cross-reference') {
+  if (candidate.kind === 'table' || candidate.kind === 'link') {
+    return undefined
+  }
+  if (candidate.kind !== 'image' && !isFieldSplice(candidate.kind)) {
     return undefined
   }
   const index = spans.findIndex(

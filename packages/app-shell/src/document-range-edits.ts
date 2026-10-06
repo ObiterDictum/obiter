@@ -1,7 +1,10 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { flowParagraphIds, removeInsert } from './document-edits'
-import { documentStory } from './document-model-text'
-import { storyBodyParagraphIds } from './document-story-flow'
+import { removeInsert } from './document-edits'
+import {
+  editingStoryOfFlowId,
+  storyBodyParagraphIds,
+  storyFlowOrder,
+} from './document-story-flow'
 import { canJoinParagraphRuns } from './document-run-fidelity'
 import {
   applyReplaceRange,
@@ -33,12 +36,13 @@ export function documentRangeRefusal(
   from: EditorCaret,
   to: EditorCaret,
 ): DocumentRangeRefusal | null {
-  const story = documentStory(model)
+  const story = editingStoryOfFlowId(model, state.inserts, from.paragraphId)
   if (!story) return 'structure'
-  const order = flowParagraphIds(
+  const order = storyFlowOrder(
     model,
     state.inserts,
     state.deletedParagraphIds,
+    from.paragraphId,
   )
   const startIndex = order.indexOf(from.paragraphId)
   const endIndex = order.indexOf(to.paragraphId)
@@ -80,10 +84,11 @@ export function applyReplaceDocumentRange(
   insert: string,
 ): EditorResult | undefined {
   if (documentRangeRefusal(model, state, from, to)) return undefined
-  const order = flowParagraphIds(
+  const order = storyFlowOrder(
     model,
     state.inserts,
     state.deletedParagraphIds,
+    from.paragraphId,
   )
   const startIndex = order.indexOf(from.paragraphId)
   const endIndex = order.indexOf(to.paragraphId)

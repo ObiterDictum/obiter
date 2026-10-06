@@ -1,5 +1,6 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { flowParagraphIds, type LocalInsert } from './document-edits'
+import type { LocalInsert } from './document-edits'
+import { storyFlowOrder } from './document-story-flow'
 import { blockText, type EditorState } from './document-word-edits'
 
 export type HistoryCaret = { paragraphId: string; offset: number }
@@ -28,15 +29,19 @@ export function historyCaretPlacement({
   restored: EditorState
   anchor: string
 }): HistoryCaret | null {
-  const order = flowParagraphIds(
+  // The anchor's own story orders the fallback: a header paragraph's caret
+  // falls back to a header neighbour, never across into the body.
+  const order = storyFlowOrder(
     model,
     restored.inserts,
     restored.deletedParagraphIds,
+    anchor,
   )
-  const beforeOrder = flowParagraphIds(
+  const beforeOrder = storyFlowOrder(
     model,
     before.inserts,
     before.deletedParagraphIds,
+    anchor,
   )
   const survives = order.includes(anchor)
   const gone = before.inserts.find((item) => item.clientId === anchor)

@@ -1,10 +1,11 @@
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
+  DocumentStoryWire,
 } from '@obiter/contracts'
 import {
-  flowParagraphIds,
   insertPlainText,
+  storyFlowParagraphIds,
   type LocalInsert,
 } from './document-edits'
 import { documentStory, paragraphPlainText } from './document-model-text'
@@ -23,15 +24,22 @@ export function findInDocument(
   deletedParagraphIds: readonly string[],
   extraRuns: ExtraRuns = {},
   query: string,
+  /** The story find scopes to: the workspace passes the story open for
+   * editing so a hit can never place the caret outside it. Defaults to the
+   * body. */
+  story: DocumentStoryWire | undefined = undefined,
 ): FindHit[] {
   const needle = query.trim().toLocaleLowerCase()
   if (!needle) return []
+  const scoped = story ?? documentStory(model)
   const hits: FindHit[] = []
   const insertById = new Map(inserts.map((item) => [item.clientId, item]))
   const paragraphsById = new Map(
-    documentStory(model)?.paragraphs.map((item) => [item.id, item]) ?? [],
+    scoped?.paragraphs.map((item) => [item.id, item]) ?? [],
   )
-  for (const id of flowParagraphIds(model, inserts, [...deletedParagraphIds])) {
+  for (const id of storyFlowParagraphIds(scoped, inserts, [
+    ...deletedParagraphIds,
+  ])) {
     const insert = insertById.get(id)
     const paragraph = paragraphsById.get(id)
     // Mirror what the editor renders (blockText): original runs + drafts,

@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import { ApiError } from '../../api'
@@ -150,6 +150,44 @@ describe('DocxWorkspace ribbon', () => {
     openRibbonTab('References')
     fireEvent.click(screen.getByRole('button', { name: 'List of authorities' }))
     expect(screen.getByRole('button', { name: '[2024] UKSC 3' })).toBeTruthy()
+  })
+
+  it('closes an open margin story when an authority row is selected', () => {
+    mountWorkspace({
+      models: {
+        doc_1: {
+          ...multiParagraphModel([paragraph('p1', 'See [2024] UKSC 3')]),
+          stories: [
+            ...multiParagraphModel([paragraph('p1', 'See [2024] UKSC 3')])
+              .stories,
+            {
+              partName: 'word/header1.xml',
+              kind: 'header' as const,
+              paragraphs: [paragraph('h1', 'Running head')],
+              preservedXmlFragments: [],
+            },
+          ],
+        },
+      },
+    })
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Header' }))
+    const band = screen.getByLabelText('Document header')
+    expect(within(band).getByLabelText('Paragraph text')).toHaveProperty(
+      'value',
+      'Running head',
+    )
+    openRibbonTab('References')
+    fireEvent.click(screen.getByRole('button', { name: 'List of authorities' }))
+    fireEvent.click(screen.getByRole('button', { name: '[2024] UKSC 3' }))
+    // The hit names a body paragraph: selecting it leaves margin editing the
+    // way a body click does, and the caret lands where the format controls
+    // can actually reach it.
+    expect(within(band).queryByLabelText('Paragraph text')).toBeNull()
+    expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
+      'value',
+      'See [2024] UKSC 3',
+    )
   })
 })
 

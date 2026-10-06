@@ -1,11 +1,11 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
-  flowParagraphIds,
   paragraphDeletionRefusal,
   removeInsert,
   type LocalInsert,
   type ParagraphDeletionOutcome,
 } from './document-edits'
+import { storyFlowOrder } from './document-story-flow'
 
 export type { ParagraphDeletionOutcome }
 
@@ -56,16 +56,18 @@ export function planParagraphDeletion(
     // `removeInsert` names the insert's anchor, but that anchor may itself be
     // pending deletion, so it would not render. Keep it only when it survives,
     // otherwise pick the effective neighbour at the insert's former position.
-    const order = flowParagraphIds(
+    const order = storyFlowOrder(
       model,
       state.inserts,
       state.deletedParagraphIds,
+      paragraphId,
     )
     const index = order.indexOf(paragraphId)
-    const effective = flowParagraphIds(
+    const effective = storyFlowOrder(
       model,
       removed.inserts,
       state.deletedParagraphIds,
+      removed.selectId,
     )
     const selectId = effective.includes(removed.selectId)
       ? removed.selectId
@@ -82,10 +84,11 @@ export function planParagraphDeletion(
   if (state.deletedParagraphIds.includes(paragraphId)) {
     return { kind: 'unchanged' }
   }
-  const order = flowParagraphIds(
+  const order = storyFlowOrder(
     model,
     state.inserts,
     state.deletedParagraphIds,
+    paragraphId,
   )
   const index = order.indexOf(paragraphId)
   // A stale id that names no paragraph in the effective flow is a no-op, not a

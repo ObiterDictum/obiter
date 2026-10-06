@@ -130,6 +130,23 @@ export function marginStories(
   return matched.length > 0 ? matched : all.slice(0, 1)
 }
 
+/**
+ * The story the workspace edits when `kind` is open: the document story for
+ * the body, or the header/footer story the body's final section references —
+ * the same story the margin band paints. A multi-section document's other
+ * header/footer parts are preserved in the package but neither painted nor
+ * editable.
+ */
+export function editingStoryFor(
+  model: DocumentModelWire,
+  kind: 'document' | 'header' | 'footer',
+): DocumentStoryWire | undefined {
+  if (kind === 'document') {
+    return model.stories.find((story) => story.kind === 'document')
+  }
+  return marginStories(model, kind)[0]
+}
+
 export function documentSectionXml(model: DocumentModelWire): string {
   const sections = documentSections(model)
   for (let index = sections.length - 1; index >= 0; index -= 1) {

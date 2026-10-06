@@ -1,8 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
-import { flowParagraphIds } from '../../document-edits'
-import { historyCaretPlacement } from '../../document-history-caret'
-import { cursorForSelection, documentStory } from '../../document-model-text'
+import { storyFlowParagraphIds } from '../../document-edits'
+import { cursorForSelection } from '../../document-model-text'
 import {
   documentRangeRefusal,
   type DocumentRangeRefusal,
@@ -31,6 +30,8 @@ import {
 } from './document-selection-notices'
 import { useWorkspaceFind } from './use-workspace-find'
 import { useWorkspaceClipboard } from './use-workspace-clipboard'
+import { useEditingStory } from './use-editing-story'
+import { useHistoryCaret } from './use-history-caret'
 import { useCaretLineageRemap } from './caret-lineage'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 
@@ -67,6 +68,23 @@ export function useWorkspaceCaret({
   const [selectionRefusal, setSelectionRefusal] =
     useState<SelectionRefusal | null>(null)
   const [verticalCaret] = useState(createVerticalCaretColumn)
+  // The story the caret belongs to — the body, or the final section's
+  // header/footer while one is open.
+  const {
+    editingKind,
+    editingStory,
+    openEditingStory,
+    closeEditingStory,
+    resetEditingStory,
+  } = useEditingStory({
+    model,
+    verticalCaret,
+    setSelection,
+    setSelectionRefusal,
+    setSelectedParagraphId,
+    setRestoreCaret,
+    setFormatRange,
+  })
   useCaretLineageRemap({
     paragraphRemap: drafts.paragraphRemap,
     setSelectedParagraphId,
@@ -79,14 +97,16 @@ export function useWorkspaceCaret({
     model,
     drafts,
     onPlaceCaret: selectParagraph,
+    story: editingStory,
   })
 
   // A column run never spans documents, and this workspace is reused when the
-  // selected document changes.
+  // selected document changes. Neither does an open margin story.
   const caretDocument = useRef<string | null>(null)
   if (caretDocument.current !== documentId) {
     caretDocument.current = documentId
     clearVerticalColumn(verticalCaret)
+    resetEditingStory()
   }
 
   const state: EditorState | null = model
@@ -97,9 +117,11 @@ export function useWorkspaceCaret({
         extraRuns: drafts.extraRuns,
       }
     : null
-  const order = model
-    ? flowParagraphIds(model, drafts.inserts, drafts.deletedParagraphIds)
-    : []
+  const order = storyFlowParagraphIds(
+    editingStory,
+    drafts.inserts,
+    drafts.deletedParagraphIds,
+  )
   const context: SelectionOrder = {
     order,
     textOf: (paragraphId) =>
@@ -109,7 +131,7 @@ export function useWorkspaceCaret({
   // The paragraphs the flow renders as ordinary body text. A table cell or a
   // text-box paragraph is not one, so the selection stops at it rather than
   // covering content the document selection cannot paint or edit.
-  const story = model ? documentStory(model) : undefined
+  const story = editingStory
   // The body/structure partition walks every table in the story and is a pure
   // function of the model, so it is derived once rather than on each render.
   const bodyIds = useMemo(
@@ -151,6 +173,7 @@ export function useWorkspaceCaret({
     placeCaret: selectParagraph,
     setRefusal: setSelectionRefusal,
     paste: drafts.paste,
+    firstParagraphId: editingStory?.paragraphs[0]?.id,
   })
 
   function clearSelectionState() {
@@ -366,13 +389,10 @@ export function useWorkspaceCaret({
     setSelectionRefusal(refusal)
   }
 
-  /** Escape with no live selection: leave the paragraph. Drafts are separate
-   * from the caret, so nothing unsaved is discarded. */
-  function blurParagraph() {
-    setSelection(null)
-    setSelectionRefusal(null)
-    setSelectedParagraphId(null)
-  }
+  /** Escape with no live selection: leave the paragraph, and leave an open
+   * margin story with it. Drafts are separate from the caret, so nothing
+   * unsaved is discarded. */
+  const blurParagraph = closeEditingStory
 
   function splitSelectionRange() {
     const range = selectedRange()
@@ -390,8 +410,7 @@ export function useWorkspaceCaret({
 
   function insertAuthority(citation: string) {
     if (!model) return
-    const paragraphId =
-      selectedParagraphId ?? documentStory(model)?.paragraphs[0]?.id
+    const paragraphId = selectedParagraphId ?? editingStory?.paragraphs[0]?.id
     if (!paragraphId) return
     const offset =
       restoreCaret?.paragraphId === paragraphId
@@ -401,33 +420,14 @@ export function useWorkspaceCaret({
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
-  /**
-   * Runs one history step and keeps the caret on a paragraph the restored
-   * state still renders. The placement itself is pure; this only applies it
-   * and clears the document selection the step invalidated.
-   */
-  function runHistoryStep(step: () => ReturnType<typeof drafts.undoDraft>) {
-    const before = {
-      inserts: drafts.inserts,
-      deletedParagraphIds: drafts.deletedParagraphIds,
-    }
-    const restored = step()
-    if (!restored || !model) return
-    setSelection(null)
-    setSelectionRefusal(null)
-    const anchor = restoreCaret?.paragraphId ?? selectedParagraphId
-    if (!anchor) return
-    const placement = historyCaretPlacement({ model, before, restored, anchor })
-    if (placement) selectParagraph(placement.paragraphId, placement.offset)
-  }
-
-  function undoDocument() {
-    runHistoryStep(drafts.undoDraft)
-  }
-
-  function redoDocument() {
-    runHistoryStep(drafts.redoDraft)
-  }
+  const { undoDocument, redoDocument } = useHistoryCaret({
+    model,
+    drafts,
+    restoreCaret,
+    selectedParagraphId,
+    onPlaceCaret: selectParagraph,
+    onClearSelection: clearSelectionState,
+  })
 
   const cursor =
     selectedParagraphId && model
@@ -441,6 +441,12 @@ export function useWorkspaceCaret({
     setFormatRange,
     verticalCaret,
     cursor,
+    /** The story kind the caret is editing: the body or an open margin. */
+    editingKind,
+    /** The story `order` and the editable band resolve from. */
+    editingStory,
+    openEditingStory,
+    closeEditingStory,
     selection: resolvedSelection,
     selectionActive,
     selectionDirection: resolvedSelection

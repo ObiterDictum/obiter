@@ -2,7 +2,11 @@ import {
   type DocumentModelWire,
   type DocumentParagraphWire,
 } from '@obiter/contracts'
-import { documentStory, effectiveParagraph } from './document-model-text'
+import {
+  editableParagraph,
+  editableStoryOf,
+  effectiveParagraph,
+} from './document-model-text'
 import {
   runColour,
   runFlag,
@@ -33,9 +37,7 @@ export function selectedParagraph(
   paragraphId: string | null,
 ) {
   if (!paragraphId) return undefined
-  return documentStory(model)?.paragraphs.find(
-    (item) => item.id === paragraphId,
-  )
+  return editableParagraph(model, paragraphId)
 }
 export function runFlagOn(
   xml: string,
@@ -187,7 +189,7 @@ export function formatControlState(
     ? (format.numbering[paragraph.id] ??
       paragraphNumPr(paragraph, model.styles))
     : undefined
-  const story = documentStory(model)
+  const story = paragraphId ? editableStoryOf(model, paragraphId) : undefined
   const index =
     story?.paragraphs.findIndex((item) => item.id === paragraphId) ?? -1
   const previous = index > 0 ? story?.paragraphs[index - 1] : undefined

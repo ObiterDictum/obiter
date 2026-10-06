@@ -22,6 +22,9 @@ export function planOperation(
   validateParagraphFormat(operation)
   validateNumbering(operation, numberingIds)
   if (operation.type === 'set_section_properties') return operation
+  // Breaks, tables, pictures, hyperlinks and cross-references stay body-only:
+  // they write package parts or block-level structure the margin stories do
+  // not carry, or relationships the header/footer parts would each need.
   if (
     operation.type === 'insert_break' ||
     operation.type === 'insert_section_break' ||
@@ -54,10 +57,10 @@ export function planOperation(
       }
       return {
         ...operation,
-        paragraph: requireMainParagraph(document, operation.paragraphId),
+        paragraph: requireEditableParagraph(document, operation.paragraphId),
       }
     }
-    const run = requireMainRun(document, runParagraphs, runId, false)
+    const run = requireEditableRun(document, runParagraphs, runId, false)
     const paragraph = runParagraphs.get(runId)
     if (!paragraph) throw new OoxmlError('model-node-not-editable')
     return { ...operation, run, paragraph }
@@ -66,7 +69,7 @@ export function planOperation(
     operation.type === 'replace_run_text' ||
     operation.type === 'set_run_style'
   ) {
-    const run = requireMainRun(
+    const run = requireEditableRun(
       document,
       runParagraphs,
       operation.runId,
@@ -78,7 +81,7 @@ export function planOperation(
   }
   return {
     ...operation,
-    paragraph: requireMainParagraph(document, operation.paragraphId),
+    paragraph: requireEditableParagraph(document, operation.paragraphId),
   }
 }
 
@@ -162,7 +165,23 @@ function validateStyle(
   }
 }
 
-function requireMainRun(
+/**
+ * The story kinds an edit operation may address: the body and the header and
+ * footer stories. Footnote/endnote/comment stories are read-only, matching
+ * the workspace's editing surface.
+ */
+const EDITABLE_STORY_KINDS = new Set(['document', 'header', 'footer'])
+
+export function storyOfParagraph(
+  document: OoxmlDocument,
+  paragraph: ParagraphAnchor,
+) {
+  return document.model.stories.find((item) =>
+    item.paragraphs.includes(paragraph.wire),
+  )
+}
+
+function requireEditableRun(
   document: OoxmlDocument,
   runParagraphs: ReadonlyMap<string, ParagraphAnchor>,
   id: string,
@@ -171,13 +190,9 @@ function requireMainRun(
   const run = document.textRunAnchors.get(id)
   if (!run) throw new OoxmlError('model-node-not-found')
   const paragraph = runParagraphs.get(id)
-  const story = paragraph
-    ? document.model.stories.find((item) =>
-        item.paragraphs.includes(paragraph.wire),
-      )
-    : undefined
+  const story = paragraph ? storyOfParagraph(document, paragraph) : undefined
   if (
-    story?.kind !== 'document' ||
+    !(story && EDITABLE_STORY_KINDS.has(story.kind)) ||
     (requireText && run.textRanges.length === 0)
   ) {
     throw new OoxmlError('model-node-not-editable')
@@ -188,10 +203,17 @@ function requireMainRun(
 function requireMainParagraph(document: OoxmlDocument, id: string) {
   const paragraph = document.paragraphAnchors.get(id)
   if (!paragraph) throw new OoxmlError('model-node-not-found')
-  const story = document.model.stories.find((item) =>
-    item.paragraphs.includes(paragraph.wire),
-  )
-  if (story?.kind !== 'document') {
+  if (storyOfParagraph(document, paragraph)?.kind !== 'document') {
+    throw new OoxmlError('model-node-not-editable')
+  }
+  return paragraph
+}
+
+function requireEditableParagraph(document: OoxmlDocument, id: string) {
+  const paragraph = document.paragraphAnchors.get(id)
+  if (!paragraph) throw new OoxmlError('model-node-not-found')
+  const story = storyOfParagraph(document, paragraph)
+  if (!(story && EDITABLE_STORY_KINDS.has(story.kind))) {
     throw new OoxmlError('model-node-not-editable')
   }
   return paragraph

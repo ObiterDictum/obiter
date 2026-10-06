@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
 import {
   clampFindIndex,
   findInDocument,
@@ -20,10 +20,14 @@ export function useWorkspaceFind({
   model,
   drafts,
   onPlaceCaret,
+  story,
 }: {
   model: DocumentModelWire | undefined
   drafts: WorkspaceDrafts
   onPlaceCaret: (paragraphId: string, offset?: number) => void
+  /** The story find scopes to — the story open for editing, so navigation
+   * never jumps the caret into a story that is not being edited. */
+  story?: DocumentStoryWire
 }) {
   const [findQuery, setFindQueryState] = useState('')
   const [replaceQuery, setReplaceQuery] = useState('')
@@ -37,6 +41,7 @@ export function useWorkspaceFind({
         drafts.deletedParagraphIds,
         drafts.extraRuns,
         findQuery,
+        story,
       )
     : []
   // Clamp the stored index to the current hit set so edits that shrink the

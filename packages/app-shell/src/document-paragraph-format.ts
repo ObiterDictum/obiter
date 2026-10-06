@@ -3,7 +3,7 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { formattedParagraphDraft } from './document-format-paint'
-import { documentStory } from './document-model-text'
+import { editableParagraph } from './document-model-text'
 import {
   pxToTwip,
   xmlAttr,
@@ -141,9 +141,7 @@ export function paragraphFormatState(
   paragraphIds: readonly string[],
 ): ParagraphFormatState {
   const faces = paragraphIds.flatMap((id) => {
-    const stored = documentStory(model)?.paragraphs.find(
-      (paragraph) => paragraph.id === id,
-    )
+    const stored = editableParagraph(model, id)
     if (!stored) return []
     return [
       faceFormat(
@@ -169,9 +167,7 @@ export function paragraphIndentLeftPx(
   format: FormatDrafts,
   paragraphId: string,
 ): number {
-  const stored = documentStory(model)?.paragraphs.find(
-    (paragraph) => paragraph.id === paragraphId,
-  )
+  const stored = editableParagraph(model, paragraphId)
   if (!stored) return 0
   return (
     paragraphFace(formattedParagraphDraft(stored, format), model.styles)

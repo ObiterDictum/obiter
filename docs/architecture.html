@@ -6583,7 +6583,7 @@
                   <code
                     >packages/app-shell/src/document-history-baseline.ts</code
                   >
-                  (1317)
+                  (1325)
                 </li>
                 <li>
                   <code>packages/app-shell/src/views/home.tsx</code> (1161)
@@ -6657,7 +6657,7 @@
                   (502)
                 </li>
                 <li>
-                  <code>packages/contracts/src/document-edit.ts</code> (502)
+                  <code>packages/contracts/src/document-edit.ts</code> (504)
                 </li>
               </ul>
             </li>
@@ -6862,6 +6862,22 @@
                     executed Find Case Law licence
                   </td>
                   <td class="id">search.md</td>
+                </tr>
+                <tr>
+                  <td>
+                    Only the final section's header and footer are editable
+                    (PR-E7a)
+                  </td>
+                  <td>
+                    The Insert ribbon opens the header or footer the body's
+                    final section references; the same parts
+                    <code>marginStories</code> paints. A multi-section
+                    document's other header/footer parts are preserved in the
+                    package but not painted — only the final section's part
+                    paints — a deliberate narrowing of the OOXML spec's per-part
+                    editing, not a data loss.
+                  </td>
+                  <td class="id">architecture.html</td>
                 </tr>
                 <tr>
                   <td>Thirty files over the 500-line ceiling</td>

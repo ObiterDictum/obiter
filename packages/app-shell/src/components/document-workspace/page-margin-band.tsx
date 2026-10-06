@@ -5,6 +5,7 @@ import type {
   DocumentStyleWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
+import type { LaidOutBlock } from '../../document-page-engine'
 import { paragraphPlainText } from '../../document-model-text'
 import {
   contrastFillText,
@@ -35,6 +36,19 @@ import { storyBlocks } from '../../document-page-tables'
 import { FooterBand, LetterheadBar, TabLine } from './page-letterhead'
 import { PageDrawing } from './page-drawing'
 import { PageTable } from './page-table'
+import { renderBlock, type BlockContext } from './model-page-blocks'
+
+/**
+ * The header/footer story open for editing on this page: its laid-out blocks
+ * and the render context `renderBlock` needs — the same machinery the body
+ * column uses, so the band edits through `ModelParagraph` rather than a
+ * second editor.
+ */
+export type EditableMargin = {
+  partName: string
+  blocks: LaidOutBlock[]
+  ctx: BlockContext
+}
 
 export function PageMarginBand({
   stories,
@@ -47,6 +61,7 @@ export function PageMarginBand({
   className,
   pageNumber = 1,
   heightPx,
+  editable,
 }: {
   stories: DocumentStoryWire[]
   label: string
@@ -58,8 +73,14 @@ export function PageMarginBand({
   className?: string
   pageNumber?: number
   heightPx?: number
+  /** The story open for editing; painted through the editable path even when
+   * it holds no visible content, so an empty header still takes the caret. */
+  editable?: EditableMargin
 }) {
-  const visible = stories.filter(marginStoryVisible)
+  const visible = stories.filter(
+    (story) =>
+      marginStoryVisible(story) || story.partName === editable?.partName,
+  )
   const Tag = edge === 'top' ? 'header' : 'footer'
   if (visible.length === 0) {
     if (!heightPx) return null
@@ -79,19 +100,83 @@ export function PageMarginBand({
       className={cn('shrink-0 overflow-hidden', className)}
       style={heightPx ? { height: heightPx } : undefined}
     >
-      {visible.map((story) => (
-        <MarginStory
-          key={story.partName}
-          story={story}
-          imageLabel={imageLabel}
-          relationships={relationships}
-          imageUrls={imageUrls}
-          styles={styles}
-          inset={padding}
-          pageNumber={pageNumber}
-        />
-      ))}
+      {visible.map((story) =>
+        story.partName === editable?.partName ? (
+          <EditableMarginStory
+            key={story.partName}
+            editable={editable}
+            inset={padding}
+          />
+        ) : (
+          <MarginStory
+            key={story.partName}
+            story={story}
+            imageLabel={imageLabel}
+            relationships={relationships}
+            imageUrls={imageUrls}
+            styles={styles}
+            inset={padding}
+            pageNumber={pageNumber}
+          />
+        ),
+      )}
     </Tag>
+  )
+}
+
+/**
+ * The open margin story, painted with the same block renderer the body uses.
+ * Every paragraph shows — including empty ones, which the read-only band
+ * hides — so the caret has somewhere to land; a letterhead or footer shape
+ * band reads as its plain paragraphs while it is being edited.
+ */
+function EditableMarginStory({
+  editable,
+  inset,
+}: {
+  editable: EditableMargin
+  inset: { left: number; right: number; edge: number }
+}) {
+  const widthPx = Math.max(
+    1,
+    editable.ctx.columnWidthPx - inset.left - inset.right,
+  )
+  return (
+    <div>
+      {editable.blocks.map((block, index) => {
+        const wrapWidthPx =
+          block.type === 'paragraph'
+            ? Math.max(
+                1,
+                widthPx -
+                  (paragraphFace(block.paragraph, editable.ctx.model.styles)
+                    .indentLeftPx ?? 0) -
+                  (paragraphFace(block.paragraph, editable.ctx.model.styles)
+                    .indentRightPx ?? 0),
+              )
+            : undefined
+        return (
+          <div
+            key={
+              block.type === 'paragraph' ? block.paragraph.id : `tbl-${index}`
+            }
+            style={{
+              paddingLeft: inset.left,
+              paddingRight: inset.right,
+              paddingTop: index === 0 ? inset.edge : 0,
+            }}
+          >
+            {renderBlock(
+              block.type === 'paragraph' && wrapWidthPx !== undefined
+                ? { ...block, wrapWidthPx }
+                : block,
+              index,
+              editable.ctx,
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
