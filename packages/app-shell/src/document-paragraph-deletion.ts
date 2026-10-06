@@ -4,6 +4,7 @@ import {
   removeInsert,
   type LocalInsert,
   type ParagraphDeletionOutcome,
+  type ParagraphDeletionRefusal,
 } from './document-edits'
 import { storyFlowOrder } from './document-story-flow'
 
@@ -23,7 +24,7 @@ export type ParagraphDeletionState = {
  */
 export type ParagraphDeletionPlan =
   | { kind: 'deleted'; selectId: string | null; state: ParagraphDeletionState }
-  | { kind: 'refused' }
+  | { kind: 'refused'; reason: ParagraphDeletionRefusal }
   | { kind: 'unchanged' }
 
 /**
@@ -40,16 +41,15 @@ export function planParagraphDeletion(
   },
   paragraphId: string,
 ): ParagraphDeletionPlan {
-  if (
-    !model ||
-    paragraphDeletionRefusal(
-      model,
-      state.inserts,
-      state.deletedParagraphIds,
-      paragraphId,
-    )
-  ) {
-    return { kind: 'refused' }
+  if (!model) return { kind: 'refused', reason: 'last-paragraph' }
+  const refusal = paragraphDeletionRefusal(
+    model,
+    state.inserts,
+    state.deletedParagraphIds,
+    paragraphId,
+  )
+  if (refusal) {
+    return { kind: 'refused', reason: refusal }
   }
   const removed = removeInsert([...state.inserts], paragraphId)
   if (removed) {

@@ -1,13 +1,19 @@
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 import { insertRuns, removeInsert, type LocalInsert } from './document-edits'
-import { editableParagraph, effectiveParagraph } from './document-model-text'
+import {
+  editableParagraph,
+  editableParagraphs,
+  effectiveParagraph,
+} from './document-model-text'
 import { canJoinParagraphRuns } from './document-run-fidelity'
-import { omitKey, replaceRunRange, splitRuns } from './document-run-range'
+import { omitKey, splitRuns } from './document-run-range'
 import {
   editingStoryOfFlowId,
   storyBodyParagraphIds,
   storyFlowOrder,
 } from './document-story-flow'
+import { isNoteStory, sameNoteEntry } from './document-note-guard'
+import { appendRuns, writeRange, writeRuns } from './document-write-runs'
 
 export type ExtraRuns = Record<string, DocumentTextRunWire[]>
 
@@ -40,7 +46,12 @@ export function blockRuns(
   const insert = state.inserts.find((item) => item.clientId === paragraphId)
   if (insert) return insertRuns(insert)
   const paragraph = editableParagraph(model, paragraphId)
-  if (!paragraph) return []
+  if (!paragraph) {
+    // A folded paragraph exists only in the painted model — a pending
+    // footnote's note body. Its runs live entirely in extraRuns, which is
+    // where `writeRuns` stores them.
+    return state.extraRuns[paragraphId] ?? []
+  }
   const extras = state.extraRuns[paragraphId] ?? []
   return effectiveParagraph(paragraph, state.drafts, extras).runs
 }
@@ -321,6 +332,21 @@ export function paragraphJoinRefusal(
   const inserts = new Set(state.inserts.map((item) => item.clientId))
   const joinable = (id: string) => body.has(id) || inserts.has(id)
   if (!joinable(paragraphId) || !joinable(previousId)) return 'structure'
+  if (
+    isNoteStory(story) &&
+    !sameNoteEntry(
+      story,
+      state.inserts,
+      new Set(editableParagraphs(model).map((item) => item.id)),
+      paragraphId,
+      previousId,
+    )
+  ) {
+    // A join may not cross a note's `w:p` boundary: merging a neighbour's
+    // runs would move text between entries, and merging into a separator
+    // entry would write a real note onto markup the format reserves.
+    return 'structure'
+  }
   const head = blockRuns(model, state, previousId)
   const moving = blockRuns(model, state, paragraphId)
   if (!canJoinParagraphRuns(head, moving)) return 'join-formatting'
@@ -350,97 +376,6 @@ export function wordEditJoinRefusal(
     return nextId ? paragraphJoinRefusal(model, state, nextId) : null
   }
   return null
-}
-
-function appendRuns(
-  state: EditorState,
-  paragraphId: string,
-  moving: DocumentTextRunWire[],
-): EditorState {
-  if (moving.length === 0) return state
-  const insert = state.inserts.find((item) => item.clientId === paragraphId)
-  if (insert) {
-    const current =
-      insert.runs && insert.runs.length > 0
-        ? insert.runs
-        : [
-            {
-              id: insert.clientId,
-              text: insert.text,
-              preservedXmlFragments: [],
-            },
-          ]
-    const runs = [...current, ...moving]
-    return {
-      ...state,
-      inserts: state.inserts.map((item) =>
-        item.clientId === paragraphId
-          ? { ...item, runs, text: runs.map((run) => run.text).join('') }
-          : item,
-      ),
-    }
-  }
-  return {
-    ...state,
-    extraRuns: {
-      ...state.extraRuns,
-      [paragraphId]: [...(state.extraRuns[paragraphId] ?? []), ...moving],
-    },
-  }
-}
-
-export function writeRange(
-  model: DocumentModelWire,
-  state: EditorState,
-  paragraphId: string,
-  runs: DocumentTextRunWire[],
-  from: number,
-  to: number,
-  insert: string,
-): EditorState {
-  return writeRuns(
-    model,
-    state,
-    paragraphId,
-    replaceRunRange(runs, from, to, insert),
-  )
-}
-
-function writeRuns(
-  model: DocumentModelWire,
-  state: EditorState,
-  paragraphId: string,
-  runs: DocumentTextRunWire[],
-): EditorState {
-  const insert = state.inserts.find((item) => item.clientId === paragraphId)
-  if (insert) {
-    return {
-      ...state,
-      inserts: state.inserts.map((item) =>
-        item.clientId === paragraphId
-          ? { ...item, runs, text: runs.map((run) => run.text).join('') }
-          : item,
-      ),
-    }
-  }
-  const originalIds = new Set(
-    editableParagraph(model, paragraphId)?.runs.map((run) => run.id) ?? [],
-  )
-  const drafts = { ...state.drafts }
-  for (const id of originalIds) {
-    drafts[id] = runs.find((run) => run.id === id)?.text ?? ''
-  }
-  // An edit that stays inside the stored runs adds no extra run. Storing an
-  // empty list would make the paragraph look dirty and persist an empty entry.
-  const extra = runs.filter((run) => !originalIds.has(run.id))
-  return {
-    ...state,
-    drafts,
-    extraRuns:
-      extra.length > 0
-        ? { ...state.extraRuns, [paragraphId]: extra }
-        : omitKey(state.extraRuns, paragraphId),
-  }
 }
 
 export type WordEdit = {
@@ -476,6 +411,15 @@ export function applyWordEdit(
     return applyDeleteForward(model, state, caret)
   }
   if (edit.type === 'split') {
+    // A folded paragraph — a pending footnote's note body — has no stored
+    // anchor for a paragraph split, so Enter carries a line break into its
+    // text instead of minting an insert that cannot save.
+    if (
+      !editableParagraph(model, edit.paragraphId) &&
+      !state.inserts.some((item) => item.clientId === edit.paragraphId)
+    ) {
+      return applyLineBreak(model, state, caret)
+    }
     return applySplitParagraph(model, state, caret, newParagraphId)
   }
   return applyLineBreak(model, state, caret)

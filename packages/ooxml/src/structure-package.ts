@@ -212,6 +212,48 @@ export function addMediaPart(
   return partName
 }
 
+/**
+ * Registers a new story part an edit creates — the `word/footnotes.xml` a
+ * first footnote needs — under the same package bounds `addMediaPart`
+ * enforces, with `reservedPartNames` covering the relationships part the
+ * caller will create alongside it so the entry count guards the finished
+ * package. The part is born dirty and serialises from its overlay, where
+ * the caller's entry appends land.
+ */
+export function addXmlStoryPart(
+  document: OoxmlDocument,
+  partName: string,
+  xml: string,
+  reservedPartNames: readonly string[] = [],
+): SourcePart {
+  if (document.sourceParts.has(partName)) {
+    throw new OoxmlError('invalid-package')
+  }
+  const bytes = encoder.encode(xml)
+  const reserved = reservedPartNames.filter(
+    (name) => !document.sourceParts.has(name),
+  ).length
+  if (
+    bytes.byteLength > OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES ||
+    document.sourceParts.size + 1 + reserved > OOXML_MAX_ENTRIES
+  ) {
+    throw new OoxmlError('package-limits-exceeded')
+  }
+  let total = bytes.byteLength
+  for (const part of document.sourceParts.values()) {
+    total += serialisedPartLength(part)
+  }
+  if (total > OOXML_MAX_UNCOMPRESSED_BYTES) {
+    throw new OoxmlError('package-limits-exceeded')
+  }
+  const part = createOpaquePart(partName, 'xml', bytes)
+  part.role = 'story'
+  part.overlay = createXmlOverlay(xml)
+  part.dirty = true
+  document.sourceParts.set(partName, part)
+  return part
+}
+
 /** The byte signature each supported raster type must actually carry. */
 const IMAGE_SIGNATURES = {
   'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
@@ -274,8 +316,37 @@ function insertRootChild(
     attributesXml,
     namespaceUri,
   )
+  appendToRootElement(overlay, root, childXml, key)
+  return childXml
+}
+
+/**
+ * Appends already-formed child XML under a named root — `w:footnote` entries
+ * carry children, so they cannot go through `insertRootChild`'s
+ * attribute-only emission. The self-closing expansion composes the same way:
+ * one replacement owns the root and later children append inside it.
+ */
+export function insertRootChildXml(
+  overlay: XmlOverlay,
+  rootName: string,
+  childXml: string,
+  key: string,
+) {
+  const root = parseXmlElements(overlay.source).find(
+    (element) => element.parent === undefined && element.localName === rootName,
+  )
+  if (!root) throw new OoxmlError('invalid-document-edit')
+  appendToRootElement(overlay, root, childXml, key)
+}
+
+function appendToRootElement(
+  overlay: XmlOverlay,
+  root: XmlElement,
+  childXml: string,
+  key: string,
+) {
   if (root.selfClosing) {
-    const ownerKey = `${rootName}:children`
+    const ownerKey = `${root.localName}:children`
     const close = `</${root.qualifiedName}>`
     const owner = overlay.replacements.get(ownerKey)
     if (owner) {
@@ -286,7 +357,7 @@ function insertRootChild(
         ...owner,
         value: `${owner.value.slice(0, owner.value.length - close.length)}${childXml}${close}`,
       })
-      return childXml
+      return
     }
     setOverlayReplacement(overlay, ownerKey, {
       start: root.start,
@@ -295,14 +366,13 @@ function insertRootChild(
         .slice(root.start, root.startTagEnd)
         .replace(/\/\s*>$/u, '>')}${childXml}${close}`,
     })
-    return childXml
+    return
   }
   setOverlayReplacement(overlay, key, {
     start: root.endTagStart,
     end: root.endTagStart,
     value: childXml,
   })
-  return childXml
 }
 
 /**

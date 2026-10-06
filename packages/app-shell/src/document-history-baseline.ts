@@ -993,18 +993,24 @@ export function translateSnapshot(
         // rest of the snapshot — unrelated typed drafts especially —
         // survives translation. A snapshot that predates the structure
         // describes the document without it, so restoring it would need a
-        // removal no operation expresses. A stored page-number field is the
-        // exception: the contract carries no splice removal, so the snapshot
-        // keeps the same treatment a predating snapshot gets across a saved
-        // break — the stored field is baseline content the restored state
-        // stays consistent with, and undo simply cannot offer the field's
-        // removal. Every other structure kind keeps the explicit block
-        // rather than silently claiming a reversal that cannot happen.
+        // removal no operation expresses. A stored page-number field or
+        // footnote is the exception: the contract carries no operation that
+        // removes a spliced field or reference, so the snapshot keeps the
+        // same treatment a predating snapshot gets across a saved break —
+        // the stored mark (and, for a footnote, its note entry) is baseline
+        // content the restored state stays consistent with, and undo simply
+        // cannot offer its removal. Every other structure kind keeps the
+        // explicit block rather than silently claiming a reversal that
+        // cannot happen.
         if (snapshot.structures.some((item) => item.id === slot.id)) {
           Object.assign(next, removeDraftSlots(next, [slot]))
           break
         }
-        if (slot.structureKind === 'page-number') break
+        if (
+          slot.structureKind === 'page-number' ||
+          slot.structureKind === 'footnote'
+        )
+          break
         return null
       }
       default: {

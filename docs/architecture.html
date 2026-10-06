@@ -6565,8 +6565,8 @@
             </li>
             <li>
               <span
-                ><b>Files stay under 500 lines.</b> Thirty non-test TypeScript
-                source files currently exceed it:</span
+                ><b>Files stay under 500 lines.</b> Twenty-nine non-test
+                TypeScript source files currently exceed it:</span
               >
               <ul>
                 <li><code>scripts/synthetic-v2/run.ts</code> (1881)</li>
@@ -6583,7 +6583,7 @@
                   <code
                     >packages/app-shell/src/document-history-baseline.ts</code
                   >
-                  (1325)
+                  (1337)
                 </li>
                 <li>
                   <code>packages/app-shell/src/views/home.tsx</code> (1161)
@@ -6655,9 +6655,6 @@
                 <li>
                   <code>tools/oxlint/anti-slop/shared/dictionary-types.ts</code>
                   (502)
-                </li>
-                <li>
-                  <code>packages/contracts/src/document-edit.ts</code> (504)
                 </li>
               </ul>
             </li>
@@ -6880,7 +6877,36 @@
                   <td class="id">architecture.html</td>
                 </tr>
                 <tr>
-                  <td>Thirty files over the 500-line ceiling</td>
+                  <td>
+                    Footnote bodies are editable; endnotes and comments stay
+                    read-only (PR-E7b)
+                  </td>
+                  <td>
+                    <code>insert_footnote</code> anchors its
+                    <code>w:footnoteReference</code> in the document body alone
+                    and creates <code>word/footnotes.xml</code> — with its
+                    relationship, content-type override and separator entries —
+                    when the package carries none. The note body opens as the
+                    footnotes story through the same open/close contract the
+                    margin band keeps, and a new note's text is typed into the
+                    folded pending paragraph the save carries as the entry's
+                    text. A <code>w:footnote</code> entry must keep at least one
+                    <code>w:p</code>, so the last-paragraph invariant also holds
+                    inside each entry. Endnotes and comments are painted but not
+                    editable, and the insertion fails closed under tracked
+                    changes like the other structural operations. A
+                    <code>PAGE</code> field is refused at the ribbon, the save
+                    partition and the writer alike when the anchor is a note
+                    story — a note has no page of its own for the field to
+                    resolve.
+                  </td>
+                  <td class="id">
+                    ooxml/footnote-edits.ts ·
+                    app-shell/document-footnote-fold.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>Twenty-nine files over the 500-line ceiling</td>
                   <td>The hardest modules to review are the largest</td>
                   <td class="id">RULES.md</td>
                 </tr>

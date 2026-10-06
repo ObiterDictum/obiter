@@ -1,7 +1,11 @@
 import { z } from 'zod'
 
 import { isValidXmlText } from './xml-text'
-import { characterOffsetSchema, editIdSchema } from './document-edit-shared'
+import {
+  characterOffsetSchema,
+  editIdSchema,
+  editTextSchema,
+} from './document-edit-shared'
 
 /** Bounds for a user-inserted table; the writer emits empty grid cells. */
 export const DOCUMENT_EDIT_TABLE_MAX_ROWS = 64
@@ -232,4 +236,25 @@ export const insertPageNumberOperationSchema = z
   .strict()
 export type DocumentEditInsertPageNumberOperation = z.infer<
   typeof insertPageNumberOperationSchema
+>
+
+/**
+ * A `w:footnoteReference` run spliced at `offset` in `paragraphId`, plus the
+ * `w:footnote` entry the reference resolves to: `text` is the note's own body
+ * text, written as one paragraph inside the entry. `paragraphId` must name a
+ * body paragraph — a reference belongs in the main story — and the writer
+ * checks that, not just the client.
+ */
+export const insertFootnoteOperationSchema = z
+  .object({
+    type: z.literal('insert_footnote'),
+    paragraphId: editIdSchema,
+    /** Caret offset in the paragraph's effective text. */
+    offset: characterOffsetSchema,
+    /** The footnote body's text, written as a single paragraph. */
+    text: editTextSchema,
+  })
+  .strict()
+export type DocumentEditInsertFootnoteOperation = z.infer<
+  typeof insertFootnoteOperationSchema
 >

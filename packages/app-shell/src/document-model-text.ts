@@ -1,10 +1,11 @@
-import type {
-  DocumentChangeWire,
-  DocumentCursor,
-  DocumentModelWire,
-  DocumentParagraphWire,
-  DocumentStoryWire,
-  DocumentTextRunWire,
+import {
+  EDITABLE_STORY_KINDS,
+  type DocumentChangeWire,
+  type DocumentCursor,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
+  type DocumentStoryWire,
+  type DocumentTextRunWire,
 } from '@obiter/contracts'
 
 export function documentStory(
@@ -14,22 +15,11 @@ export function documentStory(
   return model.stories.find((story) => story.kind === kind)
 }
 
-/**
- * The story kinds the workspace can edit: the body and the header and footer
- * margin stories. Footnote, endnote and comment stories stay read-only,
- * matching the writer's editable-story set.
- */
-const EDITABLE_STORY_KINDS: ReadonlySet<DocumentStoryWire['kind']> = new Set([
-  'document',
-  'header',
-  'footer',
-])
-
 export function editableStories(model: DocumentModelWire): DocumentStoryWire[] {
   return model.stories.filter((story) => EDITABLE_STORY_KINDS.has(story.kind))
 }
 
-/** The story — body, header or footer — `paragraphId` belongs to. */
+/** The editable story — body, margin or notes — `paragraphId` belongs to. */
 export function editableStoryOf(
   model: DocumentModelWire,
   paragraphId: string,
@@ -251,4 +241,27 @@ export function cursorForSelection(
   const run = paragraph?.runs[0]
   if (!paragraph || !run) return null
   return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
+}
+
+/**
+ * Resolves a paragraph id to the story that paints it, indexed once over the
+ * whole model: the body answers for ids no margin or note story claims, so a
+ * lookup stays O(1) instead of walking every story per paragraph.
+ */
+export function paragraphStoryResolver(model: DocumentModelWire) {
+  const storyByParagraph = new Map<string, { kind: string; partName: string }>()
+  let bodyStory = { kind: 'document', partName: '' }
+  for (const item of model.stories) {
+    if (item.kind === 'document') {
+      bodyStory = { kind: 'document', partName: item.partName }
+      continue
+    }
+    for (const paragraph of item.paragraphs) {
+      storyByParagraph.set(paragraph.id, {
+        kind: item.kind,
+        partName: item.partName,
+      })
+    }
+  }
+  return (paragraphId: string) => storyByParagraph.get(paragraphId) ?? bodyStory
 }

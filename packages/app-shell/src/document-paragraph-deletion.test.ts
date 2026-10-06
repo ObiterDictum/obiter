@@ -44,12 +44,13 @@ function selectId(plan: ParagraphDeletionPlan): string | null {
 describe('planParagraphDeletion', () => {
   it('refuses deleting the only paragraph without returning state', () => {
     const plan = planParagraphDeletion(model(['p1']), empty, 'p1')
-    expect(plan).toEqual({ kind: 'refused' })
+    expect(plan).toEqual({ kind: 'refused', reason: 'last-paragraph' })
   })
 
   it('refuses when no model is loaded', () => {
     expect(planParagraphDeletion(undefined, empty, 'p1')).toEqual({
       kind: 'refused',
+      reason: 'last-paragraph',
     })
   })
 
@@ -81,7 +82,7 @@ describe('planParagraphDeletion', () => {
         { inserts: [], deletedParagraphIds: ['p1'] },
         'p2',
       ),
-    ).toEqual({ kind: 'refused' })
+    ).toEqual({ kind: 'refused', reason: 'last-paragraph' })
   })
 
   it('treats a paragraph already pending deletion as unchanged', () => {
@@ -123,6 +124,6 @@ describe('planParagraphDeletion', () => {
         { inserts: [insert], deletedParagraphIds: ['p1'] },
         'insert-1',
       ),
-    ).toEqual({ kind: 'refused' })
+    ).toEqual({ kind: 'refused', reason: 'last-paragraph' })
   })
 })

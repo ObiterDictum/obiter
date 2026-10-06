@@ -8,7 +8,10 @@ import type {
 
 import { useWorkspaceDraftHistory } from './document-editor-history'
 import { translateSnapshot } from './document-history-baseline'
-import type { StructuralDraft } from './document-structural-drafts'
+import {
+  footnoteNoteParagraphId,
+  type StructuralDraft,
+} from './document-structural-drafts'
 import {
   emptyDraftState,
   type DraftSlot,
@@ -26,6 +29,13 @@ const tableDraft = (id: string, paragraphId: string): StructuralDraft => ({
 const pageNumberDraft = (id: string, paragraphId: string): StructuralDraft => ({
   id,
   kind: 'page-number',
+  paragraphId,
+  offset: 0,
+})
+
+const footnoteDraft = (id: string, paragraphId: string): StructuralDraft => ({
+  id,
+  kind: 'footnote',
   paragraphId,
   offset: 0,
 })
@@ -113,6 +123,48 @@ describe('translateSnapshot structure slots', () => {
         },
       ],
       sent: pageNumberSent,
+      fromModel,
+    })
+    expect(translated).not.toBeNull()
+    expect(translated?.structures).toEqual([])
+  })
+
+  it('translates a snapshot predating a saved footnote', () => {
+    // No operation removes a stored footnote either, so the reference and
+    // its note entry stay baseline content under the same reasoning the
+    // page-number slice settled on — the predating snapshot survives and
+    // undo simply offers no removal. The covered list is the pair a real
+    // footnote save produces: the structure slot and the deferred
+    // note-text runs, which the predating snapshot does not hold.
+    const noteParagraph = footnoteNoteParagraphId({ id: 'fn1' })
+    const footnoteSent: DraftState = {
+      ...emptyDraftState(),
+      structures: [footnoteDraft('fn1', 'p1')],
+      extraRuns: {
+        [noteParagraph]: [
+          {
+            id: `${noteParagraph}-e`,
+            text: 'note text',
+            preservedXmlFragments: [],
+          },
+        ],
+      },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [
+        {
+          kind: 'structure',
+          key: 'structure:fn1',
+          id: 'fn1',
+          structureKind: 'footnote',
+        },
+        {
+          kind: 'extra-runs',
+          key: `extra:${noteParagraph}`,
+          paragraphId: noteParagraph,
+        },
+      ],
+      sent: footnoteSent,
       fromModel,
     })
     expect(translated).not.toBeNull()

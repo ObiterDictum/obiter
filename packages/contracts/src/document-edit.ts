@@ -5,9 +5,11 @@ import {
   characterOffsetSchema,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
   editIdSchema,
+  editTextSchema,
 } from './document-edit-shared'
 import {
   insertCrossReferenceOperationSchema,
+  insertFootnoteOperationSchema,
   insertImageOperationSchema,
   insertPageNumberOperationSchema,
   insertTableOperationSchema,
@@ -18,6 +20,7 @@ export {
   DOCUMENT_EDIT_ID_MAX_LENGTH,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
   editIdSchema,
+  normaliseEditText,
 } from './document-edit-shared'
 
 export const DOCUMENT_EDIT_OPERATION_MAX_COUNT = 100
@@ -66,24 +69,6 @@ export const documentEditAlignmentSchema = z.enum([
 ])
 export const documentEditLineRuleSchema = z.enum(['auto', 'exact', 'atLeast'])
 export const documentEditOrientationSchema = z.enum(['portrait', 'landscape'])
-
-const editTextSchema = z
-  .string()
-  .max(DOCUMENT_EDIT_TEXT_MAX_LENGTH)
-  .refine(isValidXmlText, {
-    message: 'Document edit text contains an unsupported XML character.',
-  })
-  .transform(normaliseEditText)
-
-/**
- * One text representation at the boundary. A CRLF pair and a lone CR are the
- * same logical break as LF, so the model never carries a \r that serialised
- * OOXML cannot reproduce. See docs/architecture.md, "Document edit operation
- * batches".
- */
-export function normaliseEditText(value: string) {
-  return value.replace(/\r\n?/gu, '\n')
-}
 
 const styleIdSchema = editIdSchema.nullable()
 const colourSchema = z
@@ -484,6 +469,7 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   setHyperlinkOperationSchema,
   insertCrossReferenceOperationSchema,
   insertPageNumberOperationSchema,
+  insertFootnoteOperationSchema,
 ])
 export type DocumentEditOperation = z.infer<typeof documentEditOperationSchema>
 

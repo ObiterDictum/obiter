@@ -132,17 +132,21 @@ export function marginStories(
 
 /**
  * The story the workspace edits when `kind` is open: the document story for
- * the body, or the header/footer story the body's final section references —
- * the same story the margin band paints. A multi-section document's other
- * header/footer parts are preserved in the package but neither painted nor
- * editable.
+ * the body, the header/footer story the body's final section references —
+ * the same story the margin band paints — or the single footnotes part,
+ * whose note bodies paint beneath the body flow. A multi-section document's
+ * other header/footer parts are preserved in the package but neither painted
+ * nor editable.
  */
 export function editingStoryFor(
   model: DocumentModelWire,
-  kind: 'document' | 'header' | 'footer',
+  kind: 'document' | 'header' | 'footer' | 'footnotes',
 ): DocumentStoryWire | undefined {
   if (kind === 'document') {
     return model.stories.find((story) => story.kind === 'document')
+  }
+  if (kind === 'footnotes') {
+    return model.stories.find((story) => story.kind === 'footnotes')
   }
   return marginStories(model, kind)[0]
 }

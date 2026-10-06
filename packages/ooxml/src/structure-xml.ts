@@ -1,4 +1,6 @@
 import { escapeXmlAttribute } from './parts/overlay'
+import { WORD_NAMESPACE } from './parts/xml-elements'
+import { wordRunInnerTextXml } from './text-run-edit'
 
 export const W14_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordml'
@@ -6,6 +8,11 @@ export const IMAGE_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
 export const HYPERLINK_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
+export const FOOTNOTES_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes'
+export const FOOTNOTES_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml'
+export const FOOTNOTES_PART_NAME = 'word/footnotes.xml'
 export const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
@@ -173,5 +180,71 @@ export function buildInlineDrawingXml({
     `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${String(cx)}" cy="${String(cy)}"/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
     `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>`
+  )
+}
+
+const FOOTNOTE_REFERENCE_STYLE = 'FootnoteReference'
+const FOOTNOTE_TEXT_STYLE = 'FootnoteText'
+
+/**
+ * The body-side `w:footnoteReference` run: the style Word gives the mark and
+ * the note's allocated `w:id`. It carries no `w:t`, so it is zero-width in
+ * the paragraph's effective text — the same fragment a reparse reads back.
+ */
+export function buildFootnoteReferenceRunXml(footnoteId: number) {
+  return (
+    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr>` +
+    `<w:footnoteReference w:id="${String(footnoteId)}"/></w:r>`
+  )
+}
+
+/**
+ * The entry-side `w:footnote` for a one-paragraph note: the `w:footnoteRef`
+ * mark run ahead of the note's own text run. `paraId` is emitted when the
+ * caller already allocated it — a created paragraph needs its persisted
+ * identity in the same write, not a later pass.
+ */
+export function buildFootnoteXml(
+  footnoteId: number,
+  text: string,
+  paraId?: string,
+) {
+  const identity = paraId === undefined ? '' : ` w14:paraId="${paraId}"`
+  return (
+    `<w:footnote w:id="${String(footnoteId)}">` +
+    `<w:p${identity}><w:pPr><w:pStyle w:val="${FOOTNOTE_TEXT_STYLE}"/></w:pPr>` +
+    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr><w:footnoteRef/></w:r>` +
+    `<w:r>${wordRunInnerTextXml('w', text)}</w:r>` +
+    `</w:p></w:footnote>`
+  )
+}
+
+/**
+ * The root of a created `word/footnotes.xml`: both namespaces the part's
+ * content needs, no entries. The separator (-1) and continuation separator
+ * (0) entries are appended through the same path real notes use.
+ */
+export function buildFootnotesRootXml() {
+  return (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    `<w:footnotes xmlns:w="${WORD_NAMESPACE}" xmlns:w14="${W14_NAMESPACE}">` +
+    `</w:footnotes>`
+  )
+}
+
+/**
+ * The separator entries a footnotes part requires: `w:id="-1"` and `w:id="0"`
+ * are reserved, which is why real notes allocate from 1. Each holds one
+ * paragraph — `paraId` is that paragraph's persisted identity.
+ */
+export function buildFootnoteSeparatorXml(
+  footnoteId: number,
+  kind: 'separator' | 'continuationSeparator',
+  paraId: string,
+) {
+  return (
+    `<w:footnote w:type="${kind}" w:id="${String(footnoteId)}">` +
+    `<w:p w14:paraId="${paraId}"><w:r><w:${kind}/></w:r></w:p>` +
+    `</w:footnote>`
   )
 }

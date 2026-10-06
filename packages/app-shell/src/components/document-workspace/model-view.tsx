@@ -22,8 +22,9 @@ import { marginBandHeights } from '../../document-page-margin'
 import { storyBlocks } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
-import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
+import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import { documentListMarkers } from '../../document-page-lists'
+import { paragraphStoryResolver } from '../../document-model-text'
 import { documentNotes } from '../../document-page-notes'
 import {
   blockEndOffset,
@@ -88,6 +89,7 @@ export function DocumentModelPage({
   onMoveCaret,
   marginEditing,
   onExitMarginEditing,
+  onOpenNoteEditing,
 }: {
   model: DocumentModelWire
   selectedParagraphId: string | null
@@ -141,6 +143,9 @@ export function DocumentModelPage({
   /** A click on the body while a margin story is open closes the story, the
    * way Word leaves header editing — the click then lands as a body caret. */
   onExitMarginEditing?: () => void
+  /** A click on a painted footnote body opens the footnotes story with the
+   * caret on that paragraph — the inverse of `onExitMarginEditing`. */
+  onOpenNoteEditing?: (paragraphId: string) => void
 }) {
   const derived = useMemo(() => {
     const story = model.stories.find((item) => item.kind === 'document')
@@ -165,22 +170,7 @@ export function DocumentModelPage({
     // A paragraph outside the body renders inside another story's part, so
     // its story has to travel with the element: verification locations are
     // story-scoped, and a paragraph id alone is not unique.
-    const storyByParagraph = new Map<
-      string,
-      { kind: string; partName: string }
-    >()
-    for (const item of model.stories) {
-      if (item.kind === 'document') continue
-      for (const paragraph of item.paragraphs) {
-        storyByParagraph.set(paragraph.id, {
-          kind: item.kind,
-          partName: item.partName,
-        })
-      }
-    }
-    const bodyStory = { kind: 'document', partName: story?.partName ?? '' }
-    const storyOf = (paragraphId: string) =>
-      storyByParagraph.get(paragraphId) ?? bodyStory
+    const storyOf = paragraphStoryResolver(model)
     const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
     // One resolver over the story's flow order per model. Building it inside
     // the per-paragraph render walked the whole document for every paragraph
@@ -276,6 +266,10 @@ export function DocumentModelPage({
     listMarkers,
     noteMarks,
     noteParagraphIds,
+    editableNotePart:
+      editing && marginEditing?.kind === 'footnotes'
+        ? marginEditing.partName
+        : undefined,
     storyOf,
     selectionSegments,
     linkOverlays,
@@ -340,6 +334,19 @@ export function DocumentModelPage({
         const paragraphEl = event.target.closest('[data-paragraph-id]')
         if (paragraphEl instanceof HTMLElement) {
           const paragraphId = paragraphEl.dataset.paragraphId
+          // A click on a painted footnote body opens the notes story at
+          // that paragraph — the same open/close contract the margin band
+          // keeps — whether the body or another story was open. An endnote
+          // stays read-only paint.
+          if (
+            paragraphId &&
+            storyOf(paragraphId).kind === 'footnotes' &&
+            marginEditing?.kind !== 'footnotes'
+          ) {
+            clearVerticalColumn(verticalCaret)
+            onOpenNoteEditing?.(paragraphId)
+            return
+          }
           // A click on the body while a margin story is open leaves margin
           // editing, the way Word does; the same click places the body caret.
           if (marginEditing && paragraphId && !include(paragraphId)) {
