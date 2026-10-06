@@ -314,19 +314,19 @@ describe('OOXML document edits', () => {
 
   it('rejects non-editable stories, missing styles, tracked paragraphs, and deleting the only paragraph', async () => {
     const document = await parseFixture()
-    const footnoteRun = document.model.stories
-      .find(({ kind }) => kind === 'footnotes')
+    const endnoteRun = document.model.stories
+      .find(({ kind }) => kind === 'endnotes')
       ?.paragraphs.find((paragraph) => paragraph.runs.length > 0)?.runs[0]
     const paragraphs = mainParagraphs(document)
     const trackedParagraphId = document.model.changes.find(
       ({ elementName }) => elementName === 'pPrChange',
     )?.paragraphId
     const tracked = paragraphs.find(({ id }) => id === trackedParagraphId)
-    if (!footnoteRun || !tracked) throw new Error('Fixture model is missing.')
+    if (!endnoteRun || !tracked) throw new Error('Fixture model is missing.')
 
     expect(() =>
       applyDocumentEdits(document, [
-        { type: 'replace_run_text', runId: footnoteRun.id, text: 'No' },
+        { type: 'replace_run_text', runId: endnoteRun.id, text: 'No' },
       ]),
     ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
     expect(() =>

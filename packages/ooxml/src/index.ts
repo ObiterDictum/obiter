@@ -38,7 +38,11 @@ export {
 export { resolveRelationshipTarget } from './parts/rels'
 export { imageExtensionForContentType } from './structure-package'
 export {
+  buildFootnoteReferenceRunXml,
+  buildFootnoteSeparatorXml,
+  buildFootnoteXml,
   buildInlineDrawingXml,
+  FOOTNOTES_PART_NAME,
   buildTableParagraphXml,
   buildTableXml,
   decideTablePlacement,

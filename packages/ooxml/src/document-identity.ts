@@ -3,6 +3,7 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 
+import { EDITABLE_STORY_KINDS } from './editable-story-kinds'
 import type { OoxmlDocument } from './model'
 import {
   parseXmlElements,
@@ -17,20 +18,13 @@ export const WORD_2010_NAMESPACE =
 const CANONICAL_PARA_ID = /^[0-9A-Fa-f]{8}$/u
 
 /**
- * The story kinds the writer can edit: the body and the header/footer margin
- * stories. They are the only stories whose paragraphs get a persisted
- * `w14:paraId`; footnote, endnote and comment stories stay untouched.
- */
-const EDITABLE_STORY_KINDS: ReadonlySet<
-  DocumentModelWire['stories'][number]['kind']
-> = new Set(['document', 'header', 'footer'])
-
-/**
  * `w14:paraId` is the only standard persisted paragraph identity (`AG_Parids`
  * applies to `CT_P`). Word preserves it on round-trip, and our parser derives
  * the model id `para-w14-<value>` from it. Canonicalising every paragraph of
- * every editable story in a new version — the body and the header/footer
- * margin stories alike — gives cross-version paragraph identity without a
+ * every editable story in a new version — the body, the header/footer margin
+ * stories and the footnotes story — the same set `editable-story-kinds` lists,
+ * so endnote and comment stories stay untouched — gives cross-version
+ * paragraph identity without a
  * positional guess: a paragraph that already carries a valid, unique id keeps
  * it; an absent, malformed or duplicate one receives a deterministic fresh
  * value, and no two source paragraphs are ever given the same identity.
