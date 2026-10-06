@@ -1388,6 +1388,173 @@ describe('saving an inserted structure', () => {
   })
 })
 
+describe('undo across a saved mid-run structure', () => {
+  // Every one of these inserts splices strictly inside the caret run, so the
+  // save that covers both the run's text edit and the structure splits the
+  // run into head + insert + tail. The reversal must distribute the pre-save
+  // text across both continuing runs: writing it only to the head leaves the
+  // tail's saved text beside the restored text, and the next save persists
+  // the duplication.
+  it('reverses a run edit split by a saved picture without duplicating text', async () => {
+    const restorePicker = stubImagePicker()
+    try {
+      const document = await server(['Hello world'])
+      mountWorkspace({
+        editAsync: document.editAsync,
+        decideAsync: document.decideAsync,
+        modelFor: document.modelFor,
+      })
+      selectBodyParagraph('Hello world')
+      fireEvent.change(field(), { target: { value: 'Hello world typed' } })
+      clickParagraph('para-000001', 5)
+      openRibbonTab('Insert')
+      fireEvent.click(screen.getByRole('button', { name: 'Picture' }))
+      insertPictureFile()
+      await waitFor(() => expect(saveState()).toBe('unsaved'))
+      fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
+      await clickSaveAndSettle(document, 1)
+      expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+        'Hello',
+        '',
+        ' world typed more',
+      ])
+
+      // The snapshot predates the picture: the drawing stays baseline
+      // content, but the run's text must come back as 'Hello' + ' world
+      // typed' around it — never the saved tail beside a restored head.
+      openRibbonTab('Home')
+      fireEvent.click(undoButton())
+      await waitFor(() => expect(saveState()).toBe('unsaved'))
+      await clickSaveAndSettle(document, 2)
+      expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+        'Hello',
+        '',
+        ' world typed',
+      ])
+    } finally {
+      restorePicker()
+    }
+  })
+
+  it('reverses a run edit split by a saved cross-reference without duplicating text', async () => {
+    const document = await server(['Hello world', 'Cited paragraph'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    selectBodyParagraph('Hello world')
+    fireEvent.change(field(), { target: { value: 'Hello world typed' } })
+    clickParagraph('para-000001', 5)
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Cross-reference' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Cited paragraph' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
+    await clickSaveAndSettle(document, 1)
+    expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      'Hello',
+      '',
+      '',
+      '',
+      'Cited paragraph',
+      '',
+      ' world typed more',
+    ])
+
+    openRibbonTab('Home')
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickSaveAndSettle(document, 2)
+    expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      'Hello',
+      '',
+      '',
+      '',
+      'Cited paragraph',
+      '',
+      ' world typed',
+    ])
+  })
+
+  it('reverses a run edit split by a saved page number without duplicating text', async () => {
+    const document = await server(['Hello world'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    selectBodyParagraph('Hello world')
+    fireEvent.change(field(), { target: { value: 'Hello world typed' } })
+    clickParagraph('para-000001', 5)
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
+    await clickSaveAndSettle(document, 1)
+    expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      'Hello',
+      '',
+      '',
+      '',
+      '',
+      '',
+      ' world typed more',
+    ])
+
+    openRibbonTab('Home')
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickSaveAndSettle(document, 2)
+    expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      'Hello',
+      '',
+      '',
+      '',
+      '',
+      '',
+      ' world typed',
+    ])
+  })
+
+  it('reverses a run edit split by a saved footnote without duplicating text', async () => {
+    const document = await server(['Hello world'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      decideAsync: document.decideAsync,
+      modelFor: document.modelFor,
+    })
+    selectBodyParagraph('Hello world')
+    fireEvent.change(field(), { target: { value: 'Hello world typed' } })
+    clickParagraph('para-000001', 5)
+    openRibbonTab('Insert')
+    fireEvent.click(screen.getByRole('button', { name: 'Footnote' }))
+    // The insertion opens the notes story with the caret in the folded note
+    // body; the note text is part of the same pending batch.
+    fireEvent.change(field(), { target: { value: 'A note' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Close footnotes' }))
+    clickParagraph('para-000001')
+    fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
+    await clickSaveAndSettle(document, 1)
+    expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      'Hello',
+      '',
+      ' world typed more',
+    ])
+
+    openRibbonTab('Home')
+    fireEvent.click(undoButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickSaveAndSettle(document, 2)
+    expect(document.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      'Hello',
+      '',
+      ' world typed',
+    ])
+  })
+})
+
 /** The editable band paragraph's id — the only one inside the header band. */
 function marginParagraphId() {
   const node = screen
