@@ -83,6 +83,32 @@ describe('break recording', () => {
     expect(breaks.map((item) => item.kind)).toEqual(['page', 'section'])
   })
 
+  it('names a margin story, not a pending insert, when the caret is in a header', () => {
+    const recorded: BreakDraft[] = []
+    const at = (paragraphId: string) =>
+      documentBreakToolbar({
+        paragraphId,
+        model: marginModel(),
+        offset: 0,
+        selectionActive: false,
+        trackChanges: false,
+        setBreaks: (update) => {
+          recorded.splice(0, recorded.length, ...update(recorded))
+        },
+      })
+    // A stored header paragraph is not pending: the reason matches the
+    // structural controls' body-only refusal.
+    expect(at('h1').breakUnavailable).toBe(
+      'Only the document body can hold this insertion',
+    )
+    // A genuinely pending id keeps the save-first reason.
+    expect(at('pending-1').breakUnavailable).toBe(
+      'Save the new paragraph before adding a break',
+    )
+    at('h1').onPageBreak()
+    expect(recorded).toEqual([])
+  })
+
   it('refuses an unresolved caret rather than defaulting to offset zero', () => {
     const recorded: BreakDraft[] = []
     const toolbar = documentBreakToolbar({
@@ -149,5 +175,22 @@ function paragraph(id: string): DocumentParagraphWire {
     id,
     runs: [{ id: `${id}-r`, text: 'text', preservedXmlFragments: [] }],
     preservedXmlFragments: [],
+  }
+}
+
+/** A body paragraph plus a stored header paragraph the caret can sit in. */
+function marginModel(): DocumentModelWire {
+  const model = singleParagraphModel()
+  return {
+    ...model,
+    stories: [
+      ...model.stories,
+      {
+        partName: 'word/header1.xml',
+        kind: 'header',
+        paragraphs: [paragraph('h1')],
+        preservedXmlFragments: [],
+      },
+    ],
   }
 }
