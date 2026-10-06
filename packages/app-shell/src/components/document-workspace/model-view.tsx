@@ -282,6 +282,7 @@ export function DocumentModelPage({
     selectionHandlers,
     onFocusParagraph,
     onMoveCaret,
+    pageNumber,
   }
   // While a margin story is open the body keeps painting exactly as before
   // but takes no caret, edits, or selection; the band holding the story gets
@@ -449,6 +450,7 @@ export function DocumentModelPage({
           imageUrls={imageUrls}
           selectionSegments={selectionSegments}
           selectionHandlers={selectionHandlers}
+          pageNumber={pageNumber}
         />
       </div>
       <PageMarginBand

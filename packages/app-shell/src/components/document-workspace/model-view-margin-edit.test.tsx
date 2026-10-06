@@ -43,6 +43,36 @@ const model: DocumentModelWire = {
   changes: [],
 }
 
+/** The five runs `insertPageNumber` stores: the result run holds no text —
+ * the instruction resolves at paint time. */
+function storedPageFieldRuns(prefix: string) {
+  return [
+    {
+      id: `${prefix}-begin`,
+      text: '',
+      preservedXmlFragments: ['<w:fldChar w:fldCharType="begin"/>'],
+    },
+    {
+      id: `${prefix}-instr`,
+      text: '',
+      preservedXmlFragments: [
+        '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
+      ],
+    },
+    {
+      id: `${prefix}-sep`,
+      text: '',
+      preservedXmlFragments: ['<w:fldChar w:fldCharType="separate"/>'],
+    },
+    { id: `${prefix}-result`, text: '', preservedXmlFragments: [] },
+    {
+      id: `${prefix}-end`,
+      text: '',
+      preservedXmlFragments: ['<w:fldChar w:fldCharType="end"/>'],
+    },
+  ]
+}
+
 afterEach(() => {
   cleanup()
 })
@@ -65,6 +95,48 @@ describe('an open margin story', () => {
     const body = screen.getByLabelText('Document body')
     expect(body.textContent).toContain('Body text')
     expect(body.querySelector('textarea')).toBeNull()
+  })
+
+  it('paints a stored PAGE field while its story is open for editing', () => {
+    const fieldHeader = {
+      ...header,
+      paragraphs: [
+        {
+          id: 'h1',
+          runs: [
+            { id: 'hr0', text: 'Page ', preservedXmlFragments: [] },
+            ...storedPageFieldRuns('hf'),
+          ],
+          preservedXmlFragments: [] as string[],
+        },
+      ],
+    }
+    const fieldModel: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [paragraph('p1', 'Body text')],
+          preservedXmlFragments: [],
+        },
+        fieldHeader,
+      ],
+    }
+    render(
+      <DocumentModelPage
+        model={fieldModel}
+        marginEditing={fieldHeader}
+        pageNumber={4}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+        editing
+      />,
+    )
+    const band = screen.getByLabelText('Document header')
+    expect(band.querySelector('[data-paragraph-id="h1"]')?.textContent).toBe(
+      'Page 4',
+    )
   })
 
   it('keeps the band read-only while no margin story is open', () => {
