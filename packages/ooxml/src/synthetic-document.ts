@@ -30,7 +30,8 @@ const WORD_NAMESPACE =
 const WORD_2010_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordml'
 
-const DOCUMENT_R_NAMESPACE = ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+const DOCUMENT_R_NAMESPACE =
+  ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
 
 export type SyntheticParagraph =
   | string
