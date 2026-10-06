@@ -239,6 +239,9 @@ test('hyperlink and cross-reference paint, save and reload', async ({
       HEADING,
       { timeout: 30_000 },
     )
+    // The stored w:hyperlink reads back: the linked range repaints with its
+    // target rather than falling back to plain text.
+    await expect(linkedText(reloaded)).toContainText('IN THE')
     await shot(reloaded, '05-reloaded')
   } finally {
     await fresh.close()

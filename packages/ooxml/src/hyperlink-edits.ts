@@ -75,6 +75,11 @@ export function setHyperlink(
   }
   const runs = coveringRuns(paragraph, from, to)
   refuseNestedHyperlink(part.overlay.source, runs)
+  // A pending wrap marks its covered wire runs, so a second overlapping
+  // wrap in the same batch is refused like a stored one.
+  if (runs.some((run) => run.anchor.wire.hyperlinkTarget !== undefined)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
   const relationship = appendRelationship(document, paragraph.partName, {
     type: HYPERLINK_RELATIONSHIP_TYPE,
     target,
@@ -89,6 +94,7 @@ export function setHyperlink(
     paragraph,
     runs,
     openTag,
+    target,
     occurrence,
     lineage,
   )
@@ -168,6 +174,7 @@ function writeHyperlinkWrap(
   paragraph: ParagraphAnchor,
   runs: readonly CoveringRun[],
   openTag: string,
+  target: string,
   occurrence: number,
   lineage?: LineageRecorder,
 ) {
@@ -180,6 +187,7 @@ function writeHyperlinkWrap(
       pieces.push(
         overlay.source.slice(anchor.runRange.start, anchor.runRange.end),
       )
+      anchor.wire.hyperlinkTarget = target
       continue
     }
     const materialise = runHasPendingOverlay(overlay, anchor)
@@ -214,6 +222,7 @@ function writeHyperlinkWrap(
       { from: localFrom, to: localTo },
       ...(needsTail ? [{ from: localTo, to: anchor.wire.text.length }] : []),
     ]
+    const coveredIndex = needsHead ? 1 : 0
     const wireRuns: DocumentTextRunWire[] = parts.map((part, index) => ({
       id: index === 0 ? anchor.wire.id : allocateModelId(document, 'text-edit'),
       text: anchor.wire.text.slice(part.from, part.to),
@@ -221,6 +230,7 @@ function writeHyperlinkWrap(
       ...(anchor.wire.styleId !== undefined
         ? { styleId: anchor.wire.styleId }
         : {}),
+      ...(index === coveredIndex ? { hyperlinkTarget: target } : {}),
     }))
     const value = [
       headXml,
@@ -300,6 +310,16 @@ function removeHyperlink(
   const fragment = elementFragment(part.overlay.source, linkElement)
   paragraph.wire.preservedXmlFragments =
     paragraph.wire.preservedXmlFragments.filter((item) => item !== fragment)
+  // Every run inside the unwrapped element loses its link, not only the one
+  // at `from`.
+  for (const run of paragraph.runs) {
+    if (
+      run.runRange.start >= linkElement.start &&
+      run.runRange.end <= linkElement.end
+    ) {
+      delete run.wire.hyperlinkTarget
+    }
+  }
   if (relId) dropRelationship(document, paragraph.partName, relId)
 }
 

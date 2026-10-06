@@ -193,6 +193,9 @@ function splitRun(
   const wires = parts.map((part, index) => ({
     id: index === 0 ? run.wire.id : nextId(),
     ...(run.wire.styleId ? { styleId: run.wire.styleId } : {}),
+    ...(run.wire.hyperlinkTarget
+      ? { hyperlinkTarget: run.wire.hyperlinkTarget }
+      : {}),
     text: part.text,
     preservedXmlFragments: part.emphasis
       ? emphasisFragments(view.fragments, part.emphasis)

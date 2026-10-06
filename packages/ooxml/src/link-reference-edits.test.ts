@@ -16,6 +16,8 @@ import {
 import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 
 describe('hyperlink edits', () => {
   it('wraps a mid-run range in w:hyperlink with an external relationship', async () => {
@@ -51,6 +53,15 @@ describe('hyperlink edits', () => {
     expect(relationship).toContain('TargetMode="External"')
     expect(relationship).toContain('Target="https://example.co.uk/authority"')
 
+    // The covered piece of the split run carries the link on the wire.
+    expect(
+      anchor.runs.find((run) => run.text === 'Alice')?.hyperlinkTarget,
+    ).toBe('https://example.co.uk/authority')
+    expect(
+      anchor.runs.find((run) => run.text === ' Example overview')
+        ?.hyperlinkTarget,
+    ).toBeUndefined()
+
     const reparsed = mainParagraphs(await parseDocx(output))
     const paragraph = reparsed.find((item) => item.id === anchor.id)
     expect(paragraph?.runs.map((run) => run.text).join('')).toBe(
@@ -61,6 +72,29 @@ describe('hyperlink edits', () => {
         fragment.includes('<w:hyperlink'),
       ),
     ).toBe(true)
+    // The reader resolves the stored w:hyperlink back onto its runs.
+    expect(
+      paragraph?.runs.find((run) => run.text === 'Alice')?.hyperlinkTarget,
+    ).toBe('https://example.co.uk/authority')
+    expect(
+      paragraph?.runs.find((run) => run.text === ' Example overview')
+        ?.hyperlinkTarget,
+    ).toBeUndefined()
+  })
+
+  it('reads a stored hyperlink onto the runs it wraps', async () => {
+    const document = await parseMultiRunFixture()
+    const paragraph = mainParagraphs(document).find((item) =>
+      item.runs.some((run) => run.text === 'the report'),
+    )
+    if (!paragraph) throw new Error('Linked paragraph is missing.')
+    expect(
+      paragraph.runs.map((run) => [run.text, run.hyperlinkTarget]),
+    ).toEqual([
+      ['See ', undefined],
+      ['the report', 'https://example.co.uk/report'],
+      [' today', undefined],
+    ])
   })
 
   it('wraps a range spanning several runs in one hyperlink', async () => {
@@ -144,6 +178,9 @@ describe('hyperlink edits', () => {
     expect(paragraph?.runs.map((run) => run.text).join('')).toBe(
       'See the report today',
     )
+    // The unwrapped run drops the link on the wire and after a reparse.
+    expect(anchor.runs.some((run) => run.hyperlinkTarget)).toBe(false)
+    expect(paragraph?.runs.some((run) => run.hyperlinkTarget)).toBe(false)
     expect(
       document.model.relationships.some((wire) => wire.id === 'rId50'),
     ).toBe(false)

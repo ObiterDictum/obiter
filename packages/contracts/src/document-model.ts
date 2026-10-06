@@ -14,6 +14,13 @@ export const documentTextRunWireSchema = z.object({
   id: z.string().min(1),
   sourceTextId: z.string().min(1).optional(),
   styleId: z.string().min(1).optional(),
+  /**
+   * The external target of the `w:hyperlink` wrapping this run, resolved
+   * through the part's relationships at parse. Whole runs only: a hyperlink
+   * boundary that falls inside a run is represented by that run splitting,
+   * so every piece keeps the field.
+   */
+  hyperlinkTarget: z.string().min(1).optional(),
   text: z.string(),
   preservedXmlFragments: z.array(z.string()),
 })

@@ -287,6 +287,11 @@ function splitReplacedRun(
   const wires = parts.map((part, index) => ({
     id: index === 0 ? run.wire.id : nextId(),
     ...(run.wire.styleId ? { styleId: run.wire.styleId } : {}),
+    // A text edit leaves the run inside any stored hyperlink, so every
+    // piece the split produces keeps the target.
+    ...(run.wire.hyperlinkTarget
+      ? { hyperlinkTarget: run.wire.hyperlinkTarget }
+      : {}),
     text: part.text,
     preservedXmlFragments: [...fragments],
   }))
