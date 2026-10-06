@@ -30,6 +30,7 @@ import {
   removeDraftSlots,
   type DraftSlot,
   type DraftState,
+  type StructureKind,
 } from './document-save-plan'
 
 /**
@@ -639,6 +640,27 @@ function runText(model: DocumentModelWire, runId: string) {
 }
 
 /**
+ * Whether the edit vocabulary can remove a saved structure of this kind.
+ * `insert_table`, `insert_image`, `insert_cross_reference`,
+ * `insert_page_number` and `insert_footnote` have no inverse, so the stored
+ * structure is baseline content the moment it is saved: a history snapshot
+ * that predates it stays consistent, and undo simply cannot offer its
+ * removal. `set_hyperlink` alone removes — a null target unwraps a stored
+ * link — so a predating snapshot is a reversal this path does not
+ * synthesise, and it keeps the explicit block. The map is exhaustive on
+ * `StructureKind` so adding a kind fails to compile until this decision is
+ * made for it.
+ */
+const STRUCTURE_KIND_REMOVABLE = {
+  table: false,
+  image: false,
+  link: true,
+  'cross-reference': false,
+  'page-number': false,
+  footnote: false,
+} satisfies Record<StructureKind, boolean>
+
+/**
  * Re-expresses one history snapshot against the saved baseline. Returns null
  * when the snapshot cannot be represented at all (a saved delete that removed
  * the only paragraph its restoration could anchor to), so the caller drops it
@@ -993,24 +1015,13 @@ export function translateSnapshot(
         // rest of the snapshot — unrelated typed drafts especially —
         // survives translation. A snapshot that predates the structure
         // describes the document without it, so restoring it would need a
-        // removal no operation expresses. A stored page-number field or
-        // footnote is the exception: the contract carries no operation that
-        // removes a spliced field or reference, so the snapshot keeps the
-        // same treatment a predating snapshot gets across a saved break —
-        // the stored mark (and, for a footnote, its note entry) is baseline
-        // content the restored state stays consistent with, and undo simply
-        // cannot offer its removal. Every other structure kind keeps the
-        // explicit block rather than silently claiming a reversal that
-        // cannot happen.
+        // removal; whether the vocabulary expresses one for this kind is
+        // decided by STRUCTURE_KIND_REMOVABLE, not by a per-kind list.
         if (snapshot.structures.some((item) => item.id === slot.id)) {
           Object.assign(next, removeDraftSlots(next, [slot]))
           break
         }
-        if (
-          slot.structureKind === 'page-number' ||
-          slot.structureKind === 'footnote'
-        )
-          break
+        if (!STRUCTURE_KIND_REMOVABLE[slot.structureKind]) break
         return null
       }
       default: {
