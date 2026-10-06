@@ -285,8 +285,9 @@ function noteParagraphWire(
  * One more than the highest `w:id` the package still names: the part's
  * `w:footnote` entries — source and pending replacements, since a
  * same-batch entry exists only as a pending value — plus every
- * `w:footnoteReference` the stories' preserved fragments carry, the same
- * rule the fold's `nextPendingFootnoteId` applies. Separator ids are
+ * `w:footnoteReference` the stories' preserved fragments carry: the same
+ * rule the fold's `nextPendingFootnoteId` applies, over every story and
+ * the overlay rather than the body and notes story alone. Separator ids are
  * negative or zero, so real notes allocate from 1. The reference scan is
  * load-bearing: a `w:footnote` entry can be removed while a mark naming it
  * survives, and recycling that id would silently re-point the stored mark
