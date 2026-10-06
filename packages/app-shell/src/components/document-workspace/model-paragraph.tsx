@@ -29,7 +29,7 @@ import {
   paragraphFace,
   paragraphLineHeightPx,
 } from '../../document-page-style'
-import type { SelectionEndpoint } from '../../document-selection'
+import { toModelEndpoint } from '../../document-selection'
 import { PageDrawing } from './page-drawing'
 import type {
   ParagraphNeighborResolver,
@@ -485,19 +485,4 @@ export function ModelParagraph({
       </div>
     </div>
   )
-}
-
-/**
- * The editor emits offsets local to the block it renders. A step that stays in
- * this paragraph is therefore base-relative; a step into a neighbour already
- * names a model offset, and the two are told apart by the paragraph id.
- */
-function toModelEndpoint(
-  endpoint: SelectionEndpoint,
-  paragraphId: string,
-  base: number,
-): SelectionEndpoint {
-  return endpoint.paragraphId === paragraphId
-    ? { paragraphId, offset: base + endpoint.offset }
-    : endpoint
 }
