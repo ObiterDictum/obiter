@@ -90,7 +90,12 @@ export function withStructuralDrafts(
     }
   }
 
-  const foldToc = createTableOfContentsFold(model, drafts, nextParaId)
+  const foldToc = createTableOfContentsFold(
+    model,
+    drafts,
+    deletedIds,
+    nextParaId,
+  )
   const stories = model.stories.map((story) => {
     if (story.kind !== 'document') return story
     const result = foldStory(
