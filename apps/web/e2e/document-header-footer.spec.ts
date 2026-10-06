@@ -97,15 +97,27 @@ async function openFixtureDocument(
   await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
 
   const fixtureName = path.basename(FIXTURE)
-  if ((await page.getByText(fixtureName).count()) === 0) {
+  // The fixture name appears twice: the document row in the main region and
+  // the mode-rail "In this matter" link. An unscoped locator picks whichever
+  // has painted first, and the row only selects the matter page's embedded
+  // pane — the readiness check passes there too, so the journey would
+  // silently exercise the details surface instead of the workspace.
+  const main = page.getByRole('main')
+  if ((await main.getByText(fixtureName).count()) === 0) {
     const fileInput = page.locator('input[aria-label="Upload document"]')
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(FIXTURE)
   }
-  const documentRow = page.getByText(fixtureName).first()
+  const documentRow = main.getByText(fixtureName).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
-  await documentRow.click()
 
+  // The standalone workspace lives under the documents route; the rail's
+  // "In this matter" link is the only element that navigates there.
+  await page
+    .getByRole('complementary')
+    .getByRole('link', { name: fixtureName })
+    .click()
+  await expect(page).toHaveURL(/\/documents\//, { timeout: 20_000 })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
@@ -195,6 +207,11 @@ test('header text and page number survive save, reload and export', async ({
   await shot(page, '03-page-number-inserted')
 
   await saveAndWait(page)
+  // A save whose edit history could not be reconciled surfaces a
+  // reload-required banner; the spec must fail while that defect is live.
+  await expect(
+    page.getByText('Reloading is required to continue'),
+  ).toHaveCount(0)
   await shot(page, '04-saved')
 
   // A fresh context reads the stored version: the header band still shows
