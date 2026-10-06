@@ -1,8 +1,9 @@
-import type {
-  DocumentParagraphWire,
-  DocumentStoryKind,
-  DocumentStoryWire,
-  DocumentTextRunWire,
+import {
+  documentEditHyperlinkTargetSchema,
+  type DocumentParagraphWire,
+  type DocumentStoryKind,
+  type DocumentStoryWire,
+  type DocumentTextRunWire,
 } from '@obiter/contracts'
 
 import type {
@@ -294,6 +295,10 @@ function parseRun(
  * A run nested in a stored `w:hyperlink` carries the relationship's target,
  * resolved on the part that owns the story — an `r:id` means nothing outside
  * its own `.rels` part. Internal links (`w:anchor`, no `r:id`) carry none.
+ * A stored target gets the write path's scheme allowlist and length bound at
+ * this point: one a hostile package plants (`javascript:`, an unbounded
+ * string) is never set on the wire, so no consumer can render it as an
+ * address while the part bytes stay untouched.
  */
 function runHyperlinkTarget(
   runElement: XmlElement,
@@ -302,7 +307,13 @@ function runHyperlinkTarget(
   const link = nearestWordAncestor(runElement, 'hyperlink')
   if (!link) return undefined
   const relationshipId = attributeValue(link, RELATIONSHIPS_NAMESPACE, 'id')
-  return relationshipId ? hyperlinkTargets?.get(relationshipId) : undefined
+  const target = relationshipId
+    ? hyperlinkTargets?.get(relationshipId)
+    : undefined
+  return target !== undefined &&
+    documentEditHyperlinkTargetSchema.safeParse(target).success
+    ? target
+    : undefined
 }
 
 function runPlainText(
