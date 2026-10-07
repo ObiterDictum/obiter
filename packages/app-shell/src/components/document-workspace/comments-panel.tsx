@@ -32,8 +32,9 @@ export function DocumentCommentsPanel({
   canModerate: boolean
   pending: boolean
   error: string | null
-  onCreate: (body: string) => void
-  onReply: (input: { parentId: string; body: string }) => void
+  /** Resolves true only when the comment was stored; a failed submit keeps the draft. */
+  onCreate: (body: string) => Promise<boolean>
+  onReply: (input: { parentId: string; body: string }) => Promise<boolean>
   onResolve: (commentId: string) => void
   onReopen: (commentId: string) => void
   onRevealAnchor: (anchor: DocumentCommentAnchor) => void
@@ -64,11 +65,12 @@ export function DocumentCommentsPanel({
       {canEdit ? (
         <form
           className="flex flex-col gap-2"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault()
             if (!commentTarget || body.trim() === '') return
-            onCreate(body.trim())
-            setBody('')
+            // The draft survives a failed submit so the same intent can be
+            // retried; only a stored comment clears the field.
+            if (await onCreate(body.trim())) setBody('')
           }}
         >
           <Input
@@ -212,7 +214,7 @@ function CommentCard({
   canEdit: boolean
   mayResolve: boolean
   pending: boolean
-  onReply: (input: { parentId: string; body: string }) => void
+  onReply: (input: { parentId: string; body: string }) => Promise<boolean>
   onResolve: (commentId: string) => void
   onReopen: (commentId: string) => void
   onRevealAnchor: (anchor: DocumentCommentAnchor) => void
@@ -285,7 +287,7 @@ function ImportedCommentCard({
   comment: DocumentImportedCommentThread
   canEdit: boolean
   pending: boolean
-  onReply: (input: { parentId: string; body: string }) => void
+  onReply: (input: { parentId: string; body: string }) => Promise<boolean>
   onRevealAnchor: (anchor: DocumentCommentAnchor) => void
 }) {
   const anchor = comment.anchor
@@ -370,17 +372,18 @@ function ReplyForm({
 }: {
   parentId: string
   pending: boolean
-  onReply: (input: { parentId: string; body: string }) => void
+  onReply: (input: { parentId: string; body: string }) => Promise<boolean>
 }) {
   const [body, setBody] = useState('')
   return (
     <form
       className="flex items-end gap-2"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault()
         if (body.trim() === '') return
-        onReply({ parentId, body: body.trim() })
-        setBody('')
+        // Same contract as the new-comment form: the draft clears only once
+        // the reply is stored, so a failed submit can be retried as-is.
+        if (await onReply({ parentId, body: body.trim() })) setBody('')
       }}
     >
       <Input

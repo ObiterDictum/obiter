@@ -1,7 +1,8 @@
 import '@obiter/test-dom'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { ApiError } from '../../api'
 import type {
   DocumentComment,
   DocumentImportedCommentThread,
@@ -11,6 +12,7 @@ import {
   multiParagraphModel,
   openRibbonTab,
   paragraph,
+  rerenderWorkspace,
 } from './docx-workspace-harness'
 import {
   bodyField,
@@ -77,8 +79,24 @@ function submitNewComment(body: string) {
   fireEvent.submit(form)
 }
 
+function submitReply(body: string) {
+  const input = screen.getByLabelText('Reply')
+  fireEvent.change(input, { target: { value: body } })
+  fireEvent.submit(input.closest('form') as HTMLFormElement)
+}
+
+function clientKeys(calls: unknown[][]) {
+  return calls.map((call) => {
+    const variables = call[0] as {
+      clientKey?: string
+      reply?: { clientKey?: string }
+    }
+    return variables.clientKey ?? variables.reply?.clientKey
+  })
+}
+
 describe('comment anchors', () => {
-  it('anchors a new comment to the selected text, not the paragraph', () => {
+  it('anchors a new comment to the selected text, not the paragraph', async () => {
     const createComment = vi.fn()
     mountWorkspace({ models: { doc_1: model() }, createComment })
     clickParagraph('p1')
@@ -87,14 +105,15 @@ describe('comment anchors', () => {
     openCommentsPanel()
     submitNewComment('Tighten this')
 
-    expect(createComment).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
     expect(createComment).toHaveBeenCalledWith({
       body: 'Tighten this',
       anchor: { paragraphId: 'p1', startOffset: 1, endOffset: 4 },
+      clientKey: expect.any(String),
     })
   })
 
-  it('anchors a bare caret as an insertion-point comment', () => {
+  it('anchors a bare caret as an insertion-point comment', async () => {
     const createComment = vi.fn()
     mountWorkspace({ models: { doc_1: model() }, createComment })
     clickParagraph('p1')
@@ -103,13 +122,16 @@ describe('comment anchors', () => {
     openCommentsPanel()
     submitNewComment('Insert a clause here')
 
-    expect(createComment).toHaveBeenCalledWith({
-      body: 'Insert a clause here',
-      anchor: { paragraphId: 'p1', startOffset: 3, endOffset: 3 },
-    })
+    await waitFor(() =>
+      expect(createComment).toHaveBeenCalledWith({
+        body: 'Insert a clause here',
+        anchor: { paragraphId: 'p1', startOffset: 3, endOffset: 3 },
+        clientKey: expect.any(String),
+      }),
+    )
   })
 
-  it('anchors a selection spanning paragraphs with an end paragraph', () => {
+  it('anchors a selection spanning paragraphs with an end paragraph', async () => {
     const createComment = vi.fn()
     mountWorkspace({ models: { doc_1: model() }, createComment })
     clickParagraph('p1')
@@ -120,15 +142,134 @@ describe('comment anchors', () => {
     openCommentsPanel()
     submitNewComment('Spans two paragraphs')
 
-    expect(createComment).toHaveBeenCalledWith({
-      body: 'Spans two paragraphs',
-      anchor: {
-        paragraphId: 'p1',
-        startOffset: 5,
-        endParagraphId: 'p2',
-        endOffset: 1,
-      },
+    await waitFor(() =>
+      expect(createComment).toHaveBeenCalledWith({
+        body: 'Spans two paragraphs',
+        anchor: {
+          paragraphId: 'p1',
+          startOffset: 5,
+          endParagraphId: 'p2',
+          endOffset: 1,
+        },
+        clientKey: expect.any(String),
+      }),
+    )
+  })
+
+  it('reuses the intent key only while its submit is unsatisfied', async () => {
+    const createComment = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('request aborted'))
+    mountWorkspace({ models: { doc_1: model() }, createComment })
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+
+    openCommentsPanel()
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
+    // A failed submit keeps the draft so the same intent can be retried.
+    const input = screen.getByLabelText('New comment')
+    expect((input as HTMLInputElement).value).toBe('Tighten this')
+
+    // Retrying the identical unsatisfied intent replays under the same key.
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect((input as HTMLInputElement).value).toBe(''))
+
+    // Once stored, the intent is finished: the next identical submission is
+    // a deliberate second comment under a fresh key, not a replay.
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(3))
+
+    const keys = clientKeys(createComment.mock.calls)
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+  })
+
+  it('mints a new intent when the draft or anchor changes, without losing a pending one', async () => {
+    const createComment = vi
+      .fn()
+      .mockRejectedValue(new Error('request aborted'))
+    mountWorkspace({ models: { doc_1: model() }, createComment })
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+
+    openCommentsPanel()
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
+
+    // A changed body is a different intent and must not reuse the key.
+    submitNewComment('Different wording')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(2))
+
+    // A changed anchor is a different intent too: the pointer press that
+    // collapses the live selection comes first, then the new drag.
+    clickParagraph('p1')
+    nativeSelect(0, 3)
+    submitNewComment('Different wording')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(3))
+
+    // Submitting the original unsatisfied intent again still replays its key.
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(4))
+
+    const keys = clientKeys(createComment.mock.calls)
+    expect(keys[1]).not.toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[1])
+    expect(keys[3]).toBe(keys[0])
+  })
+
+  it('does not alias a pending intent across documents', async () => {
+    const createComment = vi
+      .fn()
+      .mockRejectedValue(new Error('request aborted'))
+    const view = mountWorkspace({
+      models: { doc_1: model(), doc_2: model() },
+      createComment,
     })
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+    openCommentsPanel()
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
+
+    rerenderWorkspace(view, 'doc_2')
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(2))
+
+    const keys = clientKeys(createComment.mock.calls)
+    expect(keys[1]).not.toBe(keys[0])
+  })
+
+  it('drops a conflicting intent so the next submit gets a fresh key', async () => {
+    const createComment = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ApiError(
+          'comment_client_key_conflict',
+          'This key was already used for a different comment or reply.',
+          409,
+          'req_1',
+        ),
+      )
+    mountWorkspace({ models: { doc_1: model() }, createComment })
+    clickParagraph('p1')
+    nativeSelect(1, 4)
+
+    openCommentsPanel()
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
+
+    submitNewComment('Tighten this')
+    await waitFor(() => expect(createComment).toHaveBeenCalledTimes(2))
+
+    const keys = clientKeys(createComment.mock.calls)
+    expect(keys[1]).not.toBe(keys[0])
   })
 
   it('refuses a create with no caret or selection in the document', () => {
@@ -176,7 +317,7 @@ describe('comment cards', () => {
     ).toBeNull()
   })
 
-  it('posts a reply against the product comment', () => {
+  it('posts a reply against the product comment', async () => {
     const replyComment = vi.fn()
     mountWorkspace({
       models: { doc_1: model() },
@@ -189,10 +330,47 @@ describe('comment cards', () => {
     fireEvent.change(input, { target: { value: 'Agreed' } })
     fireEvent.submit(input.closest('form') as HTMLFormElement)
 
-    expect(replyComment).toHaveBeenCalledWith({
-      commentId: 'cmt_1',
-      reply: { body: 'Agreed' },
+    await waitFor(() =>
+      expect(replyComment).toHaveBeenCalledWith({
+        commentId: 'cmt_1',
+        reply: { body: 'Agreed', clientKey: expect.any(String) },
+      }),
+    )
+  })
+
+  it('keeps a failed reply draft and replays it under the same key', async () => {
+    const replyComment = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('request aborted'))
+    mountWorkspace({
+      models: { doc_1: model() },
+      comments: { comments: [productComment()] },
+      replyComment,
     })
+    openCommentsPanel()
+
+    submitReply('Agreed')
+    await waitFor(() => expect(replyComment).toHaveBeenCalledTimes(1))
+    expect((screen.getByLabelText('Reply') as HTMLInputElement).value).toBe(
+      'Agreed',
+    )
+
+    submitReply('Agreed')
+    await waitFor(() => expect(replyComment).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect((screen.getByLabelText('Reply') as HTMLInputElement).value).toBe(
+        '',
+      ),
+    )
+
+    // The stored reply satisfied the intent: a further identical reply is a
+    // new deliberate write under a new key.
+    submitReply('Agreed')
+    await waitFor(() => expect(replyComment).toHaveBeenCalledTimes(3))
+
+    const keys = clientKeys(replyComment.mock.calls)
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
   })
 
   it('shows replies already on the thread', () => {
@@ -311,7 +489,7 @@ describe('imported comments', () => {
     expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull()
   })
 
-  it('replies to an imported thread under its ooxml identity', () => {
+  it('replies to an imported thread under its ooxml identity', async () => {
     const replyComment = vi.fn()
     mountWorkspace({
       models: { doc_1: model() },
@@ -324,10 +502,12 @@ describe('imported comments', () => {
     fireEvent.change(input, { target: { value: 'Reply in product' } })
     fireEvent.submit(input.closest('form') as HTMLFormElement)
 
-    expect(replyComment).toHaveBeenCalledWith({
-      commentId: 'ooxml-3',
-      reply: { body: 'Reply in product' },
-    })
+    await waitFor(() =>
+      expect(replyComment).toHaveBeenCalledWith({
+        commentId: 'ooxml-3',
+        reply: { body: 'Reply in product', clientKey: expect.any(String) },
+      }),
+    )
   })
 
   it('offers no reply on an anonymous imported comment', () => {
