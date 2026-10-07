@@ -36,22 +36,25 @@ type ParsedStartTag = {
   selfClosing: boolean
 }
 
-const validationParser = new XMLParser({
-  preserveOrder: true,
-  ignoreAttributes: false,
-  trimValues: false,
-  parseTagValue: false,
-  parseAttributeValue: false,
-  processEntities: false,
-  cdataPropName: '#cdata',
-  commentPropName: '#comment',
-})
+// Built on first use: an eager module-scope instance drags fast-xml-parser
+// into the client bundle for a validation path only document parsing runs.
+let validationParser: XMLParser | undefined
 
 export function createXmlOverlay(source: string) {
   return { source, replacements: new Map() } satisfies XmlOverlay
 }
 
 export function parseXmlElements(source: string) {
+  validationParser ??= new XMLParser({
+    preserveOrder: true,
+    ignoreAttributes: false,
+    trimValues: false,
+    parseTagValue: false,
+    parseAttributeValue: false,
+    processEntities: false,
+    cdataPropName: '#cdata',
+    commentPropName: '#comment',
+  })
   validationParser.parse(source, true)
   const elements: XmlElement[] = []
   const stack: OpenElement[] = []
