@@ -157,4 +157,44 @@ describe('draft edits queued across the save boundary', () => {
     expect(result.current.lineageUnresolved).toBe(false)
     expect(result.current.drafts['r1']).toBe('Hello worldX')
   })
+
+  it('resolves when the committed model renders before the boundary lands', () => {
+    // The edit mutation's onSuccess finishes the model refetch before the
+    // caller's `await mutateAsync` continues, so the saved version can paint
+    // ahead of `commitSaveBoundary`. Recording the boundary re-runs the
+    // resolution effect via its `pendingVersion` dependency; without that the
+    // version match is never seen again and the save reports Saving forever.
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: WorkspaceDraftScope }) => useWorkspaceDrafts(scope),
+      { initialProps: { scope: scopeFor(model('Hello'), 'ver_1', 1) } },
+    )
+
+    act(() => {
+      result.current.setDrafts(() => ({ r1: 'Hello world' }))
+    })
+    // The committed model renders before the boundary is recorded.
+    rerender({ scope: scopeFor(model('Hello world'), 'ver_2', 2) })
+
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { r1: 'Hello world' },
+    }
+    const covered: DraftSlot[] = [
+      { kind: 'run-text', key: 'run:r1', runId: 'r1' },
+    ]
+    act(() => {
+      result.current.commitSaveBoundary(
+        covered,
+        sent,
+        model('Hello'),
+        SAVED_LINEAGE,
+        'ver_2',
+        2,
+      )
+    })
+
+    expect(result.current.boundaryPending).toBe(false)
+    expect(result.current.lineageUnresolved).toBe(false)
+    expect(result.current.drafts).toEqual({})
+  })
 })
