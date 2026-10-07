@@ -162,16 +162,21 @@ async function holdNextModelFetch(page: Page) {
 }
 
 /**
- * Clicks Save and types through the flight, returning the characters that
- * were sent. A few land while the request is out; releasing the held model
- * then starts the reload mid-burst and typing continues until the save
- * boundary has resolved — `data-save-state` leaves `saving` — plus two more
- * characters, so the burst provably straddles the model swap on a document
- * of any size.
+ * Activates Save and types through the flight, returning the characters that
+ * were sent. `activate` is the input path under test — a pointer click or
+ * keyboard focus plus Enter. A few keys land while the request is out;
+ * releasing the held model then starts the reload mid-burst and typing
+ * continues until the save boundary has resolved — `data-save-state` leaves
+ * `saving` — plus two more characters, so the burst provably straddles the
+ * model swap on a document of any size.
  */
-async function typeThroughFlight(page: Page, marker: string) {
+async function typeThroughFlight(
+  page: Page,
+  marker: string,
+  activate: () => Promise<void>,
+) {
   const releaseModel = await holdNextModelFetch(page)
-  await save(page).click()
+  await activate()
   const keys = [...marker]
   let index = 0
   for (; index < Math.min(5, keys.length); index += 1) {
@@ -206,7 +211,9 @@ test('typing through the save flight keeps every character', async ({
   await page.keyboard.type(' E7CBOUNDa')
   await expect(editor(page)).toHaveValue(/E7CBOUNDa$/)
 
-  const typed = await typeThroughFlight(page, ' ryZNINE1234567890')
+  const typed = await typeThroughFlight(page, ' ryZNINE1234567890', () =>
+    save(page).click(),
+  )
 
   // The burst landed after the request was planned, so it must stay pending
   // and dirty — never silently lost — and the follow-up save persists it.
@@ -223,6 +230,47 @@ test('typing through the save flight keeps every character', async ({
     await openFixtureDocument(reloaded, email, password, matter)
     await focusParagraph(reloaded, BODY)
     await expect(editor(reloaded)).toHaveValue(`${BODY} E7CBOUNDa${typed}`)
+  } finally {
+    await fresh.close()
+  }
+})
+
+test('typing through a keyboard-activated save flight keeps every character', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E7F keys ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  await caretAtEnd(page, BODY)
+  await page.keyboard.type(' E7CKEYSb')
+  await expect(editor(page)).toHaveValue(/E7CKEYSb$/)
+
+  // Tab+Enter is the keyboard save path: activation leaves DOM focus on the
+  // button, and `saving` disables it, so the browser would drop focus to
+  // document.body and lose the whole burst. The save must hand focus back to
+  // the caret's field before the flight starts.
+  const typed = await typeThroughFlight(page, ' kEYS9876543210', async () => {
+    await save(page).focus()
+    await page.keyboard.press('Enter')
+    await expect(editor(page)).toBeFocused({ timeout: 2_000 })
+  })
+
+  await expect
+    .poll(() => saveState(page), { message: 'flight settled' })
+    .not.toBe('saving')
+  await expect(editor(page)).toHaveValue(`${BODY} E7CKEYSb${typed}`)
+  expect(await saveState(page)).toBe('unsaved')
+  await saveAndWait(page)
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await focusParagraph(reloaded, BODY)
+    await expect(editor(reloaded)).toHaveValue(`${BODY} E7CKEYSb${typed}`)
   } finally {
     await fresh.close()
   }
@@ -258,7 +306,9 @@ test('typing through the save flight beside a stored table of contents and page 
   await page.keyboard.type(' E7CSTRUCT')
   await expect(editor(page)).toHaveValue(/E7CSTRUCT$/)
 
-  const typed = await typeThroughFlight(page, ' ryZNINE1234567890')
+  const typed = await typeThroughFlight(page, ' ryZNINE1234567890', () =>
+    save(page).click(),
+  )
 
   await expect
     .poll(() => saveState(page), { message: 'flight settled' })
