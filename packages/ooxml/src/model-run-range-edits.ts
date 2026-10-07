@@ -4,7 +4,7 @@ import {
   locateOffset,
   preserveTextOpeningTag,
   type InsertionPoint,
-} from './comment-anchors'
+} from './text-offsets'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'

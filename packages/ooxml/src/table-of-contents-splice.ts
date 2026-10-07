@@ -4,7 +4,7 @@ import type {
   DocumentTextRunWire,
 } from '@obiter/contracts'
 
-import { preserveTextOpeningTag, type InsertionPoint } from './comment-anchors'
+import { preserveTextOpeningTag, type InsertionPoint } from './text-offsets'
 import {
   recordInsertedParagraph,
   recordSplitRun,

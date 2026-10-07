@@ -5,7 +5,7 @@ import {
   type DocumentRelationshipWire,
 } from '@obiter/contracts'
 
-import { editableTextNodes } from './comment-anchors'
+import { editableTextNodes } from './text-offsets'
 import type { ParagraphAnchor, SourcePart } from './model'
 import { decodeXmlReferences } from './xml-lexemes'
 import { parseXmlElements } from './parts/overlay'

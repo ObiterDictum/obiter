@@ -1,6 +1,6 @@
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
-import { locateOffset } from './comment-anchors'
+import { locateOffset } from './text-offsets'
 import {
   OoxmlError,
   type OoxmlDocument,

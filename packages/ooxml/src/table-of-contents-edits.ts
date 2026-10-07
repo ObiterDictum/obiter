@@ -1,7 +1,7 @@
 import { DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES } from '@obiter/contracts'
 import type { DocumentStoryWire } from '@obiter/contracts'
 
-import { locateOffset } from './comment-anchors'
+import { locateOffset } from './text-offsets'
 import { ensureParagraphBookmark } from './document-bookmarks'
 import type { LineageRecorder } from './document-lineage'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
