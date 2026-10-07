@@ -5,6 +5,7 @@ import {
   type Page,
 } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
@@ -244,7 +245,7 @@ test('header text and page number survive save, reload and export', async ({
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const download = await downloadPromise
   expect(download.suggestedFilename()).toMatch(/\.docx$/)
-  const savedPath = path.join(HERE, `e7a-export-${Date.now()}.docx`)
+  const savedPath = path.join(os.tmpdir(), `e7a-export-${Date.now()}.docx`)
   await download.saveAs(savedPath)
   expectExportedDocx(savedPath)
   await shot(page, '06-exported')
