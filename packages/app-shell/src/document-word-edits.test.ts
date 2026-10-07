@@ -35,6 +35,7 @@ const twoParagraphs: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 describe('applyDeleteBackward', () => {
@@ -90,6 +91,7 @@ describe('applyDeleteBackward', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     expect(
       applyDeleteBackward(only, emptyEditorState(), {

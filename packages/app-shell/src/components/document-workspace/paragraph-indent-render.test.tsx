@@ -45,6 +45,7 @@ function indentedModel(indentAttr: string, continuation = false) {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
   const { container } = render(
     <DocumentModelPage

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
-import { selectedParagraphLength } from '../../document-edits'
 import {
   documentFormatToolbar,
   type FormatTarget,
@@ -13,11 +12,9 @@ import {
   useDocumentModel,
   useDocumentTrackedChanges,
   useDocumentCollaborationSync,
-  useResolveDocumentComment,
-  useCreateDocumentComment,
   useTrackedChangeDecision,
 } from '../../document-workspace-api'
-import { refocusCaret, refocusCaretBeforeFlight } from './document-actions'
+import { refocusCaretBeforeFlight } from './document-actions'
 import { DocxModelPages } from './docx-model-pages'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
@@ -29,6 +26,7 @@ import { useDocumentSave } from './use-document-save'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
+import { useWorkspaceComments } from './use-workspace-comments'
 import { documentClipboardToolbar } from './use-workspace-clipboard'
 import { exportDocumentAsDocx } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
@@ -72,8 +70,6 @@ export function DocxWorkspace({
       ? savedVersion.versionId
       : (modelQuery.data?.versionId ?? versionId)
   const syncQuery = useDocumentCollaborationSync(documentId, baseVersionId)
-  const createComment = useCreateDocumentComment(documentId)
-  const resolveComment = useResolveDocumentComment(documentId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
   const model = modelQuery.data?.model
   const drafts = useWorkspaceDrafts({
@@ -134,6 +130,8 @@ export function DocxWorkspace({
     selectionNotice,
     selectAll,
     extendSelection,
+    commentTarget,
+    revealCommentAnchor,
     collapseSelection,
     focusParagraph,
     moveCaret,
@@ -220,6 +218,14 @@ export function DocxWorkspace({
     onRejectInput: rejectSelectionInput,
     onEscapeBlur: blurParagraph,
   }
+  const commentsPanel = useWorkspaceComments({
+    documentId,
+    listed: commentsQuery.data,
+    commentTarget,
+    currentUserId: me?.user.id,
+    canModerate: me?.user.role === 'owner' || me?.user.role === 'admin',
+    revealCommentAnchor,
+  })
   // Print reports only refusal or absence; printing itself saves nothing.
   const transientBanner = printBanner ?? save.notice ?? banner
   const format = painted
@@ -267,7 +273,7 @@ export function DocxWorkspace({
         commentsOpen={commentsOpen}
         changesOpen={changesOpen}
         authoritiesOpen={authoritiesOpen}
-        commentCount={commentsQuery.data?.comments.length ?? 0}
+        commentCount={commentsPanel.threadCount}
         changeCount={changesQuery.data?.changes.length ?? 0}
         presence={presence}
         currentUserId={me?.user.id}
@@ -414,42 +420,7 @@ export function DocxWorkspace({
                 commentsOpen={commentsOpen}
                 changesOpen={changesOpen}
                 authoritiesOpen={authoritiesOpen}
-                comments={commentsQuery.data?.comments ?? []}
-                selectedParagraphId={
-                  documentStory(model)?.paragraphs.some(
-                    (paragraph) => paragraph.id === selectedParagraphId,
-                  )
-                    ? selectedParagraphId
-                    : null
-                }
-                selectedParagraphLength={selectedParagraphLength(
-                  model,
-                  selectedParagraphId,
-                )}
-                commentsPending={
-                  createComment.isPending || resolveComment.isPending
-                }
-                commentsError={mutationError(
-                  createComment.error ?? resolveComment.error,
-                )}
-                onCreateComment={(input) => {
-                  // The form's field and submit button disable for the
-                  // flight, so even a text field holding focus would be
-                  // dropped to the body; hand it to the caret first.
-                  refocusCaret()
-                  createComment.mutate({
-                    body: input.body,
-                    anchor: {
-                      paragraphId: input.paragraphId,
-                      startOffset: 0,
-                      endOffset: input.endOffset,
-                    },
-                  })
-                }}
-                onResolveComment={(commentId) => {
-                  refocusCaretBeforeFlight()
-                  resolveComment.mutate(commentId)
-                }}
+                {...commentsPanel.props}
                 changes={changesQuery.data?.changes ?? []}
                 changesPending={decideChange.isPending || save.saving}
                 changesError={mutationError(decideChange.error)}

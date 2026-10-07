@@ -108,6 +108,7 @@ const model = (paragraphs: DocumentParagraphWire[]): DocumentModelWire => ({
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 })
 
 const fromModel = model([paragraph('p1')])

@@ -23,7 +23,9 @@ const hooks = vi.hoisted(() => ({
   useDocumentTrackedChanges: vi.fn(),
   useDocumentCollaborationSync: vi.fn(),
   useCreateDocumentComment: vi.fn(),
+  useReplyDocumentComment: vi.fn(),
   useResolveDocumentComment: vi.fn(),
+  useReopenDocumentComment: vi.fn(),
   useEditDocument: vi.fn(),
   useCollaborationMerge: vi.fn(),
   useTrackedChangeDecision: vi.fn(),
@@ -59,7 +61,9 @@ mock.module('../../document-workspace-api', () =>
         useDocumentTrackedChanges: hooks.useDocumentTrackedChanges,
         useDocumentCollaborationSync: hooks.useDocumentCollaborationSync,
         useCreateDocumentComment: hooks.useCreateDocumentComment,
+        useReplyDocumentComment: hooks.useReplyDocumentComment,
         useResolveDocumentComment: hooks.useResolveDocumentComment,
+        useReopenDocumentComment: hooks.useReopenDocumentComment,
         useEditDocument: hooks.useEditDocument,
         useCollaborationMerge: hooks.useCollaborationMerge,
         useTrackedChangeDecision: hooks.useTrackedChangeDecision,
@@ -129,6 +133,7 @@ function model(runs: Array<[string, string]>): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
@@ -207,7 +212,9 @@ function mount(
       model: id === 'doc_b' ? documentB : documentA,
     },
   }))
-  hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })
+  hooks.useDocumentComments.mockReturnValue({
+    data: { comments: [], importedComments: [], orphanedReplies: [] },
+  })
   hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
   hooks.useDocumentCollaborationSync.mockReturnValue({
     data: { changed: false, participants: [], currentVersionId: 'ver_doc_a' },
@@ -215,7 +222,9 @@ function mount(
   const editAsync = options.editAsync ?? vi.fn()
   const mergeAsync = vi.fn()
   hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
+  hooks.useReplyDocumentComment.mockReturnValue(idleMutation())
   hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
+  hooks.useReopenDocumentComment.mockReturnValue(idleMutation())
   hooks.useEditDocument.mockReturnValue(
     idleMutation({ mutateAsync: editAsync }),
   )

@@ -53,6 +53,7 @@ function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

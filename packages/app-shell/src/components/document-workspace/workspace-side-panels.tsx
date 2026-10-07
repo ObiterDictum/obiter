@@ -1,4 +1,10 @@
-import type { DocumentChangeWire, DocumentComment } from '@obiter/contracts'
+import type {
+  DocumentChangeWire,
+  DocumentComment,
+  DocumentCommentAnchor,
+  DocumentCommentReply,
+  DocumentImportedCommentThread,
+} from '@obiter/contracts'
 import { DocumentAuthoritiesPanel } from './authorities-panel'
 import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
@@ -9,12 +15,18 @@ export function WorkspaceSidePanels({
   changesOpen,
   authoritiesOpen,
   comments,
-  selectedParagraphId,
-  selectedParagraphLength,
+  importedComments,
+  orphanedReplies,
+  commentTarget,
+  currentUserId,
+  canModerate,
   commentsPending,
   commentsError,
   onCreateComment,
+  onReplyComment,
   onResolveComment,
+  onReopenComment,
+  onRevealCommentAnchor,
   changes,
   changesPending,
   changesError,
@@ -26,16 +38,18 @@ export function WorkspaceSidePanels({
   changesOpen: boolean
   authoritiesOpen: boolean
   comments: DocumentComment[]
-  selectedParagraphId: string | null
-  selectedParagraphLength: number
+  importedComments: DocumentImportedCommentThread[]
+  orphanedReplies: DocumentCommentReply[]
+  commentTarget: DocumentCommentAnchor | null
+  currentUserId: string | undefined
+  canModerate: boolean
   commentsPending: boolean
   commentsError: string | null
-  onCreateComment: (input: {
-    body: string
-    paragraphId: string
-    endOffset: number
-  }) => void
+  onCreateComment: (body: string) => void
+  onReplyComment: (input: { parentId: string; body: string }) => void
   onResolveComment: (commentId: string) => void
+  onReopenComment: (commentId: string) => void
+  onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void
   changes: DocumentChangeWire[]
   changesPending: boolean
   changesError: string | null
@@ -52,13 +66,19 @@ export function WorkspaceSidePanels({
         >
           <DocumentCommentsPanel
             comments={comments}
-            selectedParagraphId={selectedParagraphId}
-            selectedParagraphLength={selectedParagraphLength}
+            importedComments={importedComments}
+            orphanedReplies={orphanedReplies}
+            commentTarget={commentTarget}
             canEdit
+            currentUserId={currentUserId}
+            canModerate={canModerate}
             pending={commentsPending}
             error={commentsError}
             onCreate={onCreateComment}
+            onReply={onReplyComment}
             onResolve={onResolveComment}
+            onReopen={onReopenComment}
+            onRevealAnchor={onRevealCommentAnchor}
           />
         </div>
       ) : null}
