@@ -136,6 +136,7 @@ describe('draft edits queued across the save boundary', () => {
         covered,
         sent,
         model('Hello'),
+        'ver_1',
         SAVED_LINEAGE,
         'ver_2',
         2,
@@ -187,6 +188,7 @@ describe('draft edits queued across the save boundary', () => {
         covered,
         sent,
         model('Hello'),
+        'ver_1',
         SAVED_LINEAGE,
         'ver_2',
         2,
@@ -196,5 +198,110 @@ describe('draft edits queued across the save boundary', () => {
     expect(result.current.boundaryPending).toBe(false)
     expect(result.current.lineageUnresolved).toBe(false)
     expect(result.current.drafts).toEqual({})
+  })
+
+  it('resolves a committed version whose model projection is unchanged', () => {
+    // An operation can commit a version whose parsed model is deep-equal to
+    // the pre-save one — e.g. one that only touches XML the parser drops.
+    // Structural sharing then keeps `model` referentially identical, so a
+    // same-model check reads the committed version as the pre-save rerun and
+    // the boundary never resolves: Saving forever. The version id is the
+    // identity that decides.
+    const shared = model('Hello')
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: WorkspaceDraftScope }) => useWorkspaceDrafts(scope),
+      { initialProps: { scope: scopeFor(shared, 'ver_1', 1) } },
+    )
+
+    act(() => {
+      result.current.setDrafts(() => ({ r1: 'Hello world' }))
+    })
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { r1: 'Hello world' },
+    }
+    const covered: DraftSlot[] = [
+      { kind: 'run-text', key: 'run:r1', runId: 'r1' },
+    ]
+    act(() => {
+      result.current.commitSaveBoundary(
+        covered,
+        sent,
+        shared,
+        'ver_1',
+        SAVED_LINEAGE,
+        'ver_2',
+        2,
+      )
+    })
+    expect(result.current.boundaryPending).toBe(true)
+
+    // The committed version arrives carrying the same model reference.
+    rerender({ scope: scopeFor(shared, 'ver_2', 2) })
+
+    expect(result.current.boundaryPending).toBe(false)
+    expect(result.current.lineageUnresolved).toBe(false)
+    expect(result.current.drafts).toEqual({})
+  })
+
+  it('blocks a newer version whose model projection is unchanged', () => {
+    // The sibling case: a version the save did not produce arrives with a
+    // deep-equal model. Waiting on it would wedge the same way, so the
+    // boundary must block honestly instead.
+    const shared = model('Hello')
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: WorkspaceDraftScope }) => useWorkspaceDrafts(scope),
+      { initialProps: { scope: scopeFor(shared, 'ver_1', 1) } },
+    )
+
+    act(() => {
+      result.current.setDrafts(() => ({ r1: 'Hello world' }))
+    })
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { r1: 'Hello world' },
+    }
+    const covered: DraftSlot[] = [
+      { kind: 'run-text', key: 'run:r1', runId: 'r1' },
+    ]
+    act(() => {
+      result.current.commitSaveBoundary(
+        covered,
+        sent,
+        shared,
+        'ver_1',
+        SAVED_LINEAGE,
+        'ver_2',
+        2,
+      )
+    })
+    expect(result.current.boundaryPending).toBe(true)
+
+    rerender({ scope: scopeFor(shared, 'ver_3', 3) })
+
+    expect(result.current.boundaryPending).toBe(false)
+    expect(result.current.lineageUnresolved).toBe(true)
+    expect(result.current.blockedReason).toBe('newer-version')
+  })
+
+  it('resolves a committed decision whose model projection is unchanged', () => {
+    // The tracked-decision path waits on the same gate with no lineage: the
+    // decision's version arriving under the same model reference must still
+    // release the boundary.
+    const shared = model('Hello')
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: WorkspaceDraftScope }) => useWorkspaceDrafts(scope),
+      { initialProps: { scope: scopeFor(shared, 'ver_1', 1) } },
+    )
+
+    act(() => {
+      result.current.resetHistoryAfterDecision('ver_2', 2)
+    })
+    expect(result.current.boundaryPending).toBe(true)
+
+    rerender({ scope: scopeFor(shared, 'ver_2', 2) })
+
+    expect(result.current.boundaryPending).toBe(false)
+    expect(result.current.lineageUnresolved).toBe(false)
   })
 })

@@ -56,6 +56,13 @@ export type SaveBaseline = {
   /** The model the snapshots were recorded against. */
   fromModel: DocumentModelWire
   /**
+   * The version the request was planned against. Structural sharing can keep
+   * `fromModel` referentially identical to a reloaded model whose projection
+   * did not change, so "still the pre-flight model" is a version test, not a
+   * reference test.
+   */
+  fromVersionId?: string
+  /**
    * The authoritative lineage the server returned for the accepted batch. When
    * present, identity is read from it rather than inferred from a diff.
    */

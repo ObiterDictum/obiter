@@ -1,12 +1,8 @@
 import { Button } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { refocusCaretBeforeFlight } from './document-actions'
-import {
-  blockedSummary,
-  refusedSummary,
-  type DocumentSave,
-  type SaveState,
-} from './use-document-save'
+import { blockedSummary, refusedSummary } from './document-save-messages'
+import type { DocumentSave, SaveState } from './use-document-save'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
 
