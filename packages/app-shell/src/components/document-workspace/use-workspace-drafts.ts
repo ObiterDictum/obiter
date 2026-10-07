@@ -71,8 +71,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     modelVersionNumber: scope.baseVersionNumber,
     modelError: scope.modelError ?? false,
     state: bundle.state,
-    resolveState: (next) =>
-      setBundle((current) => ({ ...current, state: next })),
+    resolveState: (update) =>
+      setBundle((current) => ({ ...current, state: update(current.state) })),
     onBlocked: setBlockedReason,
   })
   const storage = draftStorage()
