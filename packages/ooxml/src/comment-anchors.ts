@@ -14,9 +14,23 @@ import {
 import { decodeXmlReferences } from './xml-lexemes'
 import { setOverlayReplacement } from './parts/overlay'
 
+export type AllocatedReply = {
+  /** The product-authored reply as it will be emitted into the package. */
+  reply: { author: { name: string }; createdAt: string; body: string }
+  ooxmlId: number
+  /** The `w14:paraId` this reply's own comment paragraph carries. */
+  paraId: string | null
+}
+
 export type AllocatedComment = {
   comment: DocumentComment
   ooxmlId: number
+  /**
+   * The `w14:paraId` on the emitted comment's paragraph — present whenever
+   * `commentsExtended` metadata (threading or done state) must name it.
+   */
+  paraId: string | null
+  replies: AllocatedReply[]
 }
 
 type MarkerKind = 'start' | 'end' | 'reference'
@@ -49,31 +63,27 @@ export function placeCommentAnchors(
   const insertionsByPart = new Map<string, Map<number, PendingInsertion>>()
 
   for (const allocated of comments) {
-    const paragraph = resolveParagraph(document, allocated.comment)
-    const zeroLength =
-      allocated.comment.anchor.startOffset ===
-      allocated.comment.anchor.endOffset
-    addMarker(
-      document,
-      insertionsByPart,
-      paragraph,
-      allocated.comment.anchor.startOffset,
-      { kind: 'start', ooxmlId: allocated.ooxmlId, zeroLength },
-    )
-    addMarker(
-      document,
-      insertionsByPart,
-      paragraph,
-      allocated.comment.anchor.endOffset,
-      { kind: 'end', ooxmlId: allocated.ooxmlId, zeroLength },
-    )
-    addMarker(
-      document,
-      insertionsByPart,
-      paragraph,
-      allocated.comment.anchor.endOffset,
-      { kind: 'reference', ooxmlId: allocated.ooxmlId, zeroLength },
-    )
+    const anchor = allocated.comment.anchor
+    const { start, end } = resolveParagraphs(document, allocated.comment)
+    // The three markers collapse onto one source point only for a zero-length
+    // range inside a single paragraph; for any other shape the start and end
+    // markers sit at different positions or in different paragraphs.
+    const zeroLength = start === end && anchor.startOffset === anchor.endOffset
+    addMarker(document, insertionsByPart, start, anchor.startOffset, {
+      kind: 'start',
+      ooxmlId: allocated.ooxmlId,
+      zeroLength,
+    })
+    addMarker(document, insertionsByPart, end, anchor.endOffset, {
+      kind: 'end',
+      ooxmlId: allocated.ooxmlId,
+      zeroLength,
+    })
+    addMarker(document, insertionsByPart, end, anchor.endOffset, {
+      kind: 'reference',
+      ooxmlId: allocated.ooxmlId,
+      zeroLength,
+    })
   }
 
   for (const [partName, insertions] of insertionsByPart) {
@@ -105,32 +115,88 @@ export function placeCommentAnchors(
   }
 }
 
+/**
+ * Validates an anchor against the model: both endpoint paragraphs must be
+ * unique, must live in the same story, and must be ordered start before end.
+ * Returns the two endpoint wire paragraphs — the same object twice for a
+ * single-paragraph range or an insertion point.
+ */
 export function validateCommentAnchor(
   model: DocumentModelWire,
   anchor: DocumentCommentAnchor,
 ) {
+  const start = resolveWireParagraph(model, anchor.paragraphId)
+  const end =
+    anchor.endParagraphId === undefined ||
+    anchor.endParagraphId === anchor.paragraphId
+      ? start
+      : resolveWireParagraph(model, anchor.endParagraphId)
+
+  if (end.story !== start.story || start.index > end.index) {
+    throw new OoxmlError('comment-anchor-unresolved')
+  }
+
+  const startText = wireParagraphText(start.paragraph)
+  const endText = wireParagraphText(end.paragraph)
+  if (start === end) {
+    if (
+      anchor.startOffset > anchor.endOffset ||
+      anchor.endOffset > startText.length ||
+      splitsSurrogate(startText, anchor.startOffset) ||
+      splitsSurrogate(startText, anchor.endOffset)
+    ) {
+      throw new OoxmlError('comment-anchor-unresolved')
+    }
+    return { start: start.paragraph, end: end.paragraph }
+  }
+
+  if (
+    anchor.startOffset > startText.length ||
+    anchor.endOffset > endText.length ||
+    splitsSurrogate(startText, anchor.startOffset) ||
+    splitsSurrogate(endText, anchor.endOffset)
+  ) {
+    throw new OoxmlError('comment-anchor-unresolved')
+  }
+  return { start: start.paragraph, end: end.paragraph }
+}
+
+function resolveWireParagraph(model: DocumentModelWire, paragraphId: string) {
   const matches = model.stories.flatMap((story) =>
-    story.paragraphs.filter((paragraph) => paragraph.id === anchor.paragraphId),
+    story.paragraphs.flatMap((paragraph, index) =>
+      paragraph.id === paragraphId ? [{ story, paragraph, index }] : [],
+    ),
   )
   if (matches.length !== 1) {
     throw new OoxmlError('comment-anchor-unresolved')
   }
-
-  const paragraph = matches[0]
-  const text = paragraph.runs.map((run) => run.text).join('')
-  if (
-    anchor.startOffset > anchor.endOffset ||
-    anchor.endOffset > text.length ||
-    splitsSurrogate(text, anchor.startOffset) ||
-    splitsSurrogate(text, anchor.endOffset)
-  ) {
-    throw new OoxmlError('comment-anchor-unresolved')
-  }
-  return paragraph
+  const match = matches[0]
+  if (!match) throw new OoxmlError('comment-anchor-unresolved')
+  return match
 }
 
-function resolveParagraph(document: OoxmlDocument, comment: DocumentComment) {
-  const modelParagraph = validateCommentAnchor(document.model, comment.anchor)
+function wireParagraphText(paragraph: { runs: { text: string }[] }) {
+  return paragraph.runs.map((run) => run.text).join('')
+}
+
+function resolveParagraphs(document: OoxmlDocument, comment: DocumentComment) {
+  const endpoints = validateCommentAnchor(document.model, comment.anchor)
+  const start = anchorParagraph(document, endpoints.start)
+  const end =
+    endpoints.end === endpoints.start
+      ? start
+      : anchorParagraph(document, endpoints.end)
+  // Both endpoints were validated into one story, so one part must own them.
+  if (start.partName !== end.partName) {
+    throw new OoxmlError('comment-anchor-unresolved')
+  }
+  return { start, end }
+}
+
+function anchorParagraph(
+  document: OoxmlDocument,
+  modelParagraph: ParagraphAnchor['wire'],
+) {
   const paragraph = document.paragraphAnchors.get(modelParagraph.id)
   if (!paragraph || !sameParagraphModel(paragraph, modelParagraph)) {
     throw new OoxmlError('comment-anchor-unresolved')
@@ -264,11 +330,11 @@ export function locateOffset(
 // decoded text; a text-wrapping `w:br` contributes exactly one `\n`, matching
 // the parser's `runPlainText` and `DocumentTextRunWire.text`. Everything else
 // in a run is structure and contributes no offset. One traversal owner so the
-// formatting locator, range validation and the comment-anchor validator cannot
-// disagree about a break.
-type EditableTextNode = { range: XmlElementRange; textBreak: boolean }
+// formatting locator, range validation, the comment-anchor validator and the
+// imported-marker resolver cannot disagree about a break.
+export type EditableTextNode = { range: XmlElementRange; textBreak: boolean }
 
-function editableTextNodes(run: TextRunAnchor): EditableTextNode[] {
+export function editableTextNodes(run: TextRunAnchor): EditableTextNode[] {
   return [
     ...run.textElements.map((range) => ({ range, textBreak: false })),
     ...run.textBreaks.map((range) => ({ range, textBreak: true })),

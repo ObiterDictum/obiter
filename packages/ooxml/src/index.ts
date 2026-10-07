@@ -86,6 +86,7 @@ export {
   hasPureStartOverride,
   levelStartOverride,
 } from './numbering-edits'
+export type { ImportedThreadReply } from './comments-package'
 export * from './model-json'
 export * from './parse'
 export * from './serialise'
