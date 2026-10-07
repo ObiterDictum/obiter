@@ -45,8 +45,11 @@ export function WorkspaceSidePanels({
   canModerate: boolean
   commentsPending: boolean
   commentsError: string | null
-  onCreateComment: (body: string) => void
-  onReplyComment: (input: { parentId: string; body: string }) => void
+  onCreateComment: (body: string) => Promise<boolean>
+  onReplyComment: (input: {
+    parentId: string
+    body: string
+  }) => Promise<boolean>
   onResolveComment: (commentId: string) => void
   onReopenComment: (commentId: string) => void
   onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void

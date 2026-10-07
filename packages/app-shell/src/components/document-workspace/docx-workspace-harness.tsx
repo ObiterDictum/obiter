@@ -321,10 +321,10 @@ export function mountWorkspace(
     },
   })
   hooks.useCreateDocumentComment.mockReturnValue(
-    idleMutation({ mutate: options.createComment ?? vi.fn() }),
+    idleMutation({ mutateAsync: options.createComment ?? vi.fn() }),
   )
   hooks.useReplyDocumentComment.mockReturnValue(
-    idleMutation({ mutate: options.replyComment ?? vi.fn() }),
+    idleMutation({ mutateAsync: options.replyComment ?? vi.fn() }),
   )
   hooks.useResolveDocumentComment.mockReturnValue(
     idleMutation({ mutate: options.resolveComment ?? vi.fn() }),
