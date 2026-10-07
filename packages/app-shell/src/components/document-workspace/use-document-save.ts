@@ -21,6 +21,7 @@ import {
   useTrackedChangeDecision,
   workspaceKeys,
 } from '../../document-workspace-api'
+import { refocusCaretBeforeFlight } from './document-actions'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 
 /**
@@ -266,6 +267,20 @@ export function useDocumentSave({
     return false
   }
 
+  /**
+   * A flight must hand DOM focus back to the caret's field while a control
+   * still holds it: `setFailure(null)` unmounts a focused Retry and `saving`
+   * disables a focused Save, dropping focus to `document.body` and losing
+   * the typed burst. Doing it at the only point a flight can begin covers
+   * every entry point by construction.
+   */
+  function startFlight() {
+    refocusCaretBeforeFlight()
+    inFlight.current = true
+    setFailure(null)
+    setNotice(null)
+  }
+
   async function save() {
     if (!model) return
     // A save whose lineage could not be reconciled leaves the history baseline
@@ -310,9 +325,7 @@ export function useDocumentSave({
         )
         return
       }
-      inFlight.current = true
-      setFailure(null)
-      setNotice(null)
+      startFlight()
       try {
         const saved = await decideChange.mutateAsync({
           baseVersionId,
@@ -351,9 +364,7 @@ export function useDocumentSave({
       return
     }
     if (current.operations.length === 0) return
-    inFlight.current = true
-    setFailure(null)
-    setNotice(null)
+    startFlight()
     try {
       const result = await sendBatch(current.operations)
       commit(

@@ -232,13 +232,10 @@ export function DocumentWorkspaceToolbar({
         <div className="ml-auto flex shrink-0 items-center self-center pr-1">
           {/* preventDefault keeps the caret in the editor while the save
               flight runs, so keystrokes typed during it still land. Keyboard
-              activation instead leaves focus on the button; the marker lets
-              the save path hand it back before `saving` disables the control
-              and the browser drops focus to document.body. */}
-          <span
-            data-save-control
-            onMouseDown={(event) => event.preventDefault()}
-          >
+              activation instead leaves focus on the button; the save path
+              hands it back before `saving` disables the control and the
+              browser drops focus to document.body. */}
+          <span onMouseDown={(event) => event.preventDefault()}>
             <Button
               size="sm"
               aria-label="Save"
