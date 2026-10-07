@@ -216,7 +216,7 @@ test('pastes multiple paragraphs and undoes it in one step', async ({
   await shot(page, '04-multi-paragraph-paste')
 
   // One paste is one history entry: a single undo restores the document.
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
   await shot(page, '05-paste-undone-in-one-step')
 })

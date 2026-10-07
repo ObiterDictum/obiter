@@ -125,8 +125,10 @@ const editor = (page: Page) =>
 const deleteButton = (page: Page) =>
   page.getByRole('button', { name: /Delete paragraph/ })
 const saveButton = (page: Page) => page.getByRole('button', { name: 'Save' })
-const undoButton = (page: Page) => page.getByRole('button', { name: 'Undo' })
-const redoButton = (page: Page) => page.getByRole('button', { name: 'Redo' })
+const undoButton = (page: Page) =>
+  page.getByRole('button', { name: 'Undo', exact: true })
+const redoButton = (page: Page) =>
+  page.getByRole('button', { name: 'Redo', exact: true })
 
 function uniqueParagraphCount(page: Page) {
   return page.$$eval(
