@@ -59,6 +59,7 @@ export function useSaveBaseline({
   const decisionPending = useRef<{
     versionId: string
     versionNumber: number | undefined
+    fromModel: DocumentModelWire | undefined
   } | null>(null)
   // Exposed so the workspace can refuse a second save until the model for the
   // committed version has actually reloaded.
@@ -97,6 +98,10 @@ export function useSaveBaseline({
         return
       }
       if (!model) return
+      // See the pendingVersion dependency below: this effect can rerun while
+      // the served model is still the one the decision was made against, and
+      // that must not read as a version the decision did not produce.
+      if (model === decision.fromModel) return
       if (modelVersionId === decision.versionId) {
         decisionPending.current = null
         setPendingVersion(null)
@@ -124,6 +129,13 @@ export function useSaveBaseline({
       return
     }
     if (!model) return
+    // The mutation's `onSuccess` finishes the model refetch before the
+    // caller's `await mutateAsync` continues, so the committed model can
+    // render before the boundary is recorded. `pendingVersion` is a
+    // dependency so that ordering still resolves here, but that rerun then
+    // also fires while the served model is still the pre-save one, which
+    // must not read as a version the save did not produce.
+    if (model === boundary.fromModel) return
     if (modelVersionId === boundary.versionId) {
       const resolved: SaveBaseline = { ...boundary, toModel: model }
       history.translate(
@@ -163,7 +175,7 @@ export function useSaveBaseline({
     pending.current = null
     setPendingVersion(null)
     onBlockedRef.current('newer-version')
-  }, [model, modelVersionId, modelVersionNumber, modelError])
+  }, [model, modelVersionId, modelVersionNumber, modelError, pendingVersion])
 
   return {
     commit(
@@ -221,7 +233,7 @@ export function useSaveBaseline({
       setParagraphRemap(new Map())
     },
     markDecisionCommitted(versionId: string, versionNumber?: number) {
-      decisionPending.current = { versionId, versionNumber }
+      decisionPending.current = { versionId, versionNumber, fromModel: model }
       setPendingVersion(versionId)
     },
     pendingVersion,
