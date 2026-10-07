@@ -28,16 +28,35 @@ alter table document_comments
   );
 
 -- Scoped uniqueness so a reply's foreign key can prove the parent comment
--- belongs to the same organisation, matter and document.
-alter table document_comments
-  drop constraint if exists document_comments_scoped_id_key;
-alter table document_comments
-  add constraint document_comments_scoped_id_key
-    unique (id, document_id, matter_id, organisation_id);
+-- belongs to the same organisation, matter and document. Created inside a
+-- guard rather than drop-and-add: the replies table's foreign key depends on
+-- this constraint, so dropping it on a re-apply would need cascade.
+do $$
+declare
+  -- Resolved once, through the same search_path the ALTER below uses, so the
+  -- guard and the DDL cannot disagree about the target relation: a same-named
+  -- constraint on another schema's document_comments must not satisfy it.
+  target_relation regclass := 'document_comments'::regclass;
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'document_comments_scoped_id_key'
+      and conrelid = target_relation
+  ) then
+    alter table document_comments
+      add constraint document_comments_scoped_id_key
+        unique (id, document_id, matter_id, organisation_id);
+  end if;
+end $$;
 
 -- A client key dedupes one user's resubmit; different authors' keys are
--- independent intents and must not collide.
-create unique index if not exists document_comments_client_key_idx
+-- independent intents and must not collide. These unique indexes back the
+-- idempotency semantics, so they are recreated rather than merely created
+-- when absent: a draft index of the same name on different columns would
+-- otherwise survive `if not exists` and silently change what a replay means.
+drop index if exists document_comments_client_key_idx;
+create unique index document_comments_client_key_idx
   on document_comments (document_id, author_id, client_key)
   where client_key is not null;
 
@@ -91,6 +110,7 @@ create index if not exists document_comment_replies_imported_idx
   on document_comment_replies (document_id, imported_comment_id, created_at, id)
   where imported_comment_id is not null;
 
-create unique index if not exists document_comment_replies_client_key_idx
+drop index if exists document_comment_replies_client_key_idx;
+create unique index document_comment_replies_client_key_idx
   on document_comment_replies (document_id, author_id, client_key)
   where client_key is not null;
