@@ -26,8 +26,9 @@ const password = process.env.E6_E2E_PASSWORD
 const fixture = process.env.E6_E2E_DOCX
 const shots = process.env.E6_E2E_SHOTS ?? '/tmp/e6-shots'
 const matterName = process.env.E6_E2E_MATTER ?? 'E6 Redo Matter'
-// Typing is one history step per character, so this many Undo presses remove
-// the whole marker and the same number of Redo presses restore it.
+// Typing coalesces into one history step per burst (document-history-grouping):
+// a word boundary ends the run, so this marker is two steps (the space, then
+// the word) and two Undo presses remove it.
 const textMarker = ' REDO-MARKER'
 const ready = Boolean(email && password && fixture)
 const capturing = process.env.E6_E2E_CAPTURE === '1'
@@ -221,14 +222,15 @@ test.describe('redo in a browser', () => {
     await shot(page, '02-text-edited')
     await check(editor(page)).toHaveValue(/REDO-MARKER$/)
 
-    for (let step = 0; step < textMarker.length; step += 1)
-      await clickControl(undo(page))
+    // Two typing runs is two undo steps: the space, then the word.
+    await clickControl(undo(page))
+    await clickControl(undo(page))
     await shot(page, '03-undo-removed-the-edit')
     await check(editor(page)).not.toHaveValue(/REDO-MARKER/)
     await check(redo(page)).toBeEnabled()
 
-    for (let step = 0; step < textMarker.length; step += 1)
-      await clickControl(redo(page))
+    await clickControl(redo(page))
+    await clickControl(redo(page))
     await shot(page, '04-redo-restored-the-edit')
     await check(editor(page)).toHaveValue(/REDO-MARKER$/)
     await check(redo(page)).toBeDisabled()
@@ -253,16 +255,17 @@ test.describe('redo in a browser', () => {
   test('steps several edits back and forward', async ({ page }) => {
     await openFixtureDocument(page)
 
-    // Undo is per keystroke, so three typed characters are three steps.
-    await typeInParagraph(page, 'Paragraph 2.', 'ABC')
-    await check(editor(page)).toHaveValue(/ABC$/)
+    // Undo is per typing run, not per keystroke: word boundaries break the
+    // burst, so 'A B C' is three steps where three plain letters would be one.
+    await typeInParagraph(page, 'Paragraph 2.', 'A B C')
+    await check(editor(page)).toHaveValue(/A B C$/)
 
     for (let step = 0; step < 3; step += 1) await clickControl(undo(page))
-    await check(editor(page)).not.toHaveValue(/ABC/)
+    await check(editor(page)).not.toHaveValue(/A B C/)
     await shot(page, '06-multiple-undo')
 
     for (let step = 0; step < 3; step += 1) await clickControl(redo(page))
-    await check(editor(page)).toHaveValue(/ABC$/)
+    await check(editor(page)).toHaveValue(/A B C$/)
     await shot(page, '07-multiple-redo')
     await check(redo(page)).toBeDisabled()
   })
