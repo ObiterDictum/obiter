@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
 import { documentStory } from '../../document-model-text'
 import { editingStoryFor } from '../../document-page-layout'
@@ -30,6 +30,7 @@ const emptyFootnotesStory: DocumentStoryWire = {
  * the caret to the body with nothing selected.
  */
 export function useEditingStory({
+  documentId,
   model,
   verticalCaret,
   setSelection,
@@ -38,6 +39,7 @@ export function useEditingStory({
   setRestoreCaret,
   setFormatRange,
 }: {
+  documentId: string
   model: DocumentModelWire | undefined
   verticalCaret: VerticalCaretColumn
   setSelection: (selection: null) => void
@@ -49,6 +51,15 @@ export function useEditingStory({
   setFormatRange: (range: { from: number; to: number } | null) => void
 }) {
   const [editingKind, setEditingKind] = useState<EditingKind>('document')
+
+  // A column run never spans documents, and this workspace is reused when the
+  // selected document changes. Neither does an open margin story.
+  const caretDocument = useRef<string | null>(null)
+  if (caretDocument.current !== documentId) {
+    caretDocument.current = documentId
+    clearVerticalColumn(verticalCaret)
+    setEditingKind('document')
+  }
 
   // A margin kind with no story resolves to the body, so a reload that drops
   // the part lands the editor back in the document rather than stranding it.

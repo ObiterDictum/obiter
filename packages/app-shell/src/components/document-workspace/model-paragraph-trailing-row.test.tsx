@@ -38,6 +38,7 @@ function doc(paragraph: DocumentParagraphWire): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

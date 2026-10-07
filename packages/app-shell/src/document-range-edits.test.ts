@@ -42,6 +42,7 @@ function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
@@ -308,6 +309,7 @@ function tabledDoc(): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

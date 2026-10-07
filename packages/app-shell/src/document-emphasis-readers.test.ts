@@ -94,6 +94,7 @@ describe('out-of-contract emphasis reversal', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
   }
 

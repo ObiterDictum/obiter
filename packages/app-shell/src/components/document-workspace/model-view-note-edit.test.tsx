@@ -61,6 +61,7 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 /** The laid-out blocks the page renders: the body paragraph, then the note
