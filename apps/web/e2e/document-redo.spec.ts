@@ -117,8 +117,10 @@ async function openFixtureDocument(page: Page, matter = matterName) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const redo = (page: Page) => page.getByRole('button', { name: 'Redo' })
-const undo = (page: Page) => page.getByRole('button', { name: 'Undo' })
+const redo = (page: Page) =>
+  page.getByRole('button', { name: 'Redo', exact: true })
+const undo = (page: Page) =>
+  page.getByRole('button', { name: 'Undo', exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()

@@ -113,7 +113,8 @@ async function openFixtureDocument(
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
-const undo = (page: Page) => page.getByRole('button', { name: 'Undo' })
+const undo = (page: Page) =>
+  page.getByRole('button', { name: 'Undo', exact: true })
 const tabs = (page: Page) =>
   page.getByRole('tab', { name: /Home|Insert|Layout/ })
 const linkedText = (page: Page) =>
@@ -212,7 +213,7 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await undo(page).click()
   await expect(fieldMarkers(page)).toHaveCount(0)
   await shot(page, '03-undone-reference')
-  await page.getByRole('button', { name: 'Redo' }).click()
+  await page.getByRole('button', { name: 'Redo', exact: true }).click()
   await expect(fieldMarkers(page)).toHaveCount(1)
 
   await saveAndWait(page)

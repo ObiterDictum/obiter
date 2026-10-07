@@ -582,7 +582,7 @@ test('tracked property history never paints, presses or saves as current', async
   ).toContain('line-through')
 
   // Undo agrees with paint and controls: the toggle reverses, not the history.
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(
     page.getByRole('button', { name: 'Strikethrough' }),
   ).toHaveAttribute('aria-pressed', 'false')
