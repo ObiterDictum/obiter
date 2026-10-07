@@ -1,6 +1,5 @@
-import { useEffect } from 'react'
-
 import type { DocumentSelection } from '../../document-selection'
+import { useBrowserLayoutEffect } from './use-browser-layout-effect'
 
 type CaretPlacement = { paragraphId: string; offset: number }
 
@@ -10,6 +9,11 @@ type CaretPlacement = { paragraphId: string; offset: number }
  * at an id the reloaded model no longer holds. Run identifiers are unchanged,
  * so only paragraph ids are rewritten. The map is the one the drafts hook
  * published when the save boundary resolved, never a positional guess.
+ *
+ * This runs as a layout effect so the retarget lands in the same synchronous
+ * commit cascade as the model swap: a passive-effect hop paints a commit
+ * where no paragraph is selected, unmounting the editor, and a keystroke
+ * delivered there falls through to `document.body` and is silently lost.
  */
 export function useCaretLineageRemap({
   paragraphRemap,
@@ -28,7 +32,7 @@ export function useCaretLineageRemap({
     update: (current: DocumentSelection | null) => DocumentSelection | null,
   ) => void
 }) {
-  useEffect(() => {
+  useBrowserLayoutEffect(() => {
     if (paragraphRemap.size === 0) return
     const remap = (id: string) => paragraphRemap.get(id) ?? id
     setSelectedParagraphId((current) => (current ? remap(current) : current))

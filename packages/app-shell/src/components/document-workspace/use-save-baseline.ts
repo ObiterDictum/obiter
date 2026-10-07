@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useBrowserLayoutEffect } from './use-browser-layout-effect'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   lineageCoversCoveredSlots,
@@ -82,7 +83,11 @@ export function useSaveBaseline({
   // describes; a response that fails to load, or that carries a version this
   // save did not produce, is surfaced rather than leaving a permanent
   // "Saving…" with an enabled-but-inert Save button.
-  useEffect(() => {
+  // This is a layout effect: resolving publishes the paragraph remap the
+  // caret lineage retargets, and both have to land inside the swap's commit
+  // cascade — a passive-effect hop leaves a window where the focused editor
+  // is already gone and the next keystroke falls through to document.body.
+  useBrowserLayoutEffect(() => {
     // A tracked decision carries no lineage to translate; the gate exists only
     // so the next save plans against the reloaded model for that exact version.
     const decision = decisionPending.current
