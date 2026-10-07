@@ -48,7 +48,7 @@ export function useSaveBaseline({
   modelVersionNumber: number | undefined
   modelError: boolean
   state: DraftState
-  resolveState: (state: DraftState) => void
+  resolveState: (update: (current: DraftState) => DraftState) => void
   onBlocked: (reason: BaselineBlockReason | null) => void
 }) {
   const pending = useRef<SaveBaseline | null>(null)
@@ -121,17 +121,27 @@ export function useSaveBaseline({
     if (!model) return
     if (modelVersionId === boundary.versionId) {
       const resolved: SaveBaseline = { ...boundary, toModel: model }
-      const live = remapLiveDraftState(stateRef.current, resolved)
       history.translate(
         (snapshot) => remapLiveDraftState(snapshot, resolved).state,
       )
-      resolveStateRef.current(live.state)
+      // The live-state rewrite goes through the updater form: `stateRef` is
+      // the last rendered state, but an edit can be queued and still
+      // unrendered when this effect runs — it only ever runs after the commit
+      // — so replacing state wholesale would discard that edit. Remapping
+      // `current` at application time keeps it. `unresolved` stays a read of
+      // the rendered state: a queued edit that added an unresolvable key
+      // would still be held back as a blocked draft at the next save, which
+      // is a banner rather than silent loss.
+      const { unresolved } = remapLiveDraftState(stateRef.current, resolved)
+      resolveStateRef.current(
+        (current) => remapLiveDraftState(current, resolved).state,
+      )
       if (resolved.lineage) {
         setParagraphRemap(paragraphMapFromLineage(resolved.lineage))
       }
       pending.current = null
       setPendingVersion(null)
-      onBlockedRef.current(live.unresolved ? 'lineage' : null)
+      onBlockedRef.current(unresolved ? 'lineage' : null)
       return
     }
     // A version this save did not produce. An older one is a stale response
