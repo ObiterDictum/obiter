@@ -17,6 +17,7 @@ import {
   useCreateDocumentComment,
   useTrackedChangeDecision,
 } from '../../document-workspace-api'
+import { refocusCaretBeforeSave } from './document-actions'
 import { DocxModelPages } from './docx-model-pages'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
@@ -115,6 +116,11 @@ export function DocxWorkspace({
   // recoverable draft. `useDocumentSave` owns that truth as `saveState`; the
   // E45 recovery paths keep it unsaved until the work is actually covered.
   usePublishDocumentDirty(save.saveState.status !== 'saved')
+
+  const saveKeepingFocus = () => {
+    refocusCaretBeforeSave()
+    save.save()
+  }
 
   const {
     selectedParagraphId,
@@ -265,7 +271,7 @@ export function DocxWorkspace({
           })
         }}
         onPrint={printDocument}
-        onSave={save.save}
+        onSave={saveKeepingFocus}
         onUndo={undoDocument}
         onRedo={redoDocument}
         onInsertParagraph={() => {
@@ -337,7 +343,7 @@ export function DocxWorkspace({
       layout={layout}
       onKeyDown={(event) =>
         documentWorkspaceKeyDown(event, {
-          save: save.save,
+          save: saveKeepingFocus,
           undo: undoDocument,
           redo: redoDocument,
           print: printDocument,
