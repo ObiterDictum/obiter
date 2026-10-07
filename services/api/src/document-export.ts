@@ -1,12 +1,17 @@
 import type { Pool } from 'pg'
-import type { DocumentComment } from '@obiter/contracts'
+import type { DocumentComment, DocumentCommentReply } from '@obiter/contracts'
 import {
   OoxmlError,
   parseDocx,
   serialiseDocxWithComments,
   validateCommentAnchor,
+  type ImportedThreadReply,
 } from '@obiter/ooxml'
-import { CommentsDatabaseError, listDocumentComments } from './comments-db'
+import {
+  CommentsDatabaseError,
+  listDocumentComments,
+  type ListedDocumentComments,
+} from './comments-db'
 import {
   appendAuditLog,
   createDocumentObjectKey,
@@ -55,8 +60,8 @@ export async function exportDocumentDocx(
     requestId: string
   },
 ): Promise<DocumentExportResult> {
-  const comments = await listComments(pool, input)
-  if (comments === null) return { status: 'not_found' }
+  const listed = await listComments(pool, input)
+  if (listed === null) return { status: 'not_found' }
 
   const expectedSourceKey = createDocumentObjectKey({
     organisationId: input.version.organisationId,
@@ -77,9 +82,9 @@ export async function exportDocumentDocx(
   }
 
   const embedded =
-    comments.length === 0
+    listed.comments.length === 0 && listed.replies.length === 0
       ? { bytes: Uint8Array.from(source), skippedCommentCount: 0 }
-      : await embedComments(source, comments)
+      : await embedComments(source, listed)
 
   await appendAuditLog(pool, {
     organisationId: input.organisationId,
@@ -90,7 +95,7 @@ export async function exportDocumentDocx(
     metadata: {
       matterId: input.matterId,
       versionId: input.version.id,
-      commentCount: comments.length,
+      commentCount: listed.comments.length,
       skippedCommentCount: embedded.skippedCommentCount,
     },
     requestId: input.requestId,
@@ -132,16 +137,51 @@ async function listComments(
 
 async function embedComments(
   source: Buffer,
-  comments: NonNullable<Awaited<ReturnType<typeof listDocumentComments>>>,
+  listed: ListedDocumentComments,
 ): Promise<{ bytes: Uint8Array; skippedCommentCount: number }> {
   try {
     const document = await parseDocx(Uint8Array.from(source))
+
+    const productReplies = new Map<string, DocumentCommentReply[]>()
+    const importedReplies: ImportedThreadReply[] = []
+    const importedById = new Map(
+      document.model.comments.map((entry) => [entry.id, entry]),
+    )
+    for (const record of listed.replies) {
+      const reply: DocumentCommentReply = {
+        imported: false,
+        id: record.id,
+        body: record.body,
+        author: record.author,
+        createdAt: record.createdAt,
+      }
+      if (record.commentId !== null) {
+        const list = productReplies.get(record.commentId)
+        if (list) list.push(reply)
+        else productReplies.set(record.commentId, [reply])
+      } else if (record.importedCommentId !== null) {
+        // The head is resolved against this version's own comments part; a
+        // thread absent here still exports its reply unanchored so the
+        // product-authored text is not dropped from the file.
+        const head = importedById.get(record.importedCommentId)
+        importedReplies.push({
+          ooxmlId: head?.ooxmlId ?? null,
+          paraId: head?.paraId ?? null,
+          reply,
+        })
+      }
+    }
+
     const resolvable: DocumentComment[] = []
     let skippedCommentCount = 0
-    for (const comment of comments) {
+    for (const record of listed.comments) {
       try {
-        validateCommentAnchor(document.model, comment.anchor)
-        resolvable.push(comment)
+        validateCommentAnchor(document.model, record.anchor)
+        resolvable.push({
+          ...record,
+          replies: productReplies.get(record.id) ?? [],
+          anchorResolved: true,
+        })
       } catch (error) {
         if (
           error instanceof OoxmlError &&
@@ -154,9 +194,9 @@ async function embedComments(
       }
     }
     const bytes =
-      resolvable.length === 0
+      resolvable.length === 0 && importedReplies.length === 0
         ? Uint8Array.from(source)
-        : await serialiseDocxWithComments(document, resolvable)
+        : await serialiseDocxWithComments(document, resolvable, importedReplies)
     return { bytes, skippedCommentCount }
   } catch {
     throw new DocumentExportError()

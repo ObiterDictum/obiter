@@ -169,6 +169,7 @@ describe('GET /api/documents/:id/export response', () => {
       'versions',
       'current-version',
       'comments',
+      'comment-replies',
       'audit',
     ])
   })

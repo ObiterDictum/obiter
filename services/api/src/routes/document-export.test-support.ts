@@ -29,6 +29,7 @@ interface StoredComment {
   documentId: string
   anchorVersionId: string | null
   paragraphId: string
+  endParagraphId: string | null
   startOffset: number
   endOffset: number
   body: string
@@ -40,12 +41,23 @@ interface StoredComment {
   updatedAt: string
 }
 
+interface StoredReply {
+  id: string
+  commentId: string | null
+  importedCommentId: string | null
+  body: string
+  authorId: string
+  authorName: string
+  createdAt: string
+}
+
 interface TestDatabaseOptions extends SharedTestDatabaseOptions {
   commentsDocumentMissing?: boolean
 }
 
 export class TestDatabase extends SharedTestDatabase {
   comments = new Map<string, StoredComment>()
+  replies = new Map<string, StoredReply>()
   audits: Array<{
     entityType: string
     entityId: string
@@ -72,6 +84,7 @@ export class TestDatabase extends SharedTestDatabase {
       documentId: overrides.documentId ?? 'doc_1',
       anchorVersionId: overrides.anchorVersionId ?? 'ver_1',
       paragraphId: overrides.paragraphId ?? fixtureParagraphId,
+      endParagraphId: overrides.endParagraphId ?? null,
       startOffset: overrides.startOffset ?? 0,
       endOffset: overrides.endOffset ?? 0,
       body: overrides.body ?? 'Synthetic review note',
@@ -83,6 +96,20 @@ export class TestDatabase extends SharedTestDatabase {
       updatedAt: overrides.updatedAt ?? '2026-08-10T12:00:00.000Z',
     }
     this.comments.set(value.id, value)
+    return value
+  }
+
+  seedReply(overrides: Partial<StoredReply> = {}) {
+    const value = {
+      id: overrides.id ?? `cmtr_${this.comments.size + this.replies.size + 1}`,
+      commentId: overrides.commentId ?? null,
+      importedCommentId: overrides.importedCommentId ?? null,
+      body: overrides.body ?? 'Synthetic reply note',
+      authorId: overrides.authorId ?? 'usr_owner',
+      authorName: overrides.authorName ?? 'Owner Reviewer',
+      createdAt: overrides.createdAt ?? '2026-08-10T12:30:00.000Z',
+    }
+    this.replies.set(value.id, value)
     return value
   }
 
@@ -112,6 +139,7 @@ export class TestDatabase extends SharedTestDatabase {
                     document_id: comment.documentId,
                     anchor_version_id: comment.anchorVersionId,
                     paragraph_id: comment.paragraphId,
+                    end_paragraph_id: comment.endParagraphId,
                     start_offset: comment.startOffset,
                     end_offset: comment.endOffset,
                     body: comment.body,
@@ -122,6 +150,29 @@ export class TestDatabase extends SharedTestDatabase {
                     created_at: comment.createdAt,
                     updated_at: comment.updatedAt,
                   })),
+          }
+        }
+        if (sql.includes('from document_comment_replies')) {
+          this.queries.push(sql)
+          const [documentId, matterId, organisationId] = parameters as string[]
+          if (
+            this.exportOptions.commentsDocumentMissing ||
+            documentId !== 'doc_1' ||
+            matterId !== 'mtr_1' ||
+            organisationId !== 'org_1'
+          ) {
+            return { rows: [] }
+          }
+          return {
+            rows: [...this.replies.values()].map((reply) => ({
+              id: reply.id,
+              comment_id: reply.commentId,
+              imported_comment_id: reply.importedCommentId,
+              body: reply.body,
+              author_id: reply.authorId,
+              author_name: reply.authorName,
+              created_at: reply.createdAt,
+            })),
           }
         }
         if (sql.includes('insert into audit_logs')) {
