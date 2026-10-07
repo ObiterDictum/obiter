@@ -1080,13 +1080,19 @@ describe('undo across a successful save', () => {
       1,
     )
 
-    // The stale response is ignored; a later render carrying the exact saved
-    // version resolves the boundary without corruption.
-    stale = false
+    // The stale response is ignored; the boundary stays pending, so an edit
+    // lands inside the unresolved window. `save()` would early-return on it,
+    // so Save must read as still landing rather than sit enabled-but-inert.
     fireEvent.change(field(), { target: { value: 'Hello world!' } })
+    expect(saveButton()).toHaveProperty('disabled', true)
+    stale = false
+    // The next render serves the exact saved version: the boundary resolves
+    // and the edit queued inside the window survives the rewrite.
+    fireEvent.change(field(), { target: { value: 'Hello world!!' } })
     await waitFor(() => expect(saveState()).toBe('unsaved'))
+    expect(saveButton()).toHaveProperty('disabled', false)
     await clickSaveAndSettle(document, 2)
-    expect(persistedText(document.paragraphs)).toEqual(['Hello world!'])
+    expect(persistedText(document.paragraphs)).toEqual(['Hello world!!'])
   })
 
   it('surfaces a failed reload and recovers on retry without resending', async () => {

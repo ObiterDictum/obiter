@@ -517,14 +517,32 @@ describe('DocxWorkspace redo and save boundaries', () => {
   })
 
   it('keeps an undo made while a save was in flight as unsent work', async () => {
+    let saved = false
     let resolveFirst: (value: unknown) => void = () => undefined
     const editAsync = vi.fn().mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          resolveFirst = resolve
+          resolveFirst = (value) => {
+            saved = true
+            resolve(value)
+          }
         }),
     )
-    mountWorkspace({ editAsync })
+    mountWorkspace({
+      editAsync,
+      modelFor: () =>
+        saved
+          ? {
+              versionId: 'ver_2',
+              versionNumber: 2,
+              model: helloModel('Hello second'),
+            }
+          : {
+              versionId: 'ver_1',
+              versionNumber: 1,
+              model: helloModel('Hello'),
+            },
+    })
     selectBodyParagraph()
 
     fireEvent.change(field(), { target: { value: 'Hello first' } })
