@@ -234,6 +234,27 @@ export function DocxWorkspace({
         drafts.extraRuns,
       )
     : undefined
+  // Undo, redo, print and reload can each disable or unmount the focused
+  // control mid-step — an emptied stack disables the button, a cleared banner
+  // unmounts it — so the ribbon controls and the keyboard chords share these
+  // wrappers: focus is handed to the caret before the step can drop it to
+  // document.body and lose the typed burst.
+  const undo = () => {
+    refocusCaretBeforeFlight()
+    undoDocument()
+  }
+  const redo = () => {
+    refocusCaretBeforeFlight()
+    redoDocument()
+  }
+  const print = () => {
+    refocusCaretBeforeFlight()
+    printDocument()
+  }
+  const reload = () => {
+    refocusCaretBeforeFlight()
+    save.reload()
+  }
   const ribbon = (
     <WorkspaceRibbon>
       <DocumentWorkspaceToolbar
@@ -266,21 +287,10 @@ export function DocxWorkspace({
             if (message) setBanner(message)
           })
         }}
-        onPrint={() => {
-          refocusCaretBeforeFlight()
-          printDocument()
-        }}
+        onPrint={print}
         onSave={save.save}
-        // Undo and redo disable their own control when the stack empties, so
-        // a keyboard activation would strand focus on document.body mid-step.
-        onUndo={() => {
-          refocusCaretBeforeFlight()
-          undoDocument()
-        }}
-        onRedo={() => {
-          refocusCaretBeforeFlight()
-          redoDocument()
-        }}
+        onUndo={undo}
+        onRedo={redo}
         onInsertParagraph={() => {
           if (!selectedParagraphId) return
           selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
@@ -318,7 +328,7 @@ export function DocxWorkspace({
           <ConflictBanner
             body="The document has changed since editing began."
             actionLabel="Reload"
-            onAction={save.reload}
+            onAction={reload}
           />
         </div>
       ) : null}
@@ -327,7 +337,7 @@ export function DocxWorkspace({
           <ConflictBanner
             body="A colleague saved a newer version. Reload before saving, or save to merge disjoint edits."
             actionLabel="Reload"
-            onAction={save.reload}
+            onAction={reload}
           />
         </div>
       ) : null}
@@ -351,9 +361,9 @@ export function DocxWorkspace({
       onKeyDown={(event) =>
         documentWorkspaceKeyDown(event, {
           save: save.save,
-          undo: undoDocument,
-          redo: redoDocument,
-          print: printDocument,
+          undo,
+          redo,
+          print,
           format,
         })
       }
