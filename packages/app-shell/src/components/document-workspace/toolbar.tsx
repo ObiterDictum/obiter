@@ -230,16 +230,20 @@ export function DocumentWorkspaceToolbar({
           <ViewRibbon zoom={zoom} onZoom={onZoom} />
         </TabsContent>
         <div className="ml-auto flex shrink-0 items-center self-center pr-1">
-          <Button
-            size="sm"
-            aria-label="Save"
-            disabled={!dirty || saving || blocked}
-            loading={saving}
-            onClick={onSave}
-            iconStart={<FloppyDisk size={16} aria-hidden />}
-          >
-            Save
-          </Button>
+          {/* preventDefault keeps the caret in the editor while the save
+              flight runs, so keystrokes typed during it still land. */}
+          <span onMouseDown={(event) => event.preventDefault()}>
+            <Button
+              size="sm"
+              aria-label="Save"
+              disabled={!dirty || saving || blocked}
+              loading={saving}
+              onClick={onSave}
+              iconStart={<FloppyDisk size={16} aria-hidden />}
+            >
+              Save
+            </Button>
+          </span>
         </div>
       </div>
     </Tabs>
