@@ -276,6 +276,64 @@ test('typing through a keyboard-activated save flight keeps every character', as
   }
 })
 
+test('typing through a keyboard-activated banner retry keeps every character', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E7F retry ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  await caretAtEnd(page, BODY)
+  await page.keyboard.type(' E7CBANNEd')
+  await expect(editor(page)).toHaveValue(/E7CBANNEd$/)
+
+  // Abort the first edit request so the failure banner and its Retry save
+  // control appear; the retry itself reaches the real API.
+  let aborted = false
+  await page.route('**/api/documents/*/edit', async (route) => {
+    if (aborted) {
+      await route.continue()
+      return
+    }
+    aborted = true
+    await route.abort()
+  })
+  await save(page).click()
+  const retry = page.getByRole('button', { name: 'Retry save', exact: true })
+  await expect(retry).toBeVisible({ timeout: 30_000 })
+  await expect
+    .poll(() => saveState(page), { message: 'failure banner shown' })
+    .toBe('failed')
+
+  // Enter on the focused retry used to leave focus on the button while the
+  // retry cleared the failure and unmounted it, dropping focus to
+  // document.body and losing the whole burst.
+  const typed = await typeThroughFlight(page, ' baNNER1234567890', async () => {
+    await retry.focus()
+    await page.keyboard.press('Enter')
+    await expect(editor(page)).toBeFocused({ timeout: 2_000 })
+  })
+
+  await expect
+    .poll(() => saveState(page), { message: 'flight settled' })
+    .not.toBe('saving')
+  await expect(editor(page)).toHaveValue(`${BODY} E7CBANNEd${typed}`)
+  expect(await saveState(page)).toBe('unsaved')
+  await saveAndWait(page)
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await focusParagraph(reloaded, BODY)
+    await expect(editor(reloaded)).toHaveValue(`${BODY} E7CBANNEd${typed}`)
+  } finally {
+    await fresh.close()
+  }
+})
+
 test('typing through the save flight beside a stored table of contents and page break', async ({
   page,
   browser,
