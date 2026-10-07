@@ -107,8 +107,13 @@ export function useDocumentSave({
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
   const dirty = plan.operations.length > 0 || plan.rejections.length > 0
+  // The boundary window is part of "a save is still landing": `save()` refuses
+  // a second request while it lasts, so an enabled button would be inert.
   const saving =
-    editDocument.isPending || mergeDocument.isPending || decideChange.isPending
+    editDocument.isPending ||
+    mergeDocument.isPending ||
+    decideChange.isPending ||
+    drafts.boundaryPending
   const blocked = plan.blocked
   const held = drafts.held
 
