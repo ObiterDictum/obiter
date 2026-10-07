@@ -99,9 +99,19 @@ async function openMatterDocument(page: Page, matterName: string) {
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(FIXTURE)
   }
-  const documentRow = page.getByText(fixtureName).first()
+  // getByText resolves to the mode rail's document link first (the rail sits
+  // before the matter list in DOM order), so the click navigates to the
+  // document route. That navigation remounts the workspace ~200-500ms later;
+  // typing into the matter pane's workspace meanwhile is the flake this pins
+  // down. Await the route commit and the detail chrome so the paragraph probe
+  // can only see the surviving workspace, not the outgoing pane's.
+  const documentRow = page.getByRole('link', { name: fixtureName }).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
+  await expect(page).toHaveURL(/\/matters\/[^/?#]+\/documents\/[^/?#]+$/)
+  await expect(page.getByRole('link', { name: 'Back to matter' })).toBeVisible({
+    timeout: 30_000,
+  })
 
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
