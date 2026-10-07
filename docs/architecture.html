@@ -2285,6 +2285,8 @@
                   redaction-audit-report · redaction-renderer ·
                   redaction-hard-output · redaction-secure-pdf ·
                   document-extraction · document-layout · comments-db ·
+                  comments-list · comments-create · comments-replies ·
+                  comments-resolution · imported-comment-fingerprint ·
                   pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
@@ -2691,7 +2693,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>29 migrations, 0001 to 0030, 0008 withdrawn</dd>
+                <dd>30 migrations, 0001 to 0031, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3089,8 +3091,11 @@
                     comments whose anchors resolve in the exported version are
                     embedded with their replies and threading parts, and the
                     rest are skipped with the count in
-                    <code>x-obiter-comments-skipped</code>. Audit records ids,
-                    <code>commentCount</code>, and
+                    <code>x-obiter-comments-skipped</code>. Replies under an
+                    imported head thread by <code>paraIdParent</code> only while
+                    the stored parent fingerprint still matches the exported
+                    head; unmatched replies export unanchored and count as
+                    skipped. Audit records ids, <code>commentCount</code>, and
                     <code>skippedCommentCount</code> only.
                   </td>
                 </tr>
@@ -3121,7 +3126,10 @@
                   <td>
                     View-gated merged list of stored threads, imported Word
                     comments and orphaned replies; edit-gated comment creation
-                    on a real selected range or caret insertion point
+                    on a real selected range or caret insertion point. An
+                    optional <code>clientKey</code> replays the stored comment
+                    on a canonically identical retry and answers a typed 409
+                    when the key was used for a different intent
                   </td>
                 </tr>
                 <tr>
@@ -3131,7 +3139,10 @@
                   <td class="id">comments.ts</td>
                   <td>
                     Edit-gated reply to a stored comment or to an imported Word
-                    comment identity
+                    comment identity. Replies under an imported head store a
+                    fingerprint of the head served at write time and reattach
+                    only while a later version's head matches it; the same
+                    client-key replay/409 semantics as comment creation apply
                   </td>
                 </tr>
                 <tr>
@@ -4169,9 +4180,11 @@
                   <td>
                     Replies to a stored comment or to an imported Word comment
                     identity, scoped to the same organisation, matter and
-                    document as the thread
+                    document as the thread. 0031 adds the imported-parent
+                    fingerprint that binds each imported reply to the head
+                    identity it was written against
                   </td>
-                  <td class="id">0030</td>
+                  <td class="id">0030, 0031</td>
                 </tr>
                 <tr>
                   <td class="id">artifacts</td>
