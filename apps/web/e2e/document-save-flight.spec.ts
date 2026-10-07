@@ -63,7 +63,14 @@ async function openFixtureDocument(
   matterName: string,
 ) {
   await signIn(page, email, password)
+  await openMatterDocument(page, matterName)
+}
 
+/**
+ * The post-sign-in leg, shared by the first tab and by sibling tabs in the
+ * same context, which are already authenticated.
+ */
+async function openMatterDocument(page: Page, matterName: string) {
   await page.getByRole('link', { name: 'Matters' }).first().click()
   await expect(
     page.getByRole('heading', { name: 'Matters', exact: true }),
@@ -329,6 +336,143 @@ test('typing through a keyboard-activated banner retry keeps every character', a
     await openFixtureDocument(reloaded, email, password, matter)
     await focusParagraph(reloaded, BODY)
     await expect(editor(reloaded)).toHaveValue(`${BODY} E7CBANNEd${typed}`)
+  } finally {
+    await fresh.close()
+  }
+})
+
+test('typing after a keyboard-activated discard confirm keeps every character', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E7F discard ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  // An unsaved draft parked against the opened version. A sibling tab sharing
+  // this context's storage commits the next version, so this tab's reload
+  // surfaces the stale-draft banner — a pure discard: confirming unmounts
+  // the banner that holds the dialog's trigger.
+  await caretAtEnd(page, BODY)
+  await page.keyboard.type(' E7CPARKED')
+  await expect(editor(page)).toHaveValue(/E7CPARKED$/)
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() =>
+          Object.keys(window.localStorage).some((key) =>
+            key.startsWith('obiter.document-draft.'),
+          ),
+        ),
+      { message: 'draft persisted' },
+    )
+    .toBe(true)
+
+  const sibling = await page.context().newPage()
+  try {
+    await sibling.goto('/')
+    await openMatterDocument(sibling, matter)
+    await caretAtEnd(sibling, BODY)
+    await sibling.keyboard.type(' E7CSAVED')
+    await saveAndWait(sibling)
+
+    await page.reload()
+    await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+      timeout: 30_000,
+    })
+    const trigger = page.getByRole('button', {
+      name: 'Discard unsaved changes',
+      exact: true,
+    })
+    await expect(trigger).toBeVisible({ timeout: 30_000 })
+    await caretAtEnd(page, 'Delta paragraph E7CSAVED')
+
+    // Enter on the focused confirm disables it for the flight, so the browser
+    // drops focus to document.body; the close then restores focus to a trigger
+    // the discard already unmounted. Without a rescue the typed burst is lost.
+    await trigger.click()
+    const confirm = page.getByRole('button', {
+      name: 'Discard parked changes',
+      exact: true,
+    })
+    await confirm.focus()
+    await page.keyboard.press('Enter')
+    await expect(confirm).toBeHidden({ timeout: 10_000 })
+    await expect(editor(page)).toBeFocused({ timeout: 2_000 })
+
+    await page.keyboard.type(' E7CKEEP')
+    await expect(editor(page)).toHaveValue('Delta paragraph E7CSAVED E7CKEEP')
+    await saveAndWait(page)
+  } finally {
+    await sibling.close()
+  }
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await focusParagraph(reloaded, BODY)
+    await expect(editor(reloaded)).toHaveValue(
+      'Delta paragraph E7CSAVED E7CKEEP',
+    )
+  } finally {
+    await fresh.close()
+  }
+})
+
+test('typing after a keyboard-activated reload-and-discard confirm keeps every character', async ({
+  page,
+  browser,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E7F reload ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  await caretAtEnd(page, BODY)
+  await page.keyboard.type(' E7CDROP')
+  await expect(editor(page)).toHaveValue(/E7CDROP$/)
+
+  // Abort the edit so the failure banner carries the reload-and-discard
+  // dialog; the reload itself is real and remounts the editor.
+  await page.route('**/api/documents/*/edit', (route) => route.abort())
+  await save(page).click()
+  const trigger = page.getByRole('button', {
+    name: 'Reload and discard',
+    exact: true,
+  })
+  await expect(trigger).toBeVisible({ timeout: 30_000 })
+  await expect
+    .poll(() => saveState(page), { message: 'failure banner shown' })
+    .toBe('failed')
+
+  // Keep a caret so the rescue has a target, then keyboard-activate the
+  // confirm: pending disables it mid-flight, the close restores to a trigger
+  // the banner unmounted, and the reload remounts the caret's field.
+  await caretAtEnd(page, BODY)
+  await trigger.click()
+  const confirm = page.getByRole('button', {
+    name: 'Discard unsaved work',
+    exact: true,
+  })
+  await confirm.focus()
+  await page.keyboard.press('Enter')
+  await expect(confirm).toBeHidden({ timeout: 10_000 })
+  await page.unroute('**/api/documents/*/edit')
+
+  await expect(editor(page)).toBeFocused({ timeout: 10_000 })
+  await page.keyboard.press('End')
+  await page.keyboard.type(' E7CKEPT')
+  await expect(editor(page)).toHaveValue(`${BODY} E7CKEPT`)
+  await saveAndWait(page)
+
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await focusParagraph(reloaded, BODY)
+    await expect(editor(reloaded)).toHaveValue(`${BODY} E7CKEPT`)
   } finally {
     await fresh.close()
   }
