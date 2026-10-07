@@ -2,7 +2,8 @@ import '@obiter/test-dom'
 import { afterEach, describe, expect, it } from 'bun:test'
 import {
   documentRedactionRunsId,
-  refocusCaretBeforeSave,
+  refocusCaret,
+  refocusCaretBeforeFlight,
   revealDocumentRedactionRuns,
 } from './document-actions'
 
@@ -24,42 +25,67 @@ describe('revealDocumentRedactionRuns', () => {
   })
 })
 
-describe('refocusCaretBeforeSave', () => {
-  function mount(saveHolder: string) {
+describe('refocusCaretBeforeFlight', () => {
+  function mount(extra: string) {
     document.body.innerHTML = `
-      <span data-save-control><button type="button"></button></span>
-      <div data-paragraph-id="p1" aria-current="true"><textarea></textarea></div>
-      ${saveHolder}`
-    const button = document.querySelector('button')
-    const field = document.querySelector('textarea')
-    if (!button || !field) throw new Error('fixture incomplete')
+      <button type="button" id="control"></button>
+      <div data-paragraph-id="p1" aria-current="true"><textarea id="caret"></textarea></div>
+      ${extra}`
+    const button = document.getElementById('control')
+    const field = document.getElementById('caret')
+    if (!(button instanceof HTMLElement) || !(field instanceof HTMLElement))
+      throw new Error('fixture incomplete')
     return { button, field }
   }
 
-  it('returns focus to the caret field when the Save control holds it', () => {
+  it('hands a focused button back to the caret field without any marker', () => {
     const { button, field } = mount('')
     button.focus()
-    refocusCaretBeforeSave()
+    refocusCaretBeforeFlight()
     expect(document.activeElement).toBe(field)
   })
 
-  it('leaves focus untouched when another element holds it', () => {
-    const { field } = mount('<input>')
-    const input = document.querySelector('input')
-    if (!input) throw new Error('fixture incomplete')
+  it('leaves focus in a field that still consumes typed text', () => {
+    mount('<input id="find">')
+    const input = document.getElementById('find')
+    if (!(input instanceof HTMLElement)) throw new Error('fixture incomplete')
     input.focus()
-    refocusCaretBeforeSave()
+    refocusCaretBeforeFlight()
     expect(document.activeElement).toBe(input)
-    expect(document.activeElement).not.toBe(field)
+  })
+
+  it('leaves focus inside an open dialog', () => {
+    mount(
+      '<div role="dialog"><button type="button" id="confirm"></button></div>',
+    )
+    const confirm = document.getElementById('confirm')
+    if (!(confirm instanceof HTMLElement)) throw new Error('fixture incomplete')
+    confirm.focus()
+    refocusCaretBeforeFlight()
+    expect(document.activeElement).toBe(confirm)
   })
 
   it('does nothing when no paragraph holds the caret', () => {
-    document.body.innerHTML =
-      '<span data-save-control><button type="button"></button></span>'
-    const button = document.querySelector('button')
-    if (!button) throw new Error('fixture incomplete')
+    document.body.innerHTML = '<button type="button" id="control"></button>'
+    const button = document.getElementById('control')
+    if (!(button instanceof HTMLElement)) throw new Error('fixture incomplete')
     button.focus()
-    refocusCaretBeforeSave()
+    refocusCaretBeforeFlight()
     expect(document.activeElement).toBe(button)
+  })
+})
+
+describe('refocusCaret', () => {
+  it('moves focus to the caret field even from a text field', () => {
+    document.body.innerHTML = `
+      <input id="comment">
+      <div data-paragraph-id="p1" aria-current="true"><textarea id="caret"></textarea></div>`
+    const input = document.getElementById('comment')
+    const field = document.getElementById('caret')
+    if (!(input instanceof HTMLElement) || !(field instanceof HTMLElement))
+      throw new Error('fixture incomplete')
+    input.focus()
+    refocusCaret()
+    expect(document.activeElement).toBe(field)
   })
 })
