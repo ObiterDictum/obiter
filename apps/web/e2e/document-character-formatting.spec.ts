@@ -497,6 +497,40 @@ async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
         documentId: TRACKED_DOC_ID,
         versionId: 'ver_2',
         versionNumber: 2,
+        // The real edit route returns the accepted batch's cross-version
+        // lineage; without it the workspace cannot reconcile the history
+        // baseline and the save lands blocked rather than saved. Run indexes
+        // address the result model below, which splits p1-r at offset 5.
+        lineage: {
+          version: 1,
+          baseVersionId: 'ver_1',
+          versionId: 'ver_2',
+          acceptedOperations: (editBodies.at(-1)?.operations ?? []).map(
+            (_operation, index) => index,
+          ),
+          paragraphs: [
+            {
+              fromParagraphId: 'p1',
+              toParagraphId: 'p1',
+              runs: [
+                {
+                  runIndex: 0,
+                  segments: [{ fromRunId: 'p1-r', fromOffset: 0, toOffset: 5 }],
+                },
+                {
+                  runIndex: 1,
+                  segments: [
+                    {
+                      fromRunId: 'p1-r',
+                      fromOffset: 5,
+                      toOffset: TRACKED_TEXT.length,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
       },
     })
   })
@@ -590,26 +624,45 @@ test('tracked property history never paints, presses or saves as current', async
     (await paintedStyle(page, TRACKED_TEXT))?.textDecoration ?? '',
   ).not.toContain('line-through')
 
+  // Re-select 'Plain' before striking again: clicking Undo moved DOM focus to
+  // the toolbar, so the paragraph selection no longer stands.
+  await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
   await page.getByRole('button', { name: 'Strikethrough' }).click()
   await saveAndWait(page)
+  // The committed save is only landed once the history boundary resolves
+  // against the reloaded model; navigating away before then would persist the
+  // covered draft and reopen it as unsaved work.
+  await expect
+    .poll(() =>
+      page.locator('[data-save-state]').getAttribute('data-save-state'),
+    )
+    .toBe('saved')
 
   // Only the current change was saved; history never entered the baseline.
   const operations = editBodies.flatMap((body) => body.operations ?? [])
   expect(operations).toContainEqual(
-    expect.objectContaining({ type: 'set_run_emphasis', strikethrough: true }),
+    expect.objectContaining({
+      type: 'set_run_emphasis',
+      paragraphId: 'p1',
+      from: 0,
+      to: TRACKED_SELECTED.length,
+      strikethrough: true,
+    }),
   )
   for (const operation of operations) {
     expect(operation.highlight ?? 'none').toBe('none')
     expect(operation.vertAlign ?? 'baseline').toBe('baseline')
   }
 
-  // Reopening re-reads the stored model: strike and bold still agree.
+  // Reopening re-reads the stored model: strike and bold still agree. The
+  // paint is read with the caret on the selection's boundary: parked inside
+  // the run it would split the painted span there and no overlay span would
+  // carry exactly 'Plain'.
   await openTrackedDocument(page)
-  await focusParagraph(page, TRACKED_TEXT)
+  await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
   const reopened = await paintedStyle(page, TRACKED_SELECTED)
   expect(reopened?.textDecoration).toContain('line-through')
   expect(reopened?.fontWeight).toBe('700')
-  await selectFirst(page, TRACKED_SELECTED, TRACKED_SELECTED.length)
   await expect(
     page.getByRole('button', { name: 'Strikethrough' }),
   ).toHaveAttribute('aria-pressed', 'true')
