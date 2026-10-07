@@ -46,7 +46,7 @@ const trackedModelJson = JSON.stringify(trackedModel)
 const trackedBytesSha256 = createHash('sha256')
   .update(trackedSourceBytes)
   .digest('hex')
-const anchor = {
+export const anchor = {
   paragraphId: plainParagraph.id,
   startOffset: 0,
   endOffset: 1,

@@ -9,9 +9,10 @@ import {
 } from '@obiter/ooxml'
 import {
   CommentsDatabaseError,
-  listDocumentComments,
   type ListedDocumentComments,
 } from './comments-db'
+import { listDocumentComments } from './comments-list'
+import { importedParentMatches } from './imported-comment-fingerprint'
 import {
   appendAuditLog,
   createDocumentObjectKey,
@@ -147,6 +148,7 @@ async function embedComments(
     const importedById = new Map(
       document.model.comments.map((entry) => [entry.id, entry]),
     )
+    let skippedCommentCount = 0
     for (const record of listed.replies) {
       const reply: DocumentCommentReply = {
         imported: false,
@@ -160,20 +162,32 @@ async function embedComments(
         if (list) list.push(reply)
         else productReplies.set(record.commentId, [reply])
       } else if (record.importedCommentId !== null) {
-        // The head is resolved against this version's own comments part; a
-        // thread absent here still exports its reply unanchored so the
-        // product-authored text is not dropped from the file.
+        // The head is resolved against this version's own comments part and
+        // must match the identity the reply was written against. A head that
+        // is absent, carries a different thread under the same w:id, or has
+        // no paraId to thread under still exports its reply unanchored so
+        // the product-authored text is not dropped — and is counted so the
+        // caller knows it did not land on its thread.
         const head = importedById.get(record.importedCommentId)
+        const attached =
+          head !== undefined &&
+          importedParentMatches(record.importedParentFingerprint, head)
+            ? head
+            : undefined
+        const threadable =
+          attached !== undefined &&
+          attached.ooxmlId !== null &&
+          attached.paraId !== null
+        if (!threadable) skippedCommentCount += 1
         importedReplies.push({
-          ooxmlId: head?.ooxmlId ?? null,
-          paraId: head?.paraId ?? null,
+          ooxmlId: attached?.ooxmlId ?? null,
+          paraId: attached?.paraId ?? null,
           reply,
         })
       }
     }
 
     const resolvable: DocumentComment[] = []
-    let skippedCommentCount = 0
     for (const record of listed.comments) {
       try {
         validateCommentAnchor(document.model, record.anchor)
@@ -187,7 +201,10 @@ async function embedComments(
           error instanceof OoxmlError &&
           error.code === 'comment-anchor-unresolved'
         ) {
-          skippedCommentCount += 1
+          // The comment is skipped; its product replies cannot export either,
+          // so they are counted too rather than dropped unaccounted.
+          skippedCommentCount +=
+            1 + (productReplies.get(record.id)?.length ?? 0)
         } else {
           throw error
         }

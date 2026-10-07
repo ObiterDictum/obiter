@@ -22,14 +22,16 @@ import {
   type DocumentModelWire,
 } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
-import {
-  createDocumentComment,
-  createDocumentCommentReply,
-  listDocumentComments,
-  setDocumentCommentResolution,
-  type DocumentCommentReplyRecord,
-} from '../comments-db'
+import type { DocumentCommentReplyRecord } from '../comments-db'
+import { createDocumentComment } from '../comments-create'
+import { listDocumentComments } from '../comments-list'
+import { createDocumentCommentReply } from '../comments-replies'
+import { setDocumentCommentResolution } from '../comments-resolution'
 import { getDocumentModel } from '../document-model-store'
+import {
+  importedCommentFingerprint,
+  importedParentMatches,
+} from '../imported-comment-fingerprint'
 import type { StorageService } from '../storage'
 import {
   documentNotFound,
@@ -108,10 +110,11 @@ export function createCommentsRoutes(pool: Pool, storage: StorageService) {
       requestId: c.get('requestId'),
     })
     if (!created) return documentNotFound(c)
+    if (created.status === 'conflict') return clientKeyConflict(c)
     const comment = servedComment(model, created.comment, [])
     return c.json(
       documentCommentCreateResponseSchema.parse({ comment }),
-      created.replayed ? 200 : 201,
+      created.status === 'replayed' ? 200 : 201,
     )
   })
 
@@ -145,7 +148,9 @@ export function createCommentsRoutes(pool: Pool, storage: StorageService) {
       requestId: c.get('requestId'),
     }
 
-    let target: { commentId: string } | { importedCommentId: string }
+    let target:
+      | { commentId: string }
+      | { importedCommentId: string; importedParentFingerprint: string }
     if (parent.startsWith('ooxml-')) {
       const model = await getDocumentModel(storage, resolved.version)
       const byId = new Map(model.comments.map((entry) => [entry.id, entry]))
@@ -155,7 +160,10 @@ export function createCommentsRoutes(pool: Pool, storage: StorageService) {
       // identity to key a reply to across reparses: refuse it the same way a
       // missing target is refused, without exposing which case occurred.
       if (!head || head.ooxmlId === null) return documentNotFound(c)
-      target = { importedCommentId: head.id }
+      target = {
+        importedCommentId: head.id,
+        importedParentFingerprint: importedCommentFingerprint(head),
+      }
     } else {
       target = { commentId: parent }
     }
@@ -165,11 +173,12 @@ export function createCommentsRoutes(pool: Pool, storage: StorageService) {
       ...target,
     })
     if (!created) return documentNotFound(c)
+    if (created.status === 'conflict') return clientKeyConflict(c)
     return c.json(
       documentCommentReplyCreateResponseSchema.parse({
         reply: wireReply(created.reply),
       }),
-      created.replayed ? 200 : 201,
+      created.status === 'replayed' ? 200 : 201,
     )
   })
 
@@ -221,6 +230,10 @@ async function transitionResolution(
   ).safeParse(await c.req.json().catch(() => null))
   if (!request.success) return validationFailed(c)
 
+  // The model is read before the transition commits and the replies are read
+  // inside the transition transaction itself, so the response renders only
+  // state captured before commit — never a post-commit re-read.
+  const model = await getDocumentModel(storage, resolved.version)
   const outcome = await setDocumentCommentResolution(pool, {
     organisationId: resolved.user.organisationId,
     matterId: resolved.document.matterId,
@@ -235,17 +248,7 @@ async function transitionResolution(
   if (outcome.status === 'not_found') return documentNotFound(c)
   if (outcome.status === 'forbidden') return commentForbidden(c)
 
-  const [model, listed] = await Promise.all([
-    getDocumentModel(storage, resolved.version),
-    listDocumentComments(pool, {
-      organisationId: resolved.user.organisationId,
-      matterId: resolved.document.matterId,
-      documentId: resolved.document.id,
-    }),
-  ])
-  const replies = (listed?.replies ?? [])
-    .filter((reply) => reply.commentId === outcome.comment.id)
-    .map(wireReply)
+  const replies = outcome.replies.map(wireReply)
   const comment = servedComment(model, outcome.comment, replies)
   const body = { comment }
   return c.json(
@@ -266,18 +269,6 @@ function commentListBody(
   comments: DocumentCommentRecord[],
   replies: DocumentCommentReplyRecord[],
 ) {
-  const productReplies = new Map<string, DocumentCommentReply[]>()
-  const importedReplies = new Map<string, DocumentCommentReply[]>()
-  for (const record of replies) {
-    const reply = wireReply(record)
-    const key = record.commentId ?? record.importedCommentId
-    if (!key) continue
-    const bucket = record.commentId ? productReplies : importedReplies
-    const list = bucket.get(key)
-    if (list) list.push(reply)
-    else bucket.set(key, [reply])
-  }
-
   const order = paragraphOrder(model)
   const byId = new Map(model.comments.map((entry) => [entry.id, entry]))
   const children = new Map<string, typeof model.comments>()
@@ -291,6 +282,35 @@ function commentListBody(
       heads.push(entry)
     }
   }
+
+  // A reply joins its imported thread only when this version's head matches
+  // the identity the reply was written against; a `w:id` the file now uses
+  // for a different thread leaves the reply orphaned instead of misattaching.
+  const productReplies = new Map<string, DocumentCommentReply[]>()
+  const importedReplies = new Map<string, DocumentCommentReply[]>()
+  const orphanedReplies: DocumentCommentReply[] = []
+  for (const record of replies) {
+    const reply = wireReply(record)
+    if (record.commentId !== null) {
+      const list = productReplies.get(record.commentId)
+      if (list) list.push(reply)
+      else productReplies.set(record.commentId, [reply])
+      continue
+    }
+    if (record.importedCommentId === null) continue
+    const head = byId.get(record.importedCommentId)
+    if (
+      head === undefined ||
+      !importedParentMatches(record.importedParentFingerprint, head)
+    ) {
+      orphanedReplies.push(reply)
+      continue
+    }
+    const list = importedReplies.get(record.importedCommentId)
+    if (list) list.push(reply)
+    else importedReplies.set(record.importedCommentId, [reply])
+  }
+
   const headOrder = (entry: DocumentModelWire['comments'][number]) =>
     entry.anchor === null
       ? { paragraph: Number.MAX_SAFE_INTEGER, offset: 0 }
@@ -315,14 +335,6 @@ function commentListBody(
       ]
       return { ...head, replies: threadReplies }
     })
-
-  const orphanedReplies = replies
-    .filter(
-      (record) =>
-        record.importedCommentId !== null &&
-        !byId.has(record.importedCommentId),
-    )
-    .map(wireReply)
 
   return {
     comments: comments.map((comment) =>
@@ -406,6 +418,18 @@ function anchorUnresolved(c: RouteContext) {
     },
   }
   return c.json(body, 400)
+}
+
+function clientKeyConflict(c: RouteContext) {
+  const body: ApiErrorResponse = {
+    error: {
+      code: 'comment_client_key_conflict',
+      message:
+        'This key was already used for a different comment or reply. Resubmit with a new key.',
+      requestId: c.get('requestId'),
+    },
+  }
+  return c.json(body, 409)
 }
 
 function commentForbidden(c: RouteContext) {

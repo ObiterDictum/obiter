@@ -41,6 +41,7 @@ interface StoredReply {
   documentId: string
   commentId: string | null
   importedCommentId: string | null
+  importedParentFingerprint: string | null
   body: string
   authorId: string
   authorName: string
@@ -286,6 +287,23 @@ export class TestDatabase extends SharedTestDatabase {
           return { rows: existing ? [replyRow(existing)] : [] }
         }
         if (
+          sql.includes('from document_comment_replies') &&
+          sql.includes('comment_id = $1')
+        ) {
+          this.queries.push(sql)
+          // The resolution path's pre-commit thread read.
+          const [commentId, documentId, matterId, organisationId] =
+            parameters as string[]
+          const replies = [...stagedReplies.values()].filter(
+            (reply) =>
+              reply.commentId === commentId &&
+              reply.documentId === documentId &&
+              reply.matterId === matterId &&
+              reply.organisationId === organisationId,
+          )
+          return { rows: replies.map(replyRow) }
+        }
+        if (
           sql.includes('select id\n') &&
           sql.includes('from document_comments')
         ) {
@@ -392,6 +410,7 @@ export class TestDatabase extends SharedTestDatabase {
             documentId,
             commentId,
             importedCommentId,
+            importedParentFingerprint,
             body,
             authorId,
             authorName,
@@ -400,6 +419,7 @@ export class TestDatabase extends SharedTestDatabase {
             string,
             string,
             string,
+            string | null,
             string | null,
             string | null,
             string,
@@ -424,6 +444,7 @@ export class TestDatabase extends SharedTestDatabase {
             documentId,
             commentId,
             importedCommentId,
+            importedParentFingerprint,
             body,
             authorId,
             authorName,
@@ -518,6 +539,7 @@ export class TestDatabase extends SharedTestDatabase {
       documentId: overrides.documentId ?? 'doc_1',
       commentId: overrides.commentId ?? null,
       importedCommentId: overrides.importedCommentId ?? null,
+      importedParentFingerprint: overrides.importedParentFingerprint ?? null,
       body: overrides.body ?? 'Synthetic reply',
       authorId: overrides.authorId ?? 'usr_actor',
       authorName: overrides.authorName ?? 'Case Reviewer',
@@ -620,6 +642,7 @@ function replyRow(reply: StoredReply) {
     id: reply.id,
     comment_id: reply.commentId,
     imported_comment_id: reply.importedCommentId,
+    imported_parent_fingerprint: reply.importedParentFingerprint,
     body: reply.body,
     author_id: reply.authorId,
     author_name: reply.authorName,

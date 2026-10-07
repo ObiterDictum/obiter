@@ -45,6 +45,7 @@ interface StoredReply {
   id: string
   commentId: string | null
   importedCommentId: string | null
+  importedParentFingerprint: string | null
   body: string
   authorId: string
   authorName: string
@@ -104,6 +105,7 @@ export class TestDatabase extends SharedTestDatabase {
       id: overrides.id ?? `cmtr_${this.comments.size + this.replies.size + 1}`,
       commentId: overrides.commentId ?? null,
       importedCommentId: overrides.importedCommentId ?? null,
+      importedParentFingerprint: overrides.importedParentFingerprint ?? null,
       body: overrides.body ?? 'Synthetic reply note',
       authorId: overrides.authorId ?? 'usr_owner',
       authorName: overrides.authorName ?? 'Owner Reviewer',
@@ -168,6 +170,7 @@ export class TestDatabase extends SharedTestDatabase {
               id: reply.id,
               comment_id: reply.commentId,
               imported_comment_id: reply.importedCommentId,
+              imported_parent_fingerprint: reply.importedParentFingerprint,
               body: reply.body,
               author_id: reply.authorId,
               author_name: reply.authorName,
@@ -195,8 +198,8 @@ export class TestDatabase extends SharedTestDatabase {
 }
 
 export class MemoryStorage extends SharedMemoryStorage {
-  constructor() {
-    super({ binary: [[sourceObjectKey, fixture]] })
+  constructor(bytes: Uint8Array = fixture) {
+    super({ binary: [[sourceObjectKey, Buffer.from(bytes)]] })
   }
 }
 

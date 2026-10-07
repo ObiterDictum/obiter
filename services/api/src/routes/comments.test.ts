@@ -2,6 +2,8 @@ import { parseModelJson, validateCommentAnchor } from '@obiter/ooxml'
 import type { DocumentImportedComment } from '@obiter/contracts'
 import { describe, expect, it } from 'bun:test'
 
+import { importedCommentFingerprint } from '../imported-comment-fingerprint'
+
 import {
   cachedCommentModelJson,
   cachedCommentModelJsonWith,
@@ -723,9 +725,22 @@ describe('document comment routes', () => {
       commentId: product.id,
       body: 'Product reply',
     })
+    const importedHead = {
+      id: 'ooxml-3',
+      ooxmlId: 3,
+      author: 'Alice Example',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      body: 'Imported head',
+      bodyTruncated: false,
+      paraId: 'A1B2C3D4',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 4 },
+      resolved: true,
+      parentId: null,
+    } satisfies DocumentImportedComment
     database.seedReply({
       id: 'cmtr_imported',
       importedCommentId: 'ooxml-3',
+      importedParentFingerprint: importedCommentFingerprint(importedHead),
       body: 'Reply on the file thread',
     })
     database.seedReply({
@@ -734,18 +749,7 @@ describe('document comment routes', () => {
       body: 'Reply to a thread this version no longer carries',
     })
     const imported = [
-      {
-        id: 'ooxml-3',
-        ooxmlId: 3,
-        author: 'Alice Example',
-        createdAt: '2026-08-01T09:00:00.000Z',
-        body: 'Imported head',
-        bodyTruncated: false,
-        paraId: 'A1B2C3D4',
-        anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 4 },
-        resolved: true,
-        parentId: null,
-      },
+      importedHead,
       {
         id: 'ooxml-4',
         ooxmlId: 4,
@@ -818,5 +822,234 @@ describe('document comment routes', () => {
       comments: Array<{ anchorResolved: boolean }>
     }
     expect(body.comments[0]?.anchorResolved).toBe(false)
+  })
+
+  it('conflicts when a comment client key is reused with a different payload', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const app = routeApp(database).app
+    const first = await createComment(app, {
+      body: 'First intent',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      clientKey: 'submit-1',
+    })
+    const differentBody = await createComment(app, {
+      body: 'Second intent',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      clientKey: 'submit-1',
+    })
+    const differentAnchor = await createComment(app, {
+      body: 'First intent',
+      anchor: { paragraphId: 'para-1', startOffset: 4, endOffset: 8 },
+      clientKey: 'submit-1',
+    })
+
+    expect(first.status).toBe(201)
+    for (const response of [differentBody, differentAnchor]) {
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'comment_client_key_conflict' },
+      })
+    }
+    // Neither conflicting submit wrote a row, audited, or replaced the first.
+    expect(database.comments.size).toBe(1)
+    expect(database.audits.map(({ action }) => action)).toEqual([
+      'document.comment_create',
+    ])
+  })
+
+  it('replays a key whose endParagraphId repeats the start paragraph', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const app = routeApp(database).app
+
+    const first = await createComment(app, {
+      body: 'Same intent',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      clientKey: 'submit-1',
+    })
+    // endParagraphId naming the start paragraph stores identically to an
+    // absent one, so the retry is the same intent — a replay, not a conflict.
+    const retried = await createComment(app, {
+      body: 'Same intent',
+      anchor: {
+        paragraphId: 'para-1',
+        startOffset: 0,
+        endOffset: 1,
+        endParagraphId: 'para-1',
+      },
+      clientKey: 'submit-1',
+    })
+
+    expect(first.status).toBe(201)
+    expect(retried.status).toBe(200)
+    expect(database.comments.size).toBe(1)
+  })
+
+  it('replays a retried reply by client key without a duplicate', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const existing = database.seedComment()
+    const app = routeApp(database).app
+    const body = { body: 'Idempotent reply', clientKey: 'reply-1' }
+
+    const first = await replyToComment(app, existing.id, body)
+    const second = await replyToComment(app, existing.id, body)
+
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(200)
+    const firstReply = (await first.json()) as { reply: { id: string } }
+    const secondReply = (await second.json()) as { reply: { id: string } }
+    expect(secondReply.reply.id).toBe(firstReply.reply.id)
+    expect(database.replies.size).toBe(1)
+    expect(database.audits.map(({ action }) => action)).toEqual([
+      'document.comment_reply',
+    ])
+  })
+
+  it('conflicts when a reply client key is reused with a different payload', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const first = database.seedComment()
+    const second = database.seedComment()
+    const app = routeApp(database).app
+
+    const created = await replyToComment(app, first.id, {
+      body: 'Reply intent',
+      clientKey: 'reply-1',
+    })
+    const differentBody = await replyToComment(app, first.id, {
+      body: 'Changed reply intent',
+      clientKey: 'reply-1',
+    })
+    const differentParent = await replyToComment(app, second.id, {
+      body: 'Reply intent',
+      clientKey: 'reply-1',
+    })
+
+    expect(created.status).toBe(201)
+    for (const response of [differentBody, differentParent]) {
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'comment_client_key_conflict' },
+      })
+    }
+    expect(database.replies.size).toBe(1)
+    expect(database.audits.map(({ action }) => action)).toEqual([
+      'document.comment_reply',
+    ])
+  })
+
+  it('pins an imported reply to the served head identity', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const importedHead: DocumentImportedComment = {
+      id: 'ooxml-3',
+      ooxmlId: 3,
+      author: 'Alice Example',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      body: 'Imported file comment',
+      bodyTruncated: false,
+      paraId: 'A1B2C3D4',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 4 },
+      resolved: false,
+      parentId: null,
+    }
+    const storage = new MemoryStorage(
+      cachedCommentModelJsonWith([importedHead]),
+    )
+    const app = routeApp(database, undefined, storage).app
+
+    const reply = await replyToComment(app, 'ooxml-3', { body: 'Threaded' })
+
+    expect(reply.status).toBe(201)
+    const stored = [...database.replies.values()][0]
+    expect(stored).toMatchObject({
+      importedCommentId: 'ooxml-3',
+      commentId: null,
+    })
+    expect(stored?.importedParentFingerprint).toBe(
+      importedCommentFingerprint(importedHead),
+    )
+  })
+
+  it('orphans replies whose imported head no longer matches, fingerprinted or not', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const importedHead = {
+      id: 'ooxml-3',
+      ooxmlId: 3,
+      author: 'Alice Example',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      body: 'Imported head',
+      bodyTruncated: false,
+      paraId: 'A1B2C3D4',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 4 },
+      resolved: false,
+      parentId: null,
+    } satisfies DocumentImportedComment
+    database.seedReply({
+      id: 'cmtr_attached',
+      importedCommentId: 'ooxml-3',
+      importedParentFingerprint: importedCommentFingerprint(importedHead),
+      body: 'Written against this thread',
+    })
+    database.seedReply({
+      id: 'cmtr_mismatch',
+      importedCommentId: 'ooxml-3',
+      importedParentFingerprint: 'f'.repeat(64),
+      body: 'Written against a thread this w:id no longer holds',
+    })
+    database.seedReply({
+      id: 'cmtr_unverified',
+      importedCommentId: 'ooxml-3',
+      body: 'Written before fingerprints existed',
+    })
+    const storage = new MemoryStorage(
+      cachedCommentModelJsonWith([importedHead]),
+    )
+
+    const response = await routeApp(database, undefined, storage).app.request(
+      '/api/documents/doc_1/comments',
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      importedComments: Array<{
+        id: string
+        replies: Array<{ id: string }>
+      }>
+      orphanedReplies: Array<{ id: string }>
+    }
+    // Only the fingerprint-matched reply threads; a mismatched or unverified
+    // identity orphans honestly rather than attaching to the w:id slot.
+    expect(body.importedComments).toEqual([
+      expect.objectContaining({
+        id: 'ooxml-3',
+        replies: [expect.objectContaining({ id: 'cmtr_attached' })],
+      }),
+    ])
+    expect(body.orphanedReplies).toEqual([
+      expect.objectContaining({ id: 'cmtr_mismatch' }),
+      expect.objectContaining({ id: 'cmtr_unverified' }),
+    ])
+  })
+
+  it('renders resolution replies from the pre-commit thread read', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const existing = database.seedComment({ authorId: 'usr_actor' })
+    database.seedReply({ commentId: existing.id, body: 'Thread reply' })
+    const app = routeApp(database).app
+
+    const resolved = await resolveComment(app, existing.id)
+
+    expect(resolved.status).toBe(200)
+    await expect(resolved.json()).resolves.toMatchObject({
+      comment: { replies: [{ body: 'Thread reply' }] },
+    })
+    // The replies came from the transaction's own thread read; the route must
+    // not re-list comments after commit to assemble the response.
+    expect(
+      database.queries.some((sql) => sql.includes('comment_id = $1')),
+    ).toBe(true)
+    expect(
+      database.queries.some((sql) =>
+        sql.includes('left join document_comments'),
+      ),
+    ).toBe(false)
   })
 })

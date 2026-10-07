@@ -1,9 +1,10 @@
-import { parseDocx } from '@obiter/ooxml'
+import { parseDocx, serialiseDocxWithComments } from '@obiter/ooxml'
 import { describe, expect, it } from 'bun:test'
 import {
   DOCUMENT_EXPORT_CONTENT_TYPE,
   documentExportFilename,
 } from '../document-export'
+import { importedCommentFingerprint } from '../imported-comment-fingerprint'
 import {
   expectDocument404,
   fixtureParagraphId,
@@ -252,6 +253,96 @@ describe('GET /api/documents/:id/export response', () => {
     ])
   })
 
+  it('counts replies dropped with a skipped comment', async () => {
+    const database = new TestDatabase({ access: 'view' })
+    const skipped = database.seedComment({
+      paragraphId: 'para-gone',
+      body: 'Stale review note',
+    })
+    database.seedReply({ commentId: skipped.id, body: 'First reply' })
+    database.seedReply({ commentId: skipped.id, body: 'Second reply' })
+    const storage = new MemoryStorage()
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/export',
+    )
+
+    expect(response.status).toBe(200)
+    // One unresolvable comment plus its two replies that cannot embed.
+    expect(response.headers.get('x-obiter-comments-skipped')).toBe('3')
+  })
+
+  it('threads a reply under a fingerprint-matched imported head', async () => {
+    const commented = await fixtureWithComment()
+    const importedHead = commented.model.comments.find(
+      (entry) => entry.ooxmlId !== null,
+    )
+    if (!importedHead || !importedHead.paraId) {
+      throw new Error('Fixture did not produce a threaded imported head.')
+    }
+    const database = new TestDatabase({ access: 'view' })
+    database.seedReply({
+      importedCommentId: importedHead.id,
+      importedParentFingerprint: importedCommentFingerprint(importedHead),
+      body: 'Product reply on the file thread',
+    })
+    const storage = new MemoryStorage(commented.bytes)
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/export',
+    )
+    const bytes = Buffer.from(await response.arrayBuffer())
+    const exported = await parseDocx(bytes)
+    const extendedXml = new TextDecoder().decode(
+      exported.sourceParts.get('word/commentsExtended.xml')?.originalPayload,
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-obiter-comments-skipped')).toBeNull()
+    expect(extendedXml).toContain(`paraIdParent="${importedHead.paraId}"`)
+  })
+
+  it('counts imported replies whose head is absent or no longer matches', async () => {
+    const commented = await fixtureWithComment()
+    const importedHead = commented.model.comments.find(
+      (entry) => entry.ooxmlId !== null,
+    )
+    if (!importedHead) {
+      throw new Error('Fixture did not produce an imported head.')
+    }
+    const database = new TestDatabase({ access: 'view' })
+    database.seedReply({
+      importedCommentId: importedHead.id,
+      importedParentFingerprint: 'f'.repeat(64),
+      body: 'Written against a thread this w:id no longer holds',
+    })
+    database.seedReply({
+      importedCommentId: 'ooxml-99',
+      importedParentFingerprint: 'e'.repeat(64),
+      body: 'Written against a thread this version lost',
+    })
+    const storage = new MemoryStorage(commented.bytes)
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/export',
+    )
+    const bytes = Buffer.from(await response.arrayBuffer())
+    const exported = await parseDocx(bytes)
+    const commentsXml = new TextDecoder().decode(
+      exported.sourceParts.get('word/comments.xml')?.originalPayload,
+    )
+    const extendedXml = new TextDecoder().decode(
+      exported.sourceParts.get('word/commentsExtended.xml')?.originalPayload,
+    )
+
+    expect(response.status).toBe(200)
+    // Both replies export unanchored rather than attaching to the wrong or
+    // absent thread, and each is counted so the caller knows.
+    expect(response.headers.get('x-obiter-comments-skipped')).toBe('2')
+    expect(commentsXml).toContain(
+      'Written against a thread this w:id no longer holds',
+    )
+    expect(commentsXml).toContain('Written against a thread this version lost')
+    expect(extendedXml).not.toContain('paraIdParent')
+  })
+
   it('does not read storage when the comments query no longer sees the document', async () => {
     const database = new TestDatabase({ commentsDocumentMissing: true })
     const storage = new MemoryStorage()
@@ -278,3 +369,30 @@ describe('GET /api/documents/:id/export response', () => {
     expect(database.audits).toEqual([])
   })
 })
+
+/**
+ * A fixture that carries an imported comment thread: the export writer
+ * embeds a resolved comment (resolved so it is allocated a paraId), then the
+ * package is re-parsed so its comments surface as imported `ooxml-<w:id>`
+ * entries with their own threading identity.
+ */
+async function fixtureWithComment() {
+  const source = await parseDocx(sourceBytes)
+  const bytes = await serialiseDocxWithComments(source, [
+    {
+      id: 'cmt_source',
+      documentId: 'doc_1',
+      anchorVersionId: 'ver_1',
+      anchor: { paragraphId: fixtureParagraphId, startOffset: 0, endOffset: 1 },
+      body: 'File-carried thread head',
+      author: { id: 'usr_owner', name: 'Owner Reviewer' },
+      resolvedAt: '2026-08-10T12:00:00.000Z',
+      resolvedBy: 'usr_owner',
+      createdAt: '2026-08-10T12:00:00.000Z',
+      updatedAt: '2026-08-10T12:00:00.000Z',
+      replies: [],
+      anchorResolved: true,
+    },
+  ])
+  return { bytes, model: (await parseDocx(bytes)).model }
+}
