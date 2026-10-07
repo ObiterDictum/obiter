@@ -6576,7 +6576,7 @@
                   <code
                     >packages/app-shell/src/document-history-baseline.ts</code
                   >
-                  (1440)
+                  (1445)
                 </li>
                 <li><code>scripts/synthetic-v2/providers.ts</code> (1426)</li>
                 <li>
@@ -7127,15 +7127,17 @@
                     <code>insert_table</code>, <code>insert_image</code>,
                     <code>insert_cross_reference</code>,
                     <code>insert_page_number</code>,
-                    <code>insert_footnote</code> and
-                    <code>insert_table_of_contents</code> have no inverse — so
-                    once one is saved it is baseline content: a history snapshot
-                    that predates it survives translation, but undo cannot offer
-                    its removal. A structure spliced strictly inside a run
-                    splits that run into two continuations in the saved lineage,
-                    and a pre-save run text is re-expressed across every
-                    continuing run; a covered run the lineage cannot name still
-                    blocks rather than persisting a partial reversal. Only
+                    <code>insert_footnote</code>,
+                    <code>insert_table_of_contents</code>,
+                    <code>insert_break</code> and
+                    <code>insert_section_break</code> have no inverse — so once
+                    one is saved it is baseline content: a history snapshot that
+                    predates it survives translation, but undo cannot offer its
+                    removal. A structure spliced strictly inside a run splits
+                    that run into two continuations in the saved lineage, and a
+                    pre-save run text is re-expressed across every continuing
+                    run; a covered run the lineage cannot name still blocks
+                    rather than persisting a partial reversal. Only
                     <code>set_hyperlink</code> can remove a stored structure (a
                     null target unwraps the link), so a snapshot predating a
                     saved link still blocks history reconciliation rather than
