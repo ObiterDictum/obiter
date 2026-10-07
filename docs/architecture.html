@@ -2691,7 +2691,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>28 migrations, 0001 to 0029, 0008 withdrawn</dd>
+                <dd>29 migrations, 0001 to 0030, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3085,9 +3085,10 @@
                   <td>
                     View-gated ready DOCX download. Optional
                     <code>versionId</code>. Empty comments return the stored
-                    source bytes unchanged; otherwise comments whose anchors
-                    resolve in the exported version are embedded, and the rest
-                    are skipped with the count in
+                    source bytes unchanged; otherwise stored and imported
+                    comments whose anchors resolve in the exported version are
+                    embedded with their replies and threading parts, and the
+                    rest are skipped with the count in
                     <code>x-obiter-comments-skipped</code>. Audit records ids,
                     <code>commentCount</code>, and
                     <code>skippedCommentCount</code> only.
@@ -3117,14 +3118,35 @@
                 <tr>
                   <td class="id">GET · POST /api/documents/:id/comments</td>
                   <td class="id">comments.ts</td>
-                  <td>View-gated list and edit-gated comment creation</td>
+                  <td>
+                    View-gated merged list of stored threads, imported Word
+                    comments and orphaned replies; edit-gated comment creation
+                    on a real selected range or caret insertion point
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/documents/:id/comments/:commentId/replies
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Edit-gated reply to a stored comment or to an imported Word
+                    comment identity
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
                     PATCH /api/documents/:id/comments/:commentId/resolve
                   </td>
                   <td class="id">comments.ts</td>
-                  <td>Edit-gated, audited comment resolution</td>
+                  <td>Comment-author or owner/admin comment resolution</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/reopen
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>Comment-author or owner/admin comment reopen</td>
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
@@ -3846,7 +3868,7 @@
                     document_comments
                   </text>
                   <text x="302.4" y="328" text-anchor="middle" class="s">
-                    stable anchor
+                    anchor + replies
                   </text>
                 </g>
                 <g>
@@ -4137,9 +4159,19 @@
                   <td class="id">document_comments</td>
                   <td>
                     Document-scoped plain-text comments with stable paragraph
-                    ranges, version provenance and resolution lifecycle
+                    ranges that may cross paragraphs, version provenance and
+                    author-or-admin resolution lifecycle
                   </td>
-                  <td class="id">0014</td>
+                  <td class="id">0014, 0030</td>
+                </tr>
+                <tr>
+                  <td class="id">document_comment_replies</td>
+                  <td>
+                    Replies to a stored comment or to an imported Word comment
+                    identity, scoped to the same organisation, matter and
+                    document as the thread
+                  </td>
+                  <td class="id">0030</td>
                 </tr>
                 <tr>
                   <td class="id">artifacts</td>
