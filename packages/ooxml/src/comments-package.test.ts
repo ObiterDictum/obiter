@@ -51,6 +51,57 @@ describe('product comment package export', () => {
     expect(relationships).toContain('relationships/comments')
   })
 
+  it('inserts two product relationships into a rels part that already has entries', async () => {
+    // A resolved comment emits a commentsExtended entry, so one export asks
+    // for two insertions into word/_rels/document.xml.rels. The fixture part
+    // carries nine relationships already; the second insertion's position
+    // must be taken in source coordinates — the serialised view has shifted
+    // by then — or the part comes back malformed.
+    const input = await withoutCommentsPackageSupport()
+    const source = requiredXml(
+      await zipParts(input),
+      'word/_rels/document.xml.rels',
+    )
+    const existing = source.match(/<Relationship /gu)?.length ?? 0
+    expect(existing).toBeGreaterThan(1)
+
+    const document = await parseDocx(input)
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+
+    const output = await serialiseDocxWithComments(document, [
+      {
+        ...comment('cmt_done', paragraph.id, 0, 5, 'Resolved comment'),
+        resolvedAt: '2026-08-11T09:00:00.000Z',
+        resolvedBy: 'usr_1',
+      },
+    ])
+    const relationships = requiredXml(
+      await zipParts(output),
+      'word/_rels/document.xml.rels',
+    )
+
+    expect(relationships.match(/<Relationship /gu)).toHaveLength(existing + 2)
+    expect(relationships).toContain(
+      'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"',
+    )
+    expect(relationships).toContain(
+      'Type="http://schemas.microsoft.com/office/2011/relationships/commentsExtended" Target="commentsExtended.xml"',
+    )
+    for (const id of source.matchAll(/Id="(rId\d+)"/gu)) {
+      expect(relationships).toContain(`Id="${id[1]}"`)
+    }
+
+    // The finished package must still load: malformed rels XML is a hard
+    // failure here, not a silently dropped part.
+    const reparsed = await parseDocx(output)
+    expect(
+      reparsed.model.relationships.filter(
+        (relationship) => relationship.sourcePartName === 'word/document.xml',
+      ),
+    ).toHaveLength(existing + 2)
+  })
+
   it('appends to an existing self-closing comments root', async () => {
     const zip = await JSZip.loadAsync(await withoutCommentsPackageSupport())
     zip.file(
