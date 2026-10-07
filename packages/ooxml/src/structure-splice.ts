@@ -75,7 +75,7 @@ export function spliceInlineXml(
 }
 
 /** The run whose effective text strictly contains `offset`, if any. */
-function runHoldingOffset(paragraph: ParagraphAnchor, offset: number) {
+export function runHoldingOffset(paragraph: ParagraphAnchor, offset: number) {
   let runStart = 0
   for (const run of paragraph.runs) {
     const runEnd = runStart + run.wire.text.length
@@ -92,7 +92,7 @@ function runHoldingOffset(paragraph: ParagraphAnchor, offset: number) {
  * overlapping the run range afterwards cannot compose, so the edit refuses
  * rather than emit overlapping ranges at serialise time.
  */
-function spliceIntoPendingRun(
+export function spliceIntoPendingRun(
   overlay: XmlOverlay,
   paragraph: ParagraphAnchor,
   holder: { run: TextRunAnchor; runStart: number },

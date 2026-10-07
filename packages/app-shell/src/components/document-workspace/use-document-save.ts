@@ -9,8 +9,6 @@ import { ApiError } from '../../api'
 import {
   planDocumentSave,
   removeDraftSlots,
-  slotLabel,
-  type BlockedDraft,
   type DraftSlot,
   type DraftState,
   type SavePlan,
@@ -21,6 +19,8 @@ import {
   useTrackedChangeDecision,
   workspaceKeys,
 } from '../../document-workspace-api'
+import { refocusCaretBeforeFlight } from './document-actions'
+import { blockedHistoryMessage, messageFor } from './document-save-messages'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 
 /**
@@ -107,8 +107,13 @@ export function useDocumentSave({
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
   const dirty = plan.operations.length > 0 || plan.rejections.length > 0
+  // The boundary window is part of "a save is still landing": `save()` refuses
+  // a second request while it lasts, so an enabled button would be inert.
   const saving =
-    editDocument.isPending || mergeDocument.isPending || decideChange.isPending
+    editDocument.isPending ||
+    mergeDocument.isPending ||
+    decideChange.isPending ||
+    drafts.boundaryPending
   const blocked = plan.blocked
   const held = drafts.held
 
@@ -193,6 +198,7 @@ export function useDocumentSave({
         covered,
         sent,
         model,
+        baseVersionId,
         lineage,
         versionId,
         versionNumber,
@@ -261,6 +267,20 @@ export function useDocumentSave({
     return false
   }
 
+  /**
+   * A flight must hand DOM focus back to the caret's field while a control
+   * still holds it: `setFailure(null)` unmounts a focused Retry and `saving`
+   * disables a focused Save, dropping focus to `document.body` and losing
+   * the typed burst. Doing it at the only point a flight can begin covers
+   * every entry point by construction.
+   */
+  function startFlight() {
+    refocusCaretBeforeFlight()
+    inFlight.current = true
+    setFailure(null)
+    setNotice(null)
+  }
+
   async function save() {
     if (!model) return
     // A save whose lineage could not be reconciled leaves the history baseline
@@ -305,9 +325,7 @@ export function useDocumentSave({
         )
         return
       }
-      inFlight.current = true
-      setFailure(null)
-      setNotice(null)
+      startFlight()
       try {
         const saved = await decideChange.mutateAsync({
           baseVersionId,
@@ -346,9 +364,7 @@ export function useDocumentSave({
       return
     }
     if (current.operations.length === 0) return
-    inFlight.current = true
-    setFailure(null)
-    setNotice(null)
+    startFlight()
     try {
       const result = await sendBatch(current.operations)
       commit(
@@ -430,53 +446,4 @@ export function useDocumentSave({
     },
     blockedHistoryMessage: blockedHistoryMessage(drafts.blockedReason),
   }
-}
-
-/** One sentence naming why a committed save's history cannot be reconciled. */
-function blockedHistoryMessage(
-  reason: import('./use-save-baseline').BaselineBlockReason | null,
-) {
-  switch (reason) {
-    case 'newer-version':
-      return 'Your change was saved, but the document moved to a newer version before the saved model could be loaded. Reloading is required to continue; it discards the in-memory undo history. Your saved change is not lost.'
-    case 'reload-failed':
-      return 'Your change was saved, but the saved document could not be reloaded, so the edit history cannot be reconciled. Retry the reload; the saved document is unchanged.'
-    default:
-      return 'Your change was saved, but the edit history for it could not be reconciled against the saved version. Reloading is required to continue; it discards the in-memory undo history, any held rejected changes and parked drafts. The saved document is unchanged.'
-  }
-}
-
-function messageFor(error: unknown) {
-  if (error instanceof ApiError) {
-    return `Your changes have not been saved. ${error.message}`
-  }
-  return 'Your changes have not been saved. The request failed before the server committed anything.'
-}
-
-/**
- * One sentence naming what the server refused. The slot stays pending in the
- * drafts, so the next save retries it; the only way it disappears is the
- * discard affordance next to this message.
- */
-export function refusedSummary(refused: readonly DraftSlot[]) {
-  if (refused.length === 0) return null
-  if (refused.length === 1) {
-    const label = refused[0] ? slotLabel(refused[0]) : 'a change'
-    return `The server rejected ${label}; it stays in your drafts and the next save will try it again.`
-  }
-  return `${String(refused.length)} changes were rejected by the server; they stay in your drafts and the next save will try them again.`
-}
-
-/** One sentence naming what could not be sent and what to do about it. */
-export function blockedSummary(blocked: readonly BlockedDraft[]) {
-  if (blocked.length === 0) return null
-  if (blocked.length === 1) {
-    const label = blocked[0]?.label ?? 'a change'
-    return `${capitalise(label)} could not be sent because it no longer matches the document. Discard it to keep saving.`
-  }
-  return `${String(blocked.length)} changes could not be sent because they no longer match the document. Discard them to keep saving.`
-}
-
-function capitalise(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1)
 }

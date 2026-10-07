@@ -16,3 +16,48 @@ export function revealDocumentRedactionRuns(): void {
   }
   region.focus({ preventScroll: true })
 }
+
+/**
+ * Focused elements that consume typed text honestly: keystrokes keep landing
+ * in them while a flight runs, so focus may stay. Everything else (a button
+ * the flight disables or unmounts, a ribbon control, the document body)
+ * swallows the burst, so focus is handed to the caret's field instead. The
+ * gate keys on the element's shape rather than a marker on each save control,
+ * because a marker is forgotten by the next caller and this class of defect
+ * has already recurred. An open modal is left alone: moving focus out of a
+ * dialog the flight did not open is worse than losing the burst.
+ */
+const TYPED_TEXT_FIELD =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="searchbox"], [role="combobox"]'
+
+/**
+ * Focus the caret's field: the textarea the selected paragraph mounts,
+ * marked across the body, a pending insert and an open margin story by
+ * `[aria-current]` on its `[data-paragraph-id]` host.
+ */
+export function refocusCaret(): void {
+  if (typeof document === 'undefined') return
+  document
+    .querySelector<HTMLElement>(
+      '[data-paragraph-id][aria-current="true"] textarea',
+    )
+    ?.focus({ preventScroll: true })
+}
+
+/**
+ * Call before starting async work that can disable or unmount the focused
+ * control: a save, a tracked-change decision, a comment mutation. If the
+ * control holds DOM focus when the flight begins (Enter or Space on the
+ * button), the browser drops focus to `document.body` and every keystroke
+ * typed until the remount is silently lost, so the focus is handed to the
+ * caret's field first. The pointer path never needed this: the controls'
+ * wrappers preventDefault mousedown, keeping focus in the editor.
+ */
+export function refocusCaretBeforeFlight(): void {
+  if (typeof document === 'undefined') return
+  const active = document.activeElement
+  if (!(active instanceof Element)) return
+  if (active.closest('[role="dialog"]') !== null) return
+  if (active.closest(TYPED_TEXT_FIELD) !== null) return
+  refocusCaret()
+}

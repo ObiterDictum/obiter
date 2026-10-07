@@ -71,8 +71,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     modelVersionNumber: scope.baseVersionNumber,
     modelError: scope.modelError ?? false,
     state: bundle.state,
-    resolveState: (next) =>
-      setBundle((current) => ({ ...current, state: next })),
+    resolveState: (update) =>
+      setBundle((current) => ({ ...current, state: update(current.state) })),
     onBlocked: setBlockedReason,
   })
   const storage = draftStorage()
@@ -163,6 +163,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     covered: readonly DraftSlot[],
     sent: DraftState,
     fromModel: DocumentModelWire,
+    fromVersionId: string | undefined,
     lineage?: import('@obiter/contracts').DocumentVersionLineage,
     versionId?: string,
     versionNumber?: number,
@@ -172,6 +173,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       covered,
       sent,
       fromModel,
+      fromVersionId,
       lineage,
       versionId,
       versionNumber,

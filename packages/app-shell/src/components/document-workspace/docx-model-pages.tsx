@@ -1,5 +1,8 @@
+import { useMemo } from 'react'
 import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
+import { batchParagraphDeletions } from '../../document-edits'
 import { editingStoryFor } from '../../document-page-layout'
+import { pageReferenceMap } from '../../document-page-references'
 import type { LaidOutPage } from '../../document-page-engine'
 import { documentDefaultFace } from '../../document-page-style'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
@@ -78,6 +81,35 @@ export function DocxModelPages({
     editingKind === 'document'
       ? undefined
       : editingStoryFor(rendered, editingKind)
+  // `PAGEREF` fields resolve through the laid-out pages, so the map is built
+  // once per layout pass rather than per paragraph render.
+  const pageReferences = useMemo(
+    () => pageReferenceMap(rendered, pages),
+    [rendered, pages],
+  )
+  // The paragraphs the batch removes outright — the applied marks — are the
+  // ones the paint strikes through. A runless paragraph carrying typed text
+  // still shows that text, so the implicit replacements in the effective set
+  // stay visible; a refused last-paragraph mark stays painted too. The set is
+  // shared with the save via `batchParagraphDeletions`, not the raw marks.
+  const paintedDeletes = useMemo(
+    () => [
+      ...batchParagraphDeletions(
+        model,
+        drafts.inserts,
+        drafts.deletedParagraphIds,
+        drafts.extraRuns,
+        drafts.drafts,
+      ).applied,
+    ],
+    [
+      model,
+      drafts.inserts,
+      drafts.deletedParagraphIds,
+      drafts.extraRuns,
+      drafts.drafts,
+    ],
+  )
   return (
     <>
       {pages.map((laid, index) => (
@@ -94,6 +126,7 @@ export function DocxModelPages({
             onExitMarginEditing={onExitMarginEditing}
             onOpenNoteEditing={onOpenNoteEditing}
             pageNumber={index + 1}
+            pageReferences={pageReferences}
             pageBlocks={laid.blocks}
             pageFloats={laid.floats}
             pageTextBoxes={laid.textBoxes}
@@ -121,7 +154,7 @@ export function DocxModelPages({
             presence={presence}
             currentUserId={currentUserId}
             inserts={drafts.inserts}
-            deletedParagraphIds={drafts.deletedParagraphIds}
+            deletedParagraphIds={paintedDeletes}
             extraRuns={drafts.extraRuns}
             imageUrls={imageUrls}
             onInsertTextChange={(clientId, text) =>

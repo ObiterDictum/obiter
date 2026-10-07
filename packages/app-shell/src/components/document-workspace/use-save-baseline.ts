@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { useBrowserLayoutEffect } from './use-browser-layout-effect'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   lineageCoversCoveredSlots,
@@ -48,7 +49,7 @@ export function useSaveBaseline({
   modelVersionNumber: number | undefined
   modelError: boolean
   state: DraftState
-  resolveState: (state: DraftState) => void
+  resolveState: (update: (current: DraftState) => DraftState) => void
   onBlocked: (reason: BaselineBlockReason | null) => void
 }) {
   const pending = useRef<SaveBaseline | null>(null)
@@ -58,6 +59,7 @@ export function useSaveBaseline({
   const decisionPending = useRef<{
     versionId: string
     versionNumber: number | undefined
+    fromVersionId: string | undefined
   } | null>(null)
   // Exposed so the workspace can refuse a second save until the model for the
   // committed version has actually reloaded.
@@ -82,7 +84,11 @@ export function useSaveBaseline({
   // describes; a response that fails to load, or that carries a version this
   // save did not produce, is surfaced rather than leaving a permanent
   // "Saving…" with an enabled-but-inert Save button.
-  useEffect(() => {
+  // This is a layout effect: resolving publishes the paragraph remap the
+  // caret lineage retargets, and both have to land inside the swap's commit
+  // cascade — a passive-effect hop leaves a window where the focused editor
+  // is already gone and the next keystroke falls through to document.body.
+  useBrowserLayoutEffect(() => {
     // A tracked decision carries no lineage to translate; the gate exists only
     // so the next save plans against the reloaded model for that exact version.
     const decision = decisionPending.current
@@ -92,12 +98,20 @@ export function useSaveBaseline({
         return
       }
       if (!model) return
+      // The version checks come first: structural sharing can serve the
+      // decision's own version with a `model` reference identical to the
+      // pre-decision one, and reading that rerun as "still the old model"
+      // would wait on a version that already arrived.
       if (modelVersionId === decision.versionId) {
         decisionPending.current = null
         setPendingVersion(null)
         onBlockedRef.current(null)
         return
       }
+      // See the pendingVersion dependency below: this effect can rerun while
+      // the version the decision was made against is still served, and that
+      // must not read as one the decision did not produce.
+      if (modelVersionId === decision.fromVersionId) return
       if (
         modelVersionNumber !== undefined &&
         decision.versionNumber !== undefined &&
@@ -121,23 +135,44 @@ export function useSaveBaseline({
     if (!model) return
     if (modelVersionId === boundary.versionId) {
       const resolved: SaveBaseline = { ...boundary, toModel: model }
-      const live = remapLiveDraftState(stateRef.current, resolved)
       history.translate(
         (snapshot) => remapLiveDraftState(snapshot, resolved).state,
       )
-      resolveStateRef.current(live.state)
+      // The live-state rewrite goes through the updater form: `stateRef` is
+      // the last rendered state, but an edit can be queued and still
+      // unrendered when this effect runs — it only ever runs after the commit
+      // — so replacing state wholesale would discard that edit. Remapping
+      // `current` at application time keeps it. `unresolved` stays a read of
+      // the rendered state: a queued edit that added an unresolvable key
+      // would still be held back as a blocked draft at the next save, which
+      // is a banner rather than silent loss.
+      const { unresolved } = remapLiveDraftState(stateRef.current, resolved)
+      resolveStateRef.current(
+        (current) => remapLiveDraftState(current, resolved).state,
+      )
       if (resolved.lineage) {
         setParagraphRemap(paragraphMapFromLineage(resolved.lineage))
       }
       pending.current = null
       setPendingVersion(null)
-      onBlockedRef.current(live.unresolved ? 'lineage' : null)
+      onBlockedRef.current(unresolved ? 'lineage' : null)
       return
     }
-    // A version this save did not produce. An older one is a stale response
-    // from a query that raced the commit; ignore it and keep waiting. A newer
-    // one means another operation or collaborator committed, so the exact
-    // saved model is no longer served: block honestly rather than wedge.
+    // A version this save did not produce. The mutation's `onSuccess`
+    // finishes the model refetch before the caller's `await mutateAsync`
+    // continues, so the committed model can render before the boundary is
+    // recorded; `pendingVersion` is a dependency so that ordering still
+    // resolves here, but that rerun then also fires while the served version
+    // is still the one the save was planned against, which must not read as
+    // a version the save did not produce. Identity is the version id rather
+    // than the model reference: structural sharing can serve a different
+    // version whose model projection is deep-equal, and a reference test
+    // would wait on — instead of resolving or blocking — that version.
+    if (modelVersionId === boundary.fromVersionId) return
+    // An older version is a stale response from a query that raced the
+    // commit; ignore it and keep waiting. A newer one means another operation
+    // or collaborator committed, so the exact saved model is no longer
+    // served: block honestly rather than wedge.
     if (
       modelVersionNumber !== undefined &&
       boundary.versionNumber !== undefined &&
@@ -148,13 +183,14 @@ export function useSaveBaseline({
     pending.current = null
     setPendingVersion(null)
     onBlockedRef.current('newer-version')
-  }, [model, modelVersionId, modelVersionNumber, modelError])
+  }, [model, modelVersionId, modelVersionNumber, modelError, pendingVersion])
 
   return {
     commit(
       covered: readonly DraftSlot[],
       sent: DraftState,
       fromModel: DocumentModelWire,
+      fromVersionId: string | undefined,
       lineage?: SaveBaseline['lineage'],
       versionId?: string,
       versionNumber?: number,
@@ -167,6 +203,7 @@ export function useSaveBaseline({
         covered,
         sent,
         fromModel,
+        fromVersionId,
         lineage,
         versionId,
         versionNumber,
@@ -206,7 +243,11 @@ export function useSaveBaseline({
       setParagraphRemap(new Map())
     },
     markDecisionCommitted(versionId: string, versionNumber?: number) {
-      decisionPending.current = { versionId, versionNumber }
+      decisionPending.current = {
+        versionId,
+        versionNumber,
+        fromVersionId: modelVersionId,
+      }
       setPendingVersion(versionId)
     },
     pendingVersion,

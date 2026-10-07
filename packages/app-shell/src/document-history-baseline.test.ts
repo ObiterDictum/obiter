@@ -526,7 +526,7 @@ describe('translateSnapshot', () => {
     })
   })
 
-  it('blocks a saved break it cannot remove instead of claiming the reversal', () => {
+  it('translates a saved break the way a non-removable structure does', () => {
     const breakSlot: DraftSlot = {
       kind: 'break',
       key: 'break:b1',
@@ -537,11 +537,17 @@ describe('translateSnapshot', () => {
       ...emptyDraftState(),
       breaks: [{ id: 'b1', paragraphId: 'p1', offset: 0, kind: 'page' }],
     }
-    // The snapshot holds the break as pending work, so undoing the save would
-    // need to remove the saved break, which no operation can express.
-    expect(
-      translateSnapshot({ ...sent }, { covered: [breakSlot], sent, fromModel }),
-    ).toBeNull()
+    // The snapshot holds the break as pending work, but the save stored it,
+    // so the snapshot already describes the saved document: the covered slot
+    // drops and unrelated work in the same snapshot survives. Blocking here
+    // wedged the workspace — every later edit painted but could never save.
+    const held = translateSnapshot(
+      { ...sent, drafts: { r1: 'Typed' } },
+      { covered: [breakSlot], sent, fromModel },
+    )
+    expect(held).not.toBeNull()
+    expect(held?.breaks).toEqual([])
+    expect(held?.drafts.r1).toBe('Typed')
     // A snapshot that predates the break drops the covered slot and does not
     // block: it already describes the document without the break.
     const pre = translateSnapshot(emptyDraftState(), {
@@ -551,6 +557,49 @@ describe('translateSnapshot', () => {
     })
     expect(pre).not.toBeNull()
     expect(pre?.breaks).toEqual([])
+  })
+
+  it('translates a snapshot holding a pending break and structure together', () => {
+    // The E7c defect shape: the break and the field were both pending in one
+    // save, and the snapshot taken between them held both. A page break and a
+    // section break share the 'break' slot kind, so one covered break of each
+    // kind pins the neighbour combinations too.
+    const covered: DraftSlot[] = [
+      { kind: 'break', key: 'break:b1', id: 'b1', breakKind: 'page' },
+      { kind: 'break', key: 'break:b2', id: 'b2', breakKind: 'section' },
+      {
+        kind: 'structure',
+        key: 'structure:s1',
+        id: 's1',
+        structureKind: 'table-of-contents',
+      },
+    ]
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      breaks: [
+        { id: 'b1', paragraphId: 'p1', offset: 0, kind: 'page' },
+        { id: 'b2', paragraphId: 'p2', offset: 0, kind: 'section' },
+      ],
+      structures: [
+        {
+          id: 's1',
+          kind: 'table-of-contents',
+          paragraphId: 'p1',
+          offset: 0,
+        },
+      ],
+    }
+    const held = translateSnapshot(
+      {
+        ...sent,
+        drafts: { r1: 'Typed' },
+      },
+      { covered, sent, fromModel },
+    )
+    expect(held).not.toBeNull()
+    expect(held?.breaks).toEqual([])
+    expect(held?.structures).toEqual([])
+    expect(held?.drafts.r1).toBe('Typed')
   })
 })
 

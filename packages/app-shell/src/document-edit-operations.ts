@@ -1,6 +1,7 @@
 import {
   type DocumentEditOperation,
   type DocumentModelWire,
+  type DocumentParagraphWire,
   type DocumentTextRunWire,
 } from '@obiter/contracts'
 import type { BreakDraft } from './document-draft-state'
@@ -88,6 +89,33 @@ export function sameRunProperties(
   )
 }
 
+/**
+ * The runless paragraphs a batch replaces instead of editing: an empty
+ * paragraph carrying pending typed text becomes an `insert_paragraph_after`
+ * plus a `delete_paragraph`, so its id lands in the writer's `deletedIds`
+ * without ever appearing in a draft's delete list. Every "gone after this
+ * batch" check — the save partition's structure guards and the painted
+ * surfaces alike — must include this set or it disagrees with the writer.
+ */
+export function replacedEmptyParagraphIds(
+  paragraphs: readonly DocumentParagraphWire[],
+  extraRuns: Record<string, DocumentTextRunWire[]>,
+  drafts: Record<string, string>,
+): Set<string> {
+  const replaced = new Set<string>()
+  for (const paragraph of paragraphs) {
+    if (paragraph.runs.length !== 0) continue
+    if (
+      (extraRuns[paragraph.id] ?? []).some(
+        (run) => (drafts[run.id] ?? run.text).length > 0,
+      )
+    ) {
+      replaced.add(paragraph.id)
+    }
+  }
+  return replaced
+}
+
 export function collectEditOperations(
   model: DocumentModelWire,
   drafts: Record<string, string>,
@@ -103,21 +131,25 @@ export function collectEditOperations(
   // runs carry the same wire ids the batch resolves.
   const paragraphs = editableStories(model).flatMap((story) => story.paragraphs)
   const deleted = new Set(deletedParagraphIds)
-  const emptyReplacements: string[] = []
+  const emptyReplacements = replacedEmptyParagraphIds(
+    paragraphs,
+    extraRuns,
+    drafts,
+  )
+  for (const paragraphId of deleted) emptyReplacements.delete(paragraphId)
 
   for (const paragraph of paragraphs) {
     if (deleted.has(paragraph.id)) continue
     const extra = extraRuns[paragraph.id] ?? []
     const extraText = extra.map((run) => drafts[run.id] ?? run.text).join('')
     if (paragraph.runs.length === 0) {
-      if (extraText) {
+      if (emptyReplacements.has(paragraph.id)) {
         operations.push({
           type: 'insert_paragraph_after',
           paragraphId: paragraph.id,
           ...extraParagraphPayload(extra, drafts),
           ...(paragraph.styleId ? { styleId: paragraph.styleId } : {}),
         })
-        emptyReplacements.push(paragraph.id)
       }
       continue
     }
@@ -210,8 +242,16 @@ export function collectEditOperations(
   // after any paragraph the same batch inserted at its anchor, matching the
   // order the pending fold paints, and still before the deletions that close
   // the batch so a deleted anchor cannot silently swallow an insertion.
+  // The writer's `deletedIds` collects every planned `delete_paragraph` —
+  // explicit marks and empty replacements alike — so the structural scan
+  // reads the union, matching the anchors and targets the batch removes.
   operations.push(
-    ...structuralEditOperations(structures, deleted, drafts, extraRuns),
+    ...structuralEditOperations(
+      structures,
+      new Set([...deleted, ...emptyReplacements]),
+      drafts,
+      extraRuns,
+    ),
   )
 
   for (const paragraphId of deletedParagraphIds) {

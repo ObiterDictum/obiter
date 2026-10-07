@@ -1,11 +1,8 @@
 import { Button } from '@obiter/ui'
 import type { ReactNode } from 'react'
-import {
-  blockedSummary,
-  refusedSummary,
-  type DocumentSave,
-  type SaveState,
-} from './use-document-save'
+import { refocusCaretBeforeFlight } from './document-actions'
+import { blockedSummary, refusedSummary } from './document-save-messages'
+import type { DocumentSave, SaveState } from './use-document-save'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
 
@@ -53,7 +50,13 @@ export function DocumentSaveBanners({
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => drafts.restoreRecoverable(item.draftId)}
+                  onClick={() => {
+                    // Restoring the last recoverable draft unmounts this
+                    // banner, so a keyboard activation would strand focus on
+                    // document.body the same way a save flight does.
+                    refocusCaretBeforeFlight()
+                    drafts.restoreRecoverable(item.draftId)
+                  }}
                 >
                   Restore draft from {formatStamp(item.updatedAt)}
                 </Button>

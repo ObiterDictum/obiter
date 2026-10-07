@@ -17,6 +17,7 @@ import {
   useCreateDocumentComment,
   useTrackedChangeDecision,
 } from '../../document-workspace-api'
+import { refocusCaret, refocusCaretBeforeFlight } from './document-actions'
 import { DocxModelPages } from './docx-model-pages'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
@@ -233,6 +234,27 @@ export function DocxWorkspace({
         drafts.extraRuns,
       )
     : undefined
+  // Undo, redo, print and reload can each disable or unmount the focused
+  // control mid-step — an emptied stack disables the button, a cleared banner
+  // unmounts it — so the ribbon controls and the keyboard chords share these
+  // wrappers: focus is handed to the caret before the step can drop it to
+  // document.body and lose the typed burst.
+  const undo = () => {
+    refocusCaretBeforeFlight()
+    undoDocument()
+  }
+  const redo = () => {
+    refocusCaretBeforeFlight()
+    redoDocument()
+  }
+  const print = () => {
+    refocusCaretBeforeFlight()
+    printDocument()
+  }
+  const reload = () => {
+    refocusCaretBeforeFlight()
+    save.reload()
+  }
   const ribbon = (
     <WorkspaceRibbon>
       <DocumentWorkspaceToolbar
@@ -260,14 +282,15 @@ export function DocxWorkspace({
         onToggleTrackChanges={() => setTrackChanges((value) => !value)}
         onZoom={setZoom}
         onExportText={() => {
+          refocusCaretBeforeFlight()
           void exportDocumentAsDocx(documentId, filename).then((message) => {
             if (message) setBanner(message)
           })
         }}
-        onPrint={printDocument}
+        onPrint={print}
         onSave={save.save}
-        onUndo={undoDocument}
-        onRedo={redoDocument}
+        onUndo={undo}
+        onRedo={redo}
         onInsertParagraph={() => {
           if (!selectedParagraphId) return
           selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
@@ -305,7 +328,7 @@ export function DocxWorkspace({
           <ConflictBanner
             body="The document has changed since editing began."
             actionLabel="Reload"
-            onAction={save.reload}
+            onAction={reload}
           />
         </div>
       ) : null}
@@ -314,7 +337,7 @@ export function DocxWorkspace({
           <ConflictBanner
             body="A colleague saved a newer version. Reload before saving, or save to merge disjoint edits."
             actionLabel="Reload"
-            onAction={save.reload}
+            onAction={reload}
           />
         </div>
       ) : null}
@@ -338,9 +361,9 @@ export function DocxWorkspace({
       onKeyDown={(event) =>
         documentWorkspaceKeyDown(event, {
           save: save.save,
-          undo: undoDocument,
-          redo: redoDocument,
-          print: printDocument,
+          undo,
+          redo,
+          print,
           format,
         })
       }
@@ -410,6 +433,10 @@ export function DocxWorkspace({
                   createComment.error ?? resolveComment.error,
                 )}
                 onCreateComment={(input) => {
+                  // The form's field and submit button disable for the
+                  // flight, so even a text field holding focus would be
+                  // dropped to the body; hand it to the caret first.
+                  refocusCaret()
                   createComment.mutate({
                     body: input.body,
                     anchor: {
@@ -419,13 +446,15 @@ export function DocxWorkspace({
                     },
                   })
                 }}
-                onResolveComment={(commentId) =>
+                onResolveComment={(commentId) => {
+                  refocusCaretBeforeFlight()
                   resolveComment.mutate(commentId)
-                }
+                }}
                 changes={changesQuery.data?.changes ?? []}
                 changesPending={decideChange.isPending || save.saving}
                 changesError={mutationError(decideChange.error)}
                 onDecideChange={(action, changeId) => {
+                  refocusCaretBeforeFlight()
                   decideChange.mutate(
                     { baseVersionId, action, changeIds: [changeId] },
                     {

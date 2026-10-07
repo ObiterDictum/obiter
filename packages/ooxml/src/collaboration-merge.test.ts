@@ -642,6 +642,84 @@ describe('bounded collaboration reconciliation', () => {
       merged.map((paragraph) => paragraph.runs.map((run) => run.text).join('')),
     ).toEqual(['Alpha revised', 'Beta'])
   })
+
+  it('merges a table of contents over an unchanged stale base', async () => {
+    const base = await parseDocx(source)
+    const current = await parseDocx(source)
+    const anchor = mainParagraphs(base).find(
+      (paragraph) =>
+        paragraph.runs.map((run) => run.text).join('') ===
+        'Jane Example referenceJane Example reference',
+    )
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+
+    // Every paragraph aligns unchanged: the field's own anchor is the only
+    // address, and nothing it would capture has moved.
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'insert_table_of_contents',
+            paragraphId: anchor.id,
+            offset: 0,
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
+  it('conflicts a table of contents only when the current version changed', async () => {
+    const base = await parseDocx(source)
+    const paragraphs = mainParagraphs(base)
+    const anchor = paragraphs.find(
+      (paragraph) =>
+        paragraph.runs.map((run) => run.text).join('') ===
+        'Jane Example referenceJane Example reference',
+    )
+    const headingRun = paragraphs.find(
+      (paragraph) =>
+        paragraph.runs.map((run) => run.text).join('') ===
+        'Alice Example overview',
+    )?.runs[0]
+    if (!anchor || !headingRun) throw new Error('Fixture model is missing.')
+    const operation: DocumentEditOperation = {
+      type: 'insert_table_of_contents',
+      paragraphId: anchor.id,
+      offset: 0,
+    }
+
+    // A rewritten run anywhere conflicts: the footprint cannot say which
+    // changed paragraphs were headings the field would capture.
+    expect(
+      reconcileDocumentEdits(
+        base,
+        await editedSource([
+          {
+            type: 'replace_run_text',
+            runId: headingRun.id,
+            text: 'Retitled heading',
+          },
+        ]),
+        [operation],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+
+    // A deleted anchor conflicts through the presence set.
+    expect(
+      reconcileDocumentEdits(
+        base,
+        await editedSource([
+          { type: 'delete_paragraph', paragraphId: anchor.id },
+        ]),
+        [operation],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
 })
 
 async function editedSource(operations: readonly DocumentEditOperation[]) {

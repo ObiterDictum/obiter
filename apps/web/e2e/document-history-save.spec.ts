@@ -138,7 +138,8 @@ async function openFixtureDocument(
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
-const undo = (page: Page) => page.getByRole('button', { name: 'Undo' })
+const undo = (page: Page) =>
+  page.getByRole('button', { name: 'Undo', exact: true })
 const saveState = (page: Page) =>
   page.locator('[data-save-state]').getAttribute('data-save-state')
 const paragraph = (page: Page, text: string) =>
