@@ -172,13 +172,13 @@ function matchMovePairs(changes: TrackedChangeNode[]) {
     if (
       (change.wire.elementName !== 'moveFrom' &&
         change.wire.elementName !== 'moveTo') ||
-      change.wire.ooxmlId === undefined
+      change.moveKey === undefined
     ) {
       continue
     }
-    const matches = moves.get(change.wire.ooxmlId) ?? []
+    const matches = moves.get(change.moveKey) ?? []
     matches.push(change)
-    moves.set(change.wire.ooxmlId, matches)
+    moves.set(change.moveKey, matches)
   }
   for (const matches of moves.values()) {
     const from = matches.filter(({ wire }) => wire.elementName === 'moveFrom')

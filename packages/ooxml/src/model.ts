@@ -28,6 +28,13 @@ export type TrackedChangeNode = {
   innerFragment: string
   previousPropertiesFragment?: string
   validMoveCounterpart: boolean
+  /**
+   * The key two halves of a tracked move share. Word pairs `w:moveFrom` and
+   * `w:moveTo` by their `w:name` attribute; producers that omit a name are
+   * paired by a shared `w:id` instead. Internal — the wire only carries the
+   * resolved `pairId`.
+   */
+  moveKey?: string
   deletedTextElements: { range: XmlElementRange; qualifiedName: string }[]
   paragraphMarkRange?: XmlElementRange
   absorbed?: boolean

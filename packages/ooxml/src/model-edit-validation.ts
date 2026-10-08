@@ -204,14 +204,27 @@ export function validateTrackedOperations(
     } else if (operation.type === 'set_run_emphasis') {
       if (!operation.run) {
         if (
-          containsTrackedChange(
-            document,
-            operation.paragraph.partName,
-            operation.paragraph.paragraphRange,
-          ) ||
+          operation.from === undefined ||
+          operation.to === undefined ||
           runEmphasisTargets.has(operation.paragraphId ?? '')
         ) {
           throw new OoxmlError('invalid-document-edit')
+        }
+        // A range emphasis splits the covered runs and marks each piece's
+        // properties, so only the runs the range actually covers must be free
+        // of tracked markup — a tracked change beside the range survives the
+        // split the way any untouched sibling does.
+        let runStart = 0
+        for (const run of operation.paragraph.runs) {
+          const runEnd = runStart + run.wire.text.length
+          if (
+            Math.max(operation.from, runStart) <
+              Math.min(operation.to, runEnd) &&
+            containsTrackedChange(document, run.partName, run.runRange)
+          ) {
+            throw new OoxmlError('invalid-document-edit')
+          }
+          runStart = runEnd
         }
         runEmphasisTargets.add(operation.paragraphId ?? '')
       } else if (
