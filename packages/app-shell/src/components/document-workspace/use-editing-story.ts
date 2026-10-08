@@ -115,7 +115,5 @@ export function useEditingStory({
     editingStory,
     openEditingStory,
     closeEditingStory,
-    /** The document switch reset: an open story never spans documents. */
-    resetEditingStory: () => setEditingKind('document'),
   }
 }
