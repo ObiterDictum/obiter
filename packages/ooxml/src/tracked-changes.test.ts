@@ -791,6 +791,162 @@ describe('tracked change decisions', () => {
     expect(xml).toContain('w:name="outer"')
   })
 
+  it.each([
+    [
+      'bookmark',
+      '<w:bookmarkStart w:id="7" w:name="kept"/>',
+      '<w:bookmarkEnd w:id="7"/>',
+    ],
+    [
+      'comment range',
+      '<w:commentRangeStart w:id="7"/>',
+      '<w:commentRangeEnd w:id="7"/>',
+    ],
+    ['permission range', '<w:permStart w:id="7"/>', '<w:permEnd w:id="7"/>'],
+    [
+      'customXml range',
+      '<w:customXmlInsRangeStart w:id="7"/>',
+      '<w:customXmlInsRangeEnd w:id="7"/>',
+    ],
+  ] as const)(
+    'refuses a legacy w:id move that would strand a %s mate',
+    async (_label, startTag, endTag) => {
+      // A wrapper outside any container pairs by shared w:id, but the same
+      // straddle rule applies to its own range: covering one half of a paired
+      // marker while the mate survives outside would strand it, so the whole
+      // id:-keyed pair stays undecidable — including the clean other half.
+      for (const wrapper of [
+        `<w:moveFrom w:id="9">${startTag}<w:r><w:delText>m</w:delText></w:r></w:moveFrom>${endTag}`,
+        `${startTag}<w:moveFrom w:id="9"><w:r><w:delText>m</w:delText></w:r>${endTag}</w:moveFrom>`,
+      ]) {
+        const document = await parseDocx(
+          await replaceDocumentXml(
+            `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>${wrapper}<w:moveTo w:id="9"><w:r><w:t>m</w:t></w:r></w:moveTo></w:p></w:body></w:document>`,
+          ),
+        )
+        const moves = document.model.changes.filter(
+          ({ kind }) => kind === 'move',
+        )
+        if (moves.length !== 2) throw new Error('Legacy move pair is missing.')
+        expect(moves.every(({ pairId }) => pairId === undefined)).toBe(true)
+        expect(
+          moves.every(({ undecidable }) => undecidable === 'unsupported-move'),
+        ).toBe(true)
+
+        for (const action of ['accept', 'reject'] as const) {
+          expect(() =>
+            applyTrackedChangeDecisions(
+              document,
+              moves.map(({ id }) => id),
+              action,
+            ),
+          ).toThrowError(
+            expect.objectContaining({
+              code: 'invalid-tracked-change-decision',
+            }),
+          )
+        }
+        expect(
+          [...document.sourceParts.values()].every(({ dirty }) => !dirty),
+        ).toBe(true)
+        const xml = await zipText(
+          await serialiseDocx(document),
+          'word/document.xml',
+        )
+        expect(xml).toContain(startTag)
+        expect(xml).toContain(endTag)
+        expect(xml).toContain('<w:moveFrom w:id="9">')
+        expect(xml).toContain('<w:moveTo w:id="9">')
+      }
+    },
+  )
+
+  it.each([
+    [
+      'a nameless marker pair',
+      '<w:moveFromRangeStart w:id="30"/><w:moveFrom w:id="9"><w:r><w:delText>m</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/>',
+    ],
+    [
+      'mismatched marker ids',
+      '<w:moveFromRangeStart w:id="30"/><w:moveFrom w:id="9"><w:r><w:delText>m</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="99"/>',
+    ],
+    [
+      'a marker pair inside the wrapper',
+      '<w:moveFrom w:id="9"><w:moveFromRangeStart w:id="30" w:name="x"/><w:r><w:delText>m</w:delText></w:r><w:moveFromRangeEnd w:id="30"/></w:moveFrom>',
+    ],
+  ] as const)(
+    'refuses a legacy move tangled with unformed move-range markers (%s)',
+    async (_label, fromSide) => {
+      // Markers that never formed a named container still delimit a region:
+      // a wrapper sitting inside them, or carrying one, decided by shared
+      // w:id would orphan marker markup the decision leaves behind.
+      const document = await parseDocx(
+        await replaceDocumentXml(
+          `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>${fromSide}<w:moveTo w:id="9"><w:r><w:t>m</w:t></w:r></w:moveTo></w:p></w:body></w:document>`,
+        ),
+      )
+      const moves = document.model.changes.filter(({ kind }) => kind === 'move')
+      if (moves.length !== 2) throw new Error('Legacy move pair is missing.')
+      expect(moves.every(({ pairId }) => pairId === undefined)).toBe(true)
+      expect(
+        moves.every(({ undecidable }) => undecidable === 'unsupported-move'),
+      ).toBe(true)
+
+      for (const action of ['accept', 'reject'] as const) {
+        expect(() =>
+          applyTrackedChangeDecisions(
+            document,
+            moves.map(({ id }) => id),
+            action,
+          ),
+        ).toThrowError(
+          expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
+        )
+      }
+      expect(
+        [...document.sourceParts.values()].every(({ dirty }) => !dirty),
+      ).toBe(true)
+      const xml = await zipText(
+        await serialiseDocx(document),
+        'word/document.xml',
+      )
+      expect(xml).toContain('moveFromRangeStart')
+      expect(xml).toContain('moveFromRangeEnd')
+      expect(xml).toContain('<w:moveTo w:id="9">')
+    },
+  )
+
+  it('still decides a legacy w:id pair that wraps a complete marker pair', async () => {
+    // A marker pair wholly inside the wrapper goes with the covered range, so
+    // the tolerated shared-w:id fallback still applies to clean markup.
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFrom w:id="9"><w:bookmarkStart w:id="7" w:name="carried"/><w:r><w:delText>m</w:delText></w:r><w:bookmarkEnd w:id="7"/></w:moveFrom><w:moveTo w:id="9"><w:r><w:t>m</w:t></w:r></w:moveTo><w:r><w:t>Keep</w:t></w:r></w:p></w:body></w:document>`,
+      ),
+    )
+    const moves = document.model.changes.filter(({ kind }) => kind === 'move')
+    const from = moves.find(({ elementName }) => elementName === 'moveFrom')
+    if (moves.length !== 2 || !from?.pairId) {
+      throw new Error('Clean legacy move pair did not pair.')
+    }
+    expect(moves.every(({ undecidable }) => undecidable === undefined)).toBe(
+      true,
+    )
+
+    const applied = applyTrackedChangeDecisions(document, [from.id], 'accept')
+    expect(new Set(applied)).toEqual(new Set(moves.map(({ id }) => id)))
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).not.toContain('moveFrom')
+    expect(xml).not.toContain('moveTo')
+    // The wrapped bookmark went with the decided range rather than stranding.
+    expect(xml).not.toContain('w:name="carried"')
+    expect(xml).toContain('<w:t>m</w:t>')
+    expect(xml).toContain('<w:t>Keep</w:t>')
+  })
+
   it('fails closed for an orphan move and leaves every part clean', async () => {
     // Distinct w:ids and no w:name is an unpaired move — deciding it, alone
     // or inside a bulk request, is refused rather than resolved half-way.
