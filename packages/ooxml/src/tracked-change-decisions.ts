@@ -1,4 +1,8 @@
-import type { DocumentTrackedChangeDecisionRequest } from '@obiter/contracts'
+import {
+  TRACKED_DECISION_MAX_IDS,
+  type DocumentChangeWire,
+  type DocumentTrackedChangeDecisionRequest,
+} from '@obiter/contracts'
 
 import { OoxmlError, type OoxmlDocument, type TrackedChangeNode } from './model'
 import { requireEditablePart } from './model-edit-overlay'
@@ -55,9 +59,12 @@ export function applyTrackedChangeDecisions(
     }
   }
 
+  const decisionRanges = new Map(
+    pending.map((target) => [target, decisionRange(target, action)]),
+  )
   for (const target of pending) {
     const part = requireEditablePart(document, target.partName)
-    const range = decisionRange(target, action)
+    const range = decisionRanges.get(target)
     if (!range) throw invalidDecision()
     setOverlayReplacement(part.overlay, `tracked-change:${target.wire.id}`, {
       start: range.start,
@@ -66,13 +73,88 @@ export function applyTrackedChangeDecisions(
     })
     part.dirty = true
   }
+
+  // A decided move's range markers go too: the containers exist only to group
+  // the halves, and orphaned moveFrom/moveToRange markup is residue no
+  // consumer should reopen. A marker already covered by a decision or
+  // removal range is left to that replacement.
+  const cleared = new Set<string>()
+  for (const target of uniqueChanges([...requested, ...absorbed])) {
+    if (!target.moveMarkers?.length) continue
+    const part = requireEditablePart(document, target.partName)
+    for (const marker of target.moveMarkers) {
+      const key = `${target.partName}:${marker.start}:${marker.end}`
+      if (cleared.has(key)) continue
+      cleared.add(key)
+      if (
+        removals.some(
+          (removal) =>
+            removal.partName === target.partName &&
+            marker.start >= removal.start &&
+            marker.end <= removal.end,
+        ) ||
+        pending.some((pendingTarget) => {
+          const range = decisionRanges.get(pendingTarget)
+          return (
+            pendingTarget.partName === target.partName &&
+            range !== undefined &&
+            marker.start >= range.start &&
+            marker.end <= range.end
+          )
+        })
+      ) {
+        continue
+      }
+      setOverlayReplacement(part.overlay, `move-marker:${key}`, {
+        start: marker.start,
+        end: marker.end,
+        value: '',
+      })
+      part.dirty = true
+    }
+  }
   return uniqueChanges([...requested, ...absorbed]).map(({ wire }) => wire.id)
+}
+
+/**
+ * The static reason this engine can never decide a listed change, or
+ * undefined when it can. A move needs a fully paired group; a property
+ * change needs the previous-properties fragment a rejection restores. The
+ * parse writes the reason onto the wire so review surfaces can mark a
+ * listed-but-undecidable change honestly; the engine still enforces the same
+ * rules here, so the flag only ever narrows what a client may offer — it
+ * never authorises a decision. Relational refusals (overlapping decision
+ * ranges, a stale base, the last-paragraph guard) stay per-request.
+ */
+export function undecidableReason(
+  change: TrackedChangeNode,
+): NonNullable<DocumentChangeWire['undecidable']> | undefined {
+  if (change.wire.kind === 'move') {
+    return change.validMoveCounterpart && change.moveGroup !== undefined
+      ? undefined
+      : 'unsupported-move'
+  }
+  if (
+    change.wire.kind === 'property' &&
+    (!change.propertiesRange || !change.previousPropertiesFragment)
+  ) {
+    return 'missing-property-snapshot'
+  }
+  return undefined
+}
+
+/** Writes `undecidable` onto every listed change the engine cannot decide. */
+export function markUndecidableChanges(changes: readonly TrackedChangeNode[]) {
+  for (const change of changes) {
+    const reason = undecidableReason(change)
+    if (reason) change.wire.undecidable = reason
+  }
 }
 
 function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
   if (
     changeIds.length === 0 ||
-    changeIds.length > 100 ||
+    changeIds.length > TRACKED_DECISION_MAX_IDS ||
     new Set(changeIds).size !== changeIds.length
   ) {
     throw invalidDecision()
@@ -84,12 +166,14 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
     if (!target) throw invalidDecision()
     targets.set(target.wire.id, target)
     if (target.wire.kind === 'move') {
-      if (!target.validMoveCounterpart || !target.wire.pairId) {
-        throw invalidDecision()
+      // A move is a named group — several wrappers across several ranges —
+      // so deciding any member decides the whole group.
+      if (undecidableReason(target)) throw invalidDecision()
+      for (const member of document.trackedChanges.values()) {
+        if (member.moveGroup !== target.moveGroup) continue
+        if (undecidableReason(member)) throw invalidDecision()
+        targets.set(member.wire.id, member)
       }
-      const counterpart = document.trackedChanges.get(target.wire.pairId)
-      if (!counterpart?.validMoveCounterpart) throw invalidDecision()
-      targets.set(counterpart.wire.id, counterpart)
     }
   }
   return [...targets.values()]
@@ -109,7 +193,7 @@ function resolveRemovalParagraphs(
 ) {
   if (removeParagraphIds.length === 0) return []
   if (
-    removeParagraphIds.length > 100 ||
+    removeParagraphIds.length > TRACKED_DECISION_MAX_IDS ||
     new Set(removeParagraphIds).size !== removeParagraphIds.length
   ) {
     throw invalidDecision()
@@ -135,6 +219,20 @@ function resolveRemovalParagraphs(
     if (inside.length === 0) throw invalidDecision()
     if (!inside.every((target) => target.wire.kind === 'insert')) {
       throw invalidDecision()
+    }
+    // The removal deletes the whole paragraph, so a tracked change inside it
+    // that this decision does not name would be destroyed undecided. Refuse
+    // rather than let a caller erase pending markup by naming the shell.
+    const insideIds = new Set(inside.map((target) => target.wire.id))
+    for (const change of document.trackedChanges.values()) {
+      if (
+        change.partName === anchor.partName &&
+        change.range.start >= anchor.paragraphRange.start &&
+        change.range.end <= anchor.paragraphRange.end &&
+        !insideIds.has(change.wire.id)
+      ) {
+        throw invalidDecision()
+      }
     }
     removals.push({
       anchor,
@@ -218,12 +316,7 @@ function validateTargets(
   action: DocumentTrackedChangeDecisionRequest['action'],
 ) {
   for (const target of targets) {
-    if (
-      target.wire.kind === 'property' &&
-      (!target.propertiesRange || !target.previousPropertiesFragment)
-    ) {
-      throw invalidDecision()
-    }
+    if (undecidableReason(target)) throw invalidDecision()
   }
 
   const ordered = [...targets].sort((left, right) => {

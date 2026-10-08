@@ -109,7 +109,7 @@ describe('DocxWorkspace ribbon', () => {
     ).toHaveProperty('disabled', false)
   })
 
-  it('disables partial emphasis while track changes is on', () => {
+  it('allows partial emphasis while track changes is on', () => {
     mountWorkspace({})
     selectBodyParagraph()
     const field = screen.getByLabelText('Paragraph text')
@@ -122,11 +122,14 @@ describe('DocxWorkspace ribbon', () => {
     openRibbonTab('Review')
     fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
     openRibbonTab('Home')
-    expect(
-      screen.getByRole('button', {
-        name: 'Bold: Partial formatting is not yet recorded as a tracked change',
-      }),
-    ).toHaveProperty('disabled', true)
+    const bold = screen.getByRole('button', { name: 'Bold' })
+    expect(bold).toHaveProperty('disabled', false)
+    // The tracked range formats as a pending draft, not a refused control.
+    fireEvent.click(bold)
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty(
+      'disabled',
+      false,
+    )
   })
 
   it('replaces find hits and lists extracted authorities', () => {

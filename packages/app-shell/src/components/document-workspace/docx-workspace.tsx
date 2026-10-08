@@ -19,6 +19,7 @@ import { DocxModelPages } from './docx-model-pages'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
+import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
@@ -40,7 +41,6 @@ import {
   QueryError,
   WorkspaceRibbon,
   WorkspaceShell,
-  mutationError,
   type DocumentWorkspaceLayout,
 } from './workspace-chrome'
 
@@ -163,6 +163,27 @@ export function DocxWorkspace({
     undoDocument,
     redoDocument,
   } = useWorkspaceCaret({ documentId, model, drafts })
+
+  // One review derivation feeds the ribbon's controls and the Changes panel,
+  // so both surfaces share the active target, the barriers and the dispatch.
+  const changeReview = useChangeReview({
+    documentId,
+    model,
+    changes: changesQuery.data?.changes ?? [],
+    baseVersionId,
+    decision: decideChange,
+    drafts,
+    save,
+    caret: {
+      editingKind,
+      selectParagraph,
+      openEditingStory,
+      closeEditingStory,
+      selectedParagraphId,
+    },
+    onSaved: (version) => setSavedVersion({ documentId, versionId: version }),
+    onNotice: setBanner,
+  })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
   // The toolbar acts on the document selection's ranges, or on the caret's
@@ -327,6 +348,20 @@ export function DocxWorkspace({
           onReplaceOne,
           onReplaceAll,
         }}
+        review={{
+          unavailable: changeReview.unavailable ?? undefined,
+          bulkUnavailable: changeReview.bulkUnavailable,
+          targetUnavailable: changeReview.targetUnavailable,
+          undecidableCount: changeReview.undecidableCount,
+          canPrevious: changeReview.canPrevious,
+          canNext: changeReview.canNext,
+          onPreviousChange: changeReview.goToPrevious,
+          onNextChange: changeReview.goToNext,
+          onAcceptChange: () => changeReview.decideCurrent('accept'),
+          onRejectChange: () => changeReview.decideCurrent('reject'),
+          onAcceptAll: () => changeReview.decideAll('accept'),
+          onRejectAll: () => changeReview.decideAll('reject'),
+        }}
       />
       <DocumentSaveBanners save={save} drafts={drafts} />
       {save.stale ? (
@@ -421,22 +456,7 @@ export function DocxWorkspace({
                 changesOpen={changesOpen}
                 authoritiesOpen={authoritiesOpen}
                 {...commentsPanel.props}
-                changes={changesQuery.data?.changes ?? []}
-                changesPending={decideChange.isPending || save.saving}
-                changesError={mutationError(decideChange.error)}
-                onDecideChange={(action, changeId) => {
-                  refocusCaretBeforeFlight()
-                  decideChange.mutate(
-                    { baseVersionId, action, changeIds: [changeId] },
-                    {
-                      onSuccess: (data) =>
-                        drafts.resetHistoryAfterDecision(
-                          data.versionId,
-                          data.versionNumber,
-                        ),
-                    },
-                  )
-                }}
+                changeReview={changeReview}
                 authorities={authorities}
                 // An authority always names a body paragraph, so selecting
                 // one leaves margin editing the way a body click does before

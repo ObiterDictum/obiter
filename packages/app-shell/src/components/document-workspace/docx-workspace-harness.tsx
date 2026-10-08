@@ -264,6 +264,8 @@ export function mountWorkspace(
     mergeAsync?: ReturnType<typeof vi.fn>
     /** Drives the tracked-change decision path a saved tracked undo uses. */
     decideAsync?: ReturnType<typeof vi.fn>
+    /** The changes the tracked-changes query returns. */
+    changes?: import('@obiter/contracts').DocumentChangeWire[]
     /** Simulates the reload query failing, so a pending baseline cannot resolve. */
     modelError?: () => boolean
     /** Overrides the comments list the panel is fed. */
@@ -311,7 +313,9 @@ export function mountWorkspace(
       orphanedReplies: options.comments?.orphanedReplies ?? [],
     },
   })
-  hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
+  hooks.useDocumentTrackedChanges.mockReturnValue({
+    data: { changes: options.changes ?? [] },
+  })
   hooks.useDocumentCollaborationSync.mockReturnValue({
     data: {
       changed: false,
@@ -339,7 +343,13 @@ export function mountWorkspace(
     idleMutation({ mutateAsync: options.mergeAsync ?? vi.fn() }),
   )
   hooks.useTrackedChangeDecision.mockReturnValue(
-    idleMutation({ mutateAsync: options.decideAsync ?? vi.fn() }),
+    idleMutation({
+      // The review hook dispatches through `mutate` with result callbacks;
+      // the tracked-undo save path uses `mutateAsync`. One mock serves both.
+      mutate: (input: unknown, callbacks?: unknown) =>
+        options.decideAsync?.(input, callbacks),
+      mutateAsync: options.decideAsync ?? vi.fn(),
+    }),
   )
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
 

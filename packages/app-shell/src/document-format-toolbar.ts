@@ -113,12 +113,8 @@ export function documentFormatToolbar(
   )
   const section = sectionFormatState(model, format.section)
   const nothingSelected = target.kind === 'selection' && emphasis.length === 0
-  // A tracked change records a single run, so partial formatting of a range is
-  // not representable yet; fail closed rather than dropping the tracking.
-  const trackedRange =
-    trackChanges && emphasis.some((range) => range.from !== range.to)
   const toggle = (patch: EmphasisPatch) => {
-    if (trackedRange || emphasis.length === 0) return
+    if (emphasis.length === 0) return
     setFormat((current) => {
       let next = current
       for (const range of emphasis) {
@@ -197,14 +193,7 @@ export function documentFormatToolbar(
     )
   }
   return {
-    ...(trackedRange
-      ? {
-          emphasisUnavailable:
-            'Partial formatting is not yet recorded as a tracked change',
-        }
-      : nothingSelected
-        ? { emphasisUnavailable: NOTHING_TO_FORMAT }
-        : {}),
+    ...(nothingSelected ? { emphasisUnavailable: NOTHING_TO_FORMAT } : {}),
     ...(trackChanges
       ? {
           layoutUnavailable: 'Page setup is not recorded as a tracked change',

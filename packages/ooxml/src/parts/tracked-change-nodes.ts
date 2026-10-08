@@ -2,6 +2,7 @@ import type { DocumentChangeWire } from '@obiter/contracts'
 
 import type { ParagraphAnchor, TrackedChangeNode } from '../model'
 import { decodeXmlReferences } from '../xml-lexemes'
+import type { MoveRangeIndex } from './move-ranges'
 import { elementFragment } from './overlay'
 import {
   attributeValue,
@@ -103,6 +104,19 @@ function isParagraphMarkDeletion(element: XmlElement) {
   )
 }
 
+// A moveFrom/moveTo carried on a paragraph mark (the block-move shape) is not
+// a run-content wrapper: deciding it means removing or reviving a whole w:p,
+// which the member-wise decision path does not implement.
+export function isParagraphMarkMove(element: XmlElement) {
+  return (
+    (isWord(element, 'moveFrom') || isWord(element, 'moveTo')) &&
+    !!element.parent &&
+    isWord(element.parent, 'rPr') &&
+    !!element.parent.parent &&
+    isWord(element.parent.parent, 'pPr')
+  )
+}
+
 type ChangeWireCommon = Pick<
   DocumentChangeWire,
   'id' | 'storyPartName' | 'text'
@@ -143,6 +157,7 @@ export function trackedChange(
   element: XmlElement,
   paragraphs: ParagraphAnchor[],
   id: string,
+  moveRanges: MoveRangeIndex,
 ): TrackedChangeNode {
   const elementName = trackedChangeName(element.localName)
   if (!elementName) throw new Error('Unknown tracked-change element')
@@ -201,10 +216,29 @@ export function trackedChange(
           isWord(candidate, expectedPropertiesName),
       )
     : undefined
+  // Word pairs a move by the shared w:name on its range containers; a wrapper
+  // outside any container is tolerated markup paired by a shared w:id.
+  // Anything else stays ungrouped, which is what makes it undecidable.
+  let moveGroup: string | undefined
+  let moveMarkers: TrackedChangeNode['moveMarkers']
+  if (
+    (elementName === 'moveFrom' || elementName === 'moveTo') &&
+    !isParagraphMarkMove(element)
+  ) {
+    const membership = moveRanges.member(element)
+    if (membership.kind === 'member') {
+      moveGroup = membership.key
+      moveMarkers = membership.markers
+    } else if (membership.kind === 'uncontainered' && ooxmlId !== undefined) {
+      moveGroup = `id:${ooxmlId}`
+    }
+  }
   return {
     wire,
     partName,
     range: elementRange(element),
+    ...(moveGroup !== undefined ? { moveGroup } : {}),
+    ...(moveMarkers !== undefined ? { moveMarkers } : {}),
     ...(propertiesParent
       ? { propertiesRange: elementRange(propertiesParent) }
       : {}),

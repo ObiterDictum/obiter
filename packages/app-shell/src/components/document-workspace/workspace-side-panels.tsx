@@ -1,5 +1,4 @@
 import type {
-  DocumentChangeWire,
   DocumentComment,
   DocumentCommentAnchor,
   DocumentCommentReply,
@@ -8,6 +7,7 @@ import type {
 import { DocumentAuthoritiesPanel } from './authorities-panel'
 import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
+import type { ChangeReview } from './use-change-review'
 import type { AuthorityHit } from '../../document-authorities'
 
 export function WorkspaceSidePanels({
@@ -27,10 +27,7 @@ export function WorkspaceSidePanels({
   onResolveComment,
   onReopenComment,
   onRevealCommentAnchor,
-  changes,
-  changesPending,
-  changesError,
-  onDecideChange,
+  changeReview,
   authorities,
   onSelectAuthority,
 }: {
@@ -53,10 +50,8 @@ export function WorkspaceSidePanels({
   onResolveComment: (commentId: string) => void
   onReopenComment: (commentId: string) => void
   onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void
-  changes: DocumentChangeWire[]
-  changesPending: boolean
-  changesError: string | null
-  onDecideChange: (action: 'accept' | 'reject', changeId: string) => void
+  /** The shared review state the ribbon also uses; required with the panel. */
+  changeReview: ChangeReview
   authorities: AuthorityHit[]
   onSelectAuthority: (paragraphId: string) => void
 }) {
@@ -90,12 +85,7 @@ export function WorkspaceSidePanels({
           data-print-hide
           className="w-full rounded-md bg-surface p-4 lg:w-80"
         >
-          <DocumentChangesPanel
-            changes={changes}
-            pending={changesPending}
-            error={changesError}
-            onDecide={onDecideChange}
-          />
+          <DocumentChangesPanel review={changeReview} />
         </div>
       ) : null}
       {authoritiesOpen ? (

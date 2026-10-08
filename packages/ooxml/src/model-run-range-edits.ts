@@ -10,6 +10,7 @@ import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import { patchRunEmphasisXml, type RunEmphasis } from './model-property-edits'
 import { setOverlayReplacement, parseXmlElements } from './parts/overlay'
+import { appendPropertyChange } from './tracked-edit-xml'
 import { replaceTextRunAtAnchor, wordRunInnerTextXml } from './text-run-edit'
 
 // Shared run-splitting primitives. model-run-emphasis composes them for range
@@ -89,6 +90,44 @@ export function applyEmphasisXml(xml: string, emphasis: RunEmphasis) {
   return xml.replace(/<w:r\b[^>]*>/u, (open) => {
     return `${open}${patchRunEmphasisXml('<w:rPr/>', emphasis)}`
   })
+}
+
+/**
+ * The tracked form of `applyEmphasisXml` for a run piece a range split
+ * produced: the patched properties carry a `w:rPrChange` marker holding the
+ * piece's previous properties element, so accepting keeps the new formatting
+ * and rejecting restores exactly what the range replaced. A piece with no
+ * `w:rPr` records an empty previous element — the decision parser requires a
+ * properties fragment to restore, and an empty one means "no direct
+ * formatting".
+ */
+export function applyTrackedEmphasisXml(
+  xml: string,
+  emphasis: RunEmphasis,
+  attributes: string,
+) {
+  const prefix = /^<([^:>\s]+):/u.exec(xml)?.[1] ?? 'w'
+  const pattern = new RegExp(
+    `<${prefix}:rPr\\b[^>]*/>|<${prefix}:rPr\\b[^>]*>[\\s\\S]*?</${prefix}:rPr>`,
+    'u',
+  )
+  const match = pattern.exec(xml)
+  const previous = match?.[0] ?? `<${prefix}:rPr/>`
+  const patched = appendPropertyChange(
+    patchRunEmphasisXml(previous, emphasis),
+    prefix,
+    'rPr',
+    attributes,
+    previous,
+  )
+  if (match) {
+    return `${xml.slice(0, match.index)}${patched}${xml.slice(
+      match.index + match[0].length,
+    )}`
+  }
+  const openEnd = xml.indexOf('>')
+  if (openEnd === -1) throw new OoxmlError('model-node-not-editable')
+  return `${xml.slice(0, openEnd + 1)}${patched}${xml.slice(openEnd + 1)}`
 }
 
 export function splitsSurrogate(value: string, offset: number) {

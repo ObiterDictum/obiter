@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import type {
-  DocumentModelWire,
-  DocumentPresence,
-  DocumentVersionLineage,
+import {
+  TRACKED_DECISION_MAX_IDS,
+  type DocumentModelWire,
+  type DocumentPresence,
+  type DocumentVersionLineage,
 } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {
@@ -29,9 +30,6 @@ import type { WorkspaceDrafts } from './use-workspace-drafts'
  * costs requests but never history; the cap keeps that bounded.
  */
 const MAX_ISOLATION_ATTEMPTS = 12
-
-/** The tracked-change decision route's own change-id cap. */
-const DOCUMENT_TRACKED_DECISION_MAX = 100
 
 export type SaveState =
   | { status: 'saved' }
@@ -317,8 +315,8 @@ export function useDocumentSave({
         ),
       ]
       if (
-        changeIds.length > DOCUMENT_TRACKED_DECISION_MAX ||
-        removeParagraphIds.length > DOCUMENT_TRACKED_DECISION_MAX
+        changeIds.length > TRACKED_DECISION_MAX_IDS ||
+        removeParagraphIds.length > TRACKED_DECISION_MAX_IDS
       ) {
         setFailure(
           'This undo reverses more tracked changes than one decision can carry. Reload and review them in Review \u25b8 Changes.',
@@ -435,6 +433,8 @@ export function useDocumentSave({
     save: () => void save(),
     retry: () => void save(),
     reload: () => void reload(),
+    /** A decision route's 409 lands here too: the stale banner is shared. */
+    markStale: () => setStale(true),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
     discardRefused: () => {
