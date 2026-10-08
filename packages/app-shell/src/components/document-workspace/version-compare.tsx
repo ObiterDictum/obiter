@@ -128,7 +128,7 @@ export function DocumentComparisonResult({
     <div className="flex flex-col gap-2" data-version-comparison>
       <p className="text-xs text-muted">
         v{data.base.versionNumber} → v{data.target.versionNumber}
-        {data.identical ? ' — identical' : null}
+        {data.identical ? ' - identical' : null}
       </p>
       {data.identical ? (
         <p className="text-sm text-ink">These versions are identical.</p>
