@@ -311,9 +311,46 @@ describe('tracked change decisions', () => {
     ).toBe(true)
   })
 
-  it('fails closed for an orphan move and leaves every part clean', async () => {
+  it('pairs a move whose halves share w:name but not w:id', async () => {
+    // Word writes a distinct w:id on each half of a move and pairs them by
+    // w:name; the fixture uses that shape so every change it carries is
+    // decidable.
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const moveFrom = document.model.changes.find(
+      ({ elementName }) => elementName === 'moveFrom',
+    )
+    const moveTo = document.model.changes.find(
+      ({ elementName }) => elementName === 'moveTo',
+    )
+    if (!moveFrom || !moveTo || moveFrom.ooxmlId === moveTo.ooxmlId) {
+      throw new Error('Fixture move pair is missing.')
+    }
+    expect(moveFrom.pairId).toBe(moveTo.id)
+    expect(moveTo.pairId).toBe(moveFrom.id)
+
+    // Deciding either half resolves both in the same decision.
+    const applied = applyTrackedChangeDecisions(
+      document,
+      [moveFrom.id],
+      'accept',
+    )
+    expect(new Set(applied)).toEqual(new Set([moveFrom.id, moveTo.id]))
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+    expect(xml).not.toContain('moveFrom')
+    expect(xml).not.toContain('moveTo')
+    expect(xml).toContain('<w:t>To</w:t>')
+  })
+
+  it('fails closed for an orphan move and leaves every part clean', async () => {
+    // Distinct w:ids and no w:name is an unpaired move — deciding it, alone
+    // or inside a bulk request, is refused rather than resolved half-way.
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1"><w:r><w:t>Inserted</w:t></w:r></w:ins><w:moveFrom w:id="2"><w:r><w:delText>Orphan from</w:delText></w:r></w:moveFrom><w:r><w:t>Keeps</w:t></w:r></w:p></w:body></w:document>',
+      ),
     )
     const orphan = document.model.changes.find(
       ({ elementName }) => elementName === 'moveFrom',
@@ -322,12 +359,15 @@ describe('tracked change decisions', () => {
       ({ elementName }) => elementName === 'ins',
     )
     if (!orphan || !valid) throw new Error('Fixture changes are missing.')
+    expect(orphan.pairId).toBeUndefined()
 
-    expect(() =>
-      applyTrackedChangeDecisions(document, [valid.id, orphan.id], 'accept'),
-    ).toThrowError(
-      expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
-    )
+    for (const ids of [[orphan.id], [valid.id, orphan.id]]) {
+      expect(() =>
+        applyTrackedChangeDecisions(document, ids, 'accept'),
+      ).toThrowError(
+        expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
+      )
+    }
     expect(
       [...document.sourceParts.values()].every(({ dirty }) => !dirty),
     ).toBe(true)

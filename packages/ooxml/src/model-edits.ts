@@ -37,6 +37,7 @@ import {
 } from './section-edits'
 import {
   applyRunEmphasisRanges,
+  applyTrackedRunEmphasisRanges,
   type RunEmphasisRange,
 } from './model-run-emphasis'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
@@ -115,6 +116,13 @@ export function applyDocumentEdits(
   // boundaries from all of them must form one split per run; applying them one
   // at a time would let each split overwrite the previous run structure.
   const rangeEmphasis = new Map<ParagraphAnchor, RunEmphasisRange[]>()
+  // The tracked form collects the ranges with the index of the operation that
+  // produced them, so the changes a deferred split creates still record
+  // against the right batch entry.
+  const trackedRangeEmphasis = new Map<
+    ParagraphAnchor,
+    { ranges: RunEmphasisRange[]; operationIndex: number }
+  >()
   for (const [operationIndex, operation] of planned.entries()) {
     const paragraph = 'paragraph' in operation ? operation.paragraph : undefined
     const deletedLater = paragraph ? deletedIds.has(paragraph.wire.id) : false
@@ -164,18 +172,32 @@ export function applyDocumentEdits(
           operation.from !== undefined &&
           operation.to !== undefined
         ) {
-          // There is no tracked rPrChange writer for a range split. Applying it
-          // untracked would silently discard the requested tracking, and
-          // skipping it would report a saved formatting change that was never
-          // written. Refuse it so the client holds and surfaces the slot.
-          if (trackedWriter) throw new OoxmlError('model-node-not-editable')
-          const ranges = rangeEmphasis.get(operation.paragraph) ?? []
-          ranges.push({
-            from: operation.from,
-            to: operation.to,
-            ...runEmphasisFields(operation),
-          })
-          rangeEmphasis.set(operation.paragraph, ranges)
+          if (trackedWriter) {
+            // The tracked split marks every covered piece's properties with
+            // its own `w:rPrChange`; see applyTrackedRunEmphasisRanges.
+            const entry = trackedRangeEmphasis.get(operation.paragraph)
+            const range = {
+              from: operation.from,
+              to: operation.to,
+              ...runEmphasisFields(operation),
+            }
+            if (entry) {
+              entry.ranges.push(range)
+            } else {
+              trackedRangeEmphasis.set(operation.paragraph, {
+                ranges: [range],
+                operationIndex,
+              })
+            }
+          } else {
+            const ranges = rangeEmphasis.get(operation.paragraph) ?? []
+            ranges.push({
+              from: operation.from,
+              to: operation.to,
+              ...runEmphasisFields(operation),
+            })
+            rangeEmphasis.set(operation.paragraph, ranges)
+          }
         } else {
           throw new OoxmlError('invalid-document-edit')
         }
@@ -445,13 +467,15 @@ export function applyDocumentEdits(
 
     // A tracked operation names its reversal by the persisted `w:id`s it just
     // created. Taking them per operation keeps each history step's reversal a
-    // unit: a replacement's `del`/`ins` pair is never split from its run.
-    if (trackedWriter && lineage && paragraph) {
+    // unit: a replacement's `del`/`ins` pair is never split from its run. The
+    // drain runs even when the operation has no paragraph so a stray change
+    // cannot leak into the deferred range-emphasis recording below.
+    if (trackedWriter && lineage) {
       const created = trackedWriter.takeChanges()
       if (created.length > 0) {
         recordTrackedChanges(lineage, created, {
           operationIndex,
-          fromParagraphId: paragraph.wire.id,
+          fromParagraphId: paragraph?.wire.id ?? null,
           fromRunId: trackedRunIdOf(operation),
         })
       }
@@ -460,5 +484,26 @@ export function applyDocumentEdits(
 
   for (const [paragraph, ranges] of rangeEmphasis) {
     applyRunEmphasisRanges(document, paragraph, ranges, lineage)
+  }
+  if (trackedWriter) {
+    for (const [paragraph, entry] of trackedRangeEmphasis) {
+      applyTrackedRunEmphasisRanges(
+        document,
+        paragraph,
+        entry.ranges,
+        trackedWriter,
+        lineage,
+      )
+      if (lineage) {
+        const created = trackedWriter.takeChanges()
+        if (created.length > 0) {
+          recordTrackedChanges(lineage, created, {
+            operationIndex: entry.operationIndex,
+            fromParagraphId: paragraph.wire.id,
+            fromRunId: null,
+          })
+        }
+      }
+    }
   }
 }

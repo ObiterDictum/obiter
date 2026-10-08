@@ -201,10 +201,17 @@ export function trackedChange(
           isWord(candidate, expectedPropertiesName),
       )
     : undefined
+  // Word pairs a move by `w:name`; documents without names pair by a shared
+  // `w:id`. Anything else stays unpaired, which is what makes it undecidable.
+  const moveKey =
+    elementName === 'moveFrom' || elementName === 'moveTo'
+      ? (attributeValue(element, WORD_NAMESPACE, 'name') ?? ooxmlId)
+      : undefined
   return {
     wire,
     partName,
     range: elementRange(element),
+    ...(moveKey !== undefined ? { moveKey } : {}),
     ...(propertiesParent
       ? { propertiesRange: elementRange(propertiesParent) }
       : {}),

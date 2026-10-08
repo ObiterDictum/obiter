@@ -1,4 +1,7 @@
-import type { DocumentTrackedChangeDecisionRequest } from '@obiter/contracts'
+import {
+  TRACKED_DECISION_MAX_IDS,
+  type DocumentTrackedChangeDecisionRequest,
+} from '@obiter/contracts'
 
 import { OoxmlError, type OoxmlDocument, type TrackedChangeNode } from './model'
 import { requireEditablePart } from './model-edit-overlay'
@@ -72,7 +75,7 @@ export function applyTrackedChangeDecisions(
 function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
   if (
     changeIds.length === 0 ||
-    changeIds.length > 100 ||
+    changeIds.length > TRACKED_DECISION_MAX_IDS ||
     new Set(changeIds).size !== changeIds.length
   ) {
     throw invalidDecision()
@@ -109,7 +112,7 @@ function resolveRemovalParagraphs(
 ) {
   if (removeParagraphIds.length === 0) return []
   if (
-    removeParagraphIds.length > 100 ||
+    removeParagraphIds.length > TRACKED_DECISION_MAX_IDS ||
     new Set(removeParagraphIds).size !== removeParagraphIds.length
   ) {
     throw invalidDecision()
@@ -135,6 +138,20 @@ function resolveRemovalParagraphs(
     if (inside.length === 0) throw invalidDecision()
     if (!inside.every((target) => target.wire.kind === 'insert')) {
       throw invalidDecision()
+    }
+    // The removal deletes the whole paragraph, so a tracked change inside it
+    // that this decision does not name would be destroyed undecided. Refuse
+    // rather than let a caller erase pending markup by naming the shell.
+    const insideIds = new Set(inside.map((target) => target.wire.id))
+    for (const change of document.trackedChanges.values()) {
+      if (
+        change.partName === anchor.partName &&
+        change.range.start >= anchor.paragraphRange.start &&
+        change.range.end <= anchor.paragraphRange.end &&
+        !insideIds.has(change.wire.id)
+      ) {
+        throw invalidDecision()
+      }
     }
     removals.push({
       anchor,
