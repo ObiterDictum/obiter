@@ -167,26 +167,24 @@ function HistoricalDocxPages({
 }) {
   const modelQuery = useDocumentModel(documentId, { versionId })
   const model = modelQuery.data?.model
+  if (modelQuery.isLoading) return <LoadingBlock label="Loading version" />
+  if (modelQuery.isError || !model) {
+    return (
+      <QueryError
+        error={modelQuery.error}
+        fallback="This version could not be loaded."
+      />
+    )
+  }
   return (
-    <>
-      {modelQuery.isLoading ? (
-        <LoadingBlock label="Loading version" />
-      ) : modelQuery.isError || !model ? (
-        <QueryError
-          error={modelQuery.error}
-          fallback="This version could not be loaded."
-        />
-      ) : (
-        <DocumentDesk>
-          <ReadOnlyPages
-            model={model}
-            documentId={documentId}
-            versionId={versionId}
-            zoom={zoom}
-          />
-        </DocumentDesk>
-      )}
-    </>
+    <DocumentDesk>
+      <ReadOnlyPages
+        model={model}
+        documentId={documentId}
+        versionId={versionId}
+        zoom={zoom}
+      />
+    </DocumentDesk>
   )
 }
 
@@ -250,26 +248,25 @@ function HistoricalPdfPages({
   const view = useDocumentPdfView(documentId, { versionId })
   const [pageIndex, setPageIndex] = useState(0)
 
+  if (view.isLoading) return <LoadingBlock label="Loading PDF layout" />
+  if (view.isError) {
+    return (
+      <QueryError
+        error={view.error}
+        fallback="The PDF layout could not be loaded."
+      />
+    )
+  }
+  if (!view.data) return null
   return (
-    <>
-      {view.isLoading ? (
-        <LoadingBlock label="Loading PDF layout" />
-      ) : view.isError ? (
-        <QueryError
-          error={view.error}
-          fallback="The PDF layout could not be loaded."
-        />
-      ) : view.data ? (
-        <DocumentDesk>
-          <DocumentPdfPages
-            view={view.data}
-            pageIndex={pageIndex}
-            onPageIndexChange={setPageIndex}
-            zoom={zoom}
-          />
-        </DocumentDesk>
-      ) : null}
-    </>
+    <DocumentDesk>
+      <DocumentPdfPages
+        view={view.data}
+        pageIndex={pageIndex}
+        onPageIndexChange={setPageIndex}
+        zoom={zoom}
+      />
+    </DocumentDesk>
   )
 }
 
@@ -282,22 +279,21 @@ function HistoricalText({
 }) {
   const textQuery = useDocumentText(documentId, { versionId })
 
+  if (textQuery.isLoading) return <LoadingBlock label="Loading document text" />
+  if (textQuery.isError) {
+    return (
+      <QueryError
+        error={textQuery.error}
+        fallback="The document text could not be loaded."
+      />
+    )
+  }
+  if (!textQuery.data) return null
   return (
-    <>
-      {textQuery.isLoading ? (
-        <LoadingBlock label="Loading document text" />
-      ) : textQuery.isError ? (
-        <QueryError
-          error={textQuery.error}
-          fallback="The document text could not be loaded."
-        />
-      ) : textQuery.data ? (
-        <DocumentDesk>
-          <pre className="mx-auto w-full max-w-3xl rounded bg-surface p-6 text-sm leading-relaxed whitespace-pre-wrap text-ink">
-            {textQuery.data.text}
-          </pre>
-        </DocumentDesk>
-      ) : null}
-    </>
+    <DocumentDesk>
+      <pre className="mx-auto w-full max-w-3xl rounded bg-surface p-6 text-sm leading-relaxed whitespace-pre-wrap text-ink">
+        {textQuery.data.text}
+      </pre>
+    </DocumentDesk>
   )
 }
