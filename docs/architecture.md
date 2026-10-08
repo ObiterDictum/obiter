@@ -2158,7 +2158,9 @@ against the selected version's model before a row is written, and the row
 carries only ids and an offset — never document text.
 
 Decision: version comparison is a pure function over the two versions' stored
-models (`services/api/src/document-compare.ts`), served by
+models (`services/api/src/document-compare.ts` orchestrating
+`document-compare-align.ts` for paragraph pairing and
+`document-compare-word-diff.ts` for the bounded token diff), served by
 `GET /api/documents/:id/compare?baseVersionId=&targetVersionId=`. Paragraph
 pairing is tiered: `w14:paraId` anchors the alignment, gap leftovers pair on
 identical text in occurrence order, and the remainder pairs on word overlap

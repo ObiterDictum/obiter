@@ -3081,7 +3081,9 @@
                     <code>baseVersionId</code> and <code>targetVersionId</code>;
                     each side passes the shared version resolver, so a denied
                     version cannot be reached on either side of the pair. The
-                    pure comparison (<code>document-compare.ts</code>) aligns
+                    pure comparison (<code>document-compare.ts</code>
+                    orchestrating <code>document-compare-align.ts</code> and
+                    <code>document-compare-word-diff.ts</code>) aligns
                     paragraphs by preserved <code>w14:paraId</code>, then
                     identical text, then a bounded word-overlap pass — an edit
                     across the canonicalisation boundary reports 'modified',

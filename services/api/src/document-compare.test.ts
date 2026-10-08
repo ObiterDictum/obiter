@@ -297,6 +297,51 @@ describe('compareDocumentModels', () => {
     expect(result.entries[0]).toMatchObject({ type: 'added' })
   })
 
+  it('flags truncation when the overflowing difference is a modified pair', () => {
+    // Past the cap the word diff is skipped work, but the pair still counts:
+    // a text difference after a full entry list must set entriesTruncated
+    // even though no entry was ever built for it.
+    const filler = Array.from(
+      { length: DOCUMENT_COMPARISON_ENTRY_MAX_COUNT },
+      (_, index) => paragraph(`n${index}`, `New ${index}.`),
+    )
+    const shared = [
+      paragraph('s1', 'Same text.', { sourceParaId: 's1' }),
+      paragraph('s2', 'Old wording.', { sourceParaId: 's2' }),
+    ]
+    const result = compareDocumentModels(
+      model(shared),
+      model([
+        ...filler,
+        paragraph('s1', 'Same text.', { sourceParaId: 's1' }),
+        paragraph('s2', 'New wording.', { sourceParaId: 's2' }),
+      ]),
+    )
+    expect(result.entries).toHaveLength(DOCUMENT_COMPARISON_ENTRY_MAX_COUNT)
+    expect(result.entries.every((entry) => entry.type === 'added')).toBe(true)
+    expect(result.truncated).toBe(true)
+  })
+
+  it('does not flag truncation for identical pairs beyond the cap', () => {
+    // The early exit must still tell a real difference from an unchanged
+    // pair: an exact-cap result with an identical tail is complete, not
+    // truncated.
+    const filler = Array.from(
+      { length: DOCUMENT_COMPARISON_ENTRY_MAX_COUNT },
+      (_, index) => paragraph(`n${index}`, `New ${index}.`),
+    )
+    const shared = [
+      paragraph('s1', 'Same text.', { sourceParaId: 's1' }),
+      paragraph('s2', 'Also same.', { sourceParaId: 's2' }),
+    ]
+    const result = compareDocumentModels(
+      model(shared),
+      model([...filler, ...shared]),
+    )
+    expect(result.entries).toHaveLength(DOCUMENT_COMPARISON_ENTRY_MAX_COUNT)
+    expect(result.truncated).toBe(false)
+  })
+
   it('pairs duplicate identical paragraphs by occurrence, not uniqueness', () => {
     // Real documents are full of empty spacer paragraphs. Requiring a text to
     // be gap-unique left every one of them unmatched, so even a version
