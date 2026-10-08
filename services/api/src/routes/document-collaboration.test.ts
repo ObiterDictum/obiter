@@ -140,11 +140,26 @@ describe('document collaboration route gates', () => {
 describe('collaboration sync and presence', () => {
   it('polls authoritative version metadata and returns only sorted cursor references', async () => {
     const presence = new DocumentPresenceRegistry()
-    presence.update('org_1', 'doc_1', 'usr_z', cursor)
-    presence.update('org_1', 'doc_1', 'usr_a', {
-      ...cursor,
-      offset: 1,
-    })
+    const scope = {
+      organisationId: 'org_1',
+      matterId: 'mat_1',
+      documentId: 'doc_1',
+      versionId: 'ver_1',
+      clientId: 'tab_1',
+    }
+    presence.update({ ...scope, userId: 'usr_z' }, cursor)
+    presence.update(
+      { ...scope, userId: 'usr_a' },
+      {
+        ...cursor,
+        offset: 1,
+      },
+    )
+    // Presence heartbeated against a superseded version stays invisible.
+    presence.update(
+      { ...scope, userId: 'usr_stale', versionId: 'ver_old' },
+      cursor,
+    )
     const route = collaborationApp(new EditDatabase(), presence)
 
     const unchanged = await route.app.request(
@@ -162,8 +177,12 @@ describe('collaboration sync and presence', () => {
       currentVersionNumber: 1,
       changed: false,
       participants: [
-        { userId: 'usr_a', cursor: { ...cursor, offset: 1 } },
-        { userId: 'usr_z', cursor },
+        {
+          userId: 'usr_a',
+          clientId: 'tab_1',
+          cursor: { ...cursor, offset: 1 },
+        },
+        { userId: 'usr_z', clientId: 'tab_1', cursor },
       ],
     })
     expect(Object.keys(body)).toEqual([
@@ -223,12 +242,22 @@ describe('collaboration sync and presence', () => {
       presenceRequest(null),
     )
     expect(cleared.status).toBe(204)
-    expect(presence.read('org_1', 'doc_1')).toEqual([])
+    expect(
+      presence.read({
+        organisationId: 'org_1',
+        documentId: 'doc_1',
+        versionId: 'ver_1',
+      }),
+    ).toEqual([])
     expect(database.audits).toEqual([])
     expect(database.transactionCommands).toEqual([])
     expect(database.versions.size).toBe(1)
     expect(route.storage.binary.get(sourceKey)).toEqual(original)
-    expect(route.storage.textWrites).toEqual([])
+    // Cursor validation runs against the cached model artifact — the only
+    // text write is the derived model.json, never source bytes.
+    expect(route.storage.textWrites.map(({ key }) => key)).toEqual([
+      expect.stringContaining('/model.json'),
+    ])
   })
 
   it('rejects content-bearing or unresolved cursor updates', async () => {

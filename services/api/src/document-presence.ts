@@ -1,13 +1,50 @@
 import type { DocumentCursor, DocumentPresence } from '@obiter/contracts'
 import { DOCUMENT_COLLABORATION_PARTICIPANT_MAX_COUNT } from '@obiter/contracts'
-import { parseDocx } from '@obiter/ooxml'
 import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
+import { getDocumentModel } from './document-model-store'
 import type { StorageService } from './storage'
 
 const PRESENCE_DOCUMENT_MAX_COUNT = 1_000
-const PRESENCE_EXPIRY_MS = 15_000
+export const PRESENCE_EXPIRY_MS = 15_000
+
+/** One heartbeat row's identity: document scope, account, and client tab. */
+export interface DocumentPresenceScope {
+  organisationId: string
+  matterId: string
+  documentId: string
+  versionId: string
+  userId: string
+  clientId: string
+}
+
+/**
+ * The collaboration route's presence seam. Production wires the Postgres
+ * store (`PostgresDocumentPresence`) so presence is shared between API
+ * instances; tests inject `DocumentPresenceRegistry`, the in-memory
+ * implementation, when no database is available. Implementations may answer
+ * synchronously — the route awaits either.
+ *
+ * `cursor: null` is a leave: it removes the caller's own (user, client)
+ * heartbeat row only. Reads return live cursors anchored to the version the
+ * reader resolved, so presence written against a superseded version stops
+ * matching without a delete.
+ */
+export interface DocumentPresenceBackend {
+  update(
+    scope: DocumentPresenceScope,
+    cursor: DocumentCursor | null,
+  ): void | Promise<void>
+  read(scope: {
+    organisationId: string
+    documentId: string
+    versionId: string
+  }): DocumentPresence[] | Promise<DocumentPresence[]>
+}
 
 type PresenceEntry = {
+  userId: string
+  clientId: string
+  versionId: string
   cursor: DocumentCursor
   expiresAt: number
 }
@@ -23,59 +60,67 @@ export class DocumentPresenceReadError extends Error {
   }
 }
 
-export class DocumentPresenceRegistry {
+export class DocumentPresenceRegistry implements DocumentPresenceBackend {
   private readonly buckets = new Map<string, PresenceBucket>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  update(
-    organisationId: string,
-    documentId: string,
-    userId: string,
-    cursor: DocumentCursor | null,
-  ) {
+  update(scope: DocumentPresenceScope, cursor: DocumentCursor | null) {
     const now = this.now()
     this.removeExpired(now)
-    const key = bucketKey(organisationId, documentId)
+    const key = bucketKey(scope.organisationId, scope.documentId)
     const existing = this.buckets.get(key)
+    const participantKey = participantKeyOf(scope.userId, scope.clientId)
 
     if (cursor === null) {
       if (!existing) return
-      existing.participants.delete(userId)
+      existing.participants.delete(participantKey)
       if (existing.participants.size === 0) this.buckets.delete(key)
       return
     }
 
     const bucket = existing ?? this.createBucket(key)
     if (
-      !bucket.participants.has(userId) &&
+      !bucket.participants.has(participantKey) &&
       bucket.participants.size >= DOCUMENT_COLLABORATION_PARTICIPANT_MAX_COUNT
     ) {
       const oldest = [...bucket.participants.entries()].sort(
-        ([leftUserId, left], [rightUserId, right]) =>
-          left.expiresAt - right.expiresAt ||
-          compareUserIds(leftUserId, rightUserId),
+        ([leftKey, left], [rightKey, right]) =>
+          left.expiresAt - right.expiresAt || compareStrings(leftKey, rightKey),
       )[0]
       if (oldest) bucket.participants.delete(oldest[0])
     }
-    bucket.participants.set(userId, {
+    bucket.participants.set(participantKey, {
+      userId: scope.userId,
+      clientId: scope.clientId,
+      versionId: scope.versionId,
       cursor: { ...cursor },
       expiresAt: now + PRESENCE_EXPIRY_MS,
     })
     this.touch(key, bucket)
   }
 
-  read(organisationId: string, documentId: string): DocumentPresence[] {
+  read(scope: {
+    organisationId: string
+    documentId: string
+    versionId: string
+  }): DocumentPresence[] {
     const now = this.now()
     this.removeExpired(now)
-    const key = bucketKey(organisationId, documentId)
+    const key = bucketKey(scope.organisationId, scope.documentId)
     const bucket = this.buckets.get(key)
     if (!bucket) return []
     this.touch(key, bucket)
-    return [...bucket.participants.entries()]
-      .sort(([left], [right]) => compareUserIds(left, right))
-      .map(([userId, entry]) => ({
-        userId,
+    return [...bucket.participants.values()]
+      .filter((entry) => entry.versionId === scope.versionId)
+      .sort(
+        (left, right) =>
+          compareStrings(left.userId, right.userId) ||
+          compareStrings(left.clientId, right.clientId),
+      )
+      .map((entry) => ({
+        userId: entry.userId,
+        ...(entry.clientId === '' ? {} : { clientId: entry.clientId }),
         cursor: { ...entry.cursor },
       }))
   }
@@ -93,8 +138,8 @@ export class DocumentPresenceRegistry {
 
   private removeExpired(now: number) {
     for (const [key, bucket] of this.buckets) {
-      for (const [userId, entry] of bucket.participants) {
-        if (entry.expiresAt <= now) bucket.participants.delete(userId)
+      for (const [participantKey, entry] of bucket.participants) {
+        if (entry.expiresAt <= now) bucket.participants.delete(participantKey)
       }
       if (bucket.participants.size === 0) this.buckets.delete(key)
     }
@@ -106,6 +151,12 @@ export class DocumentPresenceRegistry {
   }
 }
 
+/**
+ * Validates a heartbeat cursor against the version it claims to point into.
+ * The check runs on the stored, cached model — the same artifact /model
+ * serves — so heartbeat validation never re-parses source bytes on the
+ * serving loop.
+ */
 export async function validateDocumentCursor(
   storage: StorageService,
   version: DocumentVersionRecord,
@@ -117,24 +168,28 @@ export async function validateDocumentCursor(
     documentId: version.matterDocumentId,
     versionId: version.id,
   })
-  if (version.objectKey !== expectedKey || !storage.readBinary) {
+  if (version.objectKey !== expectedKey) {
     throw new DocumentPresenceReadError()
   }
 
+  let model
   try {
-    const source = await storage.readBinary(version.objectKey)
-    const document = await parseDocx(source)
-    const paragraph = document.model.stories
-      .find(({ kind }) => kind === 'document')
-      ?.paragraphs.find(({ id }) => id === cursor.paragraphId)
-    const run = paragraph?.runs.find(({ id }) => id === cursor.runId)
-    return run !== undefined && cursor.offset <= run.text.length
+    model = await getDocumentModel(storage, version)
   } catch {
     throw new DocumentPresenceReadError()
   }
+  const paragraph = model.stories
+    .find(({ kind }) => kind === 'document')
+    ?.paragraphs.find(({ id }) => id === cursor.paragraphId)
+  const run = paragraph?.runs.find(({ id }) => id === cursor.runId)
+  return run !== undefined && cursor.offset <= run.text.length
 }
 
-function compareUserIds(left: string, right: string) {
+function participantKeyOf(userId: string, clientId: string) {
+  return `${userId} ${clientId}`
+}
+
+function compareStrings(left: string, right: string) {
   if (left === right) return 0
   return left < right ? -1 : 1
 }
