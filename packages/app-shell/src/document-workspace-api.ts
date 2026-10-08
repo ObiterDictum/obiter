@@ -17,6 +17,7 @@ import type {
   DocumentCommentReplyCreateRequest,
   DocumentCommentReplyCreateResponse,
   DocumentCommentResolveResponse,
+  DocumentCompareResponse,
   DocumentEditRequest,
   DocumentEditResponse,
   DocumentModelResponse,
@@ -29,46 +30,119 @@ import type {
 import { apiFetch, apiFetchBlob, apiFetchBlobResult } from './api'
 import { documentsKeys } from './documents'
 
+// A historical version's reads are cached under the version id, never under
+// the current key — a selected version must not render cached current content
+// nor leak its own content into the current view.
+const CURRENT_VERSION_KEY = 'current'
+
 export const workspaceKeys = {
-  model: (documentId: string) =>
-    [...documentsKeys.all, 'model', documentId] as const,
-  pdfView: (documentId: string) =>
-    [...documentsKeys.all, 'pdf-view', documentId] as const,
-  text: (documentId: string) =>
-    [...documentsKeys.all, 'text', documentId] as const,
+  model: (documentId: string, versionId?: string) =>
+    [
+      ...documentsKeys.all,
+      'model',
+      documentId,
+      versionId ?? CURRENT_VERSION_KEY,
+    ] as const,
+  pdfView: (documentId: string, versionId?: string) =>
+    [
+      ...documentsKeys.all,
+      'pdf-view',
+      documentId,
+      versionId ?? CURRENT_VERSION_KEY,
+    ] as const,
+  text: (documentId: string, versionId?: string) =>
+    [
+      ...documentsKeys.all,
+      'text',
+      documentId,
+      versionId ?? CURRENT_VERSION_KEY,
+    ] as const,
   comments: (documentId: string) =>
     [...documentsKeys.all, 'comments', documentId] as const,
-  trackedChanges: (documentId: string) =>
-    [...documentsKeys.all, 'tracked-changes', documentId] as const,
+  trackedChanges: (documentId: string, versionId?: string) =>
+    [
+      ...documentsKeys.all,
+      'tracked-changes',
+      documentId,
+      versionId ?? CURRENT_VERSION_KEY,
+    ] as const,
   sync: (documentId: string) =>
     [...documentsKeys.all, 'collaboration-sync', documentId] as const,
-  media: (documentId: string) =>
-    [...documentsKeys.all, 'media', documentId] as const,
+  media: (documentId: string, versionId?: string) =>
+    [
+      ...documentsKeys.all,
+      'media',
+      documentId,
+      versionId ?? CURRENT_VERSION_KEY,
+    ] as const,
+  compare: (documentId: string) =>
+    [...documentsKeys.all, 'compare', documentId] as const,
 }
 
-export function documentModelQueryOptions(documentId: string) {
-  return queryOptions({
-    queryKey: workspaceKeys.model(documentId),
-    queryFn: () =>
-      apiFetch<DocumentModelResponse>(`/api/documents/${documentId}/model`),
-  })
+/** The `?versionId=` selector the version-aware read routes share. */
+function versionQuery(versionId: string | undefined) {
+  return versionId === undefined
+    ? ''
+    : `?versionId=${encodeURIComponent(versionId)}`
 }
 
-export function documentPdfViewQueryOptions(documentId: string) {
+export function documentModelQueryOptions(
+  documentId: string,
+  versionId?: string,
+) {
   return queryOptions({
-    queryKey: workspaceKeys.pdfView(documentId),
+    queryKey: workspaceKeys.model(documentId, versionId),
     queryFn: () =>
-      apiFetch<DocumentPdfViewResponse>(
-        `/api/documents/${documentId}/pdf-view`,
+      apiFetch<DocumentModelResponse>(
+        `/api/documents/${documentId}/model${versionQuery(versionId)}`,
       ),
   })
 }
 
-export function documentTextQueryOptions(documentId: string) {
+export function documentPdfViewQueryOptions(
+  documentId: string,
+  versionId?: string,
+) {
   return queryOptions({
-    queryKey: workspaceKeys.text(documentId),
+    queryKey: workspaceKeys.pdfView(documentId, versionId),
     queryFn: () =>
-      apiFetch<DocumentTextResponse>(`/api/documents/${documentId}/text`),
+      apiFetch<DocumentPdfViewResponse>(
+        `/api/documents/${documentId}/pdf-view${versionQuery(versionId)}`,
+      ),
+  })
+}
+
+export function documentTextQueryOptions(
+  documentId: string,
+  versionId?: string,
+) {
+  return queryOptions({
+    queryKey: workspaceKeys.text(documentId, versionId),
+    queryFn: () =>
+      apiFetch<DocumentTextResponse>(
+        `/api/documents/${documentId}/text${versionQuery(versionId)}`,
+      ),
+  })
+}
+
+export function documentCompareQueryOptions(
+  documentId: string,
+  baseVersionId: string,
+  targetVersionId: string,
+) {
+  const search =
+    `?baseVersionId=${encodeURIComponent(baseVersionId)}` +
+    `&targetVersionId=${encodeURIComponent(targetVersionId)}`
+  return queryOptions({
+    queryKey: [
+      ...workspaceKeys.compare(documentId),
+      baseVersionId,
+      targetVersionId,
+    ] as const,
+    queryFn: () =>
+      apiFetch<DocumentCompareResponse>(
+        `/api/documents/${documentId}/compare${search}`,
+      ),
   })
 }
 
@@ -82,12 +156,15 @@ export function documentCommentsQueryOptions(documentId: string) {
   })
 }
 
-export function documentTrackedChangesQueryOptions(documentId: string) {
+export function documentTrackedChangesQueryOptions(
+  documentId: string,
+  versionId?: string,
+) {
   return queryOptions({
-    queryKey: workspaceKeys.trackedChanges(documentId),
+    queryKey: workspaceKeys.trackedChanges(documentId, versionId),
     queryFn: () =>
       apiFetch<DocumentTrackedChangeListResponse>(
-        `/api/documents/${documentId}/tracked-changes`,
+        `/api/documents/${documentId}/tracked-changes${versionQuery(versionId)}`,
       ),
   })
 }
@@ -113,11 +190,15 @@ export function documentCollaborationSyncQueryOptions(
   })
 }
 
-export function useDocumentImageUrls(documentId: string, partNames: string[]) {
+export function useDocumentImageUrls(
+  documentId: string,
+  partNames: string[],
+  versionId?: string,
+) {
   const queries = useQueries({
     queries: partNames.map((partName) => ({
-      queryKey: [...workspaceKeys.media(documentId), partName],
-      queryFn: () => loadDocumentImage(documentId, partName),
+      queryKey: [...workspaceKeys.media(documentId, versionId), partName],
+      queryFn: () => loadDocumentImage(documentId, partName, versionId),
       gcTime: 0,
     })),
   })
@@ -161,10 +242,15 @@ const BROWSER_IMAGE = /^image\/(png|jpeg|gif|bmp|webp|svg\+xml)$/
  * loads. Do not move these bytes into an `<object>`, `<embed>`, `<iframe>` or
  * `innerHTML`, all of which do.
  */
-async function loadDocumentImage(documentId: string, partName: string) {
-  const blob = await apiFetchBlob(
-    `/api/documents/${documentId}/media?part=${encodeURIComponent(partName)}`,
-  )
+async function loadDocumentImage(
+  documentId: string,
+  partName: string,
+  versionId?: string,
+) {
+  const search = `?part=${encodeURIComponent(partName)}${
+    versionId === undefined ? '' : `&versionId=${encodeURIComponent(versionId)}`
+  }`
+  const blob = await apiFetchBlob(`/api/documents/${documentId}/media${search}`)
   if (!BROWSER_IMAGE.test(blob.type)) return null
   return URL.createObjectURL(blob)
 }
@@ -183,37 +269,59 @@ export async function fetchDocumentExport(
 }
 
 /** Raw source bytes for any ready version: the download path behind every viewer. */
-export async function fetchDocumentDownload(documentId: string): Promise<Blob> {
-  return apiFetchBlob(`/api/documents/${documentId}/download`)
+export async function fetchDocumentDownload(
+  documentId: string,
+  versionId?: string,
+): Promise<Blob> {
+  return apiFetchBlob(
+    `/api/documents/${documentId}/download${versionQuery(versionId)}`,
+  )
 }
 
 export function useDocumentModel(
   documentId: string,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; versionId?: string },
 ) {
   return useQuery({
-    ...documentModelQueryOptions(documentId),
+    ...documentModelQueryOptions(documentId, options?.versionId),
     enabled: options?.enabled ?? true,
   })
 }
 
 export function useDocumentPdfView(
   documentId: string,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; versionId?: string },
 ) {
   return useQuery({
-    ...documentPdfViewQueryOptions(documentId),
+    ...documentPdfViewQueryOptions(documentId, options?.versionId),
     enabled: options?.enabled ?? true,
   })
 }
 
 export function useDocumentText(
   documentId: string,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; versionId?: string },
 ) {
   return useQuery({
-    ...documentTextQueryOptions(documentId),
+    ...documentTextQueryOptions(documentId, options?.versionId),
     enabled: options?.enabled ?? true,
+  })
+}
+
+export function useDocumentCompare(
+  documentId: string,
+  baseVersionId: string | undefined,
+  targetVersionId: string | undefined,
+) {
+  return useQuery({
+    ...documentCompareQueryOptions(
+      documentId,
+      baseVersionId ?? '',
+      targetVersionId ?? '',
+    ),
+    // The pair is only fetched once both sides are picked; '' never reaches
+    // the API because a disabled query never runs its queryFn.
+    enabled: baseVersionId !== undefined && targetVersionId !== undefined,
   })
 }
 
@@ -229,10 +337,10 @@ export function useDocumentComments(
 
 export function useDocumentTrackedChanges(
   documentId: string,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; versionId?: string },
 ) {
   return useQuery({
-    ...documentTrackedChangesQueryOptions(documentId),
+    ...documentTrackedChangesQueryOptions(documentId, options?.versionId),
     enabled: options?.enabled ?? true,
   })
 }
