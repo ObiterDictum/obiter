@@ -5,7 +5,7 @@ import {
   type Page,
 } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
@@ -37,7 +37,9 @@ const SELECTED = 'Alice'
 const USER_NAME = 'E9 User'
 
 function buildFixture() {
-  if (existsSync(FIXTURE_PATH)) return
+  // Always rebuild: a cached fixture keeps the shape the builder emitted when
+  // it was written, so an existsSync guard silently reruns stale markup.
+  if (existsSync(FIXTURE_PATH)) rmSync(FIXTURE_PATH)
   execFileSync(
     'bun',
     [
