@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
 import {
+  TRACKED_DECISION_MAX_IDS,
   documentTrackedChangeDecisionRequestSchema,
   documentTrackedChangeListResponseSchema,
 } from './document-tracked-changes'
@@ -71,21 +72,21 @@ describe('tracked change contracts', () => {
     ).toBe(false)
   })
 
-  it('accepts exactly one hundred ids and refuses more', () => {
+  it('accepts the id cap and refuses more', () => {
     const ids = (count: number) =>
       Array.from({ length: count }, (_, index) => `change-${String(index)}`)
     expect(
       documentTrackedChangeDecisionRequestSchema.safeParse({
         baseVersionId: 'ver_1',
         action: 'reject',
-        changeIds: ids(100),
+        changeIds: ids(TRACKED_DECISION_MAX_IDS),
       }).success,
     ).toBe(true)
     expect(
       documentTrackedChangeDecisionRequestSchema.safeParse({
         baseVersionId: 'ver_1',
         action: 'reject',
-        changeIds: ids(101),
+        changeIds: ids(TRACKED_DECISION_MAX_IDS + 1),
       }).success,
     ).toBe(false)
   })
@@ -98,7 +99,7 @@ describe('tracked change contracts', () => {
         baseVersionId: 'ver_1',
         action: 'reject',
         changeIds: ['change-1'],
-        removeParagraphIds: ids(100),
+        removeParagraphIds: ids(TRACKED_DECISION_MAX_IDS),
       }).success,
     ).toBe(true)
     expect(
@@ -114,7 +115,7 @@ describe('tracked change contracts', () => {
         baseVersionId: 'ver_1',
         action: 'reject',
         changeIds: ['change-1'],
-        removeParagraphIds: ids(101),
+        removeParagraphIds: ids(TRACKED_DECISION_MAX_IDS + 1),
       }).success,
     ).toBe(false)
     expect(
