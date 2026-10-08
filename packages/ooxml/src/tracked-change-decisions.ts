@@ -58,9 +58,12 @@ export function applyTrackedChangeDecisions(
     }
   }
 
+  const decisionRanges = new Map(
+    pending.map((target) => [target, decisionRange(target, action)]),
+  )
   for (const target of pending) {
     const part = requireEditablePart(document, target.partName)
-    const range = decisionRange(target, action)
+    const range = decisionRanges.get(target)
     if (!range) throw invalidDecision()
     setOverlayReplacement(part.overlay, `tracked-change:${target.wire.id}`, {
       start: range.start,
@@ -68,6 +71,46 @@ export function applyTrackedChangeDecisions(
       value: decisionReplacement(target, action),
     })
     part.dirty = true
+  }
+
+  // A decided move's range markers go too: the containers exist only to group
+  // the halves, and orphaned moveFrom/moveToRange markup is residue no
+  // consumer should reopen. A marker already covered by a decision or
+  // removal range is left to that replacement.
+  const cleared = new Set<string>()
+  for (const target of uniqueChanges([...requested, ...absorbed])) {
+    if (!target.moveMarkers?.length) continue
+    const part = requireEditablePart(document, target.partName)
+    for (const marker of target.moveMarkers) {
+      const key = `${target.partName}:${marker.start}:${marker.end}`
+      if (cleared.has(key)) continue
+      cleared.add(key)
+      if (
+        removals.some(
+          (removal) =>
+            removal.partName === target.partName &&
+            marker.start >= removal.start &&
+            marker.end <= removal.end,
+        ) ||
+        pending.some((pendingTarget) => {
+          const range = decisionRanges.get(pendingTarget)
+          return (
+            pendingTarget.partName === target.partName &&
+            range !== undefined &&
+            marker.start >= range.start &&
+            marker.end <= range.end
+          )
+        })
+      ) {
+        continue
+      }
+      setOverlayReplacement(part.overlay, `move-marker:${key}`, {
+        start: marker.start,
+        end: marker.end,
+        value: '',
+      })
+      part.dirty = true
+    }
   }
   return uniqueChanges([...requested, ...absorbed]).map(({ wire }) => wire.id)
 }
@@ -87,12 +130,16 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
     if (!target) throw invalidDecision()
     targets.set(target.wire.id, target)
     if (target.wire.kind === 'move') {
-      if (!target.validMoveCounterpart || !target.wire.pairId) {
+      // A move is a named group — several wrappers across several ranges —
+      // so deciding any member decides the whole group.
+      if (!target.validMoveCounterpart || !target.moveGroup) {
         throw invalidDecision()
       }
-      const counterpart = document.trackedChanges.get(target.wire.pairId)
-      if (!counterpart?.validMoveCounterpart) throw invalidDecision()
-      targets.set(counterpart.wire.id, counterpart)
+      for (const member of document.trackedChanges.values()) {
+        if (member.moveGroup !== target.moveGroup) continue
+        if (!member.validMoveCounterpart) throw invalidDecision()
+        targets.set(member.wire.id, member)
+      }
     }
   }
   return [...targets.values()]
