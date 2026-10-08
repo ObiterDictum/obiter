@@ -2693,7 +2693,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>30 migrations, 0001 to 0031, 0008 withdrawn</dd>
+                <dd>31 migrations, 0001 to 0032, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -2985,18 +2985,31 @@
                 <tr>
                   <td class="id">GET /api/documents/:id</td>
                   <td class="id">documents.ts</td>
-                  <td>Document with immutable versions</td>
+                  <td>
+                    Document with immutable versions. A view grantee sees only
+                    the current version's row; the full version list is returned
+                    to grantees who may read history (matter-level
+                    <code>edit</code>), so denied version ids are never
+                    disclosed.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/documents/:id/model</td>
                   <td class="id">document-model.ts</td>
-                  <td>Current ready DOCX model for read-only viewing</td>
+                  <td>
+                    Ready DOCX model for viewing. Optional
+                    <code>versionId</code>: the current version is view-gated, a
+                    historical one requires <code>edit</code> and otherwise
+                    answers the concealed document 404.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/documents/:id/media</td>
                   <td class="id">document-media.ts</td>
                   <td>
-                    Current ready DOCX image part for page rendering. Query
+                    Ready DOCX image part for page rendering; optional
+                    <code>versionId</code> follows the same
+                    view-current/edit-history gate as <code>/model</code>. Query
                     <code>part</code> is a package path such as
                     <code>word/media/image1.png</code>. Image parts are unzipped
                     once per immutable version, kept in an LRU cache bounded to
@@ -3044,23 +3057,50 @@
                   </td>
                   <td class="id">document-collaboration.ts</td>
                   <td>
-                    No-store polling, ephemeral typed cursors, and bounded OT
-                    merges into locked immutable versions. A reconciled merge
-                    applies the client's batch to the newer current version and
-                    returns a lineage re-expressed against the client's base
-                    version (persisted paragraph ids, then run skeleton), so its
-                    history stays translatable.
+                    No-store polling, typed cursors, and bounded OT merges into
+                    locked immutable versions. Presence rows live in
+                    <code>document_presence</code> (migration 0032), keyed by
+                    document, user and per-tab <code>clientId</code> and expired
+                    by the database clock, so participants are correct across
+                    API instances and a closed tab's cursor stops matching reads
+                    at the heartbeat TTL. A reconciled merge applies the
+                    client's batch to the newer current version and returns a
+                    lineage re-expressed against the client's base version
+                    (persisted paragraph ids, then run skeleton), so its history
+                    stays translatable.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/compare</td>
+                  <td class="id">document-compare.ts</td>
+                  <td>
+                    Compares two ready versions of one document, selected by
+                    <code>baseVersionId</code> and <code>targetVersionId</code>;
+                    each side passes the shared version resolver, so a denied
+                    version cannot be reached on either side of the pair. The
+                    pure comparison (<code>document-compare.ts</code>) aligns
+                    paragraphs by preserved <code>w14:paraId</code>, then
+                    identical text, then a bounded word-overlap pass — an edit
+                    across the canonicalisation boundary reports 'modified',
+                    never a whole-document remove+add. Entries cover added,
+                    removed, word-level modified, formatting-only,
+                    story-structure and package-area changes and are bounded and
+                    deterministic; opaque package bytes outside the model
+                    surface are acknowledged by a note when the content hashes
+                    differ.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/documents/:id/tracked-changes</td>
                   <td class="id">tracked-changes.ts</td>
                   <td>
-                    View-level typed change list for a selected ready DOCX
-                    version. A listed change the decision engine can never
-                    decide carries <code>undecidable</code> with the reason, so
-                    review surfaces can disable its controls honestly while the
-                    markup stays byte-preserved.
+                    Typed change list for a selected ready DOCX version
+                    (<code>versionId</code>; current is view-gated, historical
+                    needs <code>edit</code>). A listed change the decision
+                    engine can never decide carries
+                    <code>undecidable</code> with the reason, so review surfaces
+                    can disable its controls honestly while the markup stays
+                    byte-preserved.
                   </td>
                 </tr>
                 <tr>
@@ -3081,19 +3121,21 @@
                   <td class="id">GET /api/documents/:id/pdf-view</td>
                   <td class="id">document-pdf-view.ts</td>
                   <td>
-                    Current ready PDF extracted view for read-only viewing
+                    Ready PDF extracted view for read-only viewing; optional
+                    <code>versionId</code> follows the same
+                    view-current/edit-history gate as <code>/model</code>
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/documents/:id/export</td>
                   <td class="id">document-export.ts</td>
                   <td>
-                    View-gated ready DOCX download. Optional
-                    <code>versionId</code>. Empty comments return the stored
-                    source bytes unchanged; otherwise stored and imported
-                    comments whose anchors resolve in the exported version are
-                    embedded with their replies and threading parts, and the
-                    rest are skipped with the count in
+                    Ready DOCX download. Optional <code>versionId</code>;
+                    current is view-gated, historical needs <code>edit</code>.
+                    Empty comments return the stored source bytes unchanged;
+                    otherwise stored and imported comments whose anchors resolve
+                    in the exported version are embedded with their replies and
+                    threading parts, and the rest are skipped with the count in
                     <code>x-obiter-comments-skipped</code>. Replies under an
                     imported head thread by <code>paraIdParent</code> only while
                     the stored parent fingerprint still matches the exported
@@ -3106,10 +3148,12 @@
                   <td class="id">GET /api/documents/:id/download</td>
                   <td class="id">document-content.ts</td>
                   <td>
-                    View-gated raw source bytes for any ready version (DOCX,
-                    PDF, TXT) — byte-identical to what was uploaded. DOCX keeps
-                    <code>/export</code> for comment-embedding downloads. Served
-                    as <code>Content-Disposition: attachment</code> under a
+                    Raw source bytes for a ready version (DOCX, PDF, TXT) —
+                    byte-identical to what was uploaded; current is view-gated,
+                    a historical <code>versionId</code> needs <code>edit</code>.
+                    DOCX keeps <code>/export</code> for comment-embedding
+                    downloads. Served as
+                    <code>Content-Disposition: attachment</code> under a
                     non-executable Content-Security-Policy.
                   </td>
                 </tr>
@@ -3117,7 +3161,8 @@
                   <td class="id">GET /api/documents/:id/text</td>
                   <td class="id">document-content.ts</td>
                   <td>
-                    View-gated extracted text for a ready TXT version. DOCX
+                    Extracted text for a ready TXT version under the same
+                    view-current/edit-history <code>versionId</code> gate. DOCX
                     answers <code>/model</code> and PDF answers
                     <code>/pdf-view</code>; other types get the document 404
                     here.
@@ -3871,6 +3916,23 @@
                 <g>
                   <rect
                     x="240"
+                    y="365"
+                    width="124.8"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--subtle)"
+                  />
+                  <text x="302.4" y="382" text-anchor="middle" class="n">
+                    document_presence
+                  </text>
+                  <text x="302.4" y="393" text-anchor="middle" class="s">
+                    ephemeral TTL
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="240"
                     y="300"
                     width="124.8"
                     height="41"
@@ -4002,6 +4064,16 @@
                 />
                 <text x="174.9" y="335.0" text-anchor="middle" class="e">
                   + matter_id
+                </text>
+                <path
+                  d="M240,385.5 L184.8,380.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="212.4" y="377.0" text-anchor="middle" class="e">
+                  version + doc
                 </text>
                 <path
                   d="M240,320.5 L178.8,295.0"
