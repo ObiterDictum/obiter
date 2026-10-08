@@ -84,8 +84,10 @@ export async function resolveReadyDocumentVersion(
 /**
  * The historical-version policy in one place: only callers who can edit the
  * matter may read non-current versions. The document detail response uses the
- * same decision to conceal historical version metadata from viewers, so the
- * ids this gate rejects are never enumerable in the first place.
+ * same decision to conceal the historical version list from viewers. Denied
+ * ids can still appear as provenance on secondary records — a comment's
+ * `anchorVersionId`, a redaction run's `documentVersionId` — but knowing an
+ * id grants nothing: every content route enforces this gate regardless.
  */
 export async function canReadDocumentHistory(
   pool: Pool,

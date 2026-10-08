@@ -256,7 +256,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    const textObjectKey = await getRunTextObjectKey(pool, run)
+    const textObjectKey = await getRunTextObjectKey(pool, run, user)
     if (!textObjectKey)
       return errorResponse(
         c,
@@ -278,7 +278,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    const source = await getRunSourceFile(pool, run)
+    const source = await getRunSourceFile(pool, run, user)
     if (!source || !storage.readBinary)
       return errorResponse(
         c,
@@ -305,7 +305,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+    const layoutObjectKey = await getRunLayoutObjectKey(pool, run, user)
     if (!layoutObjectKey)
       return errorResponse(
         c,
@@ -483,7 +483,7 @@ export function createRedactReviewRoutes(
         'Acknowledge that the detection mode was not recorded before finalising.',
         400,
       )
-    const textObjectKey = await getRunTextObjectKey(pool, run)
+    const textObjectKey = await getRunTextObjectKey(pool, run, user)
     if (!textObjectKey)
       return errorResponse(
         c,
@@ -492,7 +492,7 @@ export function createRedactReviewRoutes(
         404,
       )
     const text = await storage.readText(textObjectKey)
-    const source = await getRunSourceFile(pool, run)
+    const source = await getRunSourceFile(pool, run, user)
     // Fail closed: finalising claims the output is complete, so refuse when
     // the source holds text extraction never examined (footnotes, endnotes,
     // comments, textboxes, fused PDF runs). Checked here — after the text
@@ -574,7 +574,7 @@ export function createRedactReviewRoutes(
     if (body.data.outputMode === 'redacted') {
       // Hard redaction has exactly one share-safe output: a rasterized PDF.
       // There is no text fallback, so any failure leaves the run unfinalized.
-      const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+      const layoutObjectKey = await getRunLayoutObjectKey(pool, run, user)
       try {
         if (!storage.writeBinary)
           throw new HardRedactionOutputError(
