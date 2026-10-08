@@ -1,8 +1,4 @@
-import {
-  PAGE_STORY_KINDS,
-  type DocumentModelWire,
-  type DocumentParagraphWire,
-} from '@obiter/contracts'
+import type { DocumentModelWire } from '@obiter/contracts'
 import {
   emptyDraftState,
   isPendingBaselineId,
@@ -10,25 +6,16 @@ import {
   type DraftSlot,
   type DraftState,
 } from './document-draft-state'
-import { documentStory, editableStories } from './document-model-text'
+import { editableStories } from './document-model-text'
 import {
   batchParagraphDeletions,
   LAST_PARAGRAPH_MESSAGE,
 } from './document-edits'
-import { storyTableCellIds } from './document-page-tables'
 import { footnoteNoteParagraphId } from './document-structural-drafts'
 import { partitionFormatDrafts } from './document-format-partition'
-import { emphasisSlotKey, slotLabel } from './document-save-slots'
+import { emphasisSlotKey } from './document-save-slots'
 import { resolveInsertAnchor } from './document-story-flow'
-import {
-  conflictingStructure,
-  structuralKindNoun,
-} from './document-structure-conflicts'
-import {
-  isTableOfContentsHeading,
-  tableOfContentsAnchorBlock,
-  tableOfContentsHeadingsBlock,
-} from './document-toc-availability'
+import { partitionStructureSlots } from './document-structure-partition'
 
 /**
  * A tracked-change decision the save can send: the group's persisted `w:id`s
@@ -244,133 +231,18 @@ export function partitionDraftState(
   // Why each blocked structure was held back, so the deferred note text can
   // disclose the same reason rather than blaming a missing anchor paragraph.
   const blockedStructureReasons = new Map<string, string>()
-  // The table-of-contents facts the shared refusal predicate reads, computed
-  // lazily so a save holding no such draft does not re-parse the tables. The
-  // heading set is the painted view restricted to stored paragraphs: a
-  // paragraph deleted earlier in the batch is gone, and a `set_paragraph_style`
-  // the same batch carries is already applied — the writer sees both when it
-  // captures entries, so a freshly styled heading must count.
-  let tocFacts:
-    | { cellIds: ReadonlySet<string>; headings: DocumentParagraphWire[] }
-    | undefined
-  const tableOfContentsFacts = () => {
-    const story = documentStory(model)
-    tocFacts ??= {
-      cellIds: storyTableCellIds(story),
-      headings: (story?.paragraphs ?? []).filter((paragraph) => {
-        if (batchDeletions.has(paragraph.id)) return false
-        const pendingStyle = state.format.paragraphStyles[paragraph.id]
-        const effective = { ...paragraph }
-        if (pendingStyle === null) delete effective.styleId
-        else if (pendingStyle !== undefined) effective.styleId = pendingStyle
-        return isTableOfContentsHeading(effective, model.styles)
-      }),
-    }
-    return tocFacts
-  }
-  for (const structure of state.structures) {
-    const deletedAnchor = batchDeletions.has(structure.paragraphId)
-    const missingTarget =
-      structure.kind === 'cross-reference' &&
-      (!paragraphIds.has(structure.targetParagraphId) ||
-        batchDeletions.has(structure.targetParagraphId))
-    // A footnote's reference lives in the body alone: an anchor in any other
-    // editable story is a placement the writer must reject, so it is blocked
-    // here rather than sent to fail. A page number carries the same rule
-    // against a note-story anchor — the `PAGE` field only resolves in the
-    // body, a header or a footer.
-    const anchorStoryKind = paragraphStoryKind.get(structure.paragraphId)
-    const nonBodyAnchor =
-      (structure.kind === 'footnote' ||
-        structure.kind === 'table-of-contents' ||
-        structure.kind === 'defined-term') &&
-      anchorStoryKind !== undefined &&
-      anchorStoryKind !== 'document'
-    const nonPageAnchor =
-      structure.kind === 'page-number' &&
-      anchorStoryKind !== undefined &&
-      !PAGE_STORY_KINDS.has(anchorStoryKind)
-    // Same-paragraph pairs a writer cannot compose (a link rewrites whole
-    // runs; a field splice poisons its run for a second splice) are held back
-    // like `replacedEmptyAnchors`, so they are disclosed rather than failing
-    // the whole request.
-    const wire = paragraphWires.get(structure.paragraphId)
-    // A reloaded table-of-contents draft is refused for every reason the
-    // ribbon would refuse the insertion now: the shared wire-level predicate
-    // keeps the two surfaces from drifting, and anything it cannot see — an
-    // anchor inside `w:sdt` content — stays the writer's last line.
-    const tableOfContentsBlock =
-      structure.kind === 'table-of-contents' && wire !== undefined
-        ? (tableOfContentsAnchorBlock(
-            wire,
-            tableOfContentsFacts().cellIds,
-            model.changes,
-          ) ??
-          tableOfContentsHeadingsBlock(
-            tableOfContentsFacts().headings,
-            model.changes,
-          ))
-        : undefined
-    const conflicting = wire
-      ? conflictingStructure(
-          wire,
-          keep.drafts,
-          keep.extraRuns[structure.paragraphId] ?? [],
-          keep.structures,
-          structure,
-        )
-      : undefined
-    if (
-      !paragraphIds.has(structure.paragraphId) ||
-      deletedAnchor ||
-      missingTarget ||
-      nonBodyAnchor ||
-      nonPageAnchor ||
-      tableOfContentsBlock ||
-      conflicting
-    ) {
-      const reason = nonBodyAnchor
-        ? structure.kind === 'table-of-contents'
-          ? 'A table of contents can only be placed in the body.'
-          : structure.kind === 'defined-term'
-            ? 'A defined-term mark can only be placed in the body.'
-            : 'A footnote can only be placed in the body.'
-        : nonPageAnchor
-          ? 'A page number needs a page of its own: the body, a header or a footer.'
-          : missingTarget
-            ? 'The paragraph this references is no longer in the document.'
-            : deletedAnchor
-              ? 'The paragraph this was placed after is marked for deletion.'
-              : (tableOfContentsBlock ??
-                (conflicting
-                  ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-                  : 'The paragraph this was placed in is no longer in the document.'))
-      blockedStructureReasons.set(structure.id, reason)
-      blocked.push({
-        slot: {
-          kind: 'structure',
-          key: `structure:${structure.id}`,
-          id: structure.id,
-          structureKind: structure.kind,
-        },
-        reason,
-        label: slotLabel({
-          kind: 'structure',
-          key: `structure:${structure.id}`,
-          id: structure.id,
-          structureKind: structure.kind,
-        }),
-      })
-      continue
-    }
-    keep.structures.push(structure)
-    covered.push({
-      kind: 'structure',
-      key: `structure:${structure.id}`,
-      id: structure.id,
-      structureKind: structure.kind,
-    })
-  }
+  partitionStructureSlots({
+    model,
+    state,
+    paragraphIds,
+    batchDeletions,
+    paragraphStoryKind,
+    paragraphWires,
+    keep,
+    covered,
+    blocked,
+    blockedStructureReasons,
+  })
 
   // The note text deferred above joins the save only when its footnote
   // structure does — the `insert_footnote` operation carries it — and is

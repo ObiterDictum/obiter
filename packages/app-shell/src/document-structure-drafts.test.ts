@@ -71,12 +71,14 @@ const definedTermDraft = (
   paragraphId: string,
   from = 0,
   to = 4,
+  marked = 'text',
 ): StructuralDraft => ({
   id,
   kind: 'defined-term',
   paragraphId,
   from,
   to,
+  marked,
 })
 
 function paragraph(
@@ -447,6 +449,7 @@ describe('documentStructureToolbar', () => {
       setStructures: (update) => {
         structures.push(...update([]))
       },
+      toaFacts: { occurrences: [], entries: [], citingWires: [] },
       ...overrides,
     })
     return { api, structures }
@@ -484,6 +487,7 @@ describe('documentStructureToolbar', () => {
         paragraphId: 'p1',
         from: 4,
         to: 15,
+        marked: 'Hourly Rate',
       }),
     ])
   })

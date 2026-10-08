@@ -504,6 +504,7 @@ describe('documentStructureToolbar links', () => {
       setStructures: (update) => {
         structures.push(...update([]))
       },
+      toaFacts: { occurrences: [], entries: [], citingWires: [] },
       ...overrides,
     })
     return { api, structures }

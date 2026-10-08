@@ -121,6 +121,7 @@ const save = (page: Page) =>
 const referencesTab = (page: Page) =>
   page.getByRole('tab', { name: 'References' })
 const markedText = (page: Page) => page.locator('[data-defined-term]')
+const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
 const authoritiesPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Authorities' })
 const checksPanel = (page: Page) =>
@@ -289,4 +290,95 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   } finally {
     await fresh.close()
   }
+})
+
+test('dialogs cancel cleanly and stored reference fields check back', async ({
+  page,
+  request,
+}) => {
+  const { email, password } = await createAccount(request)
+  const matter = `E11 references ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  await openReferences(page)
+
+  // Cancel is honest in both dialogs: the authority dialog forgets its
+  // typed citation and the reference chooser forgets its picked target,
+  // and neither leaves a pending draft behind — Save stays disabled.
+  const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
+  await caretParagraph.click()
+  await page.getByRole('button', { name: 'Insert authority' }).click()
+  await page.getByRole('textbox', { name: 'Citation' }).fill(CITATION)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).last().click()
+  await expect(caretParagraph).not.toContainText(CITATION)
+  await expect(save(page)).toBeDisabled()
+
+  await page.getByRole('button', { name: 'Insert cross-reference' }).click()
+  await page
+    .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
+    .first()
+    .click()
+  await page.getByRole('button', { name: 'Cancel', exact: true }).last().click()
+  await expect(fieldMarkers(page)).toHaveCount(0)
+  await expect(save(page)).toBeDisabled()
+  await shot(page, '10-cancelled-dialogs')
+
+  // The same chooser, used for real, paints the pending field marker and
+  // writes a REF field whose stored result is the heading's text.
+  await page.getByRole('button', { name: 'Insert cross-reference' }).click()
+  await page
+    .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
+    .first()
+    .click()
+  await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
+  await expect(fieldMarkers(page)).toHaveCount(1)
+  await saveAndWait(page)
+
+  // Non-empty case: the stored field reads back as checked and clean.
+  await page.reload({ waitUntil: 'networkidle' })
+  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  await openReferences(page)
+  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await expect(checksPanel(page)).toContainText('1 reference field checked')
+  await expect(checksPanel(page)).toContainText('No cross-reference findings')
+  await shot(page, '11-stored-reference-clean')
+
+  // Stale case: rewriting the target's text leaves the stored result
+  // behind, so the next save reports review rather than passing silently.
+  // Shift+End selects the single-line heading; Control+A would take the
+  // whole document.
+  await focusHeading(page)
+  await page.keyboard.press('Shift+End')
+  await page.keyboard.type('Amended heading text')
+  await saveAndWait(page)
+  await page.reload({ waitUntil: 'networkidle' })
+  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  await openReferences(page)
+  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await expect(checksPanel(page)).toContainText('differs from the target')
+  await shot(page, '12-stored-reference-stale')
+
+  // Broken case: deleting the target paragraph removes its bookmark, so
+  // the check names the missing target rather than a green panel.
+  await page
+    .locator('[data-paragraph-id]', { hasText: 'Amended heading text' })
+    .first()
+    .click()
+  await page.getByRole('tab', { name: 'Home' }).click()
+  await page.getByRole('button', { name: 'Delete paragraph' }).click()
+  await saveAndWait(page)
+  await page.reload({ waitUntil: 'networkidle' })
+  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  await openReferences(page)
+  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await expect(checksPanel(page)).toContainText(
+    'not a bookmark in this document',
+  )
+  await shot(page, '13-stored-reference-broken')
 })

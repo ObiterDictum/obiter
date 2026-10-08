@@ -115,6 +115,15 @@ export function ReferencesRibbon({
             onClick={onToggleAuthorities}
             icon={<ListDashes size={16} aria-hidden />}
           />
+          <IconButton
+            label="Table of authorities"
+            onClick={structure?.onInsertTableOfAuthorities}
+            disabled={
+              !structure || Boolean(structure.tableOfAuthoritiesUnavailable)
+            }
+            disabledReason={structure?.tableOfAuthoritiesUnavailable}
+            icon={<Checks size={16} aria-hidden />}
+          />
           <RibbonSelect
             label="Citation style"
             className="w-[6.5rem]"

@@ -5,6 +5,8 @@ import type {
 } from '@obiter/contracts'
 
 import { checkDefinedTerms } from './document-defined-terms'
+import { partitionDraftState } from './document-save-partition'
+import { emptyDraftState } from './document-save-plan'
 import type { StructuralDraft } from './document-structural-drafts'
 
 function paragraph(
@@ -185,6 +187,7 @@ describe('checkDefinedTerms', () => {
         paragraphId: 'p1',
         from: 4,
         to: 15,
+        marked: 'Hourly Rate',
       },
     ]
     // p1 'The Hourly Rate applies.' [4,15) covers 'Hourly Rate'
@@ -203,6 +206,111 @@ describe('checkDefinedTerms', () => {
       { term: 'hourly rate', marks: 1, uses: 0, paragraphId: 'p1' },
     ])
     expect(check.findings).toEqual([])
+  })
+
+  it('flags a pending mark whose covered text drifted after it was made', () => {
+    // The mark bound 'Hourly Rate' at [4,15); a typed draft has since
+    // changed what that range covers. The finding names the term, not the
+    // text now under it — and the save partition must not emit the op.
+    const structures: StructuralDraft[] = [
+      {
+        id: 'd1',
+        kind: 'defined-term',
+        paragraphId: 'p1',
+        from: 4,
+        to: 15,
+        marked: 'Hourly Rate',
+      },
+    ]
+    const check = checkDefinedTerms(
+      model(paragraph('p1', 'The Hourly Rate applies.')),
+      structures,
+      [],
+      new Set(),
+      { 'p1-r1': 'The Weekly Rate applies.' },
+      noDrafts.extraRuns,
+    )
+    expect(check.terms).toEqual([
+      { term: 'hourly rate', marks: 1, uses: 0, paragraphId: 'p1' },
+    ])
+    expect(check.findings).toEqual([
+      expect.objectContaining({
+        pending: true,
+        severity: 'issue',
+        message: expect.stringContaining('will not be saved'),
+      }),
+    ])
+  })
+
+  it('blocks the save when text under the range no longer reads the term', () => {
+    const draft: StructuralDraft = {
+      id: 'd1',
+      kind: 'defined-term',
+      paragraphId: 'p1',
+      from: 4,
+      to: 15,
+      marked: 'Hourly Rate',
+    }
+    const partition = partitionDraftState(
+      model(paragraph('p1', 'The Hourly Rate applies.')),
+      {
+        ...emptyDraftState(),
+        // Typing earlier in the paragraph shifted the range's contents.
+        drafts: { 'p1-r1': 'See the Hourly Rate applies.' },
+        structures: [draft],
+      },
+    )
+    expect(partition.keep.structures).toEqual([])
+    expect(partition.blocked.map((item) => item.slot.kind)).toEqual([
+      'structure',
+    ])
+    expect(partition.blocked[0]?.reason).toBe(
+      'The text under this defined-term mark changed since it was marked.',
+    )
+  })
+
+  it('keeps the mark when a draft only changes text outside the range', () => {
+    const draft: StructuralDraft = {
+      id: 'd1',
+      kind: 'defined-term',
+      paragraphId: 'p1',
+      from: 4,
+      to: 15,
+      marked: 'Hourly Rate',
+    }
+    const partition = partitionDraftState(
+      model(paragraph('p1', 'The Hourly Rate applies.')),
+      {
+        ...emptyDraftState(),
+        drafts: { 'p1-r1': 'The Hourly Rate applies always.' },
+        structures: [draft],
+      },
+    )
+    expect(partition.keep.structures).toEqual([draft])
+    expect(partition.blocked).toEqual([])
+  })
+
+  it('blocks the save when the range itself was edited', () => {
+    const draft: StructuralDraft = {
+      id: 'd1',
+      kind: 'defined-term',
+      paragraphId: 'p1',
+      from: 4,
+      to: 15,
+      marked: 'Hourly Rate',
+    }
+    const partition = partitionDraftState(
+      model(paragraph('p1', 'The Hourly Rate applies.')),
+      {
+        ...emptyDraftState(),
+        drafts: { 'p1-r1': 'The Monthly Rate applies.' },
+        structures: [draft],
+      },
+    )
+    expect(partition.keep.structures).toEqual([])
+    expect(partition.blocked[0]?.reason).toBe(
+      'The text under this defined-term mark changed since it was marked.',
+    )
   })
 
   it('reads a pending insert paragraph in flow order', () => {

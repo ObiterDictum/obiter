@@ -211,6 +211,7 @@ export function DocxWorkspace({
     documentId,
     model,
     drafts,
+    legalChecksOpen: legalTools.legalChecksOpen !== null,
     insert: {
       caret: formatTarget,
       offset: formatRange?.to ?? null,

@@ -35,6 +35,7 @@ export type PlannedOperation =
           | 'insert_footnote'
           | 'insert_page_number'
           | 'insert_table_of_contents'
+          | 'insert_table_of_authorities'
           | 'mark_defined_term'
       }
     > & { paragraph: ParagraphAnchor })
@@ -175,6 +176,7 @@ export function validateTrackedOperations(
       operation.type === 'insert_footnote' ||
       operation.type === 'insert_page_number' ||
       operation.type === 'insert_table_of_contents' ||
+      operation.type === 'insert_table_of_authorities' ||
       operation.type === 'mark_defined_term'
     ) {
       throw new OoxmlError('model-node-not-editable')

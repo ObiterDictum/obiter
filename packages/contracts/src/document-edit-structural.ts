@@ -316,3 +316,40 @@ export const insertTableOfContentsOperationSchema = z
 export type DocumentEditInsertTableOfContentsOperation = z.infer<
   typeof insertTableOfContentsOperationSchema
 >
+
+/**
+ * The most distinct citations a written `TOA` field lists, and the most
+ * citation occurrences it marks. The operation carries no entry or mark
+ * payload — citations are captured at save — so the writer is what refuses
+ * a document whose citation count would write an unbounded field or an
+ * unbounded number of `TA` marks.
+ */
+export const DOCUMENT_EDIT_TABLE_OF_AUTHORITIES_MAX_ENTRIES = 500
+export const DOCUMENT_EDIT_TABLE_OF_AUTHORITIES_MAX_OCCURRENCES = 2_000
+
+/**
+ * A `TOA` field whose result is a heading paragraph plus one paragraph per
+ * distinct neutral citation the body holds, spliced at `offset` in
+ * `paragraphId` — the same multi-paragraph shape a table of contents takes:
+ * the anchor splits into head and tail around the caret, the field's begin,
+ * instruction and separator open the heading paragraph between them, and
+ * the end marker opens the tail. The writer also writes a hidden `TA` mark
+ * after every citation occurrence in the body and a `_ToA` bookmark around
+ * every citing paragraph, which the entries' `PAGEREF` fields resolve.
+ *
+ * Entries and marks are computed from the document's stored paragraphs when
+ * the save applies the operation — a stored snapshot, never recomputed — so
+ * the operation carries no payload. `paragraphId` must name a body-level
+ * paragraph.
+ */
+export const insertTableOfAuthoritiesOperationSchema = z
+  .object({
+    type: z.literal('insert_table_of_authorities'),
+    paragraphId: editIdSchema,
+    /** Caret offset in the paragraph's effective text. */
+    offset: characterOffsetSchema,
+  })
+  .strict()
+export type DocumentEditInsertTableOfAuthoritiesOperation = z.infer<
+  typeof insertTableOfAuthoritiesOperationSchema
+>

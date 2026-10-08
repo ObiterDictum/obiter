@@ -221,10 +221,11 @@ function nextPendingFootnoteId(
 export function spliceRunAtOffset(
   paragraph: DocumentParagraphWire,
   offset: number,
-  inserted: DocumentTextRunWire,
+  inserted: DocumentTextRunWire | readonly DocumentTextRunWire[],
   drafts: Record<string, string>,
   idPrefix: string,
 ): DocumentParagraphWire {
+  const insertedRuns = Array.isArray(inserted) ? inserted : [inserted]
   const runs = [...paragraph.runs]
   let cursor = 0
   for (let index = 0; index < runs.length; index += 1) {
@@ -234,7 +235,7 @@ export function spliceRunAtOffset(
     if (effective.length === 0) continue
     const end = cursor + effective.length
     if (offset <= cursor) {
-      runs.splice(index, 0, inserted)
+      runs.splice(index, 0, ...insertedRuns)
       return { ...paragraph, runs }
     }
     if (offset < end) {
@@ -253,11 +254,11 @@ export function spliceRunAtOffset(
           /^<w:rPr\b/u.test(fragment),
         ),
       }
-      runs.splice(index, 1, head, inserted, tail)
+      runs.splice(index, 1, head, ...insertedRuns, tail)
       return { ...paragraph, runs }
     }
     cursor = end
   }
-  runs.push(inserted)
+  runs.push(...insertedRuns)
   return { ...paragraph, runs }
 }

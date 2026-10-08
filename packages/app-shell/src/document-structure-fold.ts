@@ -14,6 +14,7 @@ import { storyTableCellIds } from './document-page-tables'
 import { foldFootnoteDrafts, spliceRunAtOffset } from './document-footnote-fold'
 import { pendingImageTarget } from './document-image-inserts'
 import type { StructuralDraft } from './document-structural-drafts'
+import { createTableOfAuthoritiesFold } from './document-toa-fold'
 import { createTableOfContentsFold } from './document-toc-fold'
 
 /**
@@ -37,6 +38,10 @@ import { createTableOfContentsFold } from './document-toc-fold'
  *   field's `end` run, and stamps `_Toc` bookmark fragments on the heading
  *   wires, so `PAGEREF` fields resolve pending entries through the same
  *   bookmark→page map a reloaded document uses.
+ * - A table of authorities runs the same splice with a heading wire plus
+ *   one entry per distinct citation, and folds the hidden `TA` mark runs
+ *   and `_ToA` bookmark fragments into the citing wires — the mark and
+ *   bookmark pass the writer makes before it writes the field.
  *
  * All fragments come from the same `structure-xml` builders the writers
  * call, so the pending model holds the writer's own output — only the
@@ -96,6 +101,12 @@ export function withStructuralDrafts(
     deletedIds,
     nextParaId,
   )
+  const foldToa = createTableOfAuthoritiesFold(
+    model,
+    drafts,
+    deletedIds,
+    nextParaId,
+  )
   const stories = model.stories.map((story) => {
     if (story.kind !== 'document') return story
     const result = foldStory(
@@ -115,6 +126,7 @@ export function withStructuralDrafts(
         return relId
       },
       foldToc,
+      foldToa,
     )
     changed ||= result.changed
     return result.story
@@ -144,6 +156,11 @@ function foldStory(
   foldToc: (
     paragraphs: DocumentParagraphWire[],
     draft: StructuralDraft & { kind: 'table-of-contents' },
+    tails: Map<string, DocumentParagraphWire>,
+  ) => boolean,
+  foldToa: (
+    paragraphs: DocumentParagraphWire[],
+    draft: StructuralDraft & { kind: 'table-of-authorities' },
     tails: Map<string, DocumentParagraphWire>,
   ) => boolean,
 ) {
@@ -218,6 +235,12 @@ function foldStory(
     // head/entry/tail shape, painted through the same `PAGEREF` resolution.
     if (draft.kind === 'table-of-contents') {
       changed = foldToc(paragraphs, draft, tails) || changed
+      continue
+    }
+    // A table of authorities folds the same way: the mark and bookmark
+    // pass first, then the field's heading, entry and tail wires.
+    if (draft.kind === 'table-of-authorities') {
+      changed = foldToa(paragraphs, draft, tails) || changed
       continue
     }
     // A link or cross-reference folds nothing into the model: the link is an

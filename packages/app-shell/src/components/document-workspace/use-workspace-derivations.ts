@@ -27,6 +27,8 @@ import {
 } from '../../document-structure-overlays'
 import { checkCrossReferences } from '../../document-cross-reference-check'
 import { checkDefinedTerms } from '../../document-defined-terms'
+import { isGeneratedFieldResultStyle } from '@obiter/ooxml'
+import type { TableOfAuthoritiesFacts } from '../../document-legal-toolbar'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -132,10 +134,17 @@ export function useWorkspaceDerivations({
   model,
   drafts,
   insert,
+  legalChecksOpen,
 }: {
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
+  /**
+   * The legal-checks panel's open state: the stored-markup checks are a
+   * whole-document scan that only the panel reads, so they run when it is
+   * open and report `null` — "checks unavailable" — when it is closed.
+   */
+  legalChecksOpen: boolean
   /** The caret state the Insert ribbon's availability derives from. */
   insert: {
     caret: FormatTarget
@@ -275,6 +284,44 @@ export function useWorkspaceDerivations({
         : [],
     [model, drafts.drafts, drafts.inserts, deletions, drafts.extraRuns],
   )
+  // The citations a table of authorities captures at the caret: the
+  // authority hits the memo above already scans, restricted to stored body
+  // paragraphs that survive the effective deletions — the same exclusion
+  // the writer's `deletedIds` pass and the generated-result style test
+  // keep. Grouped into entries once so the ribbon's disabled reason and
+  // the save partition's facts read one answer.
+  const toaFacts = useMemo<TableOfAuthoritiesFacts>(() => {
+    const story = model ? documentStory(model) : undefined
+    if (!story) return { occurrences: [], entries: [], citingWires: [] }
+    const wiresById = new Map(
+      story.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+    )
+    const occurrences = authorities.filter((hit) => {
+      const wire = wiresById.get(hit.paragraphId)
+      return (
+        wire !== undefined &&
+        !deletions.effective.has(hit.paragraphId) &&
+        !isGeneratedFieldResultStyle(wire.styleId)
+      )
+    })
+    const citingByCitation = new Map<string, string[]>()
+    for (const hit of occurrences) {
+      const citing = citingByCitation.get(hit.citation) ?? []
+      if (!citing.includes(hit.paragraphId)) citing.push(hit.paragraphId)
+      citingByCitation.set(hit.citation, citing)
+    }
+    const entries = [...citingByCitation.entries()]
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([citation, paragraphIds]) => ({ citation, paragraphIds }))
+    const citingIds = new Set(entries.flatMap((entry) => entry.paragraphIds))
+    return {
+      occurrences,
+      entries,
+      citingWires: story.paragraphs.filter((paragraph) =>
+        citingIds.has(paragraph.id),
+      ),
+    }
+  }, [model, authorities, deletions])
   // Links and field markers carry no model change, so they are grouped into
   // an overlay map here rather than folded like a table. The painted model
   // feeds the marker labels so a reference names the target's current text.
@@ -284,10 +331,12 @@ export function useWorkspaceDerivations({
   )
   // The legal checks read the stored model plus pending structure — the same
   // paragraphs and fields the save will write — so `effective` deletions are
-  // what count as gone, matching the writer's answer.
+  // what count as gone, matching the writer's answer. They run only while
+  // the panel is open: both checks scan every stored field and `_Def_`
+  // bookmark in the document, and nothing else consumes the result.
   const legalChecks = useMemo(
     () =>
-      model
+      model && legalChecksOpen
         ? {
             references: checkCrossReferences(
               model,
@@ -308,6 +357,7 @@ export function useWorkspaceDerivations({
         : null,
     [
       model,
+      legalChecksOpen,
       drafts.structures,
       deletions,
       drafts.drafts,
@@ -323,6 +373,7 @@ export function useWorkspaceDerivations({
     insert.trackChanges,
     insert.margin,
     { ...drafts, deletedParagraphIds: deletions.effective },
+    toaFacts,
     insert.onImageError,
   )
   return {
