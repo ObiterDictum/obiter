@@ -36,6 +36,10 @@ const insertShellTwoInsertsSourceBytes = await replaceDocumentXml(
   sourceBytes,
   '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Keep</w:t></w:r></w:p><w:p><w:ins w:id="92" w:author="Foreign Reviewer" w:date="2026-08-10T10:00:00Z"><w:r><w:t>Typed</w:t></w:r></w:ins><w:ins w:id="93" w:author="Foreign Reviewer" w:date="2026-08-10T10:01:00Z"><w:r><w:t>Also typed</w:t></w:r></w:ins></w:p></w:body></w:document>',
 )
+const orphanedMoveSourceBytes = await replaceDocumentXml(
+  sourceBytes,
+  '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Kept text</w:t></w:r></w:p><w:p><w:moveFromRangeStart w:id="40" w:name="orphanMove" w:author="Foreign Reviewer" w:date="2026-08-10T10:06:00Z"/><w:moveFrom w:id="30" w:author="Foreign Reviewer" w:date="2026-08-10T10:06:00Z"><w:r><w:delText>Stranded move</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="40"/></w:p></w:body></w:document>',
+)
 const sourceDocument = await parseDocx(trackedSourceBytes)
 const insertion = sourceDocument.model.changes.find(
   ({ elementName }) => elementName === 'ins',
@@ -490,6 +494,60 @@ describe('tracked change routes', () => {
     expect(database.transactionCommands).toEqual(['begin', 'rollback'])
     expect(route.storage.deletes).toEqual(route.storage.writes)
     expect(route.errors).toEqual(['The edited document could not be stored.'])
+  })
+
+  it('lists an undecidable move with its reason on the wire', async () => {
+    const route = trackedRouteApp(
+      new EditDatabase({ access: 'view' }),
+      undefined,
+      undefined,
+      orphanedMoveSourceBytes,
+    )
+    const response = await route.app.request(
+      '/api/documents/doc_1/tracked-changes',
+    )
+    const body = documentTrackedChangeListResponseSchema.parse(
+      await response.json(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(body.changes).toHaveLength(1)
+    expect(body.changes[0]).toMatchObject({
+      elementName: 'moveFrom',
+      undecidable: 'unsupported-move',
+    })
+  })
+
+  it('refuses a bypassed decision on an undecidable move without a version', async () => {
+    const database = new EditDatabase()
+    const route = trackedRouteApp(
+      database,
+      undefined,
+      undefined,
+      orphanedMoveSourceBytes,
+    )
+    const crafted = await parseDocx(orphanedMoveSourceBytes)
+    const move = crafted.model.changes.find(
+      ({ elementName }) => elementName === 'moveFrom',
+    )
+    if (move?.undecidable !== 'unsupported-move') {
+      throw new Error('Crafted undecidable move is missing.')
+    }
+
+    const response = await route.app.request(
+      '/api/documents/doc_1/tracked-changes/decision',
+      decisionRequest('accept', move.id),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    expect(database.currentVersionId).toBe('ver_1')
+    expect(database.versions.size).toBe(1)
+    expect(database.audits).toEqual([])
+    expect(route.storage.writes).toEqual([])
+    expect(route.storage.binary.get(sourceKey)).toEqual(orphanedMoveSourceBytes)
   })
 })
 

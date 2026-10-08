@@ -1,5 +1,6 @@
 import {
   TRACKED_DECISION_MAX_IDS,
+  type DocumentChangeWire,
   type DocumentTrackedChangeDecisionRequest,
 } from '@obiter/contracts'
 
@@ -115,6 +116,41 @@ export function applyTrackedChangeDecisions(
   return uniqueChanges([...requested, ...absorbed]).map(({ wire }) => wire.id)
 }
 
+/**
+ * The static reason this engine can never decide a listed change, or
+ * undefined when it can. A move needs a fully paired group; a property
+ * change needs the previous-properties fragment a rejection restores. The
+ * parse writes the reason onto the wire so review surfaces can mark a
+ * listed-but-undecidable change honestly; the engine still enforces the same
+ * rules here, so the flag only ever narrows what a client may offer — it
+ * never authorises a decision. Relational refusals (overlapping decision
+ * ranges, a stale base, the last-paragraph guard) stay per-request.
+ */
+export function undecidableReason(
+  change: TrackedChangeNode,
+): NonNullable<DocumentChangeWire['undecidable']> | undefined {
+  if (change.wire.kind === 'move') {
+    return change.validMoveCounterpart && change.moveGroup !== undefined
+      ? undefined
+      : 'unsupported-move'
+  }
+  if (
+    change.wire.kind === 'property' &&
+    (!change.propertiesRange || !change.previousPropertiesFragment)
+  ) {
+    return 'missing-property-snapshot'
+  }
+  return undefined
+}
+
+/** Writes `undecidable` onto every listed change the engine cannot decide. */
+export function markUndecidableChanges(changes: readonly TrackedChangeNode[]) {
+  for (const change of changes) {
+    const reason = undecidableReason(change)
+    if (reason) change.wire.undecidable = reason
+  }
+}
+
 function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
   if (
     changeIds.length === 0 ||
@@ -132,12 +168,10 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
     if (target.wire.kind === 'move') {
       // A move is a named group — several wrappers across several ranges —
       // so deciding any member decides the whole group.
-      if (!target.validMoveCounterpart || !target.moveGroup) {
-        throw invalidDecision()
-      }
+      if (undecidableReason(target)) throw invalidDecision()
       for (const member of document.trackedChanges.values()) {
         if (member.moveGroup !== target.moveGroup) continue
-        if (!member.validMoveCounterpart) throw invalidDecision()
+        if (undecidableReason(member)) throw invalidDecision()
         targets.set(member.wire.id, member)
       }
     }
@@ -282,12 +316,7 @@ function validateTargets(
   action: DocumentTrackedChangeDecisionRequest['action'],
 ) {
   for (const target of targets) {
-    if (
-      target.wire.kind === 'property' &&
-      (!target.propertiesRange || !target.previousPropertiesFragment)
-    ) {
-      throw invalidDecision()
-    }
+    if (undecidableReason(target)) throw invalidDecision()
   }
 
   const ordered = [...targets].sort((left, right) => {
