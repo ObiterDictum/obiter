@@ -352,6 +352,7 @@ export function DocxWorkspace({
           unavailable: changeReview.unavailable ?? undefined,
           bulkUnavailable: changeReview.bulkUnavailable,
           targetUnavailable: changeReview.targetUnavailable,
+          undecidableCount: changeReview.undecidableCount,
           canPrevious: changeReview.canPrevious,
           canNext: changeReview.canNext,
           onPreviousChange: changeReview.goToPrevious,

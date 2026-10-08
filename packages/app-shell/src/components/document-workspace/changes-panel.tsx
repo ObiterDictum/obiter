@@ -46,7 +46,9 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
               disabled={review.pending || Boolean(review.bulkUnavailable)}
               onClick={() => review.decideAll('accept')}
             >
-              Accept all
+              {review.undecidableCount > 0
+                ? 'Accept all supported'
+                : 'Accept all'}
             </Button>
             <Button
               variant="ghost"
@@ -54,13 +56,22 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
               disabled={review.pending || Boolean(review.bulkUnavailable)}
               onClick={() => review.decideAll('reject')}
             >
-              Reject all
+              {review.undecidableCount > 0
+                ? 'Reject all supported'
+                : 'Reject all'}
             </Button>
           </div>
         ) : null}
         {changes.length > 0 && review.bulkUnavailable ? (
           <p className="text-xs leading-relaxed text-muted" role="note">
             {review.bulkUnavailable}
+          </p>
+        ) : null}
+        {review.undecidableCount > 0 ? (
+          <p className="text-xs leading-relaxed text-muted" role="note">
+            {review.undecidableCount === 1
+              ? 'One listed change cannot be decided here; it stays listed and unchanged in the document.'
+              : `${review.undecidableCount} listed changes cannot be decided here; they stay listed and unchanged in the document.`}
           </p>
         ) : null}
       </div>
@@ -78,6 +89,7 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
         <ul className="flex flex-col gap-3">
           {changes.map((change, index) => {
             const isActive = index === review.activeIndex
+            const undecidableReason = review.undecidableReason(change)
             return (
               <li
                 key={change.id}
@@ -111,10 +123,15 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
                     {change.text || 'Property change'}
                   </p>
                 </button>
+                {undecidableReason ? (
+                  <p className="text-xs leading-relaxed text-muted" role="note">
+                    {undecidableReason}
+                  </p>
+                ) : null}
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    disabled={decideBlocked}
+                    disabled={decideBlocked || Boolean(undecidableReason)}
                     onClick={() => review.decideChange('accept', change)}
                   >
                     Accept
@@ -122,7 +139,7 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={decideBlocked}
+                    disabled={decideBlocked || Boolean(undecidableReason)}
                     onClick={() => review.decideChange('reject', change)}
                   >
                     Reject

@@ -175,6 +175,11 @@ export type DocumentReviewToolbar = {
   bulkUnavailable?: string
   /** The reason single-change Accept/Reject is unavailable, when it is. */
   targetUnavailable?: string
+  /**
+   * Listed changes the engine can never decide. Bulk labels say "supported"
+   * when this is non-zero because the excluded changes stay in the document.
+   */
+  undecidableCount: number
   canPrevious: boolean
   canNext: boolean
   onPreviousChange: () => void
