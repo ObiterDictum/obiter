@@ -44,8 +44,9 @@ const paragraphFields = {
  * word-level segment diff; `formatted` means the paragraph text is identical
  * but its recorded formatting or internal run structure changed. `story`
  * marks a non-paragraph change inside a story part (tables, section
- * properties), `package` a change outside story paragraphs (styles,
- * numbering, relationships, tracked revisions, imported comments).
+ * properties), including a part that exists on only one side; `package`
+ * marks a change outside story paragraphs (styles, numbering, relationships,
+ * tracked revisions, imported comments).
  */
 export const documentComparisonEntrySchema = z.discriminatedUnion('type', [
   // `text` may be empty: a paragraph with no text runs is still a real
