@@ -30,11 +30,13 @@ import {
   tocSpliceReplacement,
 } from './table-of-contents-splice'
 import {
+  entryParagraphWire,
   entryParagraphXml,
   sectionColumnWidthTwips,
   TOC_FIELD_END_RUN,
   type TocEntry,
 } from './table-of-contents-xml'
+import { allocateModelId } from './model-paragraph-edits'
 
 const TOC_BOOKMARK_PREFIX = '_Toc'
 
@@ -160,16 +162,24 @@ export function insertTableOfContents(
   }
   part.dirty = true
 
+  const nextRunId = () => allocateModelId(document, 'text-edit')
+  const entryWires = entries.map((entry, index) =>
+    entryParagraphWire(
+      nextRunId,
+      entry,
+      paraIds[index] ?? '',
+      index === 0,
+      tabPosition,
+    ),
+  )
   const tailWire = spliceParagraphWires(
     document,
     story,
     paragraph,
     offset,
-    entries,
-    paraIds,
+    entryWires,
     tailParaId,
     pPrCopy,
-    tabPosition,
     lineage,
   )
   return { lastWire: tailWire, appended: entries.length + 1 }

@@ -7034,7 +7034,10 @@
                     <code>PAGE</code> field is refused at the ribbon, the save
                     partition and the writer alike when the anchor is a note
                     story — a note has no page of its own for the field to
-                    resolve.
+                    resolve. The note story takes run edits alone: marks, fields
+                    and tables anchor in the document body, so a footnote's text
+                    cannot carry a defined-term mark, a cross-reference or a
+                    generated table.
                   </td>
                   <td class="id">
                     ooxml/footnote-edits.ts ·
@@ -7070,6 +7073,60 @@
                     ooxml/table-of-contents-edits.ts ·
                     ooxml/table-of-contents-splice.ts ·
                     app-shell/document-toc-fold.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A table of authorities marks all citations at save and is
+                    never refreshed (PR-E11)
+                  </td>
+                  <td>
+                    <code>insert_table_of_authorities</code> runs Word's
+                    mark-all gesture in one batch: a hidden
+                    <code>TA</code> field after every neutral-citation
+                    occurrence the shared grammar matches, a
+                    <code>_ToA&lt;n&gt;</code> bookmark around each citing
+                    paragraph, then a <code>TOA \h \c "1"</code> field whose
+                    entries are the distinct citations sorted into one
+                    <code>TableofAuthorities</code> paragraph each with
+                    <code>PAGEREF</code> fields back to the bookmarks — a stored
+                    snapshot, never recomputed, exactly like the contents table.
+                    Body-only and refused under tracked changes like the other
+                    generated structures, with the same shared refusal
+                    predicates at ribbon and partition: a citing paragraph that
+                    cannot hold a mark or bookmark blocks the whole insertion.
+                    Only occurrences the writer can mark are captured — a
+                    citation typed in a pending-insert paragraph is dropped
+                    rather than dangling — and text inside a generated field's
+                    result is skipped, so a table never lists its own captured
+                    citations. A mark splice that lands inside a stored or
+                    pending <code>w:hyperlink</code> refuses, the field-level
+                    hyperlink rule applied per mark.
+                  </td>
+                  <td class="id">
+                    ooxml/table-of-authorities-edits.ts ·
+                    ooxml/table-of-authorities-entries.ts ·
+                    app-shell/document-toa-fold.ts ·
+                    app-shell/document-toa-availability.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Underscore-prefixed bookmark families are writer-owned
+                  </td>
+                  <td>
+                    <code>_Def_…</code>, <code>_Ref_…</code>,
+                    <code>_Toc…</code> and <code>_ToA…</code> names follow
+                    Word's hidden-bookmark convention: each family is allocated
+                    by scanning the whole part and a paragraph already carrying
+                    one is reused, so a stored document's matching names join
+                    the family rather than colliding. Content under a bookmark
+                    is never required to be machine-generated — a hand-authored
+                    <code>_Def_</code> mark reads as a defined-term mark the
+                    same way.
+                  </td>
+                  <td class="id">
+                    ooxml/document-bookmarks.ts · contracts/defined-terms.ts
                   </td>
                 </tr>
                 <tr>
@@ -7265,6 +7322,7 @@
                     <code>insert_page_number</code>,
                     <code>insert_footnote</code>,
                     <code>insert_table_of_contents</code>,
+                    <code>insert_table_of_authorities</code>,
                     <code>insert_break</code> and
                     <code>insert_section_break</code> have no inverse — so once
                     one is saved it is baseline content: a history snapshot that
@@ -7296,9 +7354,10 @@
                     lands plain, the same boundary the Bold button reads. The
                     list of authorities groups extracted neutral citations and
                     joins verification findings strictly by paragraph and
-                    excerpt; it writes no <code>TOA</code> field into the
-                    document, and a citation the latest run did not cover shows
-                    no state rather than borrowing one.
+                    excerpt; a citation the latest run did not cover shows no
+                    state rather than borrowing one. The References ribbon's
+                    table-of-authorities control is the document-side
+                    counterpart: it inserts a real <code>TOA</code> field.
                   </td>
                   <td class="id">
                     app-shell/document-preferences.ts ·

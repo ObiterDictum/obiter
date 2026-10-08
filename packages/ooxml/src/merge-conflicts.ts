@@ -116,6 +116,18 @@ export function operationConflicts(
       changes.paragraphRunChanges.size > 0
     )
   }
+  if (operation.type === 'insert_table_of_authorities') {
+    // The same document-wide footprint as the contents table, one step
+    // deeper: the field also marks every citation occurrence and bookmarks
+    // every citing paragraph, so any paragraph change anywhere — not just a
+    // heading's — can move a mark offset or empty an entry.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphStyles.size > 0 ||
+      changes.paragraphOpaque.size > 0 ||
+      changes.paragraphRunChanges.size > 0
+    )
+  }
   if (operation.type === 'insert_section_break') {
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||

@@ -1,21 +1,19 @@
-import {
-  definedTermBookmarkName,
-  PAGE_STORY_KINDS,
-  type DocumentModelWire,
-} from '@obiter/contracts'
+import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
 import {
   isTableOfContentsHeading,
   tableOfContentsAnchorBlock,
   tableOfContentsHeadingsBlock,
 } from './document-toc-availability'
 import type { ParagraphRange } from './document-format-toolbar'
+import { documentLegalToolbar } from './document-legal-toolbar'
+import type { TableOfAuthoritiesFacts } from './document-legal-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
 import {
   conflictingStructure,
   structuralKindNoun,
   type StructuralPlacement,
 } from './document-structure-conflicts'
-import { blockText, type ExtraRuns } from './document-word-edits'
+import type { ExtraRuns } from './document-word-edits'
 import type { ImageInsertFields } from './document-image-inserts'
 import { crossReferenceTargetLabel } from './document-structure-overlays'
 import {
@@ -73,6 +71,7 @@ export function documentStructureToolbar({
   drafts,
   extraRuns,
   setStructures,
+  toaFacts,
 }: {
   paragraphId: string | null
   /** The stored model — a pending paragraph or cell wire is not an anchor. */
@@ -103,6 +102,12 @@ export function documentStructureToolbar({
   drafts: Record<string, string>
   extraRuns: ExtraRuns
   setStructures: SetStructures
+  /**
+   * The citations the painted flow reports over stored body paragraphs —
+   * memoised by the caller so the mark pass does not rescan the document
+   * per render.
+   */
+  toaFacts: TableOfAuthoritiesFacts
 }) {
   const story = model ? documentStory(model) : undefined
   // The same run-level rule the save plan enforces: the reason names the
@@ -163,26 +168,6 @@ export function documentStructureToolbar({
           : 'Save the new paragraph before linking its text'
         : conflictWith({
             kind: 'link',
-            paragraphId: selectionRange.paragraphId,
-            from: selectionRange.from,
-            to: selectionRange.to,
-          })
-  // A defined-term mark is a range mark over the words that bind the term,
-  // so it shares the link's selection rules and body-only anchor.
-  const definedTermUnavailable = trackChanges
-    ? 'A defined-term mark is not recorded as a tracked change'
-    : !selectionRange
-      ? selectionActive
-        ? 'Select text within one paragraph to mark'
-        : 'Select the words that bind the term'
-      : !story?.paragraphs.some(
-            (paragraph) => paragraph.id === selectionRange.paragraphId,
-          )
-        ? model && editableParagraph(model, selectionRange.paragraphId)
-          ? 'Only the document body can hold a defined-term mark'
-          : 'Save the new paragraph before marking a term in it'
-        : conflictWith({
-            kind: 'defined-term',
             paragraphId: selectionRange.paragraphId,
             from: selectionRange.from,
             to: selectionRange.to,
@@ -271,6 +256,27 @@ export function documentStructureToolbar({
             paragraphId,
             offset,
           })))
+  // The legal-document controls — the defined-term mark and the table of
+  // authorities — own their own module: same caret-level predicates as the
+  // splice above, a different set of facts under them.
+  const legal = documentLegalToolbar({
+    model,
+    paragraphId,
+    offset,
+    selectionActive,
+    selectionRange,
+    trackChanges,
+    structures,
+    baseUnavailable,
+    inTableCell,
+    anchorWire,
+    cellParagraphIds,
+    conflictWith,
+    toaFacts,
+    drafts,
+    extraRuns,
+    setStructures,
+  })
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
@@ -288,7 +294,8 @@ export function documentStructureToolbar({
     tableUnavailable,
     pictureUnavailable,
     linkUnavailable,
-    definedTermUnavailable,
+    definedTermUnavailable: legal.definedTermUnavailable,
+    tableOfAuthoritiesUnavailable: legal.tableOfAuthoritiesUnavailable,
     crossReferenceUnavailable,
     crossReferenceTargets,
     pageNumberUnavailable,
@@ -351,45 +358,8 @@ export function documentStructureToolbar({
       setStructures((current) => [...current, draft])
       return { inserted: true }
     },
-    markDefinedTerm(): StructuralInsertOutcome {
-      if (definedTermUnavailable || !selectionRange || !model) {
-        return {
-          inserted: false,
-          reason: definedTermUnavailable ?? 'No text selected',
-        }
-      }
-      // The bookmark name is derived from the covered words, here and again
-      // by the writer at save time; a selection that cannot name a term —
-      // no word characters, or longer than the bookmark-name cap — is refused
-      // now rather than at save.
-      const covered = blockText(
-        model,
-        { drafts, extraRuns, inserts: [], deletedParagraphIds: [] },
-        selectionRange.paragraphId,
-      ).slice(selectionRange.from, selectionRange.to)
-      if (definedTermBookmarkName(covered) === null) {
-        return {
-          inserted: false,
-          reason:
-            'That selection cannot name a term: it needs words the bookmark can hold.',
-        }
-      }
-      const draft: StructuralDraft = {
-        id: crypto.randomUUID(),
-        kind: 'defined-term',
-        paragraphId: selectionRange.paragraphId,
-        from: selectionRange.from,
-        to: selectionRange.to,
-      }
-      if (!structuralDraftSchema.safeParse(draft).success) {
-        return {
-          inserted: false,
-          reason: 'That mark cannot be held as a draft.',
-        }
-      }
-      setStructures((current) => [...current, draft])
-      return { inserted: true }
-    },
+    markDefinedTerm: legal.markDefinedTerm,
+    insertTableOfAuthorities: legal.insertTableOfAuthorities,
     insertCrossReference(targetParagraphId: string): StructuralInsertOutcome {
       if (crossReferenceUnavailable || !paragraphId || offset == null) {
         return {

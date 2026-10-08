@@ -499,6 +499,7 @@ describe('table of contents ribbon availability', () => {
       setStructures: (update) => {
         structures.push(...update([]))
       },
+      toaFacts: { occurrences: [], entries: [], citingWires: [] },
       ...overrides,
     })
     return { api, structures, baseModel }

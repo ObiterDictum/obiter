@@ -13,7 +13,13 @@ export type StructuralPlacement =
   | { kind: 'table'; paragraphId: string }
   | { kind: 'image'; paragraphId: string; offset: number }
   | {
-      kind: 'cross-reference' | 'page-number' | 'footnote' | 'table-of-contents'
+      kind:
+        | 'cross-reference'
+        | 'page-number'
+        | 'footnote'
+        | 'table-of-contents'
+        | 'table-of-authorities'
+        | 'authority-mark'
       paragraphId: string
       offset: number
     }
@@ -24,7 +30,13 @@ type RangePlacement = Extract<StructuralPlacement, { from: number }>
 type SplicePlacement = Extract<
   StructuralPlacement,
   {
-    kind: 'cross-reference' | 'page-number' | 'footnote' | 'table-of-contents'
+    kind:
+      | 'cross-reference'
+      | 'page-number'
+      | 'footnote'
+      | 'table-of-contents'
+      | 'table-of-authorities'
+      | 'authority-mark'
   }
 >
 
@@ -42,9 +54,11 @@ function isRangeMark(
 
 /**
  * A zero-width splice at one offset. A `REF` field, a `PAGE` field, a
- * footnote reference and a `TOC` field share the same shape — a run cut
- * open for element-only content — so they share the conflict rules: each
- * poisons strictly-inside splices on the run it lands in.
+ * footnote reference, a `TOC` field, a `TOA` field and the hidden `TA`
+ * marks a table of authorities writes into citing paragraphs share the
+ * same shape — a run cut open for element-only content — so they share
+ * the conflict rules: each poisons strictly-inside splices on the run it
+ * lands in.
  */
 function isZeroWidthSplice(
   placement: StructuralPlacement,
@@ -53,7 +67,9 @@ function isZeroWidthSplice(
     placement.kind === 'cross-reference' ||
     placement.kind === 'page-number' ||
     placement.kind === 'footnote' ||
-    placement.kind === 'table-of-contents'
+    placement.kind === 'table-of-contents' ||
+    placement.kind === 'table-of-authorities' ||
+    placement.kind === 'authority-mark'
   )
 }
 
@@ -206,6 +222,10 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'footnote'
     case 'table-of-contents':
       return 'table of contents'
+    case 'table-of-authorities':
+      return 'table of authorities'
+    case 'authority-mark':
+      return 'citation mark'
     case 'defined-term':
       return 'defined-term mark'
   }

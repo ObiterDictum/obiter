@@ -33,6 +33,7 @@ import {
 import type { RunEmphasisRange } from './model-run-emphasis'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { insertTable } from './table-edits'
+import { insertTableOfAuthorities } from './table-of-authorities-edits'
 import { insertTableOfContents } from './table-of-contents-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import type { createTrackedEditWriter } from './tracked-edits'
@@ -443,6 +444,29 @@ export function applyPlannedOperation(
       // The field's tail paragraph is the anchor's post-split half: a later
       // table or paragraph insert at the same anchor chains after it, the
       // same way the serialised output places it after the tail's `</w:p>`.
+      state.postAnchorTails.set(key, inserted.lastWire)
+      state.postAnchorCounts.set(
+        key,
+        (state.postAnchorCounts.get(key) ?? 0) + inserted.appended,
+      )
+    }
+  } else if (operation.type === 'insert_table_of_authorities') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater) {
+      const key = operation.paragraph.wire.id
+      const occurrence = state.structureCounts.get(key) ?? 0
+      const inserted = insertTableOfAuthorities(
+        document,
+        mainStory,
+        operation.paragraph,
+        operation.offset,
+        occurrence,
+        deletedIds,
+        lineage ? { recorder: lineage, operationIndex } : undefined,
+      )
+      state.structureCounts.set(key, occurrence + 1)
+      // As with the contents table: the field's tail is the anchor's
+      // post-split half, so later post-anchor insertions chain after it.
       state.postAnchorTails.set(key, inserted.lastWire)
       state.postAnchorCounts.set(
         key,

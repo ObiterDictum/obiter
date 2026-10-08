@@ -60,6 +60,18 @@ export {
   FALLBACK_TAB_POSITION_TWIPS,
   type TocEntry,
 } from './table-of-contents-xml'
+export {
+  tableOfAuthoritiesCitations,
+  isGeneratedFieldResultStyle,
+  type AuthorityOccurrence,
+  type TableOfAuthoritiesEntry,
+} from './table-of-authorities-entries'
+export {
+  tableAuthorityMarkWires,
+  toaEntryParagraphWire,
+  toaHeadingParagraphWire,
+  type ToaEntry,
+} from './table-of-authorities-xml'
 export { decodeXmlReferences, findXmlTagEnd } from './xml-lexemes'
 export * from './collaboration-merge'
 export * from './document-identity'

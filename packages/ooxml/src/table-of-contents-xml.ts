@@ -19,9 +19,10 @@ export type TocEntry = TableOfContentsEntry & { bookmark: string }
 
 export const TOC_INSTRUCTION = ' TOC \\o "1-3" \\u '
 export const TOC_FIELD_END_RUN = '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
-const FIELD_BEGIN_RUN = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
-const FIELD_SEPARATE_RUN = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
-const TAB_RUN = '<w:r><w:tab/></w:r>'
+export const FIELD_BEGIN_RUN = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+export const FIELD_SEPARATE_RUN =
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+export const TAB_RUN = '<w:r><w:tab/></w:r>'
 
 // The right-aligned dot-leader tab stop an entry line carries, positioned at
 // the section's column width when the part records one and at the synthetic
@@ -120,7 +121,7 @@ export function sectionColumnWidthTwips(
 }
 
 /** The five run wires a stored `PAGEREF` field reparses to. */
-function pageReferenceRunWires(
+export function pageReferenceRunWires(
   nextId: () => string,
   bookmark: string,
 ): DocumentTextRunWire[] {
@@ -167,7 +168,7 @@ function tocInstructionFragment() {
   return `<w:instrText xml:space="preserve">${TOC_INSTRUCTION}</w:instrText>`
 }
 
-function pageReferenceXml(bookmark: string) {
+export function pageReferenceXml(bookmark: string) {
   return [
     FIELD_BEGIN_RUN,
     `<w:r><w:instrText xml:space="preserve"> PAGEREF ${escapeXmlText(bookmark)} </w:instrText></w:r>`,

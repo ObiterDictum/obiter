@@ -638,6 +638,39 @@ describe('structural link and reference refusals', () => {
     }
   })
 
+  it('refuses a cross-reference splice that splits a surrogate pair', async () => {
+    const document = await parseDocx(await surrogateFixtureBytes())
+    const paragraphs = mainParagraphs(document)
+    const anchor = paragraphs.find((paragraph) =>
+      paragraph.runs.some((run) => run.text.includes('Term')),
+    )
+    const target = paragraphs.find((paragraph) => paragraph.id !== anchor?.id)
+    if (!anchor || !target) throw new Error('Fixture model is missing.')
+    // 'Term \u{1F600} end': offset 6 sits between the emoji's surrogate
+    // halves; a field spliced there would sever the pair.
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_cross_reference',
+          paragraphId: anchor.id,
+          offset: 6,
+          targetParagraphId: target.id,
+        },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+    // Either edge of the pair composes.
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_cross_reference',
+          paragraphId: anchor.id,
+          offset: 5,
+          targetParagraphId: target.id,
+        },
+      ]),
+    ).not.toThrow()
+  })
+
   it('fails closed under tracked changes', async () => {
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
@@ -818,6 +851,26 @@ function hostileLinkFixtureBytes() {
         '<Relationship Id="rId52" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.co.uk/report" TargetMode="External"/></Relationships>',
     ),
   )
+  zip.file('word/styles.xml', stylesXml)
+  zip.file('word/numbering.xml', numberingXml)
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
+}
+
+/**
+ * A paragraph whose text holds a two-code-unit emoji, so a field splice
+ * can be placed inside the surrogate pair.
+ */
+function surrogateFixtureBytes() {
+  const zip = new JSZip()
+  const fixed = documentXml.replace(
+    '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
+    '<w:p w14:paraId="C1C2C3D6"><w:r><w:t>Term \u{1F600} end</w:t></w:r></w:p>' +
+      '<w:p><w:fldSimple w:instr=" STYLEREF Heading1 ">',
+  )
+  zip.file('[Content_Types].xml', contentTypesXml)
+  zip.file('_rels/.rels', rootRelationshipsXml)
+  zip.file('word/document.xml', fixed)
+  zip.file('word/_rels/document.xml.rels', documentRelationshipsXml)
   zip.file('word/styles.xml', stylesXml)
   zip.file('word/numbering.xml', numberingXml)
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })

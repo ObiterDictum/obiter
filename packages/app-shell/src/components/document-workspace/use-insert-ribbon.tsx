@@ -12,6 +12,7 @@ import {
   storyTableCellIds,
 } from '../../document-structure-toolbar'
 import { readImageInsert } from '../../document-image-inserts'
+import type { TableOfAuthoritiesFacts } from '../../document-legal-toolbar'
 import type { StructuralDraft } from '../../document-structural-drafts'
 import type { DocumentStructureToolbar } from './ribbon-types'
 
@@ -60,6 +61,9 @@ export function useInsertRibbon(
       update: (current: StructuralDraft[]) => StructuralDraft[],
     ) => void
   },
+  /** The citations the workspace reports over stored body paragraphs —
+   * memoised upstream so availability does not rescan the flow. */
+  toaFacts: TableOfAuthoritiesFacts,
   onImageError: (message: string) => void,
 ): InsertRibbonProps {
   const pictureInput = useRef<HTMLInputElement>(null)
@@ -99,6 +103,7 @@ export function useInsertRibbon(
     drafts: drafts.drafts,
     extraRuns: drafts.extraRuns,
     setStructures: drafts.setStructures,
+    toaFacts,
   })
   return {
     ...documentBreakToolbar({
@@ -119,6 +124,7 @@ export function useInsertRibbon(
       pageNumberUnavailable: structure.pageNumberUnavailable,
       footnoteUnavailable: structure.footnoteUnavailable,
       tableOfContentsUnavailable: structure.tableOfContentsUnavailable,
+      tableOfAuthoritiesUnavailable: structure.tableOfAuthoritiesUnavailable,
       editingStoryKind:
         margin.editingKind === 'document' ? undefined : margin.editingKind,
       headerUnavailable,
@@ -139,6 +145,10 @@ export function useInsertRibbon(
       },
       onInsertTableOfContents: () => {
         const outcome = structure.insertTableOfContents()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
+      onInsertTableOfAuthorities: () => {
+        const outcome = structure.insertTableOfAuthorities()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertFootnote: () => {

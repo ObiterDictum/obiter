@@ -473,6 +473,7 @@ describe('the footnote insert control', () => {
       setStructures: (update) => {
         structures.push(...update([]))
       },
+      toaFacts: { occurrences: [], entries: [], citingWires: [] },
       ...overrides,
     })
     return { api, structures }
