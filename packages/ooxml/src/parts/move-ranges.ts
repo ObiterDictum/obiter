@@ -17,7 +17,11 @@ import { isParagraphMarkMove, isTrackedChange } from './tracked-change-nodes'
 // elements.
 //
 // A wrapper outside any container is tolerated legacy markup: some producers
-// pair halves by a shared w:id, which the caller handles as a fallback.
+// pair halves by a shared w:id, which the caller handles as a fallback — but
+// only when deciding it cannot strand markup outside its own range. A paired
+// range marker it covers while the mate lies outside, a move-range marker it
+// carries, or an unformed marker span bracketing it would all leave orphaned
+// range markup behind, so such a wrapper reports blocked instead.
 // Containers that fail their shape rules — unmatched markers, missing names,
 // content no member wrapper covers, paragraph-mark moves — stay listed and
 // byte-preserved but undecidable rather than half-apply a move.
@@ -32,7 +36,10 @@ type MoveContainer = {
 
 export type MoveMembership =
   | { kind: 'member'; key: string; markers: XmlElementRange[] }
+  // A wrapper inside a container that failed its shape rules, or an
+  // uncontainered wrapper whose decision would strand range markup.
   | { kind: 'blocked' }
+  // A clean wrapper outside any container: the shared-w:id legacy fallback.
   | { kind: 'uncontainered' }
 
 export type MoveRangeIndex = ReturnType<typeof resolveMoveRanges>
@@ -157,10 +164,46 @@ export function resolveMoveRanges(
     containers.filter((container) => !container.clean).map(({ name }) => name),
   )
   const markerRanges = new Map<string, XmlElementRange[]>()
+  const formedMarkers = new Set<XmlElement>()
   for (const container of containers) {
+    formedMarkers.add(container.start)
+    formedMarkers.add(container.end)
     const ranges = markerRanges.get(container.name) ?? []
     ranges.push(elementRange(container.start), elementRange(container.end))
     markerRanges.set(container.name, ranges)
+  }
+
+  // The tolerated shared-w:id fallback applies the container rule with the
+  // wrapper itself as the boundary: a decision rewrites exactly that range,
+  // so a paired marker it covers while the mate survives outside, a
+  // move-range marker it carries, or unformed marker markup bracketing it —
+  // a same-side start before and end after that no container claimed —
+  // would strand markup. Those wrappers stay undecidable instead of pairing.
+  function uncontaineredSafe(wrapper: XmlElement) {
+    const covered = (element: XmlElement) =>
+      element.start >= wrapper.startTagEnd && element.end <= wrapper.endTagStart
+    for (const element of elements) {
+      if (!covered(element)) continue
+      if (MOVE_RANGE_MARKERS.has(element.localName)) return false
+      if (!RANGE_MARKER_NAMES.has(element.localName)) continue
+      const mate = markerMates.get(element)
+      if (mate && !covered(mate)) return false
+    }
+    return !(['from', 'to'] as const).some(
+      (side) =>
+        elements.some(
+          (element) =>
+            isWord(element, MARKER_NAMES[side].start) &&
+            !formedMarkers.has(element) &&
+            element.end <= wrapper.start,
+        ) &&
+        elements.some(
+          (element) =>
+            isWord(element, MARKER_NAMES[side].end) &&
+            !formedMarkers.has(element) &&
+            element.start >= wrapper.end,
+        ),
+    )
   }
 
   function member(element: XmlElement): MoveMembership {
@@ -176,7 +219,11 @@ export function resolveMoveRanges(
         (left, right) =>
           right.start.start - left.start.start || left.end.end - right.end.end,
       )[0]
-    if (!inner) return { kind: 'uncontainered' }
+    if (!inner) {
+      return uncontaineredSafe(element)
+        ? { kind: 'uncontainered' }
+        : { kind: 'blocked' }
+    }
     const side = element.localName === 'moveFrom' ? 'from' : 'to'
     if (inner.side !== side || !inner.clean || blockedNames.has(inner.name)) {
       return { kind: 'blocked' }
