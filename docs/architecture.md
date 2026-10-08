@@ -2098,3 +2098,81 @@ Decision: export embeds stored and imported comments plus their replies into
 comments parts are untouched. A reparse of the export reproduces the
 imported threads with their replies, so the DOCX round-trips through a Word
 edit without losing the product layer.
+
+### Version-level ACL, Postgres presence, and model comparison (E10)
+
+Context: the E10 milestone closes audit findings P2-8 and P2-9. Presence was a
+process-local `Map`, so two API instances behind the same document showed
+different participants, and a reload-adjacent deployment silently dropped
+every cursor. Separately, every version-reading route resolved `?versionId=`
+with matter-level `view`, so any view grantee could read arbitrary ready
+historical versions — content the share model never promised them.
+
+Decision: historical versions are gated at `edit`. `resolveReadyDocumentVersion`
+in `services/api/src/routes/document-route-shared.ts` is the single resolver:
+a request naming a non-current version requires matter-level `edit`, while the
+current version keeps each route's existing level (`view` for reads). Denial is
+the concealed document 404, not a 403, so the gate leaks nothing about whether
+the version exists. `GET /api/documents/:id` likewise lists only the current
+version to a view grantee, so the historical version list is not enumerable
+through document metadata. Denied ids can still surface as provenance on
+secondary records — a comment's `anchorVersionId`, a redaction run's
+`documentVersionId` — which is deliberate: the id alone grants nothing because
+every content route enforces the gate independently. The policy is the
+least-privilege reading of the existing two-level share model: `view` means
+"see the matter's documents as they are", not "see every prior state".
+Verification-run binding already required `edit` for a selected version, so
+the choice matches the established boundary rather than inventing a third
+level. Every direct read path goes through the resolver — model, media, text,
+download, export, pdf-view, tracked-changes and the new compare route — and
+the compare route resolves both named versions through it, so a denied version
+cannot be reached by naming it as either side of a comparison.
+
+The same gate covers the one indirect read path: a redaction run bound to a
+document version resolves its source text, source file and layout through
+`document_versions`, so `getRunDocumentVersion` in
+`services/api/src/redaction-database.ts` joins the run's version to its
+document and serves the storage keys only while that version is current —
+or always to a caller with matter-level `edit`. The check runs inside the key
+lookup, so a version that flips non-current between check and read cannot
+slip through, and a denied lookup returns the same not-found as a missing
+version. Run-owned data — spans, decisions, summary, the finalized output
+artifact and the pseudonymisation token map — keeps the run-level share model:
+those are the review product itself, not the immutable version bytes.
+
+Decision: presence lives in Postgres (`document_presence`, migration 0032),
+not process memory. One row per `(organisation, document, user, client)`; the
+client sends a per-tab `clientId`, so two tabs of one account are distinct
+participants and a leave removes only the caller's own row. Rows expire by
+the database clock at the heartbeat TTL, reads filter `expires_at > now()`,
+and each write is a single statement whose CTEs upsert the row, sweep a
+bounded batch of expired rows and cap participants — no separate cleanup job
+and no read-modify-write race between instances. The cap is a read bound
+enforced per write rather than a strict global row count: concurrent upserts
+into a full bucket can transiently overshoot, and the next write converges it
+back. Rows reference the version
+by the composite `document_versions` key and cascade with it, so a superseded
+version's cursors stop matching current-version reads and a deleted document
+is never blocked by abandoned presence. Cursor coordinates are validated
+against the selected version's model before a row is written, and the row
+carries only ids and an offset — never document text.
+
+Decision: version comparison is a pure function over the two versions' stored
+models (`services/api/src/document-compare.ts` orchestrating
+`document-compare-align.ts` for paragraph pairing and
+`document-compare-word-diff.ts` for the bounded token diff), served by
+`GET /api/documents/:id/compare?baseVersionId=&targetVersionId=`. Paragraph
+pairing is tiered: `w14:paraId` anchors the alignment, gap leftovers pair on
+identical text in occurrence order, and the remainder pairs on word overlap
+so an edit across the canonicalisation boundary — a version that predates
+`w14` ids compared against one that has them — reports 'modified' instead of
+a whole-document remove+add. The merged pair set is then filtered to a
+monotonic subsequence before emission, so a reordered paragraph reports
+remove+add rather than pairing across its new position. Entries cover added,
+removed, modified (with word-level segments), formatting-only, story and
+package-area changes; the response is bounded and deterministic, and opaque
+package bytes the model does not carry are acknowledged by a note when the
+hashes differ rather than silently compared equal. The frontend renders the
+entries and offers read-only viewing of historical versions through the same
+version-aware queries, so a historical view never reads or mutates the
+current version's cached model.

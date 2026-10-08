@@ -462,17 +462,68 @@ export async function listRedactionRunsForDocument(
   return result.rows.map(mapRedactionRun)
 }
 
-export async function getRunTextObjectKey(pool: Pool, run: RedactionRunRecord) {
-  if (run.sourceTextObjectKey) return run.sourceTextObjectKey
+/**
+ * A run bound to a document version reads that version's storage objects.
+ * While the bound version is still the document's current one, run-level
+ * access already implies the caller may read its content; once a newer
+ * version supersedes it, the bytes are historical document content and the
+ * same 'edit' gate as `?versionId=` applies. The predicate lives inside the
+ * key lookup itself, so no caller can forget it and a version that flips
+ * non-current between an earlier check and this read cannot slip through. A
+ * denied lookup returns no row, so callers report the same not-found they
+ * would for a missing version.
+ */
+async function getRunDocumentVersion(
+  pool: Pool,
+  run: RedactionRunRecord,
+  user: AuthenticatedOrgUser,
+) {
   if (!run.documentVersionId) return null
-  const result = await pool.query<{ text_object_key: string | null }>(
-    'select text_object_key from document_versions where id = $1 and organisation_id = $2',
-    [run.documentVersionId, run.organisationId],
+  const result = await pool.query<{
+    object_key: string
+    text_object_key: string | null
+    filename: string
+    file_type: string
+  }>(
+    `select version.object_key, version.text_object_key,
+       version.filename, version.file_type
+     from document_versions version
+     join matter_documents document
+       on document.id = version.matter_document_id
+       and document.matter_id = version.matter_id
+       and document.organisation_id = version.organisation_id
+     join matters matter
+       on matter.id = document.matter_id
+       and matter.organisation_id = document.organisation_id
+     where version.id = $1
+       and version.organisation_id = $2
+       and version.document_status = 'ready'
+       and document.deleted_at is null
+       and matter.deleted_at is null
+       and (
+         document.current_version_id = version.id
+         or ${matterAccessPredicate('$3', "'edit'")}
+       )`,
+    [run.documentVersionId, run.organisationId, user.id],
   )
-  return result.rows[0]?.text_object_key ?? null
+  return result.rows[0] ?? null
 }
 
-export async function getRunSourceFile(pool: Pool, run: RedactionRunRecord) {
+export async function getRunTextObjectKey(
+  pool: Pool,
+  run: RedactionRunRecord,
+  user: AuthenticatedOrgUser,
+) {
+  if (run.sourceTextObjectKey) return run.sourceTextObjectKey
+  const version = await getRunDocumentVersion(pool, run, user)
+  return version?.text_object_key ?? null
+}
+
+export async function getRunSourceFile(
+  pool: Pool,
+  run: RedactionRunRecord,
+  user: AuthenticatedOrgUser,
+) {
   if (run.sourceFileObjectKey) {
     return {
       objectKey: run.sourceFileObjectKey,
@@ -480,23 +531,12 @@ export async function getRunSourceFile(pool: Pool, run: RedactionRunRecord) {
       filename: run.sourceFilename,
     }
   }
-  if (!run.documentVersionId) return null
-  const result = await pool.query<{
-    object_key: string
-    filename: string
-    file_type: string
-  }>(
-    `select object_key, filename, file_type
-     from document_versions
-     where id = $1 and organisation_id = $2`,
-    [run.documentVersionId, run.organisationId],
-  )
-  const row = result.rows[0]
-  if (!row) return null
+  const version = await getRunDocumentVersion(pool, run, user)
+  if (!version) return null
   return {
-    objectKey: row.object_key,
-    mimeType: mimeTypeFromStoredFileType(row.file_type),
-    filename: row.filename,
+    objectKey: version.object_key,
+    mimeType: mimeTypeFromStoredFileType(version.file_type),
+    filename: version.filename,
   }
 }
 
@@ -525,14 +565,11 @@ export function mimeTypeFromStoredFileType(
 export async function getRunLayoutObjectKey(
   pool: Pool,
   run: RedactionRunRecord,
+  user: AuthenticatedOrgUser,
 ) {
   if (run.sourceLayoutObjectKey) return run.sourceLayoutObjectKey
-  if (!run.documentVersionId) return null
-  const result = await pool.query<{ object_key: string }>(
-    `select object_key from document_versions where id = $1 and organisation_id = $2`,
-    [run.documentVersionId, run.organisationId],
-  )
-  const objectKey = result.rows[0]?.object_key
+  const version = await getRunDocumentVersion(pool, run, user)
+  const objectKey = version?.object_key
   if (!objectKey?.endsWith('/source')) return null
   return objectKey.replace(/\/source$/, '/layout.json')
 }

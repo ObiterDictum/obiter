@@ -7,7 +7,10 @@ import {
   getDocumentPdfView,
 } from '../document-pdf-view-store'
 import type { StorageService } from '../storage'
-import { resolveCurrentReadyDocumentVersion } from './document-route-shared'
+import {
+  requestedVersionSelection,
+  resolveReadyDocumentVersion,
+} from './document-route-shared'
 
 export function createDocumentPdfViewRoutes(
   pool: Pool,
@@ -16,11 +19,13 @@ export function createDocumentPdfViewRoutes(
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
   routes.get('/api/documents/:id/pdf-view', async (c) => {
-    const resolved = await resolveCurrentReadyDocumentVersion(
+    const resolved = await resolveReadyDocumentVersion(
       c,
       pool,
       c.req.param('id'),
       'pdf',
+      'view',
+      requestedVersionSelection(c),
     )
     if (resolved instanceof Response) return resolved
 

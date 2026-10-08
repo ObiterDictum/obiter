@@ -34,6 +34,7 @@ import {
 } from '../request-limits'
 import type { StorageService } from '../storage'
 import { ensureOrgUser, requireManageRole } from '../authz'
+import { canReadDocumentHistory } from './document-route-shared'
 
 interface RouteUser {
   id: string
@@ -366,6 +367,17 @@ export function createDocumentsRoutes(
     })
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
+    }
+    // Version history is editor-only: a 'view' share reads the document as it
+    // stands. Conceal the other versions' ids and metadata here so the same
+    // caller cannot enumerate the versions the read routes would deny.
+    if (!(await canReadDocumentHistory(pool, user, result.document.matterId))) {
+      return c.json({
+        ...result,
+        versions: result.versions.filter(
+          (version) => version.id === result.document.currentVersionId,
+        ),
+      })
     }
     return c.json(result)
   })

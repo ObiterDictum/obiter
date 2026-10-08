@@ -169,7 +169,7 @@ export function DocumentWorkspaceToolbar({
           >
             {others.map((item) => (
               <span
-                key={item.userId}
+                key={item.clientId ?? item.userId}
                 className="inline-flex h-6 min-w-6 items-center justify-center rounded-pill bg-raised px-1.5 text-[10px] font-medium text-muted ring-1 ring-line"
               >
                 {shortUserLabel(item.userId)}

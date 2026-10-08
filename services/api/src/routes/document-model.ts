@@ -7,17 +7,22 @@ import {
   getDocumentModel,
 } from '../document-model-store'
 import type { StorageService } from '../storage'
-import { resolveCurrentReadyDocumentVersion } from './document-route-shared'
+import {
+  requestedVersionSelection,
+  resolveReadyDocumentVersion,
+} from './document-route-shared'
 
 export function createDocumentModelRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
   routes.get('/api/documents/:id/model', async (c) => {
-    const resolved = await resolveCurrentReadyDocumentVersion(
+    const resolved = await resolveReadyDocumentVersion(
       c,
       pool,
       c.req.param('id'),
       'docx',
+      'view',
+      requestedVersionSelection(c),
     )
     if (resolved instanceof Response) return resolved
 
