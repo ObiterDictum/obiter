@@ -2051,3 +2051,50 @@ applies it in filename order and an upgrade applies it whenever it becomes
 pending, so it is safe whichever of two concurrently proposed migrations lands
 first. The route-level sharing and access contracts are unchanged; the
 constraint is a backstop, not a replacement for the application checks.
+
+### Document comments: cross-paragraph anchors, imported threads, replies and authorised resolution (7 October 2026)
+
+Context: the S3 comment slice (M1.25) anchored comments to a paragraph range,
+kept imported Word comments inside the OOXML parts only, permitted any editor
+to resolve, and had no replies. The comment panel told the author comments
+were paragraph-wide, so the anchor contract already carried offsets the UI
+never asked for.
+
+Decision: extend the anchor with an optional `endParagraphId`, so a selected
+range that crosses paragraphs survives honestly. A collapsed caret stays an
+insertion-point anchor with equal offsets; a missing selection creates no
+comment rather than widening to the whole paragraph. Unresolvable anchors
+stay stored and render as unresolved; nothing re-anchors them.
+
+Decision: imported `w:comment` entries are read out of the parsed model
+(`DocumentModelWire.comments`) at serve time and merged into the comment
+list. They are never copied into `document_comments`: the immutable source
+bytes are their record, so a stored copy would drift from the file. Imported
+threads keep the file's `w15:done` resolution state read-only; the product
+does not rewrite foreign OOXML to mark them resolved. Replies to an imported
+thread are stored against its `ooxml-<w:id>` identity, which cannot collide
+with a stored `cmt_` id; a thread without a usable numeric id cannot accept
+replies, and product replies whose imported head later vanishes are served
+as orphaned replies rather than dropped.
+
+Decision: `document_comment_replies` is a new organisation and matter scoped
+table (migration 0030) with a composite foreign key into the scoped
+comment key, so a reply cannot reference another document's comment.
+`POST /api/documents/:id/comments/:commentId/replies` accepts either a
+stored comment id or an imported `ooxml-<n>` id as the parent. Create and
+reply carry an optional client key deduped per author, so a retried submit
+returns the existing row instead of duplicating the thread.
+
+Decision: resolution is no longer "any editor". Resolve and the new reopen
+route succeed for the comment author or an organisation owner/admin only;
+another member gets the uniform forbidden response. This narrows the S3
+edit-gated rule because a resolve is a moderation act on someone else's
+recorded judgment, and audit P2-6 flagged the missing un-resolve path:
+`PATCH /api/documents/:id/comments/:commentId/reopen` restores it.
+
+Decision: export embeds stored and imported comments plus their replies into
+`word/comments.xml` with `w15:commentsExtended` threading (`paraId`,
+`paraIdParent`, `done`), preserving foreign parts byte-identically where the
+comments parts are untouched. A reparse of the export reproduces the
+imported threads with their replies, so the DOCX round-trips through a Word
+edit without losing the product layer.

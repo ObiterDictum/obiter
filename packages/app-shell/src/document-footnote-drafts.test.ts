@@ -72,6 +72,7 @@ function model(stories: DocumentStoryWire[]): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

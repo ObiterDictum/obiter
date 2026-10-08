@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { documentImportedCommentSchema } from './document-comments'
+
 export const documentStoryKindSchema = z.enum([
   'document',
   'header',
@@ -178,6 +180,12 @@ export const documentModelWireSchema = z.object({
   relationships: z.array(documentRelationshipWireSchema),
   preservedXmlFragments: z.array(preservedDocumentXmlFragmentSchema),
   changes: z.array(documentChangeWireSchema).default([]),
+  /**
+   * Comments carried by the package's own `word/comments.xml`. Required rather
+   * than defaulted so a cached model written before this field existed fails
+   * validation and regenerates instead of reporting no imported comments.
+   */
+  comments: z.array(documentImportedCommentSchema),
 })
 export type DocumentModelWire = z.infer<typeof documentModelWireSchema>
 

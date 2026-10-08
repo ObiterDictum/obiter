@@ -43,6 +43,7 @@ const model: DocumentModelWire = {
       paragraphId: 'p1',
     },
   ],
+  comments: [],
 }
 
 const tabledModel: DocumentModelWire = {

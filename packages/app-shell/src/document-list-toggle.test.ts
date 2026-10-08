@@ -47,6 +47,7 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 describe('list toggle', () => {

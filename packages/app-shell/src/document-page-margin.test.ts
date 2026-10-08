@@ -292,6 +292,7 @@ describe('marginBandHeights', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     expect(marginBandHeights(model).footerPx).toBeGreaterThanOrEqual(72)
   })
@@ -332,6 +333,7 @@ describe('marginBandHeights', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     expect(marginBandHeights(model).headerPx).toBe(186)
   })
@@ -372,6 +374,7 @@ describe('marginBandHeights', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     expect(marginBandHeights(model).headerPx).toBe(109)
   })
@@ -414,6 +417,7 @@ describe('marginBandHeights', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     expect(marginBandHeights(model).headerPx).toBe(156)
   })

@@ -44,6 +44,7 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 function blankParagraphModel(styleId?: string): DocumentModelWire {

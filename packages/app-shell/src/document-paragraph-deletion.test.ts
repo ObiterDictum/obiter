@@ -26,6 +26,7 @@ function model(ids: readonly string[]): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

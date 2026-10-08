@@ -28,23 +28,26 @@ type CanonicalNode =
 type CanonicalAttribute = ExpandedName & { value: string }
 type NamespaceBindings = ReadonlyMap<string, string>
 
-const parser = new XMLParser({
-  preserveOrder: true,
-  ignoreAttributes: false,
-  trimValues: false,
-  parseTagValue: false,
-  parseAttributeValue: false,
-  processEntities: false,
-  cdataPropName: '#cdata',
-  commentPropName: '#comment',
-  ignoreDeclaration: false,
-  ignorePiTags: false,
-})
+// Built on first use: an eager module-scope instance drags fast-xml-parser
+// into the client bundle for a comparison path only server-side code runs.
+let parser: XMLParser | undefined
 
 export function canonicaliseXml(xml: string) {
   try {
     const inspection = inspectXmlLexemes(xml)
     const instructions = inspection.instructions
+    parser ??= new XMLParser({
+      preserveOrder: true,
+      ignoreAttributes: false,
+      trimValues: false,
+      parseTagValue: false,
+      parseAttributeValue: false,
+      processEntities: false,
+      cdataPropName: '#cdata',
+      commentPropName: '#comment',
+      ignoreDeclaration: false,
+      ignorePiTags: false,
+    })
     const parsed: unknown = parser.parse(xml, true)
     if (!Array.isArray(parsed)) return undefined
 

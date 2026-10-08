@@ -30,6 +30,7 @@ function page(jc: string, text: string): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

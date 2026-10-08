@@ -43,6 +43,7 @@ function sampleModel(
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
     ...overrides,
   }
 }

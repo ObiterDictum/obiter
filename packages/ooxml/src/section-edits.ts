@@ -1,6 +1,6 @@
 import type { DocumentStoryWire } from '@obiter/contracts'
 
-import { locateOffset, preserveTextOpeningTag } from './comment-anchors'
+import { locateOffset, preserveTextOpeningTag } from './text-offsets'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { splitsSurrogate } from './model-run-range-edits'

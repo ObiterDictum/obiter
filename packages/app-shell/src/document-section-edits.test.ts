@@ -177,6 +177,7 @@ describe('section pagination', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     const pages = layoutDocument(model)
     expect(pages).toHaveLength(2)
@@ -429,6 +430,7 @@ function model(paragraphIds: string[]): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

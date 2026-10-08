@@ -416,6 +416,7 @@ function trackedModel(saved: boolean) {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     },
   }
 }
@@ -535,7 +536,9 @@ async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
     })
   })
   await page.route(`**/api/documents/${TRACKED_DOC_ID}/comments`, (route) =>
-    route.fulfill({ json: { comments: [] } }),
+    route.fulfill({
+      json: { comments: [], importedComments: [], orphanedReplies: [] },
+    }),
   )
   await page.route(
     `**/api/documents/${TRACKED_DOC_ID}/tracked-changes`,

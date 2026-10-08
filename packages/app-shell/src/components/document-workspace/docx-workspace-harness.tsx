@@ -16,7 +16,9 @@ const hooks = vi.hoisted(() => ({
   useDocumentTrackedChanges: vi.fn(),
   useDocumentCollaborationSync: vi.fn(),
   useCreateDocumentComment: vi.fn(),
+  useReplyDocumentComment: vi.fn(),
   useResolveDocumentComment: vi.fn(),
+  useReopenDocumentComment: vi.fn(),
   useEditDocument: vi.fn(),
   useCollaborationMerge: vi.fn(),
   useTrackedChangeDecision: vi.fn(),
@@ -51,7 +53,9 @@ mock.module('../../document-workspace-api', () =>
         useDocumentTrackedChanges: hooks.useDocumentTrackedChanges,
         useDocumentCollaborationSync: hooks.useDocumentCollaborationSync,
         useCreateDocumentComment: hooks.useCreateDocumentComment,
+        useReplyDocumentComment: hooks.useReplyDocumentComment,
         useResolveDocumentComment: hooks.useResolveDocumentComment,
+        useReopenDocumentComment: hooks.useReopenDocumentComment,
         useEditDocument: hooks.useEditDocument,
         useCollaborationMerge: hooks.useCollaborationMerge,
         useTrackedChangeDecision: hooks.useTrackedChangeDecision,
@@ -143,6 +147,7 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 export const staleConflict = new ApiError(
@@ -200,6 +205,7 @@ export function multiParagraphModel(
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
@@ -260,15 +266,28 @@ export function mountWorkspace(
     decideAsync?: ReturnType<typeof vi.fn>
     /** Simulates the reload query failing, so a pending baseline cannot resolve. */
     modelError?: () => boolean
+    /** Overrides the comments list the panel is fed. */
+    comments?: {
+      comments?: import('@obiter/contracts').DocumentComment[]
+      importedComments?: import('@obiter/contracts').DocumentImportedCommentThread[]
+      orphanedReplies?: import('@obiter/contracts').DocumentCommentReply[]
+    }
+    /** Drives the comment mutations; each defaults to an idle mutation. */
+    createComment?: ReturnType<typeof vi.fn>
+    replyComment?: ReturnType<typeof vi.fn>
+    resolveComment?: ReturnType<typeof vi.fn>
+    reopenComment?: ReturnType<typeof vi.fn>
+    /** Overrides the signed-in user's id and organisation role. */
+    user?: { id?: string; role?: 'owner' | 'admin' | 'member' }
   } = {},
 ) {
   hooks.useCurrentUser.mockReturnValue({
     data: {
       user: {
-        id: 'usr_1',
+        id: options.user?.id ?? 'usr_1',
         name: 'Lex',
         email: 'lex@obiter.dev',
-        role: 'owner',
+        role: options.user?.role ?? 'owner',
       },
       organisation: { id: 'org_1', name: 'Chambers', plan: 'private_beta' },
     },
@@ -285,7 +304,13 @@ export function mountWorkspace(
       data: { documentId: id, ...current },
     }
   })
-  hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })
+  hooks.useDocumentComments.mockReturnValue({
+    data: {
+      comments: options.comments?.comments ?? [],
+      importedComments: options.comments?.importedComments ?? [],
+      orphanedReplies: options.comments?.orphanedReplies ?? [],
+    },
+  })
   hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
   hooks.useDocumentCollaborationSync.mockReturnValue({
     data: {
@@ -295,8 +320,18 @@ export function mountWorkspace(
         options.modelFor?.(options.documentId ?? 'doc_1').versionId ?? 'ver_1',
     },
   })
-  hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
-  hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
+  hooks.useCreateDocumentComment.mockReturnValue(
+    idleMutation({ mutateAsync: options.createComment ?? vi.fn() }),
+  )
+  hooks.useReplyDocumentComment.mockReturnValue(
+    idleMutation({ mutateAsync: options.replyComment ?? vi.fn() }),
+  )
+  hooks.useResolveDocumentComment.mockReturnValue(
+    idleMutation({ mutate: options.resolveComment ?? vi.fn() }),
+  )
+  hooks.useReopenDocumentComment.mockReturnValue(
+    idleMutation({ mutate: options.reopenComment ?? vi.fn() }),
+  )
   hooks.useEditDocument.mockReturnValue(
     idleMutation({ mutateAsync: options.editAsync ?? vi.fn() }),
   )
