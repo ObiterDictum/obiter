@@ -1,5 +1,6 @@
 import {
   ArrowDown,
+  ArrowsClockwise,
   ArrowUp,
   BookOpen,
   ChatText,
@@ -123,6 +124,16 @@ export function ReferencesRibbon({
             }
             disabledReason={structure?.tableOfAuthoritiesUnavailable}
             icon={<Checks size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Update table"
+            onClick={structure?.onUpdateTableOfAuthorities}
+            disabled={
+              !structure ||
+              Boolean(structure.tableOfAuthoritiesUpdateUnavailable)
+            }
+            disabledReason={structure?.tableOfAuthoritiesUpdateUnavailable}
+            icon={<ArrowsClockwise size={16} aria-hidden />}
           />
           <RibbonSelect
             label="Citation style"

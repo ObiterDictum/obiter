@@ -129,6 +129,21 @@ export type StructuralTableOfAuthoritiesDraft = {
 }
 
 /**
+ * A pending refresh of a table of authorities the document already
+ * holds. `paragraphId` names the stored paragraph carrying the field's
+ * `begin` — the generated heading paragraph — so the writer rewrites
+ * the field's generated range in place rather than splicing a second
+ * field. Payload-free like the insertion: the server rediscovers the
+ * citations, adds `TA` marks only where an occurrence is not already
+ * marked, and reuses the `_ToA` bookmarks it finds.
+ */
+export type StructuralTableOfAuthoritiesRefreshDraft = {
+  id: string
+  kind: 'table-of-authorities-refresh'
+  paragraphId: string
+}
+
+/**
  * A pending `_Def_` bookmark mark over `[from, to)` of a stored paragraph's
  * painted text — the editor's defined-term mark. Like the link draft it
  * carries no model change: the paint draws an overlay range and the save
@@ -169,6 +184,7 @@ export type StructuralDraft =
   | StructuralFootnoteDraft
   | StructuralTableOfContentsDraft
   | StructuralTableOfAuthoritiesDraft
+  | StructuralTableOfAuthoritiesRefreshDraft
   | StructuralDefinedTermDraft
 
 /**
@@ -252,6 +268,13 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       kind: z.literal('table-of-authorities'),
       paragraphId: z.string().min(1),
       offset: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('table-of-authorities-refresh'),
+      paragraphId: z.string().min(1),
     })
     .strict(),
   z
@@ -362,6 +385,13 @@ export function structuralEditOperations(
         type: 'insert_table_of_authorities',
         paragraphId: structure.paragraphId,
         offset: structure.offset,
+      })
+      continue
+    }
+    if (structure.kind === 'table-of-authorities-refresh') {
+      operations.push({
+        type: 'update_table_of_authorities',
+        paragraphId: structure.paragraphId,
       })
       continue
     }

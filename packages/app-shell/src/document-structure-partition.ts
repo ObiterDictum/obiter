@@ -21,6 +21,7 @@ import {
   conflictingStructure,
   structuralKindNoun,
 } from './document-structure-conflicts'
+import { resolveInsertAnchor } from './document-story-flow'
 import {
   isTableOfContentsHeading,
   tableOfContentsAnchorBlock,
@@ -29,6 +30,7 @@ import {
 import {
   createTableOfAuthoritiesFacts,
   tableOfAuthoritiesPartitionBlock,
+  tableOfAuthoritiesUpdateBlock,
 } from './document-toa-availability'
 
 /**
@@ -96,7 +98,15 @@ export function partitionStructureSlots({
     batchDeletions,
     drafts: keep.drafts,
     extraRuns: keep.extraRuns,
+    paragraphStyles: state.format.paragraphStyles,
   })
+  // Paragraphs a kept table-of-authorities refresh will rewrite: a
+  // structure anchored inside that range would be silently replaced, so it
+  // is held back rather than composed. Insert anchors are resolved lazily
+  // — a save holding no refresh draft never walks the chain.
+  const refreshCovered = new Set<string>()
+  let insertAnchors: Set<string> | undefined
+  const storyParagraphs = documentStory(model)?.paragraphs ?? []
   for (const structure of state.structures) {
     const deletedAnchor = batchDeletions.has(structure.paragraphId)
     const missingTarget =
@@ -113,6 +123,7 @@ export function partitionStructureSlots({
       (structure.kind === 'footnote' ||
         structure.kind === 'table-of-contents' ||
         structure.kind === 'table-of-authorities' ||
+        structure.kind === 'table-of-authorities-refresh' ||
         structure.kind === 'defined-term') &&
       anchorStoryKind !== undefined &&
       anchorStoryKind !== 'document'
@@ -159,6 +170,54 @@ export function partitionStructureSlots({
             structures: keep.structures,
           })
         : undefined
+    // A reloaded refresh draft is refused for every reason the ribbon
+    // would refuse the update now: the field it names must still be a
+    // stored `TOA` head, and nothing pending may touch the range the
+    // writer rewrites. The block also catches a second refresh queued on
+    // the same field.
+    const refreshField =
+      structure.kind === 'table-of-authorities-refresh'
+        ? tableOfAuthoritiesFacts().fields.get(structure.paragraphId)
+        : undefined
+    if (refreshField && insertAnchors === undefined) {
+      const insertById = new Map(
+        state.inserts.map((item) => [item.clientId, item]),
+      )
+      insertAnchors = new Set(
+        keep.inserts.map((insert) =>
+          resolveInsertAnchor(insert, insertById, paragraphIds),
+        ),
+      )
+    }
+    const refreshBlock =
+      structure.kind === 'table-of-authorities-refresh'
+        ? refreshField === undefined
+          ? 'The table of authorities this updates is no longer in the document.'
+          : tableOfAuthoritiesUpdateBlock({
+              field: refreshField,
+              fieldWires: refreshField.paragraphIds.flatMap((id) => {
+                const found = storyParagraphs.find(
+                  (paragraph) => paragraph.id === id,
+                )
+                return found === undefined ? [] : [found]
+              }),
+              facts: tableOfAuthoritiesFacts(),
+              changes: model.changes,
+              deletions: batchDeletions,
+              drafts: keep.drafts,
+              extraRuns: keep.extraRuns,
+              format: state.format,
+              breaks: state.breaks,
+              insertAnchors: insertAnchors ?? new Set(),
+              structures: keep.structures,
+            })
+        : undefined
+    // A structure anchored inside a field a kept refresh rewrites would be
+    // silently replaced along with the generated paragraphs.
+    const coveredByRefresh =
+      refreshCovered.has(structure.paragraphId) ||
+      (structure.kind === 'cross-reference' &&
+        refreshCovered.has(structure.targetParagraphId))
     const conflicting = wire
       ? conflictingStructure(
           wire,
@@ -192,6 +251,8 @@ export function partitionStructureSlots({
       nonPageAnchor ||
       tableOfContentsBlock ||
       tableOfAuthoritiesBlock ||
+      refreshBlock ||
+      coveredByRefresh ||
       conflicting ||
       definedTermDrift
     ) {
@@ -200,22 +261,27 @@ export function partitionStructureSlots({
           ? 'A table of contents can only be placed in the body.'
           : structure.kind === 'table-of-authorities'
             ? 'A table of authorities can only be placed in the body.'
-            : structure.kind === 'defined-term'
-              ? 'A defined-term mark can only be placed in the body.'
-              : 'A footnote can only be placed in the body.'
+            : structure.kind === 'table-of-authorities-refresh'
+              ? 'A table of authorities update can only target the body.'
+              : structure.kind === 'defined-term'
+                ? 'A defined-term mark can only be placed in the body.'
+                : 'A footnote can only be placed in the body.'
         : nonPageAnchor
           ? 'A page number needs a page of its own: the body, a header or a footer.'
           : missingTarget
             ? 'The paragraph this references is no longer in the document.'
             : deletedAnchor
               ? 'The paragraph this was placed after is marked for deletion.'
-              : (tableOfContentsBlock ??
-                tableOfAuthoritiesBlock ??
-                (definedTermDrift
-                  ? 'The text under this defined-term mark changed since it was marked.'
-                  : conflicting
-                    ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-                    : 'The paragraph this was placed in is no longer in the document.'))
+              : coveredByRefresh
+                ? 'This is inside a table of authorities that is already queued to update.'
+                : (tableOfContentsBlock ??
+                  tableOfAuthoritiesBlock ??
+                  refreshBlock ??
+                  (definedTermDrift
+                    ? 'The text under this defined-term mark changed since it was marked.'
+                    : conflicting
+                      ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+                      : 'The paragraph this was placed in is no longer in the document.'))
       blockedStructureReasons.set(structure.id, reason)
       blocked.push({
         slot: {
@@ -235,6 +301,9 @@ export function partitionStructureSlots({
       continue
     }
     keep.structures.push(structure)
+    if (structure.kind === 'table-of-authorities-refresh' && refreshField) {
+      for (const id of refreshField.resultIds) refreshCovered.add(id)
+    }
     covered.push({
       kind: 'structure',
       key: `structure:${structure.id}`,

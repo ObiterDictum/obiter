@@ -34,6 +34,7 @@ import type { RunEmphasisRange } from './model-run-emphasis'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { insertTable } from './table-edits'
 import { insertTableOfAuthorities } from './table-of-authorities-edits'
+import { updateTableOfAuthorities } from './table-of-authorities-update'
 import { insertTableOfContents } from './table-of-contents-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import type { createTrackedEditWriter } from './tracked-edits'
@@ -471,6 +472,17 @@ export function applyPlannedOperation(
       state.postAnchorCounts.set(
         key,
         (state.postAnchorCounts.get(key) ?? 0) + inserted.appended,
+      )
+    }
+  } else if (operation.type === 'update_table_of_authorities') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater) {
+      updateTableOfAuthorities(
+        document,
+        mainStory,
+        operation.paragraph,
+        deletedIds,
+        lineage ? { recorder: lineage, operationIndex } : undefined,
       )
     }
   } else {

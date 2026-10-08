@@ -158,11 +158,17 @@ function foldStory(
     draft: StructuralDraft & { kind: 'table-of-contents' },
     tails: Map<string, DocumentParagraphWire>,
   ) => boolean,
-  foldToa: (
-    paragraphs: DocumentParagraphWire[],
-    draft: StructuralDraft & { kind: 'table-of-authorities' },
-    tails: Map<string, DocumentParagraphWire>,
-  ) => boolean,
+  foldToa: {
+    insert: (
+      paragraphs: DocumentParagraphWire[],
+      draft: StructuralDraft & { kind: 'table-of-authorities' },
+      tails: Map<string, DocumentParagraphWire>,
+    ) => boolean
+    refresh: (
+      paragraphs: DocumentParagraphWire[],
+      draft: StructuralDraft & { kind: 'table-of-authorities-refresh' },
+    ) => boolean
+  },
 ) {
   const paragraphs = [...story.paragraphs]
   const fragments = [...story.preservedXmlFragments]
@@ -240,7 +246,14 @@ function foldStory(
     // A table of authorities folds the same way: the mark and bookmark
     // pass first, then the field's heading, entry and tail wires.
     if (draft.kind === 'table-of-authorities') {
-      changed = foldToa(paragraphs, draft, tails) || changed
+      changed = foldToa.insert(paragraphs, draft, tails) || changed
+      continue
+    }
+    // A table of authorities refresh rewrites the stored field's
+    // generated paragraphs in place — the same mark, bookmark and entry
+    // wires, minus the tail split the insertion performs.
+    if (draft.kind === 'table-of-authorities-refresh') {
+      changed = foldToa.refresh(paragraphs, draft) || changed
       continue
     }
     // A link or cross-reference folds nothing into the model: the link is an

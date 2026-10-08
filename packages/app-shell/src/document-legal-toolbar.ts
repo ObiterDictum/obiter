@@ -3,13 +3,12 @@ import {
   type DocumentModelWire,
   type DocumentParagraphWire,
 } from '@obiter/contracts'
-import type {
-  AuthorityOccurrence,
-  TableOfAuthoritiesEntry,
-} from '@obiter/ooxml'
+import type { BreakDraft } from './document-draft-state'
+import type { FormatDrafts } from './document-format-types'
 import type { ParagraphRange } from './document-format-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
 import { blockText, type ExtraRuns } from './document-word-edits'
+import { resolveInsertAnchor, type LocalInsert } from './document-story-flow'
 import type { StructuralPlacement } from './document-structure-conflicts'
 import {
   structuralDraftSchema,
@@ -19,6 +18,9 @@ import {
   tableOfAuthoritiesAnchorBlock,
   tableOfAuthoritiesEntriesBlock,
   tableOfAuthoritiesMarkBlock,
+  tableOfAuthoritiesUpdateBlock,
+  type TableOfAuthoritiesFactSet,
+  type TableOfAuthoritiesField,
 } from './document-toa-availability'
 import type { StructuralInsertOutcome } from './document-structure-toolbar'
 
@@ -29,12 +31,12 @@ type SetStructures = (
 /**
  * The citations the painted flow reports over stored body paragraphs —
  * the same set the save partition's facts describe, so the ribbon's
- * disabled reason and the partition's block read one answer.
+ * disabled reason and the partition's block read one answer. `fields`
+ * maps each stored `TOA` field's head paragraph id to the range it
+ * covers, so the update control can name the field under the caret.
  */
-export type TableOfAuthoritiesFacts = {
-  occurrences: AuthorityOccurrence[]
-  entries: TableOfAuthoritiesEntry[]
-  citingWires: DocumentParagraphWire[]
+export type TableOfAuthoritiesFacts = TableOfAuthoritiesFactSet & {
+  fields: ReadonlyMap<string, TableOfAuthoritiesField>
 }
 
 /**
@@ -62,6 +64,10 @@ export function documentLegalToolbar({
   toaFacts,
   drafts,
   extraRuns,
+  deletedParagraphIds,
+  format,
+  breaks,
+  inserts,
   setStructures,
 }: {
   model: DocumentModelWire | undefined
@@ -86,6 +92,12 @@ export function documentLegalToolbar({
   toaFacts: TableOfAuthoritiesFacts
   drafts: Record<string, string>
   extraRuns: ExtraRuns
+  /** Paragraphs marked for deletion — a field one covers cannot update. */
+  deletedParagraphIds: ReadonlySet<string>
+  /** Pending format state the update block reads like the partition does. */
+  format: FormatDrafts
+  breaks: readonly BreakDraft[]
+  inserts: readonly LocalInsert[]
   setStructures: SetStructures
 }) {
   const story = model ? documentStory(model) : undefined
@@ -145,10 +157,50 @@ export function documentLegalToolbar({
               paragraphId,
               offset,
             })))
+  // A stored field updates when the caret sits anywhere inside it — the
+  // head's `begin` is what the draft names — through the same shared
+  // refusal chain the save partition runs, so a refresh the save would
+  // hold is refused here with the same reason.
+  const storyParagraphs = story?.paragraphs ?? []
+  const wiresById = new Map(
+    storyParagraphs.map((paragraph) => [paragraph.id, paragraph]),
+  )
+  const caretField = paragraphId
+    ? [...toaFacts.fields.values()].find((field) =>
+        field.paragraphIds.includes(paragraphId),
+      )
+    : undefined
+  const insertById = new Map(inserts.map((insert) => [insert.clientId, insert]))
+  const realIds = new Set(storyParagraphs.map((paragraph) => paragraph.id))
+  const tableOfAuthoritiesUpdateUnavailable = trackChanges
+    ? 'A table of authorities update is not recorded as a tracked change'
+    : !caretField
+      ? 'Place the cursor in a table of authorities to update it'
+      : tableOfAuthoritiesUpdateBlock({
+          field: caretField,
+          fieldWires: caretField.paragraphIds.flatMap((id) => {
+            const wire = wiresById.get(id)
+            return wire === undefined ? [] : [wire]
+          }),
+          facts: toaFacts,
+          changes: model?.changes ?? [],
+          deletions: deletedParagraphIds,
+          drafts,
+          extraRuns,
+          format,
+          breaks,
+          insertAnchors: new Set(
+            inserts.map((insert) =>
+              resolveInsertAnchor(insert, insertById, realIds),
+            ),
+          ),
+          structures,
+        })
 
   return {
     definedTermUnavailable,
     tableOfAuthoritiesUnavailable,
+    tableOfAuthoritiesUpdateUnavailable,
     markDefinedTerm(): StructuralInsertOutcome {
       if (definedTermUnavailable || !selectionRange || !model) {
         return {
@@ -209,6 +261,28 @@ export function documentLegalToolbar({
         return {
           inserted: false,
           reason: 'That table of authorities cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
+    },
+    updateTableOfAuthorities(): StructuralInsertOutcome {
+      if (tableOfAuthoritiesUpdateUnavailable || !caretField) {
+        return {
+          inserted: false,
+          reason:
+            tableOfAuthoritiesUpdateUnavailable ?? 'No table of authorities',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'table-of-authorities-refresh',
+        paragraphId: caretField.headId,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That update cannot be held as a draft.',
         }
       }
       setStructures((current) => [...current, draft])

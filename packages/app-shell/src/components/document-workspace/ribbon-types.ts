@@ -123,6 +123,9 @@ export type DocumentStructureToolbar = {
   /** The reason no table of authorities can be inserted at the caret, when
    * it cannot. */
   tableOfAuthoritiesUnavailable?: string
+  /** The reason the table of authorities under the caret cannot update,
+   * when it cannot. */
+  tableOfAuthoritiesUpdateUnavailable?: string
   /** The paragraphs a cross-reference can point at, in story order. */
   crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
   /** The non-body story open for editing, when one is — pressed state for
@@ -160,6 +163,11 @@ export type DocumentStructureToolbar = {
    * the mark runs, bookmarks and entry paragraphs the save writes.
    */
   onInsertTableOfAuthorities: () => void
+  /**
+   * Holds a pending refresh of the stored `TOA` field under the caret:
+   * the folded model rewrites its generated paragraphs in place.
+   */
+  onUpdateTableOfAuthorities: () => void
   /**
    * Holds a pending footnote reference at the body caret and opens the
    * footnotes story so the note's text is typed into its folded body.

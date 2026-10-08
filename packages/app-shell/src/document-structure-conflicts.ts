@@ -25,6 +25,12 @@ export type StructuralPlacement =
     }
   | { kind: 'link'; paragraphId: string; from: number; to: number }
   | { kind: 'defined-term'; paragraphId: string; from: number; to: number }
+  /**
+   * A refresh claims a field's whole generated range rather than a point,
+   * so it has no offset: its conflicts are range-level and live with the
+   * update predicates, not here.
+   */
+  | { kind: 'table-of-authorities-refresh'; paragraphId: string }
 
 type RangePlacement = Extract<StructuralPlacement, { from: number }>
 type SplicePlacement = Extract<
@@ -114,6 +120,15 @@ export function structuralDraftConflict(
   earlier: StructuralPlacement,
   later: StructuralPlacement,
 ): boolean {
+  // A refresh's claim is the field's covered paragraphs, not a splice
+  // point: the offset rules have nothing to say to it, and the range
+  // coverage the update predicates own is what refuses the pair.
+  if (
+    earlier.kind === 'table-of-authorities-refresh' ||
+    later.kind === 'table-of-authorities-refresh'
+  ) {
+    return false
+  }
   if (isRangeMark(earlier)) {
     if (later.kind === 'table') return false
     const covered = coveredRuns(spans, earlier)
@@ -224,6 +239,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'table of contents'
     case 'table-of-authorities':
       return 'table of authorities'
+    case 'table-of-authorities-refresh':
+      return 'table of authorities update'
     case 'authority-mark':
       return 'citation mark'
     case 'defined-term':

@@ -11,6 +11,7 @@ import {
   paragraphDeletionRefusal,
 } from './document-edits'
 import { documentStory, editableParagraph } from './document-model-text'
+import { emptyFormatDrafts } from './document-format-types'
 import { runNoteRefs } from './document-page-notes'
 import { partitionDraftState } from './document-save-partition'
 import { emptyDraftState, planDocumentSave } from './document-save-plan'
@@ -470,10 +471,18 @@ describe('the footnote insert control', () => {
       structures,
       drafts: {},
       extraRuns: {},
+      format: emptyFormatDrafts,
+      breaks: [],
+      inserts: [],
       setStructures: (update) => {
         structures.push(...update([]))
       },
-      toaFacts: { occurrences: [], entries: [], citingWires: [] },
+      toaFacts: {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      },
       ...overrides,
     })
     return { api, structures }

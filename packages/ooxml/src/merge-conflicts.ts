@@ -128,6 +128,17 @@ export function operationConflicts(
       changes.paragraphRunChanges.size > 0
     )
   }
+  if (operation.type === 'update_table_of_authorities') {
+    // A refresh reads the same document-wide citation set and rewrites the
+    // field's covered paragraphs: any paragraph change can move a mark
+    // offset, empty an entry, or touch the range the update replaces.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphStyles.size > 0 ||
+      changes.paragraphOpaque.size > 0 ||
+      changes.paragraphRunChanges.size > 0
+    )
+  }
   if (operation.type === 'insert_section_break') {
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
