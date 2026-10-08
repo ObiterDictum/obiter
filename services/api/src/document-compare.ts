@@ -76,15 +76,28 @@ export function compareDocumentModels(
     }
     // Non-paragraph story content — tables, section properties, bookmarks —
     // lives in the preserved fragments; paragraph diffs cannot see it.
-    if (
-      baseStory !== undefined &&
-      targetStory !== undefined &&
-      !arraysEqual(
-        baseStory.preservedXmlFragments,
-        targetStory.preservedXmlFragments,
-      )
-    ) {
-      push(() => ({ type: 'story', storyPartName: partName }))
+    if (baseStory !== undefined && targetStory !== undefined) {
+      if (
+        !arraysEqual(
+          baseStory.preservedXmlFragments,
+          targetStory.preservedXmlFragments,
+        )
+      ) {
+        push(() => ({ type: 'story', storyPartName: partName }))
+      }
+    } else {
+      // A part present on only one side: its paragraphs already report
+      // above as added or removed, but its non-paragraph content (or the
+      // bare part, when it has no paragraphs at all) would otherwise
+      // leave no trace.
+      const present = baseStory ?? targetStory
+      if (
+        present !== undefined &&
+        (present.paragraphs.length === 0 ||
+          present.preservedXmlFragments.length > 0)
+      ) {
+        push(() => ({ type: 'story', storyPartName: partName }))
+      }
     }
   }
 

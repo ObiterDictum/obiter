@@ -440,6 +440,57 @@ describe('compareDocumentModels', () => {
     expect(kinds.sort()).toEqual(['package', 'story'])
   })
 
+  it('reports a one-sided story part its paragraphs cannot', () => {
+    // A part existing on only one side reports its paragraphs as added or
+    // removed, but a paragraph-less part (a header that is only a table,
+    // or an empty part) produced no entry at all; the byte-difference
+    // note was the only sign. The part itself reports in both directions.
+    const body = [paragraph('p1', 'Body.', { sourceParaId: 'a' })]
+    const header = story([], {
+      partName: 'word/header1.xml',
+      kind: 'header',
+      preservedXmlFragments: ['<w:tbl/>'],
+    })
+    expect(compareDocumentModels(model(body), model(body)).entries).toEqual([])
+    const added = compareDocumentModels(model(body), {
+      ...model(body),
+      stories: [story(body), header],
+    })
+    expect(added.entries).toEqual([
+      { type: 'story', storyPartName: 'word/header1.xml' },
+    ])
+    expect(added.truncated).toBe(false)
+    const removed = compareDocumentModels(
+      { ...model(body), stories: [story(body), header] },
+      model(body),
+    )
+    expect(removed.entries).toEqual([
+      { type: 'story', storyPartName: 'word/header1.xml' },
+    ])
+  })
+
+  it('does not double-report a one-sided story part that has paragraphs', () => {
+    // The paragraph entries already say the part appeared; a bare
+    // paragraph-carrying part needs no extra story entry.
+    const body = [paragraph('p1', 'Body.', { sourceParaId: 'a' })]
+    const target = model(body)
+    target.stories.push(
+      story([paragraph('h1', 'Head note.')], {
+        partName: 'word/header1.xml',
+        kind: 'header',
+      }),
+    )
+    expect(compareDocumentModels(model(body), target).entries).toEqual([
+      {
+        type: 'added',
+        storyPartName: 'word/header1.xml',
+        paragraphId: 'h1',
+        text: 'Head note.',
+        textTruncated: false,
+      },
+    ])
+  })
+
   it('keeps entries ordered and bounded past the entry cap', () => {
     const base = model([paragraph('p0', 'Anchor.', { sourceParaId: 'aa00' })])
     const target = model([
