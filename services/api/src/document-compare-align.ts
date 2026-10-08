@@ -19,6 +19,14 @@ export interface AlignedPair {
  * paragraph into a 'modified' entry instead of a remove+add pair. Anything
  * still unmatched is an insertion or deletion: the diff can over-report a
  * split but never silently hide one.
+ *
+ * The gap passes do not keep the pair set monotonic: identical text pairs
+ * in occurrence order per text (which inverts across texts on a reorder)
+ * and overlap pairs in score order. A final increasing-subsequence pass
+ * over the union restores the emission walk's precondition; pairs it drops
+ * degrade to unmatched, so an inversion reports remove+add, the same move
+ * semantics as an anchor-excluded id pair, rather than double-claiming a
+ * paragraph as added and paired at once.
  */
 
 /**
@@ -89,7 +97,14 @@ export function alignParagraphs(
     paired,
   )
 
-  const ordered = [...paired].sort((left, right) => left[0] - right[0])
+  // Anchors are mutually monotonic and gap pairs sit between anchor
+  // boundaries, so only same-gap pairs can cross. When they do, the walk
+  // below would emit a paired-later target as 'added' while its removal
+  // half vanished. Dropped pairs keep both sides unmatched, which is why
+  // the losers report instead of disappearing.
+  const ordered = longestIncreasingPairs(
+    [...paired].sort((left, right) => left[0] - right[0]),
+  )
   const pairs: AlignedPair[] = []
   let baseCursor = 0
   let targetCursor = 0

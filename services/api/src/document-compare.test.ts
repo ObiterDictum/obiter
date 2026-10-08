@@ -161,6 +161,164 @@ describe('compareDocumentModels', () => {
     })
   })
 
+  it('reports a reorder without durable ids as remove plus add', () => {
+    // Neither side carries `w14:paraId`; this is the pre-canonicalisation
+    // corpus the fallback tiers exist for. Identical text pairs inverted
+    // across the texts (Alpha at (0,1), Beta at (1,0)); the loser of the
+    // crossing must demote to unmatched and report remove+add. Emitting
+    // the base-sorted union instead reported two bare additions, and the
+    // moved text's removal was suppressed entirely.
+    const base = model([paragraph('p1', 'Alpha.'), paragraph('p2', 'Beta.')])
+    const target = model([paragraph('q2', 'Beta.'), paragraph('q1', 'Alpha.')])
+    expect(compareDocumentModels(base, target).entries).toEqual([
+      {
+        type: 'removed',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'p1',
+        text: 'Alpha.',
+        textTruncated: false,
+      },
+      {
+        type: 'added',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'q1',
+        text: 'Alpha.',
+        textTruncated: false,
+      },
+    ])
+  })
+
+  it('reports a three-paragraph rotation without ids as remove plus add', () => {
+    const base = model([
+      paragraph('p1', 'One.'),
+      paragraph('p2', 'Two.'),
+      paragraph('p3', 'Three.'),
+    ])
+    const target = model([
+      paragraph('q3', 'Three.'),
+      paragraph('q1', 'One.'),
+      paragraph('q2', 'Two.'),
+    ])
+    expect(compareDocumentModels(base, target).entries).toEqual([
+      {
+        type: 'added',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'q3',
+        text: 'Three.',
+        textTruncated: false,
+      },
+      {
+        type: 'removed',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'p3',
+        text: 'Three.',
+        textTruncated: false,
+      },
+    ])
+  })
+
+  it('keeps an in-gap reorder between anchors honest', () => {
+    // Anchored ends, an unanchored middle pair swapped: the identical-text
+    // pass pairs the middle inverted inside one gap. The alignment must
+    // still report the moved paragraph's removal; before monotonic
+    // enforcement this emitted a single bare 'added' and nothing else.
+    const base = model([
+      paragraph('h', 'Head.', { sourceParaId: 'hh' }),
+      paragraph('p1', 'Middle one.'),
+      paragraph('p2', 'Middle two.'),
+      paragraph('t', 'Tail.', { sourceParaId: 'tt' }),
+    ])
+    const target = model([
+      paragraph('h', 'Head.', { sourceParaId: 'hh' }),
+      paragraph('q2', 'Middle two.'),
+      paragraph('q1', 'Middle one.'),
+      paragraph('t', 'Tail.', { sourceParaId: 'tt' }),
+    ])
+    expect(compareDocumentModels(base, target).entries).toEqual([
+      {
+        type: 'removed',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'p1',
+        text: 'Middle one.',
+        textTruncated: false,
+      },
+      {
+        type: 'added',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'q1',
+        text: 'Middle one.',
+        textTruncated: false,
+      },
+    ])
+  })
+
+  it('does not claim a reordered edited paragraph as both added and modified', () => {
+    // Overlap pairs are chosen by score, not position, so an edited swap
+    // pairs inverted the same way identical text does. One side of the
+    // crossing wins and reports modified; the loser is an honest
+    // remove+add. Previously every target index below a pair's targetIndex
+    // emitted 'added' even when it was itself paired, so a paragraph
+    // counted twice, once added and once modified.
+    const base = model([
+      paragraph('p1', 'The claimant seeks damages for breach.'),
+      paragraph('p2', 'The defendant denies all liability entirely.'),
+    ])
+    const target = model([
+      paragraph('q2', 'The defendant denies all liability absolutely.'),
+      paragraph('q1', 'The claimant seeks damages for repudiation.'),
+    ])
+    const entries = compareDocumentModels(base, target).entries
+    expect(entries.map((entry) => entry.type)).toEqual([
+      'removed',
+      'modified',
+      'added',
+    ])
+    expect(entries[0]).toMatchObject({ paragraphId: 'p1' })
+    expect(entries[2]).toMatchObject({ paragraphId: 'q1' })
+    const modified = entries[1]
+    expect(modified).toMatchObject({ paragraphId: 'q2' })
+    if (modified?.type !== 'modified') {
+      throw new Error('Expected a modified entry.')
+    }
+    expectReconstructed(
+      modified,
+      'The defendant denies all liability entirely.',
+      'The defendant denies all liability absolutely.',
+    )
+  })
+
+  it('demotes an inverted duplicate-text pair instead of hiding the move', () => {
+    // Occurrence pairing is monotonic within one repeated text but inverts
+    // across texts: 'Same.' pairs (0,0) and (2,1), 'Mid.' pairs (1,2). The
+    // dropped side reports as remove+add, not a lone bare addition.
+    const base = model([
+      paragraph('p1', 'Same.'),
+      paragraph('p2', 'Mid.'),
+      paragraph('p3', 'Same.'),
+    ])
+    const target = model([
+      paragraph('q1', 'Same.'),
+      paragraph('q2', 'Same.'),
+      paragraph('q3', 'Mid.'),
+    ])
+    expect(compareDocumentModels(base, target).entries).toEqual([
+      {
+        type: 'removed',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'p2',
+        text: 'Mid.',
+        textTruncated: false,
+      },
+      {
+        type: 'added',
+        storyPartName: 'word/document.xml',
+        paragraphId: 'q3',
+        text: 'Mid.',
+        textTruncated: false,
+      },
+    ])
+  })
+
   it('reports a formatting-only change as formatted, not modified', () => {
     const base = model([
       paragraph('p1', 'Same words.', {
