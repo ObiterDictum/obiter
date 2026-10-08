@@ -2989,8 +2989,11 @@
                     Document with immutable versions. A view grantee sees only
                     the current version's row; the full version list is returned
                     to grantees who may read history (matter-level
-                    <code>edit</code>), so denied version ids are never
-                    disclosed.
+                    <code>edit</code>). Secondary records can still carry a
+                    denied id as provenance — a comment's
+                    <code>anchorVersionId</code>, a redaction run's
+                    <code>documentVersionId</code> — but every content route
+                    enforces the gate, so the id alone grants nothing.
                   </td>
                 </tr>
                 <tr>
@@ -3292,20 +3295,29 @@
                     GET /api/redaction-runs/:runId/document-text
                   </td>
                   <td class="id">redact-review.ts</td>
-                  <td>Source text for the review view</td>
+                  <td>
+                    Source text for the review view. A run bound to a document
+                    version serves it only while that version is current; once
+                    superseded it is historical content and needs matter-level
+                    <code>edit</code>, else the run's source reads as not found.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/source-file</td>
                   <td class="id">redact-review.ts</td>
                   <td>
-                    Original upload or matter document bytes for PDF preview
+                    Original upload or matter document bytes for PDF preview,
+                    under the same current/historical gate as
+                    <code>document-text</code>.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/layout</td>
                   <td class="id">redact-review.ts</td>
                   <td>
-                    PDF text-layout geometry aligned to extracted text offsets
+                    PDF text-layout geometry aligned to extracted text offsets,
+                    under the same current/historical gate as
+                    <code>document-text</code>.
                   </td>
                 </tr>
                 <tr>
