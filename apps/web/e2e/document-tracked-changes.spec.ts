@@ -53,7 +53,9 @@ function buildFixture() {
       '-e',
       `const { buildOoxmlFixture } = await import('${REPO_ROOT}/packages/ooxml/fixtures/builder.ts'); const { default: JSZip } = await import('jszip'); const bytes = await buildOoxmlFixture('full-fidelity-with-w14-ids'); await Bun.write('${FIXTURE_PATH}', bytes); const zip = await JSZip.loadAsync(bytes); const xml = await zip.file('word/document.xml').async('string'); zip.file('word/document.xml', xml.replace('${MIXED_ANCHOR}', '${MIXED_MARKUP}' + '${MIXED_ANCHOR}')); await Bun.write('${MIXED_PATH}', await zip.generateAsync({ type: 'uint8array' }))`,
     ],
-    { cwd: REPO_ROOT, stdio: 'pipe' },
+    // jszip is an @obiter/ooxml dependency — the eval resolves it from that
+    // package's directory, not from the repository root.
+    { cwd: `${REPO_ROOT}/packages/ooxml`, stdio: 'pipe' },
   )
 }
 
