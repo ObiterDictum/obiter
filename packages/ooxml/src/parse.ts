@@ -172,25 +172,33 @@ function matchMovePairs(changes: TrackedChangeNode[]) {
     if (
       (change.wire.elementName !== 'moveFrom' &&
         change.wire.elementName !== 'moveTo') ||
-      change.moveKey === undefined
+      change.moveGroup === undefined
     ) {
       continue
     }
-    const matches = moves.get(change.moveKey) ?? []
+    const matches = moves.get(change.moveGroup) ?? []
     matches.push(change)
-    moves.set(change.moveKey, matches)
+    moves.set(change.moveGroup, matches)
   }
-  for (const matches of moves.values()) {
-    const from = matches.filter(({ wire }) => wire.elementName === 'moveFrom')
-    const to = matches.filter(({ wire }) => wire.elementName === 'moveTo')
-    if (matches.length !== 2 || from.length !== 1 || to.length !== 1) continue
+  for (const [key, members] of moves) {
+    const from = members.filter(({ wire }) => wire.elementName === 'moveFrom')
+    const to = members.filter(({ wire }) => wire.elementName === 'moveTo')
     const fromNode = from[0]
     const toNode = to[0]
-    if (!fromNode || !toNode) continue
-    fromNode.validMoveCounterpart = true
-    toNode.validMoveCounterpart = true
-    fromNode.wire.pairId = toNode.wire.id
-    toNode.wire.pairId = fromNode.wire.id
+    // A container-named group is a real move with at least one member on
+    // each side. The shared-w:id fallback is tolerated legacy markup, so it
+    // keeps the strict one-from-one-to rule.
+    const paired = key.startsWith('name:')
+      ? from.length > 0 && to.length > 0
+      : members.length === 2 && from.length === 1 && to.length === 1
+    if (!paired || !fromNode || !toNode) continue
+    for (const member of members) {
+      member.validMoveCounterpart = true
+      member.wire.pairId =
+        member.wire.elementName === 'moveFrom'
+          ? toNode.wire.id
+          : fromNode.wire.id
+    }
   }
 }
 

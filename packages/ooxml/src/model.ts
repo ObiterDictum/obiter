@@ -29,12 +29,17 @@ export type TrackedChangeNode = {
   previousPropertiesFragment?: string
   validMoveCounterpart: boolean
   /**
-   * The key two halves of a tracked move share. Word pairs `w:moveFrom` and
-   * `w:moveTo` by their `w:name` attribute; producers that omit a name are
-   * paired by a shared `w:id` instead. Internal — the wire only carries the
+   * The identity every member of one tracked move shares. Word groups a move
+   * by the `w:name` on its `w:moveFromRangeStart`/`w:moveToRangeStart`
+   * containers — one move can hold several wrappers and several ranges — so a
+   * `name:` key carries the story part to keep same-named parts' moves
+   * distinct. Wrappers outside any container pair by a shared `w:id` as
+   * tolerated legacy markup (`id:` key). Internal — the wire only carries the
    * resolved `pairId`.
    */
-  moveKey?: string
+  moveGroup?: string
+  /** Marker element ranges for every range container in the move's group. */
+  moveMarkers?: XmlElementRange[]
   deletedTextElements: { range: XmlElementRange; qualifiedName: string }[]
   paragraphMarkRange?: XmlElementRange
   absorbed?: boolean
