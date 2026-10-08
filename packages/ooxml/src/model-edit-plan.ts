@@ -31,7 +31,9 @@ export function planOperation(
   // not carry, or relationships the header/footer parts would each need. A
   // footnote reference joins them: its note lives in the shared footnotes
   // story, not in whichever part the reference happened to land in. A table
-  // of contents splices paragraph siblings, so it is body-only too.
+  // of contents splices paragraph siblings, so it is body-only too. A
+  // defined-term mark names the term it binds, and that meaning lives in the
+  // main story.
   if (
     operation.type === 'insert_break' ||
     operation.type === 'insert_section_break' ||
@@ -39,7 +41,8 @@ export function planOperation(
     operation.type === 'insert_image' ||
     operation.type === 'set_hyperlink' ||
     operation.type === 'insert_footnote' ||
-    operation.type === 'insert_table_of_contents'
+    operation.type === 'insert_table_of_contents' ||
+    operation.type === 'mark_defined_term'
   ) {
     const paragraph = requireMainParagraph(document, operation.paragraphId)
     return { ...operation, paragraph }

@@ -10,6 +10,7 @@ import {
   type LineageRecorder,
 } from './document-lineage'
 import { insertCrossReference } from './cross-reference-edits'
+import { markDefinedTerm } from './defined-term-edits'
 import { insertFootnote } from './footnote-edits'
 import { setHyperlink } from './hyperlink-edits'
 import { insertImage } from './image-edits'
@@ -371,6 +372,21 @@ export function applyPlannedOperation(
         operation.paragraph,
         operation.targetParagraph,
         operation.offset,
+        occurrence,
+        lineage,
+      )
+      state.structureCounts.set(key, occurrence + 1)
+    }
+  } else if (operation.type === 'mark_defined_term') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater) {
+      const key = operation.paragraph.wire.id
+      const occurrence = state.structureCounts.get(key) ?? 0
+      markDefinedTerm(
+        document,
+        operation.paragraph,
+        operation.from,
+        operation.to,
         occurrence,
         lineage,
       )

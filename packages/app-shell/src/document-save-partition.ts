@@ -282,7 +282,8 @@ export function partitionDraftState(
     const anchorStoryKind = paragraphStoryKind.get(structure.paragraphId)
     const nonBodyAnchor =
       (structure.kind === 'footnote' ||
-        structure.kind === 'table-of-contents') &&
+        structure.kind === 'table-of-contents' ||
+        structure.kind === 'defined-term') &&
       anchorStoryKind !== undefined &&
       anchorStoryKind !== 'document'
     const nonPageAnchor =
@@ -331,7 +332,9 @@ export function partitionDraftState(
       const reason = nonBodyAnchor
         ? structure.kind === 'table-of-contents'
           ? 'A table of contents can only be placed in the body.'
-          : 'A footnote can only be placed in the body.'
+          : structure.kind === 'defined-term'
+            ? 'A defined-term mark can only be placed in the body.'
+            : 'A footnote can only be placed in the body.'
         : nonPageAnchor
           ? 'A page number needs a page of its own: the body, a header or a footer.'
           : missingTarget

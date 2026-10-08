@@ -27,6 +27,7 @@ import {
   TextT,
   X,
 } from '@phosphor-icons/react'
+import { useState } from 'react'
 import type {
   DocumentFindToolbar,
   DocumentReviewToolbar,
@@ -41,18 +42,40 @@ import {
 import { FindControls } from './ribbon-find'
 import { revealDocumentRedactionRuns } from './document-actions'
 import { useVerificationWorkspace } from '../verification/verification-context'
+import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
+import {
+  citationStyleSchema,
+  type CitationStyle,
+} from '../../document-preferences'
+
+/** Which legal-checks section the panel is showing; null when it is closed. */
+export type LegalChecksFocus = 'terms' | 'references'
 
 export function ReferencesRibbon({
   authoritiesOpen,
   onToggleAuthorities,
   onInsertAuthority,
+  citationStyle,
+  onCitationStyle,
+  legalChecks,
   structure,
 }: {
   authoritiesOpen: boolean
   onToggleAuthorities: () => void
   onInsertAuthority: () => void
+  /** The persisted citation convention new insertions are written in. */
+  citationStyle: CitationStyle
+  /** Absent where authority insertion is not offered; the style select
+   * is disabled without it. */
+  onCitationStyle?: (style: CitationStyle) => void
+  /** The checks panel; absent outside an editable workspace. */
+  legalChecks?: {
+    open: LegalChecksFocus | null
+    onOpen: (focus: LegalChecksFocus) => void
+  }
   structure?: DocumentStructureToolbar
 }) {
+  const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
   const verification = useVerificationWorkspace()
   // The one document-level Verify control owns the action; this entry reveals
   // it. The context exposes one canonical availability, so this entry is never
@@ -94,13 +117,17 @@ export function ReferencesRibbon({
           />
           <RibbonSelect
             label="Citation style"
-            soon
             className="w-[6.5rem]"
-            value="oscola"
+            disabled={!onCitationStyle}
+            value={citationStyle}
             options={[
               { value: 'oscola', label: 'OSCOLA' },
               { value: 'house', label: 'House style' },
             ]}
+            onChange={(value) => {
+              const parsed = citationStyleSchema.safeParse(value)
+              if (parsed.success) onCitationStyle?.(parsed.data)
+            }}
           />
         </ToolbarRow>
       </ToolbarGroup>
@@ -108,12 +135,16 @@ export function ReferencesRibbon({
         <ToolbarRow>
           <IconButton
             label="Mark defined term"
-            soon
+            disabled={!structure || Boolean(structure.definedTermUnavailable)}
+            disabledReason={structure?.definedTermUnavailable}
+            onClick={structure?.onMarkDefinedTerm}
             icon={<TextT size={16} aria-hidden />}
           />
           <IconButton
             label="Check defined terms"
-            soon
+            pressed={legalChecks?.open === 'terms'}
+            disabled={!legalChecks}
+            onClick={() => legalChecks?.onOpen('terms')}
             icon={<ListMagnifyingGlass size={16} aria-hidden />}
           />
         </ToolbarRow>
@@ -122,12 +153,18 @@ export function ReferencesRibbon({
         <ToolbarRow>
           <IconButton
             label="Insert cross-reference"
-            soon
+            disabled={
+              !structure || Boolean(structure.crossReferenceUnavailable)
+            }
+            disabledReason={structure?.crossReferenceUnavailable}
+            onClick={() => setCrossReferenceOpen(true)}
             icon={<BookOpen size={16} aria-hidden />}
           />
           <IconButton
             label="Check cross-references"
-            soon
+            pressed={legalChecks?.open === 'references'}
+            disabled={!legalChecks}
+            onClick={() => legalChecks?.onOpen('references')}
             icon={<CheckCircle size={16} aria-hidden />}
           />
         </ToolbarRow>
@@ -135,8 +172,25 @@ export function ReferencesRibbon({
       <ToolbarGroup label="Notes">
         <ToolbarRow>
           <IconButton
-            label="Insert footnote"
-            soon
+            label={
+              structure?.editingStoryKind === 'footnotes'
+                ? 'Close footnotes'
+                : 'Insert footnote'
+            }
+            pressed={structure?.editingStoryKind === 'footnotes'}
+            disabled={
+              !structure ||
+              (structure.editingStoryKind !== 'footnotes' &&
+                Boolean(structure.footnoteUnavailable))
+            }
+            disabledReason={structure?.footnoteUnavailable}
+            onClick={() => {
+              if (structure?.editingStoryKind === 'footnotes') {
+                structure.onCloseStory()
+              } else {
+                structure?.onInsertFootnote()
+              }
+            }}
             icon={<Note size={16} aria-hidden />}
           />
           <IconButton
@@ -150,6 +204,17 @@ export function ReferencesRibbon({
           />
         </ToolbarRow>
       </ToolbarGroup>
+      <InsertCrossReferenceDialog
+        open={crossReferenceOpen}
+        onOpenChange={setCrossReferenceOpen}
+        targets={structure?.crossReferenceTargets ?? []}
+        onInsert={(targetParagraphId) =>
+          structure?.onInsertCrossReference(targetParagraphId) ?? {
+            inserted: false,
+            reason: 'The document is still loading.',
+          }
+        }
+      />
     </div>
   )
 }

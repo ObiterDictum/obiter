@@ -35,6 +35,7 @@ export type PlannedOperation =
           | 'insert_footnote'
           | 'insert_page_number'
           | 'insert_table_of_contents'
+          | 'mark_defined_term'
       }
     > & { paragraph: ParagraphAnchor })
   | (Extract<DocumentEditOperation, { type: 'insert_cross_reference' }> & {
@@ -173,7 +174,8 @@ export function validateTrackedOperations(
       operation.type === 'insert_cross_reference' ||
       operation.type === 'insert_footnote' ||
       operation.type === 'insert_page_number' ||
-      operation.type === 'insert_table_of_contents'
+      operation.type === 'insert_table_of_contents' ||
+      operation.type === 'mark_defined_term'
     ) {
       throw new OoxmlError('model-node-not-editable')
     }

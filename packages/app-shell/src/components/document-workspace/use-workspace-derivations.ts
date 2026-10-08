@@ -25,6 +25,8 @@ import {
   structuralLinkOverlays,
   type ParagraphLinkOverlay,
 } from '../../document-structure-overlays'
+import { checkCrossReferences } from '../../document-cross-reference-check'
+import { checkDefinedTerms } from '../../document-defined-terms'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -86,6 +88,15 @@ export type WorkspaceDerivations = {
    * paragraph they paint over, in painted-text offsets.
    */
   linkOverlays: ReadonlyMap<string, ParagraphLinkOverlay>
+  /**
+   * The stored-markup legal checks: cross-reference fields against the
+   * document's bookmarks, and `_Def_` defined-term marks against the body's
+   * effective text. `null` while the model is loading.
+   */
+  legalChecks: {
+    references: ReturnType<typeof checkCrossReferences>
+    terms: ReturnType<typeof checkDefinedTerms>
+  } | null
 }
 
 /** The disabled reason Delete paragraph shows for `paragraphId`, or undefined
@@ -271,6 +282,39 @@ export function useWorkspaceDerivations({
     () => structuralLinkOverlays(painted, drafts.structures),
     [painted, drafts.structures],
   )
+  // The legal checks read the stored model plus pending structure — the same
+  // paragraphs and fields the save will write — so `effective` deletions are
+  // what count as gone, matching the writer's answer.
+  const legalChecks = useMemo(
+    () =>
+      model
+        ? {
+            references: checkCrossReferences(
+              model,
+              drafts.structures,
+              deletions.effective,
+              drafts.drafts,
+              drafts.extraRuns,
+            ),
+            terms: checkDefinedTerms(
+              model,
+              drafts.structures,
+              drafts.inserts,
+              deletions.effective,
+              drafts.drafts,
+              drafts.extraRuns,
+            ),
+          }
+        : null,
+    [
+      model,
+      drafts.structures,
+      deletions,
+      drafts.drafts,
+      drafts.extraRuns,
+      drafts.inserts,
+    ],
+  )
   const insertRibbon = useInsertRibbon(
     model,
     painted,
@@ -288,6 +332,7 @@ export function useWorkspaceDerivations({
     imageUrls,
     insert: insertRibbon,
     linkOverlays,
+    legalChecks,
     deleteParagraphReason:
       model && insert.paragraphId
         ? deleteReasonForParagraph(

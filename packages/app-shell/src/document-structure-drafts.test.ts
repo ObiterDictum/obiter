@@ -66,6 +66,19 @@ const imageDraft = (
   name: 'Figure',
 })
 
+const definedTermDraft = (
+  id: string,
+  paragraphId: string,
+  from = 0,
+  to = 4,
+): StructuralDraft => ({
+  id,
+  kind: 'defined-term',
+  paragraphId,
+  from,
+  to,
+})
+
 function paragraph(
   id: string,
   text = 'text',
@@ -320,6 +333,43 @@ describe('structural save planning', () => {
     expect(plan.covered).toEqual([])
   })
 
+  it('emits a mark_defined_term operation for a body-anchored mark', () => {
+    const plan = planDocumentSave(model([paragraph('p1')]), {
+      ...emptyDraftState(),
+      structures: [definedTermDraft('s1', 'p1', 0, 4)],
+    })
+    expect(plan.operations).toEqual([
+      { type: 'mark_defined_term', paragraphId: 'p1', from: 0, to: 4 },
+    ])
+    expect(plan.blocked).toEqual([])
+  })
+
+  it('blocks a defined-term mark anchored outside the body', () => {
+    const base = model([paragraph('p1')])
+    const footnoteStory: DocumentModelWire = {
+      ...base,
+      stories: [
+        ...base.stories,
+        {
+          partName: 'word/footnotes.xml',
+          kind: 'footnotes',
+          paragraphs: [paragraph('fn1')],
+          preservedXmlFragments: [],
+        },
+      ],
+    }
+    const plan = planDocumentSave(footnoteStory, {
+      ...emptyDraftState(),
+      structures: [definedTermDraft('s1', 'fn1')],
+    })
+    expect(plan.operations).toEqual([])
+    expect(plan.blocked[0]?.slot).toMatchObject({
+      kind: 'structure',
+      structureKind: 'defined-term',
+    })
+    expect(plan.blocked[0]?.reason).toContain('body')
+  })
+
   it('blocks a structure on a runless paragraph being replaced by text', () => {
     const state: DraftState = {
       ...emptyDraftState(),
@@ -417,6 +467,105 @@ describe('documentStructureToolbar', () => {
     expect(structures.map((item) => item.kind)).toEqual(['table', 'image'])
     expect(structures[0]).toMatchObject({ rows: 2, columns: 3 })
     expect(structures[1]).toMatchObject({ offset: 2 })
+  })
+
+  it('holds a defined-term mark over a nameable selection', () => {
+    const baseModel = model([paragraph('p1', 'The Hourly Rate applies')])
+    const { api, structures } = toolbar({
+      model: baseModel,
+      selectionActive: true,
+      selectionRange: { paragraphId: 'p1', from: 4, to: 15 },
+    })
+    expect(api.definedTermUnavailable).toBeUndefined()
+    expect(api.markDefinedTerm()).toEqual({ inserted: true })
+    expect(structures).toEqual([
+      expect.objectContaining({
+        kind: 'defined-term',
+        paragraphId: 'p1',
+        from: 4,
+        to: 15,
+      }),
+    ])
+  })
+
+  it('refuses a defined-term mark with a reason the ribbon can show', () => {
+    expect(
+      toolbar({ selectionActive: true, selectionRange: null }).api
+        .definedTermUnavailable,
+    ).toBeTruthy()
+    expect(
+      toolbar({
+        trackChanges: true,
+        selectionRange: { paragraphId: 'p1', from: 0, to: 4 },
+      }).api.definedTermUnavailable,
+    ).toContain('tracked')
+    // A selection whose text cannot name a term is refused with a reason.
+    const unnameable = toolbar({
+      model: model([paragraph('p1', '— — —')]),
+      selectionActive: true,
+      selectionRange: { paragraphId: 'p1', from: 0, to: 5 },
+    })
+    expect(unnameable.api.markDefinedTerm().inserted).toBe(false)
+    expect(unnameable.structures).toEqual([])
+  })
+
+  it('refuses a splice inside a run a pending mark cuts, not inside a covered one', () => {
+    // Runs 'aaaa' 'bbbb' 'cccc': the mark [4,11) covers run 2 whole and cuts
+    // run 3. A field inside run 2 composes; inside run 3 it cannot fold.
+    const multi = model([
+      {
+        id: 'p1',
+        runs: [
+          { id: 'r1', text: 'aaaa', preservedXmlFragments: [] },
+          { id: 'r2', text: 'bbbb', preservedXmlFragments: [] },
+          { id: 'r3', text: 'cccc', preservedXmlFragments: [] },
+        ],
+        preservedXmlFragments: [],
+      },
+      paragraph('p2', 'target'),
+    ])
+    const held = [definedTermDraft('s1', 'p1', 4, 11)]
+    const inside = toolbar({
+      model: multi,
+      structures: held,
+      offset: 9,
+    })
+    expect(inside.api.crossReferenceUnavailable).toContain('defined-term')
+    const coveredOnly = toolbar({
+      model: multi,
+      structures: [definedTermDraft('s1', 'p1', 4, 11)],
+      offset: 6,
+    })
+    expect(coveredOnly.api.crossReferenceUnavailable).toBeUndefined()
+  })
+
+  it('refuses a second mark sharing a covered run but allows disjoint runs', () => {
+    const multi = model([
+      {
+        id: 'p1',
+        runs: [
+          { id: 'r1', text: 'aaaa', preservedXmlFragments: [] },
+          { id: 'r2', text: 'bbbb', preservedXmlFragments: [] },
+        ],
+        preservedXmlFragments: [],
+      },
+    ])
+    // A second mark inside the first mark's run writes an overlapping
+    // replacement; one over the other run composes.
+    const shared = toolbar({
+      model: multi,
+      structures: [definedTermDraft('s1', 'p1', 0, 2)],
+      selectionActive: true,
+      selectionRange: { paragraphId: 'p1', from: 2, to: 4 },
+    })
+    expect(shared.api.definedTermUnavailable).toContain('defined-term')
+    const disjoint = toolbar({
+      model: multi,
+      structures: [definedTermDraft('s1', 'p1', 0, 2)],
+      selectionActive: true,
+      selectionRange: { paragraphId: 'p1', from: 4, to: 8 },
+    })
+    expect(disjoint.api.definedTermUnavailable).toBeUndefined()
   })
 
   it('refuses honestly when tracking, selecting, or unanchored', () => {

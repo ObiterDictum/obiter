@@ -7281,6 +7281,57 @@
                   </td>
                   <td class="id">app-shell/document-history-baseline.ts</td>
                 </tr>
+                <tr>
+                  <td>
+                    Citation style shapes new insertions only; the authority
+                    list is a panel, not a Word <code>TOA</code> field
+                  </td>
+                  <td>
+                    E11's citation style is a per-document editor preference in
+                    browser storage: <code>house</code> writes the inserted
+                    citation italicised, <code>oscola</code> writes it as typed,
+                    and neither rewrites existing text. A pending-insert
+                    paragraph cannot carry run emphasis anywhere in the editor,
+                    so the house italic does not apply there — the citation
+                    lands plain, the same boundary the Bold button reads. The
+                    list of authorities groups extracted neutral citations and
+                    joins verification findings strictly by paragraph and
+                    excerpt; it writes no <code>TOA</code> field into the
+                    document, and a citation the latest run did not cover shows
+                    no state rather than borrowing one.
+                  </td>
+                  <td class="id">
+                    app-shell/document-preferences.ts ·
+                    app-shell/authorities-panel.tsx
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Defined-term marks round-trip the name, not the position;
+                    the checks report only what the wire can prove
+                  </td>
+                  <td>
+                    <code>mark_defined_term</code> writes a
+                    <code>_Def_…</code> bookmark pair, but paragraph-level
+                    fragments carry no offset on the wire, so a stored mark's
+                    range is not round-tripped. The check reports unpaired and
+                    malformed marks, duplicate definitions, marks whose
+                    paragraph no longer reads as the term, and
+                    use-before-definition against effective (including pending)
+                    text — quoted capitalised phrases are review candidates, not
+                    asserted errors. Cross-reference checks likewise read stored
+                    <code>REF</code>/<code>PAGEREF</code>
+                    fields and bookmarks and name what they cannot read rather
+                    than passing it. Both are untracked structural edits,
+                    refused under track-changes and outside the body like the
+                    other structural operations.
+                  </td>
+                  <td class="id">
+                    contracts/defined-terms.ts ·
+                    app-shell/document-defined-terms.ts ·
+                    app-shell/document-cross-reference-check.ts
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

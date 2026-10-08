@@ -111,6 +111,8 @@ export type DocumentStructureToolbar = {
   linkUnavailable?: string
   /** The reason no cross-reference can be inserted, when it cannot. */
   crossReferenceUnavailable?: string
+  /** The reason the selection cannot take a defined-term mark, when it cannot. */
+  definedTermUnavailable?: string
   /** The reason no page number can be inserted at the caret, when it cannot. */
   pageNumberUnavailable?: string
   /** The reason no footnote can be inserted at the caret, when it cannot. */
@@ -141,6 +143,8 @@ export type DocumentStructureToolbar = {
   onInsertLink: (target: string) => StructuralInsertOutcome
   /** Holds a pending cross-reference at the caret to the target paragraph. */
   onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
+  /** Holds a pending defined-term mark over the selection's range. */
+  onMarkDefinedTerm: () => void
   /** Holds a pending `PAGE` field at the caret in the active story. */
   onInsertPageNumber: () => void
   /**

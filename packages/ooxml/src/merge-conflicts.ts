@@ -43,7 +43,10 @@ export function operationConflicts(
       changes.paragraphRunChanges.has(operation.paragraphId)
     )
   }
-  if (operation.type === 'set_hyperlink') {
+  if (
+    operation.type === 'set_hyperlink' ||
+    operation.type === 'mark_defined_term'
+  ) {
     // A range mark addresses this paragraph's text, so a text edit to the
     // same paragraph in the current version moves the covered range; refuse
     // rather than wrap the wrong runs.
