@@ -2114,16 +2114,31 @@ a request naming a non-current version requires matter-level `edit`, while the
 current version keeps each route's existing level (`view` for reads). Denial is
 the concealed document 404, not a 403, so the gate leaks nothing about whether
 the version exists. `GET /api/documents/:id` likewise lists only the current
-version to a view grantee, so historical ids and metadata are never exposed to
-someone who cannot open them. The policy is the least-privilege reading of the
-existing two-level share model: `view` means "see the matter's documents as
-they are", not "see every prior state". Verification-run binding already
-required `edit` for a selected version, so the choice matches the established
-boundary rather than inventing a third level. Every direct read path goes
-through the resolver — model, media, text, download, export, pdf-view,
-tracked-changes and the new compare route — and the compare route resolves
-both named versions through it, so a denied version cannot be reached by
-naming it as either side of a comparison.
+version to a view grantee, so the historical version list is not enumerable
+through document metadata. Denied ids can still surface as provenance on
+secondary records — a comment's `anchorVersionId`, a redaction run's
+`documentVersionId` — which is deliberate: the id alone grants nothing because
+every content route enforces the gate independently. The policy is the
+least-privilege reading of the existing two-level share model: `view` means
+"see the matter's documents as they are", not "see every prior state".
+Verification-run binding already required `edit` for a selected version, so
+the choice matches the established boundary rather than inventing a third
+level. Every direct read path goes through the resolver — model, media, text,
+download, export, pdf-view, tracked-changes and the new compare route — and
+the compare route resolves both named versions through it, so a denied version
+cannot be reached by naming it as either side of a comparison.
+
+The same gate covers the one indirect read path: a redaction run bound to a
+document version resolves its source text, source file and layout through
+`document_versions`, so `getRunDocumentVersion` in
+`services/api/src/redaction-database.ts` joins the run's version to its
+document and serves the storage keys only while that version is current —
+or always to a caller with matter-level `edit`. The check runs inside the key
+lookup, so a version that flips non-current between check and read cannot
+slip through, and a denied lookup returns the same not-found as a missing
+version. Run-owned data — spans, decisions, summary, the finalized output
+artifact and the pseudonymisation token map — keeps the run-level share model:
+those are the review product itself, not the immutable version bytes.
 
 Decision: presence lives in Postgres (`document_presence`, migration 0032),
 not process memory. One row per `(organisation, document, user, client)`; the
@@ -2132,7 +2147,10 @@ participants and a leave removes only the caller's own row. Rows expire by
 the database clock at the heartbeat TTL, reads filter `expires_at > now()`,
 and each write is a single statement whose CTEs upsert the row, sweep a
 bounded batch of expired rows and cap participants — no separate cleanup job
-and no read-modify-write race between instances. Rows reference the version
+and no read-modify-write race between instances. The cap is a read bound
+enforced per write rather than a strict global row count: concurrent upserts
+into a full bucket can transiently overshoot, and the next write converges it
+back. Rows reference the version
 by the composite `document_versions` key and cascade with it, so a superseded
 version's cursors stop matching current-version reads and a deleted document
 is never blocked by abandoned presence. Cursor coordinates are validated
