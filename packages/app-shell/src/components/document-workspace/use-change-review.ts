@@ -26,6 +26,22 @@ type DecisionMutation = Pick<
 export type ChangeReview = ReturnType<typeof useChangeReview>
 
 /**
+ * Why a listed change can never be decided, or undefined when it can. The
+ * server derives the flag on the wire (`undecidable`); this only turns it
+ * into the review copy the two surfaces share, so neither offers a decision
+ * the engine would refuse.
+ */
+function undecidableReason(change: DocumentChangeWire) {
+  if (change.undecidable === 'unsupported-move') {
+    return 'This move cannot be decided here; it stays listed and unchanged in the document.'
+  }
+  if (change.undecidable === 'missing-property-snapshot') {
+    return 'This formatting change does not record the properties it replaced, so it cannot be decided.'
+  }
+  return undefined
+}
+
+/**
  * The tracked-change review state the ribbon and the Changes panel share.
  * One active target, one availability answer and one dispatch live here, so
  * the ribbon's single/bulk actions and the panel's per-change buttons can
@@ -118,18 +134,27 @@ export function useChangeReview({
             : status === 'unsaved'
               ? 'Save or discard unsaved edits before deciding changes.'
               : null
+  // Changes the server has marked undecidable stay listed and preserved, but
+  // no decision can run on them — single controls name the reason, and bulk
+  // actions scope themselves to the supported set with the excluded count
+  // visible rather than wedging on a guaranteed refusal.
+  const supported = changes.filter((change) => change.undecidable === undefined)
+  const undecidableCount = changes.length - supported.length
   const bulkUnavailable =
     changes.length === 0
       ? 'There are no tracked changes.'
-      : changes.length > TRACKED_DECISION_MAX_IDS
-        ? `More than ${TRACKED_DECISION_MAX_IDS} changes must be decided in smaller groups.`
-        : (unavailable ?? undefined)
+      : supported.length > TRACKED_DECISION_MAX_IDS
+        ? `More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`
+        : (unavailable ??
+          (supported.length === 0
+            ? 'None of the listed changes can be decided here; they stay listed and unchanged in the document.'
+            : undefined))
   const targetUnavailable =
     unavailable ??
     (changes.length === 0
       ? 'There are no tracked changes.'
       : current
-        ? undefined
+        ? undecidableReason(current)
         : 'Go to a change first — use Previous, Next or the Changes list.')
 
   function reveal(change: DocumentChangeWire) {
@@ -168,11 +193,17 @@ export function useChangeReview({
   }
 
   function decide(action: 'accept' | 'reject', changeIds: string[]) {
+    const undecidableIds = new Set(
+      changes
+        .filter((change) => change.undecidable !== undefined)
+        .map((change) => change.id),
+    )
     if (
       unavailable ||
       !model ||
       changeIds.length === 0 ||
-      changeIds.length > TRACKED_DECISION_MAX_IDS
+      changeIds.length > TRACKED_DECISION_MAX_IDS ||
+      changeIds.some((id) => undecidableIds.has(id))
     ) {
       return
     }
@@ -224,6 +255,10 @@ export function useChangeReview({
     bulkUnavailable,
     /** Why the single-change controls are unavailable, or undefined. */
     targetUnavailable,
+    /** How many listed changes the engine can never decide. */
+    undecidableCount,
+    /** Why this change can never be decided, or undefined when it can. */
+    undecidableReason,
     canPrevious: activeIndex > 0,
     canNext: changes.length > 0 && activeIndex < changes.length - 1,
     goTo,
@@ -246,7 +281,7 @@ export function useChangeReview({
     decideAll: (action: 'accept' | 'reject') =>
       decide(
         action,
-        changes.map((change) => change.id),
+        supported.map((change) => change.id),
       ),
   }
 }

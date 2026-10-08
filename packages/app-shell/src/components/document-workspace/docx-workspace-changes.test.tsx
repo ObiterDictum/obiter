@@ -32,6 +32,20 @@ const format: DocumentChangeWire = {
   text: '',
   author: 'Review Author',
 }
+const unsupportedMove: DocumentChangeWire = {
+  id: 'chg_3',
+  ooxmlId: '6',
+  elementName: 'moveFrom',
+  kind: 'move',
+  direction: 'from',
+  storyPartName: 'word/document.xml',
+  paragraphId: 'p1',
+  text: 'stranded move',
+  author: 'Review Author',
+  undecidable: 'unsupported-move',
+}
+const unsupportedMoveReason =
+  'This move cannot be decided here; it stays listed and unchanged in the document.'
 
 function decided(
   input: unknown,
@@ -209,6 +223,104 @@ describe('DocxWorkspace change review', () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
+  })
+
+  it('marks an undecidable change, disables only its controls, and still navigates', () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({
+      changes: [inserted, unsupportedMove],
+      decideAsync: decide,
+    })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Changes (2)' }))
+
+    const panel = screen.getByRole('complementary', {
+      name: 'Tracked changes',
+    })
+    expect(panel.textContent).toContain(unsupportedMoveReason)
+    expect(panel.textContent).toContain(
+      'One listed change cannot be decided here',
+    )
+    const items = within(panel).getAllByRole('button', {
+      name: 'Show this change',
+    })
+    const item = items[1]?.closest('li')
+    if (!item) throw new Error('Undecidable change row is missing.')
+    expect(within(item).getByRole('button', { name: 'Accept' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    expect(within(item).getByRole('button', { name: 'Reject' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+
+    // The row still reveals its location, and the ribbon's single-change
+    // controls carry the reason on their accessible name once it is active.
+    fireEvent.click(items[1]!)
+    expect(item.getAttribute('aria-current')).toBe('true')
+    expect(
+      screen.getByRole('button', {
+        name: `Accept change: ${unsupportedMoveReason}`,
+      }),
+    ).toHaveProperty('disabled', true)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Accept change: ${unsupportedMoveReason}`,
+      }),
+    )
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('scopes a bulk decision to the supported changes and says so', () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({
+      changes: [inserted, format, unsupportedMove],
+      decideAsync: decide,
+    })
+    openRibbonTab('Review')
+
+    const panel = (() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Changes (3)' }))
+      return screen.getByRole('complementary', { name: 'Tracked changes' })
+    })()
+    expect(panel.textContent).toContain(
+      'One listed change cannot be decided here',
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Accept all supported changes' }),
+    )
+
+    // The undecidable change is never put on the wire — the request is one
+    // atomic decision over the supported ids only.
+    expect(decide).toHaveBeenCalledWith(
+      {
+        baseVersionId: 'ver_1',
+        action: 'accept',
+        changeIds: ['chg_1', 'chg_2'],
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    )
+  })
+
+  it('disables bulk actions when nothing listed can be decided', () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [unsupportedMove], decideAsync: decide })
+    openRibbonTab('Review')
+
+    const reason =
+      'None of the listed changes can be decided here; they stay listed and unchanged in the document.'
+    expect(
+      screen.getByRole('button', {
+        name: `Accept all supported changes: ${reason}`,
+      }),
+    ).toHaveProperty('disabled', true)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Accept all supported changes: ${reason}`,
+      }),
+    )
+    expect(decide).not.toHaveBeenCalled()
   })
 
   it('reports an empty review honestly', () => {

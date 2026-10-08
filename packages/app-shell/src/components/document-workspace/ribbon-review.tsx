@@ -256,14 +256,22 @@ export function ReviewRibbon({
             icon={<X size={16} aria-hidden />}
           />
           <IconButton
-            label="Accept all changes"
+            label={
+              review && review.undecidableCount > 0
+                ? 'Accept all supported changes'
+                : 'Accept all changes'
+            }
             disabled={!review || Boolean(review.bulkUnavailable)}
             disabledReason={review?.bulkUnavailable}
             onClick={review?.onAcceptAll}
             icon={<Checks size={16} aria-hidden />}
           />
           <IconButton
-            label="Reject all changes"
+            label={
+              review && review.undecidableCount > 0
+                ? 'Reject all supported changes'
+                : 'Reject all changes'
+            }
             disabled={!review || Boolean(review.bulkUnavailable)}
             disabledReason={review?.bulkUnavailable}
             onClick={review?.onRejectAll}

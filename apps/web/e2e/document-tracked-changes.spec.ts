@@ -29,7 +29,12 @@ const REPO_ROOT = path.resolve(
   '../../..',
 )
 const FIXTURE_PATH = '/tmp/e9-tracked-changes-fixture.docx'
-const FIXTURE_NAME = path.basename(FIXTURE_PATH)
+/** The same fixture plus a one-sided move container the engine cannot decide. */
+const MIXED_PATH = '/tmp/e9-tracked-changes-mixed-fixture.docx'
+const MIXED_MARKUP =
+  '<w:p><w:moveFromRangeStart w:id="40" w:name="orphanMove" w:author="Jane Example" w:date="2026-08-10T10:06:00Z"/><w:moveFrom w:id="30" w:author="Jane Example" w:date="2026-08-10T10:06:00Z"><w:r><w:delText>Stranded move</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="40"/></w:p>'
+const MIXED_ANCHOR =
+  '<w:sectPr><w:headerReference w:type="default" r:id="rId5"/>'
 /** A plain untracked paragraph whose single run the mid-run format splits. */
 const PLAIN = 'Alice Example overview'
 /** Five code units, so the selection never cuts a surrogate pair. */
@@ -39,12 +44,14 @@ const USER_NAME = 'E9 User'
 function buildFixture() {
   // Always rebuild: a cached fixture keeps the shape the builder emitted when
   // it was written, so an existsSync guard silently reruns stale markup.
-  if (existsSync(FIXTURE_PATH)) rmSync(FIXTURE_PATH)
+  for (const fixturePath of [FIXTURE_PATH, MIXED_PATH]) {
+    if (existsSync(fixturePath)) rmSync(fixturePath)
+  }
   execFileSync(
     'bun',
     [
       '-e',
-      `const { buildOoxmlFixture } = await import('${REPO_ROOT}/packages/ooxml/fixtures/builder.ts'); const bytes = await buildOoxmlFixture('full-fidelity-with-w14-ids'); await Bun.write('${FIXTURE_PATH}', bytes)`,
+      `const { buildOoxmlFixture } = await import('${REPO_ROOT}/packages/ooxml/fixtures/builder.ts'); const { default: JSZip } = await import('jszip'); const bytes = await buildOoxmlFixture('full-fidelity-with-w14-ids'); await Bun.write('${FIXTURE_PATH}', bytes); const zip = await JSZip.loadAsync(bytes); const xml = await zip.file('word/document.xml').async('string'); zip.file('word/document.xml', xml.replace('${MIXED_ANCHOR}', '${MIXED_MARKUP}' + '${MIXED_ANCHOR}')); await Bun.write('${MIXED_PATH}', await zip.generateAsync({ type: 'uint8array' }))`,
     ],
     { cwd: REPO_ROOT, stdio: 'pipe' },
   )
@@ -82,7 +89,9 @@ async function openFixtureDocument(
   email: string,
   password: string,
   matterName: string,
+  fixturePath = FIXTURE_PATH,
 ) {
+  const fixtureName = path.basename(fixturePath)
   await signIn(page, email, password)
 
   await page.getByRole('link', { name: 'Matters' }).first().click()
@@ -107,12 +116,12 @@ async function openFixtureDocument(
   await page.getByRole('link', { name: matterName }).first().click()
   await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
 
-  if ((await page.getByText(FIXTURE_NAME).count()) === 0) {
+  if ((await page.getByText(fixtureName).count()) === 0) {
     const fileInput = page.locator('input[aria-label="Upload document"]')
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
-    await fileInput.setInputFiles(FIXTURE_PATH)
+    await fileInput.setInputFiles(fixturePath)
   }
-  const documentRow = page.getByText(FIXTURE_NAME).first()
+  const documentRow = page.getByText(fixtureName).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
 
@@ -277,6 +286,117 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
     await expect(
       reloaded.getByRole('heading', { name: 'No tracked changes' }),
     ).toBeVisible({ timeout: 15_000 })
+  } finally {
+    await fresh.close()
+  }
+})
+
+test('lists an undecidable move honestly and bulk-decides only supported changes', async ({
+  page,
+  browser,
+  request,
+}) => {
+  buildFixture()
+  const { email, password } = await createAccount(request)
+  const matter = `E9 undecidable ${String(Date.now())}`
+  // Capture the list response so the test knows the server's own verdict on
+  // the undecidable change, not a client-side guess.
+  const listResponse = page.waitForResponse(
+    (incoming) =>
+      /\/api\/documents\/[^/]+\/tracked-changes$/u.test(incoming.url()) &&
+      incoming.request().method() === 'GET' &&
+      incoming.status() === 200,
+  )
+  await openFixtureDocument(page, email, password, matter, MIXED_PATH)
+  const listed = (await (await listResponse).json()) as {
+    changes: { id: string; undecidable?: string }[]
+  }
+  const undecidable = listed.changes.filter(
+    (change) => change.undecidable !== undefined,
+  )
+  const undecidableChange = undecidable[0]
+  if (undecidable.length !== 1 || !undecidableChange) {
+    throw new Error('Expected exactly one undecidable change in the list.')
+  }
+  expect(undecidableChange.undecidable).toBe('unsupported-move')
+  const undecidableId = undecidableChange.id
+
+  await openChangesPanel(page)
+
+  // Seven changes: the six supported revisions plus the stranded move, which
+  // renders marked and disabled while the row still navigates to it.
+  const list = panel(page).getByRole('list')
+  await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
+  const undecidableRow = list.locator('li', { hasText: 'Stranded move' })
+  await expect(undecidableRow).toContainText('This move cannot be decided here')
+  await expect(
+    undecidableRow.getByRole('button', { name: 'Accept' }),
+  ).toBeDisabled()
+  await expect(
+    undecidableRow.getByRole('button', { name: 'Reject' }),
+  ).toBeDisabled()
+  await undecidableRow.getByRole('button', { name: 'Show this change' }).click()
+  await expect(panel(page)).toContainText('7 of 7')
+  await expect(
+    page.getByRole('button', {
+      name: 'Accept change: This move cannot be decided here; it stays listed and unchanged in the document.',
+    }),
+  ).toBeDisabled()
+
+  // Bulk names its real scope; the request carries the supported ids only,
+  // so the undecidable change is never offered to the engine.
+  await expect(
+    page.getByRole('button', {
+      name: 'Accept all supported changes',
+      exact: true,
+    }),
+  ).toBeEnabled()
+  const bulkResponse = page.waitForResponse(
+    (incoming) =>
+      /\/api\/documents\/[^/]+\/tracked-changes\/decision$/u.test(
+        incoming.url(),
+      ) && incoming.request().method() === 'POST',
+  )
+  await panel(page)
+    .getByRole('button', { name: 'Accept all supported' })
+    .click()
+  const accepted = await bulkResponse
+  expect(accepted.status(), await accepted.text()).toBe(201)
+  const payload = accepted.request().postDataJSON() as {
+    changeIds: string[]
+  }
+  expect(payload.changeIds).toHaveLength(6)
+  expect(payload.changeIds).not.toContain(undecidableId)
+
+  // The undecidable change is the only one left — still listed, still marked.
+  await expect(list.getByRole('listitem')).toHaveCount(1, { timeout: 15_000 })
+  await expect(list.locator('li', { hasText: 'Stranded move' })).toContainText(
+    'This move cannot be decided here',
+  )
+
+  // The export keeps its markup untouched: nothing decided it silently, and
+  // the supported changes resolved around it.
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  const xml = zipPart(await (await downloadPromise).path(), 'word/document.xml')
+  expect(xml).toContain('w:name="orphanMove"')
+  expect(xml).toContain('<w:moveFrom ')
+  expect(xml).toContain('Stranded move')
+  expect(xml).not.toContain('<w:ins')
+  expect(xml).not.toContain('<w:del ')
+
+  // A fresh context reads the same honest state back after the decision.
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter, MIXED_PATH)
+    await openChangesPanel(reloaded)
+    const reloadedList = panel(reloaded).getByRole('list')
+    await expect(reloadedList.getByRole('listitem')).toHaveCount(1, {
+      timeout: 15_000,
+    })
+    await expect(reloadedList).toContainText('Stranded move')
+    await expect(reloadedList).toContainText('cannot be decided')
   } finally {
     await fresh.close()
   }
