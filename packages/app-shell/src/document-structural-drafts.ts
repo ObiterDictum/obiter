@@ -113,6 +113,21 @@ export type StructuralTableOfContentsDraft = {
 }
 
 /**
+ * A pending `_Def_` bookmark mark over `[from, to)` of a stored paragraph's
+ * painted text — the editor's defined-term mark. Like the link draft it
+ * carries no model change: the paint draws an overlay range and the save
+ * writes the bookmark pair. The covered words are re-read at save time to
+ * name the bookmark, so the draft keeps the range only.
+ */
+export type StructuralDefinedTermDraft = {
+  id: string
+  kind: 'defined-term'
+  paragraphId: string
+  from: number
+  to: number
+}
+
+/**
  * The paragraph id the pending footnote's note body folds under. It is not a
  * stored paragraph and never becomes one: the note's own `w14` id is only
  * allocated by the save writer.
@@ -129,6 +144,7 @@ export type StructuralDraft =
   | StructuralPageNumberDraft
   | StructuralFootnoteDraft
   | StructuralTableOfContentsDraft
+  | StructuralDefinedTermDraft
 
 /**
  * The persisted form of a structural draft, bounded to exactly the fields the
@@ -205,6 +221,18 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       offset: z.number().int().min(0),
     })
     .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('defined-term'),
+      paragraphId: z.string().min(1),
+      from: z.number().int().min(0),
+      to: z.number().int().min(0),
+    })
+    .strict()
+    .refine((draft) => draft.from < draft.to, {
+      message: 'from and to must form a non-empty forward range.',
+    }),
 ])
 
 /**
@@ -292,6 +320,15 @@ export function structuralEditOperations(
         type: 'insert_table_of_contents',
         paragraphId: structure.paragraphId,
         offset: structure.offset,
+      })
+      continue
+    }
+    if (structure.kind === 'defined-term') {
+      operations.push({
+        type: 'mark_defined_term',
+        paragraphId: structure.paragraphId,
+        from: structure.from,
+        to: structure.to,
       })
       continue
     }

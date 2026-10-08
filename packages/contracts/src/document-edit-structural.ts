@@ -220,6 +220,34 @@ export type DocumentEditInsertCrossReferenceOperation = z.infer<
 >
 
 /**
+ * A `_Def_` bookmark pair around `[from, to)` of `paragraphId`'s effective
+ * text — the editor's defined-term mark. It inserts no text, so it cannot
+ * shift an offset; the writer names the bookmark from the covered words
+ * (`definedTermBookmarkName`) and refuses a range whose text cannot name a
+ * term. `paragraphId` must name a body paragraph.
+ */
+export const markDefinedTermOperationSchema = z
+  .object({
+    type: z.literal('mark_defined_term'),
+    paragraphId: editIdSchema,
+    from: characterOffsetSchema,
+    to: characterOffsetSchema,
+  })
+  .strict()
+  .superRefine((operation, context) => {
+    if (operation.from >= operation.to) {
+      context.addIssue({
+        code: 'custom',
+        path: ['to'],
+        message: 'from and to must form a non-empty forward range.',
+      })
+    }
+  })
+export type DocumentEditMarkDefinedTermOperation = z.infer<
+  typeof markDefinedTermOperationSchema
+>
+
+/**
  * A `PAGE` field spliced at `offset` in `paragraphId`. The field carries an
  * empty stored result; the reader resolves the number at paint time and Word
  * recomputes it on repagination, so the operation takes no value. `paragraphId`

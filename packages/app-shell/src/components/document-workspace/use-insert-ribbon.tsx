@@ -115,6 +115,7 @@ export function useInsertRibbon(
       linkUnavailable: structure.linkUnavailable,
       crossReferenceUnavailable: structure.crossReferenceUnavailable,
       crossReferenceTargets: structure.crossReferenceTargets,
+      definedTermUnavailable: structure.definedTermUnavailable,
       pageNumberUnavailable: structure.pageNumberUnavailable,
       footnoteUnavailable: structure.footnoteUnavailable,
       tableOfContentsUnavailable: structure.tableOfContentsUnavailable,
@@ -128,6 +129,10 @@ export function useInsertRibbon(
       onInsertLink: (target) => structure.insertLink(target),
       onInsertCrossReference: (targetParagraphId) =>
         structure.insertCrossReference(targetParagraphId),
+      onMarkDefinedTerm: () => {
+        const outcome = structure.markDefinedTerm()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
       onInsertPageNumber: () => {
         const outcome = structure.insertPageNumber()
         if (!outcome.inserted) onImageError(outcome.reason)

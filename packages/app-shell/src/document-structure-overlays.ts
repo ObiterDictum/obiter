@@ -3,14 +3,16 @@ import { documentStory, paragraphPlainText } from './document-model-text'
 import type { StructuralDraft } from './document-structural-drafts'
 
 /**
- * What the run overlay needs to paint the pending link and cross-reference
- * drafts over one paragraph. A link is a range painted on the covered text;
- * a cross-reference is a zero-width marker at its offset, labelled with the
- * target's current text so the chip reads like the resolved field without
- * entering the editable stream.
+ * What the run overlay needs to paint the pending link, defined-term and
+ * cross-reference drafts over one paragraph. A link or a defined-term mark
+ * is a range painted on the covered text; a cross-reference is a zero-width
+ * marker at its offset, labelled with the target's current text so the chip
+ * reads like the resolved field without entering the editable stream.
  */
 export type ParagraphLinkOverlay = {
   links: Array<{ from: number; to: number; target: string }>
+  /** Pending defined-term marks: painted as a range, no text change. */
+  marks: Array<{ from: number; to: number }>
   fieldMarkers: Array<{ offset: number; label: string }>
 }
 
@@ -49,7 +51,11 @@ export function structuralLinkOverlays(
   const entry = (paragraphId: string) => {
     const current = overlays.get(paragraphId)
     if (current) return current
-    const created: ParagraphLinkOverlay = { links: [], fieldMarkers: [] }
+    const created: ParagraphLinkOverlay = {
+      links: [],
+      marks: [],
+      fieldMarkers: [],
+    }
     overlays.set(paragraphId, created)
     return created
   }
@@ -59,6 +65,13 @@ export function structuralLinkOverlays(
         from: structure.from,
         to: structure.to,
         target: structure.target,
+      })
+      continue
+    }
+    if (structure.kind === 'defined-term') {
+      entry(structure.paragraphId).marks.push({
+        from: structure.from,
+        to: structure.to,
       })
       continue
     }

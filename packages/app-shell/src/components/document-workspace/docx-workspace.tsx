@@ -31,6 +31,7 @@ import { useWorkspaceComments } from './use-workspace-comments'
 import { documentClipboardToolbar } from './use-workspace-clipboard'
 import { exportDocumentAsDocx } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
+import { useLegalToolsState } from './use-legal-tools-state'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
 import { DocumentDesk, DocumentPrintStyle } from './document-page'
@@ -87,6 +88,7 @@ export function DocxWorkspace({
   const [changesOpen, setChangesOpen] = useState(false)
   const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
+  const legalTools = useLegalToolsState(documentId)
   const [trackChanges, setTrackChanges] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
@@ -204,6 +206,7 @@ export function DocxWorkspace({
     deleteParagraphReason,
     insert,
     linkOverlays,
+    legalChecks,
   } = useWorkspaceDerivations({
     documentId,
     model,
@@ -306,6 +309,9 @@ export function DocxWorkspace({
         onToggleChanges={() => setChangesOpen((value) => !value)}
         onToggleAuthorities={() => setAuthoritiesOpen((value) => !value)}
         onInsertAuthority={() => setInsertAuthorityOpen(true)}
+        citationStyle={legalTools.citationStyle}
+        onCitationStyle={legalTools.onCitationStyle}
+        legalChecks={legalTools.legalChecks}
         onToggleTrackChanges={() => setTrackChanges((value) => !value)}
         onZoom={setZoom}
         onExportText={() => {
@@ -455,6 +461,8 @@ export function DocxWorkspace({
                 commentsOpen={commentsOpen}
                 changesOpen={changesOpen}
                 authoritiesOpen={authoritiesOpen}
+                legalChecksOpen={legalTools.legalChecksOpen}
+                legalChecks={legalChecks}
                 {...commentsPanel.props}
                 changeReview={changeReview}
                 authorities={authorities}
@@ -476,7 +484,10 @@ export function DocxWorkspace({
             disabled={
               !selectedParagraphId && !documentStory(model)?.paragraphs[0]
             }
-            onInsert={insertAuthority}
+            citationStyle={legalTools.citationStyle}
+            onInsert={(citation) =>
+              insertAuthority(citation, legalTools.citationStyle === 'house')
+            }
           />
         </>
       ) : null}

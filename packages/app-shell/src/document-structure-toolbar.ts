@@ -1,4 +1,8 @@
-import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
+import {
+  definedTermBookmarkName,
+  PAGE_STORY_KINDS,
+  type DocumentModelWire,
+} from '@obiter/contracts'
 import {
   isTableOfContentsHeading,
   tableOfContentsAnchorBlock,
@@ -11,7 +15,7 @@ import {
   structuralKindNoun,
   type StructuralPlacement,
 } from './document-structure-conflicts'
-import type { ExtraRuns } from './document-word-edits'
+import { blockText, type ExtraRuns } from './document-word-edits'
 import type { ImageInsertFields } from './document-image-inserts'
 import { crossReferenceTargetLabel } from './document-structure-overlays'
 import {
@@ -163,6 +167,26 @@ export function documentStructureToolbar({
             from: selectionRange.from,
             to: selectionRange.to,
           })
+  // A defined-term mark is a range mark over the words that bind the term,
+  // so it shares the link's selection rules and body-only anchor.
+  const definedTermUnavailable = trackChanges
+    ? 'A defined-term mark is not recorded as a tracked change'
+    : !selectionRange
+      ? selectionActive
+        ? 'Select text within one paragraph to mark'
+        : 'Select the words that bind the term'
+      : !story?.paragraphs.some(
+            (paragraph) => paragraph.id === selectionRange.paragraphId,
+          )
+        ? model && editableParagraph(model, selectionRange.paragraphId)
+          ? 'Only the document body can hold a defined-term mark'
+          : 'Save the new paragraph before marking a term in it'
+        : conflictWith({
+            kind: 'defined-term',
+            paragraphId: selectionRange.paragraphId,
+            from: selectionRange.from,
+            to: selectionRange.to,
+          })
   const crossReferenceUnavailable =
     baseUnavailable ??
     (offset == null || !paragraphId
@@ -264,6 +288,7 @@ export function documentStructureToolbar({
     tableUnavailable,
     pictureUnavailable,
     linkUnavailable,
+    definedTermUnavailable,
     crossReferenceUnavailable,
     crossReferenceTargets,
     pageNumberUnavailable,
@@ -321,6 +346,45 @@ export function documentStructureToolbar({
         return {
           inserted: false,
           reason: 'Enter an http, https or mailto address.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
+    },
+    markDefinedTerm(): StructuralInsertOutcome {
+      if (definedTermUnavailable || !selectionRange || !model) {
+        return {
+          inserted: false,
+          reason: definedTermUnavailable ?? 'No text selected',
+        }
+      }
+      // The bookmark name is derived from the covered words, here and again
+      // by the writer at save time; a selection that cannot name a term —
+      // no word characters, or longer than the bookmark-name cap — is refused
+      // now rather than at save.
+      const covered = blockText(
+        model,
+        { drafts, extraRuns, inserts: [], deletedParagraphIds: [] },
+        selectionRange.paragraphId,
+      ).slice(selectionRange.from, selectionRange.to)
+      if (definedTermBookmarkName(covered) === null) {
+        return {
+          inserted: false,
+          reason:
+            'That selection cannot name a term: it needs words the bookmark can hold.',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'defined-term',
+        paragraphId: selectionRange.paragraphId,
+        from: selectionRange.from,
+        to: selectionRange.to,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That mark cannot be held as a draft.',
         }
       }
       setStructures((current) => [...current, draft])
