@@ -7,6 +7,7 @@ import type {
 import {
   DOCUMENT_COMPARISON_ENTRY_MAX_COUNT,
   DOCUMENT_COMPARISON_PREVIEW_MAX_LENGTH,
+  DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT,
 } from '@obiter/contracts'
 
 /**
@@ -496,28 +497,46 @@ function wordDiff(baseText: string, targetText: string) {
     targetEnd -= 1
   }
 
-  const segments: DocumentComparisonSegment[] = []
-  const sameHead = joinTokens(baseTokens.slice(0, start))
-  if (sameHead) segments.push({ kind: 'same', text: sameHead })
+  // The coarse form: verified common head and tail stay 'same', the changed
+  // middle reports as one removed block and one added block — honest, just
+  // not minimal. It answers both ways the fine-grained diff cannot be
+  // served: a middle too large to diff at all, and an LCS result that would
+  // fragment past the contract's segment bound.
+  const coarse = () => {
+    const segments: DocumentComparisonSegment[] = []
+    const sameHead = joinTokens(baseTokens.slice(0, start))
+    if (sameHead) segments.push({ kind: 'same', text: sameHead })
+    const removed = joinTokens(baseTokens.slice(start, baseEnd))
+    if (removed) segments.push({ kind: 'removed', text: removed })
+    const added = joinTokens(targetTokens.slice(start, targetEnd))
+    if (added) segments.push({ kind: 'added', text: added })
+    const sameTail = joinTokens(baseTokens.slice(baseEnd))
+    if (sameTail) segments.push({ kind: 'same', text: sameTail })
+    return segments
+  }
+
   if (
     baseEnd - start > WORD_DIFF_TOKEN_LIMIT ||
     targetEnd - start > WORD_DIFF_TOKEN_LIMIT
   ) {
-    const removed = joinTokens(baseTokens.slice(start, baseEnd))
-    const added = joinTokens(targetTokens.slice(start, targetEnd))
-    if (removed) segments.push({ kind: 'removed', text: removed })
-    if (added) segments.push({ kind: 'added', text: added })
-  } else {
-    for (const segment of lcsDiff(
-      baseTokens.slice(start, baseEnd),
-      targetTokens.slice(start, targetEnd),
-    )) {
-      segments.push(segment)
-    }
+    return coarse()
+  }
+
+  const segments: DocumentComparisonSegment[] = []
+  const sameHead = joinTokens(baseTokens.slice(0, start))
+  if (sameHead) segments.push({ kind: 'same', text: sameHead })
+  for (const segment of lcsDiff(
+    baseTokens.slice(start, baseEnd),
+    targetTokens.slice(start, targetEnd),
+  )) {
+    segments.push(segment)
   }
   const sameTail = joinTokens(baseTokens.slice(baseEnd))
   if (sameTail) segments.push({ kind: 'same', text: sameTail })
-  return mergeSegments(segments)
+  const merged = mergeSegments(segments)
+  return merged.length <= DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT
+    ? merged
+    : coarse()
 }
 
 /** Runs and whitespace are both tokens, so segments rejoin verbatim. */

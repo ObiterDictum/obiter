@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test'
-import { DOCUMENT_COMPARISON_ENTRY_MAX_COUNT } from '@obiter/contracts'
+import {
+  DOCUMENT_COMPARISON_ENTRY_MAX_COUNT,
+  DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT,
+  documentComparisonEntrySchema,
+} from '@obiter/contracts'
 import type {
+  DocumentComparisonEntry,
   DocumentModelWire,
   DocumentParagraphWire,
   DocumentStoryWire,
@@ -348,5 +353,106 @@ describe('compareDocumentModels', () => {
     const first = compareDocumentModels(base, target)
     const second = compareDocumentModels(base, target)
     expect(second).toEqual(first)
+  })
+
+  /**
+   * Independent oracle for a `modified` entry: rejoining every segment that
+   * is not an insertion must rebuild the base text verbatim, and every
+   * segment that is not a removal must rebuild the target — whether the diff
+   * was word-level or the bounded coarse fallback.
+   */
+  function expectReconstructed(
+    entry: DocumentComparisonEntry,
+    baseText: string,
+    targetText: string,
+  ) {
+    if (entry.type !== 'modified') throw new Error('Expected a modified entry.')
+    expect(
+      entry.segments
+        .filter((segment) => segment.kind !== 'added')
+        .map((segment) => segment.text)
+        .join(''),
+    ).toBe(baseText)
+    expect(
+      entry.segments
+        .filter((segment) => segment.kind !== 'removed')
+        .map((segment) => segment.text)
+        .join(''),
+    ).toBe(targetText)
+  }
+
+  it('collapses a dense rewrite inside the segment bound', () => {
+    // Two differing words between each shared word stay under the word-diff
+    // token limit (479 tokens), so the LCS path runs — and fragments into 480
+    // segments, past the contract bound. The producer must fall back to the
+    // coarse form rather than emit a response the schema rejects.
+    const baseWords: string[] = []
+    const targetWords: string[] = []
+    for (let index = 0; index < 80; index += 1) {
+      baseWords.push(`old${index}a`, `old${index}b`, `keep${index}`)
+      targetWords.push(`new${index}a`, `new${index}b`, `keep${index}`)
+    }
+    const baseText = baseWords.join(' ')
+    const targetText = targetWords.join(' ')
+    const [entry] = compareDocumentModels(
+      model([paragraph('p1', baseText, { sourceParaId: 'a' })]),
+      model([paragraph('p1', targetText, { sourceParaId: 'a' })]),
+    ).entries
+    expect(entry?.type).toBe('modified')
+    if (entry?.type !== 'modified') return
+    expect(entry.segments.length).toBeLessThanOrEqual(
+      DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT,
+    )
+    expect(documentComparisonEntrySchema.safeParse(entry).success).toBe(true)
+    // The fallback is lossless: every real change still reports, and the
+    // segments carry the full before and after text.
+    expectReconstructed(entry, baseText, targetText)
+    expect(entry.segments.some((segment) => segment.kind === 'removed')).toBe(
+      true,
+    )
+    expect(entry.segments.some((segment) => segment.kind === 'added')).toBe(
+      true,
+    )
+  })
+
+  it('stays inside the contract bounds under a seeded rewrite fuzz', () => {
+    // Deterministic LCG: the same corpus every run, so a failure reproduces
+    // exactly. Paragraphs are ~200-280 words from a shared 40-word
+    // vocabulary — coincidental matches fragment the token-level diff far
+    // past the segment bound, which is how the original defect escaped.
+    let state = 0x9e3779b9
+    const next = () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+      return state / 0x100000000
+    }
+    const vocabulary = Array.from({ length: 40 }, (_, i) => `w${i}`)
+    const words = (count: number) =>
+      Array.from(
+        { length: count },
+        () => vocabulary[Math.floor(next() * vocabulary.length)],
+      ).join(' ')
+    let modifiedCount = 0
+    for (let iteration = 0; iteration < 200; iteration += 1) {
+      const baseText = words(200 + Math.floor(next() * 80))
+      const targetText = words(200 + Math.floor(next() * 80))
+      const result = compareDocumentModels(
+        model([paragraph('p1', baseText)]),
+        model([paragraph('p1', targetText)]),
+      )
+      for (const entry of result.entries) {
+        expect(documentComparisonEntrySchema.safeParse(entry).success).toBe(
+          true,
+        )
+        if (entry.type === 'modified') {
+          modifiedCount += 1
+          expect(entry.segments.length).toBeLessThanOrEqual(
+            DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT,
+          )
+          expectReconstructed(entry, baseText, targetText)
+        }
+      }
+    }
+    // The corpus is pointless if no paragraph ever pairs as modified.
+    expect(modifiedCount).toBeGreaterThan(0)
   })
 })
