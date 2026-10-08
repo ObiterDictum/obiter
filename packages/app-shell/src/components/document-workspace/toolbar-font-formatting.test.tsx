@@ -191,32 +191,46 @@ describe('the font formatting controls', () => {
     expect(spanOf('p1', 'Hello')?.style.fontFamily ?? '').toContain('Georgia')
   })
 
-  it('refuses the font controls and clear formatting under track changes', () => {
-    mountWorkspace({ models: { doc_1: helloModel() } })
+  it('queues the font controls and clear formatting under track changes', async () => {
+    // A mid-run selection is recorded as w:rPrChange, so every character
+    // control stays live with tracking on and queues its range operation.
+    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
+    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
     fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Home' }))
     clickParagraph('p1')
     nativeSelect(1, 4)
 
-    for (const name of [/^Font:/, /^Font size:/, /^Font colour:/]) {
-      const select = fontSelectNode(name)
-      expect(select.disabled).toBe(true)
-      expect(select.getAttribute('aria-label')).toMatch(/tracked change/i)
+    for (const name of ['Font', 'Font size', 'Font colour']) {
+      expect(fontSelect(name).disabled).toBe(false)
     }
-    const clear = screen.queryByRole('button', { name: /^Clear formatting:/ })
-    if (!(clear instanceof HTMLButtonElement)) {
-      throw new Error('missing Clear formatting control with a reason')
-    }
-    expect(clear.disabled).toBe(true)
-    expect(clear.getAttribute('aria-label')).toMatch(/tracked change/i)
+    fireEvent.change(fontSelect('Font'), { target: { value: 'Georgia' } })
+    fireEvent.change(fontSelect('Font size'), { target: { value: '24' } })
+    fireEvent.change(fontSelect('Font colour'), { target: { value: 'FF0000' } })
+    fireEvent.click(control('Clear formatting'))
+
+    await save(editAsync)
+    expect(emphasisOperations(editAsync)).toEqual([
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 1,
+        to: 4,
+        bold: null,
+        italic: null,
+        underline: null,
+        strikethrough: null,
+        fontFamily: null,
+        fontSize: null,
+        colour: null,
+        highlight: null,
+        vertAlign: null,
+        smallCaps: null,
+      },
+    ])
+    const call = editAsync.mock.calls[0]?.[0] as
+      { trackChanges?: boolean } | undefined
+    expect(call?.trackChanges).toBe(true)
   })
 })
-
-function fontSelectNode(name: RegExp): HTMLSelectElement {
-  const node = screen.getByLabelText(name)
-  if (!(node instanceof HTMLSelectElement)) {
-    throw new Error(`missing ${String(name)} select`)
-  }
-  return node
-}
