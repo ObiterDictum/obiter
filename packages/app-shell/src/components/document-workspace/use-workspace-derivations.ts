@@ -27,8 +27,8 @@ import {
 } from '../../document-structure-overlays'
 import { checkCrossReferences } from '../../document-cross-reference-check'
 import { checkDefinedTerms } from '../../document-defined-terms'
-import { isGeneratedFieldResultStyle } from '@obiter/ooxml'
 import type { TableOfAuthoritiesFacts } from '../../document-legal-toolbar'
+import { createTableOfAuthoritiesFacts } from '../../document-toa-availability'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -284,44 +284,34 @@ export function useWorkspaceDerivations({
         : [],
     [model, drafts.drafts, drafts.inserts, deletions, drafts.extraRuns],
   )
-  // The citations a table of authorities captures at the caret: the
-  // authority hits the memo above already scans, restricted to stored body
-  // paragraphs that survive the effective deletions — the same exclusion
-  // the writer's `deletedIds` pass and the generated-result style test
-  // keep. Grouped into entries once so the ribbon's disabled reason and
-  // the save partition's facts read one answer.
+  // The citations a table of authorities captures, computed by the same
+  // owner the save partition reads — pending styles and effective
+  // deletions applied — so the ribbon's disabled reason and the
+  // partition's block read one answer, and the update control names the
+  // same field the save's `fields` map finds.
   const toaFacts = useMemo<TableOfAuthoritiesFacts>(() => {
-    const story = model ? documentStory(model) : undefined
-    if (!story) return { occurrences: [], entries: [], citingWires: [] }
-    const wiresById = new Map(
-      story.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
-    )
-    const occurrences = authorities.filter((hit) => {
-      const wire = wiresById.get(hit.paragraphId)
-      return (
-        wire !== undefined &&
-        !deletions.effective.has(hit.paragraphId) &&
-        !isGeneratedFieldResultStyle(wire.styleId)
-      )
-    })
-    const citingByCitation = new Map<string, string[]>()
-    for (const hit of occurrences) {
-      const citing = citingByCitation.get(hit.citation) ?? []
-      if (!citing.includes(hit.paragraphId)) citing.push(hit.paragraphId)
-      citingByCitation.set(hit.citation, citing)
+    if (!model) {
+      return {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      }
     }
-    const entries = [...citingByCitation.entries()]
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([citation, paragraphIds]) => ({ citation, paragraphIds }))
-    const citingIds = new Set(entries.flatMap((entry) => entry.paragraphIds))
-    return {
-      occurrences,
-      entries,
-      citingWires: story.paragraphs.filter((paragraph) =>
-        citingIds.has(paragraph.id),
-      ),
-    }
-  }, [model, authorities, deletions])
+    return createTableOfAuthoritiesFacts({
+      model,
+      batchDeletions: deletions.effective,
+      drafts: drafts.drafts,
+      extraRuns: drafts.extraRuns,
+      paragraphStyles: drafts.format.paragraphStyles,
+    })()
+  }, [
+    model,
+    deletions,
+    drafts.drafts,
+    drafts.extraRuns,
+    drafts.format.paragraphStyles,
+  ])
   // Links and field markers carry no model change, so they are grouped into
   // an overlay map here rather than folded like a table. The painted model
   // feeds the marker labels so a reference names the target's current text.

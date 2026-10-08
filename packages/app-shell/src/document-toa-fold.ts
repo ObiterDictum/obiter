@@ -13,6 +13,7 @@ import {
 
 import { spliceRunAtOffset } from './document-footnote-fold'
 import type { StructuralDraft } from './document-structural-drafts'
+import { tableOfAuthoritiesFields } from './document-toa-availability'
 import { splitRunsAtOffset } from './document-toc-fold'
 
 const TOA_BOOKMARK_NAME = /<w:bookmarkStart\b[^>]*\bw:name="(_ToA\d+)"/u
@@ -21,6 +22,9 @@ const BOOKMARK_ID = /<w:bookmarkStart\b[^>]*\bw:id="(\d+)"/gu
 const FIELD_END_FRAGMENT = '<w:fldChar w:fldCharType="end"/>'
 
 type ToaDraft = StructuralDraft & { kind: 'table-of-authorities' }
+type ToaRefreshDraft = StructuralDraft & {
+  kind: 'table-of-authorities-refresh'
+}
 
 /**
  * The pending-fold state for `TOA` drafts: the `_ToA` bookmark name and
@@ -104,30 +108,22 @@ export function createTableOfAuthoritiesFold(
     )
 
   /**
-   * Splices one pending `TOA` into `paragraphs` — the wire counterpart of
-   * the writer's mark pass and `</w:p>`-level splice. The hidden `TA` mark
-   * runs fold into every citing paragraph first, the anchor's runs then
-   * split at the effective-text offset, and the heading plus one entry
-   * wire per distinct citation land between the head and a tail that
-   * opens with the field `end` run — the shape the serialised output
-   * produces. `_ToA` bookmark fragments attach after the split so a
-   * citing paragraph that was the anchor lands them on the head wire.
+   * The `TA` marks the painted model folds for one citation set —
+   * `spliceRunAtOffset` per occurrence, the wire counterpart of the
+   * writer's mark pass. `skipMarked` is the refresh path's deduplication:
+   * an occurrence already carrying its mark — stored or folded by an
+   * earlier draft — is left alone so a refresh cannot accrete marks.
    */
-  return function fold(
+  const foldMarks = (
     paragraphs: DocumentParagraphWire[],
-    draft: ToaDraft,
-    tails: Map<string, DocumentParagraphWire>,
-  ) {
-    const index = paragraphs.findIndex(
-      (paragraph) => paragraph.id === draft.paragraphId,
-    )
-    const anchor = paragraphs[index]
-    if (!anchor) return false
-    const { occurrences, entries } = citations(paragraphs)
-    if (entries.length === 0) return false
-
-    // The `TA` marks — before the split, so a citation in the anchor
-    // paragraph's head or tail lands in the wire its offset belongs to.
+    draftId: string,
+    occurrences: readonly {
+      paragraphId: string
+      end: number
+      citation: string
+    }[],
+    skipMarked: boolean,
+  ) => {
     let markSequence = 0
     for (const hit of occurrences) {
       const at = paragraphs.findIndex(
@@ -135,6 +131,12 @@ export function createTableOfAuthoritiesFold(
       )
       const wire = paragraphs[at]
       if (!wire) continue
+      if (
+        skipMarked &&
+        hasAuthorityMarkAtWire(wire, hit.end, hit.citation, drafts)
+      ) {
+        continue
+      }
       const markIndex = markSequence
       markSequence += 1
       let runSequence = 0
@@ -142,83 +144,41 @@ export function createTableOfAuthoritiesFold(
         wire,
         hit.end,
         tableAuthorityMarkWires(
-          () => `${draft.id}:ta${String(markIndex)}:r${String(runSequence++)}`,
+          () => `${draftId}:ta${String(markIndex)}:r${String(runSequence++)}`,
           hit.citation,
         ),
         drafts,
-        `${draft.id}:ta${String(markIndex)}`,
+        `${draftId}:ta${String(markIndex)}`,
       )
     }
+  }
 
-    const bookmarksById = new Map<
-      string,
-      { name: string; fragments?: string[] }
-    >()
+  /**
+   * The `_ToA` bookmark names the entries reference, one per citing
+   * paragraph — an existing name on the wire when it has one — and the
+   * fresh fragments each paragraph still needs, applied after the fold's
+   * paragraph splices so a citing paragraph that was the anchor lands
+   * them on the head wire.
+   */
+  const bookmarksFor = (
+    paragraphs: readonly DocumentParagraphWire[],
+    entries: readonly { paragraphIds: readonly string[] }[],
+  ) => {
+    const byId = new Map<string, { name: string; fragments?: string[] }>()
     for (const entry of entries) {
       for (const id of entry.paragraphIds) {
-        if (bookmarksById.has(id)) continue
+        if (byId.has(id)) continue
         const wire = paragraphs.find((paragraph) => paragraph.id === id)
-        if (wire) bookmarksById.set(id, bookmarkFor(wire))
+        if (wire) byId.set(id, bookmarkFor(wire))
       }
     }
-    const toaEntries: ToaEntry[] = entries.map((entry) => ({
-      ...entry,
-      bookmarks: entry.paragraphIds.flatMap((id) => {
-        const bookmark = bookmarksById.get(id)
-        return bookmark ? [bookmark.name] : []
-      }),
-    }))
+    return byId
+  }
 
-    const { head, tail } = splitRunsAtOffset(
-      anchor.runs,
-      draft.offset,
-      drafts,
-      draft.id,
-    )
-    let sequence = 0
-    const nextRunId = () => `${draft.id}:r${String(sequence++)}`
-    const tailParaId = nextParaId()
-    const tailWire: DocumentParagraphWire = {
-      id: `para-w14-${tailParaId}`,
-      sourceParaId: tailParaId,
-      ...(anchor.styleId ? { styleId: anchor.styleId } : {}),
-      runs: [
-        {
-          id: nextRunId(),
-          text: '',
-          preservedXmlFragments: [FIELD_END_FRAGMENT],
-        },
-        ...tail,
-      ],
-      preservedXmlFragments: anchor.preservedXmlFragments.filter((fragment) =>
-        /^<w:pPr\b/u.test(fragment),
-      ),
-    }
-    const insertedWires = [
-      toaHeadingParagraphWire(nextRunId, nextParaId()),
-      ...toaEntries.map((entry) =>
-        toaEntryParagraphWire(
-          nextRunId,
-          entry,
-          nextParaId(),
-          FALLBACK_TAB_POSITION_TWIPS,
-        ),
-      ),
-    ]
-    paragraphs[index] = { ...anchor, runs: head }
-    const previousTail = tails.get(anchor.id)
-    const parked = previousTail ? paragraphs.indexOf(previousTail) : -1
-    if (previousTail && parked >= 0) {
-      paragraphs[parked] = {
-        ...previousTail,
-        runs: previousTail.runs.slice(0, 1),
-      }
-      tailWire.runs.push(...previousTail.runs.slice(1))
-      paragraphs.splice(parked + 1, 0, ...insertedWires, tailWire)
-    } else {
-      paragraphs.splice(index + 1, 0, ...insertedWires, tailWire)
-    }
-    tails.set(anchor.id, tailWire)
+  const attachBookmarks = (
+    paragraphs: DocumentParagraphWire[],
+    bookmarksById: ReadonlyMap<string, { name: string; fragments?: string[] }>,
+  ) => {
     for (const [id, bookmark] of bookmarksById) {
       if (!bookmark.fragments) continue
       const at = paragraphs.findIndex((paragraph) => paragraph.id === id)
@@ -232,6 +192,182 @@ export function createTableOfAuthoritiesFold(
         ],
       }
     }
-    return true
   }
+
+  return {
+    /**
+     * Splices one pending `TOA` into `paragraphs` — the wire counterpart
+     * of the writer's mark pass and `</w:p>`-level splice. The hidden
+     * `TA` mark runs fold into every citing paragraph first, the
+     * anchor's runs then split at the effective-text offset, and the
+     * heading plus one entry wire per distinct citation land between the
+     * head and a tail that opens with the field `end` run — the shape
+     * the serialised output produces.
+     */
+    insert(
+      paragraphs: DocumentParagraphWire[],
+      draft: ToaDraft,
+      tails: Map<string, DocumentParagraphWire>,
+    ) {
+      const index = paragraphs.findIndex(
+        (paragraph) => paragraph.id === draft.paragraphId,
+      )
+      const anchor = paragraphs[index]
+      if (!anchor) return false
+      const { occurrences, entries } = citations(paragraphs)
+      if (entries.length === 0) return false
+
+      // The marks fold before the split, so a citation in the anchor
+      // paragraph's head or tail lands in the wire its offset belongs to.
+      foldMarks(paragraphs, draft.id, occurrences, false)
+      const bookmarksById = bookmarksFor(paragraphs, entries)
+      const toaEntries: ToaEntry[] = entries.map((entry) => ({
+        ...entry,
+        bookmarks: entry.paragraphIds.flatMap((id) => {
+          const bookmark = bookmarksById.get(id)
+          return bookmark ? [bookmark.name] : []
+        }),
+      }))
+
+      const { head, tail } = splitRunsAtOffset(
+        anchor.runs,
+        draft.offset,
+        drafts,
+        draft.id,
+      )
+      let sequence = 0
+      const nextRunId = () => `${draft.id}:r${String(sequence++)}`
+      const tailParaId = nextParaId()
+      const tailWire: DocumentParagraphWire = {
+        id: `para-w14-${tailParaId}`,
+        sourceParaId: tailParaId,
+        ...(anchor.styleId ? { styleId: anchor.styleId } : {}),
+        runs: [
+          {
+            id: nextRunId(),
+            text: '',
+            preservedXmlFragments: [FIELD_END_FRAGMENT],
+          },
+          ...tail,
+        ],
+        preservedXmlFragments: anchor.preservedXmlFragments.filter((fragment) =>
+          /^<w:pPr\b/u.test(fragment),
+        ),
+      }
+      const insertedWires = [
+        toaHeadingParagraphWire(nextRunId, nextParaId()),
+        ...toaEntries.map((entry) =>
+          toaEntryParagraphWire(
+            nextRunId,
+            entry,
+            nextParaId(),
+            FALLBACK_TAB_POSITION_TWIPS,
+          ),
+        ),
+      ]
+      paragraphs[index] = { ...anchor, runs: head }
+      const previousTail = tails.get(anchor.id)
+      const parked = previousTail ? paragraphs.indexOf(previousTail) : -1
+      if (previousTail && parked >= 0) {
+        paragraphs[parked] = {
+          ...previousTail,
+          runs: previousTail.runs.slice(0, 1),
+        }
+        tailWire.runs.push(...previousTail.runs.slice(1))
+        paragraphs.splice(parked + 1, 0, ...insertedWires, tailWire)
+      } else {
+        paragraphs.splice(index + 1, 0, ...insertedWires, tailWire)
+      }
+      tails.set(anchor.id, tailWire)
+      attachBookmarks(paragraphs, bookmarksById)
+      return true
+    },
+
+    /**
+     * Rewrites a stored `TOA` field's generated paragraphs in place —
+     * the wire counterpart of the update writer's range replacement.
+     * The draft names the paragraph holding the field's `begin`: the
+     * paragraphs up to the one holding its `end` are replaced by a
+     * rebuilt heading and entries, marks fold only where an occurrence
+     * is not already marked, and the tail keeps its `end` run and text.
+     * A draft whose field is gone — or whose head no longer opens a
+     * `TOA` field — folds nothing so the draft stays pending.
+     */
+    refresh(paragraphs: DocumentParagraphWire[], draft: ToaRefreshDraft) {
+      const field = tableOfAuthoritiesFields(paragraphs).get(draft.paragraphId)
+      if (!field) return false
+      const removedIds = new Set(field.resultIds)
+      const { occurrences, entries } = citations(
+        paragraphs.filter((paragraph) => !removedIds.has(paragraph.id)),
+      )
+      if (entries.length === 0) return false
+
+      foldMarks(paragraphs, draft.id, occurrences, true)
+      const bookmarksById = bookmarksFor(paragraphs, entries)
+      const toaEntries: ToaEntry[] = entries.map((entry) => ({
+        ...entry,
+        bookmarks: entry.paragraphIds.flatMap((id) => {
+          const bookmark = bookmarksById.get(id)
+          return bookmark ? [bookmark.name] : []
+        }),
+      }))
+      let sequence = 0
+      const nextRunId = () => `${draft.id}:r${String(sequence++)}`
+      const insertedWires = [
+        toaHeadingParagraphWire(nextRunId, nextParaId()),
+        ...toaEntries.map((entry) =>
+          toaEntryParagraphWire(
+            nextRunId,
+            entry,
+            nextParaId(),
+            FALLBACK_TAB_POSITION_TWIPS,
+          ),
+        ),
+      ]
+      const headIndex = paragraphs.findIndex(
+        (paragraph) => paragraph.id === field.headId,
+      )
+      const tailIndex = paragraphs.findIndex(
+        (paragraph, index) =>
+          index > headIndex &&
+          field.paragraphIds[field.paragraphIds.length - 1] === paragraph.id,
+      )
+      if (headIndex === -1 || tailIndex === -1) return false
+      paragraphs.splice(headIndex, tailIndex - headIndex, ...insertedWires)
+      attachBookmarks(paragraphs, bookmarksById)
+      return true
+    },
+  }
+}
+
+/**
+ * Whether the citation at `end` already carries its `TA` mark in the
+ * painted wires: the mark runs carry no text, so the check walks runs at
+ * and after the citation's end offset — an `offset` landing inside a
+ * run's text has no mark (the splice that placed one would have split the
+ * run), and the first run with text past the point bounds the scan.
+ */
+function hasAuthorityMarkAtWire(
+  wire: DocumentParagraphWire,
+  end: number,
+  citation: string,
+  drafts: Record<string, string>,
+) {
+  const instruction = ` TA \\l "${citation}"`
+  const marks: DocumentParagraphWire['runs'] = []
+  let cursor = 0
+  for (const run of wire.runs) {
+    const length = (drafts[run.id] ?? run.text).length
+    if (cursor === end) {
+      if (length > 0) break
+      marks.push(run)
+      continue
+    }
+    if (cursor + length > end) return false
+    cursor += length
+  }
+  if (cursor !== end) return false
+  return marks.some((run) =>
+    run.preservedXmlFragments.join('').includes(instruction),
+  )
 }

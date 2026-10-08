@@ -755,6 +755,10 @@ const STRUCTURE_KIND_REMOVABLE = {
   // `_ToA` bookmarks and generated entry paragraphs are baseline content
   // once saved, with no unmark or remove-field operation to reverse them.
   'table-of-authorities': false,
+  // `update_table_of_authorities` likewise: the rewritten range, marks and
+  // bookmarks are baseline content once saved, and a field update cannot
+  // restore the result it replaced.
+  'table-of-authorities-refresh': false,
   // `mark_defined_term` likewise: the bookmark pair is baseline content once
   // saved and there is no unmark operation in the vocabulary.
   'defined-term': false,

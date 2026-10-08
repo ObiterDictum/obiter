@@ -44,6 +44,7 @@ export function planOperation(
     operation.type === 'insert_footnote' ||
     operation.type === 'insert_table_of_contents' ||
     operation.type === 'insert_table_of_authorities' ||
+    operation.type === 'update_table_of_authorities' ||
     operation.type === 'mark_defined_term'
   ) {
     const paragraph = requireMainParagraph(document, operation.paragraphId)

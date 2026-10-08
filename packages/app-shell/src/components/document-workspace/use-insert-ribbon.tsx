@@ -4,7 +4,8 @@ import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 
 import { documentBreakToolbar } from '../../document-break-toolbar'
 import type { BreakDraft } from '../../document-edits'
-import type { FormatTarget } from '../../document-format-edits'
+import type { FormatDrafts, FormatTarget } from '../../document-format-edits'
+import type { LocalInsert } from '../../document-story-flow'
 import { documentStory } from '../../document-model-text'
 import { marginStories } from '../../document-page-layout'
 import {
@@ -55,6 +56,10 @@ export function useInsertRibbon(
     deletedParagraphIds: ReadonlySet<string>
     drafts: Record<string, string>
     extraRuns: Record<string, DocumentTextRunWire[]>
+    /** Pending format, break and insert state the refresh block reads. */
+    format: FormatDrafts
+    breaks: BreakDraft[]
+    inserts: LocalInsert[]
     structures: StructuralDraft[]
     setBreaks: (update: (current: BreakDraft[]) => BreakDraft[]) => void
     setStructures: (
@@ -102,6 +107,9 @@ export function useInsertRibbon(
     structures: drafts.structures,
     drafts: drafts.drafts,
     extraRuns: drafts.extraRuns,
+    format: drafts.format,
+    breaks: drafts.breaks,
+    inserts: drafts.inserts,
     setStructures: drafts.setStructures,
     toaFacts,
   })
@@ -125,6 +133,8 @@ export function useInsertRibbon(
       footnoteUnavailable: structure.footnoteUnavailable,
       tableOfContentsUnavailable: structure.tableOfContentsUnavailable,
       tableOfAuthoritiesUnavailable: structure.tableOfAuthoritiesUnavailable,
+      tableOfAuthoritiesUpdateUnavailable:
+        structure.tableOfAuthoritiesUpdateUnavailable,
       editingStoryKind:
         margin.editingKind === 'document' ? undefined : margin.editingKind,
       headerUnavailable,
@@ -149,6 +159,10 @@ export function useInsertRibbon(
       },
       onInsertTableOfAuthorities: () => {
         const outcome = structure.insertTableOfAuthorities()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
+      onUpdateTableOfAuthorities: () => {
+        const outcome = structure.updateTableOfAuthorities()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertFootnote: () => {

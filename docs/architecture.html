@@ -7077,8 +7077,8 @@
                 </tr>
                 <tr>
                   <td>
-                    A table of authorities marks all citations at save and is
-                    never refreshed (PR-E11)
+                    A table of authorities marks citations at save and refreshes
+                    the whole field range, never a partial result (PR-E11)
                   </td>
                   <td>
                     <code>insert_table_of_authorities</code> runs Word's
@@ -7089,23 +7089,34 @@
                     paragraph, then a <code>TOA \h \c "1"</code> field whose
                     entries are the distinct citations sorted into one
                     <code>TableofAuthorities</code> paragraph each with
-                    <code>PAGEREF</code> fields back to the bookmarks — a stored
-                    snapshot, never recomputed, exactly like the contents table.
-                    Body-only and refused under tracked changes like the other
-                    generated structures, with the same shared refusal
-                    predicates at ribbon and partition: a citing paragraph that
-                    cannot hold a mark or bookmark blocks the whole insertion.
-                    Only occurrences the writer can mark are captured — a
-                    citation typed in a pending-insert paragraph is dropped
-                    rather than dangling — and text inside a generated field's
-                    result is skipped, so a table never lists its own captured
-                    citations. A mark splice that lands inside a stored or
-                    pending <code>w:hyperlink</code> refuses, the field-level
-                    hyperlink rule applied per mark.
+                    <code>PAGEREF</code> fields back to the bookmarks.
+                    <code>update_table_of_authorities</code> is the refresh:
+                    anchored on the field's head paragraph, it replaces the
+                    stored generated range — heading, entries and field runs —
+                    in place, reusing <code>_ToA</code> bookmarks already on a
+                    citing paragraph and skipping citations whose
+                    <code>TA</code> mark is already stored so a refresh never
+                    accretes marks. Body-only and refused under tracked changes
+                    like the other generated structures, with the same shared
+                    refusal predicates at ribbon and partition: a citing
+                    paragraph that cannot hold a mark or bookmark blocks the
+                    write, and a refresh refuses a missing or malformed field,
+                    edits inside the covered range, a duplicate queued update,
+                    or a recomputed citation set that is empty. Only occurrences
+                    the writer can mark are captured — a citation typed in a
+                    pending-insert paragraph is dropped rather than dangling —
+                    and text inside a generated field's result is skipped, so a
+                    table never lists its own captured citations. A mark splice
+                    that lands inside a stored or pending
+                    <code>w:hyperlink</code> refuses, the field-level hyperlink
+                    rule applied per mark. A field closed inside its own head
+                    paragraph has no tail the range replacement can preserve, so
+                    it scans as no refreshable field.
                   </td>
                   <td class="id">
                     ooxml/table-of-authorities-edits.ts ·
                     ooxml/table-of-authorities-entries.ts ·
+                    ooxml/table-of-authorities-update.ts ·
                     app-shell/document-toa-fold.ts ·
                     app-shell/document-toa-availability.ts
                   </td>
@@ -7316,13 +7327,14 @@
                     away
                   </td>
                   <td>
-                    The structural vocabulary is insertion-only —
+                    The structural vocabulary is write-only —
                     <code>insert_table</code>, <code>insert_image</code>,
                     <code>insert_cross_reference</code>,
                     <code>insert_page_number</code>,
                     <code>insert_footnote</code>,
                     <code>insert_table_of_contents</code>,
                     <code>insert_table_of_authorities</code>,
+                    <code>update_table_of_authorities</code>,
                     <code>insert_break</code> and
                     <code>insert_section_break</code> have no inverse — so once
                     one is saved it is baseline content: a history snapshot that
@@ -7357,7 +7369,10 @@
                     excerpt; a citation the latest run did not cover shows no
                     state rather than borrowing one. The References ribbon's
                     table-of-authorities control is the document-side
-                    counterpart: it inserts a real <code>TOA</code> field.
+                    counterpart: it inserts a real <code>TOA</code> field, and
+                    an update-table control — armed only while the caret sits
+                    inside a stored field — queues the refresh that replaces the
+                    generated range.
                   </td>
                   <td class="id">
                     app-shell/document-preferences.ts ·

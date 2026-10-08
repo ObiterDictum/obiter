@@ -6,6 +6,7 @@ import type {
   DocumentStoryWire,
 } from '@obiter/contracts'
 
+import { emptyFormatDrafts } from './document-format-types'
 import { paragraphPlainText } from './document-model-text'
 import { emptyDraftState, planDocumentSave } from './document-save-plan'
 import { withStructuralDrafts } from './document-structure-fold'
@@ -91,6 +92,7 @@ function facts(
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([citation, paragraphIds]) => ({ citation, paragraphIds })),
     citingWires,
+    fields: new Map(),
   }
 }
 
@@ -475,6 +477,9 @@ describe('table of authorities ribbon availability', () => {
       structures,
       drafts: {},
       extraRuns: {},
+      format: emptyFormatDrafts,
+      breaks: [],
+      inserts: [],
       setStructures: (update) => {
         structures.push(...update([]))
       },
@@ -503,7 +508,12 @@ describe('table of authorities ribbon availability', () => {
 
   it('names the missing citations when there is nothing to list', () => {
     const { api } = toolbar({
-      toaFacts: { occurrences: [], entries: [], citingWires: [] },
+      toaFacts: {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      },
     })
     expect(api.tableOfAuthoritiesUnavailable).toContain('no citations')
     const outcome = api.insertTableOfAuthorities()

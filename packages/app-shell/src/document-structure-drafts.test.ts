@@ -6,6 +6,7 @@ import type {
 } from '@obiter/contracts'
 
 import { MapStorage, scope } from './document-draft-store-test-support'
+import { emptyFormatDrafts } from './document-format-types'
 import { readDocumentDraft, writeDocumentDraft } from './document-draft-store'
 import {
   imagePartNameForDrawing,
@@ -446,10 +447,18 @@ describe('documentStructureToolbar', () => {
       structures,
       drafts: {},
       extraRuns: {},
+      format: emptyFormatDrafts,
+      breaks: [],
+      inserts: [],
       setStructures: (update) => {
         structures.push(...update([]))
       },
-      toaFacts: { occurrences: [], entries: [], citingWires: [] },
+      toaFacts: {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      },
       ...overrides,
     })
     return { api, structures }

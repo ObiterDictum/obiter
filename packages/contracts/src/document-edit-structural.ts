@@ -353,3 +353,23 @@ export const insertTableOfAuthoritiesOperationSchema = z
 export type DocumentEditInsertTableOfAuthoritiesOperation = z.infer<
   typeof insertTableOfAuthoritiesOperationSchema
 >
+
+/**
+ * Regenerates a stored `TOA` field's result in place. `paragraphId` names
+ * the paragraph holding the field's `begin` — the generated heading
+ * paragraph — and the writer rewrites every paragraph up to the one
+ * holding the field's `end`: rediscovering the body's citations, splicing
+ * a `TA` mark only where an occurrence is not already marked, reusing the
+ * `_ToA` bookmarks it finds, and rebuilding the entries and `PAGEREF`
+ * fields. Payload-free for the same reason the insertion is: the client
+ * identifies the field, the server derives everything else.
+ */
+export const updateTableOfAuthoritiesOperationSchema = z
+  .object({
+    type: z.literal('update_table_of_authorities'),
+    paragraphId: editIdSchema,
+  })
+  .strict()
+export type DocumentEditUpdateTableOfAuthoritiesOperation = z.infer<
+  typeof updateTableOfAuthoritiesOperationSchema
+>

@@ -7,6 +7,7 @@ import type {
 } from '@obiter/contracts'
 
 import { batchParagraphDeletions } from './document-edits'
+import { emptyFormatDrafts } from './document-format-types'
 import { paragraphPlainText } from './document-model-text'
 import { runDisplayText } from './document-page-media'
 import { layoutDocument } from './document-page-engine'
@@ -496,10 +497,18 @@ describe('table of contents ribbon availability', () => {
       structures,
       drafts: {},
       extraRuns: {},
+      format: emptyFormatDrafts,
+      breaks: [],
+      inserts: [],
       setStructures: (update) => {
         structures.push(...update([]))
       },
-      toaFacts: { occurrences: [], entries: [], citingWires: [] },
+      toaFacts: {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      },
       ...overrides,
     })
     return { api, structures, baseModel }
