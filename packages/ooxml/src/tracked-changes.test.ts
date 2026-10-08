@@ -606,6 +606,191 @@ describe('tracked change decisions', () => {
     )
   })
 
+  it('marks the changes the engine can never decide on the wire', async () => {
+    // One document mixes a decidable insertion, a fully paired named move, a
+    // stray uncontainered move half, and a property change that recorded no
+    // previous properties — the wire has to tell them apart so review
+    // surfaces never offer a decision the engine would refuse.
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1"><w:r><w:t>Insert</w:t></w:r></w:ins><w:moveFromRangeStart w:id="30" w:name="moved" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2"><w:r><w:delText>From</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="moved" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4"><w:r><w:t>From</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/><w:moveFrom w:id="5"><w:r><w:delText>Stray</w:delText></w:r></w:moveFrom></w:p><w:p><w:pPr><w:pPrChange w:id="6"><w:unknown/></w:pPrChange></w:pPr><w:r><w:t>Keep</w:t></w:r></w:p></w:body></w:document>`,
+      ),
+    )
+    const insert = document.model.changes.find(
+      ({ elementName }) => elementName === 'ins',
+    )
+    const pairedMove = document.model.changes.find(
+      ({ elementName, ooxmlId }) =>
+        elementName === 'moveFrom' && ooxmlId === '2',
+    )
+    const strayMove = document.model.changes.find(
+      ({ elementName, ooxmlId }) =>
+        elementName === 'moveFrom' && ooxmlId === '5',
+    )
+    const property = document.model.changes.find(
+      ({ elementName }) => elementName === 'pPrChange',
+    )
+    expect(insert?.undecidable).toBeUndefined()
+    expect(pairedMove?.undecidable).toBeUndefined()
+    expect(pairedMove?.pairId).toBeDefined()
+    expect(strayMove?.undecidable).toBe('unsupported-move')
+    expect(strayMove?.pairId).toBeUndefined()
+    expect(property?.undecidable).toBe('missing-property-snapshot')
+    // The flag only ever narrows what a client offers; the engine still
+    // refuses both undecidable shapes.
+    for (const target of [strayMove, property]) {
+      if (!target) throw new Error('Undecidable change is missing.')
+      expect(() =>
+        applyTrackedChangeDecisions(document, [target.id], 'accept'),
+      ).toThrowError(
+        expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
+      )
+    }
+    expect(
+      [...document.sourceParts.values()].every(({ dirty }) => !dirty),
+    ).toBe(true)
+  })
+
+  it.each([
+    [
+      'start inside, end outside',
+      '<w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:bookmarkStart w:id="7" w:name="kept"/><w:r><w:delText>one</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:bookmarkEnd w:id="7"/>',
+    ],
+    [
+      'end inside, start outside',
+      '<w:bookmarkStart w:id="7" w:name="kept"/><w:moveFromRangeStart w:id="30" w:name="moveB" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>one</w:delText></w:r><w:bookmarkEnd w:id="7"/></w:moveFrom><w:moveFromRangeEnd w:id="30"/>',
+    ],
+    [
+      'end inside, start listed after it',
+      '<w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>one</w:delText></w:r><w:bookmarkEnd w:id="7"/></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:bookmarkStart w:id="7" w:name="kept"/>',
+    ],
+  ] as const)(
+    'refuses a move whose container would strand a bookmark mate (%s)',
+    async (_label, fromSide) => {
+      // A member-wise decision deletes or carries the whole covered range;
+      // a paired marker whose mate lies outside the container would be left
+      // stranded, so the whole named group stays undecidable — including
+      // its clean destination half.
+      const document = await parseDocx(
+        await replaceDocumentXml(
+          `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="moveB" w:author="A" w:date="2026-08-10T10:00:00Z"/>${fromSide}<w:moveToRangeStart w:id="31" w:name="moveB" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
+        ),
+      )
+      const moves = document.model.changes.filter(({ kind }) => kind === 'move')
+      if (moves.length !== 2) throw new Error('Straddled move is missing.')
+      expect(moves.every(({ pairId }) => pairId === undefined)).toBe(true)
+      expect(
+        moves.every(({ undecidable }) => undecidable === 'unsupported-move'),
+      ).toBe(true)
+
+      for (const action of ['accept', 'reject'] as const) {
+        expect(() =>
+          applyTrackedChangeDecisions(
+            document,
+            moves.map(({ id }) => id),
+            action,
+          ),
+        ).toThrowError(
+          expect.objectContaining({
+            code: 'invalid-tracked-change-decision',
+          }),
+        )
+      }
+      expect(
+        [...document.sourceParts.values()].every(({ dirty }) => !dirty),
+      ).toBe(true)
+      const xml = await zipText(
+        await serialiseDocx(document),
+        'word/document.xml',
+      )
+      expect(xml).toContain('<w:bookmarkStart w:id="7" w:name="kept"/>')
+      expect(xml).toContain('<w:bookmarkEnd w:id="7"/>')
+      expect(xml).toContain('moveFromRangeStart')
+      expect(xml).toContain('moveToRangeEnd')
+    },
+  )
+
+  it('still decides a move whose wrapped range markers are complete pairs', async () => {
+    // A bookmark and a comment range fully inside the member wrappers are
+    // carried or removed with them — no mate can strand.
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="moveC" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:bookmarkStart w:id="7" w:name="kept"/><w:r><w:delText>one</w:delText></w:r><w:bookmarkEnd w:id="7"/></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="moveC" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
+      ),
+    )
+    const moves = document.model.changes.filter(({ kind }) => kind === 'move')
+    if (moves.length !== 2) throw new Error('Paired-marker move is missing.')
+    expect(moves.every(({ pairId }) => pairId !== undefined)).toBe(true)
+    expect(moves.every(({ undecidable }) => undecidable === undefined)).toBe(
+      true,
+    )
+
+    applyTrackedChangeDecisions(
+      document,
+      moves.map(({ id }) => id),
+      'accept',
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).not.toContain('moveFrom')
+    expect(xml).not.toContain('moveTo')
+    expect(xml).not.toContain('RangeStart')
+    expect(xml).not.toContain('RangeEnd')
+    expect(xml).toContain('<w:t>one</w:t>')
+  })
+
+  it('decides a move whose wrapped marker has no mate to strand', async () => {
+    // An unmatched start marker has no end to orphan, so removing it with
+    // the covered range strands nothing.
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="moveD" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:bookmarkStart w:id="7" w:name="lone"/><w:r><w:delText>one</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="moveD" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
+      ),
+    )
+    const moves = document.model.changes.filter(({ kind }) => kind === 'move')
+    if (moves.length !== 2) throw new Error('Lone-marker move is missing.')
+    expect(moves.every(({ pairId }) => pairId !== undefined)).toBe(true)
+    applyTrackedChangeDecisions(
+      document,
+      moves.map(({ id }) => id),
+      'accept',
+    )
+  })
+
+  it('refuses a move container nested inside a member wrapper', async () => {
+    // The inner markers name a different group, but deciding the outer
+    // member would still rewrite the range they sit in — deciding another
+    // group's members unnamed. The whole outer group stays undecidable.
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="outer" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>one</w:delText></w:r><w:moveFromRangeStart w:id="32" w:name="inner" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFromRangeEnd w:id="32"/></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="outer" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
+      ),
+    )
+    const moves = document.model.changes.filter(({ kind }) => kind === 'move')
+    if (moves.length !== 2) throw new Error('Nested-marker move is missing.')
+    expect(moves.every(({ pairId }) => pairId === undefined)).toBe(true)
+    expect(
+      moves.every(({ undecidable }) => undecidable === 'unsupported-move'),
+    ).toBe(true)
+    expect(() =>
+      applyTrackedChangeDecisions(
+        document,
+        moves.map(({ id }) => id),
+        'accept',
+      ),
+    ).toThrowError(
+      expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).toContain('w:name="inner"')
+    expect(xml).toContain('w:name="outer"')
+  })
+
   it('fails closed for an orphan move and leaves every part clean', async () => {
     // Distinct w:ids and no w:name is an unpaired move — deciding it, alone
     // or inside a bulk request, is refused rather than resolved half-way.

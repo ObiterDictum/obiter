@@ -21,6 +21,7 @@ import {
 } from './parts/rels'
 import { parseStory, type IdentityContext } from './parts/stories'
 import { parseStyles } from './parts/styles'
+import { markUndecidableChanges } from './tracked-change-decisions'
 import { HYPERLINK_RELATIONSHIP_TYPE } from './structure-xml'
 
 const CONTENT_TYPES_PART = '[Content_Types].xml'
@@ -129,7 +130,11 @@ function parseParts(
       paragraphAnchors.set(anchor.wire.id, anchor)
   }
 
-  matchMovePairs([...trackedChanges.values()])
+  const changeNodes = [...trackedChanges.values()]
+  matchMovePairs(changeNodes)
+  // Pairing has run, so this is where the engine's static decidability lands
+  // on the wire for every surface that lists the changes.
+  markUndecidableChanges(changeNodes)
 
   const styles = parseOptionalTypedPart(
     sourceParts,

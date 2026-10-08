@@ -132,6 +132,17 @@ const documentChangeWireBaseSchema = z.object({
   paragraphId: z.string().min(1).optional(),
   runId: z.string().min(1).optional(),
   text: z.string(),
+  /**
+   * Why the decision engine can never decide this listed change, when it
+   * cannot: an unsupported move shape (`unsupported-move`) or a property
+   * change that did not record the properties it replaced
+   * (`missing-property-snapshot`). Undecidable changes stay listed and
+   * byte-preserved; the reason lets a review surface refuse honestly instead
+   * of offering a decision the engine would reject.
+   */
+  undecidable: z
+    .enum(['unsupported-move', 'missing-property-snapshot'])
+    .optional(),
 })
 
 export const documentChangeWireSchema = z.discriminatedUnion('elementName', [
