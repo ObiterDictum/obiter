@@ -250,6 +250,12 @@ export function requiredRoot(
   return root
 }
 
+/**
+ * Inserts an element inside the part's root. One replacement owns a
+ * self-closing root's expansion: the first child rewrites the whole element
+ * and later children append inside that same replacement; a second
+ * whole-root replacement would overlap the first and fail serialisation.
+ */
 export function insertRootChild(
   part: SourcePart,
   overlay: XmlOverlay,
@@ -258,13 +264,24 @@ export function insertRootChild(
   value: string,
 ) {
   if (root.selfClosing) {
-    const fragment = overlay.source.slice(root.start, root.end)
-    const opening = fragment.replace(/\/\s*>$/u, '>')
-    setOverlayReplacement(overlay, key, {
-      start: root.start,
-      end: root.end,
-      value: `${opening}${value}</${root.qualifiedName}>`,
-    })
+    const ownerKey = `${root.localName}:children`
+    const close = `</${root.qualifiedName}>`
+    const owner = overlay.replacements.get(ownerKey)
+    if (owner) {
+      if (!owner.value.endsWith(close)) throw commentExportError()
+      setOverlayReplacement(overlay, ownerKey, {
+        ...owner,
+        value: `${owner.value.slice(0, owner.value.length - close.length)}${value}${close}`,
+      })
+    } else {
+      const fragment = overlay.source.slice(root.start, root.end)
+      const opening = fragment.replace(/\/\s*>$/u, '>')
+      setOverlayReplacement(overlay, ownerKey, {
+        start: root.start,
+        end: root.end,
+        value: `${opening}${value}${close}`,
+      })
+    }
   } else {
     setOverlayReplacement(overlay, key, {
       start: root.endTagStart,
