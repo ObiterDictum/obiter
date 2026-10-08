@@ -2166,11 +2166,13 @@ pairing is tiered: `w14:paraId` anchors the alignment, gap leftovers pair on
 identical text in occurrence order, and the remainder pairs on word overlap
 so an edit across the canonicalisation boundary — a version that predates
 `w14` ids compared against one that has them — reports 'modified' instead of
-a whole-document remove+add. Entries cover added, removed, modified (with
-word-level segments), formatting-only, story-structure and package-area
-changes; the response is bounded and deterministic, and opaque package bytes
-the model does not carry are acknowledged by a note when the hashes differ
-rather than silently compared equal. The frontend renders the entries and
-offers read-only viewing of historical versions through the same
+a whole-document remove+add. The merged pair set is then filtered to a
+monotonic subsequence before emission, so a reordered paragraph reports
+remove+add rather than pairing across its new position. Entries cover added,
+removed, modified (with word-level segments), formatting-only, story and
+package-area changes; the response is bounded and deterministic, and opaque
+package bytes the model does not carry are acknowledged by a note when the
+hashes differ rather than silently compared equal. The frontend renders the
+entries and offers read-only viewing of historical versions through the same
 version-aware queries, so a historical view never reads or mutates the
 current version's cached model.

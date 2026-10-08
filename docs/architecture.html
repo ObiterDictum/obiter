@@ -3087,12 +3087,14 @@
                     paragraphs by preserved <code>w14:paraId</code>, then
                     identical text, then a bounded word-overlap pass — an edit
                     across the canonicalisation boundary reports 'modified',
-                    never a whole-document remove+add. Entries cover added,
-                    removed, word-level modified, formatting-only,
-                    story-structure and package-area changes and are bounded and
-                    deterministic; opaque package bytes outside the model
-                    surface are acknowledged by a note when the content hashes
-                    differ.
+                    never a whole-document remove+add. The merged pair set is
+                    re-filtered to a monotonic subsequence before emission, so a
+                    reordered paragraph reports remove+add rather than pairing
+                    across its new position. Entries cover added, removed,
+                    word-level modified, formatting-only, story-structure and
+                    package-area changes and are bounded and deterministic;
+                    opaque package bytes outside the model surface are
+                    acknowledged by a note when the content hashes differ.
                   </td>
                 </tr>
                 <tr>
