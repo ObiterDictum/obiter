@@ -150,6 +150,22 @@ describe('tracked emphasis from the client path', () => {
     toolbar().onFontFamily('Georgia')
     toolbar().onFontSize(28)
     toolbar().onColour('FF0000')
+    toolbar().onToggleSubscript()
+    // Subscript owns vertAlign on the same tracked range: the queued draft
+    // restates superscript as subscript rather than stacking a second entry.
+    expect(format.emphasis).toEqual([
+      {
+        paragraphId: 'p1',
+        from: 1,
+        to: 4,
+        strikethrough: true,
+        highlight: 'yellow',
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        vertAlign: 'subscript',
+      },
+    ])
     toolbar().onClearFormatting()
     expect(format.emphasis).toEqual([
       {

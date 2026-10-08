@@ -184,6 +184,9 @@ export function ReviewRibbon({
   onExportText: () => void
   onPrint?: () => void
 }) {
+  // Boundary reasons would be false when this ribbon has no review at all;
+  // the absent surface is the truer reason there.
+  const reviewAbsent = 'Change review is not available for this document.'
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -228,14 +231,16 @@ export function ReviewRibbon({
           <IconButton
             label="Previous change"
             disabled={!review || !review.canPrevious}
-            disabledReason="There is no earlier change."
+            disabledReason={
+              review ? 'There is no earlier change.' : reviewAbsent
+            }
             onClick={review?.onPreviousChange}
             icon={<ArrowUp size={16} aria-hidden />}
           />
           <IconButton
             label="Next change"
             disabled={!review || !review.canNext}
-            disabledReason="There is no later change."
+            disabledReason={review ? 'There is no later change.' : reviewAbsent}
             onClick={review?.onNextChange}
             icon={<ArrowDown size={16} aria-hidden />}
           />
@@ -244,14 +249,14 @@ export function ReviewRibbon({
           <IconButton
             label="Accept change"
             disabled={!review || Boolean(review.targetUnavailable)}
-            disabledReason={review?.targetUnavailable}
+            disabledReason={review?.targetUnavailable ?? reviewAbsent}
             onClick={review?.onAcceptChange}
             icon={<Check size={16} aria-hidden />}
           />
           <IconButton
             label="Reject change"
             disabled={!review || Boolean(review.targetUnavailable)}
-            disabledReason={review?.targetUnavailable}
+            disabledReason={review?.targetUnavailable ?? reviewAbsent}
             onClick={review?.onRejectChange}
             icon={<X size={16} aria-hidden />}
           />
@@ -262,7 +267,7 @@ export function ReviewRibbon({
                 : 'Accept all changes'
             }
             disabled={!review || Boolean(review.bulkUnavailable)}
-            disabledReason={review?.bulkUnavailable}
+            disabledReason={review?.bulkUnavailable ?? reviewAbsent}
             onClick={review?.onAcceptAll}
             icon={<Checks size={16} aria-hidden />}
           />
@@ -273,7 +278,7 @@ export function ReviewRibbon({
                 : 'Reject all changes'
             }
             disabled={!review || Boolean(review.bulkUnavailable)}
-            disabledReason={review?.bulkUnavailable}
+            disabledReason={review?.bulkUnavailable ?? reviewAbsent}
             onClick={review?.onRejectAll}
             icon={<Prohibit size={16} aria-hidden />}
           />
