@@ -1,8 +1,11 @@
 import {
+  ArrowDown,
+  ArrowUp,
   BookOpen,
   ChatText,
   Check,
   CheckCircle,
+  Checks,
   DownloadSimple,
   EyeSlash,
   Files,
@@ -16,6 +19,7 @@ import {
   Note,
   PencilLine,
   Printer,
+  Prohibit,
   Ruler,
   Scales,
   SealCheck,
@@ -25,6 +29,7 @@ import {
 } from '@phosphor-icons/react'
 import type {
   DocumentFindToolbar,
+  DocumentReviewToolbar,
   DocumentStructureToolbar,
 } from './ribbon-types'
 import {
@@ -157,6 +162,7 @@ export function ReviewRibbon({
   commentCount,
   changeCount,
   find,
+  review,
   onToggleComments,
   onToggleChanges,
   onToggleTrackChanges,
@@ -170,6 +176,8 @@ export function ReviewRibbon({
   commentCount: number
   changeCount: number
   find?: DocumentFindToolbar
+  /** The shared review state; absent only outside an editable workspace. */
+  review?: DocumentReviewToolbar
   onToggleComments: () => void
   onToggleChanges: () => void
   onToggleTrackChanges: () => void
@@ -218,14 +226,48 @@ export function ReviewRibbon({
             icon={<ListChecks size={16} aria-hidden />}
           />
           <IconButton
+            label="Previous change"
+            disabled={!review || !review.canPrevious}
+            disabledReason="There is no earlier change."
+            onClick={review?.onPreviousChange}
+            icon={<ArrowUp size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Next change"
+            disabled={!review || !review.canNext}
+            disabledReason="There is no later change."
+            onClick={review?.onNextChange}
+            icon={<ArrowDown size={16} aria-hidden />}
+          />
+        </ToolbarRow>
+        <ToolbarRow>
+          <IconButton
             label="Accept change"
-            soon
+            disabled={!review || Boolean(review.targetUnavailable)}
+            disabledReason={review?.targetUnavailable}
+            onClick={review?.onAcceptChange}
             icon={<Check size={16} aria-hidden />}
           />
           <IconButton
             label="Reject change"
-            soon
+            disabled={!review || Boolean(review.targetUnavailable)}
+            disabledReason={review?.targetUnavailable}
+            onClick={review?.onRejectChange}
             icon={<X size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Accept all changes"
+            disabled={!review || Boolean(review.bulkUnavailable)}
+            disabledReason={review?.bulkUnavailable}
+            onClick={review?.onAcceptAll}
+            icon={<Checks size={16} aria-hidden />}
+          />
+          <IconButton
+            label="Reject all changes"
+            disabled={!review || Boolean(review.bulkUnavailable)}
+            disabledReason={review?.bulkUnavailable}
+            onClick={review?.onRejectAll}
+            icon={<Prohibit size={16} aria-hidden />}
           />
         </ToolbarRow>
       </ToolbarGroup>

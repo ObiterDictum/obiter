@@ -14,6 +14,7 @@ import type {
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
+  DocumentReviewToolbar,
   DocumentStructureToolbar,
 } from './ribbon-types'
 
@@ -21,6 +22,7 @@ export type {
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
+  DocumentReviewToolbar,
   DocumentStructureToolbar,
 }
 
@@ -63,6 +65,7 @@ export function DocumentWorkspaceToolbar({
   format,
   clipboard,
   find,
+  review,
 }: {
   kind: 'docx' | 'pdf'
   dirty: boolean
@@ -106,6 +109,8 @@ export function DocumentWorkspaceToolbar({
   format?: DocumentFormatToolbar
   clipboard?: DocumentClipboardToolbar
   find?: DocumentFindToolbar
+  /** The tracked-change review controls; absent outside an editable model. */
+  review?: DocumentReviewToolbar
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
 
@@ -219,6 +224,7 @@ export function DocumentWorkspaceToolbar({
             commentCount={commentCount}
             changeCount={changeCount}
             find={find}
+            review={review}
             onToggleComments={onToggleComments}
             onToggleChanges={onToggleChanges}
             onToggleTrackChanges={onToggleTrackChanges}

@@ -162,6 +162,29 @@ export type DocumentStructureToolbar = {
   picturePicker?: ReactNode
 }
 
+/**
+ * The tracked-change review controls the Review ribbon exposes. The workspace
+ * derives every availability answer once (`useChangeReview`) and shares it
+ * with the Changes panel, so the two surfaces cannot disagree about whether a
+ * decision can run or which change is current.
+ */
+export type DocumentReviewToolbar = {
+  /** The reason no decision can run, published on disabled controls. */
+  unavailable?: string
+  /** The reason bulk Accept/Reject all is unavailable, when it is. */
+  bulkUnavailable?: string
+  /** The reason single-change Accept/Reject is unavailable, when it is. */
+  targetUnavailable?: string
+  canPrevious: boolean
+  canNext: boolean
+  onPreviousChange: () => void
+  onNextChange: () => void
+  onAcceptChange: () => void
+  onRejectChange: () => void
+  onAcceptAll: () => void
+  onRejectAll: () => void
+}
+
 export type DocumentFindToolbar = {
   query: string
   replace: string
