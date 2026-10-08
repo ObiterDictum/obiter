@@ -140,13 +140,15 @@ export function useChangeReview({
   // visible rather than wedging on a guaranteed refusal.
   const supported = changes.filter((change) => change.undecidable === undefined)
   const undecidableCount = changes.length - supported.length
+  // The save barrier outranks the request cap: with unsaved edits the truer
+  // answer is "save first" even when the supported set is also too large.
   const bulkUnavailable =
     changes.length === 0
       ? 'There are no tracked changes.'
-      : supported.length > TRACKED_DECISION_MAX_IDS
-        ? `More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`
-        : (unavailable ??
-          (supported.length === 0
+      : (unavailable ??
+        (supported.length > TRACKED_DECISION_MAX_IDS
+          ? `More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`
+          : supported.length === 0
             ? 'None of the listed changes can be decided here; they stay listed and unchanged in the document.'
             : undefined))
   const targetUnavailable =

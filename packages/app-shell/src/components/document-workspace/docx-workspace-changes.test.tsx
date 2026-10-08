@@ -1,13 +1,17 @@
 import '@obiter/test-dom'
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
-import type { DocumentChangeWire } from '@obiter/contracts'
+import {
+  TRACKED_DECISION_MAX_IDS,
+  type DocumentChangeWire,
+} from '@obiter/contracts'
 import {
   mountWorkspace,
   openRibbonTab,
   selectBodyParagraph,
 } from './docx-workspace-harness'
+import { ReviewRibbon } from './ribbon-review'
 
 const inserted: DocumentChangeWire = {
   id: 'chg_1',
@@ -46,6 +50,10 @@ const unsupportedMove: DocumentChangeWire = {
 }
 const unsupportedMoveReason =
   'This move cannot be decided here; it stays listed and unchanged in the document.'
+const overCap: DocumentChangeWire[] = Array.from(
+  { length: TRACKED_DECISION_MAX_IDS + 1 },
+  (_, index) => ({ ...inserted, id: `chg_bulk_${index}` }),
+)
 
 function decided(
   input: unknown,
@@ -150,6 +158,79 @@ describe('DocxWorkspace change review', () => {
       screen.getByRole('button', { name: `Accept change: ${reason}` }),
     )
     expect(decide).not.toHaveBeenCalled()
+
+    // The row and bulk controls describe themselves through the barrier note
+    // rather than repeating it — the association must resolve to the reason.
+    fireEvent.click(screen.getByRole('button', { name: 'Changes (1)' }))
+    const panel = screen.getByRole('complementary', { name: 'Tracked changes' })
+    const accept = within(panel).getByRole('button', { name: 'Accept' })
+    const describedBy = accept.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    const note = describedBy ? document.getElementById(describedBy) : null
+    expect(note?.textContent).toBe(reason)
+    expect(
+      within(panel)
+        .getByRole('button', { name: 'Accept all' })
+        .getAttribute('aria-describedby'),
+    ).toBe(describedBy)
+  })
+
+  it('names the save barrier ahead of the decision cap', () => {
+    // Both conditions hold here: the supported set alone exceeds the cap, and
+    // unsaved edits bar every decision. The barrier is the actionable reason.
+    mountWorkspace({ changes: overCap })
+    selectBodyParagraph()
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Unsaved work' },
+    })
+    openRibbonTab('Review')
+
+    const reason = 'Save or discard unsaved edits before deciding changes.'
+    expect(
+      screen.getByRole('button', { name: `Accept all changes: ${reason}` }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('names the cap when the supported set alone exceeds it', () => {
+    mountWorkspace({ changes: overCap })
+    openRibbonTab('Review')
+
+    expect(
+      screen.getByRole('button', {
+        name: `Accept all changes: More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`,
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('names the absent review surface instead of a boundary reason', () => {
+    render(
+      <ReviewRibbon
+        canEdit
+        trackChanges={false}
+        commentsOpen={false}
+        changesOpen={false}
+        commentCount={0}
+        changeCount={0}
+        onToggleComments={() => undefined}
+        onToggleChanges={() => undefined}
+        onToggleTrackChanges={() => undefined}
+        onExportText={() => undefined}
+      />,
+    )
+
+    const absent = 'Change review is not available for this document.'
+    for (const label of [
+      'Previous change',
+      'Next change',
+      'Accept change',
+      'Reject change',
+      'Accept all changes',
+      'Reject all changes',
+    ]) {
+      expect(
+        screen.getByRole('button', { name: `${label}: ${absent}` }),
+      ).toHaveProperty('disabled', true)
+    }
   })
 
   it('lists changes, reveals one on click, and decides it', () => {
@@ -246,14 +327,24 @@ describe('DocxWorkspace change review', () => {
     })
     const item = items[1]?.closest('li')
     if (!item) throw new Error('Undecidable change row is missing.')
-    expect(within(item).getByRole('button', { name: 'Accept' })).toHaveProperty(
-      'disabled',
-      true,
-    )
-    expect(within(item).getByRole('button', { name: 'Reject' })).toHaveProperty(
-      'disabled',
-      true,
-    )
+    const note = within(item).getByText(unsupportedMoveReason)
+    const noteId = note.getAttribute('id')
+    expect(noteId).toBeTruthy()
+    for (const label of ['Accept', 'Reject']) {
+      const button = within(item).getByRole('button', { name: label })
+      expect(button).toHaveProperty('disabled', true)
+      // The reason is not duplicated into the name; the control describes
+      // itself through the note, and the association must resolve to it.
+      expect(button.getAttribute('aria-describedby')).toBe(noteId)
+    }
+    // A decidable row keeps its controls free of the static reason.
+    const decidable = items[0]?.closest('li')
+    if (!decidable) throw new Error('Decidable change row is missing.')
+    expect(
+      within(decidable)
+        .getByRole('button', { name: 'Accept' })
+        .getAttribute('aria-describedby'),
+    ).toBeNull()
 
     // The row still reveals its location, and the ribbon's single-change
     // controls carry the reason on their accessible name once it is active.

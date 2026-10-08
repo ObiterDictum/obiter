@@ -4,6 +4,9 @@ import type { ChangeReview } from './use-change-review'
 export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
   const { changes } = review
   const decideBlocked = review.pending || Boolean(review.unavailable)
+  // Disabled controls cannot show their own tooltip, so the notes below carry
+  // the reasons and the controls point at them with aria-describedby.
+  const barrierNoteId = 'changes-review-unavailable'
   return (
     <aside
       className="flex w-full flex-col gap-5 lg:max-w-sm"
@@ -44,6 +47,9 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
               variant="ghost"
               size="sm"
               disabled={review.pending || Boolean(review.bulkUnavailable)}
+              aria-describedby={
+                review.bulkUnavailable ? barrierNoteId : undefined
+              }
               onClick={() => review.decideAll('accept')}
             >
               {review.undecidableCount > 0
@@ -54,6 +60,9 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
               variant="ghost"
               size="sm"
               disabled={review.pending || Boolean(review.bulkUnavailable)}
+              aria-describedby={
+                review.bulkUnavailable ? barrierNoteId : undefined
+              }
               onClick={() => review.decideAll('reject')}
             >
               {review.undecidableCount > 0
@@ -63,7 +72,11 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
           </div>
         ) : null}
         {changes.length > 0 && review.bulkUnavailable ? (
-          <p className="text-xs leading-relaxed text-muted" role="note">
+          <p
+            id={barrierNoteId}
+            className="text-xs leading-relaxed text-muted"
+            role="note"
+          >
             {review.bulkUnavailable}
           </p>
         ) : null}
@@ -90,6 +103,14 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
           {changes.map((change, index) => {
             const isActive = index === review.activeIndex
             const undecidableReason = review.undecidableReason(change)
+            const undecidableNoteId = `change-${change.id}-undecidable`
+            const describedBy =
+              [
+                undecidableReason ? undecidableNoteId : null,
+                decideBlocked ? barrierNoteId : null,
+              ]
+                .filter((id): id is string => id !== null)
+                .join(' ') || undefined
             return (
               <li
                 key={change.id}
@@ -124,7 +145,11 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
                   </p>
                 </button>
                 {undecidableReason ? (
-                  <p className="text-xs leading-relaxed text-muted" role="note">
+                  <p
+                    id={undecidableNoteId}
+                    className="text-xs leading-relaxed text-muted"
+                    role="note"
+                  >
                     {undecidableReason}
                   </p>
                 ) : null}
@@ -132,6 +157,7 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
                   <Button
                     size="sm"
                     disabled={decideBlocked || Boolean(undecidableReason)}
+                    aria-describedby={describedBy}
                     onClick={() => review.decideChange('accept', change)}
                   >
                     Accept
@@ -140,6 +166,7 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
                     variant="ghost"
                     size="sm"
                     disabled={decideBlocked || Boolean(undecidableReason)}
+                    aria-describedby={describedBy}
                     onClick={() => review.decideChange('reject', change)}
                   >
                     Reject
