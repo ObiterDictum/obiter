@@ -8,6 +8,7 @@ import { cleanup, render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { EMPTY_DOCUMENT_MARKINGS } from '@obiter/contracts'
 import type {
   DocumentModelWire,
   VerificationFindingView,
@@ -234,12 +235,7 @@ function model(): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
+    markings: EMPTY_DOCUMENT_MARKINGS,
   }
 }
 

@@ -45,12 +45,8 @@ import {
   SHARE_SAFE_WEB_POINTER_ELEMENTS,
 } from './share-safe-word-classes'
 import {
-  EMBEDDED_ATTRIBUTES,
-  EMBEDDED_SCOPED_ATTRIBUTES,
-  EMBEDDED_STRIP_ATTRIBUTES,
-  EMBEDDED_NAME_LABEL_ELEMENTS,
-  EXTENSION_URI_PATTERN,
-  GRAPHIC_DATA_URIS,
+  embeddedAttributeVerdict,
+  XML_SPACE_VALUES,
 } from './share-safe-drawing-attributes'
 import {
   EMBEDDED_ELEMENTS,
@@ -68,7 +64,6 @@ import {
  * `share-safe-word-classes`, the name allow-lists in the vocabulary files.
  */
 
-const ON_VALUES = new Set(['1', 'true', 'on'])
 const ON_OFF_VALUES = new Set(['0', '1', 'true', 'false', 'on', 'off'])
 
 export type ShareSafeElementVerdict = 'keep' | 'remove' | 'unwrap' | 'refuse'
@@ -180,8 +175,6 @@ export type ShareSafeAttributeVerdict =
   | 'refuse-hidden'
   | 'refuse-revision'
 
-const XML_ATTRIBUTES_KEPT = new Set(['space', 'lang'])
-
 /**
  * What the policy does with an attribute. Revision identity
  * (`author`/`date`/`ed`/`edGrp` on the `w:` or Word extension namespaces)
@@ -190,9 +183,11 @@ const XML_ATTRIBUTES_KEPT = new Set(['space', 'lang'])
  * relationships by the caller. `w:` elements carry only the allow-list of
  * `w:` attributes (everything else strips) and an unqualified attribute on
  * a `w:` element refuses outright — Word never writes one. Embedded
- * elements carry the bounded unqualified name list with descriptive
- * carriers (`descr`/`title`/`name` labels, `hidden`, `uri`) resolved
- * element-scoped.
+ * elements run the shared bounded vocabulary: descriptive carriers
+ * (`descr`/`title`/`name` labels, `hidden`) strip or refuse element-scoped,
+ * and every other kept name is element-scoped or value-bounded — a bound
+ * failure refuses rather than shipping foreign text in a value slot.
+ * `xml:space` keeps only its two switch values; `xml:lang` strips.
  */
 export function shareSafeAttributeVerdict(
   element: XmlElement,
@@ -224,6 +219,14 @@ export function shareSafeAttributeVerdict(
     }
     return 'strip'
   }
+  if (attribute.namespaceUri === XML_NAMESPACE_URI) {
+    // `xml:space` is a two-value whitespace switch; `xml:lang` and every
+    // other `xml:` attribute carry no layout semantics worth shipping.
+    if (attribute.localName === 'space') {
+      return XML_SPACE_VALUES.has(attribute.value) ? 'keep' : 'refuse'
+    }
+    return 'strip'
+  }
   if (element.namespaceUri === WORD_NAMESPACE) {
     if (attribute.namespaceUri === '') return 'refuse'
     if (attribute.namespaceUri === WORD_NAMESPACE) {
@@ -247,41 +250,21 @@ export function shareSafeAttributeVerdict(
       }
       return 'keep'
     }
-    if (attribute.namespaceUri === XML_NAMESPACE_URI) {
-      return XML_ATTRIBUTES_KEPT.has(attribute.localName) ? 'keep' : 'strip'
-    }
     // Word-extension, markup-compatibility and foreign attributes are
     // non-semantic metadata here — dropped, never emitted.
     return 'strip'
   }
   if (EMBEDDED_ELEMENTS.has(element.namespaceUri)) {
+    // Unqualified embedded attributes resolve through the bounded
+    // vocabulary: element-scoped names with per-placement value bounds,
+    // then the unscoped grammar-bound names. Prefixed attributes have no
+    // legitimate placement here — embedded namespaces declare none.
     if (attribute.namespaceUri === '') {
-      if (EMBEDDED_STRIP_ATTRIBUTES.has(attribute.localName)) return 'strip'
-      if (attribute.localName === 'hidden') {
-        return ON_VALUES.has(attribute.value.trim().toLowerCase())
-          ? 'refuse-hidden'
-          : 'strip'
-      }
-      if (
-        attribute.localName === 'name' &&
-        EMBEDDED_NAME_LABEL_ELEMENTS.has(element.localName)
-      ) {
-        return 'strip'
-      }
-      if (attribute.localName === 'uri') {
-        if (element.localName === 'graphicData') {
-          return GRAPHIC_DATA_URIS.has(attribute.value) ? 'keep' : 'refuse'
-        }
-        return EXTENSION_URI_PATTERN.test(attribute.value) ? 'keep' : 'strip'
-      }
-      const scoped = EMBEDDED_SCOPED_ATTRIBUTES.get(attribute.localName)
-      if (scoped !== undefined) {
-        return scoped.has(element.localName) ? 'keep' : 'strip'
-      }
-      return EMBEDDED_ATTRIBUTES.has(attribute.localName) ? 'keep' : 'strip'
-    }
-    if (attribute.namespaceUri === XML_NAMESPACE_URI) {
-      return XML_ATTRIBUTES_KEPT.has(attribute.localName) ? 'keep' : 'strip'
+      return embeddedAttributeVerdict(
+        element.localName,
+        attribute.localName,
+        attribute.value,
+      )
     }
     return 'strip'
   }

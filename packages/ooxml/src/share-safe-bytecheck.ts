@@ -1,4 +1,5 @@
 import type { SourcePart } from './model'
+import { WORD_NAMESPACE } from './parts/xml-elements'
 import {
   CUSTOM_PROPERTIES_NAMESPACE,
   DOC_PROPS_VT_NAMESPACE,
@@ -21,7 +22,11 @@ import {
   SHARE_SAFE_FIELD_NAMES,
 } from './share-safe-fields'
 import { WML_ELEMENT_ATTRIBUTES } from './share-safe-word-attributes'
-import { EMBEDDED_SCOPED_ATTRIBUTES } from './share-safe-drawing-attributes'
+import {
+  embeddedAttributeVerdict,
+  XML_SPACE_VALUES,
+} from './share-safe-drawing-attributes'
+import { EMBEDDED_ELEMENTS } from './share-safe-drawing-vocabulary'
 import { refuseShareSafe } from './share-safe-refusal'
 
 /**
@@ -158,6 +163,12 @@ export function checkShareSafeXmlBytes(
       declaredPrefixes.set(prefix, value)
     }
     checkPrefixedName(part, tagName, declaredPrefixes)
+    const elementColon = tagName.indexOf(':')
+    const elementPrefix =
+      elementColon === -1 ? '' : tagName.slice(0, elementColon)
+    const elementLocal =
+      elementColon === -1 ? tagName : tagName.slice(elementColon + 1)
+    const elementUri = declaredPrefixes.get(elementPrefix)
     for (const match of attributes) {
       const name = match[1]!
       const value = match[2]!.slice(1, -1)
@@ -167,6 +178,17 @@ export function checkShareSafeXmlBytes(
         checkPrefixedName(part, name, declaredPrefixes)
         const prefix = name.slice(0, colon)
         const local = name.slice(colon + 1)
+        if (prefix === 'xml') {
+          // `xml:space` is the only `xml:` attribute that may emit, and
+          // only with one of its two switch values.
+          if (local !== 'space' || !XML_SPACE_VALUES.has(value)) {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries unsupported ${name}`,
+            )
+          }
+          continue
+        }
         if (
           REVISION_IDENTITY_LOCALS.has(local) ||
           local.toLowerCase().startsWith('rsid')
@@ -178,28 +200,58 @@ export function checkShareSafeXmlBytes(
         }
         // A `w:` attribute must sit on the `w:` element that declares it
         // — `w:instr`/`w:name`/`w:anchor`/`w:uri`/`w:id` out of scope are
-        // payload channels, not formatting.
+        // payload channels, not formatting. Relationship pointers are
+        // proven against the package graph by the package-level check;
+        // `mc:` attributes are only ever the `Ignorable` declaration,
+        // which is checked below. Every other embedded namespace declares
+        // no prefixed attributes at all, so one reaching the emitted bytes
+        // is a writer splice.
         if (prefix === 'w') {
-          const elementLocal = tagName.startsWith('w:') ? tagName.slice(2) : ''
-          const allowed = WML_ELEMENT_ATTRIBUTES.get(elementLocal)
+          const wmlLocal = tagName.startsWith('w:') ? tagName.slice(2) : ''
+          const allowed = WML_ELEMENT_ATTRIBUTES.get(wmlLocal)
           if (allowed === undefined || !allowed.has(local)) {
             refuseShareSafe(
               'unverifiable-output',
               `${part.name} carries ${name} out of element scope`,
             )
           }
+        } else if (prefix === 'mc') {
+          if (local !== 'Ignorable') {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries unsupported ${name}`,
+            )
+          }
+        } else if (prefix === 'r') {
+          continue
+        } else {
+          const attributeUri = declaredPrefixes.get(prefix)
+          if (
+            attributeUri !== undefined &&
+            EMBEDDED_ELEMENTS.has(attributeUri)
+          ) {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries embedded-namespaced attribute ${name}`,
+            )
+          }
         }
       }
       if (colon === -1) {
-        const scoped = EMBEDDED_SCOPED_ATTRIBUTES.get(name)
-        if (scoped !== undefined) {
-          const elementLocal = tagName.includes(':')
-            ? tagName.slice(tagName.indexOf(':') + 1)
-            : tagName
-          if (!scoped.has(elementLocal)) {
+        // An unqualified attribute on a `w:` element is a payload channel
+        // Word never writes; on an embedded element it must satisfy the
+        // same bounded vocabulary the transform applied.
+        if (elementUri === WORD_NAMESPACE) {
+          refuseShareSafe(
+            'unverifiable-output',
+            `${part.name} carries unqualified attribute ${name}`,
+          )
+        }
+        if (elementUri !== undefined && EMBEDDED_ELEMENTS.has(elementUri)) {
+          if (embeddedAttributeVerdict(elementLocal, name, value) !== 'keep') {
             refuseShareSafe(
               'unverifiable-output',
-              `${part.name} carries ${name} on an element that cannot bear it`,
+              `${part.name} carries ${name} outside its bound`,
             )
           }
         }
