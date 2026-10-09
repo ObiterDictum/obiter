@@ -33,6 +33,12 @@ function page(jc: string, text: string): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 }
 

@@ -2693,7 +2693,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>31 migrations, 0001 to 0032, 0008 withdrawn</dd>
+                <dd>32 migrations, 0001 to 0033, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3149,6 +3149,29 @@
                     head; unmatched replies export unanchored and count as
                     skipped. Audit records ids, <code>commentCount</code>, and
                     <code>skippedCommentCount</code> only.
+                    <code>?mode=share-safe</code> instead returns a sanitised
+                    package through the ooxml share-safe builder: comments and
+                    their parts, identifying authorship metadata, foreign custom
+                    properties, digital signatures and tracking mode are
+                    removed; tracked changes, hidden text, embedded objects and
+                    uninspectable parts refuse the export rather than guessing
+                    (409 <code>share_safe_export_refused</code>). The product's
+                    own <code>obiter.*</code> marking properties are retained,
+                    and the output re-parses clean before it is served. The
+                    download name gains a <code>-share-safe</code> suffix.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/documents/:id/markings</td>
+                  <td class="id">document-markings.ts</td>
+                  <td>
+                    Edit-gated. Commits the document classification — document
+                    type plus Draft, Privileged and Without prejudice flags —
+                    into the DOCX's <code>docProps/custom.xml</code> as a new
+                    immutable version (audit <code>document.markings</code>).
+                    Requires <code>baseVersionId</code>; a moved head answers
+                    <code>conflict_detected</code>. The wire keeps unknown
+                    document-kind strings so foreign values survive.
                   </td>
                 </tr>
                 <tr>
@@ -3352,6 +3375,22 @@
                   <td class="id">redact-review.ts</td>
                   <td>
                     Finalized artifact bytes (redacted PDF or text download)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/redaction-runs/:runId/return-to-document
+                  </td>
+                  <td class="id">redact-lifecycle.ts</td>
+                  <td>
+                    Edit-gated. Commits a document-bound finalized run's ready
+                    DOCX output back to its source document as a new immutable
+                    version (migration 0033 records
+                    <code>returned_document_version_id</code>). Verified against
+                    the stored artifact's SHA-256 and DOCX parse; a moved
+                    document head answers <code>conflict_detected</code>, a
+                    completed return answers idempotently with the version it
+                    already created.
                   </td>
                 </tr>
                 <tr>

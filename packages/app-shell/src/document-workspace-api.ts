@@ -20,6 +20,8 @@ import type {
   DocumentCompareResponse,
   DocumentEditRequest,
   DocumentEditResponse,
+  DocumentMarkingsRequest,
+  DocumentMarkingsResponse,
   DocumentModelResponse,
   DocumentPdfViewResponse,
   DocumentPresenceUpdateRequest,
@@ -257,15 +259,50 @@ async function loadDocumentImage(
 
 export async function fetchDocumentExport(
   documentId: string,
-  versionId?: string,
-): Promise<{ blob: Blob; skippedCommentCount: number }> {
-  const search =
-    versionId === undefined ? '' : `?versionId=${encodeURIComponent(versionId)}`
+  options?: { versionId?: string; shareSafe?: boolean },
+): Promise<{
+  blob: Blob
+  skippedCommentCount: number
+  filename: string | null
+}> {
+  const params = new URLSearchParams()
+  if (options?.versionId !== undefined)
+    params.set('versionId', options.versionId)
+  if (options?.shareSafe === true) params.set('mode', 'share-safe')
+  const search = params.size === 0 ? '' : `?${params.toString()}`
   const { blob, headers } = await apiFetchBlobResult(
     `/api/documents/${documentId}/export${search}`,
   )
   const skipped = Number(headers.get('x-obiter-comments-skipped') ?? '0')
-  return { blob, skippedCommentCount: Number.isFinite(skipped) ? skipped : 0 }
+  return {
+    blob,
+    skippedCommentCount: Number.isFinite(skipped) ? skipped : 0,
+    filename: contentDispositionFilename(headers),
+  }
+}
+
+/**
+ * The download name the server put on a binary response. `filename*` (RFC
+ * 5987) is authoritative because it is the only field that carries a
+ * non-ASCII name exactly; the quoted `filename` is the ASCII fallback. A
+ * header the parser cannot decode yields null rather than a guessed name —
+ * the caller falls back to its own title.
+ */
+export function contentDispositionFilename(headers: Headers): string | null {
+  const value = headers.get('content-disposition')
+  if (!value) return null
+  const encoded = /filename\*=(?:UTF-8|utf-8)''([^;]+)/.exec(value)
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1] ?? '')
+    } catch {
+      return null
+    }
+  }
+  const quoted = /filename="((?:[^"\\]|\\.)*)"/.exec(value)
+  if (quoted) return (quoted[1] ?? '').replace(/\\(.)/g, '$1')
+  const bare = /filename=([^;]+)/.exec(value)
+  return bare?.[1]?.trim() || null
 }
 
 /** Raw source bytes for any ready version: the download path behind every viewer. */
@@ -454,6 +491,21 @@ export function useEditDocument(documentId: string, matterId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
+  })
+}
+
+export function useUpdateDocumentMarkings(
+  documentId: string,
+  matterId: string,
+) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: DocumentMarkingsRequest) =>
+      apiFetch<DocumentMarkingsResponse>(
+        `/api/documents/${documentId}/markings`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
     onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
   })
 }

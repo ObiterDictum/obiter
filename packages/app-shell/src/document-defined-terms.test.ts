@@ -40,6 +40,12 @@ function model(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 }
 

@@ -17,6 +17,7 @@ const hooks = vi.hoisted(() => ({
   useSpanDecision: vi.fn(),
   useFinalizeRun: vi.fn(),
   useRedetectRun: vi.fn(),
+  useReturnToDocument: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
 const sourcePreviewHooks = vi.hoisted(() => ({
@@ -95,6 +96,7 @@ const run = {
   detectionMode: 'model+supplement' as const,
   replacesRunId: null,
   replacementRunId: null,
+  returnedDocumentVersionId: null,
   summary: {
     totalSpans: 1,
     byCategory: { person_name: 1 },
@@ -634,6 +636,7 @@ describe('RedactionReviewView', () => {
         status: 'ready_for_review',
         detectionMode: 'heuristics+supplement',
         replacementRunId: 'red_2',
+        returnedDocumentVersionId: null,
       },
     })
     hooks.useRedactionDocumentText.mockReturnValue({

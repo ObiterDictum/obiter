@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { documentImportedCommentSchema } from './document-comments'
+import { documentMarkingsWireSchema } from './document-markings'
 
 export const documentStoryKindSchema = z.enum([
   'document',
@@ -262,6 +263,12 @@ export const documentModelWireSchema = z.object({
    * validation and regenerates instead of reporting no imported comments.
    */
   comments: z.array(documentImportedCommentSchema),
+  /**
+   * The package's own `docProps/custom.xml` markings. Required for the same
+   * reason as `comments`: a cached model written before the wire carried
+   * them fails validation and regenerates rather than reporting none.
+   */
+  markings: documentMarkingsWireSchema,
 })
 export type DocumentModelWire = z.infer<typeof documentModelWireSchema>
 

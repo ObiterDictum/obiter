@@ -419,6 +419,12 @@ function trackedModel(saved: boolean) {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      markings: {
+        documentKind: null,
+        draft: false,
+        privileged: false,
+        withoutPrejudice: false,
+      },
     },
   }
 }

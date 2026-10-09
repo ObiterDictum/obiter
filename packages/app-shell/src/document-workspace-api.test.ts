@@ -90,11 +90,13 @@ describe('document workspace query options', () => {
     })
 
     await fetchDocumentExport('doc_1')
-    await fetchDocumentExport('doc_1', 'ver_2')
+    await fetchDocumentExport('doc_1', { versionId: 'ver_2' })
+    await fetchDocumentExport('doc_1', { shareSafe: true })
 
     expect(api.apiFetchBlobResult.mock.calls.map((call) => call[0])).toEqual([
       '/api/documents/doc_1/export',
       '/api/documents/doc_1/export?versionId=ver_2',
+      '/api/documents/doc_1/export?mode=share-safe',
     ])
     await expect(fetchDocumentExport('doc_1')).resolves.toMatchObject({
       skippedCommentCount: 2,

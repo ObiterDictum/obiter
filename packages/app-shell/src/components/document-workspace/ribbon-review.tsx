@@ -252,6 +252,7 @@ export function ReviewRibbon({
   onToggleChanges,
   onToggleTrackChanges,
   onExportText,
+  onExportShareSafe,
   onPrint,
 }: {
   canEdit: boolean
@@ -267,6 +268,7 @@ export function ReviewRibbon({
   onToggleChanges: () => void
   onToggleTrackChanges: () => void
   onExportText: () => void
+  onExportShareSafe?: () => void
   onPrint?: () => void
 }) {
   // Boundary reasons would be false when this ribbon has no review at all;
@@ -392,7 +394,7 @@ export function ReviewRibbon({
           />
           <IconButton
             label="Share-safe export"
-            soon
+            onClick={onExportShareSafe}
             icon={<LockSimple size={16} aria-hidden />}
           />
           <IconButton

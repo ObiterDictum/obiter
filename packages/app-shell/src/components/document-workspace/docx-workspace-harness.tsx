@@ -24,6 +24,7 @@ const hooks = vi.hoisted(() => ({
   useTrackedChangeDecision: vi.fn(),
   usePresenceUpdate: vi.fn(),
   useCurrentUser: vi.fn(),
+  useUpdateDocumentMarkings: vi.fn(),
   fetchDocumentExport: vi.fn(),
 }))
 // The real module, snapshotted before mock.module registers: a factory
@@ -60,6 +61,7 @@ mock.module('../../document-workspace-api', () =>
         useCollaborationMerge: hooks.useCollaborationMerge,
         useTrackedChangeDecision: hooks.useTrackedChangeDecision,
         usePresenceUpdate: hooks.usePresenceUpdate,
+        useUpdateDocumentMarkings: hooks.useUpdateDocumentMarkings,
         fetchDocumentExport: hooks.fetchDocumentExport,
       }
     })(),
@@ -150,6 +152,12 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 }
 
 export const staleConflict = new ApiError(
@@ -210,6 +218,12 @@ export function multiParagraphModel(
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 }
 
@@ -268,6 +282,8 @@ export function mountWorkspace(
     mergeAsync?: ReturnType<typeof vi.fn>
     /** Drives the tracked-change decision path a saved tracked undo uses. */
     decideAsync?: ReturnType<typeof vi.fn>
+    /** Drives the markings commit; default is an idle mutation. */
+    markingsAsync?: ReturnType<typeof vi.fn>
     /** The changes the tracked-changes query returns. */
     changes?: import('@obiter/contracts').DocumentChangeWire[]
     /** Simulates the reload query failing, so a pending baseline cannot resolve. */
@@ -356,6 +372,14 @@ export function mountWorkspace(
     }),
   )
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
+  hooks.useUpdateDocumentMarkings.mockReturnValue(
+    idleMutation({
+      // The markings hook dispatches through `mutate` with result callbacks,
+      // the same dispatch shape as the tracked-change decision hook.
+      mutate: (input: unknown, callbacks?: unknown) =>
+        options.markingsAsync?.(input, callbacks),
+    }),
+  )
 
   return render(
     <DocxWorkspace
