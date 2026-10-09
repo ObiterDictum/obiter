@@ -26,6 +26,8 @@ const model: DocumentModelWire = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],
@@ -67,6 +69,8 @@ const tabledModel: DocumentModelWire = {
       preservedXmlFragments: [
         '<w:tbl><w:tr><w:tc><w:p w14:paraId="AABBCCDD"><w:r><w:t>Particulars</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="EEFF0011"><w:r><w:t>Details</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
       ],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
 }
@@ -99,6 +103,8 @@ const narrowTableModel: DocumentModelWire = {
           longCellText +
           '</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
       ],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
 }
@@ -207,6 +213,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/footer1.xml',
@@ -225,6 +233,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -288,6 +298,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -336,6 +348,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -389,6 +403,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [xml],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -434,6 +450,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -540,6 +558,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -580,6 +600,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -616,6 +638,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -648,6 +672,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/footer2.xml',
@@ -662,6 +688,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -708,6 +736,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -746,6 +776,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -781,6 +813,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -831,6 +865,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -1274,6 +1310,8 @@ describe('DocumentModelPage', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/footnotes.xml',
@@ -1294,6 +1332,8 @@ describe('DocumentModelPage', () => {
           preservedXmlFragments: [
             '<w:footnote w:id="1"><w:p><w:r><w:t>Alice Example footnote</w:t></w:r></w:p></w:footnote>',
           ],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export * from './account'
 export * from './api-error'
+export * from './defined-terms'
 export * from './document-collaboration'
 export * from './document-comments'
 export * from './document-compare'

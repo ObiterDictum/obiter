@@ -160,6 +160,8 @@ function singleParagraphModel(): DocumentModelWire {
         kind: 'document',
         paragraphs: [paragraph('p1')],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],
@@ -191,6 +193,8 @@ function marginModel(): DocumentModelWire {
         kind: 'header',
         paragraphs: [paragraph('h1')],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
   }

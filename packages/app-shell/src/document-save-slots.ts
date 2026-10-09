@@ -235,7 +235,11 @@ export function slotLabel(slot: DraftSlot): string {
                 ? 'a footnote'
                 : slot.structureKind === 'table-of-contents'
                   ? 'a table of contents'
-                  : 'a page number'
+                  : slot.structureKind === 'table-of-authorities'
+                    ? 'a table of authorities'
+                    : slot.structureKind === 'table-of-authorities-refresh'
+                      ? 'a table of authorities update'
+                      : 'a page number'
     case 'tracked-reject':
       return 'a tracked change'
   }

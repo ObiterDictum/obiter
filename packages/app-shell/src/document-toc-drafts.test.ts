@@ -7,6 +7,7 @@ import type {
 } from '@obiter/contracts'
 
 import { batchParagraphDeletions } from './document-edits'
+import { emptyFormatDrafts } from './document-format-types'
 import { paragraphPlainText } from './document-model-text'
 import { runDisplayText } from './document-page-media'
 import { layoutDocument } from './document-page-engine'
@@ -63,6 +64,8 @@ function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
     kind: 'document',
     paragraphs,
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -246,6 +249,8 @@ describe('table of contents save partitioning', () => {
       kind: 'header',
       paragraphs: [paragraph('h1', 'Running head')],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     const plan = planDocumentSave(
       {
@@ -496,8 +501,17 @@ describe('table of contents ribbon availability', () => {
       structures,
       drafts: {},
       extraRuns: {},
+      format: emptyFormatDrafts,
+      breaks: [],
+      inserts: [],
       setStructures: (update) => {
         structures.push(...update([]))
+      },
+      toaFacts: {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
       },
       ...overrides,
     })

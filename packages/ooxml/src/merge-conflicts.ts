@@ -43,7 +43,10 @@ export function operationConflicts(
       changes.paragraphRunChanges.has(operation.paragraphId)
     )
   }
-  if (operation.type === 'set_hyperlink') {
+  if (
+    operation.type === 'set_hyperlink' ||
+    operation.type === 'mark_defined_term'
+  ) {
     // A range mark addresses this paragraph's text, so a text edit to the
     // same paragraph in the current version moves the covered range; refuse
     // rather than wrap the wrong runs.
@@ -106,6 +109,29 @@ export function operationConflicts(
     // `paragraphIds` is the presence set: every aligned paragraph, changed
     // or not. It answers only whether the anchor survived; the change sets
     // are `paragraphStyles`, `paragraphOpaque` and `paragraphRunChanges`.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphStyles.size > 0 ||
+      changes.paragraphOpaque.size > 0 ||
+      changes.paragraphRunChanges.size > 0
+    )
+  }
+  if (operation.type === 'insert_table_of_authorities') {
+    // The same document-wide footprint as the contents table, one step
+    // deeper: the field also marks every citation occurrence and bookmarks
+    // every citing paragraph, so any paragraph change anywhere — not just a
+    // heading's — can move a mark offset or empty an entry.
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphStyles.size > 0 ||
+      changes.paragraphOpaque.size > 0 ||
+      changes.paragraphRunChanges.size > 0
+    )
+  }
+  if (operation.type === 'update_table_of_authorities') {
+    // A refresh reads the same document-wide citation set and rewrites the
+    // field's covered paragraphs: any paragraph change can move a mark
+    // offset, empty an entry, or touch the range the update replaces.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphStyles.size > 0 ||

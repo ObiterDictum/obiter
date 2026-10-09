@@ -409,6 +409,8 @@ function trackedModel(saved: boolean) {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [{ styleId: 'Normal', sourceFragment: TRACKED_STYLE_XML }],

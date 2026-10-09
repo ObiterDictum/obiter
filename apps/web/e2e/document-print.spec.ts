@@ -87,6 +87,8 @@ const MODEL = {
           paragraph('p-last', 'Closing paragraph.'),
         ],
         preservedXmlFragments: [TABLE_XML],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

@@ -148,6 +148,7 @@ export function remapMergeOperations(
       case 'insert_table':
       case 'insert_image':
       case 'set_hyperlink':
+      case 'mark_defined_term':
         return { ...operation, paragraphId: paragraph(operation.paragraphId) }
       case 'insert_cross_reference':
         return {

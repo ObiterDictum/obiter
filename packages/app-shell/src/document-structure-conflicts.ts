@@ -7,33 +7,75 @@ import type { StructuralDraft } from './document-structural-drafts'
 /** A run's [start, end) span in the paragraph's effective text. */
 export type ParagraphRunSpan = { start: number; end: number }
 
-/** The fields of a structural draft the conflict rule reads. */
+/** The fields of a structural draft the conflict rule reads. Each kind owns
+ * its member so the kind discriminant narrows cleanly. */
 export type StructuralPlacement =
   | { kind: 'table'; paragraphId: string }
+  | { kind: 'image'; paragraphId: string; offset: number }
   | {
       kind:
-        | 'image'
         | 'cross-reference'
         | 'page-number'
         | 'footnote'
         | 'table-of-contents'
+        | 'table-of-authorities'
+        | 'authority-mark'
       paragraphId: string
       offset: number
     }
   | { kind: 'link'; paragraphId: string; from: number; to: number }
+  | { kind: 'defined-term'; paragraphId: string; from: number; to: number }
+  /**
+   * A refresh claims a field's whole generated range rather than a point,
+   * so it has no offset: its conflicts are range-level and live with the
+   * update predicates, not here.
+   */
+  | { kind: 'table-of-authorities-refresh'; paragraphId: string }
+
+type RangePlacement = Extract<StructuralPlacement, { from: number }>
+type SplicePlacement = Extract<
+  StructuralPlacement,
+  {
+    kind:
+      | 'cross-reference'
+      | 'page-number'
+      | 'footnote'
+      | 'table-of-contents'
+      | 'table-of-authorities'
+      | 'authority-mark'
+  }
+>
+
+/**
+ * A range mark over `[from, to)`: a `w:hyperlink` wrap or a `_Def_` bookmark
+ * pair. Both write markup whose ends sit at the range boundaries, so a splice
+ * inside the covered text composes while a boundary inside another mark's
+ * covered run meets pending structure.
+ */
+function isRangeMark(
+  placement: StructuralPlacement,
+): placement is RangePlacement {
+  return placement.kind === 'link' || placement.kind === 'defined-term'
+}
 
 /**
  * A zero-width splice at one offset. A `REF` field, a `PAGE` field, a
- * footnote reference and a `TOC` field share the same shape — a run cut
- * open for element-only content — so they share the conflict rules: each
- * poisons strictly-inside splices on the run it lands in.
+ * footnote reference, a `TOC` field, a `TOA` field and the hidden `TA`
+ * marks a table of authorities writes into citing paragraphs share the
+ * same shape — a run cut open for element-only content — so they share
+ * the conflict rules: each poisons strictly-inside splices on the run it
+ * lands in.
  */
-function isZeroWidthSplice(kind: StructuralPlacement['kind']) {
+function isZeroWidthSplice(
+  placement: StructuralPlacement,
+): placement is SplicePlacement {
   return (
-    kind === 'cross-reference' ||
-    kind === 'page-number' ||
-    kind === 'footnote' ||
-    kind === 'table-of-contents'
+    placement.kind === 'cross-reference' ||
+    placement.kind === 'page-number' ||
+    placement.kind === 'footnote' ||
+    placement.kind === 'table-of-contents' ||
+    placement.kind === 'table-of-authorities' ||
+    placement.kind === 'authority-mark'
   )
 }
 
@@ -78,20 +120,61 @@ export function structuralDraftConflict(
   earlier: StructuralPlacement,
   later: StructuralPlacement,
 ): boolean {
-  if (earlier.kind === 'link') {
+  // A refresh's claim is the field's covered paragraphs, not a splice
+  // point: the offset rules have nothing to say to it, and the range
+  // coverage the update predicates own is what refuses the pair.
+  if (
+    earlier.kind === 'table-of-authorities-refresh' ||
+    later.kind === 'table-of-authorities-refresh'
+  ) {
+    return false
+  }
+  if (isRangeMark(earlier)) {
     if (later.kind === 'table') return false
     const covered = coveredRuns(spans, earlier)
-    if (later.kind === 'link') {
+    if (isRangeMark(later)) {
+      if (earlier.kind === 'defined-term' && later.kind === 'defined-term') {
+        // Two marks sharing a covered run write overlapping replacements the
+        // overlay cannot serialise; in disjoint runs only a crossing range
+        // would pair the terms' bookmarks over the same words.
+        return (
+          coveredRuns(spans, later).some((run) => covered.includes(run)) ||
+          (earlier.from < later.to && later.from < earlier.to)
+        )
+      }
+      if (later.kind === 'defined-term') {
+        // A mark boundary strictly inside a run the link rewrites cuts that
+        // run, and two replacements cannot cover one range. At a run's edges
+        // the pair lands beside the link element and composes — a bookmark
+        // around a `w:hyperlink` is legal OOXML.
+        return covered.some(
+          (span) =>
+            strictlyInside(span, later.from) || strictlyInside(span, later.to),
+        )
+      }
       return coveredRuns(spans, later).some((run) => covered.includes(run))
     }
-    // A splice strictly inside a covered run meets the pending wrap; at a run
-    // boundary it lands in the gap between run elements and composes.
-    return insideAnyRun(covered, later.offset)
+    if (earlier.kind === 'link') {
+      // A splice strictly inside a covered run meets the pending wrap; at a
+      // run boundary it lands in the gap between run elements and composes.
+      return insideAnyRun(covered, later.offset)
+    }
+    // Only the runs the mark cuts are rewritten: a splice strictly inside one
+    // overlaps the mark's pending replacement; inside a wholly covered run or
+    // at a boundary it composes.
+    return insideAnyRun(markCutRuns(covered, earlier), later.offset)
   }
-  if (later.kind === 'link') {
+  if (isRangeMark(later)) {
     if (earlier.kind === 'table') return false
+    if (later.kind === 'defined-term') {
+      // A field or picture splice strictly inside a run the mark cuts cannot
+      // fold: the mark's materialisation of the run's pending content would
+      // read more than one element.
+      const cut = markCutRuns(coveredRuns(spans, later), later)
+      return insideAnyRun(cut, earlier.offset)
+    }
     const covered = coveredRuns(spans, later)
-    if (isZeroWidthSplice(earlier.kind)) {
+    if (isZeroWidthSplice(earlier)) {
       // The field's zero-width splice counts as pending on the run it opens
       // at, so a boundary offset poisons the following run too.
       const occupied = occupiedRun(spans, earlier.offset)
@@ -99,11 +182,7 @@ export function structuralDraftConflict(
     }
     return insideAnyRun(covered, earlier.offset)
   }
-  if (
-    earlier.kind !== 'table' &&
-    isZeroWidthSplice(earlier.kind) &&
-    later.kind !== 'table'
-  ) {
+  if (isZeroWidthSplice(earlier) && later.kind !== 'table') {
     // A second splice strictly inside the field's run cannot fold the field
     // markup; the run's boundaries land in the gap and compose.
     const run = occupiedRun(spans, earlier.offset)
@@ -158,6 +237,14 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'footnote'
     case 'table-of-contents':
       return 'table of contents'
+    case 'table-of-authorities':
+      return 'table of authorities'
+    case 'table-of-authorities-refresh':
+      return 'table of authorities update'
+    case 'authority-mark':
+      return 'citation mark'
+    case 'defined-term':
+      return 'defined-term mark'
   }
 }
 
@@ -176,15 +263,28 @@ function storedLinkConflict(
   if (candidate.kind === 'table' || candidate.kind === 'link') {
     return undefined
   }
-  if (candidate.kind !== 'image' && !isZeroWidthSplice(candidate.kind)) {
+  if (
+    candidate.kind !== 'image' &&
+    candidate.kind !== 'defined-term' &&
+    !isZeroWidthSplice(candidate)
+  ) {
     return undefined
   }
-  const index = spans.findIndex(
-    (span, runIndex) =>
-      paragraph.runs[runIndex]?.hyperlinkTarget !== undefined &&
-      span.start <= candidate.offset &&
-      candidate.offset < span.end,
-  )
+  // A defined-term mark writes its pair at the range boundaries: an end
+  // landing inside a stored link's element is the same refused splice a
+  // field's offset makes. `from` counts inside a linked run it opens (the
+  // pair's start would land between the element's tags); `to` counts through
+  // the run's end edge, the writer's `endInside` test.
+  const index = spans.findIndex((span, runIndex) => {
+    if (paragraph.runs[runIndex]?.hyperlinkTarget === undefined) return false
+    if (candidate.kind === 'defined-term') {
+      return (
+        (span.start <= candidate.from && candidate.from < span.end) ||
+        (span.start < candidate.to && candidate.to <= span.end)
+      )
+    }
+    return span.start <= candidate.offset && candidate.offset < span.end
+  })
   const span = spans[index]
   return span === undefined
     ? undefined
@@ -202,6 +302,22 @@ function coveredRuns(
   link: { from: number; to: number },
 ) {
   return spans.filter((span) => span.start < link.to && span.end > link.from)
+}
+
+/**
+ * The covered runs the mark rewrites: the boundary runs it cuts. A wholly
+ * covered interior run keeps its stored element and stays composable — the
+ * pair's halves land at the range's edges as insertions, not a rewrite.
+ */
+function markCutRuns(
+  covered: readonly ParagraphRunSpan[],
+  mark: { from: number; to: number },
+) {
+  return covered.filter((span) => span.start < mark.from || span.end > mark.to)
+}
+
+function strictlyInside(span: ParagraphRunSpan, offset: number) {
+  return span.start < offset && offset < span.end
 }
 
 /**

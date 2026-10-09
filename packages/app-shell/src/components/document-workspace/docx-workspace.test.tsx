@@ -168,6 +168,8 @@ describe('DocxWorkspace ribbon', () => {
               kind: 'header' as const,
               paragraphs: [paragraph('h1', 'Running head')],
               preservedXmlFragments: [],
+              fields: [],
+              unanchoredFieldParagraphIds: [],
             },
           ],
         },

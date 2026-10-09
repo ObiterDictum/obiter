@@ -40,6 +40,8 @@ function listModel(): DocumentModelWire {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

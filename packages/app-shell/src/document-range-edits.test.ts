@@ -35,6 +35,8 @@ function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         partName: 'word/document.xml',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],
@@ -86,6 +88,106 @@ describe('replacing a range inside one paragraph', () => {
     )
     expect(result?.state).toBe(state)
     expect(operations(model, result?.state ?? state)).toEqual([])
+  })
+})
+
+describe('a range that would split a stored field', () => {
+  // p2 holds the field's begin/separate, p4 its end.
+  const fieldModel = () => {
+    const document = doc(
+      para('p1', 'alpha'),
+      para('p2', 'bravo'),
+      para('p3', 'charlie'),
+      para('p4', 'delta'),
+      para('p5', 'echo'),
+    )
+    document.stories[0]!.fields = [
+      {
+        headId: 'p2',
+        tailId: 'p4',
+        closed: true,
+        boundaryIds: ['p2', 'p4'],
+        paragraphIds: ['p2', 'p3', 'p4'],
+        resultIds: ['p2', 'p3'],
+        instruction: ' TOA \\h \\c "1" ',
+        rangeReplaceable: true,
+        boundariesAnchored: true,
+      },
+    ]
+    return document
+  }
+
+  it('refuses a range leaving one boundary behind', () => {
+    // p1→p3 removes the head while the tail's `end` survives.
+    expect(
+      applyReplaceDocumentRange(
+        fieldModel(),
+        emptyEditorState(),
+        { paragraphId: 'p1', offset: 0 },
+        { paragraphId: 'p3', offset: 3 },
+        'X',
+      ),
+    ).toBeUndefined()
+    // p3→p5 removes the tail while the head's `begin` survives.
+    expect(
+      applyReplaceDocumentRange(
+        fieldModel(),
+        emptyEditorState(),
+        { paragraphId: 'p3', offset: 0 },
+        { paragraphId: 'p5', offset: 2 },
+        'X',
+      ),
+    ).toBeUndefined()
+  })
+
+  it('allows a range removing every boundary the field carries', () => {
+    const result = applyReplaceDocumentRange(
+      fieldModel(),
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 2 },
+      { paragraphId: 'p5', offset: 2 },
+      'X',
+    )
+    // The tail endpoint joins away too — every boundary lands inside the
+    // removed set, so the field leaves whole.
+    expect(result?.state.deletedParagraphIds).toEqual(['p2', 'p3', 'p4', 'p5'])
+  })
+
+  it('refuses a cross-paragraph range on a wire without field metadata', () => {
+    // The model a pre-field-metadata server serves — the same wire minus
+    // the keys the parser now guarantees — cannot prove a removed
+    // paragraph carries no field marker, and the old server has no
+    // writer-side split check, so the removal refuses rather than
+    // guessing field-free.
+    const legacy = JSON.parse(
+      JSON.stringify(
+        doc(para('p1', 'alpha'), para('p2', 'bravo'), para('p3', 'charlie')),
+      ),
+    ) as { stories: Record<string, unknown>[] }
+    for (const story of legacy.stories) {
+      delete story.fields
+      delete story.unanchoredFieldParagraphIds
+    }
+    const wire = legacy as DocumentModelWire
+    expect(
+      applyReplaceDocumentRange(
+        wire,
+        emptyEditorState(),
+        { paragraphId: 'p1', offset: 0 },
+        { paragraphId: 'p3', offset: 1 },
+        'X',
+      ),
+    ).toBeUndefined()
+    // A range inside one paragraph removes nothing, so it still applies.
+    expect(
+      applyReplaceDocumentRange(
+        wire,
+        emptyEditorState(),
+        { paragraphId: 'p1', offset: 0 },
+        { paragraphId: 'p1', offset: 3 },
+        'X',
+      ),
+    ).toBeDefined()
   })
 })
 
@@ -302,6 +404,8 @@ function tabledDoc(): DocumentModelWire {
         preservedXmlFragments: [
           '<w:tbl><w:tr><w:tc><w:p w14:paraId="CELL0001"><w:r><w:t>Cell one</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="CELL0002"><w:r><w:t>Cell two</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
         ],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

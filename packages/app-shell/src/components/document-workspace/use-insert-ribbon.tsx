@@ -4,7 +4,8 @@ import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 
 import { documentBreakToolbar } from '../../document-break-toolbar'
 import type { BreakDraft } from '../../document-edits'
-import type { FormatTarget } from '../../document-format-edits'
+import type { FormatDrafts, FormatTarget } from '../../document-format-edits'
+import type { LocalInsert } from '../../document-story-flow'
 import { documentStory } from '../../document-model-text'
 import { marginStories } from '../../document-page-layout'
 import {
@@ -12,6 +13,7 @@ import {
   storyTableCellIds,
 } from '../../document-structure-toolbar'
 import { readImageInsert } from '../../document-image-inserts'
+import type { TableOfAuthoritiesFacts } from '../../document-legal-toolbar'
 import type { StructuralDraft } from '../../document-structural-drafts'
 import type { DocumentStructureToolbar } from './ribbon-types'
 
@@ -54,12 +56,19 @@ export function useInsertRibbon(
     deletedParagraphIds: ReadonlySet<string>
     drafts: Record<string, string>
     extraRuns: Record<string, DocumentTextRunWire[]>
+    /** Pending format, break and insert state the refresh block reads. */
+    format: FormatDrafts
+    breaks: BreakDraft[]
+    inserts: LocalInsert[]
     structures: StructuralDraft[]
     setBreaks: (update: (current: BreakDraft[]) => BreakDraft[]) => void
     setStructures: (
       update: (current: StructuralDraft[]) => StructuralDraft[],
     ) => void
   },
+  /** The citations the workspace reports over stored body paragraphs —
+   * memoised upstream so availability does not rescan the flow. */
+  toaFacts: TableOfAuthoritiesFacts,
   onImageError: (message: string) => void,
 ): InsertRibbonProps {
   const pictureInput = useRef<HTMLInputElement>(null)
@@ -98,7 +107,11 @@ export function useInsertRibbon(
     structures: drafts.structures,
     drafts: drafts.drafts,
     extraRuns: drafts.extraRuns,
+    format: drafts.format,
+    breaks: drafts.breaks,
+    inserts: drafts.inserts,
     setStructures: drafts.setStructures,
+    toaFacts,
   })
   return {
     ...documentBreakToolbar({
@@ -115,9 +128,13 @@ export function useInsertRibbon(
       linkUnavailable: structure.linkUnavailable,
       crossReferenceUnavailable: structure.crossReferenceUnavailable,
       crossReferenceTargets: structure.crossReferenceTargets,
+      definedTermUnavailable: structure.definedTermUnavailable,
       pageNumberUnavailable: structure.pageNumberUnavailable,
       footnoteUnavailable: structure.footnoteUnavailable,
       tableOfContentsUnavailable: structure.tableOfContentsUnavailable,
+      tableOfAuthoritiesUnavailable: structure.tableOfAuthoritiesUnavailable,
+      tableOfAuthoritiesUpdateUnavailable:
+        structure.tableOfAuthoritiesUpdateUnavailable,
       editingStoryKind:
         margin.editingKind === 'document' ? undefined : margin.editingKind,
       headerUnavailable,
@@ -128,12 +145,24 @@ export function useInsertRibbon(
       onInsertLink: (target) => structure.insertLink(target),
       onInsertCrossReference: (targetParagraphId) =>
         structure.insertCrossReference(targetParagraphId),
+      onMarkDefinedTerm: () => {
+        const outcome = structure.markDefinedTerm()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
       onInsertPageNumber: () => {
         const outcome = structure.insertPageNumber()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertTableOfContents: () => {
         const outcome = structure.insertTableOfContents()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
+      onInsertTableOfAuthorities: () => {
+        const outcome = structure.insertTableOfAuthorities()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
+      onUpdateTableOfAuthorities: () => {
+        const outcome = structure.updateTableOfAuthorities()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertFootnote: () => {

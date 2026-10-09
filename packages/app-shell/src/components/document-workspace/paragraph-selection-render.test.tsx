@@ -46,6 +46,8 @@ function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         partName: 'word/document.xml',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

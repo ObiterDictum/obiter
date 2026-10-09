@@ -46,6 +46,8 @@ describe('document notes', () => {
           kind: 'document',
           paragraphs: [paragraph],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/footnotes.xml',
@@ -57,6 +59,8 @@ describe('document notes', () => {
             '<w:footnote w:id="1"><w:p><w:r><w:t>Alice Example footnote</w:t></w:r></w:p></w:footnote>',
             '<w:footnote w:id="2"><w:p><w:r><w:t>Second note</w:t></w:r></w:p><w:p><w:r><w:t>continued</w:t></w:r></w:p></w:footnote>',
           ],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],

@@ -12,8 +12,11 @@ import {
   insertFootnoteOperationSchema,
   insertImageOperationSchema,
   insertPageNumberOperationSchema,
+  insertTableOfAuthoritiesOperationSchema,
   insertTableOfContentsOperationSchema,
+  updateTableOfAuthoritiesOperationSchema,
   insertTableOperationSchema,
+  markDefinedTermOperationSchema,
   setHyperlinkOperationSchema,
 } from './document-edit-structural'
 
@@ -472,6 +475,9 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   insertPageNumberOperationSchema,
   insertFootnoteOperationSchema,
   insertTableOfContentsOperationSchema,
+  insertTableOfAuthoritiesOperationSchema,
+  updateTableOfAuthoritiesOperationSchema,
+  markDefinedTermOperationSchema,
 ])
 export type DocumentEditOperation = z.infer<typeof documentEditOperationSchema>
 

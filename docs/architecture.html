@@ -7034,7 +7034,10 @@
                     <code>PAGE</code> field is refused at the ribbon, the save
                     partition and the writer alike when the anchor is a note
                     story — a note has no page of its own for the field to
-                    resolve.
+                    resolve. The note story takes run edits alone: marks, fields
+                    and tables anchor in the document body, so a footnote's text
+                    cannot carry a defined-term mark, a cross-reference or a
+                    generated table.
                   </td>
                   <td class="id">
                     ooxml/footnote-edits.ts ·
@@ -7070,6 +7073,89 @@
                     ooxml/table-of-contents-edits.ts ·
                     ooxml/table-of-contents-splice.ts ·
                     app-shell/document-toc-fold.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    A table of authorities marks citations at save and refreshes
+                    the whole field range, never a partial result (PR-E11)
+                  </td>
+                  <td>
+                    <code>insert_table_of_authorities</code> runs Word's
+                    mark-all gesture in one batch: a hidden
+                    <code>TA</code> field after every neutral-citation
+                    occurrence the shared grammar matches, a
+                    <code>_ToA&lt;n&gt;</code> bookmark around each citing
+                    paragraph, then a <code>TOA \h \c "1"</code> field whose
+                    entries are the distinct citations sorted into one
+                    <code>TableofAuthorities</code> paragraph each with
+                    <code>PAGEREF</code> fields back to the bookmarks.
+                    <code>update_table_of_authorities</code> is the refresh:
+                    anchored on the field's head paragraph, it replaces the
+                    stored generated range — heading, entries and field runs —
+                    in place, reusing <code>_ToA</code> bookmarks already on a
+                    citing paragraph and skipping citations whose
+                    <code>TA</code> mark is already stored so a refresh never
+                    accretes marks. The parser pairs every stored
+                    <code>fldChar</code>/<code>w:fldSimple</code> field and
+                    emits each one's boundary paragraphs, range and decoded
+                    instruction onto the story wire as <code>fields</code> — the
+                    only layer element parentage and sibling order survive to —
+                    with <code>rangeReplaceable</code> recording the tail shape
+                    an in-place refresh needs. The ribbon, fold, save partition
+                    and writer all read that one pairing, so a foreign-shaped
+                    <code>TOA</code> is refused identically everywhere, and a
+                    deletion that would drop some but not all of a field's
+                    boundary markers is refused in the editor, the partition and
+                    the writer — a field may only be removed whole, and a story
+                    served without the metadata at all (a pre-field-metadata
+                    server) refuses stored-paragraph removal outright rather
+                    than guessing field-free. Marks are matched on the parsed
+                    instruction, so a <code>TA</code> split across runs or
+                    carried by a <code>w:fldSimple</code> dedupes like the
+                    generated literal. Body-only and refused under tracked
+                    changes like the other generated structures, with the same
+                    shared refusal predicates at ribbon and partition: a citing
+                    paragraph that cannot hold a mark or bookmark blocks the
+                    write, and a refresh refuses a missing or malformed field,
+                    edits inside the covered range, a duplicate queued update,
+                    or a recomputed citation set that is empty. Only occurrences
+                    the writer can mark are captured — a citation typed in a
+                    pending-insert paragraph is dropped rather than dangling —
+                    and text inside a generated field's result is skipped, so a
+                    table never lists its own captured citations. A mark splice
+                    that lands inside a stored or pending
+                    <code>w:hyperlink</code> refuses, the field-level hyperlink
+                    rule applied per mark. A field closed inside its own head
+                    paragraph has no tail the range replacement can preserve, so
+                    it scans as no refreshable field.
+                  </td>
+                  <td class="id">
+                    ooxml/table-of-authorities-edits.ts ·
+                    ooxml/table-of-authorities-entries.ts ·
+                    ooxml/table-of-authorities-update.ts · ooxml/field-spans.ts
+                    · ooxml/field-instructions.ts ·
+                    app-shell/document-toa-fold.ts ·
+                    app-shell/document-toa-availability.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Underscore-prefixed bookmark families are writer-owned
+                  </td>
+                  <td>
+                    <code>_Def_…</code>, <code>_Ref_…</code>,
+                    <code>_Toc…</code> and <code>_ToA…</code> names follow
+                    Word's hidden-bookmark convention: each family is allocated
+                    by scanning the whole part and a paragraph already carrying
+                    one is reused, so a stored document's matching names join
+                    the family rather than colliding. Content under a bookmark
+                    is never required to be machine-generated — a hand-authored
+                    <code>_Def_</code> mark reads as a defined-term mark the
+                    same way.
+                  </td>
+                  <td class="id">
+                    ooxml/document-bookmarks.ts · contracts/defined-terms.ts
                   </td>
                 </tr>
                 <tr>
@@ -7259,12 +7345,14 @@
                     away
                   </td>
                   <td>
-                    The structural vocabulary is insertion-only —
+                    The structural vocabulary is write-only —
                     <code>insert_table</code>, <code>insert_image</code>,
                     <code>insert_cross_reference</code>,
                     <code>insert_page_number</code>,
                     <code>insert_footnote</code>,
                     <code>insert_table_of_contents</code>,
+                    <code>insert_table_of_authorities</code>,
+                    <code>update_table_of_authorities</code>,
                     <code>insert_break</code> and
                     <code>insert_section_break</code> have no inverse — so once
                     one is saved it is baseline content: a history snapshot that
@@ -7280,6 +7368,61 @@
                     claiming a reversal that is not synthesised.
                   </td>
                   <td class="id">app-shell/document-history-baseline.ts</td>
+                </tr>
+                <tr>
+                  <td>
+                    Citation style shapes new insertions only; the authority
+                    list is a panel, not a Word <code>TOA</code> field
+                  </td>
+                  <td>
+                    E11's citation style is a per-document editor preference in
+                    browser storage: <code>house</code> writes the inserted
+                    citation italicised, <code>oscola</code> writes it as typed,
+                    and neither rewrites existing text. A pending-insert
+                    paragraph cannot carry run emphasis anywhere in the editor,
+                    so the house italic does not apply there — the citation
+                    lands plain, the same boundary the Bold button reads. The
+                    list of authorities groups extracted neutral citations and
+                    joins verification findings strictly by paragraph and
+                    excerpt; a citation the latest run did not cover shows no
+                    state rather than borrowing one. The References ribbon's
+                    table-of-authorities control is the document-side
+                    counterpart: it inserts a real <code>TOA</code> field, and
+                    an update-table control — armed only while the caret sits
+                    inside a stored field — queues the refresh that replaces the
+                    generated range.
+                  </td>
+                  <td class="id">
+                    app-shell/document-preferences.ts ·
+                    app-shell/authorities-panel.tsx
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Defined-term marks round-trip the name, not the position;
+                    the checks report only what the wire can prove
+                  </td>
+                  <td>
+                    <code>mark_defined_term</code> writes a
+                    <code>_Def_…</code> bookmark pair, but paragraph-level
+                    fragments carry no offset on the wire, so a stored mark's
+                    range is not round-tripped. The check reports unpaired and
+                    malformed marks, duplicate definitions, marks whose
+                    paragraph no longer reads as the term, and
+                    use-before-definition against effective (including pending)
+                    text — quoted capitalised phrases are review candidates, not
+                    asserted errors. Cross-reference checks likewise read stored
+                    <code>REF</code>/<code>PAGEREF</code>
+                    fields and bookmarks and name what they cannot read rather
+                    than passing it. Both are untracked structural edits,
+                    refused under track-changes and outside the body like the
+                    other structural operations.
+                  </td>
+                  <td class="id">
+                    contracts/defined-terms.ts ·
+                    app-shell/document-defined-terms.ts ·
+                    app-shell/document-cross-reference-check.ts
+                  </td>
                 </tr>
               </tbody>
             </table>

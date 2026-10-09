@@ -20,6 +20,8 @@ describe('painted list restart without an abstract numbering', () => {
           ],
         })),
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

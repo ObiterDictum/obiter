@@ -34,6 +34,8 @@ function model(
           preservedXmlFragments: [],
         })),
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

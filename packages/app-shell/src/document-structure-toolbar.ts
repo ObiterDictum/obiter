@@ -4,8 +4,13 @@ import {
   tableOfContentsAnchorBlock,
   tableOfContentsHeadingsBlock,
 } from './document-toc-availability'
+import type { BreakDraft } from './document-draft-state'
+import type { FormatDrafts } from './document-format-types'
 import type { ParagraphRange } from './document-format-toolbar'
+import { documentLegalToolbar } from './document-legal-toolbar'
+import type { TableOfAuthoritiesFacts } from './document-legal-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
+import type { LocalInsert } from './document-story-flow'
 import {
   conflictingStructure,
   structuralKindNoun,
@@ -68,7 +73,11 @@ export function documentStructureToolbar({
   structures,
   drafts,
   extraRuns,
+  format,
+  breaks,
+  inserts,
   setStructures,
+  toaFacts,
 }: {
   paragraphId: string | null
   /** The stored model — a pending paragraph or cell wire is not an anchor. */
@@ -98,12 +107,35 @@ export function documentStructureToolbar({
   structures: StructuralDraft[]
   drafts: Record<string, string>
   extraRuns: ExtraRuns
+  /** Pending format, break and insert state the refresh block reads. */
+  format: FormatDrafts
+  breaks: readonly BreakDraft[]
+  inserts: readonly LocalInsert[]
   setStructures: SetStructures
+  /**
+   * The citations the painted flow reports over stored body paragraphs —
+   * memoised by the caller so the mark pass does not rescan the document
+   * per render.
+   */
+  toaFacts: TableOfAuthoritiesFacts
 }) {
   const story = model ? documentStory(model) : undefined
+  // The paragraphs a held refresh draft rewrites: a structure anchored
+  // inside one would be silently replaced, so it conflicts up front the
+  // way the save partition blocks it.
+  const refreshCovered = new Set(
+    structures
+      .filter((item) => item.kind === 'table-of-authorities-refresh')
+      .flatMap(
+        (item) => toaFacts.fields.get(item.paragraphId)?.resultIds ?? [],
+      ),
+  )
   // The same run-level rule the save plan enforces: the reason names the
   // earlier draft a candidate cannot compose with.
   const conflictWith = (candidate: StructuralPlacement) => {
+    if (refreshCovered.has(candidate.paragraphId)) {
+      return 'The paragraph is inside a table of authorities that is already queued to update.'
+    }
     const wire = model
       ? editableParagraph(model, candidate.paragraphId)
       : undefined
@@ -247,6 +279,31 @@ export function documentStructureToolbar({
             paragraphId,
             offset,
           })))
+  // The legal-document controls — the defined-term mark and the table of
+  // authorities — own their own module: same caret-level predicates as the
+  // splice above, a different set of facts under them.
+  const legal = documentLegalToolbar({
+    model,
+    paragraphId,
+    offset,
+    selectionActive,
+    selectionRange,
+    trackChanges,
+    structures,
+    baseUnavailable,
+    inTableCell,
+    anchorWire,
+    cellParagraphIds,
+    conflictWith,
+    toaFacts,
+    drafts,
+    extraRuns,
+    deletedParagraphIds,
+    format,
+    breaks,
+    inserts,
+    setStructures,
+  })
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
@@ -264,6 +321,10 @@ export function documentStructureToolbar({
     tableUnavailable,
     pictureUnavailable,
     linkUnavailable,
+    definedTermUnavailable: legal.definedTermUnavailable,
+    tableOfAuthoritiesUnavailable: legal.tableOfAuthoritiesUnavailable,
+    tableOfAuthoritiesUpdateUnavailable:
+      legal.tableOfAuthoritiesUpdateUnavailable,
     crossReferenceUnavailable,
     crossReferenceTargets,
     pageNumberUnavailable,
@@ -326,6 +387,9 @@ export function documentStructureToolbar({
       setStructures((current) => [...current, draft])
       return { inserted: true }
     },
+    markDefinedTerm: legal.markDefinedTerm,
+    insertTableOfAuthorities: legal.insertTableOfAuthorities,
+    updateTableOfAuthorities: legal.updateTableOfAuthorities,
     insertCrossReference(targetParagraphId: string): StructuralInsertOutcome {
       if (crossReferenceUnavailable || !paragraphId || offset == null) {
         return {

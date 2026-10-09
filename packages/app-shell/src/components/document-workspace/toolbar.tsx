@@ -8,7 +8,12 @@ import {
 import { HomeRibbon } from './ribbon-home'
 import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
-import { ReferencesRibbon, ReviewRibbon, ViewRibbon } from './ribbon-review'
+import {
+  ReferencesRibbon,
+  ReviewRibbon,
+  ViewRibbon,
+  type LegalChecksFocus,
+} from './ribbon-review'
 import { IconButton, RibbonTab, ToolbarGroup } from './ribbon-primitives'
 import type {
   DocumentClipboardToolbar,
@@ -17,6 +22,7 @@ import type {
   DocumentReviewToolbar,
   DocumentStructureToolbar,
 } from './ribbon-types'
+import type { CitationStyle } from '../../document-preferences'
 
 export type {
   DocumentClipboardToolbar,
@@ -44,6 +50,9 @@ export function DocumentWorkspaceToolbar({
   onToggleChanges,
   onToggleAuthorities,
   onInsertAuthority,
+  citationStyle,
+  onCitationStyle,
+  legalChecks,
   onToggleTrackChanges,
   onZoom,
   onExportText,
@@ -85,6 +94,16 @@ export function DocumentWorkspaceToolbar({
   onToggleChanges: () => void
   onToggleAuthorities: () => void
   onInsertAuthority: () => void
+  /** The persisted citation convention new authority insertions follow. */
+  citationStyle?: CitationStyle
+  /** Absent where authority insertion is not offered; the style select
+   * is disabled without it. */
+  onCitationStyle?: (style: CitationStyle) => void
+  /** The checks panel the References ribbon's Check controls focus. */
+  legalChecks?: {
+    open: LegalChecksFocus | null
+    onOpen: (focus: LegalChecksFocus) => void
+  }
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
@@ -212,6 +231,9 @@ export function DocumentWorkspaceToolbar({
             authoritiesOpen={authoritiesOpen}
             onToggleAuthorities={onToggleAuthorities}
             onInsertAuthority={onInsertAuthority}
+            citationStyle={citationStyle ?? 'oscola'}
+            onCitationStyle={onCitationStyle}
+            legalChecks={legalChecks}
             structure={structure}
           />
         </TabsContent>

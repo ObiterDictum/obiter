@@ -16,6 +16,8 @@ function story(kind: DocumentStoryKind, partName: string, texts: string[]) {
     kind,
     paragraphs: texts.map((text, index) => paragraph(`p${index + 1}`, text)),
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -180,6 +182,8 @@ describe('extractVerificationCandidates', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ]),
     )

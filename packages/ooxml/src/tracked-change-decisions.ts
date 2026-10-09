@@ -4,9 +4,14 @@ import {
   type DocumentTrackedChangeDecisionRequest,
 } from '@obiter/contracts'
 
+import { fieldBoundarySplit } from './field-spans'
 import { OoxmlError, type OoxmlDocument, type TrackedChangeNode } from './model'
 import { requireEditablePart } from './model-edit-overlay'
-import { renameFragmentElements, setOverlayReplacement } from './parts/overlay'
+import {
+  parseXmlElements,
+  renameFragmentElements,
+  setOverlayReplacement,
+} from './parts/overlay'
 
 export function applyTrackedChangeDecisions(
   document: OoxmlDocument,
@@ -36,6 +41,39 @@ export function applyTrackedChangeDecisions(
   validateTargets(pending, action)
   if (wouldRemoveLastParagraph(document, action, removals, pending)) {
     throw new OoxmlError('last-paragraph-required')
+  }
+  // A decision that drops stored content — accepting a deletion, rejecting
+  // an insertion, removing a shell — takes every `fldChar` inside it with
+  // it. When that leaves a stored field with some boundary markers gone
+  // and some surviving, Word can never pair the remainder, so the whole
+  // decision is refused rather than write an unbalanced field.
+  const removalsByPart = new Map<string, { start: number; end: number }[]>()
+  const addRemoval = (
+    partName: string,
+    range: { start: number; end: number },
+  ) => {
+    const ranges = removalsByPart.get(partName) ?? []
+    ranges.push(range)
+    removalsByPart.set(partName, ranges)
+  }
+  for (const removal of removals) addRemoval(removal.partName, removal)
+  for (const target of pending) {
+    const range = decisionRange(target, action)
+    if (range !== undefined && decisionRemovesContent(target, action)) {
+      addRemoval(target.partName, range)
+    }
+  }
+  for (const [partName, ranges] of removalsByPart) {
+    const part = requireEditablePart(document, partName)
+    if (
+      fieldBoundarySplit(
+        parseXmlElements(part.overlay.source),
+        part.overlay.source,
+        ranges,
+      )
+    ) {
+      throw invalidDecision()
+    }
   }
   // Fold the absorbed siblings only once the decision is accepted: a refused
   // decision must leave the parsed document untouched.
@@ -343,6 +381,26 @@ function validateTargets(
       throw invalidDecision()
     }
   }
+}
+
+/**
+ * Whether the decision drops the target's stored content rather than
+ * keeping or restoring it: accepting a deletion or a move's `from` half,
+ * or rejecting an insertion or a move's `to` half. Unwrapping keeps the
+ * markers — only these paths erase source bytes.
+ */
+function decisionRemovesContent(
+  target: TrackedChangeNode,
+  action: DocumentTrackedChangeDecisionRequest['action'],
+) {
+  if (target.wire.kind === 'insert') return action === 'reject'
+  if (target.wire.kind === 'delete') return action === 'accept'
+  if (target.wire.kind === 'move') {
+    return target.wire.direction === 'from'
+      ? action === 'accept'
+      : action === 'reject'
+  }
+  return false
 }
 
 function decisionRange(

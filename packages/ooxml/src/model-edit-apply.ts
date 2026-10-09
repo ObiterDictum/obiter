@@ -10,6 +10,7 @@ import {
   type LineageRecorder,
 } from './document-lineage'
 import { insertCrossReference } from './cross-reference-edits'
+import { markDefinedTerm } from './defined-term-edits'
 import { insertFootnote } from './footnote-edits'
 import { setHyperlink } from './hyperlink-edits'
 import { insertImage } from './image-edits'
@@ -32,6 +33,8 @@ import {
 import type { RunEmphasisRange } from './model-run-emphasis'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { insertTable } from './table-edits'
+import { insertTableOfAuthorities } from './table-of-authorities-edits'
+import { updateTableOfAuthorities } from './table-of-authorities-update'
 import { insertTableOfContents } from './table-of-contents-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import type { createTrackedEditWriter } from './tracked-edits'
@@ -376,6 +379,21 @@ export function applyPlannedOperation(
       )
       state.structureCounts.set(key, occurrence + 1)
     }
+  } else if (operation.type === 'mark_defined_term') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater) {
+      const key = operation.paragraph.wire.id
+      const occurrence = state.structureCounts.get(key) ?? 0
+      markDefinedTerm(
+        document,
+        operation.paragraph,
+        operation.from,
+        operation.to,
+        occurrence,
+        lineage,
+      )
+      state.structureCounts.set(key, occurrence + 1)
+    }
   } else if (operation.type === 'insert_footnote') {
     // A footnote writes a package part and a relationship — no tracked form —
     // so validateTrackedOperations refuses it before any write.
@@ -431,6 +449,40 @@ export function applyPlannedOperation(
       state.postAnchorCounts.set(
         key,
         (state.postAnchorCounts.get(key) ?? 0) + inserted.appended,
+      )
+    }
+  } else if (operation.type === 'insert_table_of_authorities') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater) {
+      const key = operation.paragraph.wire.id
+      const occurrence = state.structureCounts.get(key) ?? 0
+      const inserted = insertTableOfAuthorities(
+        document,
+        mainStory,
+        operation.paragraph,
+        operation.offset,
+        occurrence,
+        deletedIds,
+        lineage ? { recorder: lineage, operationIndex } : undefined,
+      )
+      state.structureCounts.set(key, occurrence + 1)
+      // As with the contents table: the field's tail is the anchor's
+      // post-split half, so later post-anchor insertions chain after it.
+      state.postAnchorTails.set(key, inserted.lastWire)
+      state.postAnchorCounts.set(
+        key,
+        (state.postAnchorCounts.get(key) ?? 0) + inserted.appended,
+      )
+    }
+  } else if (operation.type === 'update_table_of_authorities') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater) {
+      updateTableOfAuthorities(
+        document,
+        mainStory,
+        operation.paragraph,
+        deletedIds,
+        lineage ? { recorder: lineage, operationIndex } : undefined,
       )
     }
   } else {

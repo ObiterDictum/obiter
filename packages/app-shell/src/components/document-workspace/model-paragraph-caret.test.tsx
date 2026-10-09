@@ -106,6 +106,8 @@ function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         kind: 'document',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

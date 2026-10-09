@@ -1,5 +1,6 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import type { ParagraphDeletionOutcome } from '../../document-edits'
+import { mergeEmphasis } from '../../document-format-edits'
 import { planParagraphDeletion } from '../../document-paragraph-deletion'
 import type { DraftState } from '../../document-save-plan'
 import type { HistoryEdit } from '../../document-history-grouping'
@@ -128,6 +129,58 @@ export function createWorkspaceDraftEdits({
     return result.caret
   }
 
+  /**
+   * `insertText` with a formatting draft over the inserted range in the same
+   * history step — the citation style's italic form. The range addresses
+   * post-insert effective text, which is what the save writer's
+   * `set_run_emphasis` resolves.
+   *
+   * A paragraph that exists only as a pending insert cannot carry run
+   * emphasis anywhere in the editor (the Bold button reads the same
+   * boundary), so the draft is not written there: it would only surface as a
+   * blocked slot at save. The citation still lands as plain text.
+   */
+  function insertStyledText(
+    model: DocumentModelWire,
+    paragraphId: string,
+    offset: number,
+    text: string,
+    emphasis: { italic: true },
+  ) {
+    const result = applyInsertText(
+      model,
+      getState(),
+      { paragraphId, offset },
+      text,
+    )
+    if (!result) return null
+    const pendingInsert = result.state.inserts.some(
+      (item) => item.clientId === paragraphId,
+    )
+    checkpoint()
+    setState((current) => ({
+      ...current,
+      drafts: result.state.drafts,
+      inserts: result.state.inserts,
+      deletedParagraphIds: result.state.deletedParagraphIds,
+      extraRuns: result.state.extraRuns,
+      ...(pendingInsert
+        ? {}
+        : {
+            format: {
+              ...current.format,
+              emphasis: mergeEmphasis(current.format.emphasis, {
+                paragraphId,
+                from: offset,
+                to: offset + text.length,
+                ...emphasis,
+              }),
+            },
+          }),
+    }))
+    return result.caret
+  }
+
   /** A paste is one edit and one history step, however many paragraphs it
    * creates; the pure splitter supplies the resulting state. */
   function paste(
@@ -177,6 +230,7 @@ export function createWorkspaceDraftEdits({
     splitDocumentRange,
     replaceHits,
     insertText,
+    insertStyledText,
     paste,
     insertAfter,
     deleteParagraph,

@@ -233,9 +233,10 @@ function tableOfContentsEntriesFor(
  * Splits `runs` at the effective-text `offset` — the wire twin of the
  * writer's run reparenting. Zero-length runs stay with the head; a run
  * the draft state replaces loses its id on both halves so the draft does
- * not repaint over a split, the rule `spliceRunAtOffset` uses.
+ * not repaint over a split, the rule `spliceRunAtOffset` uses. Exported
+ * for the authorities fold, whose anchor splits the same way.
  */
-function splitRunsAtOffset(
+export function splitRunsAtOffset(
   runs: readonly DocumentTextRunWire[],
   offset: number,
   drafts: Record<string, string>,

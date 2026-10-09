@@ -224,6 +224,8 @@ function model(): DocumentModelWire {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

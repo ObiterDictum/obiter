@@ -11,6 +11,7 @@ import {
   paragraphDeletionRefusal,
 } from './document-edits'
 import { documentStory, editableParagraph } from './document-model-text'
+import { emptyFormatDrafts } from './document-format-types'
 import { runNoteRefs } from './document-page-notes'
 import { partitionDraftState } from './document-save-partition'
 import { emptyDraftState, planDocumentSave } from './document-save-plan'
@@ -82,6 +83,8 @@ function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
     kind: 'document',
     paragraphs,
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -101,6 +104,8 @@ function footnotesStory(): DocumentStoryWire {
       '<w:footnote w:type="separator" w:id="-1"><w:p w14:paraId="S"/></w:footnote>',
       '<w:footnote w:id="2"><w:p w14:paraId="A"/><w:p w14:paraId="B"/></w:footnote>',
     ],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -304,6 +309,8 @@ describe('footnote save partitioning', () => {
       kind: 'header',
       paragraphs: [paragraph('h1', 'Running head')],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     const draft = footnoteDraft('s1', 'h1', 0)
     const noteId = footnoteNoteParagraphId(draft)
@@ -470,8 +477,17 @@ describe('the footnote insert control', () => {
       structures,
       drafts: {},
       extraRuns: {},
+      format: emptyFormatDrafts,
+      breaks: [],
+      inserts: [],
       setStructures: (update) => {
         structures.push(...update([]))
+      },
+      toaFacts: {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
       },
       ...overrides,
     })
@@ -513,6 +529,8 @@ describe('the footnote insert control', () => {
         kind: 'header',
         paragraphs: [paragraph('h1', 'Running head')],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ])
     expect(

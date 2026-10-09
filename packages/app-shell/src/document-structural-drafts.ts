@@ -113,6 +113,60 @@ export type StructuralTableOfContentsDraft = {
 }
 
 /**
+ * A pending `TOA` field at `offset` in `paragraphId` — the second draft
+ * whose fold is multi-paragraph: the painted model splits the anchor around
+ * a heading wire plus one entry wire per distinct citation, and every
+ * citing paragraph carries a hidden `TA` mark run and a `_ToA` bookmark
+ * fragment — exactly as the save writer captures them when the batch
+ * applies. The draft itself is still only a placement: the citations,
+ * marks, bookmarks and page references are all generated, never held.
+ */
+export type StructuralTableOfAuthoritiesDraft = {
+  id: string
+  kind: 'table-of-authorities'
+  paragraphId: string
+  offset: number
+}
+
+/**
+ * A pending refresh of a table of authorities the document already
+ * holds. `paragraphId` names the stored paragraph carrying the field's
+ * `begin` — the generated heading paragraph — so the writer rewrites
+ * the field's generated range in place rather than splicing a second
+ * field. Payload-free like the insertion: the server rediscovers the
+ * citations, adds `TA` marks only where an occurrence is not already
+ * marked, and reuses the `_ToA` bookmarks it finds.
+ */
+export type StructuralTableOfAuthoritiesRefreshDraft = {
+  id: string
+  kind: 'table-of-authorities-refresh'
+  paragraphId: string
+}
+
+/**
+ * A pending `_Def_` bookmark mark over `[from, to)` of a stored paragraph's
+ * painted text — the editor's defined-term mark. Like the link draft it
+ * carries no model change: the paint draws an overlay range and the save
+ * writes the bookmark pair.
+ *
+ * `marked` is the term's identity, not just its address: the range alone is
+ * stale the moment text shifts, and re-reading the covered words at save
+ * time could mark words the user never selected. The draft holds the
+ * effective text it covered at creation, so the save partition can verify
+ * the same slice still reads `marked` before the writer names the bookmark
+ * — a mark whose text drifted is blocked, never silently re-pointed.
+ */
+export type StructuralDefinedTermDraft = {
+  id: string
+  kind: 'defined-term'
+  paragraphId: string
+  from: number
+  to: number
+  /** The effective text `[from, to)` covered when the mark was made. */
+  marked: string
+}
+
+/**
  * The paragraph id the pending footnote's note body folds under. It is not a
  * stored paragraph and never becomes one: the note's own `w14` id is only
  * allocated by the save writer.
@@ -129,6 +183,9 @@ export type StructuralDraft =
   | StructuralPageNumberDraft
   | StructuralFootnoteDraft
   | StructuralTableOfContentsDraft
+  | StructuralTableOfAuthoritiesDraft
+  | StructuralTableOfAuthoritiesRefreshDraft
+  | StructuralDefinedTermDraft
 
 /**
  * The persisted form of a structural draft, bounded to exactly the fields the
@@ -205,6 +262,34 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       offset: z.number().int().min(0),
     })
     .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('table-of-authorities'),
+      paragraphId: z.string().min(1),
+      offset: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('table-of-authorities-refresh'),
+      paragraphId: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('defined-term'),
+      paragraphId: z.string().min(1),
+      from: z.number().int().min(0),
+      to: z.number().int().min(0),
+      marked: z.string().min(1).max(4_096),
+    })
+    .strict()
+    .refine((draft) => draft.from < draft.to, {
+      message: 'from and to must form a non-empty forward range.',
+    }),
 ])
 
 /**
@@ -292,6 +377,33 @@ export function structuralEditOperations(
         type: 'insert_table_of_contents',
         paragraphId: structure.paragraphId,
         offset: structure.offset,
+      })
+      continue
+    }
+    if (structure.kind === 'table-of-authorities') {
+      operations.push({
+        type: 'insert_table_of_authorities',
+        paragraphId: structure.paragraphId,
+        offset: structure.offset,
+      })
+      continue
+    }
+    if (structure.kind === 'table-of-authorities-refresh') {
+      operations.push({
+        type: 'update_table_of_authorities',
+        paragraphId: structure.paragraphId,
+      })
+      continue
+    }
+    if (structure.kind === 'defined-term') {
+      // `marked` is not sent: the save partition has already proved the
+      // covered slice still reads it, so the writer naming the bookmark
+      // from `[from, to)` names the words the user selected.
+      operations.push({
+        type: 'mark_defined_term',
+        paragraphId: structure.paragraphId,
+        from: structure.from,
+        to: structure.to,
       })
       continue
     }

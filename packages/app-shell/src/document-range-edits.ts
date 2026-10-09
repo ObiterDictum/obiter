@@ -1,5 +1,5 @@
 import type { DocumentModelWire } from '@obiter/contracts'
-import { removeInsert } from './document-edits'
+import { fieldBoundarySplitIds, removeInsert } from './document-edits'
 import {
   editingStoryOfFlowId,
   storyBodyParagraphIds,
@@ -57,6 +57,21 @@ export function documentRangeRefusal(
     if (!body.has(id) && !insertIds.has(id)) return 'structure'
   }
   if (startIndex !== endIndex) {
+    // The range deletes every paragraph strictly between the endpoints and
+    // joins the tail paragraph away: each loses its whole element, so a
+    // stored field boundary inside one — but not all of them — would leave
+    // `fldChar` markers Word can never pair.
+    const removed = order
+      .slice(startIndex + 1, endIndex + 1)
+      .filter((id) => body.has(id))
+    if (
+      fieldBoundarySplitIds(
+        model,
+        new Set([...state.deletedParagraphIds, ...removed]),
+      )
+    ) {
+      return 'structure'
+    }
     const head = blockRuns(model, state, from.paragraphId)
     const moving = blockRuns(model, state, to.paragraphId)
     if (!canJoinParagraphRuns(head, moving)) return 'join-formatting'
