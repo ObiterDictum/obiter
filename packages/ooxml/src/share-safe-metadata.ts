@@ -13,29 +13,9 @@ import { attributeValue, type XmlElement } from './parts/xml-elements'
 import {
   CANONICAL_APP_PROPERTIES_XML,
   CANONICAL_CORE_PROPERTIES_XML,
-  type ShareSafePartDisposition,
-  type ShareSafePartFamily,
 } from './share-safe-parts'
-import {
-  shareSafeAttributeVerdict,
-  shareSafeElementVerdict,
-} from './share-safe-policy'
 import { refuseShareSafe } from './share-safe-refusal'
 import { decodeXmlReferences } from './xml-lexemes'
-
-/**
- * The edit surface one kept part exposes to the policy transforms: whole
- * elements removed, wrapper elements unwrapped to their children, and
- * start-tag rewrites — all as overlay replacements, so a failed write fails
- * the whole export rather than leaving partial state.
- */
-export type ShareSafePartEdits = {
-  isRemoved(element: XmlElement): boolean
-  /** The element's start tag is gone — removed whole or unwrapped. */
-  isTagGone(element: XmlElement): boolean
-  remove(element: XmlElement): void
-  unwrap(element: XmlElement): void
-}
 
 export const SHARE_SAFE_CANONICAL_EMITS = {
   'scrub-core-properties': CANONICAL_CORE_PROPERTIES_XML,
@@ -53,73 +33,6 @@ export function emitCanonicalPart(part: SourcePart, xml: string) {
     value: xml,
   })
   part.dirty = true
-}
-
-/**
- * Applies the element and attribute policy to one kept part: elements the
- * policy marks `remove` go whole, `unwrap` wrappers lose their tags and
- * keep their children, and attributes whose verdict is `strip` are dropped
- * from their start tags. Refuse-verdict content cannot reach here — the
- * scan threw before the transform ran — so encountering it fails closed.
- */
-export function applyShareSafeContentEdits(
-  part: SourcePart,
-  disposition: ShareSafePartDisposition,
-  family: ShareSafePartFamily,
-  elements: readonly XmlElement[],
-  edits: ShareSafePartEdits,
-) {
-  for (const element of elements) {
-    if (edits.isRemoved(element)) continue
-    const verdict = shareSafeElementVerdict(element, family, disposition.kind)
-    if (verdict === 'remove') edits.remove(element)
-    else if (verdict === 'unwrap') edits.unwrap(element)
-    else if (verdict === 'refuse') {
-      refuseShareSafe(
-        'unverifiable-output',
-        `${part.name} carries ${element.localName}, which the share-safe copy cannot prove clean`,
-      )
-    }
-  }
-  stripPolicyAttributes(part, elements, edits)
-}
-
-/** Rewrites each kept element's start tag minus its stripped attributes. */
-function stripPolicyAttributes(
-  part: SourcePart,
-  elements: readonly XmlElement[],
-  edits: ShareSafePartEdits,
-) {
-  const overlay = part.overlay
-  if (!overlay) return
-  for (const element of elements) {
-    if (edits.isTagGone(element)) continue
-    const flagged = element.attributes.filter(
-      (attribute) => shareSafeAttributeVerdict(element, attribute) === 'strip',
-    )
-    if (flagged.length === 0) continue
-    let tag = overlay.source.slice(element.start, element.startTagEnd)
-    for (const attribute of flagged) {
-      const pattern = new RegExp(
-        `\\s${escapeRegExp(attribute.qualifiedName)}\\s*=\\s*("[^"]*"|'[^']*')`,
-        'u',
-      )
-      const next = tag.replace(pattern, '')
-      if (next === tag) {
-        refuseShareSafe(
-          'unverifiable-output',
-          `${part.name} holds an attribute that could not be stripped`,
-        )
-      }
-      tag = next
-    }
-    setOverlayReplacement(overlay, `share-safe:attrs:${element.start}`, {
-      start: element.start,
-      end: element.startTagEnd,
-      value: tag,
-    })
-    part.dirty = true
-  }
 }
 
 /**
@@ -240,57 +153,4 @@ export function rewriteCustomProperties(
       `</Properties>`,
   })
   part.dirty = true
-}
-
-/** The scoped edit helpers for one kept part. */
-export function shareSafeOverlayEditScope(
-  part: SourcePart,
-): ShareSafePartEdits {
-  const overlay = part.overlay
-  if (!overlay) {
-    refuseShareSafe('malformed-package', `${part.name} has no parse surface`)
-  }
-  const removedRanges: { start: number; end: number }[] = []
-  const removedTags = new Set<number>()
-  const isRemoved = (element: XmlElement) =>
-    removedRanges.some(
-      (range) => element.start >= range.start && element.end <= range.end,
-    )
-  return {
-    isRemoved,
-    isTagGone: (element) =>
-      removedTags.has(element.start) || isRemoved(element),
-    remove: (element) => {
-      if (isRemoved(element)) return
-      removedRanges.push({ start: element.start, end: element.end })
-      removedTags.add(element.start)
-      setOverlayReplacement(overlay, `share-safe:el:${element.start}`, {
-        start: element.start,
-        end: element.end,
-        value: '',
-      })
-      part.dirty = true
-    },
-    unwrap: (element) => {
-      if (isRemoved(element)) return
-      removedTags.add(element.start)
-      setOverlayReplacement(overlay, `share-safe:open:${element.start}`, {
-        start: element.start,
-        end: element.selfClosing ? element.end : element.startTagEnd,
-        value: '',
-      })
-      if (!element.selfClosing) {
-        setOverlayReplacement(overlay, `share-safe:close:${element.start}`, {
-          start: element.endTagStart,
-          end: element.end,
-          value: '',
-        })
-      }
-      part.dirty = true
-    },
-  }
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }

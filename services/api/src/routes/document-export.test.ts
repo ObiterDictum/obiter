@@ -1,6 +1,7 @@
 import { parseDocx, serialiseDocxWithComments } from '@obiter/ooxml'
 import { describe, expect, it } from 'bun:test'
 import JSZip from 'jszip'
+import { readFile } from 'node:fs/promises'
 import {
   DOCUMENT_EXPORT_CONTENT_TYPE,
   documentExportFilename,
@@ -466,6 +467,44 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     // The response is the error envelope, not document bytes: the refusal is
     // a JSON body well under the source package's size.
     expect(body.length).toBeLessThan(tracked.byteLength)
+  })
+
+  // Real-toolchain corpus: ordinary Word output must export, not refuse.
+  it.each([
+    'letter-plain.docx',
+    'letter-table.docx',
+    'letter-footnotes-numbering.docx',
+    'letter-image.docx',
+  ])('exports the real-toolchain corpus doc %s', async (filename) => {
+    const bytes = await readFile(`test-fixtures/upload-corpus/${filename}`)
+    const database = new TestDatabase({ access: 'view' })
+    const storage = new MemoryStorage(new Uint8Array(bytes))
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/export?mode=share-safe',
+    )
+
+    expect(response.status).toBe(200)
+    const exported = await parseDocx(
+      new Uint8Array(await response.arrayBuffer()),
+    )
+    expect(exported.model.changes).toHaveLength(0)
+    expect(exported.model.comments).toHaveLength(0)
+  })
+
+  it('refuses the tracked-changes corpus doc', async () => {
+    const bytes = await readFile(
+      'test-fixtures/upload-corpus/letter-tracked-changes.docx',
+    )
+    const database = new TestDatabase({ access: 'view' })
+    const storage = new MemoryStorage(new Uint8Array(bytes))
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/export?mode=share-safe',
+    )
+
+    expect(response.status).toBe(422)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'share_safe_export_refused' },
+    })
   })
 
   it('carries a faithful Unicode name through filename*', async () => {
