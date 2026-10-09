@@ -26,7 +26,10 @@ import {
   SHARE_SAFE_MARKER_ELEMENTS,
   WML_ELEMENTS,
 } from './share-safe-word-vocabulary'
-import { WML_ATTRIBUTES } from './share-safe-word-attributes'
+import {
+  WML_ELEMENT_ATTRIBUTES,
+  WML_ONOFF_ELEMENTS,
+} from './share-safe-word-attributes'
 import {
   hiddenElementRefuses,
   isSdtScoped,
@@ -35,6 +38,7 @@ import {
   SHARE_SAFE_OPAQUE_ELEMENTS,
   SHARE_SAFE_REVISION_ELEMENTS,
   SHARE_SAFE_SDT_IDENTITY_ELEMENTS,
+  SHARE_SAFE_FONT_EMBED_ELEMENTS,
   SHARE_SAFE_SDT_POINTER_ELEMENTS,
   SHARE_SAFE_SETTINGS_REMOVE,
   SHARE_SAFE_UNWRAP_ELEMENTS,
@@ -42,12 +46,16 @@ import {
 } from './share-safe-word-classes'
 import {
   EMBEDDED_ATTRIBUTES,
+  EMBEDDED_SCOPED_ATTRIBUTES,
   EMBEDDED_STRIP_ATTRIBUTES,
   EMBEDDED_NAME_LABEL_ELEMENTS,
   EXTENSION_URI_PATTERN,
   GRAPHIC_DATA_URIS,
 } from './share-safe-drawing-attributes'
-import { EMBEDDED_ELEMENTS } from './share-safe-drawing-vocabulary'
+import {
+  EMBEDDED_ELEMENTS,
+  EMBEDDED_REMOVE_ELEMENTS,
+} from './share-safe-drawing-vocabulary'
 
 /**
  * The element-level half of the share-safe policy: what may exist inside a
@@ -61,6 +69,7 @@ import { EMBEDDED_ELEMENTS } from './share-safe-drawing-vocabulary'
  */
 
 const ON_VALUES = new Set(['1', 'true', 'on'])
+const ON_OFF_VALUES = new Set(['0', '1', 'true', 'false', 'on', 'off'])
 
 export type ShareSafeElementVerdict = 'keep' | 'remove' | 'unwrap' | 'refuse'
 
@@ -103,6 +112,10 @@ export function shareSafeElementVerdict(
     ) {
       return 'remove'
     }
+    const removed = EMBEDDED_REMOVE_ELEMENTS.get(element.namespaceUri)
+    if (removed !== undefined && removed.has(element.localName)) {
+      return 'remove'
+    }
     const allowed = EMBEDDED_ELEMENTS.get(element.namespaceUri)
     return allowed !== undefined && allowed.has(element.localName)
       ? 'keep'
@@ -119,7 +132,8 @@ export function shareSafeElementVerdict(
   if (
     SHARE_SAFE_CARRIER_ELEMENTS.has(element.localName) ||
     SHARE_SAFE_MARKER_ELEMENTS.has(element.localName) ||
-    SHARE_SAFE_COMMENT_MARKERS.has(element.localName)
+    SHARE_SAFE_COMMENT_MARKERS.has(element.localName) ||
+    SHARE_SAFE_FONT_EMBED_ELEMENTS.has(element.localName)
   ) {
     return 'remove'
   }
@@ -217,7 +231,21 @@ export function shareSafeAttributeVerdict(
         return 'strip'
       }
       if (attribute.localName === 'displacedByCustomXml') return 'strip'
-      return WML_ATTRIBUTES.has(attribute.localName) ? 'keep' : 'strip'
+      // Element-scoped: a `w:` attribute keeps only where the schema
+      // declares it — `w:val` or `w:instr` on a `w:p` is a payload
+      // channel, not formatting.
+      const declared = WML_ELEMENT_ATTRIBUTES.get(element.localName)
+      if (declared === undefined || !declared.has(attribute.localName)) {
+        return 'strip'
+      }
+      if (
+        attribute.localName === 'val' &&
+        WML_ONOFF_ELEMENTS.has(element.localName) &&
+        !ON_OFF_VALUES.has(attribute.value.trim().toLowerCase())
+      ) {
+        return 'strip'
+      }
+      return 'keep'
     }
     if (attribute.namespaceUri === XML_NAMESPACE_URI) {
       return XML_ATTRIBUTES_KEPT.has(attribute.localName) ? 'keep' : 'strip'
@@ -245,6 +273,10 @@ export function shareSafeAttributeVerdict(
           return GRAPHIC_DATA_URIS.has(attribute.value) ? 'keep' : 'refuse'
         }
         return EXTENSION_URI_PATTERN.test(attribute.value) ? 'keep' : 'strip'
+      }
+      const scoped = EMBEDDED_SCOPED_ATTRIBUTES.get(attribute.localName)
+      if (scoped !== undefined) {
+        return scoped.has(element.localName) ? 'keep' : 'strip'
       }
       return EMBEDDED_ATTRIBUTES.has(attribute.localName) ? 'keep' : 'strip'
     }

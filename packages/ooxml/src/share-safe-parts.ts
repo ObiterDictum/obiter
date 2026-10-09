@@ -208,7 +208,6 @@ export const KEEP_RELATIONSHIPS = new Map<string, ShareSafeKeepSpec>([
   [`${OFFICE_REL}footnotes`, keep('footnotes')],
   [`${OFFICE_REL}endnotes`, keep('endnotes')],
   [`${OFFICE_REL}image`, { kind: 'keep', binary: true, unique: false }],
-  [`${OFFICE_REL}font`, { kind: 'keep', binary: true, unique: false }],
   [
     `${OFFICE_REL}settings`,
     {
@@ -281,6 +280,11 @@ export const DROP_RELATIONSHIP_TAILS = new Set([
   'customXml',
   'customXmlProps',
   'glossaryDocument',
+  // Embedded font payloads are font-program bytes the binary layer cannot
+  // bound or re-serialise metadata-free — the part drops with its
+  // relationship, and the `w:embed*` elements pointing at it are removed
+  // at element level.
+  'font',
 ])
 
 /**

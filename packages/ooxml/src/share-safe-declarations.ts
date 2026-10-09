@@ -5,6 +5,7 @@ import {
 import { attributeValue, type XmlElement } from './parts/xml-elements'
 import {
   CONTENT_TYPES_NAMESPACE,
+  CONTENT_TYPES_PART,
   PACKAGE_REL_NAMESPACE,
   type ShareSafeContentPlan,
   type ShareSafePlan,
@@ -43,6 +44,9 @@ export function analyseRelationshipsPart(
     )
   }
   const kept = keptPartNames(plan)
+  // Two declarations spelling one `Id` make `r:id` resolution ambiguous —
+  // a reader could follow either. Refuse rather than pick.
+  const seenIds = new Set<string>()
   for (const element of elements) {
     if (element.namespaceUri !== PACKAGE_REL_NAMESPACE) continue
     // Shape is `Relationships` at the root, `Relationship` directly
@@ -67,6 +71,13 @@ export function analyseRelationshipsPart(
         `${part.name} carries an undeclarable relationship`,
       )
     }
+    if (seenIds.has(id)) {
+      refuseShareSafe(
+        'malformed-package',
+        `${part.name} declares relationship ${id} twice`,
+      )
+    }
+    seenIds.add(id)
     if (stripIds.has(id)) {
       contentPlan.removed.add(element)
       continue
@@ -128,8 +139,15 @@ export function analyseContentTypesPart(
     const dot = name.lastIndexOf('.')
     if (dot !== -1) usedExtensions.add(name.slice(dot + 1).toLowerCase())
   }
-  const seenDefaults = new Set<string>()
-  const seenOverrides = new Set<string>()
+  // Extensions and part names already declared, mapped to the type they
+  // declared. A repeat carrying the same type is redundant and drops;
+  // a repeat carrying a different type is ambiguous and refuses.
+  const seenDefaults = new Map<string, string>()
+  const seenOverrides = new Map<string, string>()
+  // The declarations that survive — a kept part must end up covered by
+  // one of them, not by an entry the plan already dropped.
+  const shippedDefaults = new Set<string>()
+  const shippedOverrides = new Set<string>()
   for (const element of elements) {
     if (element.namespaceUri !== CONTENT_TYPES_NAMESPACE) continue
     if (
@@ -151,15 +169,23 @@ export function analyseContentTypesPart(
           `${part.name} carries an undeclarable Default entry`,
         )
       }
-      if (!seenDefaults.add(extension.toLowerCase())) {
+      const seenDefault = seenDefaults.get(extension.toLowerCase())
+      if (seenDefault !== undefined) {
+        if (seenDefault === contentType) {
+          contentPlan.removed.add(element)
+          continue
+        }
         refuseShareSafe(
           'malformed-package',
           `${part.name} declares extension ${extension} twice`,
         )
       }
+      seenDefaults.set(extension.toLowerCase(), contentType)
       if (!usedExtensions.has(extension.toLowerCase())) {
         contentPlan.removed.add(element)
+        continue
       }
+      shippedDefaults.add(extension.toLowerCase())
       continue
     }
     if (element.localName === 'Override') {
@@ -172,15 +198,40 @@ export function analyseContentTypesPart(
         )
       }
       const target = partName.replace(/^\//u, '')
-      if (!seenOverrides.add(target)) {
+      const seenOverride = seenOverrides.get(target)
+      if (seenOverride !== undefined) {
+        if (seenOverride === contentType) {
+          contentPlan.removed.add(element)
+          continue
+        }
         refuseShareSafe(
           'malformed-package',
           `${part.name} declares part ${target} twice`,
         )
       }
+      seenOverrides.set(target, contentType)
       if (!kept.has(target)) {
         contentPlan.removed.add(element)
+        continue
       }
+      shippedOverrides.add(target)
+    }
+  }
+  // Every kept part must end up typed: an `Override` naming it, or a
+  // `Default` covering its extension. A part without coverage is a
+  // package a recipient cannot consistently decode — refuse. The
+  // content-types part itself is covered by the container contract.
+  for (const name of kept) {
+    if (name === CONTENT_TYPES_PART) continue
+    const dot = name.lastIndexOf('.')
+    if (
+      !shippedOverrides.has(name) &&
+      (dot === -1 || !shippedDefaults.has(name.slice(dot + 1).toLowerCase()))
+    ) {
+      refuseShareSafe(
+        'malformed-package',
+        `kept part ${name} ships with no content-type declaration`,
+      )
     }
   }
 }

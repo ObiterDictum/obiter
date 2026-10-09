@@ -3,7 +3,11 @@ import {
   WORD_NAMESPACE,
   type XmlElement,
 } from './parts/xml-elements'
-import { fieldInstructionName } from './field-instructions'
+import {
+  fieldInstructionName,
+  fieldInstructionTokens,
+  fieldInstructionTokenValue,
+} from './field-instructions'
 
 /**
  * Field instructions the copy may carry intact: every name here is bounded
@@ -65,6 +69,21 @@ export const SHARE_SAFE_FIELD_NAMES = new Set([
  */
 export const SHARE_SAFE_REMOVE_FIELDS = new Set(['SET', 'FILENAME'])
 
+/**
+ * Field names whose operands are in-document references — `REF`,
+ * `PAGEREF`, `NOTEREF` and `GOTOBUTTON` name bookmarks, so their operands
+ * follow the generated `bm<n>` renaming and must resolve to a shipped
+ * bookmark. Every other field's tokens are content: a `TC "Figure"` that
+ * happens to collide with a bookmark's name is a coincidence, never a
+ * reference, and must ship untouched.
+ */
+export const FIELD_REFERENCE_NAMES = new Set([
+  'GOTOBUTTON',
+  'NOTEREF',
+  'PAGEREF',
+  'REF',
+])
+
 /** The `=` formula field is written as `{ =… }` with no field name. */
 export function isFormulaFieldInstruction(instruction: string) {
   return instruction.trimStart().startsWith('=')
@@ -99,12 +118,15 @@ export interface FieldSpan {
   simple: XmlElement | undefined
 }
 
-export type FieldClass = 'keep' | 'remove' | 'refuse'
+export type FieldClass = 'keep' | 'remove' | 'flatten' | 'refuse'
 
 export function classifyFieldInstruction(instruction: string): FieldClass {
   if (isFormulaFieldInstruction(instruction)) return 'keep'
   const name = fieldInstructionName(instruction)
-  if (name === '') return 'keep'
+  // An instruction with no readable name — empty, or leading with a
+  // switch or a quote — carries arbitrary text under no contract: the
+  // field flattens to its cached result rather than shipping it.
+  if (name === '') return 'flatten'
   if (SHARE_SAFE_FIELD_NAMES.has(name)) return 'keep'
   return SHARE_SAFE_REMOVE_FIELDS.has(name) ? 'remove' : 'refuse'
 }
@@ -210,10 +232,16 @@ export function analyseFieldSpans(
 
   // Frames still open when the walk ends are unclosed spans: a field the
   // part never terminates cannot be flattened or removed to a bounded
-  // range — the copy refuses unless it is a keep-class instruction.
+  // range — the copy refuses unless it is a keep-class instruction. A
+  // keep-class frame that never closed ships none of its machinery — its
+  // begin marker, instruction runs and separators are orphans — so an
+  // instruction cannot leak out of a half-parsed field.
   for (const frame of frames) {
-    const classification = classifyFieldInstruction(frame.instruction)
-    if (classification !== 'keep') refused = true
+    if (classifyFieldInstruction(frame.instruction) !== 'keep') {
+      refused = true
+      continue
+    }
+    orphanMarkers.push(frame.begin, ...frame.instr, ...frame.separates)
   }
 
   return { spans, orphanMarkers, refused }
@@ -254,27 +282,33 @@ export function analyseFieldSpans(
 }
 
 /**
- * Rewrites every instruction token that names a renamed bookmark — quoted,
- * guillemet and bare forms — and returns `undefined` when nothing changed.
- * Field names and `\` switches pass through untouched; only whole tokens
- * that match an old name move to the generated one.
+ * Rewrites a reference field's bookmark operands to the generated names
+ * the anchors ship under. Every non-switch token after the field name is
+ * an operand — one naming no shipped bookmark is a dangling pointer to a
+ * name the copy never emits, so the instruction returns `'flatten'` and
+ * the field keeps only its displayed result. `undefined` means the
+ * instruction already reads canonically; a string is the rewritten form.
  */
-export function rewriteFieldInstruction(
+export function rewriteReferenceInstruction(
   instruction: string,
   renames: ReadonlyMap<string, string>,
-) {
-  let changed = false
-  const rewritten = instruction.replace(
-    /"((?:[^"\\]|\\.)*)"|«([^»]*)»|[^\s"«»]+/gu,
-    (token, quoted, guillemet) => {
-      const value: string = quoted ?? guillemet ?? token
-      const renamed = renames.get(value)
-      if (renamed === undefined || renamed === value) return token
-      changed = true
-      if (quoted !== undefined) return `"${renamed}"`
-      if (guillemet !== undefined) return `«${renamed}»`
-      return renamed
-    },
-  )
-  return changed ? rewritten.trim() : undefined
+): string | 'flatten' | undefined {
+  const tokens = fieldInstructionTokens(instruction)
+  let sawOperand = false
+  const rebuilt: string[] = []
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!
+    if (index === 0 || token.startsWith('\\')) {
+      rebuilt.push(token)
+      continue
+    }
+    sawOperand = true
+    const renamed = renames.get(fieldInstructionTokenValue(token))
+    if (renamed === undefined) return 'flatten'
+    rebuilt.push(renamed)
+  }
+  // A reference field that names no operand points at nothing.
+  if (!sawOperand) return 'flatten'
+  const rewritten = rebuilt.join(' ')
+  return rewritten === instruction ? undefined : rewritten
 }

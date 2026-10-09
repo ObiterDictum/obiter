@@ -127,12 +127,13 @@ export function emitShareSafePart(
     for (const attribute of element.attributes) {
       if (!emittedAttribute(element, attribute, contentPlan)) continue
       const key = `${attribute.namespaceUri}${attribute.localName}`
-      if (!seen.add(key)) {
+      if (seen.has(key)) {
         refuseShareSafe(
           'malformed-package',
           `${part.name} carries a duplicated attribute on ${element.qualifiedName}`,
         )
       }
+      seen.add(key)
       const override = contentPlan.attrOverrides.get(attribute)
       const value = override === undefined ? attribute.value : override
       attributes += ` ${canonicalName(attribute.namespaceUri, attribute.localName)}="${escapeXmlAttribute(value)}"`

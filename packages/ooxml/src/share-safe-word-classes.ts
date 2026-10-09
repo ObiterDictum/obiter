@@ -188,6 +188,20 @@ export const SHARE_SAFE_SDT_POINTER_ELEMENTS = new Set([
 ])
 
 /**
+ * `w:embedRegular`/`embedBold`/`embedItalic`/`embedBoldItalic` are the
+ * font table's `r:id` pointers into embedded font parts — payloads the
+ * binary layer cannot verify, so the parts drop and these elements are
+ * removed whole: the font record keeps its name, never the payload
+ * pointer.
+ */
+export const SHARE_SAFE_FONT_EMBED_ELEMENTS = new Set([
+  'embedRegular',
+  'embedBold',
+  'embedItalic',
+  'embedBoldItalic',
+])
+
+/**
  * Wrappers whose entire purpose is binding or smart-tag metadata — the
  * element goes, its children (the visible text) stay.
  */

@@ -90,7 +90,10 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     bookmarkRenames: new Map(),
   }
   const dropped = new Set<string>()
-  const uniqueSeen = new Set<string>()
+  // A `unique` type may repeat only when every declaration names the same
+  // target — real packages carry redundant same-target entries, while two
+  // different targets claiming one role are ambiguous and refuse.
+  const uniqueTargets = new Map<string, string>()
   // Binary parts carry their relationship's tail through to payload
   // inspection — an `image` and a `font` read their bytes differently.
   const binaryTails = new Map<string, string>()
@@ -187,13 +190,17 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
           `relationship ${tail} is outside the share-safe allow-list`,
         )
       }
-      if (spec.unique && !uniqueSeen.add(relationship.type)) {
-        refuseShareSafe(
-          'malformed-package',
-          `relationship ${tail} is declared more than once`,
-        )
-      }
       const target = tryResolveTarget(relationship)
+      if (spec.unique && target !== undefined) {
+        const seen = uniqueTargets.get(relationship.type)
+        if (seen !== undefined && seen !== target) {
+          refuseShareSafe(
+            'malformed-package',
+            `relationship ${tail} is declared under more than one target`,
+          )
+        }
+        uniqueTargets.set(relationship.type, target)
+      }
       if (!target || !document.sourceParts.has(target)) {
         refuseShareSafe(
           'malformed-package',

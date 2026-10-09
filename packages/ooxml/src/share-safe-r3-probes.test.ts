@@ -1,85 +1,15 @@
-import JSZip from 'jszip'
 import { describe, expect, it } from 'bun:test'
+import JSZip from 'jszip'
 
-import { buildShareSafeDocx, parseDocx, ShareSafeRefusal } from './index'
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-const PKG_R = 'http://schemas.openxmlformats.org/package/2006/relationships'
-const CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
-const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml'
-
-interface ProbeSpec {
-  body?: string
-  document?: string
-  documentRels?: string
-  rootRels?: string
-  parts?: Record<string, string | Uint8Array>
-  overrides?: string
-}
-
-function rel(id: string, tail: string, target: string, extra = '') {
-  return `<Relationship Id="${id}" Type="${R}/${tail}" Target="${target}"${extra}/>`
-}
-
-function override(partName: string, tail: string) {
-  return `<Override PartName="${partName}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${tail}+xml"/>`
-}
-
-async function probePackage(spec: ProbeSpec): Promise<Uint8Array> {
-  const zip = new JSZip()
-  zip.file(
-    '[Content_Types].xml',
-    `<?xml version="1.0"?><Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${spec.overrides ?? ''}</Types>`,
-  )
-  zip.file(
-    '_rels/.rels',
-    `<Relationships xmlns="${PKG_R}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/>${spec.rootRels ?? ''}</Relationships>`,
-  )
-  zip.file(
-    'word/document.xml',
-    spec.document ??
-      `<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:w14="${W14}"><w:body><w:p><w:r><w:t>Visible.</w:t></w:r></w:p>${spec.body ?? ''}</w:body></w:document>`,
-  )
-  zip.file(
-    'word/_rels/document.xml.rels',
-    `<Relationships xmlns="${PKG_R}">${spec.documentRels ?? ''}</Relationships>`,
-  )
-  for (const [name, source] of Object.entries(spec.parts ?? {})) {
-    zip.file(name, source)
-  }
-  return zip.generateAsync({ type: 'uint8array' })
-}
-
-/**
- * A clean export: every emitted part is searched for the probe needles,
- * and the visible marker text must survive.
- */
-async function expectClean(spec: ProbeSpec, needles: string[]) {
-  const document = await parseDocx(await probePackage(spec))
-  const bytes = await buildShareSafeDocx(document)
-  const zip = await JSZip.loadAsync(bytes)
-  const found: string[] = []
-  let story = ''
-  for (const [name, file] of Object.entries(zip.files)) {
-    if (file.dir) continue
-    const payload = await file.async('uint8array')
-    const text = new TextDecoder('utf-8', { fatal: false }).decode(payload)
-    for (const needle of needles) {
-      if (text.includes(needle)) found.push(`${name}:${needle}`)
-    }
-    if (name === 'word/document.xml') story = text
-  }
-  expect(found).toEqual([])
-  expect(story).toContain('Visible.')
-}
-
-async function expectRefusal(spec: ProbeSpec) {
-  const document = await parseDocx(await probePackage(spec))
-  await expect(buildShareSafeDocx(document)).rejects.toBeInstanceOf(
-    ShareSafeRefusal,
-  )
-}
+import { buildShareSafeDocx, parseDocx } from './index'
+import {
+  expectClean,
+  expectRefusal,
+  override,
+  probePackage,
+  rel,
+  W,
+} from './share-safe-probe-kit'
 
 describe('share-safe probes: lexical channels the parser never models', () => {
   // Canonical emission rebuilds every part from the element tree, so
@@ -437,6 +367,7 @@ describe('share-safe probes: package-level escapes', () => {
         documentRels: rel('rId9', 'image', 'media/img1.png'),
         body: '<w:p><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:blipFill><a:blip r:embed="rId9"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>',
         parts: { 'word/media/img1.png': png },
+        overrides: '<Default Extension="png" ContentType="image/png"/>',
       }),
     )
     const bytes = await buildShareSafeDocx(document)

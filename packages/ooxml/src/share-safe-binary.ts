@@ -2,13 +2,15 @@ import type { SourcePart } from './model'
 import { refuseShareSafe } from './share-safe-refusal'
 
 /**
- * Binary payload policy: a kept image or font ships only when its bytes
- * parse as the format its part name declares, and for PNG, JPEG and GIF
- * the payload is rewritten metadata-free — every chunk or segment a
- * reader does not need to render the pixels is cut, so a `tEXt` record,
- * an EXIF block or a GIF comment cannot carry bytes across the boundary.
- * Formats this build cannot inspect — TIFF, WMF, EMF, obfuscated
- * `odttf` fonts — refuse rather than ship unverifiable payload.
+ * Binary payload policy: a kept image ships only when its bytes parse as
+ * the format its part name declares, and the payload is rewritten
+ * metadata-free — every chunk or segment a reader does not need to render
+ * the pixels is cut, so a `tEXt` record, an `sPLT`/`iCCP` block, an EXIF
+ * block or a GIF comment cannot carry bytes across the boundary.
+ * Formats this build cannot inspect and re-serialise — BMP, ICO, TIFF,
+ * WMF, EMF, embedded fonts — never ship: a magic byte is not format
+ * verification, and a format whose payload this layer cannot bound is a
+ * carrier for arbitrary appended data.
  */
 
 const IMAGE_FORMATS = new Map<string, string>([
@@ -16,16 +18,7 @@ const IMAGE_FORMATS = new Map<string, string>([
   ['jpg', 'jpeg'],
   ['jpeg', 'jpeg'],
   ['gif', 'gif'],
-  ['bmp', 'bmp'],
-  ['ico', 'ico'],
 ])
-
-const FONT_MAGICS: readonly (readonly number[])[] = [
-  [0x00, 0x01, 0x00, 0x00], // TrueType
-  [0x4f, 0x54, 0x54, 0x4f], // 'OTTO' — OpenType CFF
-  [0x74, 0x72, 0x75, 0x65], // 'true'
-  [0x74, 0x74, 0x63, 0x66], // 'ttcf'
-]
 
 function hasMagic(payload: Uint8Array, magic: readonly number[]) {
   return (
@@ -50,26 +43,13 @@ export function inspectBinaryPayload(
 ): Uint8Array | undefined {
   const payload = part.originalPayload
   if (relationshipTail === 'font') {
-    const extension = partExtension(part)
-    if (extension === 'odttf') {
-      refuseShareSafe(
-        'opaque-payload',
-        `obfuscated font ${part.name} cannot be inspected`,
-      )
-    }
-    if (extension !== 'ttf' && extension !== 'otf' && extension !== 'ttc') {
-      refuseShareSafe(
-        'opaque-payload',
-        `font part ${part.name} is not a format this build can verify`,
-      )
-    }
-    if (!FONT_MAGICS.some((magic) => hasMagic(payload, magic))) {
-      refuseShareSafe(
-        'opaque-payload',
-        `font part ${part.name} does not start with a font signature`,
-      )
-    }
-    return undefined
+    // Embedded font parts are dropped before inspection ever runs — a
+    // font payload is font-program bytes this layer cannot bound. A font
+    // reaching inspection is a planning bug.
+    refuseShareSafe(
+      'opaque-payload',
+      `embedded font ${part.name} cannot be re-serialised metadata-free`,
+    )
   }
   const format = IMAGE_FORMATS.get(partExtension(part))
   if (format === undefined) {
@@ -85,22 +65,6 @@ export function inspectBinaryPayload(
       return stripJpeg(part, payload)
     case 'gif':
       return stripGif(part, payload)
-    case 'bmp':
-      if (!hasMagic(payload, [0x42, 0x4d])) {
-        refuseShareSafe(
-          'opaque-payload',
-          `image part ${part.name} does not start with a bitmap signature`,
-        )
-      }
-      return undefined
-    case 'ico':
-      if (!hasMagic(payload, [0x00, 0x00, 0x01, 0x00])) {
-        refuseShareSafe(
-          'opaque-payload',
-          `image part ${part.name} does not start with an icon signature`,
-        )
-      }
-      return undefined
     default:
       refuseShareSafe(
         'opaque-payload',
@@ -109,7 +73,12 @@ export function inspectBinaryPayload(
   }
 }
 
-/** PNG chunks a reader needs — ancillary metadata is absent by design. */
+/**
+ * PNG chunks a reader needs to render the pixels — ancillary metadata is
+ * absent by design. `iCCP` embeds an opaque profile blob, `sPLT` carries
+ * named palette labels, and `tEXt`/`zTXt`/`iTXt` are free text: none is
+ * rendering-critical, so none ships.
+ */
 const PNG_KEPT_CHUNKS = new Set([
   'IHDR',
   'PLTE',
@@ -119,12 +88,10 @@ const PNG_KEPT_CHUNKS = new Set([
   'gAMA',
   'cHRM',
   'sRGB',
-  'iCCP',
   'sBIT',
   'bKGD',
   'hIST',
   'pHYs',
-  'sPLT',
 ])
 
 function stripPng(part: SourcePart, payload: Uint8Array) {
