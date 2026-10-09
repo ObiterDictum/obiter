@@ -111,6 +111,7 @@ function runRow(
     detection_mode: 'model+supplement',
     replaces_run_id: null,
     replacement_run_id: null,
+    returned_document_version_id: null,
     created_by: ownerUserId,
     created_at: created,
     updated_at: created,

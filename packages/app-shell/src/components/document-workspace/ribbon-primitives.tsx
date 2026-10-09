@@ -120,16 +120,24 @@ export function CaptionButton({
   pressed,
   disabled,
   soon,
+  disabledReason,
   onClick,
 }: {
   label: string
   pressed?: boolean
   disabled?: boolean
   soon?: boolean
+  /** The reason a currently-disabled control is unavailable, published in its
+   * accessible name the way `IconButton` and `RibbonSelect` publish theirs. */
+  disabledReason?: string
   onClick?: () => void
 }) {
   const unavailable = Boolean(soon)
-  const caption = unavailable ? `${label} (not available yet)` : label
+  const caption = unavailable
+    ? `${label} (not available yet)`
+    : disabled && disabledReason
+      ? `${label}: ${disabledReason}`
+      : label
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}

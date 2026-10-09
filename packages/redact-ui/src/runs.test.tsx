@@ -116,6 +116,7 @@ describe('RedactionRunsView', () => {
             status: 'ready_for_review',
             detectionMode: 'heuristics+supplement',
             replacementRunId: 'red_model',
+            returnedDocumentVersionId: null,
             createdAt: '2026-07-09T00:00:00.000Z',
           },
           {

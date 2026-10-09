@@ -30,6 +30,7 @@ import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
 import type {
   DocumentFormatToolbar,
+  DocumentMarkingsToolbar,
   DocumentStructureToolbar,
 } from './ribbon-types'
 
@@ -52,6 +53,21 @@ const DOCUMENT_KINDS = [
   { value: 'skeleton', label: 'Skeleton argument' },
   { value: 'order', label: 'Order' },
 ]
+
+const NO_DOCUMENT_KIND = { value: '', label: 'No type set' }
+
+/**
+ * The stored kind first: a kind this deployment does not list still shows as
+ * itself rather than snapping the select to a value it never chose, and the
+ * user can clear it or re-pick without the stored value being lost on sight.
+ */
+function documentKindOptions(kind: string | null) {
+  const options = [...DOCUMENT_KINDS]
+  if (kind !== null && !options.some((option) => option.value === kind)) {
+    options.push({ value: kind, label: kind })
+  }
+  return [NO_DOCUMENT_KIND, ...options]
+}
 
 export function InsertRibbon({
   commentsOpen,
@@ -256,7 +272,13 @@ export function InsertRibbon({
   )
 }
 
-export function LayoutRibbon({ format }: { format?: DocumentFormatToolbar }) {
+export function LayoutRibbon({
+  format,
+  markings,
+}: {
+  format?: DocumentFormatToolbar
+  markings?: DocumentMarkingsToolbar
+}) {
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -306,17 +328,47 @@ export function LayoutRibbon({ format }: { format?: DocumentFormatToolbar }) {
       <ToolbarGroup label="Document">
         <RibbonSelect
           label="Document type"
-          soon
           className="w-[11rem]"
-          value="advice"
-          options={DOCUMENT_KINDS}
+          value={markings?.markings.documentKind ?? ''}
+          options={documentKindOptions(markings?.markings.documentKind ?? null)}
+          disabled={
+            !markings || markings.pending || Boolean(markings.unavailable)
+          }
+          disabledReason={markings?.unavailable}
+          onChange={(value) =>
+            markings?.onDocumentKind(value === '' ? null : value)
+          }
         />
       </ToolbarGroup>
       <ToolbarGroup label="Marking">
         <ToolbarRow>
-          <CaptionButton label="Draft" soon />
-          <CaptionButton label="Privileged" soon />
-          <CaptionButton label="Without prejudice" soon />
+          <CaptionButton
+            label="Draft"
+            pressed={markings?.markings.draft}
+            disabled={
+              !markings || markings.pending || Boolean(markings.unavailable)
+            }
+            disabledReason={markings?.unavailable}
+            onClick={markings?.onToggleDraft}
+          />
+          <CaptionButton
+            label="Privileged"
+            pressed={markings?.markings.privileged}
+            disabled={
+              !markings || markings.pending || Boolean(markings.unavailable)
+            }
+            disabledReason={markings?.unavailable}
+            onClick={markings?.onTogglePrivileged}
+          />
+          <CaptionButton
+            label="Without prejudice"
+            pressed={markings?.markings.withoutPrejudice}
+            disabled={
+              !markings || markings.pending || Boolean(markings.unavailable)
+            }
+            disabledReason={markings?.unavailable}
+            onClick={markings?.onToggleWithoutPrejudice}
+          />
         </ToolbarRow>
       </ToolbarGroup>
       <ToolbarGroup label="Paragraph">

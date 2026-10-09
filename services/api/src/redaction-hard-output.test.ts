@@ -65,6 +65,7 @@ function run(
     detectionMode: 'model+supplement',
     replacesRunId: null,
     replacementRunId: null,
+    returnedDocumentVersionId: null,
     createdBy: 'usr_1',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

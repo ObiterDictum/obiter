@@ -322,6 +322,13 @@ function DesktopRedactionReviewRoute() {
           params: { runId: replacementRunId },
         })
       }
+      onOpenDocument={(run) => {
+        if (!run.documentId || !run.matterId) return
+        void navigate({
+          to: '/matters/$matterId/documents/$documentId',
+          params: { matterId: run.matterId, documentId: run.documentId },
+        })
+      }}
     />
   )
 }

@@ -11,6 +11,7 @@ export * from './document-edit-request'
 export * from './document-edit-shared'
 export * from './document-edit-structural'
 export * from './document-lineage'
+export * from './document-markings'
 export * from './document-model'
 export * from './document-tracked-changes'
 // Citation honesty shapes for legal search (additive, optional at the boundary).
@@ -371,6 +372,34 @@ export const redactionOutputResponseSchema = z.object({
 })
 export type RedactionOutputResponse = z.infer<
   typeof redactionOutputResponseSchema
+>
+
+/**
+ * E12 redaction handoff: `baseVersionId` is the document head the caller
+ * believes it is returning onto. The server requires it to equal both the
+ * current version and the version the run redacted — the output artifact is a
+ * complete content replacement, so a moved head is a stale-source conflict,
+ * not something to paper over.
+ */
+export const redactionReturnRequestSchema = z
+  .object({
+    baseVersionId: z.string().min(1).max(255),
+  })
+  .strict()
+export type RedactionReturnRequest = z.infer<
+  typeof redactionReturnRequestSchema
+>
+
+export const redactionReturnResponseSchema = z
+  .object({
+    status: z.enum(['returned', 'already_returned']),
+    documentId: z.string().min(1),
+    versionId: z.string().min(1),
+    versionNumber: z.number().int().positive(),
+  })
+  .strict()
+export type RedactionReturnResponse = z.infer<
+  typeof redactionReturnResponseSchema
 >
 
 export type Tone = 'ink' | 'sage' | 'amber' | 'rust'

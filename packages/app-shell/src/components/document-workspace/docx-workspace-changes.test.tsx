@@ -289,6 +289,12 @@ describe('DocxWorkspace change review', () => {
           preservedXmlFragments: [],
           changes: [],
           comments: [],
+          markings: {
+            documentKind: null,
+            draft: false,
+            privileged: false,
+            withoutPrejudice: false,
+          },
         },
       },
       changes: [inserted],

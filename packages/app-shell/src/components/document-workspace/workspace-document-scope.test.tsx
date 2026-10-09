@@ -136,6 +136,12 @@ function model(runs: Array<[string, string]>): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 }
 
