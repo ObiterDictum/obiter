@@ -7107,18 +7107,20 @@
                     <code>TOA</code> is refused identically everywhere, and a
                     deletion that would drop some but not all of a field's
                     boundary markers is refused in the editor, the partition and
-                    the writer — a field may only be removed whole. Marks are
-                    matched on the parsed instruction, so a
-                    <code>TA</code> split across runs or carried by a
-                    <code>w:fldSimple</code> dedupes like the generated literal.
-                    Body-only and refused under tracked changes like the other
-                    generated structures, with the same shared refusal
-                    predicates at ribbon and partition: a citing paragraph that
-                    cannot hold a mark or bookmark blocks the write, and a
-                    refresh refuses a missing or malformed field, edits inside
-                    the covered range, a duplicate queued update, or a
-                    recomputed citation set that is empty. Only occurrences the
-                    writer can mark are captured — a citation typed in a
+                    the writer — a field may only be removed whole, and a story
+                    served without the metadata at all (a pre-field-metadata
+                    server) refuses stored-paragraph removal outright rather
+                    than guessing field-free. Marks are matched on the parsed
+                    instruction, so a <code>TA</code> split across runs or
+                    carried by a <code>w:fldSimple</code> dedupes like the
+                    generated literal. Body-only and refused under tracked
+                    changes like the other generated structures, with the same
+                    shared refusal predicates at ribbon and partition: a citing
+                    paragraph that cannot hold a mark or bookmark blocks the
+                    write, and a refresh refuses a missing or malformed field,
+                    edits inside the covered range, a duplicate queued update,
+                    or a recomputed citation set that is empty. Only occurrences
+                    the writer can mark are captured — a citation typed in a
                     pending-insert paragraph is dropped rather than dangling —
                     and text inside a generated field's result is skipped, so a
                     table never lists its own captured citations. A mark splice

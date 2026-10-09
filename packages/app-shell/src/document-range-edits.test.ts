@@ -152,6 +152,43 @@ describe('a range that would split a stored field', () => {
     // removed set, so the field leaves whole.
     expect(result?.state.deletedParagraphIds).toEqual(['p2', 'p3', 'p4', 'p5'])
   })
+
+  it('refuses a cross-paragraph range on a wire without field metadata', () => {
+    // The model a pre-field-metadata server serves — the same wire minus
+    // the keys the parser now guarantees — cannot prove a removed
+    // paragraph carries no field marker, and the old server has no
+    // writer-side split check, so the removal refuses rather than
+    // guessing field-free.
+    const legacy = JSON.parse(
+      JSON.stringify(
+        doc(para('p1', 'alpha'), para('p2', 'bravo'), para('p3', 'charlie')),
+      ),
+    ) as { stories: Record<string, unknown>[] }
+    for (const story of legacy.stories) {
+      delete story.fields
+      delete story.unanchoredFieldParagraphIds
+    }
+    const wire = legacy as DocumentModelWire
+    expect(
+      applyReplaceDocumentRange(
+        wire,
+        emptyEditorState(),
+        { paragraphId: 'p1', offset: 0 },
+        { paragraphId: 'p3', offset: 1 },
+        'X',
+      ),
+    ).toBeUndefined()
+    // A range inside one paragraph removes nothing, so it still applies.
+    expect(
+      applyReplaceDocumentRange(
+        wire,
+        emptyEditorState(),
+        { paragraphId: 'p1', offset: 0 },
+        { paragraphId: 'p1', offset: 3 },
+        'X',
+      ),
+    ).toBeDefined()
+  })
 })
 
 describe('replacing a range across paragraphs', () => {
