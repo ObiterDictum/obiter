@@ -60,6 +60,49 @@ export function inspectXmlLexemes(xml: string) {
   }
 }
 
+/**
+ * The text an XML consumer reads inside `source[start, end)` — the range an
+ * element's content occupies. Markup constructs are decoded the way a parser
+ * resolves them: comments and processing instructions contribute nothing,
+ * CDATA contributes its literal bytes, entity references in text decode, and
+ * nested element tags are skipped while their own text still counts.
+ */
+export function xmlInnerText(source: string, start: number, end: number) {
+  let cursor = start
+  let text = ''
+  while (cursor < end) {
+    const opening = source.indexOf('<', cursor)
+    if (opening === -1 || opening >= end) {
+      text += decodeXmlReferences(source.slice(cursor, end))
+      break
+    }
+    text += decodeXmlReferences(source.slice(cursor, opening))
+    if (source.startsWith('<!--', opening)) {
+      const close = source.indexOf('-->', opening + 4)
+      if (close === -1 || close > end) throw new Error('Unclosed XML comment')
+      cursor = close + 3
+      continue
+    }
+    if (source.startsWith('<![CDATA[', opening)) {
+      const close = source.indexOf(']]>', opening + 9)
+      if (close === -1 || close > end) throw new Error('Unclosed XML CDATA')
+      text += source.slice(opening + 9, close)
+      cursor = close + 3
+      continue
+    }
+    if (source.startsWith('<?', opening)) {
+      const close = source.indexOf('?>', opening + 2)
+      if (close === -1 || close > end) {
+        throw new Error('Unclosed XML processing instruction')
+      }
+      cursor = close + 2
+      continue
+    }
+    cursor = findXmlTagEnd(source, opening + 1)
+  }
+  return text
+}
+
 export function decodeXmlReferences(value: string) {
   const reference = /&(?:#(\d+)|#x([\da-fA-F]+)|(amp|apos|gt|lt|quot));/gy
   let cursor = 0

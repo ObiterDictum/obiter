@@ -63,6 +63,7 @@ export function IconButton({
   disabled,
   soon,
   disabledReason,
+  hint,
   onClick,
   icon,
 }: {
@@ -71,6 +72,9 @@ export function IconButton({
   disabled?: boolean
   soon?: boolean | string
   disabledReason?: string
+  /** What the action does beyond its label — shown in the tooltip, e.g.
+   * the limits a share-safe export imposes. */
+  hint?: string
   onClick?: () => void
   icon: ReactNode
 }) {
@@ -83,6 +87,9 @@ export function IconButton({
         : disabled && disabledReason
           ? `${label}: ${disabledReason}`
           : label
+  // A hint discloses what the action does beyond its name — it lives in the
+  // tooltip, not the accessible name, so `label` queries keep working.
+  const tooltip = hint ? `${caption}: ${hint}` : caption
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
@@ -110,7 +117,7 @@ export function IconButton({
       >
         {button}
       </TooltipTrigger>
-      <TooltipContent>{caption}</TooltipContent>
+      <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
   )
 }

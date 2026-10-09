@@ -6,6 +6,7 @@ import {
   parseDocx,
   serialiseDocxWithComments,
   ShareSafeRefusal,
+  type ShareSafeRefusalReason,
   validateCommentAnchor,
   type ImportedThreadReply,
 } from '@obiter/ooxml'
@@ -53,9 +54,11 @@ export class DocumentExportError extends DocumentArtifactStoreError {
  * 422 `share_safe_export_refused`: a refusal, not a broken export.
  */
 export class ShareSafeExportRefusalError extends DocumentExportError {
-  readonly refusalReason: string
+  /** The bounded policy class — safe for telemetry; carries no part names,
+   * attribute values or document text. */
+  readonly refusalReason: ShareSafeRefusalReason
 
-  constructor(reason: string) {
+  constructor(reason: ShareSafeRefusalReason) {
     super()
     this.name = 'ShareSafeExportRefusalError'
     this.refusalReason = reason
@@ -180,7 +183,9 @@ async function shareSafeBytes(source: Buffer) {
     }
   } catch (error) {
     if (error instanceof ShareSafeRefusal) {
-      throw new ShareSafeExportRefusalError(error.message)
+      // `reason` is the bounded class — the free-text detail can name parts
+      // and shapes from the private package, so it never leaves the layer.
+      throw new ShareSafeExportRefusalError(error.reason)
     }
     throw new DocumentExportError()
   }

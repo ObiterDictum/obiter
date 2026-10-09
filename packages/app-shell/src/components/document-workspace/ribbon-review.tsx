@@ -394,6 +394,7 @@ export function ReviewRibbon({
           />
           <IconButton
             label="Share-safe export"
+            hint="Removes metadata and comments, and unlinks external hyperlinks"
             onClick={onExportShareSafe}
             icon={<LockSimple size={16} aria-hidden />}
           />

@@ -3156,16 +3156,30 @@
                     allow-list, so an unreferenced payload is dropped and a
                     declared part the allow-list does not place refuses the
                     export rather than guessing (422
-                    <code>share_safe_export_refused</code>). The same inventory
-                    refuses tracked changes anywhere in the package, hidden
-                    content, embedded objects, external relationships and field
-                    instructions that fetch external resources. Comments and
-                    their satellite parts, thumbnails, signatures, authorship
-                    and provenance metadata are removed or rewritten, and the
-                    product's own <code>obiter.*</code> marking properties are
-                    canonicalised — the only custom properties retained. The
-                    transformed clone is then reparsed and re-inventoried before
-                    it is served. The download name gains a
+                    <code>share_safe_export_refused</code>). Inside each kept
+                    part a second, element-level allow-list bounds what may
+                    exist: root namespaces and embedded element namespaces are
+                    validated per part family (strict-OOXML content refuses),
+                    revision and permission markup refuses in every shape,
+                    hidden-content surfaces (vanish flags, hidden rows,
+                    conditional table styles, hidden drawing objects) refuse,
+                    relationship-namespace attributes must resolve to
+                    declarations that survive, and field instructions — read
+                    semantically through CDATA, comments and split runs — are
+                    bounded to a field-class allow-list. External hyperlinks are
+                    unlinked to their visible text; comments and their satellite
+                    parts, thumbnails, signatures, settings provenance and
+                    editing identifiers (<code>rsid*</code>,
+                    <code>w14</code>/<code>w15+</code>
+                    ids) are removed; foreign attributes on kept elements are
+                    stripped; core and app properties are re-emitted as
+                    canonical bare roots; and the product's own
+                    <code>obiter.*</code> marking properties are canonicalised —
+                    the only custom properties retained. The transformed clone
+                    is then reparsed and re-inventoried before it is served. A
+                    refusal logs its bounded reason class internally — never the
+                    detail, which may name private package internals — and the
+                    client sees only the generic 422. The download name gains a
                     <code>-share-safe</code> suffix.
                   </td>
                 </tr>
