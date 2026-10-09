@@ -49,6 +49,8 @@ describe('marginStoryVisible', () => {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       }),
     ).toBe(true)
   })

@@ -7,6 +7,7 @@ import {
 import { formattedModel } from '../../document-format-edits'
 import {
   batchParagraphDeletions,
+  FIELD_BOUNDARY_MESSAGE,
   LAST_NOTE_PARAGRAPH_MESSAGE,
   LAST_PARAGRAPH_MESSAGE,
   PENDING_STRUCTURE_MESSAGE,
@@ -118,6 +119,7 @@ function deleteReasonForParagraph(
     deletedParagraphIds,
     paragraphId,
   )
+  if (refusal === 'field-boundary') return FIELD_BOUNDARY_MESSAGE
   if (refusal === 'last-note-paragraph') return LAST_NOTE_PARAGRAPH_MESSAGE
   if (refusal === 'last-paragraph') return LAST_PARAGRAPH_MESSAGE
   if (

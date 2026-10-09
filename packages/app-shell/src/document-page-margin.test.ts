@@ -30,6 +30,8 @@ describe('headerLetterhead', () => {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     expect(headerLetterhead(story, [])).toEqual({
       pictures: [logo],
@@ -53,6 +55,8 @@ describe('headerLetterhead', () => {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     expect(headerLetterhead(story, [])).toBeUndefined()
   })
@@ -84,6 +88,8 @@ describe('headerLetterhead', () => {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     expect(headerLetterhead(story, tables)).toBeUndefined()
   })
@@ -136,6 +142,8 @@ describe('footerLetterhead', () => {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     expect(footerLetterhead(story)?.rows).toEqual([
       { left: '+44111', right: 'www.example.com' },
@@ -190,6 +198,8 @@ describe('footerLetterhead', () => {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     expect(footerLetterhead(story)?.rows).toEqual([
       { left: '+44111', right: 'www.example.com' },
@@ -247,6 +257,8 @@ describe('footerLetterhead', () => {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     expect(footerLetterhead(story)?.rows).toEqual([
       { left: '+44111', right: 'www.example.com' },
@@ -273,6 +285,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/footer1.xml',
@@ -285,6 +299,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],
@@ -314,6 +330,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/header1.xml',
@@ -326,6 +344,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],
@@ -355,6 +375,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/header1.xml',
@@ -367,6 +389,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],
@@ -398,6 +422,8 @@ describe('marginBandHeights', () => {
           preservedXmlFragments: [
             '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>',
           ],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/header1.xml',
@@ -410,6 +436,8 @@ describe('marginBandHeights', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],
@@ -446,6 +474,8 @@ describe('footerBandFill', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         [],
       ),

@@ -74,6 +74,8 @@ const model: DocumentModelWire = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],

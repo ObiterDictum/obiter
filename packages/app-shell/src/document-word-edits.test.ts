@@ -28,6 +28,8 @@ const twoParagraphs: DocumentModelWire = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],
@@ -84,6 +86,8 @@ describe('applyDeleteBackward', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],
@@ -119,6 +123,80 @@ describe('applyDeleteForward', () => {
     expect(result?.state.extraRuns.p1).toEqual([
       { id: 'r2', text: 'World', preservedXmlFragments: [] },
     ])
+  })
+})
+
+describe('field-boundary joins', () => {
+  // p2 holds the field's begin/separate, p4 its end; joining deletes the
+  // joined paragraph's element wholesale.
+  const fieldModel: DocumentModelWire = {
+    version: 1,
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: ['p1', 'p2', 'p3', 'p4', 'p5'].map((id) => ({
+          id,
+          runs: [{ id: `${id}-r`, text: id, preservedXmlFragments: [] }],
+          preservedXmlFragments: [],
+        })),
+        preservedXmlFragments: [],
+        fields: [
+          {
+            headId: 'p2',
+            tailId: 'p4',
+            closed: true,
+            boundaryIds: ['p2', 'p4'],
+            paragraphIds: ['p2', 'p3', 'p4'],
+            resultIds: ['p2', 'p3'],
+            instruction: ' TOA \\h \\c "1" ',
+            rangeReplaceable: true,
+            boundariesAnchored: true,
+          },
+        ],
+        unanchoredFieldParagraphIds: [],
+      },
+    ],
+    styles: [],
+    numbering: [],
+    relationships: [],
+    preservedXmlFragments: [],
+    changes: [],
+    comments: [],
+  }
+
+  it('refuses to join away a paragraph holding only one boundary', () => {
+    // Backspace at the start of the tail would merge it into p3 and drop
+    // the field's `end` while `begin` survives — the join is refused.
+    expect(
+      applyDeleteBackward(fieldModel, emptyEditorState(), {
+        paragraphId: 'p4',
+        offset: 0,
+      }),
+    ).toBeUndefined()
+    // The same hold applies in the other direction: joining the head away.
+    expect(
+      applyDeleteForward(fieldModel, emptyEditorState(), {
+        paragraphId: 'p1',
+        offset: 2,
+      }),
+    ).toBeUndefined()
+    // A delete inside the text — no join — is unaffected.
+    expect(
+      applyDeleteForward(fieldModel, emptyEditorState(), {
+        paragraphId: 'p1',
+        offset: 1,
+      }),
+    ).toBeDefined()
+  })
+
+  it('joins the boundary away once the rest of the field is marked', () => {
+    const result = applyDeleteBackward(
+      fieldModel,
+      { ...emptyEditorState(), deletedParagraphIds: ['p2', 'p3'] },
+      { paragraphId: 'p4', offset: 0 },
+    )
+    expect(result?.state.deletedParagraphIds).toEqual(['p2', 'p3', 'p4'])
   })
 })
 
@@ -185,6 +263,8 @@ describe('applySplitParagraph', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }

@@ -1,5 +1,6 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
+import { fieldBoundarySplit } from './field-spans'
 import { assertNoteStoriesKeepParagraph } from './footnote-edits'
 import {
   OoxmlError,
@@ -7,6 +8,7 @@ import {
   type ParagraphAnchor,
   type TextRunAnchor,
 } from './model'
+import { parseXmlElements } from './parts/overlay'
 
 export type PlannedOperation =
   | (Extract<
@@ -141,6 +143,35 @@ export function validatePlannedOperations(
     }
     if (operation.type === 'delete_paragraph') {
       alreadyDeleted.add(operation.paragraph.wire.id)
+    }
+  }
+
+  // A paragraph deletion removes its element whole: a stored field's
+  // `begin` inside it vanishes while the `end` survives in another
+  // paragraph, leaving markup Word can never pair. The batch may remove a
+  // field only whole — every boundary marker inside the removed ranges —
+  // and a tracked delete counts the same, since markup wrapped in `w:del`
+  // is deleted as far as Word's field pairing is concerned.
+  const deleteRangesByPart = new Map<string, { start: number; end: number }[]>()
+  for (const operation of planned) {
+    if (operation.type !== 'delete_paragraph') continue
+    const ranges = deleteRangesByPart.get(operation.paragraph.partName) ?? []
+    ranges.push(operation.paragraph.paragraphRange)
+    deleteRangesByPart.set(operation.paragraph.partName, ranges)
+  }
+  for (const [partName, ranges] of deleteRangesByPart) {
+    const part = document.sourceParts.get(partName)
+    if (part?.kind !== 'xml' || part.overlay === undefined) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+    if (
+      fieldBoundarySplit(
+        parseXmlElements(part.overlay.source),
+        part.overlay.source,
+        ranges,
+      )
+    ) {
+      throw new OoxmlError('invalid-document-edit')
     }
   }
   return deletedIds

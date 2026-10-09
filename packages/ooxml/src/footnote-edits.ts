@@ -169,6 +169,8 @@ function ensureFootnotesStory(
     kind: 'footnotes',
     paragraphs: [],
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
   for (const entry of SEPARATOR_ENTRIES) {
     const paraId = nextSyntheticParaId(part.overlay)

@@ -23,6 +23,8 @@ const header = {
   kind: 'header' as const,
   paragraphs: [paragraph('h1', 'Running head')],
   preservedXmlFragments: [] as string[],
+  fields: [],
+  unanchoredFieldParagraphIds: [],
 }
 
 const model: DocumentModelWire = {
@@ -33,6 +35,8 @@ const model: DocumentModelWire = {
       kind: 'document',
       paragraphs: [paragraph('p1', 'Body text')],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
     header,
   ],
@@ -120,6 +124,8 @@ describe('an open margin story', () => {
           kind: 'document',
           paragraphs: [paragraph('p1', 'Body text')],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         fieldHeader,
       ],

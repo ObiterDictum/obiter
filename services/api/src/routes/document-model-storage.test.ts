@@ -75,6 +75,10 @@ describe('GET /api/documents/:id/model storage boundary', () => {
       cachedModelJson.replace(/,"comments":\[.*\]\}$/u, '}'),
     ],
     [
+      'a legacy value without stored field metadata',
+      withoutFieldMetadata(cachedModelJson),
+    ],
+    [
       'a numbering instance without levels',
       numberingWithoutLevels(cachedModelJson),
     ],
@@ -228,5 +232,23 @@ function numberingWithoutLevels(json: string) {
   Reflect.set(value, 'numbering', [
     { numberingId: '1', sourceFragment: '<w:num w:numId="1"/>' },
   ])
+  return JSON.stringify(value)
+}
+
+function withoutFieldMetadata(json: string) {
+  const value: { stories?: unknown } = JSON.parse(json)
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !Array.isArray(value.stories)
+  ) {
+    throw new Error('Cached model JSON is invalid.')
+  }
+  for (const story of value.stories) {
+    if (typeof story !== 'object' || story === null) continue
+    const record: Record<string, unknown> = story
+    delete record.fields
+    delete record.unanchoredFieldParagraphIds
+  }
   return JSON.stringify(value)
 }

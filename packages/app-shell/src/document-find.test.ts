@@ -32,6 +32,8 @@ const model: DocumentModelWire = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],
@@ -88,6 +90,8 @@ describe('find in document', () => {
           kind: 'document',
           paragraphs: [{ id: 'p1', runs: [], preservedXmlFragments: [] }],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }

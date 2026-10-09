@@ -279,6 +279,8 @@ describe('DocxWorkspace change review', () => {
               kind: 'document',
               paragraphs: [{ id: 'p1', runs: [], preservedXmlFragments: [] }],
               preservedXmlFragments: [],
+              fields: [],
+              unanchoredFieldParagraphIds: [],
             },
           ],
           styles: [],

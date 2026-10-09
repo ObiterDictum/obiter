@@ -32,6 +32,8 @@ const body = {
     },
   ],
   preservedXmlFragments: [] as string[],
+  fields: [],
+  unanchoredFieldParagraphIds: [],
 }
 
 const footnotes = {
@@ -42,6 +44,8 @@ const footnotes = {
     '<w:footnote w:type="separator" w:id="-1"><w:p w14:paraId="S"/></w:footnote>',
     '<w:footnote w:id="2"><w:p w14:paraId="N1"/></w:footnote>',
   ],
+  fields: [],
+  unanchoredFieldParagraphIds: [],
 }
 
 const endnotes = {
@@ -51,6 +55,8 @@ const endnotes = {
   preservedXmlFragments: [
     '<w:endnote w:id="3"><w:p w14:paraId="E1"/></w:endnote>',
   ],
+  fields: [],
+  unanchoredFieldParagraphIds: [],
 }
 
 const model: DocumentModelWire = {

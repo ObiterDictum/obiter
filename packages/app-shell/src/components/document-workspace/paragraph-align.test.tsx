@@ -23,6 +23,8 @@ function page(jc: string, text: string): DocumentModelWire {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

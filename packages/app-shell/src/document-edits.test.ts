@@ -37,6 +37,8 @@ const model: DocumentModelWire = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],
@@ -63,6 +65,8 @@ function blankParagraphModel(styleId?: string): DocumentModelWire {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
   }
@@ -429,6 +433,8 @@ describe('paragraph split order', () => {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
   }
@@ -678,6 +684,8 @@ describe('paragraphDeletionRefusal', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }

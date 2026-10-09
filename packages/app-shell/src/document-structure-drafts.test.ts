@@ -104,6 +104,8 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         kind: 'document',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],
@@ -358,6 +360,8 @@ describe('structural save planning', () => {
           kind: 'footnotes',
           paragraphs: [paragraph('fn1')],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }

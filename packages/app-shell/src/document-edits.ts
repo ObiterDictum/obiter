@@ -52,10 +52,18 @@ export const LAST_NOTE_PARAGRAPH_MESSAGE =
 export const PENDING_STRUCTURE_MESSAGE =
   'A pending insertion is removed with Undo, not Delete paragraph.'
 
+/** The one user-facing reason a field-boundary paragraph deletion is
+ * refused: dropping some — but not all — of a stored field's boundary
+ * markers leaves `fldChar` runs Word can never pair. */
+export const FIELD_BOUNDARY_MESSAGE =
+  'This paragraph belongs to a stored field that can only be removed as a whole.'
+
 /** The refusal a paragraph-deletion request can report: `last-paragraph` is
  * the story-level invariant, `last-note-paragraph` the same rule scoped to a
- * single footnote or endnote entry. */
-export type ParagraphDeletionRefusal = 'last-paragraph' | 'last-note-paragraph'
+ * single footnote or endnote entry, `field-boundary` a partial removal of a
+ * stored field's boundary markers. */
+export type ParagraphDeletionRefusal =
+  'last-paragraph' | 'last-note-paragraph' | 'field-boundary'
 
 /** The outcome a paragraph-deletion request reports to the editor. A refusal is
  * typed so callers translate it rather than matching an English message, and so
@@ -64,6 +72,53 @@ export type ParagraphDeletionRefusal = 'last-paragraph' | 'last-note-paragraph'
 export type ParagraphDeletionOutcome =
   | { status: 'deleted'; selectId: string | null }
   | { status: 'refused'; reason: ParagraphDeletionRefusal; selectId: null }
+
+/**
+ * The paragraph ids inside `removedIds` whose removal would split a stored
+ * field, keyed to the refusal reason. Deleting a paragraph removes its
+ * element whole, so a `w:fldChar` or `w:fldSimple` boundary marker inside
+ * it vanishes while the field's other markers survive — markup Word can
+ * never pair. A field whose markers are all inside the removed set dies
+ * whole and stays balanced; anything less refuses each covered id, for
+ * explicit marks and the runless paragraphs a pending replacement removes
+ * alike. The marker sets come from the parser's `story.fields`, so this is
+ * the same pairing the writer's batch validation applies — including the
+ * unanchored fields whose markers reach markup the model never carried.
+ */
+export function fieldBoundaryRefusals(
+  model: DocumentModelWire,
+  removedIds: ReadonlySet<string>,
+): Map<string, string> {
+  const refusals = new Map<string, string>()
+  if (removedIds.size === 0) return refusals
+  for (const story of model.stories) {
+    for (const id of removedIds) {
+      if (story.unanchoredFieldParagraphIds.includes(id)) {
+        refusals.set(id, FIELD_BOUNDARY_MESSAGE)
+      }
+    }
+    for (const field of story.fields) {
+      const covered = field.boundaryIds.filter((id) => removedIds.has(id))
+      if (
+        covered.length > 0 &&
+        (covered.length < field.boundaryIds.length || !field.boundariesAnchored)
+      ) {
+        for (const id of covered) {
+          refusals.set(id, FIELD_BOUNDARY_MESSAGE)
+        }
+      }
+    }
+  }
+  return refusals
+}
+
+/** Whether `removedIds` would leave a stored field half-removed. */
+export function fieldBoundarySplitIds(
+  model: DocumentModelWire,
+  removedIds: ReadonlySet<string>,
+): boolean {
+  return fieldBoundaryRefusals(model, removedIds).size > 0
+}
 
 /** Why deleting `paragraphId` is refused, or null when the effective document
  * still keeps at least one paragraph. `flowParagraphIds` is the single
@@ -90,6 +145,15 @@ export function paragraphDeletionRefusal(
   const story = editableStoryOf(model, anchorId)
   const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
   if (!order.includes(paragraphId)) return null
+  // A paragraph holding part of a stored field's boundary cannot go alone:
+  // the field's other markers survive and Word can never pair them. Marks
+  // already made count toward coverage, so removing the field whole —
+  // every boundary paragraph at once — still composes.
+  if (
+    fieldBoundarySplitIds(model, new Set([...deletedParagraphIds, paragraphId]))
+  ) {
+    return 'field-boundary'
+  }
   if (isNoteStory(story)) {
     // The invariant also holds inside each note entry: a `w:footnote` with no
     // `w:p` child is invalid, so deleting the last surviving paragraph of an
@@ -157,13 +221,16 @@ export function emptiedParagraphDeletes(
  * the same answer instead of deriving its own piece of it.
  *
  * `emptied` names the marks the emptied-story guard refuses, keyed to its
- * reason. `applied` is the marks the save will actually write:
- * `deletedParagraphIds` minus those refusals — a refused mark keeps its
- * paragraph painted and addressable. `effective` adds the runless paragraphs
- * a pending replacement deletes implicitly (`replacedEmptyParagraphIds`):
- * no draft marks them, but the writer's `deletedIds` collects their
- * `delete_paragraph` ops all the same, so a structural check that reads only
- * the marks disagrees with the writer.
+ * reason. `split` names the removals the field-boundary guard refuses the
+ * same way — explicit marks and the runless paragraphs a pending
+ * replacement drops, so the partition can block whichever slot carries the
+ * removal. `applied` is the marks the save will actually write:
+ * `deletedParagraphIds` minus both refusals — a refused mark keeps its
+ * paragraph painted and addressable. `effective` adds the runless
+ * paragraphs a pending replacement deletes implicitly
+ * (`replacedEmptyParagraphIds`): no draft marks them, but the writer's
+ * `deletedIds` collects their `delete_paragraph` ops all the same, so a
+ * structural check that reads only the marks disagrees with the writer.
  *
  * Surfaces asking "does this paragraph still paint or still hold text" read
  * `applied`; surfaces asking "is this paragraph gone after the batch" read
@@ -172,6 +239,14 @@ export function emptiedParagraphDeletes(
 export type BatchParagraphDeletions = {
   /** The marks the emptied-story guard refuses, keyed to the refusal reason. */
   emptied: ReadonlyMap<string, string>
+  /** The removals the field-boundary guard refuses: a delete mark or a
+   * runless paragraph's implicit removal would drop some but not all of a
+   * stored field's boundary markers. */
+  split: ReadonlyMap<string, string>
+  /** The runless paragraphs a pending `extraRuns` replacement removes
+   * implicitly — an `insert_paragraph_after` plus a `delete_paragraph` with
+   * no delete mark — so a removal guard reads them as deletions too. */
+  implicit: ReadonlySet<string>
   /** The deletions the batch will write: marks minus the refused ones. */
   applied: ReadonlySet<string>
   /** Everything the writer treats as gone: `applied` plus implicit replaces. */
@@ -186,16 +261,19 @@ export function batchParagraphDeletions(
   drafts: Record<string, string>,
 ): BatchParagraphDeletions {
   const emptied = emptiedParagraphDeletes(model, inserts, deletedParagraphIds)
-  const applied = new Set(deletedParagraphIds.filter((id) => !emptied.has(id)))
-  const effective = new Set(applied)
-  for (const id of replacedEmptyParagraphIds(
+  const marked = new Set(deletedParagraphIds.filter((id) => !emptied.has(id)))
+  const implicit = replacedEmptyParagraphIds(
     editableStories(model).flatMap((story) => story.paragraphs),
     extraRuns,
     drafts,
-  )) {
-    effective.add(id)
+  )
+  const split = fieldBoundaryRefusals(model, new Set([...marked, ...implicit]))
+  const applied = new Set([...marked].filter((id) => !split.has(id)))
+  const effective = new Set(applied)
+  for (const id of implicit) {
+    if (!split.has(id)) effective.add(id)
   }
-  return { emptied, applied, effective }
+  return { emptied, split, implicit, applied, effective }
 }
 
 export function isDraftDirty(
