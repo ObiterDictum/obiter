@@ -446,6 +446,25 @@ describe('share-safe probes: provenance and binding surfaces', () => {
     expect(rels).not.toContain('SECRETMARK')
   })
 
+  it('drops a declared customXml store: part, properties and rels go', async () => {
+    const parts = await probeOutput({
+      documentRels: rel('rId9', 'customXml', '../customXml/item1.xml'),
+      parts: {
+        'customXml/item1.xml': `<?xml version="1.0"?><store>SECRETSTORE</store>`,
+        'customXml/itemProps1.xml': `<?xml version="1.0"?><ds:datastoreItem xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>`,
+      },
+    })
+    // A declared store is dead payload — every Word save carries a
+    // bibliography customXml — so part, properties and rels go while the
+    // document's bound markup is stripped at element level.
+    expect(parts.has('customXml/item1.xml')).toBe(false)
+    expect(parts.has('customXml/itemProps1.xml')).toBe(false)
+    expect(parts.get('word/_rels/document.xml.rels') ?? '').not.toContain(
+      'customXml',
+    )
+    expect(parts.get('word/document.xml')).toContain('Visible.')
+  })
+
   it('refuses a foreign element inside content-types', async () => {
     const zip = new JSZip()
     zip.file(

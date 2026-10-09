@@ -21,10 +21,13 @@ export { ShareSafeRefusal }
  * outside the package.
  *
  * `applyShareSafePlan` then rewrites the clone: comment surfaces and their
- * markers go, external hyperlinks unwrap to their text, attached templates
- * detach, package metadata is emptied or canonicalised, settings lose their
- * provenance elements, and editing provenance (`rsid*`/`w14` ids) leaves
- * every start tag.
+ * markers go, `customXml` stores and glossary parts drop with the markup
+ * that bound to them, external hyperlinks unwrap to their text, attached
+ * templates detach, package metadata is emptied or canonicalised, settings
+ * lose their provenance elements, and editing provenance (`rsid*`/`w14`
+ * ids) leaves every start tag. Kept XML is re-emitted canonically from the
+ * parsed element model — nothing lexical the parser never modelled can
+ * reach the output — and image payloads are re-serialised metadata-free.
  *
  * `verifyShareSafePackage` re-parses the finished bytes and re-runs the
  * inventory against them — the output must already be clean, because the
@@ -38,8 +41,7 @@ export { ShareSafeRefusal }
  *  - embedded objects, ActiveX controls, `w:altChunk`, OLE: opaque payloads;
  *  - external relationships other than detachable hyperlinks and attached
  *    templates — an external image or included text would fetch;
- *  - `customXml` payloads and every relationship type outside the
- *    allow-list;
+ *  - every relationship type outside the allow-list or the drop set;
  *  - ambiguous structure: case-variant part names, duplicated unique
  *    relationships, a part declared under two roles, dangling pointers;
  *  - fields that fetch (`INCLUDETEXT`, `INCLUDEPICTURE`, `LINK`, `DDE`,

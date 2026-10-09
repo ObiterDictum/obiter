@@ -1,15 +1,19 @@
 import type { DocumentRelationshipWire } from '@obiter/contracts'
 
-import type { OoxmlDocument, SourcePart } from './model'
+import { OoxmlError, type OoxmlDocument, type SourcePart } from './model'
 import {
   CUSTOM_PROPERTIES_NAMESPACE,
   CUSTOM_PROPERTIES_PART,
 } from './parts/custom-properties'
+import { adoptOrphanedCustomPropertiesPart } from './parts/custom-properties-write'
 import { parseXmlElements } from './parts/overlay'
 import {
   relationshipSourcePartName,
   resolveRelationshipTarget,
 } from './parts/rels'
+import { attributeValue, isWord, WORD_NAMESPACE } from './parts/xml-elements'
+import { inspectBinaryPayload } from './share-safe-binary'
+import { analyseShareSafePart } from './share-safe-content'
 import {
   CONTENT_TYPES_NAMESPACE,
   CONTENT_TYPES_PART,
@@ -21,7 +25,6 @@ import {
   type ShareSafePlan,
 } from './share-safe-parts'
 import { refuseShareSafe } from './share-safe-refusal'
-import { scanXmlSurface } from './share-safe-scan'
 
 const OFFICE_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -52,7 +55,7 @@ function tryResolveTarget(relationship: DocumentRelationshipWire) {
  * ships only when a recognised relationship type reaches it through the
  * package graph — from `_rels/.rels` down through kept parts' own `.rels` —
  * its declared root matches the role, and its XML surface passes the
- * element-level scan in `share-safe-scan`. Otherwise it is dropped
+ * element-level analysis in `share-safe-content`. Otherwise it is dropped
  * (recognised residue classes and unreachable payloads) or the export is
  * refused (declared content outside the allow-list, ambiguity a reader
  * could resolve the unsafe way, or material this layer cannot verify).
@@ -82,9 +85,15 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     dispositions: new Map(),
     stripRelationships: new Map(),
     detachedReferences: new Map(),
+    contentPlans: new Map(),
+    binaryPayloads: new Map(),
+    bookmarkRenames: new Map(),
   }
   const dropped = new Set<string>()
   const uniqueSeen = new Set<string>()
+  // Binary parts carry their relationship's tail through to payload
+  // inspection — an `image` and a `font` read their bytes differently.
+  const binaryTails = new Map<string, string>()
 
   const relationshipsByOwner = new Map<string, DocumentRelationshipWire[]>()
   for (const relationship of document.model.relationships) {
@@ -128,21 +137,36 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
       }
 
       const external = isExternal(relationship)
-      if (tail === 'hyperlink' || tail === 'attachedTemplate') {
-        // Both are detachable: an external hyperlink unwraps to its text and
-        // an attached template is dropped with its pointer. A hyperlink
-        // relationship without an external target is not a shape Word
-        // writes — ambiguous, so it refuses.
+      if (
+        tail === 'hyperlink' ||
+        tail === 'attachedTemplate' ||
+        tail === 'printerSettings'
+      ) {
+        // All three are detachable: an external hyperlink unwraps to its
+        // text, an attached template and a printer-settings record drop
+        // with their pointers. A hyperlink relationship without an
+        // external target is not a shape Word writes — ambiguous, so it
+        // refuses; a printer-settings pointer that escapes the package is
+        // an external reference like any other.
         if (tail === 'hyperlink' && !external) {
           refuseShareSafe(
             'malformed-package',
             'hyperlink relationship without an external target is ambiguous',
           )
         }
+        if (tail === 'printerSettings' && external) {
+          refuseShareSafe(
+            'external-reference',
+            'printer settings reach outside the package',
+          )
+        }
         strip()
         const detached =
           plan.detachedReferences.get(relationship.sourcePartName) ??
-          new Map<string, 'hyperlink' | 'attachedTemplate'>()
+          new Map<
+            string,
+            'hyperlink' | 'attachedTemplate' | 'printerSettings'
+          >()
         detached.set(relationship.id, tail)
         plan.detachedReferences.set(relationship.sourcePartName, detached)
         const target = tryResolveTarget(relationship)
@@ -202,6 +226,7 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
         reachable.add(target)
         queue.push(target)
       }
+      if (spec.binary) binaryTails.set(target, tail)
     }
   }
 
@@ -284,11 +309,109 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     plan.dispositions.set(name, { kind: 'drop' })
   }
 
+  // An orphaned custom.xml adopted for its markings must declare itself
+  // before the content pass plans `_rels/.rels` and `[Content_Types].xml`
+  // — the declarations it writes land as pending overlay edits, and the
+  // content pass folds them into the text it plans against.
+  for (const [name, disposition] of plan.dispositions) {
+    if (
+      disposition.kind === 'custom-properties' &&
+      disposition.orphaned === true &&
+      document.sourceParts.has(name)
+    ) {
+      try {
+        adoptOrphanedCustomPropertiesPart(document)
+      } catch (cause) {
+        if (cause instanceof OoxmlError) {
+          refuseShareSafe(
+            'malformed-package',
+            'orphaned custom properties could not be declared',
+          )
+        }
+        throw cause
+      }
+    }
+  }
+
+  // Kept binary parts prove their payload before anything is written —
+  // an image is re-serialised metadata-free and a font shows its magic.
+  for (const [name, disposition] of plan.dispositions) {
+    if (disposition.kind === 'drop') continue
+    const part = document.sourceParts.get(name)
+    if (!part || part.kind !== 'binary') continue
+    const tail = binaryTails.get(name)
+    if (tail === undefined) {
+      refuseShareSafe(
+        'malformed-package',
+        `binary part ${name} ships without a classifying relationship`,
+      )
+    }
+    const payload = inspectBinaryPayload(part, tail)
+    if (payload !== undefined) plan.binaryPayloads.set(name, payload)
+  }
+
+  // Every bookmark name the kept surface carries is replaced by a
+  // generated `bm<n>` — collection runs across all word parts first so
+  // the rewrites the content pass records use the complete map.
+  let bookmarkCounter = 0
+  const nextBookmark = () => {
+    bookmarkCounter += 1
+    return `bm${bookmarkCounter}`
+  }
+  for (const [name, part] of document.sourceParts) {
+    const disposition = plan.dispositions.get(name)
+    if (
+      !disposition ||
+      disposition.kind === 'drop' ||
+      part.kind !== 'xml' ||
+      disposition.root?.namespaceUri !== WORD_NAMESPACE
+    ) {
+      continue
+    }
+    let elements
+    try {
+      elements = parseXmlElements(
+        part.overlay?.source ?? decoder.decode(part.originalPayload),
+      )
+    } catch {
+      // The content pass below owns the malformed-package refusal.
+      continue
+    }
+    for (const element of elements) {
+      if (isWord(element, 'bookmarkStart')) {
+        const value = attributeValue(element, WORD_NAMESPACE, 'name')
+        if (value !== undefined && !plan.bookmarkRenames.has(value)) {
+          plan.bookmarkRenames.set(value, nextBookmark())
+        }
+      }
+      if (
+        isWord(element, 'name') &&
+        element.parent !== undefined &&
+        isWord(element.parent, 'ffData')
+      ) {
+        const value = attributeValue(element, WORD_NAMESPACE, 'val')
+        if (value !== undefined && !plan.bookmarkRenames.has(value)) {
+          plan.bookmarkRenames.set(value, nextBookmark())
+        }
+      }
+    }
+  }
+
   for (const [name, disposition] of plan.dispositions) {
     if (disposition.kind === 'drop') continue
     const part = document.sourceParts.get(name)
     if (!part || part.kind !== 'xml') continue
-    scanXmlSurface(document, part, disposition, plan)
+    plan.contentPlans.set(
+      name,
+      analyseShareSafePart(
+        document,
+        part,
+        disposition,
+        plan,
+        dropped,
+        plan.bookmarkRenames,
+      ),
+    )
   }
   return plan
 }

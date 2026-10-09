@@ -3175,11 +3175,17 @@
                     stripped; core and app properties are re-emitted as
                     canonical bare roots; and the product's own
                     <code>obiter.*</code> marking properties are canonicalised —
-                    the only custom properties retained. The transformed clone
-                    is then reparsed and re-inventoried before it is served. A
-                    refusal logs its bounded reason class internally — never the
-                    detail, which may name private package internals — and the
-                    client sees only the generic 422. The download name gains a
+                    the only custom properties retained. Kept XML parts are
+                    re-emitted canonically from the parsed element model rather
+                    than edited in place, so lexical constructs the model never
+                    carried (comments, processing instructions, unused namespace
+                    declarations) cannot reach the output, and image payloads
+                    are re-serialised metadata-free. The serialised bytes are
+                    then reparsed, re-inventoried and re-walked at byte level
+                    before they are served. A refusal logs its bounded reason
+                    class internally — never the detail, which may name private
+                    package internals — and the client sees only the generic
+                    422. The download name gains a
                     <code>-share-safe</code> suffix.
                   </td>
                 </tr>

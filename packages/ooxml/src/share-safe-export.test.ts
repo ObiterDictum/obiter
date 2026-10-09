@@ -252,15 +252,6 @@ describe('share-safe export', () => {
     }
   })
 
-  it('refuses a declared customXml part rather than shipping its payload', async () => {
-    const zip = await fixtureZip()
-    await declarePart(zip, 'customXml', '../customXml/item1.xml')
-    const document = await parseDocx(await zipBytes(zip))
-    await expect(buildShareSafeDocx(document)).rejects.toBeInstanceOf(
-      ShareSafeRefusal,
-    )
-  })
-
   it('drops unreferenced parts instead of shipping them verbatim', async () => {
     const zip = await fixtureZip()
     zip.file(

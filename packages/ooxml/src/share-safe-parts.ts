@@ -2,7 +2,12 @@ import {
   CUSTOM_PROPERTIES_NAMESPACE,
   DOC_PROPS_VT_NAMESPACE,
 } from './parts/custom-properties'
-import { WORD_NAMESPACE, type ExpandedName } from './parts/xml-elements'
+import {
+  WORD_NAMESPACE,
+  type ExpandedName,
+  type XmlAttribute,
+  type XmlElement,
+} from './parts/xml-elements'
 
 export { DOC_PROPS_VT_NAMESPACE }
 
@@ -37,6 +42,54 @@ const DRAWINGML_PREFIX = 'http://schemas.openxmlformats.org/drawingml/2006/'
 const WORD_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/word/'
 const DRAWING_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/drawing/'
 const THEME_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/thememl/'
+
+export const DRAWINGML_PICTURE_NAMESPACE =
+  'http://schemas.openxmlformats.org/drawingml/2006/picture'
+export const WP_DRAWING_NAMESPACE =
+  'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
+export const WPS_NAMESPACE =
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingShape'
+export const WP14_NAMESPACE =
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing'
+export const WPG_NAMESPACE =
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup'
+export const WPC_NAMESPACE =
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas'
+
+/**
+ * The prefix every emitted part spells for a kept namespace. Emission
+ * declares only namespaces the kept elements and attributes actually use,
+ * so an unused `xmlns:` declaration — a byte channel that hides foreign
+ * URIs in source XML — can never reach the output.
+ */
+export const CANONICAL_NAMESPACE_PREFIXES = new Map<string, string>([
+  [WORD_NAMESPACE, 'w'],
+  ['http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'r'],
+  [MATH_NAMESPACE, 'm'],
+  [DRAWINGML_MAIN_NAMESPACE, 'a'],
+  [DRAWINGML_PICTURE_NAMESPACE, 'pic'],
+  [WP_DRAWING_NAMESPACE, 'wp'],
+  [WPS_NAMESPACE, 'wps'],
+  [WPG_NAMESPACE, 'wpg'],
+  [WPC_NAMESPACE, 'wpc'],
+  [WP14_NAMESPACE, 'wp14'],
+  [MARKUP_COMPAT_NAMESPACE, 'mc'],
+  [PACKAGE_REL_NAMESPACE, ''],
+  [CONTENT_TYPES_NAMESPACE, ''],
+  [XML_NAMESPACE_URI, 'xml'],
+])
+
+/**
+ * Namespaces older readers know how to skip only when named in
+ * `mc:Ignorable`. Emitted parts declare the attribute themselves — a
+ * generated, bounded value — when their kept elements draw on one.
+ */
+export const IGNORABLE_NAMESPACES = new Set([
+  WPS_NAMESPACE,
+  WPG_NAMESPACE,
+  WPC_NAMESPACE,
+  WP14_NAMESPACE,
+])
 
 export const PACKAGE_OWNER = ''
 export const PACKAGE_RELATIONSHIPS_PART = '_rels/.rels'
@@ -76,8 +129,37 @@ export type ShareSafePlan = {
   /** relationships part name → relationship ids to remove from it */
   stripRelationships: Map<string, Set<string>>
   /** owning part name → detached relationship ids and their shapes */
-  detachedReferences: Map<string, Map<string, 'hyperlink' | 'attachedTemplate'>>
+  detachedReferences: Map<string, Map<string, DetachedReferenceShape>>
+  /**
+   * Per kept XML part, the content decisions the emitter applies: elements
+   * removed or unwrapped, field instructions rewritten. Computed once at
+   * plan time so scan and transform can never disagree.
+   */
+  contentPlans: Map<string, ShareSafeContentPlan>
+  /** Binary parts rewritten in place (stripped image metadata). */
+  binaryPayloads: Map<string, Uint8Array>
+  /** Bookmark names replaced by generated `bm<n>` values. */
+  bookmarkRenames: Map<string, string>
 }
+
+/**
+ * What a part's emission stage needs to know — computed while the plan
+ * scans the parsed surface. `removed` elements never emit, `unwrapped`
+ * elements emit their children but no tags, `textOverrides` replace an
+ * element's content, and `attrOverrides` rewrite (`string`) or drop
+ * (`undefined`) an attribute.
+ */
+export type ShareSafeContentPlan = {
+  /** The parsed element tree the emitter and verifier walk. */
+  elements: XmlElement[]
+  removed: Set<XmlElement>
+  unwrapped: Set<XmlElement>
+  textOverrides: Map<XmlElement, string>
+  attrOverrides: Map<XmlAttribute, string | undefined>
+}
+
+export type DetachedReferenceShape =
+  'hyperlink' | 'attachedTemplate' | 'printerSettings'
 
 const w = (localName: string): ExpandedName => ({
   namespaceUri: WORD_NAMESPACE,
@@ -190,6 +272,15 @@ export const DROP_RELATIONSHIP_TAILS = new Set([
   'signature',
   'origin',
   'certificate',
+  // Effects-only style sheets, customXml datastores (Word writes a
+  // bibliography store into nearly every document it saves) and the
+  // building-block glossary are dead payload in a share-safe copy: nothing
+  // inside them ships, and the markup that bound to them is stripped at
+  // element level.
+  'stylesWithEffects',
+  'customXml',
+  'customXmlProps',
+  'glossaryDocument',
 ])
 
 /**

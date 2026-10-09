@@ -5,27 +5,30 @@ import {
 } from './parts/custom-properties'
 import { parseXmlElements } from './parts/overlay'
 import { resolveRelationshipTarget } from './parts/rels'
-import { attributeValue, isWord, type XmlElement } from './parts/xml-elements'
+import { attributeValue } from './parts/xml-elements'
 import { parseDocx } from './parse'
+import { verifyBinaryPayload } from './share-safe-binary'
+import { checkShareSafeXmlBytes } from './share-safe-bytecheck'
 import { planShareSafeCopy } from './share-safe-inventory'
-import {
-  shareSafePartFamily,
-  type ShareSafePartDisposition,
-} from './share-safe-parts'
-import {
-  shareSafeAttributeVerdict,
-  shareSafeElementVerdict,
-} from './share-safe-policy'
 import { refuseShareSafe } from './share-safe-refusal'
 
-const COMMENT_RESIDUE_PART =
-  /(^|\/)(comments|commentsExtended|commentsIds|commentsExtensible|commentsAuthors|people)[^/]*\.xml$/iu
+/**
+ * Parts that may never ride in the emitted package — comment surfaces,
+ * people records, thumbnails, signatures, customXml payloads, glossary
+ * documents, printer settings and the effects-only style sheet.
+ */
+const FORBIDDEN_PART =
+  /(^|\/)(comments|commentsExtended|commentsIds|commentsExtensible|commentsAuthors|people)[^/]*\.xml$|\/(glossary|customXml|stylesWithEffects)\/|\/printerSettings\.|\/_xmlsignatures?\/|^docProps\/thumbnail\.|_xmlsignatures\//iu
+
+const decoder = new TextDecoder('utf-8', { fatal: true })
 
 /**
  * The verification half of the policy: re-parse the finished archive and
  * prove the package the recipient opens satisfies the same inventory the
- * copy was built from — no removed class survived, no external pointer
- * remains, and every part still classifies under the allow-list.
+ * copy was built from. The plan the output replays to must be completely
+ * clean — nothing left to drop, detach, remove or rewrite — and every
+ * emitted part's bytes are re-walked lexeme by lexeme for the constructs
+ * canonical emission promised would be absent.
  */
 export async function verifyShareSafePackage(bytes: Uint8Array) {
   let reparsed: OoxmlDocument
@@ -67,86 +70,75 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
       'a stripped relationship survived sanitisation',
     )
   }
-
-  for (const [name, part] of reparsed.sourceParts) {
+  for (const [name, contentPlan] of plan.contentPlans) {
     if (
-      COMMENT_RESIDUE_PART.test(name) ||
-      /^docProps\/thumbnail\./iu.test(name) ||
-      /^_xmlsignatures\//iu.test(name)
+      contentPlan.removed.size > 0 ||
+      contentPlan.unwrapped.size > 0 ||
+      contentPlan.textOverrides.size > 0 ||
+      contentPlan.attrOverrides.size > 0
     ) {
       refuseShareSafe(
         'unverifiable-output',
-        `comment or preview part ${name} survived`,
+        `${name} still carries content the policy would change`,
       )
     }
-    if (part.kind !== 'xml' || !part.overlay) continue
-    const elements = parseXmlElements(part.overlay.source)
-    const disposition = plan.dispositions.get(name)
-    const family = shareSafePartFamily(elements[0]?.namespaceUri ?? '')
-    verifyXmlResidue(name, elements, family, disposition?.kind ?? 'keep')
-    if (part.role === 'story') verifyStoryResidue(name, elements)
+  }
+
+  // Binary parts re-inspect: the payload must strip to itself.
+  const binaryTails = new Map<string, string>()
+  for (const relationship of reparsed.model.relationships) {
+    const tail = relationship.type.slice(relationship.type.lastIndexOf('/') + 1)
+    if (tail !== 'image' && tail !== 'font') continue
+    try {
+      const target = resolveRelationshipTarget(relationship)
+      if (target !== undefined) binaryTails.set(target, tail)
+    } catch {
+      refuseShareSafe('unverifiable-output', 'a binary target is unresolvable')
+    }
+  }
+  const bookmarkNames = new Set<string>()
+  const anchorTargets: string[] = []
+  for (const [name, part] of reparsed.sourceParts) {
+    if (FORBIDDEN_PART.test(name)) {
+      refuseShareSafe(
+        'unverifiable-output',
+        `forbidden part ${name} survived sanitisation`,
+      )
+    }
+    if (part.kind === 'binary') {
+      const tail = binaryTails.get(name)
+      if (tail === undefined) {
+        refuseShareSafe(
+          'unverifiable-output',
+          `binary part ${name} ships undeclared`,
+        )
+      }
+      verifyBinaryPayload(part, tail)
+      continue
+    }
+    let source: string
+    try {
+      source = part.overlay?.source ?? decoder.decode(part.originalPayload)
+    } catch {
+      refuseShareSafe('unverifiable-output', `${name} cannot be re-read`)
+    }
+    const result = checkShareSafeXmlBytes(part, source)
+    for (const bookmark of result.bookmarkNames) bookmarkNames.add(bookmark)
+    anchorTargets.push(...result.anchorTargets)
+  }
+  // An `w:anchor` pointing at a bookmark that did not ship is a dead
+  // pointer; a name the byte check did not generate was never rewritten.
+  for (const anchor of anchorTargets) {
+    if (!bookmarkNames.has(anchor)) {
+      refuseShareSafe(
+        'unverifiable-output',
+        `anchor ${anchor} names a bookmark that did not ship`,
+      )
+    }
   }
   verifyRelationshipsExternal(reparsed)
   verifyCoreProperties(reparsed)
   verifyCustomProperties(reparsed)
-}
-
-/**
- * Residue an inventory re-scan cannot see: the transform's own work is the
- * suspect. Any element whose policy verdict is `remove`/`unwrap`/`refuse`,
- * and any attribute whose verdict is `strip` or a refuse class, must not
- * appear in the output — the input scan already proved the same vocabulary
- * refused there, so a survivor means the transform dropped nothing or the
- * writer misapplied an edit.
- */
-function verifyXmlResidue(
-  partName: string,
-  elements: readonly XmlElement[],
-  family: ReturnType<typeof shareSafePartFamily>,
-  dispositionKind: ShareSafePartDisposition['kind'],
-) {
-  for (const element of elements) {
-    const verdict = shareSafeElementVerdict(element, family, dispositionKind)
-    if (verdict !== 'keep') {
-      refuseShareSafe(
-        'unverifiable-output',
-        `${element.localName} survived sanitisation in ${partName}`,
-      )
-    }
-    for (const attribute of element.attributes) {
-      const attrVerdict = shareSafeAttributeVerdict(element, attribute)
-      if (attrVerdict === 'strip' || attrVerdict.startsWith('refuse')) {
-        refuseShareSafe(
-          'unverifiable-output',
-          `attribute residue survived in ${partName}`,
-        )
-      }
-      if (
-        attrVerdict === 'relationship-pointer' &&
-        (isWord(element, 'hyperlink') || isWord(element, 'attachedTemplate'))
-      ) {
-        refuseShareSafe(
-          'unverifiable-output',
-          `detached pointer survived in ${partName}`,
-        )
-      }
-    }
-  }
-}
-
-function verifyStoryResidue(partName: string, elements: readonly XmlElement[]) {
-  for (const element of elements) {
-    if (
-      isWord(element, 'commentRangeStart') ||
-      isWord(element, 'commentRangeEnd') ||
-      isWord(element, 'commentReference')
-    ) {
-      refuseShareSafe(
-        'unverifiable-output',
-        `comment marker survived in ${partName}`,
-      )
-    }
-  }
 }
 
 function verifyRelationshipsExternal(document: OoxmlDocument) {
@@ -158,7 +150,11 @@ function verifyRelationshipsExternal(document: OoxmlDocument) {
       )
     }
     const tail = relationship.type.slice(relationship.type.lastIndexOf('/') + 1)
-    if (tail === 'hyperlink' || tail === 'attachedTemplate') {
+    if (
+      tail === 'hyperlink' ||
+      tail === 'attachedTemplate' ||
+      tail === 'printerSettings'
+    ) {
       refuseShareSafe(
         'unverifiable-output',
         'a detached relationship survived sanitisation',
