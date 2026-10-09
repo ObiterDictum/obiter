@@ -191,16 +191,23 @@ describe('document markings in docProps/custom.xml', () => {
     expect(rels?.match(/relationships\/custom-properties/gu)).toHaveLength(1)
   })
 
-  it('refuses a duplicate marking property rather than picking a winner', async () => {
-    await expect(
-      parseDocx(
-        await withDeclaredCustomProperties(
-          customPart(
-            property(2, 'obiter.draft', '<vt:bool>true</vt:bool>') +
-              property(3, 'obiter.draft', '<vt:bool>false</vt:bool>'),
-          ),
+  it('reports a duplicated marking as unreadable rather than picking a winner', async () => {
+    const document = await parseDocx(
+      await withDeclaredCustomProperties(
+        customPart(
+          property(2, 'obiter.draft', '<vt:bool>true</vt:bool>') +
+            property(3, 'obiter.draft', '<vt:bool>false</vt:bool>'),
         ),
       ),
-    ).rejects.toThrow()
+    )
+    expect(document.model.markings.unreadable).toBe(true)
+    expect(document.model.markings.draft).toBe(false)
+  })
+
+  it('reports a malformed custom.xml as unreadable rather than breaking open', async () => {
+    const document = await parseDocx(
+      await withDeclaredCustomProperties('<Properties><property'),
+    )
+    expect(document.model.markings.unreadable).toBe(true)
   })
 })

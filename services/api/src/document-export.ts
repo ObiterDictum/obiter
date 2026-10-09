@@ -22,6 +22,7 @@ import {
 } from './database'
 import { DocumentArtifactStoreError } from './document-artifact-store'
 import {
+  DOWNLOAD_FILENAME_MAX_LENGTH,
   downloadContentDisposition,
   safeDownloadFilename,
 } from './download-filename'
@@ -151,12 +152,18 @@ export function documentExportContentDisposition(filename: string) {
   return downloadContentDisposition(documentExportFilename(filename))
 }
 
+const SHARE_SAFE_SUFFIX = '-share-safe.docx'
+
 export function shareSafeExportFilename(filename: string) {
   const safe = safeDownloadFilename(filename, { extension: '.docx' })
   const stem = safe.replace(/\.docx$/iu, '')
-  return safeDownloadFilename(`${stem}-share-safe.docx`, {
-    extension: '.docx',
-  })
+  // The suffix is part of the length budget: truncating the assembled name
+  // against `.docx` alone would drop `-share-safe` — the marker that tells a
+  // recipient which policy produced the file.
+  const budget = DOWNLOAD_FILENAME_MAX_LENGTH - SHARE_SAFE_SUFFIX.length
+  const trimmed =
+    stem.slice(0, Math.max(1, budget)).replace(/[.\s]+$/u, '') || 'document'
+  return `${trimmed}${SHARE_SAFE_SUFFIX}`
 }
 
 async function shareSafeBytes(source: Buffer) {

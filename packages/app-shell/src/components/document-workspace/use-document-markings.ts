@@ -36,17 +36,19 @@ export function useDocumentMarkings({
 
   const status = save.saveState.status
   const unavailable =
-    update.isPending || status === 'saving'
-      ? 'A save or marking is still being committed.'
-      : status === 'blocked'
-        ? 'The edit history is blocked; resolve it before marking.'
-        : status === 'stale'
-          ? 'The document changed on the server; reload before marking.'
-          : status === 'failed'
-            ? 'The last save failed; resolve it before marking.'
-            : status === 'unsaved'
-              ? 'Save or discard unsaved edits before marking.'
-              : null
+    model.markings.unreadable === true
+      ? 'The stored markings could not be read; marking this copy is disabled.'
+      : update.isPending || status === 'saving'
+        ? 'A save or marking is still being committed.'
+        : status === 'blocked'
+          ? 'The edit history is blocked; resolve it before marking.'
+          : status === 'stale'
+            ? 'The document changed on the server; reload before marking.'
+            : status === 'failed'
+              ? 'The last save failed; resolve it before marking.'
+              : status === 'unsaved'
+                ? 'Save or discard unsaved edits before marking.'
+                : null
 
   const commit = (markings: DocumentMarkingsWire) => {
     if (unavailable) return
@@ -73,15 +75,26 @@ export function useDocumentMarkings({
     )
   }
   const markings = model.markings
+  // The write payload is the strict wire shape — the `unreadable` state flag
+  // never rides into a commit.
+  const write = (
+    patch: Partial<DocumentMarkingsWire>,
+  ): DocumentMarkingsWire => ({
+    documentKind: markings.documentKind,
+    draft: markings.draft,
+    privileged: markings.privileged,
+    withoutPrejudice: markings.withoutPrejudice,
+    ...patch,
+  })
   return {
     markings,
     pending: update.isPending,
     unavailable: unavailable ?? undefined,
-    onDocumentKind: (documentKind) => commit({ ...markings, documentKind }),
-    onToggleDraft: () => commit({ ...markings, draft: !markings.draft }),
+    onDocumentKind: (documentKind) => commit(write({ documentKind })),
+    onToggleDraft: () => commit(write({ draft: !markings.draft })),
     onTogglePrivileged: () =>
-      commit({ ...markings, privileged: !markings.privileged }),
+      commit(write({ privileged: !markings.privileged })),
     onToggleWithoutPrejudice: () =>
-      commit({ ...markings, withoutPrejudice: !markings.withoutPrejudice }),
+      commit(write({ withoutPrejudice: !markings.withoutPrejudice })),
   }
 }

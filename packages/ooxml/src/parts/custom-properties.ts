@@ -1,5 +1,6 @@
 import {
   EMPTY_DOCUMENT_MARKINGS,
+  type DocumentMarkingsState,
   type DocumentMarkingsWire,
   type DocumentRelationshipWire,
 } from '@obiter/contracts'
@@ -51,6 +52,19 @@ const MARKING_PROPERTY_NAMES = new Set([
   MARKING_KIND_PROPERTY,
   ...Object.values(MARKING_FLAG_PROPERTIES),
 ])
+
+/**
+ * The markings allow-list the share-safe export retains. Every other
+ * property — including unknown `obiter.*` names a newer build may have
+ * written — is dropped from the copy: a name this build does not own cannot
+ * be proven safe, and keeping it verbatim would smuggle arbitrary payload.
+ */
+export const MARKING_PROPERTY_TYPES = {
+  [MARKING_KIND_PROPERTY]: 'string',
+  [MARKING_FLAG_PROPERTIES.draft]: 'bool',
+  [MARKING_FLAG_PROPERTIES.privileged]: 'bool',
+  [MARKING_FLAG_PROPERTIES.withoutPrejudice]: 'bool',
+} as const
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -154,38 +168,79 @@ function propertyValueChild(
   return children[0]
 }
 
+/**
+ * Reads the product markings the custom properties part carries. A package
+ * without the part — or one that declares it at a nonstandard target — reads
+ * as unmarked; foreign properties never contribute to markings. A part that
+ * exists but cannot be read honestly — malformed XML, a duplicated or
+ * mistyped product property, competing declarations — degrades to
+ * `unreadable` rather than breaking the open path: opening a document must
+ * not fail on markings state the user never wrote. Writes still fail closed
+ * on the same input.
+ */
 export function readDocumentMarkings(source: {
   model: Pick<OoxmlDocument['model'], 'relationships'>
   sourceParts: ReadonlyMap<string, SourcePart>
-}): DocumentMarkingsWire {
-  const part = customPropertiesPart(
-    source.model.relationships,
-    source.sourceParts,
-  )
+}): DocumentMarkingsState {
+  const unreadable: DocumentMarkingsState = {
+    ...EMPTY_DOCUMENT_MARKINGS,
+    unreadable: true,
+  }
+  let part: SourcePart | null
+  try {
+    part = customPropertiesPart(source.model.relationships, source.sourceParts)
+  } catch {
+    return unreadable
+  }
   if (!part) return { ...EMPTY_DOCUMENT_MARKINGS }
-  const xml = decodePart(part, markingsError)
+
   // One parse: property elements are matched to their vt: children by
-  // identity, so a second parse would never match.
-  const { elements, properties } = storedProperties(xml, markingsError)
+  // identity, so a second parse would never match. The read walks the
+  // property elements directly rather than through `storedProperties` —
+  // that helper insists every property be named, while a nameless *foreign*
+  // property is not a marking this build wrote and must not flip the
+  // unreadable flag.
+  let xml: string
+  let elements: XmlElement[]
+  let root: XmlElement
+  try {
+    xml = decodePart(part, markingsError)
+    elements = parseXmlElements(xml)
+    root = requiredRoot(elements, CUSTOM_PROPERTIES_NAMESPACE, 'Properties')
+  } catch {
+    return unreadable
+  }
+  const properties = elements.filter(
+    (element) =>
+      element.parent === root &&
+      element.namespaceUri === CUSTOM_PROPERTIES_NAMESPACE &&
+      element.localName === 'property',
+  )
   const seen = new Set<string>()
   const markings = { ...EMPTY_DOCUMENT_MARKINGS }
 
-  for (const property of properties) {
-    if (!MARKING_PROPERTY_NAMES.has(property.name)) continue
-    if (seen.has(property.name)) throw markingsError()
-    seen.add(property.name)
-    const value = propertyValueChild(elements, property.element)
-    if (!value) throw markingsError()
+  for (const element of properties) {
+    const name = attributeValue(element, '', 'name')
+    if (name === undefined || !MARKING_PROPERTY_NAMES.has(name)) continue
+    if (seen.has(name)) return unreadable
+    seen.add(name)
+    let value: XmlElement | undefined
+    try {
+      value = propertyValueChild(elements, element)
+    } catch {
+      return unreadable
+    }
+    if (!value) return unreadable
     const text = decodeXmlReferences(
       xml.slice(value.startTagEnd, value.endTagStart),
     )
-    if (property.name === MARKING_KIND_PROPERTY) {
+    if (name === MARKING_KIND_PROPERTY) {
       if (
         value.localName !== 'lpwstr' &&
         value.localName !== 'lpstr' &&
         value.localName !== 'bstr'
       ) {
-        throw markingsError()
+        return unreadable
       }
       // An empty kind is not a kind: it reads as unset rather than failing
       // the wire's min(1).
@@ -193,15 +248,15 @@ export function readDocumentMarkings(source: {
       markings.documentKind = kind === '' ? null : kind
       continue
     }
-    if (value.localName !== 'bool') throw markingsError()
+    if (value.localName !== 'bool') return unreadable
     const flag = text.trim().toLowerCase()
     if (flag !== 'true' && flag !== 'false' && flag !== '1' && flag !== '0') {
-      throw markingsError()
+      return unreadable
     }
     const key = MARKING_FLAG_KEYS.find(
-      (flagKey) => MARKING_FLAG_PROPERTIES[flagKey] === property.name,
+      (flagKey) => MARKING_FLAG_PROPERTIES[flagKey] === name,
     )
-    if (!key) throw markingsError()
+    if (!key) return unreadable
     markings[key] = flag === 'true' || flag === '1'
   }
   return markings
@@ -336,22 +391,7 @@ function ensureCustomPropertiesPart(document: OoxmlDocument) {
   // intact. Anything else at the name is ambiguous and fails closed.
   const orphaned = document.sourceParts.get(CUSTOM_PROPERTIES_PART)
   if (orphaned) {
-    if (orphaned.kind !== 'xml') throw writeError()
-    if (!orphaned.overlay) {
-      orphaned.overlay = createXmlOverlay(decodePart(orphaned, writeError))
-    }
-    storedProperties(orphaned.overlay.source, writeError)
-    ensurePackageRelationship(document, CUSTOM_PROPERTIES_PART)
-    guardRoot(
-      () =>
-        ensureContentTypeOverride(
-          document,
-          CUSTOM_PROPERTIES_PART,
-          CUSTOM_PROPERTIES_CONTENT_TYPE,
-        ),
-      writeError,
-    )
-    return orphaned
+    return adoptOrphanedCustomPropertiesPart(document)
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="${CUSTOM_PROPERTIES_NAMESPACE}" xmlns:vt="${DOC_PROPS_VT_NAMESPACE}"></Properties>`
@@ -376,6 +416,51 @@ function ensureCustomPropertiesPart(document: OoxmlDocument) {
     writeError,
   )
   return part
+}
+
+/**
+ * Declares an orphaned `docProps/custom.xml` — a file at the conventional
+ * name with no package relationship — so it survives as the
+ * custom-properties part. The caller must have already validated the file
+ * as a readable `Properties` part; anything else at the name fails closed.
+ * The share-safe export uses this to keep the part for the product markings
+ * it may carry rather than dropping the file as an unreferenced payload.
+ */
+export function adoptOrphanedCustomPropertiesPart(document: OoxmlDocument) {
+  const orphaned = document.sourceParts.get(CUSTOM_PROPERTIES_PART)
+  if (!orphaned || orphaned.kind !== 'xml') throw writeError()
+  if (!orphaned.overlay) {
+    orphaned.overlay = createXmlOverlay(decodePart(orphaned, writeError))
+  }
+  storedProperties(orphaned.overlay.source, writeError)
+  ensurePackageRelationship(document, CUSTOM_PROPERTIES_PART)
+  guardRoot(
+    () =>
+      ensureContentTypeOverride(
+        document,
+        CUSTOM_PROPERTIES_PART,
+        CUSTOM_PROPERTIES_CONTENT_TYPE,
+      ),
+    writeError,
+  )
+  return orphaned
+}
+
+/**
+ * The canonical serialisation of one marking property. The share-safe copy
+ * rewrites each retained property rather than carrying the original
+ * element, so no foreign attribute survives inside an allowed name.
+ */
+export function markingPropertyXml(
+  pid: number,
+  name: string,
+  value: string | boolean,
+) {
+  const inner =
+    typeof value === 'boolean'
+      ? `<vt:bool xmlns:vt="${DOC_PROPS_VT_NAMESPACE}">${value ? 'true' : 'false'}</vt:bool>`
+      : `<vt:lpwstr xmlns:vt="${DOC_PROPS_VT_NAMESPACE}">${escapeXmlText(value)}</vt:lpwstr>`
+  return propertyXml(pid, name, inner)
 }
 
 /**
