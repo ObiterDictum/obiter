@@ -51,6 +51,20 @@ export const documentMarkingsWireSchema = z
   .strict()
 export type DocumentMarkingsWire = z.infer<typeof documentMarkingsWireSchema>
 
+/**
+ * The markings state a parsed package carries. When the custom-properties
+ * part is present but cannot be read honestly — ambiguous product
+ * properties, a malformed part, competing declarations — the flags fall back
+ * to unset and `unreadable` names the failure rather than hiding it. Foreign
+ * properties that are malformed but unrelated to the product's own names do
+ * not flip the flag: they are not markings this build wrote or can claim.
+ * Marking *writes* still fail closed on every ambiguity.
+ */
+export const documentMarkingsStateSchema = documentMarkingsWireSchema.extend({
+  unreadable: z.literal(true).optional(),
+})
+export type DocumentMarkingsState = z.infer<typeof documentMarkingsStateSchema>
+
 export const EMPTY_DOCUMENT_MARKINGS: DocumentMarkingsWire = {
   documentKind: null,
   draft: false,

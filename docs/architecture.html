@@ -3150,15 +3150,23 @@
                     skipped. Audit records ids, <code>commentCount</code>, and
                     <code>skippedCommentCount</code> only.
                     <code>?mode=share-safe</code> instead returns a sanitised
-                    package through the ooxml share-safe builder: comments and
-                    their parts, identifying authorship metadata, foreign custom
-                    properties, digital signatures and tracking mode are
-                    removed; tracked changes, hidden text, embedded objects and
-                    uninspectable parts refuse the export rather than guessing
-                    (409 <code>share_safe_export_refused</code>). The product's
-                    own <code>obiter.*</code> marking properties are retained,
-                    and the output re-parses clean before it is served. The
-                    download name gains a <code>-share-safe</code> suffix.
+                    package through the ooxml share-safe builder. The builder
+                    enumerates the whole package: every part is classified by
+                    its relationship type and content type against a strict
+                    allow-list, so an unreferenced payload is dropped and a
+                    declared part the allow-list does not place refuses the
+                    export rather than guessing (422
+                    <code>share_safe_export_refused</code>). The same inventory
+                    refuses tracked changes anywhere in the package, hidden
+                    content, embedded objects, external relationships and field
+                    instructions that fetch external resources. Comments and
+                    their satellite parts, thumbnails, signatures, authorship
+                    and provenance metadata are removed or rewritten, and the
+                    product's own <code>obiter.*</code> marking properties are
+                    canonicalised — the only custom properties retained. The
+                    transformed clone is then reparsed and re-inventoried before
+                    it is served. The download name gains a
+                    <code>-share-safe</code> suffix.
                   </td>
                 </tr>
                 <tr>
@@ -3171,7 +3179,11 @@
                     immutable version (audit <code>document.markings</code>).
                     Requires <code>baseVersionId</code>; a moved head answers
                     <code>conflict_detected</code>. The wire keeps unknown
-                    document-kind strings so foreign values survive.
+                    document-kind strings so foreign values survive. Malformed
+                    or ambiguous product properties read back as cleared
+                    markings with <code>unreadable</code> set — the workspace
+                    disables its marking controls and the write stays refused
+                    rather than picking a winner.
                   </td>
                 </tr>
                 <tr>
@@ -3634,6 +3646,16 @@
                   <td>
                     The run is in the wrong state, or finalize aborted because
                     span text no longer matches the document.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">422</td>
+                  <td class="id">share_safe_export_refused</td>
+                  <td>
+                    The share-safe export's package inventory could not prove
+                    the output clean — a declared part class it does not
+                    support, tracked or hidden content, an external fetch. A
+                    refusal, not a broken export.
                   </td>
                 </tr>
                 <tr>

@@ -1,3 +1,8 @@
+import {
+  attributeValue,
+  WORD_NAMESPACE,
+  type XmlElement,
+} from './parts/xml-elements'
 import { decodeXmlReferences } from './xml-lexemes'
 
 /**
@@ -137,6 +142,62 @@ export function fieldInstructionsInXml(xml: string) {
     const buffer = buffers.pop() ?? ''
     separated.pop()
     instructions.push(buffer)
+  }
+  while (buffers.length > 0) {
+    instructions.push(buffers.pop() ?? '')
+    separated.pop()
+  }
+  return instructions
+}
+
+/**
+ * The namespace-aware variant of `fieldInstructionsInXml` for callers that
+ * already hold a parsed element list: field constructs are matched on their
+ * expanded names, so an `instrText` bound to the WordprocessingML namespace
+ * under a different prefix — or a `w:` prefix bound elsewhere — reads
+ * exactly as Word resolves it, not as the literal `w:` spelling suggests.
+ * `source` backs the element offsets, so `instrText` bodies come from the
+ * same document the elements were parsed from.
+ */
+export function fieldInstructionsFromElements(
+  source: string,
+  elements: readonly XmlElement[],
+) {
+  const instructions: string[] = []
+  const buffers: string[] = []
+  const separated: boolean[] = []
+  for (const element of elements) {
+    if (element.namespaceUri !== WORD_NAMESPACE) continue
+    if (element.localName === 'instrText') {
+      const depth = buffers.length - 1
+      if (depth >= 0 && !separated[depth]) {
+        buffers[depth] += decodeXmlReferences(
+          source.slice(element.startTagEnd, element.endTagStart),
+        )
+      }
+      continue
+    }
+    if (element.localName === 'fldSimple') {
+      const instruction = attributeValue(element, WORD_NAMESPACE, 'instr')
+      if (instruction !== undefined) instructions.push(instruction)
+      continue
+    }
+    if (element.localName !== 'fldChar') continue
+    const type = attributeValue(element, WORD_NAMESPACE, 'fldCharType')
+    if (type === 'begin') {
+      buffers.push('')
+      separated.push(false)
+      continue
+    }
+    if (buffers.length === 0) continue
+    if (type === 'separate') {
+      separated[separated.length - 1] = true
+      continue
+    }
+    if (type === 'end') {
+      instructions.push(buffers.pop() ?? '')
+      separated.pop()
+    }
   }
   while (buffers.length > 0) {
     instructions.push(buffers.pop() ?? '')

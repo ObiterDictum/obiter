@@ -72,7 +72,7 @@ export async function serialiseDocxWithComments(
   }
 }
 
-function cloneDocument(document: OoxmlDocument): OoxmlDocument {
+export function cloneDocument(document: OoxmlDocument): OoxmlDocument {
   return {
     model: document.model,
     sourceParts: new Map(
