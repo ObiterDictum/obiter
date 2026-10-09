@@ -40,6 +40,14 @@ export function fieldInstructionName(instruction: string) {
   return first.toUpperCase()
 }
 
+/**
+ * The token's operand value with Word's `"…"`/`«…»` quoting removed —
+ * `fieldInstructionTokens` output carries the raw token spelling.
+ */
+export function fieldInstructionTokenValue(token: string) {
+  return tokenArgument(token)
+}
+
 function tokenArgument(token: string) {
   if (
     (token.startsWith('"') && token.endsWith('"')) ||

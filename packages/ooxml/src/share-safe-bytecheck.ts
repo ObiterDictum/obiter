@@ -7,6 +7,8 @@ import { findXmlTagEnd } from './xml-lexemes'
 import {
   fieldInstructionName,
   fieldInstructionsInXml,
+  fieldInstructionTokens,
+  fieldInstructionTokenValue,
 } from './field-instructions'
 import {
   CANONICAL_NAMESPACE_PREFIXES,
@@ -14,9 +16,12 @@ import {
   EXTENDED_PROPERTIES_NAMESPACE,
 } from './share-safe-parts'
 import {
+  FIELD_REFERENCE_NAMES,
   isFormulaFieldInstruction,
   SHARE_SAFE_FIELD_NAMES,
 } from './share-safe-fields'
+import { WML_ELEMENT_ATTRIBUTES } from './share-safe-word-attributes'
+import { EMBEDDED_SCOPED_ATTRIBUTES } from './share-safe-drawing-attributes'
 import { refuseShareSafe } from './share-safe-refusal'
 
 /**
@@ -61,6 +66,8 @@ const BOOKMARK_NAME = /^bm\d+$/u
 export interface ByteCheckResult {
   bookmarkNames: string[]
   anchorTargets: string[]
+  /** Reference-field operands (`REF`/`PAGEREF`/`NOTEREF`/`GOTOBUTTON`). */
+  fieldReferences: string[]
 }
 
 /**
@@ -82,6 +89,10 @@ export function checkShareSafeXmlBytes(
   const declaredPrefixes = new Map<string, string>()
   const bookmarkNames: string[] = []
   const anchorTargets: string[] = []
+  const fieldReferences: string[] = []
+  // `Id` values this part's `Relationship` declarations have used — a
+  // duplicate makes `r:id` resolution ambiguous.
+  const relationshipIds = new Set<string>()
 
   let cursor = declaration[0].length
   while (cursor < source.length) {
@@ -154,6 +165,7 @@ export function checkShareSafeXmlBytes(
       const colon = name.indexOf(':')
       if (colon !== -1) {
         checkPrefixedName(part, name, declaredPrefixes)
+        const prefix = name.slice(0, colon)
         const local = name.slice(colon + 1)
         if (
           REVISION_IDENTITY_LOCALS.has(local) ||
@@ -164,6 +176,42 @@ export function checkShareSafeXmlBytes(
             `${part.name} carries identity attribute ${name}`,
           )
         }
+        // A `w:` attribute must sit on the `w:` element that declares it
+        // — `w:instr`/`w:name`/`w:anchor`/`w:uri`/`w:id` out of scope are
+        // payload channels, not formatting.
+        if (prefix === 'w') {
+          const elementLocal = tagName.startsWith('w:') ? tagName.slice(2) : ''
+          const allowed = WML_ELEMENT_ATTRIBUTES.get(elementLocal)
+          if (allowed === undefined || !allowed.has(local)) {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries ${name} out of element scope`,
+            )
+          }
+        }
+      }
+      if (colon === -1) {
+        const scoped = EMBEDDED_SCOPED_ATTRIBUTES.get(name)
+        if (scoped !== undefined) {
+          const elementLocal = tagName.includes(':')
+            ? tagName.slice(tagName.indexOf(':') + 1)
+            : tagName
+          if (!scoped.has(elementLocal)) {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries ${name} on an element that cannot bear it`,
+            )
+          }
+        }
+      }
+      if (tagName === 'Relationship' && name === 'Id') {
+        if (relationshipIds.has(value)) {
+          refuseShareSafe(
+            'unverifiable-output',
+            `${part.name} declares relationship ${value} twice`,
+          )
+        }
+        relationshipIds.add(value)
       }
       if (tagName === 'w:bookmarkStart' && name === 'w:name') {
         if (!BOOKMARK_NAME.test(value)) {
@@ -191,7 +239,9 @@ export function checkShareSafeXmlBytes(
     cursor = tagEnd
   }
 
-  // Field instructions surviving in emitted bytes must all be keep-class.
+  // Field instructions surviving in emitted bytes must all be keep-class;
+  // a reference field's operands are collected so the package-level check
+  // can prove each names a bookmark that shipped.
   for (const instruction of fieldInstructionsInXml(source)) {
     if (isFormulaFieldInstruction(instruction)) continue
     const name = fieldInstructionName(instruction)
@@ -201,9 +251,17 @@ export function checkShareSafeXmlBytes(
         `field instruction ${name || '(unnamed)'} survived in ${part.name}`,
       )
     }
+    if (FIELD_REFERENCE_NAMES.has(name)) {
+      const tokens = fieldInstructionTokens(instruction)
+      for (const token of tokens.slice(1)) {
+        if (!token.startsWith('\\')) {
+          fieldReferences.push(fieldInstructionTokenValue(token))
+        }
+      }
+    }
   }
 
-  return { bookmarkNames, anchorTargets }
+  return { bookmarkNames, anchorTargets, fieldReferences }
 }
 
 /** A qualified name's prefix must resolve to a declared canonical URI. */

@@ -98,6 +98,7 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
   }
   const bookmarkNames = new Set<string>()
   const anchorTargets: string[] = []
+  const fieldReferences: string[] = []
   for (const [name, part] of reparsed.sourceParts) {
     if (FORBIDDEN_PART.test(name)) {
       refuseShareSafe(
@@ -125,14 +126,25 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
     const result = checkShareSafeXmlBytes(part, source)
     for (const bookmark of result.bookmarkNames) bookmarkNames.add(bookmark)
     anchorTargets.push(...result.anchorTargets)
+    fieldReferences.push(...result.fieldReferences)
   }
-  // An `w:anchor` pointing at a bookmark that did not ship is a dead
+  // A `w:anchor` pointing at a bookmark that did not ship is a dead
   // pointer; a name the byte check did not generate was never rewritten.
   for (const anchor of anchorTargets) {
     if (!bookmarkNames.has(anchor)) {
       refuseShareSafe(
         'unverifiable-output',
         `anchor ${anchor} names a bookmark that did not ship`,
+      )
+    }
+  }
+  // A reference-field operand must name a shipped bookmark — a dangling
+  // operand is an unrewritten input name leaking out.
+  for (const reference of fieldReferences) {
+    if (!bookmarkNames.has(reference)) {
+      refuseShareSafe(
+        'unverifiable-output',
+        `field reference ${reference} names a bookmark that did not ship`,
       )
     }
   }

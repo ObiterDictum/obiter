@@ -1,73 +1,19 @@
-import JSZip from 'jszip'
 import { describe, expect, it } from 'bun:test'
+import JSZip from 'jszip'
 
 import { buildShareSafeDocx, parseDocx, ShareSafeRefusal } from './index'
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-const PKG_R = 'http://schemas.openxmlformats.org/package/2006/relationships'
-const CT = 'http://schemas.openxmlformats.org/package/2006/content-types'
-const STRICT_W = 'http://purl.oclc.org/ooxml/wordprocessingml/main'
-
-interface ProbeSpec {
-  body?: string
-  document?: string
-  documentRels?: string
-  rootRels?: string
-  parts?: Record<string, string>
-  overrides?: string
-}
-
-function rel(id: string, tail: string, target: string, extra = '') {
-  return `<Relationship Id="${id}" Type="${R}/${tail}" Target="${target}"${extra}/>`
-}
-
-function override(partName: string, tail: string) {
-  return `<Override PartName="${partName}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${tail}+xml"/>`
-}
-
-async function probePackage(spec: ProbeSpec): Promise<Uint8Array> {
-  const zip = new JSZip()
-  zip.file(
-    '[Content_Types].xml',
-    `<?xml version="1.0"?><Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>${spec.overrides ?? ''}</Types>`,
-  )
-  zip.file(
-    '_rels/.rels',
-    `<Relationships xmlns="${PKG_R}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/>${spec.rootRels ?? ''}</Relationships>`,
-  )
-  zip.file(
-    'word/document.xml',
-    spec.document ??
-      `<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>Visible.</w:t></w:r></w:p>${spec.body ?? ''}</w:body></w:document>`,
-  )
-  zip.file(
-    'word/_rels/document.xml.rels',
-    `<Relationships xmlns="${PKG_R}">${spec.documentRels ?? ''}</Relationships>`,
-  )
-  for (const [name, source] of Object.entries(spec.parts ?? {})) {
-    zip.file(name, source)
-  }
-  return zip.generateAsync({ type: 'uint8array' })
-}
-
-async function probeOutput(spec: ProbeSpec) {
-  const document = await parseDocx(await probePackage(spec))
-  const bytes = await buildShareSafeDocx(document)
-  const zip = await JSZip.loadAsync(bytes)
-  const parts = new Map<string, string>()
-  for (const [name, file] of Object.entries(zip.files)) {
-    if (!file.dir) parts.set(name, await file.async('string'))
-  }
-  return parts
-}
-
-async function probeRefusal(spec: ProbeSpec) {
-  const document = await parseDocx(await probePackage(spec))
-  await expect(buildShareSafeDocx(document)).rejects.toBeInstanceOf(
-    ShareSafeRefusal,
-  )
-}
+import {
+  CT,
+  expectRefusal,
+  override,
+  PKG_R,
+  probeOutput,
+  R,
+  rel,
+  STRICT_W,
+  W,
+  type ProbeSpec,
+} from './share-safe-probe-kit'
 
 function settingsSpec(settingsChildren: string): ProbeSpec {
   return {
@@ -96,13 +42,13 @@ describe('share-safe probes: revision and permission markup', () => {
     'permStart',
     'permEnd',
   ])('refuses w:%s', async (name) => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:pPr><w:${name} w:id="1" w:author="SECRETAUTHOR"/></w:pPr></w:p>`,
     })
   })
 
   it('refuses revision markup in the numbering part', async () => {
-    await probeRefusal({
+    await expectRefusal({
       documentRels: rel('rId9', 'numbering', 'numbering.xml'),
       overrides: override('/word/numbering.xml', 'numbering'),
       parts: {
@@ -112,19 +58,19 @@ describe('share-safe probes: revision and permission markup', () => {
   })
 
   it('refuses an unknown element carrying revision identity attributes', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:futureMarkup w:author="SECRETAUTHOR"/></w:p>`,
     })
   })
 
   it('refuses strict-namespace package markup', async () => {
-    await probeRefusal({
+    await expectRefusal({
       document: `<?xml version="1.0"?><w:document xmlns:w="${STRICT_W}"><w:body><w:p><w:del w:author="SECRETAUTHOR"><w:r><w:delText>SECRETDELETED</w:delText></w:r></w:del></w:p></w:body></w:document>`,
     })
   })
 
   it('refuses a foreign-namespace payload inside a transitional part', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><x:payload xmlns:x="urn:probe-payload"><x:entry>SECRET</x:entry></x:payload></w:p>`,
     })
   })
@@ -156,31 +102,31 @@ describe('share-safe probes: field instructions', () => {
     'CITATION',
     'UNKNOWNFIELDNAME',
   ])('refuses %s instructions', async (name) => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> ${name} "x" </w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
     })
   })
 
   it('refuses a field hidden in CDATA', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText><![CDATA[ INCLUDETEXT \\\\server\\leak.docx ]]></w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
     })
   })
 
   it('refuses a field split by an XML comment', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> INCLUDE<!-- decoy -->TEXT "x" </w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
     })
   })
 
   it('refuses a field instruction under a different prefix bound to w', async () => {
-    await probeRefusal({
+    await expectRefusal({
       document: `<?xml version="1.0"?><wx:document xmlns:wx="${W}"><wx:body><wx:p><wx:r><wx:fldChar wx:fldCharType="begin"/><wx:instrText> INCLUDETEXT "x" </wx:instrText><wx:fldChar wx:fldCharType="end"/></wx:r></wx:p></wx:body></wx:document>`,
     })
   })
 
   it('refuses opaque field payloads', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:fldChar w:fldCharType="begin"><w:fldData>SECRETB64</w:fldData></w:fldChar><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
     })
   })
@@ -189,7 +135,7 @@ describe('share-safe probes: field instructions', () => {
     'keeps the allowed %s field',
     async (instruction) => {
       const parts = await probeOutput({
-        body: `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> ${instruction} </w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
+        body: `<w:p><w:bookmarkStart w:id="9" w:name="note"/><w:bookmarkEnd w:id="9"/><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> ${instruction} </w:instrText><w:fldChar w:fldCharType="end"/></w:r></w:p>`,
       })
       expect(parts.get('word/document.xml')).toContain('instrText')
     },
@@ -198,25 +144,25 @@ describe('share-safe probes: field instructions', () => {
 
 describe('share-safe probes: hidden content', () => {
   it('refuses a hidden table row', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:tbl><w:tr><w:trPr><w:hidden/></w:trPr><w:tc><w:p><w:r><w:t>SECRETHIDDEN</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
     })
   })
 
   it('refuses hidden text through conditional table formatting', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:tbl><w:tblPr><w:tblStylePr w:type="firstRow"><w:rPr><w:vanish/></w:rPr></w:tblStylePr></w:tblPr><w:tr><w:tc><w:p><w:r><w:t>SECRETHIDDEN</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
     })
   })
 
   it('refuses hidden text through sdt character properties', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:sdt><w:sdtPr><w:rPr><w:vanish/></w:rPr></w:sdtPr><w:sdtContent><w:r><w:t>SECRETHIDDEN</w:t></w:r></w:sdtContent></w:sdt>`,
     })
   })
 
   it('refuses hidden text through an inherited style', async () => {
-    await probeRefusal({
+    await expectRefusal({
       documentRels: rel('rId9', 'styles', 'styles.xml'),
       overrides: override('/word/styles.xml', 'styles'),
       parts: {
@@ -227,13 +173,13 @@ describe('share-safe probes: hidden content', () => {
   })
 
   it('refuses a hidden drawing object', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:docPr id="1" name="x" hidden="1"/></wp:inline></w:drawing></w:r></w:p>`,
     })
   })
 
   it('refuses VML, including hidden VML', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" id="x" style="display:none"><v:fill src="SECRET"/></v:shape></w:pict></w:r></w:p>`,
     })
   })
@@ -241,7 +187,7 @@ describe('share-safe probes: hidden content', () => {
   it.each(['w:vanish', 'w:webHidden', 'w:specVanish'])(
     'refuses %s on runs',
     async (name) => {
-      await probeRefusal({
+      await expectRefusal({
         body: `<w:p><w:r><w:rPr><${name}/></w:rPr><w:t>SECRETHIDDEN</w:t></w:r></w:p>`,
       })
     },
@@ -270,11 +216,11 @@ describe('share-safe probes: pointer attributes and opaque payloads', () => {
     '<w:subDoc r:id="rId9"/>',
     '<w:pict><w:binData w:name="x">SECRETPAYLOAD</w:binData></w:pict>',
   ])('refuses %s', async (fragment) => {
-    await probeRefusal({ body: `<w:p><w:r>${fragment}</w:r></w:p>` })
+    await expectRefusal({ body: `<w:p><w:r>${fragment}</w:r></w:p>` })
   })
 
   it('refuses an undeclared relationship pointer', async () => {
-    await probeRefusal({
+    await expectRefusal({
       body: `<w:p><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:blipFill><a:blip r:embed="rId40"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`,
     })
   })
@@ -289,7 +235,7 @@ describe('share-safe probes: pointer attributes and opaque payloads', () => {
   })
 
   it('refuses a drawing hyperlink relationship it cannot detach', async () => {
-    await probeRefusal({
+    await expectRefusal({
       documentRels: rel(
         'rId9',
         'hyperlink',
@@ -301,7 +247,7 @@ describe('share-safe probes: pointer attributes and opaque payloads', () => {
   })
 
   it('refuses webSettings frameset pointers', async () => {
-    await probeRefusal({
+    await expectRefusal({
       documentRels: rel('rId9', 'webSettings', 'webSettings.xml'),
       overrides: override('/word/webSettings.xml', 'webSettings'),
       parts: {

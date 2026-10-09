@@ -444,3 +444,12 @@ export const EMBEDDED_ELEMENTS = new Map<string, ReadonlySet<string>>([
   [WPC_NAMESPACE, WPC_ELEMENTS],
   [WP14_NAMESPACE, WP14_ELEMENTS],
 ])
+
+/**
+ * Embedded vocabulary elements the copy drops outright rather than
+ * carrying. `a:tableStyleId` is a dangling pointer into the refused
+ * tableStyles part — keeping it ships a name reference to nothing.
+ */
+export const EMBEDDED_REMOVE_ELEMENTS = new Map<string, ReadonlySet<string>>([
+  [DRAWINGML_MAIN_NAMESPACE, new Set(['tableStyleId'])],
+])

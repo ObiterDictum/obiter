@@ -15,7 +15,12 @@
  */
 export const EMBEDDED_STRIP_ATTRIBUTES = new Set(['descr', 'title'])
 
-/** Elements whose `name` attribute is a descriptive label, not semantics. */
+/**
+ * Elements whose `name` attribute is a descriptive label, not semantics.
+ * Theme machinery names (`theme`, `clrScheme`, `fontScheme`, `fmtScheme`)
+ * are author-chosen display strings a recipient never resolves — the
+ * scheme's colour and font slots still apply by structure.
+ */
 export const EMBEDDED_NAME_LABEL_ELEMENTS = new Set([
   'docPr',
   'cNvPr',
@@ -23,6 +28,25 @@ export const EMBEDDED_NAME_LABEL_ELEMENTS = new Set([
   'cNvSpPr',
   'cNvGrpSpPr',
   'cNvGraphicFramePr',
+  'theme',
+  'clrScheme',
+  'fontScheme',
+  'fmtScheme',
+  'extraClrScheme',
+  'custGeom',
+  'path',
+])
+
+/**
+ * Unqualified attributes legal only on named embedded elements —
+ * `typeface` is a font declaration's face name; placed on any other
+ * element it is a metadata channel.
+ */
+export const EMBEDDED_SCOPED_ATTRIBUTES = new Map<string, ReadonlySet<string>>([
+  [
+    'typeface',
+    new Set(['latin', 'ea', 'cs', 'font', 'sym', 'buFont', 'buFontTx']),
+  ],
 ])
 
 /**
@@ -185,6 +209,17 @@ export const EMBEDDED_ATTRIBUTES = new Set([
   'level',
   'isTabStop',
   'horizontalOverflow',
+  // a:tbl table flags and cell spans
+  'firstRow',
+  'lastRow',
+  'firstCol',
+  'lastCol',
+  'bandRow',
+  'bandCol',
+  'gridSpan',
+  'rowSpan',
+  'hMerge',
+  'vMerge',
 ])
 
 /**

@@ -10,7 +10,9 @@ import type { ShareSafeContentPlan } from './share-safe-parts'
 import {
   analyseFieldSpans,
   classifyFieldInstruction,
-  rewriteFieldInstruction,
+  FIELD_REFERENCE_NAMES,
+  rewriteReferenceInstruction,
+  type FieldSpan,
 } from './share-safe-fields'
 import { fieldInstructionName } from './field-instructions'
 import { refuseShareSafe } from './share-safe-refusal'
@@ -134,15 +136,31 @@ export function analyseWordFields(
       for (const element of span.whole) contentPlan.removed.add(element)
       continue
     }
+    if (classification === 'flatten') {
+      flattenField(span, contentPlan)
+      continue
+    }
     if (classification === 'refuse') {
       refuseShareSafe(
         'unsupported-structure',
         `${part.name} carries a field instruction ${fieldInstructionName(span.instruction) || '(unnamed)'} the copy cannot bound`,
       )
     }
-    // Keep-class spans ship their instruction — bookmark-named arguments
-    // follow the same generated names the anchors were rewritten to.
-    const rewritten = rewriteFieldInstruction(span.instruction, bookmarkRenames)
+    // Keep-class spans ship their instruction — but only reference fields
+    // rewrite operands, and only to bookmark names that actually ship. A
+    // dangling operand flattens the field to its displayed result.
+    let rewritten: string | undefined
+    if (FIELD_REFERENCE_NAMES.has(fieldInstructionName(span.instruction))) {
+      const resolution = rewriteReferenceInstruction(
+        span.instruction,
+        bookmarkRenames,
+      )
+      if (resolution === 'flatten') {
+        flattenField(span, contentPlan)
+        continue
+      }
+      rewritten = resolution
+    }
     if (rewritten === undefined) continue
     if (span.simple !== undefined) {
       const attribute = span.simple.attributes.find(
@@ -178,6 +196,20 @@ export function analyseWordFields(
       }
     }
   }
+}
+
+/**
+ * Flattening drops a field's machinery — the `w:fldChar` markers and
+ * instruction runs — while its displayed result stays: a complex field
+ * loses `[begin, lastSeparate)` plus the end marker, and a `w:fldSimple`
+ * loses only its wrapper (and with it the `w:instr` attribute).
+ */
+function flattenField(span: FieldSpan, contentPlan: ShareSafeContentPlan) {
+  if (span.simple !== undefined) {
+    contentPlan.unwrapped.add(span.simple)
+    return
+  }
+  for (const element of span.dropped) contentPlan.removed.add(element)
 }
 
 /**
