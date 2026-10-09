@@ -54,7 +54,10 @@ export async function buildShareSafeDocx(
     applyShareSafePlan(copy, plan)
   } catch (error) {
     if (error instanceof ShareSafeRefusal) throw error
-    refuseShareSafe('the sanitising transform could not be applied')
+    refuseShareSafe(
+      'unverifiable-output',
+      'the sanitising transform could not be applied',
+    )
   }
   const bytes = await serialiseDocx(copy)
   await verifyShareSafePackage(bytes)

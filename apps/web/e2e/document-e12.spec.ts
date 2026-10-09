@@ -172,6 +172,25 @@ type MarkingsBody = {
   }
 }
 
+/**
+ * Opens a ribbon tab and proves it selected before the caller touches the
+ * panel's controls: a click that lands while the workspace re-renders its
+ * toolbar (post-load, post-reload) can hit a detached trigger and silently
+ * lose the activation.
+ */
+async function openRibbonTab(page: Page, name: 'Layout' | 'Review') {
+  const tab = page.getByRole('tab', { name, exact: true }).first()
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await tab.click()
+    const selected = await expect(tab)
+      .toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (selected) return
+  }
+  await expect(tab).toHaveAttribute('aria-selected', 'true')
+}
+
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('markings commit as versions, persist, and ride both exports under a non-ASCII name', async ({
@@ -192,7 +211,6 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
     }
   })
 
-  await page.getByRole('tab', { name: 'Layout' }).click()
   const kind = page.getByLabel('Document type')
   const draft = page.getByRole('button', { name: 'Draft', exact: true })
   const privileged = page.getByRole('button', {
@@ -203,6 +221,8 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
     name: 'Without prejudice',
     exact: true,
   })
+  await openRibbonTab(page, 'Layout')
+  await expect(kind).toBeVisible()
 
   // Each change is its own immutable commit; the control must carry the
   // committed state back rather than a local paint.
@@ -228,7 +248,7 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   // Stored, not painted: a reload reads the same markings back out of the
   // committed DOCX's custom properties.
   await page.reload({ waitUntil: 'networkidle' })
-  await page.getByRole('tab', { name: 'Layout' }).click()
+  await openRibbonTab(page, 'Layout')
   await expect(kind).toHaveValue('particulars', { timeout: 30_000 })
   await expect(draft).toHaveAttribute('aria-pressed', 'true')
   await expect(privileged).toHaveAttribute('aria-pressed', 'true')
@@ -236,7 +256,10 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
 
   // The standard export keeps the package's properties — the markings and
   // the foreign dms property alike — and names the file as uploaded.
-  await page.getByRole('tab', { name: 'Review' }).click()
+  await openRibbonTab(page, 'Review')
+  await expect(
+    page.getByRole('button', { name: 'Export', exact: true }),
+  ).toBeVisible()
   const [standardDownload] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Export', exact: true }).click(),
@@ -294,7 +317,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
 
   // The ribbon entry reveals the document-level control rather than starting
   // a shadow run; the region's own button creates it.
-  await page.getByRole('tab', { name: 'Review' }).click()
+  await openRibbonTab(page, 'Review')
   await page.getByLabel('Redact this document').click()
   const region = page.getByRole('region', { name: 'Redaction runs' })
   await expect(region).toBeFocused()
