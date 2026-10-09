@@ -9,6 +9,7 @@ import {
 import { editableStories } from './document-model-text'
 import {
   batchParagraphDeletions,
+  FIELD_BOUNDARY_MESSAGE,
   LAST_PARAGRAPH_MESSAGE,
 } from './document-edits'
 import { footnoteNoteParagraphId } from './document-structural-drafts'
@@ -216,6 +217,41 @@ export function partitionDraftState(
     keep.deletedParagraphIds = keep.deletedParagraphIds.filter(
       (id) => !deletions.emptied.has(id),
     )
+  }
+  if (deletions.split.size > 0) {
+    // A removal that drops some but not all of a stored field's boundary
+    // markers leaves `fldChar` runs the writer can never pair — and its own
+    // batch validation refuses the whole save. Block every slot carrying a
+    // partial removal: a marked paragraph's `delete`, and the appended text
+    // whose implicit replacement removes a runless boundary paragraph —
+    // whether or not the paragraph is also marked, since dropping the mark
+    // alone leaves the replacement deleting the element all the same. An
+    // `extra-runs` slot on a split paragraph outside `implicit` keeps its
+    // runs: they fold into the surviving paragraph rather than remove it.
+    const removesFieldBoundary = (
+      slot: DraftSlot,
+    ): slot is Extract<DraftSlot, { kind: 'delete' | 'extra-runs' }> => {
+      if (slot.kind !== 'delete' && slot.kind !== 'extra-runs') return false
+      if (!deletions.split.has(slot.paragraphId)) return false
+      return slot.kind === 'delete' || deletions.implicit.has(slot.paragraphId)
+    }
+    for (const slot of covered) {
+      if (!removesFieldBoundary(slot)) continue
+      blocked.push({
+        slot,
+        reason: deletions.split.get(slot.paragraphId) ?? FIELD_BOUNDARY_MESSAGE,
+        label: slot.kind === 'delete' ? 'a deletion' : 'added text',
+      })
+    }
+    covered = covered.filter((slot) => !removesFieldBoundary(slot))
+    keep.deletedParagraphIds = keep.deletedParagraphIds.filter(
+      (id) => !deletions.split.has(id),
+    )
+    for (const paragraphId of deletions.split.keys()) {
+      if (deletions.implicit.has(paragraphId)) {
+        delete keep.extraRuns[paragraphId]
+      }
+    }
   }
   const batchDeletions = deletions.effective
   const paragraphWires = new Map(

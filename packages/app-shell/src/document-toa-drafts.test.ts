@@ -61,6 +61,8 @@ function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
     kind: 'document',
     paragraphs,
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -326,6 +328,8 @@ describe('table of authorities save partitioning', () => {
       kind: 'header',
       paragraphs: [paragraph('h1', 'Running head')],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     const plan = planDocumentSave(
       {

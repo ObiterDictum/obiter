@@ -220,8 +220,20 @@ test('table of authorities paints, saves, updates and exports', async ({
   await focusParagraph(page, 'Table of Cases')
   await expect(updateButton(page)).toBeEnabled()
 
+  // The field's boundary paragraphs cannot be deleted piecemeal: the
+  // heading holds the `begin`, so Delete paragraph refuses with the shared
+  // field reason rather than leaving `fldChar` runs Word cannot pair.
+  await focusParagraph(page, 'Table of Cases')
+  await page.getByRole('tab', { name: 'Home' }).click()
+  const deleteParagraph = page.getByRole('button', {
+    name: 'Delete paragraph',
+  })
+  await expect(deleteParagraph).toBeDisabled()
+  await shot(page, '03-field-boundary-refused')
+
   // A new citation in an ordinary paragraph, then the refresh: the painted
   // model lists both authorities before the save lands.
+  await openReferences(page)
   await focusParagraph(page, 'IN THE HIGH COURT OF JUSTICE')
   await page.getByRole('button', { name: 'Insert authority' }).click()
   await page.getByRole('textbox', { name: 'Citation' }).fill(ADDED_CITATION)
@@ -231,10 +243,10 @@ test('table of authorities paints, saves, updates and exports', async ({
   await expect(
     page.locator('[data-paragraph-id]', { hasText: ADDED_CITATION }).first(),
   ).toBeVisible()
-  await shot(page, '03-pending-refresh')
+  await shot(page, '04-pending-refresh')
 
   await saveAndWait(page)
-  await shot(page, '04-refreshed')
+  await shot(page, '05-refreshed')
   operations = editBodies.flatMap((body) => body.operations ?? [])
   expect(operations).toContainEqual(
     expect.objectContaining({ type: 'update_table_of_authorities' }),
@@ -252,7 +264,7 @@ test('table of authorities paints, saves, updates and exports', async ({
   await expect(
     page.locator('[data-paragraph-id]', { hasText: ADDED_CITATION }).first(),
   ).toBeVisible()
-  await shot(page, '05-reloaded-refresh')
+  await shot(page, '06-reloaded-refresh')
 
   // The exported DOCX proves the write: exactly one `TOA` field, one `TA`
   // mark per citing paragraph — the refresh did not accrete marks — and

@@ -83,6 +83,8 @@ function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
     kind: 'document',
     paragraphs,
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -102,6 +104,8 @@ function footnotesStory(): DocumentStoryWire {
       '<w:footnote w:type="separator" w:id="-1"><w:p w14:paraId="S"/></w:footnote>',
       '<w:footnote w:id="2"><w:p w14:paraId="A"/><w:p w14:paraId="B"/></w:footnote>',
     ],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -305,6 +309,8 @@ describe('footnote save partitioning', () => {
       kind: 'header',
       paragraphs: [paragraph('h1', 'Running head')],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     }
     const draft = footnoteDraft('s1', 'h1', 0)
     const noteId = footnoteNoteParagraphId(draft)
@@ -523,6 +529,8 @@ describe('the footnote insert control', () => {
         kind: 'header',
         paragraphs: [paragraph('h1', 'Running head')],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ])
     expect(

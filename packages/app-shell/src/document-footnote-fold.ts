@@ -115,6 +115,8 @@ function foldedNoteStory(
     kind: 'footnotes',
     paragraphs: [],
     preservedXmlFragments: [],
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
   const paragraphs = [...base.paragraphs]
   const fragments = [...base.preservedXmlFragments]

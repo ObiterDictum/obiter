@@ -172,30 +172,49 @@ export function documentLegalToolbar({
     : undefined
   const insertById = new Map(inserts.map((insert) => [insert.clientId, insert]))
   const realIds = new Set(storyParagraphs.map((paragraph) => paragraph.id))
+  // "Already queued" means a refresh draft that would itself survive the
+  // save partition: the block is evaluated without the queued-refresh gate
+  // first, so a draft the save would hold — the field deleted, pending
+  // edits inside it — does not report the field claimed.
+  const updateFieldBlock = caretField
+    ? tableOfAuthoritiesUpdateBlock({
+        field: caretField,
+        fieldWires: caretField.paragraphIds.flatMap((id) => {
+          const wire = wiresById.get(id)
+          return wire === undefined ? [] : [wire]
+        }),
+        facts: toaFacts,
+        changes: model?.changes ?? [],
+        deletions: deletedParagraphIds,
+        drafts,
+        extraRuns,
+        format,
+        breaks,
+        insertAnchors: new Set(
+          inserts.map((insert) =>
+            resolveInsertAnchor(insert, insertById, realIds),
+          ),
+        ),
+        structures,
+        queuedRefresh: false,
+      })
+    : undefined
+  const refreshQueued =
+    caretField !== undefined &&
+    updateFieldBlock === undefined &&
+    structures.some(
+      (item) =>
+        item.kind === 'table-of-authorities-refresh' &&
+        item.paragraphId === caretField.headId,
+    )
   const tableOfAuthoritiesUpdateUnavailable = trackChanges
     ? 'A table of authorities update is not recorded as a tracked change'
     : !caretField
       ? 'Place the cursor in a table of authorities to update it'
-      : tableOfAuthoritiesUpdateBlock({
-          field: caretField,
-          fieldWires: caretField.paragraphIds.flatMap((id) => {
-            const wire = wiresById.get(id)
-            return wire === undefined ? [] : [wire]
-          }),
-          facts: toaFacts,
-          changes: model?.changes ?? [],
-          deletions: deletedParagraphIds,
-          drafts,
-          extraRuns,
-          format,
-          breaks,
-          insertAnchors: new Set(
-            inserts.map((insert) =>
-              resolveInsertAnchor(insert, insertById, realIds),
-            ),
-          ),
-          structures,
-        })
+      : (updateFieldBlock ??
+        (refreshQueued
+          ? 'This table of authorities is already queued to update.'
+          : undefined))
 
   return {
     definedTermUnavailable,

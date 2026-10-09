@@ -1,5 +1,10 @@
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
-import { insertRuns, removeInsert, type LocalInsert } from './document-edits'
+import {
+  fieldBoundarySplitIds,
+  insertRuns,
+  removeInsert,
+  type LocalInsert,
+} from './document-edits'
 import {
   editableParagraph,
   editableParagraphs,
@@ -332,6 +337,18 @@ export function paragraphJoinRefusal(
   const inserts = new Set(state.inserts.map((item) => item.clientId))
   const joinable = (id: string) => body.has(id) || inserts.has(id)
   if (!joinable(paragraphId) || !joinable(previousId)) return 'structure'
+  // A join erases the joined paragraph's element and every marker it
+  // carries: the moved runs restate only text on save, so a stored field's
+  // boundary inside it is lost while the rest survives. Removing the field
+  // whole — every boundary paragraph already marked — still composes.
+  if (
+    fieldBoundarySplitIds(
+      model,
+      new Set([...state.deletedParagraphIds, paragraphId]),
+    )
+  ) {
+    return 'structure'
+  }
   if (
     isNoteStory(story) &&
     !sameNoteEntry(

@@ -11,11 +11,14 @@ import {
   DOCUMENT_EDIT_TABLE_OF_AUTHORITIES_MAX_ENTRIES,
   DOCUMENT_EDIT_TABLE_OF_AUTHORITIES_MAX_OCCURRENCES,
   type DocumentChangeWire,
+  type DocumentFieldWire,
   type DocumentModelWire,
   type DocumentParagraphWire,
+  type DocumentStoryWire,
   type DocumentTextRunWire,
 } from '@obiter/contracts'
 import {
+  isTableOfAuthoritiesField,
   tableOfAuthoritiesCitations,
   type AuthorityOccurrence,
   type TableOfAuthoritiesEntry,
@@ -140,101 +143,34 @@ export function tableOfAuthoritiesMarkBlock(
 }
 
 /**
- * One stored `TOA` field, located over the wire paragraphs the save batch
- * will hold. `headId` is the paragraph holding the field's `begin`,
- * instruction and `separate` — the paragraph an update operation names and
- * the paragraph whose stored wire is replaced along with `resultIds`, the
- * paragraphs carrying the field's generated result. `paragraphIds` adds
- * the tail paragraph holding the `end` character, which an update keeps.
+ * One stored `TOA` field, as the parser paired it on the wire. `headId` is
+ * the paragraph holding the field's `begin` — the paragraph an update
+ * operation names — `resultIds` are the paragraphs carrying the field's
+ * generated result, and `paragraphIds` adds the tail paragraph holding
+ * the `end` character, which an update keeps. `rangeReplaceable` is the
+ * parser's proof the stored shape is the one the in-place rewrite
+ * composes.
  */
-export type TableOfAuthoritiesField = {
-  headId: string
-  resultIds: readonly string[]
-  paragraphIds: readonly string[]
-}
-
-const FIELD_BEGIN = /<w:fldChar\b[^>]*\bw:fldCharType="begin"/u
-const FIELD_SEPARATE = /<w:fldChar\b[^>]*\bw:fldCharType="separate"/u
-const TOA_INSTRUCTION = /<w:instrText\b[^>]*>[^<]*\bTOA\b/u
-const FIELD_CHAR_COUNT = /<w:fldChar\b[^>]*\bw:fldCharType="(begin|end)"/gu
-
-function wireFieldCharDelta(wire: DocumentParagraphWire) {
-  let delta = 0
-  const fragments = [
-    ...wire.preservedXmlFragments,
-    ...wire.runs.flatMap((run) => run.preservedXmlFragments),
-  ].join('')
-  for (const match of fragments.matchAll(FIELD_CHAR_COUNT)) {
-    delta += match[1] === 'begin' ? 1 : -1
-  }
-  return delta
-}
-
-/** The stored paragraph a `TOA` field's first three characters live in. */
-export function isTableOfAuthoritiesFieldHead(
-  wire: DocumentParagraphWire,
-): boolean {
-  const fragments = [
-    ...wire.preservedXmlFragments,
-    ...wire.runs.flatMap((run) => run.preservedXmlFragments),
-  ].join('')
-  return (
-    FIELD_BEGIN.test(fragments) &&
-    TOA_INSTRUCTION.test(fragments) &&
-    FIELD_SEPARATE.test(fragments)
-  )
-}
+export type TableOfAuthoritiesField = DocumentFieldWire
 
 /**
- * Maps the stored body's `TOA` fields head-paragraph id to the paragraphs
- * each field spans, by counting `fldChar` begins and ends across the
- * paragraph elements the same way the writer walks the source XML. A
- * paragraph's nested fields — the `PAGEREF`s inside an entry, the `TA`
- * marks and `REF`s a citing paragraph carries — balance within the wire,
- * so the depth walk over paragraph paragraphs finds each field's own
- * `end`. A field whose `end` never arrives is dropped: an unbalanced
- * field has no defined range an update could claim.
+ * The stored body's `TOA` fields, keyed by head-paragraph id, taken from
+ * the field metadata the parser emitted rather than re-derived here: the
+ * wire's paragraph and run fragments lose element parentage and sibling
+ * order, so only the parser's element walk can pair begins and ends and
+ * prove the shape the writer needs. Every consumer — the ribbon's update
+ * control, the fold, the save partition — reads this one map so they can
+ * never disagree about where a stored field is or whether it is safe to
+ * rewrite.
  */
 export function tableOfAuthoritiesFields(
-  paragraphs: readonly DocumentParagraphWire[],
+  story: DocumentStoryWire | undefined,
 ): Map<string, TableOfAuthoritiesField> {
   const fields = new Map<string, TableOfAuthoritiesField>()
-  let index = 0
-  while (index < paragraphs.length) {
-    const head = paragraphs[index]
-    if (!head || !isTableOfAuthoritiesFieldHead(head)) {
-      index += 1
-      continue
+  for (const field of story?.fields ?? []) {
+    if (isTableOfAuthoritiesField(field.instruction)) {
+      fields.set(field.headId, field)
     }
-    const resultIds = [head.id]
-    let depth = 0
-    let cursor = index
-    let tailId: string | undefined
-    while (cursor < paragraphs.length) {
-      const wire = paragraphs[cursor]
-      if (!wire) break
-      depth += wireFieldCharDelta(wire)
-      if (depth <= 0) {
-        tailId = wire.id
-        break
-      }
-      if (cursor > index) resultIds.push(wire.id)
-      cursor += 1
-    }
-    if (tailId === undefined) break
-    // A field closed inside its own head paragraph has no tail the
-    // range-replacement can preserve, so an update cannot claim it. Later
-    // paragraphs may still hold a balanced field, so the scan continues.
-    if (tailId === head.id) {
-      index += 1
-      continue
-    }
-    fields.set(head.id, {
-      headId: head.id,
-      resultIds,
-      paragraphIds: [...resultIds, tailId],
-    })
-    index = cursor + 1
   }
   return fields
 }
@@ -300,7 +236,7 @@ export function createTableOfAuthoritiesFacts({
         occurrences,
         entries,
         citingWires,
-        fields: tableOfAuthoritiesFields(storyParagraphs),
+        fields: tableOfAuthoritiesFields(story),
       }
     }
     return facts
@@ -391,6 +327,11 @@ export function tableOfAuthoritiesPartitionBlock({
  * `insertAnchors` carries each kept insert's resolved anchor paragraph so
  * the predicate can refuse an insert that would land inside the replaced
  * range; callers without insert state pass an empty set.
+ *
+ * `queuedRefresh` is the caller's answer to "is a refresh draft for this
+ * field already going to save" — computed the way the partition decides
+ * survivability, so the ribbon and the save agree on whether the control
+ * is already claimed.
  */
 export function tableOfAuthoritiesUpdateBlock({
   field,
@@ -404,6 +345,7 @@ export function tableOfAuthoritiesUpdateBlock({
   breaks,
   insertAnchors,
   structures,
+  queuedRefresh,
 }: {
   field: TableOfAuthoritiesField
   fieldWires: readonly DocumentParagraphWire[]
@@ -421,21 +363,19 @@ export function tableOfAuthoritiesUpdateBlock({
   breaks: readonly BreakDraft[]
   insertAnchors: ReadonlySet<string>
   structures: readonly StructuralDraft[]
+  queuedRefresh: boolean
 }): string | undefined {
   const resultIds = new Set(field.resultIds)
+  if (!field.rangeReplaceable) {
+    return 'This table of authorities cannot be updated in place.'
+  }
   if (field.paragraphIds.some((id) => deletions.has(id))) {
     return 'A paragraph this table of authorities covers is marked for deletion.'
   }
   if (fieldWires.some((wire) => wireHasTrackedChanges(wire, changes))) {
     return 'This table of authorities contains tracked changes an update cannot record.'
   }
-  if (
-    structures.some(
-      (structure) =>
-        structure.kind === 'table-of-authorities-refresh' &&
-        structure.paragraphId === field.headId,
-    )
-  ) {
+  if (queuedRefresh) {
     return 'This table of authorities is already queued to update.'
   }
   const resultRunIds = new Set(
@@ -458,9 +398,16 @@ export function tableOfAuthoritiesUpdateBlock({
     [...insertAnchors].some((id) => resultIds.has(id)) ||
     structures.some(
       (structure) =>
-        resultIds.has(structure.paragraphId) ||
-        (structure.kind === 'cross-reference' &&
-          resultIds.has(structure.targetParagraphId)),
+        // A refresh draft on this field is the `queuedRefresh` gate's
+        // concern — it names the head, which the range covers, so counting
+        // it here would read every queued refresh as a pending edit.
+        !(
+          structure.kind === 'table-of-authorities-refresh' &&
+          structure.paragraphId === field.headId
+        ) &&
+        (resultIds.has(structure.paragraphId) ||
+          (structure.kind === 'cross-reference' &&
+            resultIds.has(structure.targetParagraphId))),
     )
   ) {
     return 'Pending edits inside this table of authorities must save before it can update.'

@@ -30,6 +30,8 @@ function model(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         kind: 'document',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

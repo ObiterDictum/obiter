@@ -52,6 +52,8 @@ function modelOf(
         kind: 'document',
         paragraphs,
         preservedXmlFragments: sectPr ? [sectPr] : [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

@@ -10,22 +10,25 @@ import {
   recordInsertedParagraph,
   type LineageRecorder,
 } from './document-lineage'
+import {
+  fieldInstructionsInXml,
+  isTableOfAuthoritiesField,
+  tableAuthorityMarkMatches,
+} from './field-instructions'
+import {
+  fieldSpans,
+  spanNestedInField,
+  spanRangeReplaceable,
+} from './field-spans'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { allocateModelId } from './model-paragraph-edits'
 import {
-  elementFragment,
-  escapeXmlText,
   parseXmlElements,
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
-import {
-  attributeValue,
-  isWord,
-  WORD_NAMESPACE,
-  type XmlElement,
-} from './parts/xml-elements'
+import { isWord } from './parts/xml-elements'
 import { effectiveRunView, runHasPendingOverlay } from './run-effective'
 import { locateOffset } from './text-offsets'
 import { nextSyntheticParaId } from './structure-package'
@@ -47,9 +50,6 @@ import {
 } from './table-of-authorities-xml'
 
 const TOA_BOOKMARK_PREFIX = '_ToA'
-const FIELD_BEGIN = /<w:fldChar\b[^>]*\bw:fldCharType="begin"/u
-const FIELD_SEPARATE = /<w:fldChar\b[^>]*\bw:fldCharType="separate"/u
-const TOA_INSTRUCTION = /<w:instrText\b[^>]*>[^<]*\bTOA\b/u
 
 /**
  * Regenerates a stored `TOA` field's result in place: the paragraphs from
@@ -85,79 +85,46 @@ export function updateTableOfAuthorities(
   const headElement = elements.find(
     (element) => element.start === paragraph.paragraphRange.start,
   )
-  const parent = headElement?.parent
-  if (!headElement || !isWord(headElement, 'p') || !parent) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-  const headFragment = elementFragment(source, headElement)
-  if (
-    !FIELD_BEGIN.test(headFragment) ||
-    !TOA_INSTRUCTION.test(headFragment) ||
-    !FIELD_SEPARATE.test(headFragment)
-  ) {
+  if (!headElement || !isWord(headElement, 'p')) {
     throw new OoxmlError('invalid-document-edit')
   }
 
-  // Walk the source for the field's own `end`: sibling `w:p` elements
-  // count their `fldChar` begins and ends, so a nested `PAGEREF` or `TA`
-  // field balances inside a paragraph while the field's `end` drops the
-  // depth to zero. A table or section boundary reached mid-field, or a
-  // field that never closes, is malformed rather than a bigger range.
-  let depth = 0
-  let endElement: XmlElement | undefined
-  let endFieldChar: XmlElement | undefined
-  let currentParagraph: XmlElement | undefined
-  for (const element of elements) {
-    if (element.start < headElement.start) continue
-    if (isWord(element, 'p') && element.parent === parent) {
-      if (depth === 0 && element !== headElement) break
-      currentParagraph = element
-      continue
-    }
-    if (depth > 0 && element.parent === parent) {
-      throw new OoxmlError('invalid-document-edit')
-    }
-    if (!isWord(element, 'fldChar') || currentParagraph === undefined) {
-      continue
-    }
-    const type = attributeValue(element, WORD_NAMESPACE, 'fldCharType')
-    if (type === 'begin') depth += 1
-    else if (type === 'end') {
-      depth -= 1
-      if (depth <= 0) {
-        endElement = currentParagraph
-        endFieldChar = element
-        break
-      }
-    }
-  }
-  if (!endElement || !endFieldChar || endElement === headElement) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-  // The kept tail must open with markup only: paragraph properties and
-  // bookmarks, then the run holding the field's `end` — whose only other
-  // content is its run properties. Text or unexpected markup ahead of the
-  // `end` means the shape is not the generated one, so the field is not
-  // safe to rewrite.
-  const endRun = endFieldChar.parent
-  if (!endRun || !isWord(endRun, 'r') || endRun.parent !== endElement) {
-    throw new OoxmlError('invalid-document-edit')
-  }
+  // The stored field the anchor names: the scan pairs every field in the
+  // part, so the `end` that follows is this field's own — a `PAGEREF`
+  // balancing inside an entry, a `separate` an entry carries, and a field
+  // nested inside a larger one all resolve the same way the model wire
+  // recorded them. A stored `TOA` whose shape is not the generated one —
+  // the `end` buried in an entry, wrapped in a content control, preceded
+  // by content in its own paragraph — fails closed here, the same
+  // contract the wire's `rangeReplaceable` records.
+  const spans = fieldSpans(elements, source)
+  const span = spans.find(
+    (candidate) =>
+      candidate.beginParagraph === headElement &&
+      isTableOfAuthoritiesField(candidate.instruction),
+  )
   if (
-    !leadingMarkupOnly(source, elements, endElement, endRun, [
-      'pPr',
-      'bookmarkStart',
-      'bookmarkEnd',
-    ]) ||
-    !leadingMarkupOnly(source, elements, endRun, endFieldChar, ['rPr'])
+    span === undefined ||
+    !spanRangeReplaceable(span) ||
+    spanNestedInField(spans, span)
   ) {
     throw new OoxmlError('invalid-document-edit')
   }
+  const endElement = span.endParagraph
+  if (!endElement) throw new OoxmlError('invalid-document-edit')
 
-  // The stored paragraphs the rewrite removes, and the batch's pending
-  // replacements that would overlap the removed range. A paragraph-level
-  // splice at either boundary still composes; anything strictly inside
-  // does not.
+  // The stored paragraphs the rewrite removes — the span's range minus the
+  // kept tail — and the batch's pending replacements that would overlap
+  // them. A paragraph the span covers that never modelled — inside a
+  // tracked wrapper or fallback the wire drops — cannot be accounted for,
+  // so the rewrite refuses rather than erase markup it cannot see. A
+  // paragraph-level splice at either boundary still composes; anything
+  // strictly inside does not.
+  const expectedStarts = new Set(
+    span.rangeParagraphs
+      .filter((element) => element !== endElement)
+      .map((element) => element.start),
+  )
   const removedIds = new Set<string>()
   for (const [id, anchor] of document.paragraphAnchors) {
     if (anchor.partName !== paragraph.partName) continue
@@ -166,10 +133,14 @@ export function updateTableOfAuthorities(
       anchor.paragraphRange.end <= endElement.start
     ) {
       removedIds.add(id)
+      expectedStarts.delete(anchor.paragraphRange.start)
       if (anchor.hasTrackedChanges) {
         throw new OoxmlError('model-node-not-editable')
       }
     }
+  }
+  if (expectedStarts.size > 0) {
+    throw new OoxmlError('invalid-document-edit')
   }
   for (const pending of overlay.replacements.values()) {
     if (pending.start < endElement.start && pending.end > headElement.start) {
@@ -302,37 +273,16 @@ export function updateTableOfAuthorities(
 }
 
 /**
- * The container's children before `bound` are only `allowed` elements
- * separated by whitespace — no text or unexpected markup — read from the
- * parsed element tree so Word's attribute order or an added `w:rPr`
- * cannot fool a regex.
- */
-function leadingMarkupOnly(
-  source: string,
-  elements: readonly XmlElement[],
-  container: XmlElement,
-  bound: XmlElement,
-  allowed: readonly string[],
-) {
-  let cursor = container.startTagEnd
-  for (const element of elements) {
-    if (element.parent !== container) continue
-    if (element.start >= bound.start) break
-    if (source.slice(cursor, element.start).trim().length > 0) return false
-    if (!allowed.some((name) => isWord(element, name))) return false
-    cursor = element.end
-  }
-  return source.slice(cursor, bound.start).trim().length === 0
-}
-
-/**
  * Whether the citation at `end` already carries its `TA` mark. A mark
  * written at an effective offset serialises immediately before the next
  * editable element — as sibling runs between the split halves, or inside
  * a run's pending replacement when the batch rewrote it — so the check
  * scans the markup that precedes the resolved point, never the text after
- * it. A mark for a different citation, or the same citation at a
- * different offset, does not match: the window ends at the last text
+ * it. Matching is on the parsed instruction, not the literal bytes: a
+ * stored `TA` split across `instrText` runs, written with `&quot;`, or
+ * carried by a `w:fldSimple` marks the citation exactly as the generated
+ * literal does. A mark for a different citation, or the same citation at
+ * a different offset, does not match: the window ends at the last text
  * close before the point.
  */
 function authorityMarkAt(
@@ -341,7 +291,10 @@ function authorityMarkAt(
   offset: number,
   citation: string,
 ) {
-  const instruction = ` TA \\l "${escapeXmlText(citation)}"`
+  const marked = (xml: string) =>
+    fieldInstructionsInXml(xml).some((instruction) =>
+      tableAuthorityMarkMatches(instruction, citation),
+    )
   const holder = runHoldingOffset(anchor, offset)
   if (holder && runHasPendingOverlay(overlay, holder.run)) {
     const view = effectiveRunView(overlay, holder.run, anchor)
@@ -351,37 +304,36 @@ function authorityMarkAt(
       offset - holder.runStart,
       true,
     )
-    return markupPrecedes(view.source, point.sourceOffset, instruction)
+    const tail = markupPrecedes(view.source, point.sourceOffset)
+    return tail !== undefined && marked(tail)
   }
   const point = locateOffset(overlay.source, anchor, offset, true)
   // A mark this batch spliced at the same point is a zero-width insertion
   // sharing the resolved offset; a mark inside stored source sits between
   // the point and the last text element before it.
   for (const pending of overlay.replacements.values()) {
-    if (
-      pending.start === point.sourceOffset &&
-      pending.value.includes(instruction)
-    ) {
+    if (pending.start === point.sourceOffset && marked(pending.value)) {
       return true
     }
   }
-  return markupPrecedes(overlay.source, point.sourceOffset, instruction)
+  const tail = markupPrecedes(overlay.source, point.sourceOffset)
+  return tail !== undefined && marked(tail)
 }
 
 /**
  * The non-editable markup immediately before `point` — where a mark
- * written at that effective offset serialises — carries the instruction.
- * The window opens after the last `w:t` close, so content belonging to an
- * earlier position cannot answer for this one; a stray text open inside
- * the window means the point sits inside editable content, where no mark
- * can live.
+ * written at that effective offset serialises — or `undefined` when the
+ * point sits inside editable content a mark cannot share. The window
+ * opens after the last `w:t` close, so content belonging to an earlier
+ * position cannot answer for this one; a stray text open inside the
+ * window means the point sits inside editable content, where no mark can
+ * live.
  */
-function markupPrecedes(source: string, point: number, instruction: string) {
+function markupPrecedes(source: string, point: number) {
   const windowStart = Math.max(0, point - 8_192)
   const window = source.slice(windowStart, point)
   const lastText = window.lastIndexOf('</w:t>')
   const tail =
     lastText === -1 ? window : window.slice(lastText + '</w:t>'.length)
-  if (/<w:t[\s>]/u.test(tail)) return false
-  return tail.includes(instruction)
+  return /<w:t[\s>]/u.test(tail) ? undefined : tail
 }

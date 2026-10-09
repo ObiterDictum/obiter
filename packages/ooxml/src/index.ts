@@ -1,5 +1,6 @@
 export {
   documentModelWireSchema,
+  type DocumentFieldWire,
   type DocumentModelWire,
   type DocumentNumberingLevelWire,
   type DocumentNumberingWire,
@@ -73,6 +74,11 @@ export {
   type ToaEntry,
 } from './table-of-authorities-xml'
 export { decodeXmlReferences, findXmlTagEnd } from './xml-lexemes'
+export {
+  fieldInstructionsInXml,
+  isTableOfAuthoritiesField,
+  tableAuthorityMarkMatches,
+} from './field-instructions'
 export * from './collaboration-merge'
 export * from './document-identity'
 export * from './document-lineage'

@@ -210,6 +210,17 @@ export function partitionStructureSlots({
               breaks: state.breaks,
               insertAnchors: insertAnchors ?? new Set(),
               structures: keep.structures,
+              // A refresh draft counts as queued only once it has itself
+              // survived the partition — `keep` holds exactly those — so a
+              // stale duplicate cannot masquerade as the field's owner and
+              // a second draft on one field is still refused.
+              queuedRefresh:
+                refreshField !== undefined &&
+                keep.structures.some(
+                  (item) =>
+                    item.kind === 'table-of-authorities-refresh' &&
+                    item.paragraphId === refreshField.headId,
+                ),
             })
         : undefined
     // A structure anchored inside a field a kept refresh rewrites would be

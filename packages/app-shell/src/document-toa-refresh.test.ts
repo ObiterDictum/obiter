@@ -1,10 +1,12 @@
 import '@obiter/test-dom'
 import { describe, expect, it } from 'bun:test'
 import type {
+  DocumentFieldWire,
   DocumentModelWire,
   DocumentParagraphWire,
   DocumentStoryWire,
 } from '@obiter/contracts'
+import { decodeXmlReferences } from '@obiter/ooxml'
 
 import { emptyFormatDrafts } from './document-format-types'
 import { paragraphPlainText } from './document-model-text'
@@ -115,10 +117,13 @@ function refreshDraft(id: string, paragraphId: string): StructuralDraft {
   return { id, kind: 'table-of-authorities-refresh', paragraphId }
 }
 
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
+function model(
+  paragraphs: DocumentParagraphWire[],
+  fields?: DocumentFieldWire[],
+): DocumentModelWire {
   return {
     version: 1,
-    stories: [bodyStory(paragraphs)],
+    stories: [bodyStory(paragraphs, fields)],
     styles: [],
     numbering: [],
     relationships: [],
@@ -128,12 +133,84 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   }
 }
 
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
+/**
+ * The `fields` metadata the parser would emit for these fixtures: a
+ * stack-paired scan of each wire's `fldChar` and `instrText` fragments, so
+ * the hand-built stories carry the same pairings a real parse produces.
+ * `rangeReplaceable` mirrors the emitted generated-TOA shape — `begin`
+ * leading the head, `end` leading a different tail — which every fixture
+ * here builds; the foreign-shape cases override it.
+ */
+function storyFields(paragraphs: DocumentParagraphWire[]): DocumentFieldWire[] {
+  const TOKEN =
+    /<w:fldChar w:fldCharType="(begin|separate|end)"\/>|<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/gu
+  type Open = {
+    headId: string
+    boundaryIds: string[]
+    instruction: string[]
+    separated: boolean
+  }
+  const fields: DocumentFieldWire[] = []
+  const stack: Open[] = []
+  const index = new Map(paragraphs.map((wire, i) => [wire.id, i]))
+  for (const wire of paragraphs) {
+    const xml = wire.runs.flatMap((run) => run.preservedXmlFragments).join('')
+    for (const match of xml.matchAll(TOKEN)) {
+      const type = match[1]
+      const open = stack[stack.length - 1]
+      if (type === 'begin') {
+        stack.push({
+          headId: wire.id,
+          boundaryIds: [wire.id],
+          instruction: [],
+          separated: false,
+        })
+      } else if (type === 'separate') {
+        if (open) {
+          open.separated = true
+          if (!open.boundaryIds.includes(wire.id)) {
+            open.boundaryIds.push(wire.id)
+          }
+        }
+      } else if (type === 'end') {
+        if (!open) continue
+        stack.pop()
+        if (!open.boundaryIds.includes(wire.id)) {
+          open.boundaryIds.push(wire.id)
+        }
+        const paragraphIds = paragraphs
+          .slice(index.get(open.headId), (index.get(wire.id) ?? 0) + 1)
+          .map((covered) => covered.id)
+        fields.push({
+          headId: open.headId,
+          tailId: wire.id,
+          closed: true,
+          boundaryIds: open.boundaryIds,
+          paragraphIds,
+          resultIds: paragraphIds.filter((id) => id !== wire.id),
+          instruction: open.instruction.join(''),
+          rangeReplaceable: open.headId !== wire.id,
+          boundariesAnchored: true,
+        })
+      } else if (open && !open.separated && match[2] !== undefined) {
+        open.instruction.push(decodeXmlReferences(match[2]))
+      }
+    }
+  }
+  return fields
+}
+
+function bodyStory(
+  paragraphs: DocumentParagraphWire[],
+  fields?: DocumentFieldWire[],
+): DocumentStoryWire {
   return {
     partName: 'word/document.xml',
     kind: 'document',
     paragraphs,
     preservedXmlFragments: [],
+    fields: fields ?? storyFields(paragraphs),
+    unanchoredFieldParagraphIds: [],
   }
 }
 
@@ -144,10 +221,11 @@ function facts(
     batchDeletions?: ReadonlySet<string>
     drafts?: Record<string, string>
     extraRuns?: Record<string, DocumentParagraphWire['runs']>
+    fields?: DocumentFieldWire[]
   } = {},
 ) {
   return createTableOfAuthoritiesFacts({
-    model: model(paragraphs),
+    model: model(paragraphs, overrides.fields),
     batchDeletions: overrides.batchDeletions ?? new Set(),
     drafts: overrides.drafts ?? {},
     extraRuns: overrides.extraRuns ?? {},
@@ -175,29 +253,34 @@ describe('table-of-authorities refresh draft', () => {
 
 describe('tableOfAuthoritiesFields', () => {
   it('maps the head paragraph to the range the field covers', () => {
-    const fields = tableOfAuthoritiesFields([
-      paragraph('before'),
-      fieldHead('head'),
-      fieldEntry('e1', '[2020] UKSC 1'),
-      fieldTail('tail', 'rest'),
-      paragraph('after'),
-    ])
+    const fields = tableOfAuthoritiesFields(
+      bodyStory([
+        paragraph('before'),
+        fieldHead('head'),
+        fieldEntry('e1', '[2020] UKSC 1'),
+        fieldTail('tail', 'rest'),
+        paragraph('after'),
+      ]),
+    )
     const field = fields.get('head')
-    expect(field).toEqual({
+    expect(field).toMatchObject({
       headId: 'head',
       resultIds: ['head', 'e1'],
       paragraphIds: ['head', 'e1', 'tail'],
+      rangeReplaceable: true,
     })
     expect(fields.size).toBe(1)
   })
 
-  it('drops an unbalanced field and keeps the balanced one', () => {
-    const fields = tableOfAuthoritiesFields([
-      fieldHead('head'),
-      fieldTail('tail', 'rest'),
-      fieldHead('broken'),
-      paragraph('plain'),
-    ])
+  it('drops an unclosed field and keeps the closed one', () => {
+    const fields = tableOfAuthoritiesFields(
+      bodyStory([
+        fieldHead('head'),
+        fieldTail('tail', 'rest'),
+        fieldHead('broken'),
+        paragraph('plain'),
+      ]),
+    )
     expect(fields.get('head')?.paragraphIds).toEqual(['head', 'tail'])
     expect(fields.has('broken')).toBe(false)
   })
@@ -340,15 +423,123 @@ describe('table-of-authorities refresh partition', () => {
     ])
   })
 
-  it('blocks a refresh when the tail is marked for deletion', () => {
+  it('blocks a lone tail deletion that would split the field', () => {
     const plan = planDocumentSave(model(storedField()), {
       ...emptyDraftState(),
       deletedParagraphIds: ['tail'],
       structures: [refreshDraft('s1', 'head')],
     })
+    // The tail carries the field's `end`: removing it alone is refused, so
+    // the field survives intact and the queued refresh keeps.
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['delete'])
+    expect(plan.blocked[0]?.reason).toContain('only be removed as a whole')
+    expect(plan.operations).toEqual([
+      { type: 'update_table_of_authorities', paragraphId: 'head' },
+    ])
+  })
+
+  it('blocks appended text that would drop a runless boundary paragraph', () => {
+    // A runless paragraph holding a boundary marker is not deleted by a
+    // mark here — the batch replaces the empty element when appended text
+    // lands, an implicit delete the writer's `deletedIds` still collects.
+    const paragraphs = [
+      paragraph('p0', 'Keep.'),
+      { id: 'head', runs: [], preservedXmlFragments: [] },
+      fieldEntry('e1', '[2020] UKSC 1'),
+      fieldTail('tail', 'rest'),
+      paragraph('after', 'After.'),
+    ]
+    const fields: DocumentFieldWire[] = [
+      {
+        headId: 'head',
+        tailId: 'tail',
+        closed: true,
+        boundaryIds: ['head', 'tail'],
+        paragraphIds: ['head', 'e1', 'tail'],
+        resultIds: ['head', 'e1'],
+        instruction: ' TOA \\h \\c "1" ',
+        rangeReplaceable: true,
+        boundariesAnchored: true,
+      },
+    ]
+    const plan = planDocumentSave(model(paragraphs, fields), {
+      ...emptyDraftState(),
+      extraRuns: {
+        head: [{ id: 'head-x', text: 'typed', preservedXmlFragments: [] }],
+      },
+    })
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['extra-runs'])
+    expect(plan.blocked[0]?.reason).toContain('only be removed as a whole')
+    expect(
+      plan.operations.some(
+        (op) => op.type === 'delete_paragraph' && op.paragraphId === 'head',
+      ),
+    ).toBe(false)
+  })
+
+  it('blocks the appended text too when a runless boundary paragraph is also marked', () => {
+    // Blocking only the delete mark still lets the implicit replacement
+    // drop the element — the appended text is the second removal path and
+    // must be held back with it, or the batch 400s on every retry.
+    const paragraphs = [
+      paragraph('p0', 'Keep.'),
+      { id: 'head', runs: [], preservedXmlFragments: [] },
+      fieldEntry('e1', '[2020] UKSC 1'),
+      fieldTail('tail', 'rest'),
+      paragraph('after', 'After.'),
+    ]
+    const fields: DocumentFieldWire[] = [
+      {
+        headId: 'head',
+        tailId: 'tail',
+        closed: true,
+        boundaryIds: ['head', 'tail'],
+        paragraphIds: ['head', 'e1', 'tail'],
+        resultIds: ['head', 'e1'],
+        instruction: ' TOA \\h \\c "1" ',
+        rangeReplaceable: true,
+        boundariesAnchored: true,
+      },
+    ]
+    const plan = planDocumentSave(model(paragraphs, fields), {
+      ...emptyDraftState(),
+      deletedParagraphIds: ['head'],
+      extraRuns: {
+        head: [{ id: 'head-x', text: 'typed', preservedXmlFragments: [] }],
+      },
+    })
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual([
+      'extra-runs',
+      'delete',
+    ])
+    expect(plan.operations).toEqual([])
+  })
+
+  it('blocks a refresh on a field whose shape cannot be replaced', () => {
+    const paragraphs = storedField()
+    const foreign = storyFields(paragraphs).map((field) =>
+      field.headId === 'head' ? { ...field, rangeReplaceable: false } : field,
+    )
+    const plan = planDocumentSave(model(paragraphs, foreign), {
+      ...emptyDraftState(),
+      structures: [refreshDraft('s1', 'head')],
+    })
+    expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['structure'])
+    expect(plan.blocked[0]?.reason).toContain('cannot be updated in place')
+    expect(plan.operations).toEqual([])
+  })
+
+  it('blocks a refresh when its whole field is marked for deletion', () => {
+    const plan = planDocumentSave(model(storedField()), {
+      ...emptyDraftState(),
+      deletedParagraphIds: ['head', 'e1', 'tail'],
+      structures: [refreshDraft('s1', 'head')],
+    })
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['structure'])
     expect(plan.blocked[0]?.reason).toContain('marked for deletion')
     expect(plan.operations).toEqual([
+      { type: 'delete_paragraph', paragraphId: 'head' },
+      { type: 'delete_paragraph', paragraphId: 'e1' },
       { type: 'delete_paragraph', paragraphId: 'tail' },
     ])
   })
@@ -405,6 +596,22 @@ describe('table-of-authorities refresh fold', () => {
       ),
     ).toBe(true)
   })
+
+  it('leaves a foreign-shaped field unfolded', () => {
+    const paragraphs = [
+      paragraph('c1', 'Cited [2020] UKSC 1.'),
+      fieldHead('head'),
+      fieldEntry('e1', '[2020] UKSC 1'),
+      fieldTail('tail', 'rest'),
+    ]
+    const foreign = storyFields(paragraphs).map((field) =>
+      field.headId === 'head' ? { ...field, rangeReplaceable: false } : field,
+    )
+    const stored = model(paragraphs, foreign)
+    const painted = withStructuralDrafts(stored, [refreshDraft('s1', 'head')])
+    const ids = painted.stories[0]?.paragraphs.map((item) => item.id) ?? []
+    expect(ids).toEqual(['c1', 'head', 'e1', 'tail'])
+  })
 })
 
 describe('table of authorities update ribbon', () => {
@@ -412,8 +619,12 @@ describe('table of authorities update ribbon', () => {
     paragraphs: DocumentParagraphWire[],
     paragraphId: string | null,
     structures: StructuralDraft[] = [],
+    options: {
+      fields?: DocumentFieldWire[]
+      drafts?: Record<string, string>
+    } = {},
   ) => {
-    const stored = model(paragraphs)
+    const stored = model(paragraphs, options.fields)
     const api = documentStructureToolbar({
       paragraphId,
       model: stored,
@@ -425,7 +636,7 @@ describe('table of authorities update ribbon', () => {
       deletedParagraphIds: new Set<string>(),
       trackChanges: false,
       structures,
-      drafts: {},
+      drafts: options.drafts ?? {},
       extraRuns: {},
       format: emptyFormatDrafts,
       breaks: [],
@@ -433,7 +644,10 @@ describe('table of authorities update ribbon', () => {
       setStructures: (update) => {
         structures.push(...update(structures))
       },
-      toaFacts: facts(paragraphs),
+      toaFacts: facts(paragraphs, {
+        fields: options.fields,
+        drafts: options.drafts ?? {},
+      }),
     })
     return { api, structures }
   }
@@ -482,5 +696,45 @@ describe('table of authorities update ribbon', () => {
     expect(api.tableOfAuthoritiesUpdateUnavailable).toContain(
       'already queued to update',
     )
+  })
+
+  it('reports the pending edit a stale queued refresh cannot survive', () => {
+    // A held refresh plus typed text inside the field: the save would hold
+    // the refresh back, so the field is not "already queued" — the reason
+    // is the pending edit the partition would report.
+    const paragraphs = [
+      paragraph('c1', 'Cited [2020] UKSC 1.'),
+      fieldHead('head'),
+      fieldEntry('e1', '[2020] UKSC 1'),
+      fieldTail('tail', 'rest'),
+    ]
+    const { api } = toolbar(paragraphs, 'e1', [refreshDraft('s1', 'head')], {
+      drafts: { 'e1-r1': 'retyped' },
+    })
+    expect(api.tableOfAuthoritiesUpdateUnavailable).toContain(
+      'Pending edits inside this table of authorities',
+    )
+  })
+
+  it('refuses a foreign-shaped stored field in place of a generated one', () => {
+    const paragraphs = [
+      paragraph('c1', 'Cited [2020] UKSC 1.'),
+      fieldHead('head'),
+      fieldEntry('e1', '[2020] UKSC 1'),
+      fieldTail('tail', 'rest'),
+    ]
+    // A field whose stored shape the in-place rewrite does not compose —
+    // the parser's shape proof fails, so `rangeReplaceable` is false.
+    const foreign = storyFields(paragraphs).map((field) =>
+      field.headId === 'head' ? { ...field, rangeReplaceable: false } : field,
+    )
+    const { api, structures } = toolbar(paragraphs, 'e1', [], {
+      fields: foreign,
+    })
+    expect(api.tableOfAuthoritiesUpdateUnavailable).toContain(
+      'cannot be updated in place',
+    )
+    expect(api.updateTableOfAuthorities().inserted).toBe(false)
+    expect(structures).toEqual([])
   })
 })

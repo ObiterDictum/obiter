@@ -6,7 +6,11 @@ import {
 } from './document-paragraph-deletion'
 import type { LocalInsert } from './document-edits'
 
-function model(ids: readonly string[]): DocumentModelWire {
+function model(
+  ids: readonly string[],
+  fields: DocumentModelWire['stories'][number]['fields'] = [],
+  unanchoredFieldParagraphIds: string[] = [],
+): DocumentModelWire {
   return {
     version: 1,
     stories: [
@@ -19,6 +23,8 @@ function model(ids: readonly string[]): DocumentModelWire {
           preservedXmlFragments: [],
         })),
         preservedXmlFragments: [],
+        fields,
+        unanchoredFieldParagraphIds,
       },
     ],
     styles: [],
@@ -126,5 +132,55 @@ describe('planParagraphDeletion', () => {
         'insert-1',
       ),
     ).toEqual({ kind: 'refused', reason: 'last-paragraph' })
+  })
+
+  describe('field-boundary deletions', () => {
+    // p2 holds the field's begin/separate, p4 its end — p3 carries a
+    // result but no marker.
+    const field = {
+      headId: 'p2',
+      tailId: 'p4',
+      closed: true,
+      boundaryIds: ['p2', 'p4'],
+      paragraphIds: ['p2', 'p3', 'p4'],
+      resultIds: ['p2', 'p3'],
+      instruction: ' TOA \\h \\c "1" ',
+      rangeReplaceable: true,
+      boundariesAnchored: true,
+    }
+    const fieldModel = () => model(['p1', 'p2', 'p3', 'p4', 'p5'], [field])
+
+    it('refuses deleting a paragraph holding only part of the field', () => {
+      expect(planParagraphDeletion(fieldModel(), empty, 'p4')).toEqual({
+        kind: 'refused',
+        reason: 'field-boundary',
+      })
+      expect(planParagraphDeletion(fieldModel(), empty, 'p2')).toEqual({
+        kind: 'refused',
+        reason: 'field-boundary',
+      })
+    })
+
+    it('refuses deleting a paragraph an unanchored boundary hides in', () => {
+      const unanchored = model(['p1', 'p2', 'p3'], [], ['p2'])
+      expect(planParagraphDeletion(unanchored, empty, 'p2')).toEqual({
+        kind: 'refused',
+        reason: 'field-boundary',
+      })
+    })
+
+    it('allows deleting a covered paragraph carrying no boundary', () => {
+      const plan = planParagraphDeletion(fieldModel(), empty, 'p3')
+      expect(plan.kind).toBe('deleted')
+    })
+
+    it("allows deleting once the field's other boundary is already marked", () => {
+      const plan = planParagraphDeletion(
+        fieldModel(),
+        { inserts: [], deletedParagraphIds: ['p2', 'p3'] },
+        'p4',
+      )
+      expect(plan.kind).toBe('deleted')
+    })
   })
 })

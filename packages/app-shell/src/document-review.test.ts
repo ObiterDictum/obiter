@@ -31,6 +31,8 @@ function modelWith(
           preservedXmlFragments: [],
         })),
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

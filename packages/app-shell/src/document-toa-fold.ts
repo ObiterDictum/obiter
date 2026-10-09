@@ -4,6 +4,8 @@ import type {
 } from '@obiter/contracts'
 import {
   FALLBACK_TAB_POSITION_TWIPS,
+  fieldInstructionsInXml,
+  tableAuthorityMarkMatches,
   tableAuthorityMarkWires,
   tableOfAuthoritiesCitations,
   toaEntryParagraphWire,
@@ -12,6 +14,7 @@ import {
 } from '@obiter/ooxml'
 
 import { spliceRunAtOffset } from './document-footnote-fold'
+import { documentStory } from './document-model-text'
 import type { StructuralDraft } from './document-structural-drafts'
 import { tableOfAuthoritiesFields } from './document-toa-availability'
 import { splitRunsAtOffset } from './document-toc-fold'
@@ -290,12 +293,16 @@ export function createTableOfAuthoritiesFold(
      * paragraphs up to the one holding its `end` are replaced by a
      * rebuilt heading and entries, marks fold only where an occurrence
      * is not already marked, and the tail keeps its `end` run and text.
-     * A draft whose field is gone — or whose head no longer opens a
-     * `TOA` field — folds nothing so the draft stays pending.
+     * The field the draft names comes from the parser's stored metadata —
+     * the same pairing and shape the writer proves — so a draft whose
+     * field is gone, foreign-shaped, or cannot survive the writer's
+     * contract folds nothing and stays pending.
      */
     refresh(paragraphs: DocumentParagraphWire[], draft: ToaRefreshDraft) {
-      const field = tableOfAuthoritiesFields(paragraphs).get(draft.paragraphId)
-      if (!field) return false
+      const field = tableOfAuthoritiesFields(documentStory(model)).get(
+        draft.paragraphId,
+      )
+      if (!field || !field.rangeReplaceable) return false
       const removedIds = new Set(field.resultIds)
       const { occurrences, entries } = citations(
         paragraphs.filter((paragraph) => !removedIds.has(paragraph.id)),
@@ -345,7 +352,10 @@ export function createTableOfAuthoritiesFold(
  * painted wires: the mark runs carry no text, so the check walks runs at
  * and after the citation's end offset — an `offset` landing inside a
  * run's text has no mark (the splice that placed one would have split the
- * run), and the first run with text past the point bounds the scan.
+ * run), and the first run with text past the point bounds the scan. The
+ * match is on the parsed instruction, the writer's own rule, so a mark
+ * split across `instrText` runs or written by another tool counts the
+ * same.
  */
 function hasAuthorityMarkAtWire(
   wire: DocumentParagraphWire,
@@ -353,7 +363,6 @@ function hasAuthorityMarkAtWire(
   citation: string,
   drafts: Record<string, string>,
 ) {
-  const instruction = ` TA \\l "${citation}"`
   const marks: DocumentParagraphWire['runs'] = []
   let cursor = 0
   for (const run of wire.runs) {
@@ -367,7 +376,8 @@ function hasAuthorityMarkAtWire(
     cursor += length
   }
   if (cursor !== end) return false
-  return marks.some((run) =>
-    run.preservedXmlFragments.join('').includes(instruction),
+  const xml = marks.map((run) => run.preservedXmlFragments.join('')).join('')
+  return fieldInstructionsInXml(xml).some((instruction) =>
+    tableAuthorityMarkMatches(instruction, citation),
   )
 }
