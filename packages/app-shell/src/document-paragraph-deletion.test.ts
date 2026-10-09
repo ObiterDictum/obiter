@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'bun:test'
-import type { DocumentModelWire } from '@obiter/contracts'
+import {
+  documentModelWireSchema,
+  type DocumentModelWire,
+} from '@obiter/contracts'
+import { emptyDraftState } from './document-draft-state'
+import { FIELD_METADATA_MESSAGE, type LocalInsert } from './document-edits'
 import {
   planParagraphDeletion,
   type ParagraphDeletionPlan,
 } from './document-paragraph-deletion'
-import type { LocalInsert } from './document-edits'
+import { partitionDraftState } from './document-save-partition'
 
 function model(
   ids: readonly string[],
@@ -181,6 +186,61 @@ describe('planParagraphDeletion', () => {
         'p4',
       )
       expect(plan.kind).toBe('deleted')
+    })
+  })
+
+  describe('a wire without field metadata', () => {
+    // The model a server that predates field metadata serves: the same
+    // wire minus the keys the parser now guarantees. Serialising then
+    // deleting keeps the fixture a genuine legacy response — keys absent,
+    // not empty arrays — standing in for the response `apiFetch` trusts
+    // without schema-checking it.
+    const legacyModel = (ids: readonly string[]): DocumentModelWire => {
+      const legacy = JSON.parse(JSON.stringify(model(ids))) as {
+        stories: Record<string, unknown>[]
+      }
+      for (const story of legacy.stories) {
+        delete story.fields
+        delete story.unanchoredFieldParagraphIds
+      }
+      return legacy as DocumentModelWire
+    }
+
+    it('fails model validation, so a cached legacy model regenerates', () => {
+      expect(
+        documentModelWireSchema.safeParse(legacyModel(['p1', 'p2'])).success,
+      ).toBe(false)
+    })
+
+    it('refuses removing a stored paragraph with the named reason', () => {
+      for (const id of ['p1', 'p2']) {
+        expect(
+          planParagraphDeletion(legacyModel(['p1', 'p2']), empty, id),
+        ).toEqual({ kind: 'refused', reason: 'field-metadata' })
+      }
+    })
+
+    it('still removes a pending insert, which holds no stored markup', () => {
+      const plan = planParagraphDeletion(
+        legacyModel(['p1', 'p2']),
+        { inserts: [insert], deletedParagraphIds: [] },
+        'insert-1',
+      )
+      expect(plan.kind).toBe('deleted')
+    })
+
+    it('blocks the removal at the save partition with the same reason', () => {
+      const partition = partitionDraftState(legacyModel(['p1', 'p2']), {
+        ...emptyDraftState(),
+        deletedParagraphIds: ['p1'],
+      })
+      expect(partition.keep.deletedParagraphIds).toEqual([])
+      expect(partition.blocked).toEqual([
+        expect.objectContaining({
+          slot: expect.objectContaining({ kind: 'delete', paragraphId: 'p1' }),
+          reason: FIELD_METADATA_MESSAGE,
+        }),
+      ])
     })
   })
 })

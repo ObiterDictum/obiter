@@ -1,4 +1,8 @@
-import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentStoryWire,
+  DocumentTextRunWire,
+} from '@obiter/contracts'
 import {
   editableParagraph,
   editableParagraphs,
@@ -58,12 +62,35 @@ export const PENDING_STRUCTURE_MESSAGE =
 export const FIELD_BOUNDARY_MESSAGE =
   'This paragraph belongs to a stored field that can only be removed as a whole.'
 
+/** The one user-facing reason a removal is refused when the wire cannot
+ * account for stored fields at all: a story served without `fields` or
+ * `unanchoredFieldParagraphIds` came from a server that predates the
+ * metadata — and the writer-side split check — so nothing client-side can
+ * prove a removal there leaves the document's field markers balanced. */
+export const FIELD_METADATA_MESSAGE =
+  'This document was loaded without its stored-field data, so paragraph removal is not supported.'
+
 /** The refusal a paragraph-deletion request can report: `last-paragraph` is
  * the story-level invariant, `last-note-paragraph` the same rule scoped to a
  * single footnote or endnote entry, `field-boundary` a partial removal of a
- * stored field's boundary markers. */
+ * stored field's boundary markers, `field-metadata` a story served without
+ * field metadata at all — a pre-field-metadata server where no removal is
+ * provably balanced. */
 export type ParagraphDeletionRefusal =
-  'last-paragraph' | 'last-note-paragraph' | 'field-boundary'
+  'last-paragraph' | 'last-note-paragraph' | 'field-boundary' | 'field-metadata'
+
+/** Whether the wire accounts for the story's stored fields. The schema
+ * requires both keys, so their absence means the model came from a server
+ * that predates field metadata — not a story that holds none — and no
+ * removal inside it can be proven to keep `fldChar` markers balanced:
+ * tracked and unmodelled markup hides markers the wire drops, and the old
+ * server has no writer-side split check either. */
+function storyFieldMetadataKnown(story: DocumentStoryWire): boolean {
+  return (
+    Array.isArray(story.fields) &&
+    Array.isArray(story.unanchoredFieldParagraphIds)
+  )
+}
 
 /** The outcome a paragraph-deletion request reports to the editor. A refusal is
  * typed so callers translate it rather than matching an English message, and so
@@ -84,6 +111,9 @@ export type ParagraphDeletionOutcome =
  * alike. The marker sets come from the parser's `story.fields`, so this is
  * the same pairing the writer's batch validation applies — including the
  * unanchored fields whose markers reach markup the model never carried.
+ * A story served without the metadata — a pre-field-metadata server's
+ * model — cannot prove any removal safe, so every stored-paragraph removal
+ * in it refuses rather than guessing field-free.
  */
 export function fieldBoundaryRefusals(
   model: DocumentModelWire,
@@ -92,6 +122,13 @@ export function fieldBoundaryRefusals(
   const refusals = new Map<string, string>()
   if (removedIds.size === 0) return refusals
   for (const story of model.stories) {
+    if (!storyFieldMetadataKnown(story)) {
+      const stored = new Set(story.paragraphs.map((item) => item.id))
+      for (const id of removedIds) {
+        if (stored.has(id)) refusals.set(id, FIELD_METADATA_MESSAGE)
+      }
+      continue
+    }
     for (const id of removedIds) {
       if (story.unanchoredFieldParagraphIds.includes(id)) {
         refusals.set(id, FIELD_BOUNDARY_MESSAGE)
@@ -145,6 +182,16 @@ export function paragraphDeletionRefusal(
   const story = editableStoryOf(model, anchorId)
   const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
   if (!order.includes(paragraphId)) return null
+  // A stored paragraph in a story served without field metadata cannot be
+  // removed at all — nothing on the wire says where its field markers
+  // hide. A pending insert is not stored markup, so it still goes freely.
+  if (
+    story !== undefined &&
+    story.paragraphs.some((paragraph) => paragraph.id === paragraphId) &&
+    !storyFieldMetadataKnown(story)
+  ) {
+    return 'field-metadata'
+  }
   // A paragraph holding part of a stored field's boundary cannot go alone:
   // the field's other markers survive and Word can never pair them. Marks
   // already made count toward coverage, so removing the field whole —
