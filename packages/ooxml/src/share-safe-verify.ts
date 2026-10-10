@@ -1,6 +1,8 @@
+import { documentKindSchema } from '@obiter/contracts'
 import type { OoxmlDocument, SourcePart } from './model'
 import {
   CUSTOM_PROPERTIES_NAMESPACE,
+  DOC_PROPS_VT_NAMESPACE,
   MARKING_PROPERTY_TYPES,
 } from './parts/custom-properties'
 import { parseXmlElements } from './parts/overlay'
@@ -11,6 +13,7 @@ import { verifyBinaryPayload } from './share-safe-binary'
 import { checkShareSafeXmlBytes } from './share-safe-bytecheck'
 import { planShareSafeCopy } from './share-safe-inventory'
 import { refuseShareSafe } from './share-safe-refusal'
+import { decodeXmlReferences } from './xml-lexemes'
 
 /**
  * Parts that may never ride in the emitted package — comment surfaces,
@@ -203,7 +206,11 @@ function verifyCoreProperties(document: OoxmlDocument) {
   }
 }
 
-/** Every property in the shipped part is a canonical product marking. */
+/**
+ * Every property in the shipped part is a canonical product marking —
+ * a known name carrying a value of its declared type: `documentKind`
+ * names a kind this build knows, and a flag spells `true` or `false`.
+ */
 function verifyCustomProperties(document: OoxmlDocument) {
   const relationship = document.model.relationships.find(
     (candidate) =>
@@ -218,16 +225,37 @@ function verifyCustomProperties(document: OoxmlDocument) {
   const elements = parseXmlElements(part.overlay!.source)
   for (const element of elements) {
     if (
-      element.namespaceUri === CUSTOM_PROPERTIES_NAMESPACE &&
-      element.localName === 'property'
+      element.namespaceUri !== CUSTOM_PROPERTIES_NAMESPACE ||
+      element.localName !== 'property'
     ) {
-      const name = attributeValue(element, '', 'name')
-      if (name === undefined || !(name in MARKING_PROPERTY_TYPES)) {
-        refuseShareSafe(
-          'unverifiable-output',
-          'a foreign custom property survived sanitisation',
-        )
-      }
+      continue
+    }
+    const name = attributeValue(element, '', 'name')
+    if (name === undefined || !(name in MARKING_PROPERTY_TYPES)) {
+      refuseShareSafe(
+        'unverifiable-output',
+        'a foreign custom property survived sanitisation',
+      )
+    }
+    const value = elements.find(
+      (candidate) =>
+        candidate.parent === element &&
+        candidate.namespaceUri === DOC_PROPS_VT_NAMESPACE,
+    )
+    const text = value
+      ? decodeXmlReferences(
+          part.overlay!.source.slice(value.startTagEnd, value.endTagStart),
+        ).trim()
+      : ''
+    if (
+      (name === 'obiter.documentKind' &&
+        !documentKindSchema.safeParse(text).success) ||
+      (name !== 'obiter.documentKind' && text !== 'true' && text !== 'false')
+    ) {
+      refuseShareSafe(
+        'unverifiable-output',
+        'a marking property shipped an unreadable value',
+      )
     }
   }
 }

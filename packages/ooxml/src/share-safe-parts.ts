@@ -55,6 +55,8 @@ export const WPG_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup'
 export const WPC_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas'
+export const DRAWINGML_2010_NAMESPACE =
+  'http://schemas.microsoft.com/office/drawing/2010/main'
 
 /**
  * The prefix every emitted part spells for a kept namespace. Emission
@@ -73,6 +75,7 @@ export const CANONICAL_NAMESPACE_PREFIXES = new Map<string, string>([
   [WPG_NAMESPACE, 'wpg'],
   [WPC_NAMESPACE, 'wpc'],
   [WP14_NAMESPACE, 'wp14'],
+  [DRAWINGML_2010_NAMESPACE, 'a14'],
   [MARKUP_COMPAT_NAMESPACE, 'mc'],
   [PACKAGE_REL_NAMESPACE, ''],
   [CONTENT_TYPES_NAMESPACE, ''],
@@ -89,6 +92,7 @@ export const IGNORABLE_NAMESPACES = new Set([
   WPG_NAMESPACE,
   WPC_NAMESPACE,
   WP14_NAMESPACE,
+  DRAWINGML_2010_NAMESPACE,
 ])
 
 export const PACKAGE_OWNER = ''

@@ -47,35 +47,37 @@ import {
   VERT_TEXT_VALUES,
   WRAP_TEXT_VALUES,
 } from './share-safe-drawing-attribute-sets'
+import {
+  PRESET_BEVEL,
+  PRESET_CAMERA,
+  PRESET_COLOR,
+  PRESET_GEOMETRY,
+  PRESET_LIGHT_RIG,
+  PRESET_MATERIAL,
+  PRESET_PATTERN,
+  PRESET_SHADOW,
+  PRESET_TEXT_WARP,
+  SYSTEM_COLOR,
+} from './share-safe-preset-attributes'
+import { SHARE_SAFE_EXTENSION_URIS } from './share-safe-drawing-vocabulary'
+import {
+  boundAllows,
+  enumBound,
+  shapeBound,
+  type ShareSafeValueBound,
+} from './share-safe-value-bounds'
 
 /** What the embedded vocabulary decides for one attribute. */
 export type EmbeddedAttributeVerdict =
   'keep' | 'strip' | 'refuse' | 'refuse-hidden'
 
 /** A kept value must match a declared enumeration or a grammar shape. */
-type EmbeddedValueBound =
-  | { kind: 'enum'; values: ReadonlySet<string> }
-  | { kind: 'shape'; pattern: RegExp }
+type EmbeddedValueBound = ShareSafeValueBound
 
-function embeddedBoundAllows(
-  bound: EmbeddedValueBound,
-  value: string,
-): boolean {
-  return bound.kind === 'enum'
-    ? bound.values.has(value)
-    : bound.pattern.test(value)
-}
+const embeddedBoundAllows = boundAllows
 
 const FLAG_VALUES = new Set(['0', '1', 'true', 'false', 'on', 'off'])
 const ON_VALUES = new Set(['1', 'true', 'on'])
-
-function enumBound(values: readonly string[]): EmbeddedValueBound {
-  return { kind: 'enum', values: new Set(values) }
-}
-
-function shapeBound(pattern: RegExp): EmbeddedValueBound {
-  return { kind: 'shape', pattern }
-}
 
 function scoped(
   bound: EmbeddedValueBound,
@@ -97,8 +99,6 @@ const GUID = shapeBound(
 const TOKEN = shapeBound(/^[A-Za-z][A-Za-z0-9]{0,31}$/u)
 /** A geometry guide name (`a:gd`): referenced by `fmla` formulas. */
 const IDENT = shapeBound(/^[A-Za-z_][\w.-]{0,62}$/u)
-/** Colour-slot names (`sysClr`, `prstClr`) are alphabetic tokens. */
-const COLOR_NAME = shapeBound(/^[A-Za-z]{3,25}$/u)
 /** Language tags (`en`, `en-US`) — short primary subtag, bounded tail. */
 const LANG_TAG = shapeBound(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8}){0,3}$/u)
 /** Four-letter ISO 15924 script codes (`Latn`, `Cyrl`, `Jpan`). */
@@ -218,10 +218,11 @@ const EMBEDDED_SCOPED_ATTRIBUTES: ReadonlyMap<
     'val',
     new Map([
       ['srgbClr', HEX6],
-      ['sysClr', COLOR_NAME],
-      ['prstClr', COLOR_NAME],
+      ['sysClr', SYSTEM_COLOR],
+      ['prstClr', PRESET_COLOR],
       ['schemeClr', SCHEME_CLR],
       ['prstDash', DASH],
+      ['useLocalDpi', FLAG],
       ...scoped(INT, PERCENT_VAL_ELEMENTS),
     ]),
   ],
@@ -276,19 +277,19 @@ const EMBEDDED_SCOPED_ATTRIBUTES: ReadonlyMap<
   ],
   ['len', scoped(ARROW_SIZE, ['headEnd', 'tailEnd'])],
   ['dir', new Map([...scoped(INT, SHADOW_ELEMENTS), ['lightRig', RECT_ALIGN]])],
-  ['rig', scoped(TOKEN, ['lightRig'])],
+  ['rig', scoped(PRESET_LIGHT_RIG, ['lightRig'])],
   [
     'prst',
-    scoped(TOKEN, [
-      'prstGeom',
-      'prstShdw',
-      'camera',
-      'bevelT',
-      'bevelB',
-      'pattFill',
+    new Map([
+      ['prstGeom', PRESET_GEOMETRY],
+      ['prstShdw', PRESET_SHADOW],
+      ['camera', PRESET_CAMERA],
+      ['bevelT', PRESET_BEVEL],
+      ['bevelB', PRESET_BEVEL],
+      ['pattFill', PRESET_PATTERN],
     ]),
   ],
-  ['prstMaterial', scoped(TOKEN, ['sp3d'])],
+  ['prstMaterial', scoped(PRESET_MATERIAL, ['sp3d'])],
   ['fov', scoped(INT, ['camera'])],
   ['zoom', scoped(INT, ['camera'])],
   ['cstate', scoped(BLIP_CSTATE, ['blip'])],
@@ -310,7 +311,7 @@ const EMBEDDED_SCOPED_ATTRIBUTES: ReadonlyMap<
   ['anchor', scoped(TEXT_ANCHOR, ['bodyPr', 'tcPr'])],
   ['fontAlgn', scoped(FONT_ALIGN, ['bodyPr'])],
   ['wrap', scoped(TEXT_WRAP, ['bodyPr'])],
-  ['prstTxWarp', scoped(TOKEN, ['bodyPr'])],
+  ['prstTxWarp', scoped(PRESET_TEXT_WARP, ['bodyPr'])],
   ['fill', scoped(PATH_FILL, ['path'])],
   ['stroke', scoped(FLAG, ['path'])],
   ['path', scoped(PATH_SHADE, ['path'])],
@@ -362,11 +363,12 @@ const GRAPHIC_DATA_URIS = new Set([
 ])
 
 /**
- * `a:ext uri` is an extension identifier — a GUID or a bounded schema URL
- * with path segments of word characters, never a free-text channel.
+ * `a:alpha`-family slots where a numeric `0` means fully transparent —
+ * `alpha`/`alphaMod`/`alphaRepl val` and `alphaModFix amt`. An
+ * `alphaOff val` of 100000 or more erases a parent's alpha entirely.
+ * Explicit invisibility is a hidden-content carrier, not a style choice.
  */
-const EXTENSION_URI_PATTERN =
-  /^(?:\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}|https?:\/\/(?:schemas\.openxmlformats\.org|schemas\.microsoft\.com|purl\.oclc\.org)(?:\/[\w.-]{1,40}){1,8})$/u
+const TRANSPARENT_ALPHA_ELEMENTS = new Set(['alpha', 'alphaMod', 'alphaRepl'])
 
 /**
  * The unqualified attribute verdict for an embedded element, given element
@@ -398,9 +400,34 @@ export function embeddedAttributeVerdict(
       return GRAPHIC_DATA_URIS.has(value) ? 'keep' : 'refuse'
     }
     if (elementLocalName === 'ext') {
-      return EXTENSION_URI_PATTERN.test(value) ? 'keep' : 'strip'
+      // An extension ships only when its URI names a supported
+      // extension — the element verdict removes the whole `a:ext`
+      // otherwise, so a kept identifier is always the supported one.
+      return SHARE_SAFE_EXTENSION_URIS.has(value) ? 'keep' : 'strip'
     }
     return 'strip'
+  }
+  // Explicit invisibility values refuse like `hidden`/`vanish` — an
+  // object a recipient cannot see must not ship under the copy.
+  if (
+    ((attributeLocalName === 'val' &&
+      TRANSPARENT_ALPHA_ELEMENTS.has(elementLocalName)) ||
+      (attributeLocalName === 'amt' && elementLocalName === 'alphaModFix')) &&
+    /^-?\d{1,19}$/u.test(value) &&
+    Number(value) === 0
+  ) {
+    return 'refuse-hidden'
+  }
+  if (
+    attributeLocalName === 'val' &&
+    elementLocalName === 'alphaOff' &&
+    /^-?\d{1,19}$/u.test(value) &&
+    Number(value) >= 100000
+  ) {
+    return 'refuse-hidden'
+  }
+  if (attributeLocalName === 'bwMode' && value === 'hidden') {
+    return 'refuse-hidden'
   }
   const scoped = EMBEDDED_SCOPED_ATTRIBUTES.get(attributeLocalName)
   if (scoped !== undefined) {

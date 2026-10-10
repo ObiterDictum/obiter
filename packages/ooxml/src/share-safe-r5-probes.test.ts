@@ -227,11 +227,11 @@ describe('share-safe r5: embedded attribute channels', () => {
       'typeface="Calibri"',
     ],
     [
-      'an extension keeps a bounded URI',
+      'a known extension keeps its URI and payload',
       SPPR(
-        '<a:extLst><a:ext uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"/></a:extLst>',
+        '<a:extLst><a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}"><a14:useLocalDpi xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" val="0"/></a:ext></a:extLst>',
       ),
-      'uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}"',
+      'a14:useLocalDpi val="0"',
     ],
     [
       'a blip compression state keeps its enum value',

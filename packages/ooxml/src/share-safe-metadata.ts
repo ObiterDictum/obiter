@@ -1,3 +1,4 @@
+import { documentKindSchema } from '@obiter/contracts'
 import { OoxmlError, type OoxmlDocument, type SourcePart } from './model'
 import {
   CUSTOM_PROPERTIES_NAMESPACE,
@@ -108,6 +109,16 @@ export function rewriteCustomProperties(
         )
       }
       if (text === '') continue
+      // The only string marking is `documentKind`, and the copy emits it
+      // only when it names a kind this build knows — an unknown kind is
+      // arbitrary text in a marking slot, not a classification, and the
+      // copy refuses rather than shipping it raw or dropping it silently.
+      if (!documentKindSchema.safeParse(text).success) {
+        refuseShareSafe(
+          'malformed-package',
+          `marking property ${name} holds an unrecognised kind`,
+        )
+      }
       kept.push(markingPropertyXml(pid++, name, text))
       continue
     }
@@ -117,14 +128,17 @@ export function rewriteCustomProperties(
         `marking property ${name} has a foreign value type`,
       )
     }
+    // Canonical markings spell a flag `true` or `false` — the numeric
+    // spellings foreign tools write are not this build's marking, and an
+    // unreadable flag refuses rather than guessing its polarity.
     const flag = text.toLowerCase()
-    if (flag !== 'true' && flag !== 'false' && flag !== '1' && flag !== '0') {
+    if (flag !== 'true' && flag !== 'false') {
       refuseShareSafe(
         'malformed-package',
         `marking property ${name} is not a readable flag`,
       )
     }
-    kept.push(markingPropertyXml(pid++, name, flag === 'true' || flag === '1'))
+    kept.push(markingPropertyXml(pid++, name, flag === 'true'))
   }
 
   // An orphaned custom.xml adopted for its markings needs the declaration a
