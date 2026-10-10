@@ -209,6 +209,15 @@ export const WRAP_TEXT_VALUES = [
 
 export const FONT_REF_INDEX_VALUES = ['major', 'minor', 'none'] as const
 
+/** `ST_BlendMode` — `a:fillOverlay@blend` values, verbatim. */
+export const BLEND_MODE_VALUES = [
+  'over',
+  'mult',
+  'screen',
+  'darken',
+  'lighten',
+] as const
+
 export const FLIP_VALUES = ['none', 'x', 'y', 'xy'] as const
 
 /**
@@ -234,7 +243,6 @@ export const INT_ATTRIBUTES = [
   'stPos',
   'fadeDir',
   'blurRad',
-  'rad',
   'l',
   't',
   'r',

@@ -12,6 +12,7 @@ import {
   ARROW_SIZE_VALUES,
   ARROW_TYPE_VALUES,
   AUTONUM_VALUES,
+  BLEND_MODE_VALUES,
   BLIP_CSTATE_VALUES,
   BW_MODE_VALUES,
   DASH_VALUES,
@@ -66,6 +67,7 @@ import {
   intRangeBound,
   shapeBound,
   unionBound,
+  UINT_BOUND,
   type ShareSafeValueBound,
 } from './share-safe-value-bounds'
 
@@ -259,8 +261,16 @@ export const EMBEDDED_SCOPED_ATTRIBUTES: ReadonlyMap<
     ]),
   ],
   ['a', scoped(POSITIVE_FIXED_PERCENTAGE, ['alphaRepl'])],
-  ['thresh', scoped(POSITIVE_FIXED_PERCENTAGE, ['alphaBiLevel'])],
+  ['thresh', scoped(POSITIVE_FIXED_PERCENTAGE, ['biLevel'])],
   ['amt', scoped(POSITIVE_PERCENTAGE, ['alphaModFix'])],
+  // `rad` is a non-negative radius wherever it ships — `blur`, `glow` and
+  // `softEdge` declare `ST_PositiveCoordinate`; `alphaOutset` declares a
+  // signed `ST_Coordinate` whose negative form is an alpha inset that
+  // erodes the shape's alpha mask, so it shares the same bound.
+  ['rad', scoped(UINT_BOUND, ['alphaOutset', 'blur', 'glow', 'softEdge'])],
+  // `a:fillOverlay@blend` is required; the transitional `ST_BlendMode`
+  // set contains no alpha-erasing mode, so the full enum may ship.
+  ['blend', scoped(enumBound(BLEND_MODE_VALUES), ['fillOverlay'])],
   [
     'pos',
     new Map([
