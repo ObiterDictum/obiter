@@ -45,16 +45,23 @@ Start an isolated lane the same way as for the e2e journey: set
      substitutes for the gate.
 5. When re-run with `--word-output <file> --word-version "<string>"`, the
    file is checked for evidence Word actually wrote it: it must differ from
-   both the input fixture and the cycle-1 export, parse as a DOCX, and its
-   `docProps/app.xml` must declare `Microsoft Office Word` as the producer.
-   Anything else is recorded as `word.status: "rejected"` with the observed
-   producer and the run fails — a flag alone never earns `"checked"`. An
-   accepted file is uploaded, exported as `cycle-2-obiter-export.docx`, and
-   compared against cycle 1 at OOXML level (body text, paragraph/story
-   counts, headings, section breaks, fields, styles, numbering, images,
-   comments, tracked changes, footnotes, endnotes, opaque parts).
-6. Writes `manifest.json` with provenance (git SHA, API origin, server-reported
-   database, runtime, artifact SHA-256s, Word evidence) and the check results.
+   both the input fixture and the cycle-1 export, carry the same body text
+   as the cycle-1 export, parse as a DOCX, and its `docProps/app.xml` must
+   declare `Microsoft Office Word` as the producer. Anything else is
+   recorded as `word.status: "rejected"` with the observed producer and
+   the run fails. An accepted file is recorded as `manual-reported` —
+   observed producer evidence with `verification: "externally-unverified"`,
+   the claimed Word version, and the input and cycle-1 artifact hashes it
+   correlates to — then uploaded, exported as
+   `cycle-2-obiter-export.docx`, and compared against cycle 1 at OOXML
+   level (body text, paragraph/story counts, headings, section breaks,
+   fields, styles, numbering, images, comments, tracked changes,
+   footnotes, endnotes, opaque parts).
+6. Writes `manifest.json` with provenance (git SHA, API origin, API-reported
+   commit SHA and checkout, server-reported database, runtime, artifact
+   SHA-256s, Word evidence) and the check results. `wordAcceptance` is the
+   release gate and stays `not-checked` on every run this harness can
+   produce today — see "What it does not claim".
 
 ## Usage
 
@@ -86,7 +93,11 @@ postgres container.
   exports. Visual/behavioural verification inside Word is an operator
   observation recorded through `--word-version` and the manifest.
 - The producer check is evidence, not proof of a licensed Word install: an
-  operator could hand-edit `docProps/app.xml`. The manifest records the
-  observed producer string so the claim stays auditable.
+  operator could hand-edit `docProps/app.xml` — the test suite does
+  exactly that — so a Word-named producer earns `manual-reported` with
+  `verification: "externally-unverified"`, never a verified verdict. The
+  `wordAcceptance` gate therefore stays `not-checked` until an operator
+  records open/save/visual evidence outside this harness; only then may a
+  human mark it checked.
 - A run without `--word-output` means the Word leg has NOT happened; the
   manifest says `word.status: "not-checked"` (or `awaiting-word-step`).

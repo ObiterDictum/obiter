@@ -19,6 +19,7 @@ import {
   SHARED_WEB_PORT,
   verifyServedCheckout,
   WORKTREE_ROOT,
+  type LaneFetch,
 } from '../../apps/web/lane-target.mjs'
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
@@ -29,15 +30,27 @@ export type LaneContext = {
   webOrigin: string
   databaseName: string
   headSha: string
+  /**
+   * The provenance the API itself served when asked for its bound database,
+   * recorded for the manifest. verifyServedCheckout already proved these
+   * equal this checkout at HEAD; recording what the server reported keeps the
+   * manifest's provenance server-attested rather than flag-attested.
+   */
+  api: {
+    commitSha: string | null
+    checkoutRoot: string | null
+  }
+}
+
+type ServedProvenance = {
+  commitSha?: string
+  checkoutRoot?: string
+  envFile?: string | null
+  databaseName?: string | null
 }
 
 type ServedHealth = {
-  provenance?: {
-    commitSha?: string
-    checkoutRoot?: string
-    envFile?: string | null
-    databaseName?: string | null
-  }
+  provenance?: ServedProvenance
 }
 
 /** A parsed loopback origin that is not the shared dev stack. */
@@ -108,15 +121,15 @@ export function testDatabaseName(raw: string | undefined): string {
   return raw
 }
 
-async function servedDatabaseName(apiOrigin: string): Promise<string | null> {
-  let health: ServedHealth
+async function servedApiProvenance(
+  apiOrigin: string,
+  fetchImpl: LaneFetch,
+): Promise<ServedProvenance | undefined> {
+  let body: unknown
   try {
-    const response = await fetch(`${apiOrigin}/api/health`)
+    const response = await fetchImpl(`${apiOrigin}/api/health`)
     if (!response.ok) throw new Error(`status ${response.status}`)
-    // SAFETY: every ServedHealth field is optional and read through optional
-    // chaining — a body of any shape lands on `undefined`, which the caller
-    // reports as an unprovable write target.
-    health = (await response.json()) as ServedHealth
+    body = await response.json()
   } catch {
     throw new Error(
       `The API at ${apiOrigin} did not answer /api/health with lane ` +
@@ -124,8 +137,17 @@ async function servedDatabaseName(apiOrigin: string): Promise<string | null> {
         'dropped between checks — restart the lane.',
     )
   }
-  const name = health.provenance?.databaseName
-  return typeof name === 'string' ? name : null
+  // A body of any non-object shape — null included — cannot prove the write
+  // target; the caller reports absent provenance as an unprovable target
+  // rather than crashing on `health.provenance`.
+  if (typeof body !== 'object' || body === null) return undefined
+  // SAFETY: every ServedProvenance field is optional and read through
+  // optional chaining — a malformed body lands on `undefined`, which the
+  // caller refuses as an unprovable write target.
+  const provenance = (body as ServedHealth).provenance
+  return typeof provenance === 'object' && provenance !== null
+    ? provenance
+    : undefined
 }
 
 /**
@@ -136,11 +158,18 @@ async function servedDatabaseName(apiOrigin: string): Promise<string | null> {
  * --db-name, or the flag would attest to a write target the server does not
  * share.
  */
-export async function resolveLane(input: {
-  api: string
-  web: string
-  dbName: string | undefined
-}): Promise<LaneContext> {
+export async function resolveLane(
+  input: {
+    api: string
+    web: string
+    dbName: string | undefined
+  },
+  deps: { fetchImpl?: LaneFetch } = {},
+): Promise<LaneContext> {
+  // The HTTP boundary is the only injected seam: tests stand in for the
+  // lane's servers while every comparison this function composes runs for
+  // real.
+  const fetchImpl = deps.fetchImpl ?? fetch
   const api = isolatedOrigin(input.api, 'API')
   const web = isolatedOrigin(input.web, 'Web')
   const databaseName = testDatabaseName(input.dbName)
@@ -160,10 +189,14 @@ export async function resolveLane(input: {
       webOrigin: web.origin,
       apiOrigin: api.origin,
     },
-    { worktreeRoot: WORKTREE_ROOT, headSha: head },
+    { worktreeRoot: WORKTREE_ROOT, headSha: head, fetchImpl },
   )
 
-  const served = await servedDatabaseName(api.origin)
+  const provenance = await servedApiProvenance(api.origin, fetchImpl)
+  const served =
+    typeof provenance?.databaseName === 'string'
+      ? provenance.databaseName
+      : null
   if (served !== databaseName) {
     throw new Error(
       `The API at ${api.origin} reports it is bound to database ` +
@@ -179,5 +212,13 @@ export async function resolveLane(input: {
     webOrigin: web.origin,
     databaseName,
     headSha: head,
+    api: {
+      commitSha:
+        typeof provenance?.commitSha === 'string' ? provenance.commitSha : null,
+      checkoutRoot:
+        typeof provenance?.checkoutRoot === 'string'
+          ? provenance.checkoutRoot
+          : null,
+    },
   }
 }

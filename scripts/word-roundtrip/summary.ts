@@ -23,15 +23,27 @@ export type Summary = {
   opaqueParts: number
 }
 
+/**
+ * The document story's text, whitespace-normalised. The word-step's
+ * relatedness check compares this against the cycle-1 export: a file with
+ * different body text is a different document, however it was produced.
+ */
+export function documentBodyText(
+  doc: Awaited<ReturnType<typeof parseDocx>>,
+): string {
+  const story = doc.model.stories.find((item) => item.kind === 'document')
+  return (story?.paragraphs ?? [])
+    .map((paragraph) => paragraph.runs.map((run) => run.text).join(''))
+    .join('\n')
+    .replaceAll(/\s+/g, ' ')
+    .trim()
+}
+
 export async function summarise(bytes: Uint8Array): Promise<Summary> {
   const doc = await parseDocx(bytes)
   const model = doc.model
   const storyKinds = model.stories.map((story) => story.kind).sort()
   const documentStory = model.stories.find((story) => story.kind === 'document')
-  const textOf = (story: typeof documentStory) =>
-    (story?.paragraphs ?? [])
-      .map((paragraph) => paragraph.runs.map((run) => run.text).join(''))
-      .join('\n')
   const count = (kind: string) =>
     model.stories.filter((story) => story.kind === kind).length
   const sectionBreaks = (documentStory?.paragraphs ?? []).filter((paragraph) =>
@@ -40,7 +52,7 @@ export async function summarise(bytes: Uint8Array): Promise<Summary> {
     ),
   ).length
   return {
-    bodyText: textOf(documentStory).replaceAll(/\s+/g, ' ').trim(),
+    bodyText: documentBodyText(doc),
     paragraphs: documentStory?.paragraphs.length ?? 0,
     headings: (documentStory?.paragraphs ?? []).filter(
       (paragraph) =>

@@ -15,8 +15,12 @@
  *     and reported as NOT Word — it never substitutes for the acceptance
  *     gate.
  *   - A supplied --word-output is not trusted at face value: the file must
- *     differ from the fixture and the cycle-1 export, parse as a DOCX, and
- *     name Microsoft Office Word as its docProps/app.xml producer.
+ *     differ from the fixture and the cycle-1 export, carry the same body
+ *     text, parse as a DOCX, and name Microsoft Office Word as its
+ *     docProps/app.xml producer. That earns `manual-reported` evidence, never
+ *     a verified gate: app.xml is operator-mutable, so `wordAcceptance`
+ *     stays `not-checked` until recorded external evidence — open without
+ *     repair, save, visual comparison — exists.
  *
  * Lane safety (scripts/word-roundtrip/lane.ts): both origins must be
  * loopback, neither may sit on the shared dev ports 8787/3000, --db-name must
@@ -52,6 +56,7 @@ import { compare, summarise } from './summary'
 import {
   detectWord,
   inspectWordOutput,
+  wordRecord,
   wordStepInstructions,
 } from './word-step'
 
@@ -86,6 +91,8 @@ const { manifest, record, fail, write } = createRunManifest(outDir, {
   api: lane.apiOrigin,
   git: lane.headSha,
   databaseName: lane.databaseName,
+  apiCommitSha: lane.api.commitSha,
+  apiCheckoutRoot: lane.api.checkoutRoot,
 })
 const client = createClient({
   apiOrigin: lane.apiOrigin,
@@ -153,24 +160,29 @@ if (!args.wordOutput) {
   process.exit(0)
 }
 
-if (!args.wordVersion) {
+// `fail` exits, so the `||` is a guard, not a default: an absent or empty
+// version never reaches the record — the manifest needs the claimed build.
+const wordVersion =
+  args.wordVersion ||
   fail(
     '--word-output requires --word-version so the manifest records real Word provenance',
   )
-}
 const wordBytes = new Uint8Array(readFileSync(path.resolve(args.wordOutput)))
 
-// Producer evidence, not the flag: the file must prove Word wrote it before
-// it earns `word.status: "checked"` or reaches the upload step at all.
+// The file carries evidence, not proof: it must differ from the inputs,
+// carry the same body text, and name the Word producer before it reaches
+// the upload step at all.
 const evidence = await inspectWordOutput(wordBytes, {
   fixtureSha256: sha256(fixture),
   cycle1Sha256: sha256(firstExport),
+  cycle1BodyText: firstSummary.bodyText,
 })
+const correlatedWith = {
+  artifact: 'cycle-1-obiter-export.docx',
+  sha256: sha256(firstExport),
+}
+manifest.word = wordRecord(evidence, wordVersion, correlatedWith)
 if (evidence.status === 'rejected') {
-  manifest.word = {
-    ...evidence,
-    version: args.wordVersion,
-  }
   manifest.result = `fail: word output rejected — ${evidence.reason}`
   write()
   console.error(`FAIL: word output rejected — ${evidence.reason}`)
@@ -191,10 +203,6 @@ const secondSummary = await summarise(secondExport)
 
 const checks = compare(firstSummary, secondSummary)
 const semanticPass = checks.every((check) => check.pass)
-manifest.word = {
-  ...evidence,
-  version: args.wordVersion,
-}
 manifest.cycle2 = {
   documentId: secondId,
   summary: { ...secondSummary, bodyText: undefined },
@@ -206,7 +214,7 @@ manifest.semanticComparison = {
   pass: semanticPass,
 }
 manifest.result = semanticPass
-  ? 'pass'
+  ? 'cycles-passed'
   : 'fail: semantic comparison found differences'
 write()
 

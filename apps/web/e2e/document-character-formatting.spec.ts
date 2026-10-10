@@ -139,7 +139,8 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
@@ -206,7 +207,10 @@ async function enableTracking(page: Page) {
   await page.getByRole('tab', { name: 'Home' }).click()
 }
 
-type EditBody = { operations?: Array<Record<string, unknown>> }
+type EditBody = {
+  trackChanges?: boolean
+  operations?: Array<Record<string, unknown>>
+}
 
 function isEditBody(value: unknown): value is EditBody {
   return typeof value === 'object' && value !== null && 'operations' in value
@@ -318,7 +322,7 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
   }
 })
 
-test('refuses partial character formatting under track changes', async ({
+test('queues partial character formatting under track changes and saves it', async ({
   page,
   request,
 }) => {
@@ -326,12 +330,19 @@ test('refuses partial character formatting under track changes', async ({
   const matter = `E53 tracked ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
+  const editBodies: EditBody[] = []
+  page.on('request', (outgoing) => {
+    if (/\/api\/documents\/[^/]+\/edit$/u.test(outgoing.url())) {
+      const body = outgoing.postDataJSON()
+      if (isEditBody(body)) editBodies.push(body)
+    }
+  })
+
   await enableTracking(page)
   await selectFirst(page, HEADING, SELECTED.length)
 
-  // A tracked range split has no rPrChange writer, so every Home character
-  // control holds and surfaces the refusal instead of painting a change the
-  // save would drop.
+  // A tracked range split is recorded as a w:rPrChange, so every character
+  // control stays available and queues a draft instead of refusing.
   for (const label of [
     'Strikethrough',
     'Highlight',
@@ -339,12 +350,39 @@ test('refuses partial character formatting under track changes', async ({
     'Subscript',
   ]) {
     await expect(
-      page.getByRole('button', {
-        name: new RegExp(`^${label}: Partial formatting is not yet recorded`),
-      }),
-    ).toBeDisabled()
+      page.getByRole('button', { name: label, exact: true }),
+    ).toBeEnabled()
   }
-  await shot(page, '04-tracked-range-refusal')
+
+  await page.getByRole('button', { name: 'Strikethrough' }).click()
+  await page.getByRole('button', { name: 'Superscript' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Strikethrough' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(
+    page.getByRole('button', { name: 'Superscript' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  const trackedStyle = await paintedStyle(page, SELECTED)
+  expect(trackedStyle?.textDecoration).toContain('line-through')
+  expect(trackedStyle?.verticalAlign).toBe('super')
+  await shot(page, '04-tracked-range-queued')
+
+  await saveAndWait(page)
+
+  // The batch flew tracked and addressed the selection as a paragraph range,
+  // the address a mid-run split has to carry.
+  expect(editBodies.at(-1)?.trackChanges).toBe(true)
+  const operations = editBodies.flatMap((body) => body.operations ?? [])
+  expect(operations).toContainEqual(
+    expect.objectContaining({
+      type: 'set_run_emphasis',
+      paragraphId: expect.any(String),
+      from: 0,
+      to: SELECTED.length,
+      strikethrough: true,
+      vertAlign: 'superscript',
+    }),
+  )
 })
 
 /*

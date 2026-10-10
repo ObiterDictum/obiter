@@ -934,8 +934,12 @@ organisation records, auth secrets, or Meilisearch admin keys. Production
 health must return only `{ status: 'ok', service: 'obiter-api' }` and must never
 expose environment, version, port, database or Meilisearch configuration,
 Rampart settings, matter data, or secrets. Development health additively
-includes the API commit SHA and checkout root for local provenance checks; these
-fields are not exposed outside development. Adding an auth requirement is a
+includes the API commit SHA, checkout root, resolved `.env` path and the
+database name derived from the API's configured `DATABASE_URL` (a malformed
+URL reports `null` rather than a guessed name) for local provenance checks —
+an isolated lane asks the server which database it is bound to instead of
+trusting a CLI flag. These fields are not exposed outside development.
+Adding an auth requirement is a
 product change and must fail `allows anonymous callers on deliberately public
 routes` in `services/api/src/routes/public-access.test.ts` rather than landing
 silently.
@@ -2206,8 +2210,13 @@ generated PDF; they cannot prove output in every browser, driver or printer,
 and say nothing about Word. The Word leg is an explicit operator acceptance
 gate in `scripts/word-roundtrip`: the harness only runs against a loopback,
 non-shared lane whose API reports this checkout at `HEAD` and the declared
-`*_test` database, and a `--word-output` file earns `word.status: "checked"`
-only when its `docProps/app.xml` names Microsoft Office Word — byte-identical
-copies and non-Word producers (LibreOffice included) are rejected and the
-rejection is recorded. Which requirement sits at which proof layer is mapped
-in `docs/evidence/e13-conformance/coverage-map.md`.
+`*_test` database, and a `--word-output` file earns `word.status:
+"manual-reported"` (`externally-unverified`) only when its `docProps/app.xml`
+names Microsoft Office Word and its body text matches the cycle-1 export —
+byte-identical copies, non-Word producers (LibreOffice included) and
+unrelated documents are rejected and the rejection is recorded. Because
+`app.xml` is operator-mutable, producer evidence can never verify a Word
+run, so the manifest's `wordAcceptance` gate stays `not-checked` until
+external open/save/visual evidence is recorded. Which requirement sits at
+which proof layer is mapped in
+`docs/evidence/e13-conformance/coverage-map.md`.

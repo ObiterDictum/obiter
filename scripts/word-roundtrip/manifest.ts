@@ -2,6 +2,8 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
+import type { WordAcceptance, WordProbe, WordRecord } from './word-step'
+
 /**
  * The acceptance record: provenance, artifact hashes, the Word leg's status
  * and the semantic comparison. Written at every exit — pass, fail and
@@ -13,10 +15,24 @@ export type RoundtripManifest = {
   generatedAt: string
   runtime: { bun: string; platform: string }
   api: string
+  /**
+   * What the API itself reported as its commit and checkout when the lane
+   * asked for its bound database — server-attested provenance for the code
+   * that produced the exports, not the CLI's word for it.
+   */
+  apiCommitSha: string | null
+  apiCheckoutRoot: string | null
   git: string
   /** The database the API reported it is bound to — server-attested, not the
    * CLI flag's word for it. */
   databaseName: string
+  /**
+   * The P0-1 release gate. `checked` requires recorded external evidence of
+   * a real Word run — open without repair, save, visual comparison — which
+   * mutable `docProps/app.xml` metadata can never supply, so every manifest
+   * this harness writes today reads `not-checked`.
+   */
+  wordAcceptance: WordAcceptance
   artifacts: Record<string, { sha256: string; bytes: number }>
   cycle1?: { documentId: string; summary: Record<string, unknown> }
   obiterCycles?: {
@@ -25,9 +41,14 @@ export type RoundtripManifest = {
     byteIdentical: boolean
     summary: Record<string, unknown>
   }[]
-  word?: Record<string, unknown>
+  word?: WordProbe | WordRecord
   cycle2?: { documentId: string; summary: Record<string, unknown> }
   semanticComparison?: Record<string, unknown>
+  /**
+   * The outcome of the automated legs: `awaiting-word-step`, `cycles-passed`
+   * (the Obiter cycles and structural comparison passed; the Word gate is
+   * reported separately in `wordAcceptance`), or `fail: <reason>`.
+   */
   result?: string
 }
 
@@ -44,15 +65,24 @@ export function sha256(bytes: Uint8Array) {
 
 export function createRunManifest(
   outDir: string,
-  provenance: { api: string; git: string; databaseName: string },
+  provenance: {
+    api: string
+    git: string
+    databaseName: string
+    apiCommitSha: string | null
+    apiCheckoutRoot: string | null
+  },
 ): RunManifest {
   const manifest: RoundtripManifest = {
     harness: 'word-roundtrip',
     generatedAt: new Date().toISOString(),
     runtime: { bun: Bun.version, platform: process.platform },
     api: provenance.api,
+    apiCommitSha: provenance.apiCommitSha,
+    apiCheckoutRoot: provenance.apiCheckoutRoot,
     git: provenance.git,
     databaseName: provenance.databaseName,
+    wordAcceptance: 'not-checked',
     artifacts: {},
   }
 

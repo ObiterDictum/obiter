@@ -2,28 +2,79 @@ import { execFileSync } from 'node:child_process'
 
 import { parseDocx } from '../../packages/ooxml/src/parse'
 import { sha256 } from './manifest'
+import { documentBodyText } from './summary'
 
 /**
- * The Microsoft Word leg's evidence. `--word-output` alone proves nothing —
- * a renamed copy of the cycle-1 export would read as "checked" — so the
- * harness opens the supplied package and reads `docProps/app.xml`, the part
- * every Word save writes. Only the canonical Word producer string passes;
- * a byte-identical copy, an unparsable file, a missing part or a
- * non-Word producer (LibreOffice included) is rejected and recorded.
+ * The evidence an operator-supplied `--word-output` file can carry, and the
+ * honesty limit on what it means.
+ *
+ * Nothing this harness can observe proves a Word execution happened: the
+ * file and `--word-version` are manual reports, and `docProps/app.xml` is
+ * operator-mutable metadata — the test suite itself writes the Word producer
+ * string into a package Word never touched. So the passing status names the
+ * evidence (`observed-producer-evidence`), never the conclusion, and the
+ * manifest's release gate stays `not-checked` until recorded external
+ * evidence — open without repair, save, visual comparison — exists.
+ *
+ * The rejections are real constraints on the story: a byte-identical copy of
+ * an input artifact cannot have been re-saved by anything, a file that is
+ * not the same document cannot be this document's Word save, and a
+ * producer string naming another application is evidence against Word.
  */
-export type WordEvidence = {
-  status: 'checked' | 'rejected'
-  producer: string | null
-  appVersion: string | null
-  inputSha256: string
-  reason?: string
-}
+export type WordEvidence =
+  | {
+      status: 'rejected'
+      producer: string | null
+      appVersion: string | null
+      inputSha256: string
+      reason: string
+    }
+  | {
+      status: 'observed-producer-evidence'
+      producer: string
+      appVersion: string | null
+      inputSha256: string
+    }
+
+/** What the manifest records for the operator-supplied Word leg. */
+export type WordRecord =
+  | {
+      status: 'rejected'
+      reason: string
+      claimedVersion: string
+      observedProducer: string | null
+      observedAppVersion: string | null
+      inputSha256: string
+      correlatedWith: { artifact: string; sha256: string }
+    }
+  | {
+      /**
+       * The file and version are manual reports carrying observed producer
+       * metadata — evidence consistent with a Word save, not verification of
+       * one.
+       */
+      status: 'manual-reported'
+      verification: 'externally-unverified'
+      claimedVersion: string
+      observedProducer: string
+      observedAppVersion: string | null
+      inputSha256: string
+      correlatedWith: { artifact: string; sha256: string }
+      limits: string
+    }
 
 export type WordProbe =
   | { status: 'word-detected'; path: string }
   | { status: 'not-checked'; reason: string }
 
-/** What Word writes as its extended-properties producer string. */
+/**
+ * The release-gate verdict. `checked` requires recorded external evidence of
+ * a real Word run — open without repair, save, visual comparison — which the
+ * operator instructions ask for and nothing in this process can produce.
+ */
+export type WordAcceptance = 'not-checked' | 'checked'
+
+/** The producer string Word desktop writes into docProps/app.xml on save. */
 const WORD_PRODUCER = /^microsoft office word$/i
 
 export function detectWord(): WordProbe {
@@ -67,12 +118,17 @@ export function detectWord(): WordProbe {
 
 /**
  * Inspect the operator-supplied DOCX for evidence Microsoft Word saved it.
- * `known` holds the hashes of artifacts this run produced; a byte-identical
- * match cannot have passed through Word — a save rewrites app.xml at least.
+ * `known` holds what this run produced: the input artifacts' hashes (a
+ * byte-identical file cannot have been re-saved) and the cycle-1 export's
+ * body text (a different document cannot be this document's Word save).
  */
 export async function inspectWordOutput(
   bytes: Uint8Array,
-  known: { fixtureSha256: string; cycle1Sha256: string },
+  known: {
+    fixtureSha256: string
+    cycle1Sha256: string
+    cycle1BodyText: string
+  },
 ): Promise<WordEvidence> {
   const inputSha256 = sha256(bytes)
   const reject = (
@@ -106,8 +162,9 @@ export async function inspectWordOutput(
   const appPart = doc.sourceParts.get('docProps/app.xml')
   if (!appPart) {
     return reject(
-      'carries no docProps/app.xml — every Word save writes the ' +
-        'extended-properties part, so this file was not produced by Word',
+      'carries no docProps/app.xml — Word desktop writes the ' +
+        'extended-properties part on save, so its absence is evidence ' +
+        'against a Word save',
     )
   }
   const xml = new TextDecoder().decode(appPart.originalPayload)
@@ -124,11 +181,56 @@ export async function inspectWordOutput(
       producer,
     )
   }
+  if (documentBodyText(doc) !== known.cycle1BodyText) {
+    return reject(
+      'names Microsoft Office Word but its body text does not match the ' +
+        'cycle-1 export — an unrelated document, not this document saved ' +
+        'by Word',
+      producer.trim(),
+    )
+  }
   return {
-    status: 'checked',
+    status: 'observed-producer-evidence',
     producer: producer.trim(),
     appVersion,
     inputSha256,
+  }
+}
+
+/**
+ * Build the manifest's word record. Passing evidence produces a
+ * `manual-reported` record — the strongest claim a mutable-metadata check can
+ * honestly carry — and never a verified one.
+ */
+export function wordRecord(
+  evidence: WordEvidence,
+  claimedVersion: string,
+  correlatedWith: { artifact: string; sha256: string },
+): WordRecord {
+  if (evidence.status === 'rejected') {
+    return {
+      status: 'rejected',
+      reason: evidence.reason,
+      claimedVersion,
+      observedProducer: evidence.producer,
+      observedAppVersion: evidence.appVersion,
+      inputSha256: evidence.inputSha256,
+      correlatedWith,
+    }
+  }
+  return {
+    status: 'manual-reported',
+    verification: 'externally-unverified',
+    claimedVersion,
+    observedProducer: evidence.producer,
+    observedAppVersion: evidence.appVersion,
+    inputSha256: evidence.inputSha256,
+    correlatedWith,
+    limits:
+      'docProps/app.xml is operator-mutable metadata: it is evidence ' +
+      'consistent with a Word save, not verification of one. The release ' +
+      'gate needs recorded external evidence — open without repair, save, ' +
+      'visual comparison — which this run cannot produce.',
   }
 }
 
@@ -149,8 +251,12 @@ export function wordStepInstructions(probe: WordProbe): string {
     '     --word-version "<Word product/version string>"',
     '',
     'The harness checks the file it is given: it must differ from both the',
-    'input fixture and the cycle-1 export, and its docProps/app.xml must name',
-    'Microsoft Office Word as the producer.',
+    'input fixture and the cycle-1 export, carry the same body text as the',
+    'cycle-1 export, and its docProps/app.xml must name Microsoft Office',
+    'Word as the producer. That is evidence, not proof: app.xml is editable,',
+    'so the manifest records the observed producer and keeps the release',
+    'gate at not-checked. A real run also records the operator observation —',
+    'open without a repair prompt and a visual comparison — in the PR.',
     '',
     `Word probe on this machine: ${JSON.stringify(probe)}`,
     '',
