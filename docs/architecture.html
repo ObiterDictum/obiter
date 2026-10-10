@@ -2834,9 +2834,13 @@
                   <td>
                     Liveness probe. No session required. Production exposes only
                     status and service identifier; development additively
-                    exposes the API commit SHA, checkout root and resolved
-                    <code>.env</code> path for local provenance checks. Never
-                    expose config, matter data, or secrets.
+                    exposes the API commit SHA, checkout root, resolved
+                    <code>.env</code> path and the database name derived from
+                    the API's configured <code>DATABASE_URL</code> (a malformed
+                    URL reports <code>null</code>) for local provenance checks —
+                    an isolated lane asks the server which database it is bound
+                    to rather than trusting a CLI flag. Never expose config,
+                    matter data, or secrets.
                   </td>
                 </tr>
                 <tr>
@@ -3885,12 +3889,13 @@
             <code>404</code>), so a provider outage cannot become a storage
             failure. National Archives access belongs to an explicit indexing
             run. Health is a minimal liveness probe; in development it also
-            exposes the API commit SHA and checkout root for local provenance
-            checks. Invite preview is gated by the secret invite token and
-            returns only organisation and inviter display names. They must never
-            return matter, client, redaction, or session data, and production
-            health must never expose environment, version, or configuration
-            detail.
+            exposes the API commit SHA, checkout root, resolved env file and the
+            database name read out of the configured
+            <code>DATABASE_URL</code> for local provenance checks. Invite
+            preview is gated by the secret invite token and returns only
+            organisation and inviter display names. They must never return
+            matter, client, redaction, or session data, and production health
+            must never expose environment, version, or configuration detail.
           </div>
         </section>
 

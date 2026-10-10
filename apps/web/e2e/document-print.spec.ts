@@ -183,7 +183,13 @@ function readPdf(pdfPath: string) {
     const bytes = await readFile(process.env.OBITER_PDF_PATH)
     const pdf = await getDocumentProxy(new Uint8Array(bytes))
     const result = await extractText(pdf, { mergePages: false })
-    process.stdout.write(JSON.stringify({ totalPages: result.totalPages, pages: result.text }))
+    const sizes = []
+    for (let index = 1; index <= pdf.numPages; index += 1) {
+      const pdfPage = await pdf.getPage(index)
+      const viewport = pdfPage.getViewport({ scale: 1 })
+      sizes.push({ width: viewport.width, height: viewport.height })
+    }
+    process.stdout.write(JSON.stringify({ totalPages: result.totalPages, pages: result.text, sizes }))
   `
   const stdout = execFileSync('bun', ['-e', script], {
     cwd: path.resolve(
@@ -193,7 +199,11 @@ function readPdf(pdfPath: string) {
     env: { ...process.env, OBITER_PDF_PATH: pdfPath },
     encoding: 'utf8',
   })
-  return JSON.parse(stdout) as { totalPages: number; pages: string[] }
+  return JSON.parse(stdout) as {
+    totalPages: number
+    pages: string[]
+    sizes: { width: number; height: number }[]
+  }
 }
 
 test('Print renders the on-screen state, including unsaved edits and tables', async ({
@@ -265,6 +275,55 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
   expect(printed).toContain('Cell one')
   expect(printed).toContain('Closing paragraph.')
   expect(printed).not.toContain('Paragraph 2 of the print fixture.')
+})
+
+test('printing from the web layout paginates onto the stored paper size', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await mockWorkspace(page)
+  await openWorkspace(page)
+
+  // The continuous web layout is one unbounded sheet; Chromium's printToPDF
+  // dispatches beforeprint, which must repaginate the painted DOM onto paper
+  // sheets before the snapshot is taken.
+  const viewTab = page.getByRole('tab', { name: 'View', exact: true }).first()
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await viewTab.click()
+    const selected = await expect(viewTab)
+      .toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (selected) break
+  }
+  await page.getByRole('button', { name: 'Web layout' }).click()
+  await expect(page.locator('[data-document-sheet]')).toHaveCount(1)
+  expect(
+    await page
+      .locator('style[data-document-print]')
+      .evaluate((element) => element.textContent),
+  ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
+
+  const pdfPath = test.info().outputPath('document-print-web.pdf')
+  await page.pdf({
+    path: pdfPath,
+    preferCSSPageSize: true,
+    printBackground: true,
+  })
+  const pdf = readPdf(pdfPath)
+
+  // More than one real page — the continuous sheet cannot be the answer —
+  // and every page is the document's stored A4 box (595.3 × 841.9 pt), not
+  // the web flow's internal unbounded frame.
+  expect(pdf.totalPages).toBeGreaterThan(1)
+  for (const size of pdf.sizes) {
+    expect(Math.abs(size.width - 595.28)).toBeLessThan(1)
+    expect(Math.abs(size.height - 841.89)).toBeLessThan(1)
+  }
+
+  const printed = pdf.pages.join('\n')
+  expect(printed).toContain('Paragraph 1 of the print fixture.')
+  expect(printed).toContain('Closing paragraph.')
 })
 
 test('the Print control reports an absent print capability', async ({

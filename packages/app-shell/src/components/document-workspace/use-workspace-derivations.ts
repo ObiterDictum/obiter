@@ -18,7 +18,16 @@ import {
 } from '../../document-edits'
 import { documentStory, editableParagraph } from '../../document-model-text'
 import { withBreakDrafts } from '../../document-section-format'
-import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
+import {
+  layoutDocument,
+  type DocumentLayoutFlow,
+  type LaidOutPage,
+} from '../../document-page-engine'
+import {
+  documentSections,
+  pageBoxForSection,
+  type PageBox,
+} from '../../document-page-layout'
 import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
 import { withStructuralDrafts } from '../../document-structure-fold'
@@ -79,6 +88,9 @@ type DraftState = Pick<
 export type WorkspaceDerivations = {
   painted: DocumentModelWire | undefined
   pages: LaidOutPage[]
+  /** The document's stored page box — the paper `@page` declares, independent
+   * of which layout view is painted. */
+  printBox: PageBox | undefined
   authorities: AuthorityHit[]
   imageUrls: Record<string, string>
   /** Set when the effective document holds one paragraph, so Delete paragraph
@@ -139,10 +151,14 @@ export function useWorkspaceDerivations({
   drafts,
   insert,
   legalChecksOpen,
+  flow,
 }: {
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
+  /** Print layout when omitted; the continuous web flow while set. The pages
+   * memo below depends on it, so a view switch repaginates once. */
+  flow?: DocumentLayoutFlow
   /**
    * The legal-checks panel's open state: the stored-markup checks are a
    * whole-document scan that only the panel reads, so they run when it is
@@ -243,6 +259,7 @@ export function useWorkspaceDerivations({
             drafts.extraRuns,
             blocks,
             drafts.breaks,
+            flow,
           )
         : [],
     [
@@ -252,7 +269,19 @@ export function useWorkspaceDerivations({
       drafts.inserts,
       drafts.extraRuns,
       drafts.breaks,
+      flow,
     ],
+  )
+  // The `@page` rule is the document's own stored page setup — the first
+  // section's box, exactly as the print flow's first page carries it. Deriving
+  // it from the model, not from `pages`, keeps the web flow's unbounded
+  // internal frame from leaking into the print contract.
+  const printBox = useMemo<PageBox | undefined>(
+    () =>
+      broken
+        ? pageBoxForSection(documentSections(broken)[0]?.xml ?? '')
+        : undefined,
+    [broken],
   )
   const imageParts = useMemo(
     () => (model ? documentImagePartNames(model) : []),
@@ -373,6 +402,7 @@ export function useWorkspaceDerivations({
   return {
     painted,
     pages,
+    printBox,
     authorities,
     imageUrls,
     insert: insertRibbon,

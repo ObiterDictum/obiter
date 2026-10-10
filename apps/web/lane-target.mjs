@@ -140,7 +140,11 @@ export async function verifyServedCheckout(
   }
 
   const health = await servedApiHealth(targets.apiOrigin, fetchImpl)
-  const provenance = health.provenance
+  // A body of any non-object shape — null included — has no provenance to
+  // compare; it lands on the same refusal as an absent block rather than
+  // crashing on `health.provenance`.
+  const provenance =
+    health !== null && typeof health === 'object' ? health.provenance : null
   if (!provenance || typeof provenance.checkoutRoot !== 'string') {
     throw new Error(
       `The API at ${targets.apiOrigin} reported no development provenance, so its ` +

@@ -79,6 +79,14 @@ export function DocumentWorkspaceToolbar({
   find,
   review,
   markings,
+  view,
+  onView,
+  rulerOn,
+  onToggleRuler,
+  navOpen,
+  onToggleNavPane,
+  spelling,
+  onToggleSpelling,
 }: {
   kind: 'docx' | 'pdf'
   dirty: boolean
@@ -137,6 +145,17 @@ export function DocumentWorkspaceToolbar({
   review?: DocumentReviewToolbar
   /** The Layout ribbon's classification controls; absent while unloaded. */
   markings?: DocumentMarkingsToolbar
+  /** The document's layout view; absent outside a paginated editor. */
+  view?: 'print' | 'web'
+  onView?: (view: 'print' | 'web') => void
+  /** The horizontal ruler over the page measure; absent where not offered. */
+  rulerOn?: boolean
+  onToggleRuler?: () => void
+  navOpen?: boolean
+  onToggleNavPane?: () => void
+  /** Browser-dictionary spell-checking; absent where not offered. */
+  spelling?: boolean
+  onToggleSpelling?: () => void
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
 
@@ -260,10 +279,21 @@ export function DocumentWorkspaceToolbar({
             onExportText={onExportText}
             onExportShareSafe={onExportShareSafe}
             onPrint={onPrint}
+            spelling={spelling}
+            onToggleSpelling={onToggleSpelling}
           />
         </TabsContent>
         <TabsContent value="view" className="min-w-0 flex-1 pt-0">
-          <ViewRibbon zoom={zoom} onZoom={onZoom} />
+          <ViewRibbon
+            zoom={zoom}
+            onZoom={onZoom}
+            view={view}
+            onView={onView}
+            rulerOn={rulerOn}
+            onToggleRuler={onToggleRuler}
+            navOpen={navOpen}
+            onToggleNavPane={onToggleNavPane}
+          />
         </TabsContent>
         <div className="ml-auto flex shrink-0 items-center self-center pr-1">
           {/* preventDefault keeps the caret in the editor while the save

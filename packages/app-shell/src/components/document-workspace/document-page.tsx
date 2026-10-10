@@ -21,12 +21,16 @@ export function DocumentPage({
   width = A4_WIDTH_PX,
   height = A4_HEIGHT_PX,
   fontFamily,
+  /** The continuous web view drops the paper chrome — the page keeps its
+   * scaled measure but loses the sheet, ring and shadow. */
+  chromeless = false,
   children,
 }: {
   zoom?: number
   width?: number
   height?: number
   fontFamily?: string
+  chromeless?: boolean
   children: ReactNode
 }) {
   const scale = zoom / 100
@@ -42,7 +46,11 @@ export function DocumentPage({
       <article
         data-document-sheet
         aria-label="Document page"
-        className="absolute top-0 left-0 flex flex-col overflow-clip bg-white text-black shadow-[0_12px_40px_rgba(0,0,0,0.38)] ring-1 ring-black/10"
+        className={
+          chromeless
+            ? 'absolute top-0 left-0 flex flex-col overflow-clip bg-transparent text-ink'
+            : 'absolute top-0 left-0 flex flex-col overflow-clip bg-white text-black shadow-[0_12px_40px_rgba(0,0,0,0.38)] ring-1 ring-black/10'
+        }
         style={{
           width,
           height,

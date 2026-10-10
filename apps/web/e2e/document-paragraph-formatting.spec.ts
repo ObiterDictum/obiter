@@ -107,7 +107,8 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 const alignCentre = (page: Page) =>

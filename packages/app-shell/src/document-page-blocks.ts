@@ -62,6 +62,10 @@ export type LaidOutPage = {
   blocks: LaidOutBlock[]
   floats: PageFloat[]
   textBoxes: PageTextBox[]
+  /** The flow height the laid-out blocks actually reach. Only the continuous
+   * web flow sets it: its page frame is unbounded so the pagination rules
+   * never advance, and the render needs the real content measure back. */
+  contentPx?: number
 }
 
 /**

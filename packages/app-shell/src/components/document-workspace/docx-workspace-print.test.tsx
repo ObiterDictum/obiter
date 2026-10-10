@@ -116,4 +116,101 @@ describe('DocxWorkspace print', () => {
       document.querySelector('style[data-document-print]')?.textContent,
     ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
   })
+
+  it('keeps the document paper size in @page while the web layout is painted', () => {
+    mountWorkspace({})
+    openRibbonTab('View')
+    fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+
+    // The web flow's internal frame is unbounded; it must never reach @page.
+    expect(
+      document.querySelector('style[data-document-print]')?.textContent,
+    ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
+    expect(
+      document.querySelector('style[data-document-print]')?.textContent,
+    ).not.toContain('104166')
+  })
+
+  it('repaginates to paper sheets before the dialog and restores afterprint', () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
+    mountWorkspace({
+      models: {
+        doc_1: multiParagraphModel(
+          Array.from({ length: 60 }, (_, index) =>
+            paragraph(`p${index}`, `Line ${index}`),
+          ),
+        ),
+      },
+    })
+    openRibbonTab('View')
+    fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+    const webSheet = document.querySelector('[data-document-sheet]')
+    expect(webSheet?.className).toContain('bg-transparent')
+
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+
+    expect(print).toHaveBeenCalledTimes(1)
+    // The dialog saw paginated paper sheets, not the continuous web sheet.
+    expect(
+      document.querySelectorAll('[data-document-sheet].bg-white').length,
+    ).toBeGreaterThan(1)
+    expect(
+      document.querySelector('[data-document-sheet].bg-transparent'),
+    ).toBeNull()
+
+    // The platform's afterprint hands the user's view back.
+    fireEvent(window, new Event('afterprint'))
+    const restored = document.querySelector('[data-document-sheet]')
+    expect(restored?.className).toContain('bg-transparent')
+    print.mockRestore()
+  })
+
+  it('repaginates for a browser-initiated print too', () => {
+    mountWorkspace({})
+    openRibbonTab('View')
+    fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+
+    // Ctrl+P / menu print dispatch beforeprint without touching the ribbon.
+    fireEvent(window, new Event('beforeprint'))
+    expect(
+      document.querySelectorAll('[data-document-sheet].bg-white').length,
+    ).toBeGreaterThan(0)
+    fireEvent(window, new Event('afterprint'))
+    expect(
+      document.querySelector('[data-document-sheet]')?.className,
+    ).toContain('bg-transparent')
+  })
+
+  it('restores the web layout when the platform cannot print', () => {
+    const original = window.print
+    Object.defineProperty(window, 'print', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    })
+    try {
+      mountWorkspace({})
+      openRibbonTab('View')
+      fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+
+      openRibbonTab('Review')
+      fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+
+      expect(
+        screen.getByText('Printing is not available in this environment.'),
+      ).toBeTruthy()
+      // No dialog opened, so no afterprint will arrive — the view must not
+      // strand the user in print layout.
+      expect(
+        document.querySelector('[data-document-sheet]')?.className,
+      ).toContain('bg-transparent')
+    } finally {
+      Object.defineProperty(window, 'print', {
+        value: original,
+        configurable: true,
+        writable: true,
+      })
+    }
+  })
 })
