@@ -26,17 +26,11 @@ import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import { documentListMarkers } from '../../document-page-lists'
 import { paragraphStoryResolver } from '../../document-model-text'
 import { documentNotes } from '../../document-page-notes'
-import {
-  blockEndOffset,
-  bodyParagraphCaret,
-  paragraphClickCaret,
-  pageClickCaret,
-} from './model-click-caret'
+import { pageClickHandlers } from './model-page-clicks'
 import type { ParagraphWordEdit } from './model-paragraph'
 import type { ParagraphSelectionRange } from './model-run'
 import { PageOverlays, renderBlock } from './model-page-blocks'
 import {
-  clearVerticalColumn,
   paragraphNeighborResolver,
   type VerticalCaretColumn,
 } from './paragraph-arrow'
@@ -91,6 +85,10 @@ export function DocumentModelPage({
   marginEditing,
   onExitMarginEditing,
   onOpenNoteEditing,
+  /** The continuous web view: no margin bands, and the root measures the
+   * flow's content rather than a paper box. The workspace closes any open
+   * margin story before switching, so `marginEditing` never meets this. */
+  chromeless = false,
 }: {
   model: DocumentModelWire
   selectedParagraphId: string | null
@@ -130,6 +128,8 @@ export function DocumentModelPage({
     box: PageBox
     frame: ContentFrame
     columns: ColumnFrame[]
+    /** The web flow's real content height, when the unbounded frame set it. */
+    contentPx?: number
   }
   pageNumber?: number
   /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
@@ -149,6 +149,8 @@ export function DocumentModelPage({
   /** A click on a painted footnote body opens the footnotes story with the
    * caret on that paragraph — the inverse of `onExitMarginEditing`. */
   onOpenNoteEditing?: (paragraphId: string) => void
+  /** Drop the margin bands and measure the flow's content, for the web view. */
+  chromeless?: boolean
 }) {
   const derived = useMemo(() => {
     const story = model.stories.find((item) => item.kind === 'document')
@@ -315,109 +317,50 @@ export function DocumentModelPage({
   return (
     <div
       className="relative flex flex-col overflow-clip"
-      style={{ height: page.heightPx }}
+      style={{
+        height: chromeless
+          ? Math.max(pageLayout?.contentPx ?? 0, 240)
+          : page.heightPx,
+      }}
       data-document-page
-      onMouseDown={(event) => {
-        event.currentTarget.dataset.pointerDown = `${event.clientX},${event.clientY}`
-      }}
-      onClick={(event) => {
-        if (!editing) return
-        if (!(event.target instanceof Element)) return
-        const down = event.currentTarget.dataset.pointerDown
-        delete event.currentTarget.dataset.pointerDown
-        if (down && down !== `${event.clientX},${event.clientY}`) return
-        const endOffset = (id: string) =>
-          blockEndOffset(
-            id,
-            (marginEditing ?? story).paragraphs,
-            drafts,
-            inserts,
-            extraRuns,
-          )
-        const include = (id: string) => editableIds.has(id)
-        const paragraphEl = event.target.closest('[data-paragraph-id]')
-        if (paragraphEl instanceof HTMLElement) {
-          const paragraphId = paragraphEl.dataset.paragraphId
-          // A click on a painted footnote body opens the notes story at
-          // that paragraph — the same open/close contract the margin band
-          // keeps — whether the body or another story was open. An endnote
-          // stays read-only paint.
-          if (
-            paragraphId &&
-            storyOf(paragraphId).kind === 'footnotes' &&
-            marginEditing?.kind !== 'footnotes'
-          ) {
-            clearVerticalColumn(verticalCaret)
-            onOpenNoteEditing?.(paragraphId)
-            return
-          }
-          // A click on the body while a margin story is open leaves margin
-          // editing, the way Word does; the same click places the body caret.
-          if (marginEditing && paragraphId && !include(paragraphId)) {
-            const hit = bodyParagraphCaret(
-              paragraphEl,
-              event.clientX,
-              event.clientY,
-              event.currentTarget,
-              story.paragraphs,
-              drafts,
-              inserts,
-              extraRuns,
-            )
-            if (hit) {
-              clearVerticalColumn(verticalCaret)
-              onExitMarginEditing?.()
-              onSelectParagraph(hit.paragraphId, hit.offset)
-            }
-            return
-          }
-          const caret = paragraphClickCaret(
-            paragraphEl,
-            event.clientX,
-            event.clientY,
-            event.currentTarget,
-            endOffset,
-            include,
-          )
-          if (caret && include(caret.paragraphId)) {
-            clearVerticalColumn(verticalCaret)
-            onSelectParagraph(caret.paragraphId, caret.offset)
-            return
-          }
-        }
-        const caret = pageClickCaret(
-          event.currentTarget,
-          event.clientY,
-          endOffset,
-          include,
-        )
-        if (caret) {
-          clearVerticalColumn(verticalCaret)
-          onSelectParagraph(caret.paragraphId, caret.offset)
-        }
-      }}
+      {...pageClickHandlers({
+        editing,
+        marginEditing,
+        story,
+        drafts,
+        inserts,
+        extraRuns,
+        editableIds,
+        storyOf,
+        verticalCaret,
+        onOpenNoteEditing,
+        onExitMarginEditing,
+        onSelectParagraph,
+      })}
     >
-      <PageMarginBand
-        stories={headers}
-        label="Document header"
-        edge="top"
-        className={
-          headerEdit
-            ? 'shrink-0'
-            : 'pointer-events-none shrink-0 overflow-hidden'
-        }
-        editable={headerEdit}
-        heightPx={frame.top}
-        relationships={model.relationships}
-        imageUrls={imageUrls}
-        styles={model.styles}
-        pageNumber={pageNumber}
-        padding={{
-          left: page.margin.left,
-          right: page.margin.right,
-          edge: page.headerPx,
-        }}
-      />
+      {!chromeless && (
+        <PageMarginBand
+          stories={headers}
+          label="Document header"
+          edge="top"
+          className={
+            headerEdit
+              ? 'shrink-0'
+              : 'pointer-events-none shrink-0 overflow-hidden'
+          }
+          editable={headerEdit}
+          heightPx={frame.top}
+          relationships={model.relationships}
+          imageUrls={imageUrls}
+          styles={model.styles}
+          pageNumber={pageNumber}
+          padding={{
+            left: page.margin.left,
+            right: page.margin.right,
+            edge: page.headerPx,
+          }}
+        />
+      )}
       <div
         aria-label="Document body"
         className="relative flex min-h-0 overflow-clip"
@@ -464,27 +407,29 @@ export function DocumentModelPage({
           pageNumber={pageNumber}
         />
       </div>
-      <PageMarginBand
-        stories={footers}
-        label="Document footer"
-        edge="bottom"
-        className={
-          footerEdit
-            ? 'mt-auto flex shrink-0 flex-col justify-end'
-            : 'pointer-events-none mt-auto flex shrink-0 flex-col justify-end overflow-hidden'
-        }
-        editable={footerEdit}
-        heightPx={frame.bottom}
-        relationships={model.relationships}
-        imageUrls={imageUrls}
-        styles={model.styles}
-        pageNumber={pageNumber}
-        padding={{
-          left: page.margin.left,
-          right: page.margin.right,
-          edge: page.footerPx,
-        }}
-      />
+      {!chromeless && (
+        <PageMarginBand
+          stories={footers}
+          label="Document footer"
+          edge="bottom"
+          className={
+            footerEdit
+              ? 'mt-auto flex shrink-0 flex-col justify-end'
+              : 'pointer-events-none mt-auto flex shrink-0 flex-col justify-end overflow-hidden'
+          }
+          editable={footerEdit}
+          heightPx={frame.bottom}
+          relationships={model.relationships}
+          imageUrls={imageUrls}
+          styles={model.styles}
+          pageNumber={pageNumber}
+          padding={{
+            left: page.margin.left,
+            right: page.margin.right,
+            edge: page.footerPx,
+          }}
+        />
+      )}
     </div>
   )
 }

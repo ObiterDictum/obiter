@@ -1,7 +1,15 @@
+import { useMemo } from 'react'
 import type { DocumentPdfViewResponse } from '@obiter/contracts'
 import { Button } from '@obiter/ui'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 
+/**
+ * The stored PDF layout, one page at a time. The segment index is built once
+ * per view so a page turn is O(segments on that page), not a scan of the whole
+ * document: a 500-page layout's `segments` array is walked exactly once, and
+ * only the current page's spans ever mount — the DOM the browser lays out is
+ * bounded by a page, not by the document.
+ */
 export function DocumentPdfPages({
   view,
   pageIndex,
@@ -13,6 +21,19 @@ export function DocumentPdfPages({
   onPageIndexChange: (index: number) => void
   zoom: number
 }) {
+  const segmentsByPage = useMemo(() => {
+    const grouped = new Map<number, number[]>()
+    view.layout.segments.forEach((segment, index) => {
+      const list = grouped.get(segment.pageIndex)
+      if (list) {
+        list.push(index)
+      } else {
+        grouped.set(segment.pageIndex, [index])
+      }
+    })
+    return grouped
+  }, [view])
+
   const page = view.layout.pages[pageIndex]
   const lastIndex = view.layout.pages.length - 1
   if (!page) {
@@ -24,9 +45,14 @@ export function DocumentPdfPages({
   }
 
   const scale = zoom / 100
-  const segments = view.layout.segments.filter(
-    (segment) => segment.pageIndex === pageIndex,
-  )
+  const segmentIndexes = segmentsByPage.get(pageIndex) ?? []
+
+  const jump = (value: string) => {
+    const target = Number(value)
+    if (Number.isInteger(target) && target >= 1 && target <= lastIndex + 1) {
+      onPageIndexChange(target - 1)
+    }
+  }
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -41,9 +67,21 @@ export function DocumentPdfPages({
         >
           Previous
         </Button>
-        <p className="font-mono text-xs text-muted">
-          {pageIndex + 1} / {view.layout.pages.length}
-        </p>
+        <label className="flex items-center gap-1 font-mono text-xs text-muted">
+          <input
+            key={pageIndex}
+            type="text"
+            inputMode="numeric"
+            defaultValue={pageIndex + 1}
+            aria-label={`Go to page, of ${view.layout.pages.length}`}
+            className="w-12 rounded-sm border border-line bg-transparent px-1 text-center"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') jump(event.currentTarget.value)
+            }}
+            onBlur={(event) => jump(event.target.value)}
+          />
+          <span aria-hidden="true">/ {view.layout.pages.length}</span>
+        </label>
         <Button
           variant="ghost"
           size="sm"
@@ -69,22 +107,26 @@ export function DocumentPdfPages({
               "Calibri, 'Segoe UI', 'Liberation Sans', Candara, sans-serif",
           }}
         >
-          {segments.map((segment, index) => (
-            <span
-              key={`${segment.start}-${index}`}
-              className="absolute overflow-visible whitespace-pre"
-              style={{
-                left: segment.x * scale,
-                top: (page.height - segment.y - segment.height) * scale,
-                width: Math.max(segment.width * scale, 1),
-                height: Math.max(segment.height * scale, 8),
-                fontSize: Math.max(segment.height * scale * 0.85, 8),
-                lineHeight: 1,
-              }}
-            >
-              {view.text.slice(segment.start, segment.end)}
-            </span>
-          ))}
+          {segmentIndexes.map((segmentIndex, index) => {
+            const segment = view.layout.segments[segmentIndex]
+            if (!segment) return null
+            return (
+              <span
+                key={`${segment.start}-${index}`}
+                className="absolute overflow-visible whitespace-pre"
+                style={{
+                  left: segment.x * scale,
+                  top: (page.height - segment.y - segment.height) * scale,
+                  width: Math.max(segment.width * scale, 1),
+                  height: Math.max(segment.height * scale, 8),
+                  fontSize: Math.max(segment.height * scale * 0.85, 8),
+                  lineHeight: 1,
+                }}
+              >
+                {view.text.slice(segment.start, segment.end)}
+              </span>
+            )
+          })}
         </div>
       </div>
     </div>

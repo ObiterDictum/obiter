@@ -11,6 +11,7 @@ import {
   EyeSlash,
   Files,
   FrameCorners,
+  GlobeSimple,
   ListChecks,
   ListDashes,
   ListMagnifyingGlass,
@@ -254,6 +255,8 @@ export function ReviewRibbon({
   onExportText,
   onExportShareSafe,
   onPrint,
+  spelling,
+  onToggleSpelling,
 }: {
   canEdit: boolean
   trackChanges: boolean
@@ -270,6 +273,11 @@ export function ReviewRibbon({
   onExportText: () => void
   onExportShareSafe?: () => void
   onPrint?: () => void
+  /** Whether the browser's local dictionary underlines flagged words. */
+  spelling?: boolean
+  /** Absent where proofing is not offered; the control then keeps its
+   * honest unavailable state instead of a no-op toggle. */
+  onToggleSpelling?: () => void
 }) {
   // Boundary reasons would be false when this ribbon has no review at all;
   // the absent surface is the truer reason there.
@@ -283,7 +291,10 @@ export function ReviewRibbon({
       <ToolbarGroup label="Proofing">
         <IconButton
           label="Spelling"
-          soon
+          soon={onToggleSpelling === undefined}
+          pressed={spelling}
+          hint="Underlines words the browser's dictionary flags. No document text leaves this device, and it is not a legal correctness check."
+          onClick={onToggleSpelling}
           icon={<TextAa size={16} aria-hidden />}
         />
       </ToolbarGroup>
@@ -412,9 +423,25 @@ export function ReviewRibbon({
 export function ViewRibbon({
   zoom,
   onZoom,
+  view,
+  onView,
+  rulerOn,
+  onToggleRuler,
+  navOpen,
+  onToggleNavPane,
 }: {
   zoom: number
   onZoom: (next: number) => void
+  /** The document's layout view; absent where the workspace shows a fixed
+   * surface (the PDF viewer), in which case the view group is hidden. */
+  view?: 'print' | 'web'
+  onView?: (view: 'print' | 'web') => void
+  /** The horizontal ruler over the page measure; absent where it is not
+   * offered, which leaves the control honestly unavailable. */
+  rulerOn?: boolean
+  onToggleRuler?: () => void
+  navOpen?: boolean
+  onToggleNavPane?: () => void
 }) {
   return (
     <div
@@ -422,23 +449,40 @@ export function ViewRibbon({
       role="toolbar"
       aria-label="View"
     >
-      <ToolbarGroup label="Views">
-        <IconButton
-          label="Print layout"
-          pressed
-          icon={<FrameCorners size={16} aria-hidden />}
-        />
-      </ToolbarGroup>
+      {view !== undefined ? (
+        <ToolbarGroup label="Views">
+          <ToolbarRow>
+            <IconButton
+              label="Print layout"
+              pressed={view === 'print'}
+              hint="Page sheets with margins, headers and footers."
+              onClick={() => onView?.('print')}
+              icon={<FrameCorners size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Web layout"
+              pressed={view === 'web'}
+              hint="One continuous column at the desk's width; headers, footers and page boundaries are not shown."
+              onClick={() => onView?.('web')}
+              icon={<GlobeSimple size={16} aria-hidden />}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+      ) : null}
       <ToolbarGroup label="Show">
         <ToolbarRow>
           <IconButton
             label="Ruler"
-            soon
+            soon={onToggleRuler === undefined}
+            pressed={rulerOn}
+            onClick={onToggleRuler}
             icon={<Ruler size={16} aria-hidden />}
           />
           <IconButton
             label="Navigation pane"
-            soon
+            soon={onToggleNavPane === undefined}
+            pressed={navOpen}
+            onClick={onToggleNavPane}
             icon={<ListDashes size={16} aria-hidden />}
           />
         </ToolbarRow>

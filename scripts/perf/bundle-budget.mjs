@@ -44,9 +44,20 @@ import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 // and is not being loosened. E6b (links and cross-references) measured at its
 // head is initial 184.0 kB, lazy 392.7 kB, largest chunk 171.1 kB, pdf worker
 // 286.6 kB — inside every budget.
+//
+// E13 (accessibility and conformance) re-baselines lazy from 400 kB to
+// 410 kB on 2026-10-10, the same measured process as the 385→400 move. The
+// checkout before the E13 change measures lazy 398.7 kB with the workspace
+// chunk at 146.3 kB; the E13 head measures lazy 402.7 kB, largest chunk
+// 150.3 kB — the ~4.0 kB is the shipped scope itself (the navigation pane,
+// the ruler, the continuous web flow, bounded PDF mounting and the spelling
+// toggle), minified and gzipped module by module, not an accidental
+// inclusion. 410 kB restores roughly the same ~1.8% headroom the 400 kB
+// figure held over its own measurement, so an ordinary addition still does
+// not fail while a regression still does. The other budgets are unchanged.
 export const BUDGETS = {
   initialGzipBytes: 212 * 1024,
-  lazyGzipBytes: 400 * 1024,
+  lazyGzipBytes: 410 * 1024,
   largestLazyChunkGzipBytes: 200 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,
 }
