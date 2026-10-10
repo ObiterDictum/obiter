@@ -19,7 +19,8 @@ import { verifyEmailInDb } from './support'
  * reload. Failure states are induced at the network boundary (aborted or
  * rewritten edit responses) or through real sibling-tab saves; the held
  * change is seeded as the legacy draft payload the restore path exists to
- * carry.
+ * carry. The coarse-pointer describe proves the touch-target classes compute
+ * to at least 44px under a real coarse pointer and a zoom-scale viewport.
  */
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
@@ -391,10 +392,12 @@ test('the PDF viewer pages a generated multi-page document with bounded mounting
   await expect(next).toBeDisabled()
   await expect(previous).toBeEnabled()
 
-  // Out-of-range jumps are refused, not clamped silently.
+  // Out-of-range jumps are refused, not clamped silently, and the field
+  // returns to the page actually being shown.
   await jump.fill('99')
   await jump.press('Enter')
   await expect(page.getByText('page 24 line 1 token-23')).toBeVisible()
+  await expect(jump).toHaveValue('24')
 
   const sheet = page.locator('[role="region"][aria-label^="PDF page"]').first()
   const widthBefore = await sheet.evaluate(
@@ -679,4 +682,66 @@ test('the workspace holds together at tablet width with no horizontal overflow',
   await expect(
     page.getByRole('button', { name: 'Navigation pane' }),
   ).toBeVisible()
+})
+
+test.describe('coarse pointer and zoomed viewport', () => {
+  // `isMobile`/`hasTouch` make Chromium report a coarse primary pointer — the
+  // media query the pointer-coarse utilities answer to — and the shrunken
+  // viewport stands in for a ~200% browser zoom, which Playwright cannot
+  // drive directly.
+  test.use({
+    hasTouch: true,
+    isMobile: true,
+    viewport: { width: 820, height: 1000 },
+  })
+
+  test('interactive targets compute to at least 44px and survive a 200% viewport', async ({
+    page,
+    request,
+  }) => {
+    const { email, password } = await createAccount(request)
+    await openDocx(page, email, password, `E13 touch ${Date.now()}`)
+    await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+      timeout: 30_000,
+    })
+
+    // The media the pointer-coarse utilities respond to is genuinely active,
+    // so the assertions below measure the coarse-pointer classes, not hope.
+    expect(
+      await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
+    ).toBe(true)
+
+    const assertTargets = async () => {
+      for (const name of [
+        'Zoom out',
+        'Zoom in',
+        'Ruler',
+        'Navigation pane',
+        'Print layout',
+        'Web layout',
+      ]) {
+        const control = page.getByRole('button', { name })
+        await expect(control).toBeVisible()
+        const box = await control.boundingBox()
+        expect(box, `${name} has no box`).not.toBeNull()
+        expect(box!.height, `${name} height`).toBeGreaterThanOrEqual(44)
+        expect(box!.width, `${name} width`).toBeGreaterThanOrEqual(44)
+      }
+    }
+
+    await openRibbonTab(page, 'View')
+    await assertTargets()
+
+    // A ~200%-zoomed 820px window is a ~410px CSS viewport: controls must
+    // stay reachable and sized, and the document column must not overflow.
+    await page.setViewportSize({ width: 410, height: 500 })
+    await expect(page.locator('[data-paragraph-id]').first()).toBeVisible()
+    await assertTargets()
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(4)
+  })
 })

@@ -2176,3 +2176,38 @@ hashes differ rather than silently compared equal. The frontend renders the
 entries and offers read-only viewing of historical versions through the same
 version-aware queries, so a historical view never reads or mutates the
 current version's cached model.
+
+### Editor view modes, printing, and the proof boundary for browsers and Word (E13)
+
+Context: the document workspace grew the Word-parity controls the conformance
+audit listed — a continuous web layout, a ruler bound to the page measure, a
+heading navigation pane, a local spell-check toggle and a bounded PDF viewer —
+and with them two honesty problems that tests alone could not settle. The
+page engine's web flow paints against an unbounded internal frame, so a print
+requested while that view is painted must not carry that frame into the
+`@page` rule or the DOM snapshot. And no in-browser check can attest to what
+Microsoft Word, another browser's print pipeline, or a printer driver does
+with the output.
+
+Decision: `@page` is derived from the document's stored page setup — the
+first section's box from `documentSections`/`pageBoxForSection` — never from
+the painted flow's `PageBox`. Any print entry point repaginates first: the
+ribbon's Print control and a `beforeprint` listener both flush the view to
+the print flow so Ctrl+P and the browser menu take the same path, and
+`afterprint` restores the web view; a print the platform refuses or fails
+restores immediately since no `afterprint` will arrive. Printing still paints
+the on-screen state — drafts, pending inserts and marked deletions included —
+and saves or mutates nothing.
+
+Decision: the browser-proofing boundary is stated, not blurred. jsdom
+component tests and the Playwright journey prove what this workspace paints
+and what Chromium's printToPDF produces, page dimensions read back from the
+generated PDF; they cannot prove output in every browser, driver or printer,
+and say nothing about Word. The Word leg is an explicit operator acceptance
+gate in `scripts/word-roundtrip`: the harness only runs against a loopback,
+non-shared lane whose API reports this checkout at `HEAD` and the declared
+`*_test` database, and a `--word-output` file earns `word.status: "checked"`
+only when its `docProps/app.xml` names Microsoft Office Word — byte-identical
+copies and non-Word producers (LibreOffice included) are rejected and the
+rejection is recorded. Which requirement sits at which proof layer is mapped
+in `docs/evidence/e13-conformance/coverage-map.md`.

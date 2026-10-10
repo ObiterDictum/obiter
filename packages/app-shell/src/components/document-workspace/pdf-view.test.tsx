@@ -106,20 +106,24 @@ describe('DocumentPdfPages', () => {
   })
 
   it('jumps to a typed page and refuses values outside the range', () => {
-    const onPageIndexChange = renderPages(0)
+    const onPageIndexChange = renderPages(2)
     const jump = screen.getByRole('textbox', { name: /Go to page/ })
-    fireEvent.change(jump, { target: { value: '3' } })
+    fireEvent.change(jump, { target: { value: '1' } })
     fireEvent.keyDown(jump, { key: 'Enter' })
-    expect(onPageIndexChange).toHaveBeenCalledWith(2)
+    expect(onPageIndexChange).toHaveBeenCalledWith(0)
 
     onPageIndexChange.mockClear()
     fireEvent.change(jump, { target: { value: '9' } })
     fireEvent.keyDown(jump, { key: 'Enter' })
     expect(onPageIndexChange).not.toHaveBeenCalled()
+    // A refused entry restores the page being shown rather than leaving a
+    // number displayed that names no mounted page.
+    expect(jump).toHaveProperty('value', '3')
 
     fireEvent.change(jump, { target: { value: 'page two' } })
     fireEvent.keyDown(jump, { key: 'Enter' })
     expect(onPageIndexChange).not.toHaveBeenCalled()
+    expect(jump).toHaveProperty('value', '3')
   })
 
   it('says when the layout has no pages', () => {

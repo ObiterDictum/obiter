@@ -1,5 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { DocumentModelWire } from '@obiter/contracts'
+
+import type { DocumentPrintOutcome } from '../../document-print'
 
 import type { FormatTarget } from '../../document-format-edits'
 import { documentFormatToolbar } from '../../document-format-edits'
@@ -32,9 +35,55 @@ export function useWorkspaceView() {
     () => (view === 'web' ? { kind: 'web', widthPx: webWidthPx } : undefined),
     [view, webWidthPx],
   )
+  // Paper output is always the paginated print flow: a web sheet is one
+  // continuous element measured against an unbounded internal frame, so
+  // printing it directly produces a clipped, mile-long page. Before any print
+  // — the ribbon control, Ctrl+P or the browser menu — the view switches to
+  // print layout synchronously, and `afterprint` restores it. A platform that
+  // never fires `afterprint` simply leaves the workspace in print layout.
+  const viewRef = useRef(view)
+  const printSwitch = useMemo(() => {
+    let switched = false
+    return {
+      before() {
+        if (switched || viewRef.current !== 'web') return
+        switched = true
+        flushSync(() => setView('print'))
+      },
+      after() {
+        if (!switched) return
+        switched = false
+        setView('web')
+      },
+    }
+  }, [])
+  useEffect(() => {
+    viewRef.current = view
+  }, [view])
+  useEffect(() => {
+    window.addEventListener('beforeprint', printSwitch.before)
+    window.addEventListener('afterprint', printSwitch.after)
+    return () => {
+      window.removeEventListener('beforeprint', printSwitch.before)
+      window.removeEventListener('afterprint', printSwitch.after)
+    }
+  }, [printSwitch])
+  // Runs a print request against a repaginated print view and undoes the
+  // switch when the platform reports no dialog ever opened — no `afterprint`
+  // will arrive to restore it in that case.
+  const forPrint = useCallback(
+    (run: () => DocumentPrintOutcome) => {
+      printSwitch.before()
+      const outcome = run()
+      if (outcome.status !== 'printed') printSwitch.after()
+      return outcome
+    },
+    [printSwitch],
+  )
   return {
     view,
     setView,
+    forPrint,
     rulerOn,
     toggleRuler: () => setRulerOn((value) => !value),
     navOpen,
@@ -45,14 +94,12 @@ export function useWorkspaceView() {
     /** The toggle announces what it switches: the browser's own dictionary,
      * on this device only — never a legal correctness claim. */
     toggleSpelling: (onNotice: (notice: string) => void) => {
-      setSpelling((current) => {
-        onNotice(
-          current
-            ? 'Spell-check is off.'
-            : 'Spell-check is on: the browser underlines words its local dictionary flags, on this device only. It is not a legal correctness check.',
-        )
-        return !current
-      })
+      onNotice(
+        spelling
+          ? 'Spell-check is off.'
+          : 'Spell-check is on: the browser underlines words its local dictionary flags, on this device only. It is not a legal correctness check.',
+      )
+      setSpelling((value) => !value)
     },
   }
 }
