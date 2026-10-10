@@ -29,6 +29,7 @@ import { createDocumentCompareRoutes } from './routes/document-compare'
 import { createDocumentContentRoutes } from './routes/document-content'
 import { createDocumentEditRoutes } from './routes/document-edit'
 import { createDocumentExportRoutes } from './routes/document-export'
+import { createDocumentMarkingsRoutes } from './routes/document-markings'
 import { createDocumentMediaRoutes } from './routes/document-media'
 import { createDocumentModelRoutes } from './routes/document-model'
 import { createDocumentPdfViewRoutes } from './routes/document-pdf-view'
@@ -320,6 +321,7 @@ export function createApiApp(
   app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))
   app.route('/', createDocumentExportRoutes(pool, storage))
+  app.route('/', createDocumentMarkingsRoutes(pool, storage))
   app.route('/', createDocumentMediaRoutes(pool, storage))
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createTrackedChangeRoutes(pool, storage))

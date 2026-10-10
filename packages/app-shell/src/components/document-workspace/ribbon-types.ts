@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { DocumentMarkingsWire } from '@obiter/contracts'
 import type { ListKind } from '../../document-list-toggle'
 import type { IndentKind } from '../../document-paragraph-format'
 import type {
@@ -76,6 +77,26 @@ export type DocumentFormatToolbar = {
   onMargins: (kind: SectionMarginsKind) => void
   onOrientation: () => void
   onPageSize: (kind: PageSizeKind) => void
+}
+
+/**
+ * The Layout ribbon's classification controls (E12): Document type, Draft,
+ * Privileged and Without prejudice. A change commits a new immutable version
+ * server-side, so the controls are disabled while unsaved work would leave
+ * the base version behind — the reason is published like the other ribbons'.
+ */
+export type DocumentMarkingsToolbar = {
+  /** The stored markings, including a kind this ribbon does not list. */
+  markings: DocumentMarkingsWire
+  /** The reason no marking change can commit, published on the controls. */
+  unavailable?: string
+  /** True while a markings commit is in flight. */
+  pending: boolean
+  /** `null` clears the stored kind. Unknown values never reach this. */
+  onDocumentKind: (kind: string | null) => void
+  onToggleDraft: () => void
+  onTogglePrivileged: () => void
+  onToggleWithoutPrejudice: () => void
 }
 
 /**

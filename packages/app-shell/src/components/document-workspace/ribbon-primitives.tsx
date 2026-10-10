@@ -63,6 +63,7 @@ export function IconButton({
   disabled,
   soon,
   disabledReason,
+  hint,
   onClick,
   icon,
 }: {
@@ -71,6 +72,9 @@ export function IconButton({
   disabled?: boolean
   soon?: boolean | string
   disabledReason?: string
+  /** What the action does beyond its label — shown in the tooltip, e.g.
+   * the limits a share-safe export imposes. */
+  hint?: string
   onClick?: () => void
   icon: ReactNode
 }) {
@@ -83,6 +87,9 @@ export function IconButton({
         : disabled && disabledReason
           ? `${label}: ${disabledReason}`
           : label
+  // A hint discloses what the action does beyond its name — it lives in the
+  // tooltip, not the accessible name, so `label` queries keep working.
+  const tooltip = hint ? `${caption}: ${hint}` : caption
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
@@ -110,7 +117,7 @@ export function IconButton({
       >
         {button}
       </TooltipTrigger>
-      <TooltipContent>{caption}</TooltipContent>
+      <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>
   )
 }
@@ -120,16 +127,24 @@ export function CaptionButton({
   pressed,
   disabled,
   soon,
+  disabledReason,
   onClick,
 }: {
   label: string
   pressed?: boolean
   disabled?: boolean
   soon?: boolean
+  /** The reason a currently-disabled control is unavailable, published in its
+   * accessible name the way `IconButton` and `RibbonSelect` publish theirs. */
+  disabledReason?: string
   onClick?: () => void
 }) {
   const unavailable = Boolean(soon)
-  const caption = unavailable ? `${label} (not available yet)` : label
+  const caption = unavailable
+    ? `${label} (not available yet)`
+    : disabled && disabledReason
+      ? `${label}: ${disabledReason}`
+      : label
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}

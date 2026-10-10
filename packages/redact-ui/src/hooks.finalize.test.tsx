@@ -68,6 +68,7 @@ const baseRun: RedactionRun = {
   detectionMode: 'model+supplement',
   replacesRunId: null,
   replacementRunId: null,
+  returnedDocumentVersionId: null,
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 }

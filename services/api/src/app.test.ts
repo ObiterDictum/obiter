@@ -1302,6 +1302,7 @@ describe('createApiApp', () => {
                 detection_mode: 'model+supplement',
                 replaces_run_id: null,
                 replacement_run_id: null,
+                returned_document_version_id: null,
                 created_by: 'usr_1',
                 created_at: '2026-01-01T00:00:00.000Z',
                 updated_at: '2026-01-01T00:00:00.000Z',
@@ -1438,6 +1439,7 @@ describe('createApiApp', () => {
       detection_mode: persistedMode,
       replaces_run_id: null,
       replacement_run_id: null,
+      returned_document_version_id: null,
       created_by: 'usr_1',
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -1804,6 +1806,7 @@ function finalizedRunRow(
     detection_mode: 'model+supplement',
     replaces_run_id: null,
     replacement_run_id: null,
+    returned_document_version_id: null,
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -3494,6 +3497,7 @@ describe('createApiApp replaced redaction run guards', () => {
       status: 'ready_for_review',
       output_artifact_id: null,
       replacement_run_id: 'red_2',
+      returned_document_version_id: null,
       spans_json: [
         {
           id: 'span_1',

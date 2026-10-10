@@ -36,6 +36,11 @@ export interface RedactionRun {
   detectionMode: DetectionMode
   replacesRunId: string | null
   replacementRunId: string | null
+  /**
+   * Document version this run's finalized output was returned into (E12).
+   * Present after a successful return-to-document; absent otherwise.
+   */
+  returnedDocumentVersionId?: string | null
   createdAt: string
   updatedAt: string
 }

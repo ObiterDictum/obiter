@@ -16,7 +16,6 @@ import {
 } from '../../document-workspace-api'
 import { refocusCaretBeforeFlight } from './document-actions'
 import { DocxModelPages } from './docx-model-pages'
-import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
 import { useChangeReview } from './use-change-review'
@@ -31,13 +30,14 @@ import { useWorkspaceComments } from './use-workspace-comments'
 import { documentClipboardToolbar } from './use-workspace-clipboard'
 import { exportDocumentAsDocx } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
+import { useDocumentMarkings } from './use-document-markings'
 import { useLegalToolsState } from './use-legal-tools-state'
+import { WorkspaceBanners } from './workspace-banners'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
 import { DocumentDesk, DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import {
-  ConflictBanner,
   LoadingBlock,
   QueryError,
   WorkspaceRibbon,
@@ -188,6 +188,17 @@ export function DocxWorkspace({
   })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
+  // Markings commit an immutable version like a decision does, so the hook
+  // shares the save machine's barriers and advances the base on success.
+  const markings = useDocumentMarkings({
+    documentId,
+    matterId,
+    model,
+    baseVersionId,
+    save,
+    onSaved: (version) => setSavedVersion({ documentId, versionId: version }),
+    onNotice: setBanner,
+  })
   // The toolbar acts on the document selection's ranges, or on the caret's
   // own paragraph when there is none.
   const formatTarget: FormatTarget = selectionActive
@@ -321,6 +332,14 @@ export function DocxWorkspace({
             if (message) setBanner(message)
           })
         }}
+        onExportShareSafe={() => {
+          refocusCaretBeforeFlight()
+          void exportDocumentAsDocx(documentId, filename, {
+            shareSafe: true,
+          }).then((message) => {
+            if (message) setBanner(message)
+          })
+        }}
         onPrint={print}
         onSave={save.save}
         onUndo={undo}
@@ -369,37 +388,18 @@ export function DocxWorkspace({
           onAcceptAll: () => changeReview.decideAll('accept'),
           onRejectAll: () => changeReview.decideAll('reject'),
         }}
+        markings={markings}
       />
-      <DocumentSaveBanners save={save} drafts={drafts} />
-      {save.stale ? (
-        <div className="px-3 pb-2">
-          <ConflictBanner
-            body="The document has changed since editing began."
-            actionLabel="Reload"
-            onAction={reload}
-          />
-        </div>
-      ) : null}
-      {remoteChange && save.dirty && !save.stale ? (
-        <div className="px-3 pb-2">
-          <ConflictBanner
-            body="A colleague saved a newer version. Reload before saving, or save to merge disjoint edits."
-            actionLabel="Reload"
-            onAction={reload}
-          />
-        </div>
-      ) : null}
-      {transientBanner ? (
-        <p className="px-3 pb-2 text-sm text-ink" role="status">
-          {transientBanner}
-        </p>
-      ) : null}
-      {/* A document selection is custom rather than the textarea's own, so its
-          state and any refusal is announced rather than only painted. No
-          role="status" so the transient banner stays the only status region. */}
-      <p className="sr-only" aria-live="polite" data-selection-status>
-        {selectionNotice ?? selectionAnnouncement(selectionSegments.size)}
-      </p>
+      <WorkspaceBanners
+        save={save}
+        drafts={drafts}
+        remoteChange={remoteChange}
+        transientNotice={transientBanner}
+        selectionNotice={
+          selectionNotice ?? selectionAnnouncement(selectionSegments.size)
+        }
+        onReload={reload}
+      />
     </WorkspaceRibbon>
   )
 

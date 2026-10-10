@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch, apiFetchBlob, declaredFileType } from '@obiter/app-shell'
+import type { RedactionReturnResponse } from '@obiter/contracts'
+import {
+  apiFetch,
+  apiFetchBlob,
+  declaredFileType,
+  documentsKeys,
+} from '@obiter/app-shell'
 import type {
   FinalizeInput,
   FinalizeResponse,
@@ -147,6 +153,34 @@ export function useRedetectRun(runId: string) {
       void queryClient.invalidateQueries({ queryKey: runsKey })
       void queryClient.invalidateQueries({
         queryKey: ['document-redaction-runs'],
+      })
+    },
+  })
+}
+
+/**
+ * Return a finalized document-linked run's output to its source document as a
+ * new immutable version (E12). `baseVersionId` is the version the run redacted
+ * — the server refuses when the head has moved, so a stale document fails
+ * closed rather than silently overwriting newer work. A successful retry
+ * reports `already_returned` with the same version, never a duplicate.
+ */
+export function useReturnToDocument(runId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { baseVersionId: string }) =>
+      apiFetch<RedactionReturnResponse>(
+        `/api/redaction-runs/${runId}/return-to-document`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: runKey(runId) })
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({
+        queryKey: ['document-redaction-runs'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: documentsKeys.detail(result.documentId),
       })
     },
   })

@@ -1,4 +1,10 @@
-import { decodeXmlReferences } from './xml-lexemes'
+import { parseStartTag } from './parts/overlay'
+import {
+  attributeValue,
+  WORD_NAMESPACE,
+  type XmlElement,
+} from './parts/xml-elements'
+import { decodeXmlReferences, findXmlTagEnd, xmlInnerText } from './xml-lexemes'
 
 /**
  * A stored field instruction parsed the way Word reads it: a field name,
@@ -32,6 +38,14 @@ export function fieldInstructionName(instruction: string) {
     return ''
   }
   return first.toUpperCase()
+}
+
+/**
+ * The token's operand value with Word's `"…"`/`«…»` quoting removed —
+ * `fieldInstructionTokens` output carries the raw token spelling.
+ */
+export function fieldInstructionTokenValue(token: string) {
+  return tokenArgument(token)
 }
 
 function tokenArgument(token: string) {
@@ -94,36 +108,119 @@ export function tableAuthorityMarkMatches(
   )
 }
 
-const FIELD_OR_INSTRUCTION =
-  /<w:fldChar\b[^>]*\bw:fldCharType="(begin|end|separate)"[^>]*\/?>|<w:instrText\b[^>]*>([\s\S]*?)<\/w:instrText>|<w:fldSimple\b[^>]*?\bw:instr="([\s\S]*?)"/gu
+/**
+ * Skips a comment, CDATA section or processing instruction — constructs that
+ * cannot carry field markup — and returns the cursor past them, or `-1`
+ * when the input is not such a construct.
+ */
+function skipXmlConstruct(xml: string, opening: number) {
+  if (xml.startsWith('<!--', opening)) {
+    const close = xml.indexOf('-->', opening + 4)
+    return close === -1 ? xml.length : close + 3
+  }
+  if (xml.startsWith('<![CDATA[', opening)) {
+    const close = xml.indexOf(']]>', opening + 9)
+    return close === -1 ? xml.length : close + 3
+  }
+  if (xml.startsWith('<?', opening)) {
+    const close = xml.indexOf('?>', opening + 2)
+    return close === -1 ? xml.length : close + 2
+  }
+  return -1
+}
+
+/** The position of `</w:instrText` that closes an open `instrText` run. */
+function instrTextClose(xml: string, start: number) {
+  let cursor = start
+  while (cursor < xml.length) {
+    const opening = xml.indexOf('<', cursor)
+    if (opening === -1) return -1
+    const skipped = skipXmlConstruct(xml, opening)
+    if (skipped !== -1) {
+      cursor = skipped
+      continue
+    }
+    if (xml.startsWith('</w:instrText', opening)) return opening
+    let tagEnd: number
+    try {
+      tagEnd = findXmlTagEnd(xml, opening + 1)
+    } catch {
+      return -1
+    }
+    cursor = tagEnd
+  }
+  return -1
+}
 
 /**
  * Every stored field instruction carried by an XML string — one entry per
  * field, with a complex field's `instrText` runs merged and a
- * `w:fldSimple`'s decoded `w:instr` standing alone. The scan pairs
- * `fldChar` begins and ends so two `TA` fields in one window never merge
- * into each other's switches; a field that never closes still emits what
- * its instruction accumulated.
+ * `w:fldSimple`'s decoded `w:instr` standing alone. The scan walks markup
+ * constructs rather than matching tag text, so a comment or CDATA inside an
+ * `instrText` resolves the way an XML parser reads it instead of corrupting
+ * the instruction. It pairs `fldChar` begins and ends so two `TA` fields in
+ * one window never merge into each other's switches; a field that never
+ * closes still emits what its instruction accumulated.
  */
 export function fieldInstructionsInXml(xml: string) {
   const instructions: string[] = []
   const buffers: string[] = []
   const separated: boolean[] = []
-  for (const match of xml.matchAll(FIELD_OR_INSTRUCTION)) {
-    const instrText = match[2]
-    if (instrText !== undefined) {
+  let cursor = 0
+  while (cursor < xml.length) {
+    const opening = xml.indexOf('<', cursor)
+    if (opening === -1) break
+    const skipped = skipXmlConstruct(xml, opening)
+    if (skipped !== -1) {
+      cursor = skipped
+      continue
+    }
+    let tagEnd: number
+    try {
+      tagEnd = findXmlTagEnd(xml, opening + 1)
+    } catch {
+      break
+    }
+    if (xml.startsWith('</', opening) || xml.startsWith('<!', opening)) {
+      cursor = tagEnd
+      continue
+    }
+    let tag
+    try {
+      tag = parseStartTag(xml.slice(opening + 1, tagEnd - 1))
+    } catch {
+      cursor = tagEnd
+      continue
+    }
+    cursor = tagEnd
+    if (tag.qualifiedName === 'w:instrText') {
+      if (tag.selfClosing) continue
+      const close = instrTextClose(xml, tagEnd)
+      if (close === -1) break
       const depth = buffers.length - 1
       if (depth >= 0 && !separated[depth]) {
-        buffers[depth] += decodeXmlReferences(instrText)
+        buffers[depth] += xmlInnerText(xml, tagEnd, close)
+      }
+      try {
+        cursor = findXmlTagEnd(xml, close + 2)
+      } catch {
+        break
       }
       continue
     }
-    const simpleInstr = match[3]
-    if (simpleInstr !== undefined) {
-      instructions.push(decodeXmlReferences(simpleInstr))
+    if (tag.qualifiedName === 'w:fldSimple') {
+      const instruction = tag.attributes.find(
+        (attribute) => attribute.qualifiedName === 'w:instr',
+      )
+      if (instruction !== undefined) {
+        instructions.push(decodeXmlReferences(instruction.value))
+      }
       continue
     }
-    const type = match[1]
+    if (tag.qualifiedName !== 'w:fldChar') continue
+    const type = tag.attributes.find(
+      (attribute) => attribute.qualifiedName === 'w:fldCharType',
+    )?.value
     if (type === 'begin') {
       buffers.push('')
       separated.push(false)
@@ -134,9 +231,68 @@ export function fieldInstructionsInXml(xml: string) {
       separated[separated.length - 1] = true
       continue
     }
-    const buffer = buffers.pop() ?? ''
+    if (type === 'end') {
+      instructions.push(buffers.pop() ?? '')
+      separated.pop()
+    }
+  }
+  while (buffers.length > 0) {
+    instructions.push(buffers.pop() ?? '')
     separated.pop()
-    instructions.push(buffer)
+  }
+  return instructions
+}
+
+/**
+ * The namespace-aware variant of `fieldInstructionsInXml` for callers that
+ * already hold a parsed element list: field constructs are matched on their
+ * expanded names, so an `instrText` bound to the WordprocessingML namespace
+ * under a different prefix — or a `w:` prefix bound elsewhere — reads
+ * exactly as Word resolves it, not as the literal `w:` spelling suggests.
+ * `source` backs the element offsets, so `instrText` bodies come from the
+ * same document the elements were parsed from.
+ */
+export function fieldInstructionsFromElements(
+  source: string,
+  elements: readonly XmlElement[],
+) {
+  const instructions: string[] = []
+  const buffers: string[] = []
+  const separated: boolean[] = []
+  for (const element of elements) {
+    if (element.namespaceUri !== WORD_NAMESPACE) continue
+    if (element.localName === 'instrText') {
+      const depth = buffers.length - 1
+      if (depth >= 0 && !separated[depth]) {
+        buffers[depth] += xmlInnerText(
+          source,
+          element.startTagEnd,
+          element.endTagStart,
+        )
+      }
+      continue
+    }
+    if (element.localName === 'fldSimple') {
+      const instruction = attributeValue(element, WORD_NAMESPACE, 'instr')
+      if (instruction !== undefined) instructions.push(instruction)
+      continue
+    }
+    if (element.localName !== 'fldChar') continue
+    const type = attributeValue(element, WORD_NAMESPACE, 'fldCharType')
+    if (type === 'begin') {
+      buffers.push('')
+      separated.push(false)
+      continue
+    }
+    if (buffers.length === 0) continue
+    if (type === 'separate') {
+      separated[separated.length - 1] = true
+      continue
+    }
+    if (type === 'end') {
+      instructions.push(buffers.pop() ?? '')
+      separated.pop()
+    }
   }
   while (buffers.length > 0) {
     instructions.push(buffers.pop() ?? '')

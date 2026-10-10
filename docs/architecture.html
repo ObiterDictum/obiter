@@ -2693,7 +2693,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>31 migrations, 0001 to 0032, 0008 withdrawn</dd>
+                <dd>32 migrations, 0001 to 0033, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3149,6 +3149,118 @@
                     head; unmatched replies export unanchored and count as
                     skipped. Audit records ids, <code>commentCount</code>, and
                     <code>skippedCommentCount</code> only.
+                    <code>?mode=share-safe</code> instead returns a sanitised
+                    package through the ooxml share-safe builder. The builder
+                    enumerates the whole package: every part is classified by
+                    its relationship type and content type against a strict
+                    allow-list, so an unreferenced payload is dropped and a
+                    declared part the allow-list does not place refuses the
+                    export rather than guessing (422
+                    <code>share_safe_export_refused</code>). Inside each kept
+                    part a second, element-level allow-list bounds what may
+                    exist: root namespaces and embedded element namespaces are
+                    validated per part family (strict-OOXML content refuses),
+                    revision and permission markup refuses in every shape,
+                    hidden-content surfaces (vanish flags, hidden rows,
+                    conditional table styles, hidden drawing objects) refuse,
+                    relationship-namespace attributes must resolve to
+                    declarations that survive, and <code>w:</code> attributes
+                    must be declared on the element that carries them with a
+                    value inside the slot's declared bound — an enumeration
+                    (justification, border, number-format, hint names), a
+                    grammar shape (bounded measures, ids, hex signatures,
+                    dates), or a dedicated validator (field instructions,
+                    bookmark names, anchor targets); a payload-bearing name such
+                    as <code>w:instr</code> or <code>w:name</code> out of schema
+                    context strips, and a declared slot holding an out-of-bound
+                    value refuses the export rather than preserving or stripping
+                    it. Field instructions — read semantically through CDATA,
+                    comments and split runs — are classified keep, remove,
+                    flatten or refuse: only a bounded field-name set may ship,
+                    <code>REF</code>, <code>PAGEREF</code>,
+                    <code>NOTEREF</code> and <code>GOTOBUTTON</code> operands
+                    rewrite to the generated bookmark names (a dangling operand
+                    flattens the field to its cached text, other field text is
+                    never rewritten), unnamed or ambiguous instructions flatten,
+                    and unclosed machinery drops or refuses rather than shipping
+                    half-open markup. External hyperlinks are unlinked to their
+                    visible text; comments and their satellite parts,
+                    thumbnails, signatures, embedded fonts (and their
+                    <code>w:embed*</code> pointers), settings provenance and
+                    editing identifiers (<code>rsid*</code>,
+                    <code>w14</code>/<code>w15+</code> ids) are removed; foreign
+                    attributes on kept elements are stripped; embedded drawing
+                    and theme descriptive names (<code>name</code>,
+                    <code>descr</code>, <code>title</code>) strip,
+                    <code>typeface</code> is legal only on font declaration
+                    elements, <code>a:graphicData uri</code> values are a
+                    bounded identifier set, every other kept embedded attribute
+                    is element-scoped and value-bounded to a declared enum or
+                    grammar (a bound failure refuses the export), and
+                    <code>xml:space</code> emits only its two switch values
+                    while the other <code>xml:</code> attributes strip. Drawing
+                    presets (geometry, shadows, cameras, light rigs, materials,
+                    patterns, preset colours and text warps) keep only their
+                    schema enumerations; an <code>a:ext</code> survives only
+                    when its <code>uri</code> names a supported extension (the
+                    <code>a14:useLocalDpi</code> GUID) and removes whole
+                    otherwise; OMML <code>m:val</code> attributes bound per
+                    property element; explicit invisibility refuses — an
+                    <code>alpha</code>/<code>alphaRepl</code> declaration below
+                    the 1% floor, an opacity-reducing
+                    <code>alphaMod</code>/<code>alphaModFix</code>
+                    multiplier under 100%, any negative
+                    <code>alphaOff</code> (the offset is additive, so the
+                    erasing direction is negative), the
+                    <code>alphaInv</code>/<code>alphaFloor</code>/
+                    <code>alphaBiLevel</code> elements outright, a negative
+                    <code>alphaOutset</code> inset,
+                    <code>bwMode="hidden"</code>, OMML phantom wrappers and
+                    <code>a:noFill</code> over drawing-run text; dangling style
+                    pointers such as <code>a:tableStyleId</code> are removed;
+                    core and app properties are re-emitted as canonical bare
+                    roots; and the product's own <code>obiter.*</code> marking
+                    properties are canonicalised —
+                    <code>documentKind</code> must name a kind this build knows
+                    and flags must spell <code>true</code>/<code>false</code>,
+                    so they are the only custom properties retained.
+                    Relationship parts must declare unique ids, required
+                    attributes and resolvable internal targets, and every kept
+                    part must carry a content-type declaration. Kept XML parts
+                    are re-emitted canonically from the parsed element model
+                    rather than edited in place, so lexical constructs the model
+                    never carried (comments, processing instructions, unused
+                    namespace declarations) cannot reach the output. Binary
+                    payloads are bounded to PNG, JPEG and GIF — other image
+                    formats refuse — and are re-serialised metadata-free: PNG
+                    emits only an allow-listed chunk set, JPEG drops APPn and
+                    COM segments, GIF drops comment and application extensions.
+                    The serialised bytes are then reparsed, re-inventoried and
+                    re-walked at byte level — re-deriving element-scoped
+                    attributes, canonical prefixes, unique relationship ids,
+                    generated bookmark names and field-reference resolution —
+                    before they are served. A refusal logs its bounded reason
+                    class internally — never the detail, which may name private
+                    package internals — and the client sees only the generic
+                    422. The download name gains a
+                    <code>-share-safe</code> suffix.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/documents/:id/markings</td>
+                  <td class="id">document-markings.ts</td>
+                  <td>
+                    Edit-gated. Commits the document classification — document
+                    type plus Draft, Privileged and Without prejudice flags —
+                    into the DOCX's <code>docProps/custom.xml</code> as a new
+                    immutable version (audit <code>document.markings</code>).
+                    Requires <code>baseVersionId</code>; a moved head answers
+                    <code>conflict_detected</code>. The wire keeps unknown
+                    document-kind strings so foreign values survive. Malformed
+                    or ambiguous product properties read back as cleared
+                    markings with <code>unreadable</code> set — the workspace
+                    disables its marking controls and the write stays refused
+                    rather than picking a winner.
                   </td>
                 </tr>
                 <tr>
@@ -3352,6 +3464,22 @@
                   <td class="id">redact-review.ts</td>
                   <td>
                     Finalized artifact bytes (redacted PDF or text download)
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/redaction-runs/:runId/return-to-document
+                  </td>
+                  <td class="id">redact-lifecycle.ts</td>
+                  <td>
+                    Edit-gated. Commits a document-bound finalized run's ready
+                    DOCX output back to its source document as a new immutable
+                    version (migration 0033 records
+                    <code>returned_document_version_id</code>). Verified against
+                    the stored artifact's SHA-256 and DOCX parse; a moved
+                    document head answers <code>conflict_detected</code>, a
+                    completed return answers idempotently with the version it
+                    already created.
                   </td>
                 </tr>
                 <tr>
@@ -3595,6 +3723,16 @@
                   <td>
                     The run is in the wrong state, or finalize aborted because
                     span text no longer matches the document.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">422</td>
+                  <td class="id">share_safe_export_refused</td>
+                  <td>
+                    The share-safe export's package inventory could not prove
+                    the output clean — a declared part class it does not
+                    support, tracked or hidden content, an external fetch. A
+                    refusal, not a broken export.
                   </td>
                 </tr>
                 <tr>
