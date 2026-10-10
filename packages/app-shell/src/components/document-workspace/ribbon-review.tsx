@@ -24,7 +24,7 @@ import {
   Prohibit,
   Ruler,
   Scales,
-  SealCheck,
+  ShieldCheck,
   TextAa,
   TextT,
   X,
@@ -109,7 +109,7 @@ export function ReferencesRibbon({
             }
             disabledReason={verifyReason ?? undefined}
             onClick={() => verification?.revealStart()}
-            icon={<SealCheck size={16} aria-hidden />}
+            icon={<ShieldCheck size={16} aria-hidden />}
           />
           <IconButton
             label="List of authorities"

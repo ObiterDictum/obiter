@@ -47,11 +47,13 @@ export function DocumentPdfPages({
   const scale = zoom / 100
   const segmentIndexes = segmentsByPage.get(pageIndex) ?? []
 
-  const jump = (value: string) => {
+  const jump = (value: string): boolean => {
     const target = Number(value)
-    if (Number.isInteger(target) && target >= 1 && target <= lastIndex + 1) {
-      onPageIndexChange(target - 1)
+    if (!Number.isInteger(target) || target < 1 || target > lastIndex + 1) {
+      return false
     }
+    onPageIndexChange(target - 1)
+    return true
   }
 
   return (
@@ -76,9 +78,18 @@ export function DocumentPdfPages({
             aria-label={`Go to page, of ${view.layout.pages.length}`}
             className="w-12 rounded-sm border border-line bg-transparent px-1 text-center"
             onKeyDown={(event) => {
-              if (event.key === 'Enter') jump(event.currentTarget.value)
+              // A refused jump resets the field to the page being shown —
+              // leaving the refused number displayed claims a page the
+              // viewer is not on.
+              if (event.key === 'Enter' && !jump(event.currentTarget.value)) {
+                event.currentTarget.value = String(pageIndex + 1)
+              }
             }}
-            onBlur={(event) => jump(event.target.value)}
+            onBlur={(event) => {
+              if (!jump(event.target.value)) {
+                event.target.value = String(pageIndex + 1)
+              }
+            }}
           />
           <span aria-hidden="true">/ {view.layout.pages.length}</span>
         </label>

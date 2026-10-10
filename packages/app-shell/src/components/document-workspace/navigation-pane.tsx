@@ -33,7 +33,7 @@ export function DocumentNavigationPane({
       ) : (
         <ul className="flex flex-col py-1">
           {entries.map((entry) => (
-            <li key={entry.paragraphId} aria-level={entry.level}>
+            <li key={entry.paragraphId}>
               <button
                 type="button"
                 data-outline-item

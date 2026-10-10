@@ -15,6 +15,10 @@ import { DocumentNavigationPane } from './navigation-pane'
  * workspace's caret and review machinery; this component owns only how the
  * desk lays them out and the view state that wraps them (spell-check
  * inheritance, the measured column, the outline row).
+ *
+ * The pane stacks in flow — above the column below `lg`, beside it from `lg`
+ * up — and never overlays the document: a reader on a narrow screen keeps the
+ * whole sheet readable without a dismiss-first gesture.
  */
 export function DocxDesk({
   model,

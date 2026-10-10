@@ -91,6 +91,7 @@ export function DocxWorkspace({
   const {
     view,
     setView,
+    forPrint,
     rulerOn,
     toggleRuler,
     navOpen,
@@ -220,6 +221,7 @@ export function DocxWorkspace({
   const {
     painted,
     pages,
+    printBox,
     authorities,
     imageUrls,
     deleteParagraphReason,
@@ -292,7 +294,9 @@ export function DocxWorkspace({
   // wrapper — focus lands on the caret's field before the step can drop it.
   const undo = withCaretRefocus(undoDocument)
   const redo = withCaretRefocus(redoDocument)
-  const print = withCaretRefocus(printDocument)
+  // forPrint repaginates to paper sheets first, so printing from web layout
+  // produces paginated output rather than the continuous frame.
+  const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = withCaretRefocus(save.reload)
   const exports = documentExportHandlers(documentId, filename, setBanner)
   const ribbon = (
@@ -413,7 +417,7 @@ export function DocxWorkspace({
         />
       ) : model ? (
         <>
-          <DocumentPrintStyle box={pages[0]?.box} />
+          <DocumentPrintStyle box={printBox} />
           {ribbon}
           <DocxDesk
             model={model}
