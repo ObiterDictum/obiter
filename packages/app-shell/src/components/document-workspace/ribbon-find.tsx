@@ -1,4 +1,7 @@
-import { Minus, Plus } from '@phosphor-icons/react'
+import {
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
+} from '@phosphor-icons/react'
 import { CaptionButton, IconButton, ToolbarRow } from './ribbon-primitives'
 import type { DocumentFindToolbar } from './ribbon-types'
 
@@ -14,8 +17,8 @@ export function ZoomControls({
       <IconButton
         label="Zoom out"
         disabled={zoom <= 50}
-        onClick={() => onZoom(Math.max(50, zoom - 10))}
-        icon={<Minus size={16} aria-hidden />}
+        onClick={() => onZoom(zoom - 10)}
+        icon={<MagnifyingGlassMinus size={16} aria-hidden />}
       />
       <span className="min-w-12 text-center font-mono text-[11px] text-muted">
         {zoom}%
@@ -23,8 +26,8 @@ export function ZoomControls({
       <IconButton
         label="Zoom in"
         disabled={zoom >= 200}
-        onClick={() => onZoom(Math.min(200, zoom + 10))}
-        icon={<Plus size={16} aria-hidden />}
+        onClick={() => onZoom(zoom + 10)}
+        icon={<MagnifyingGlassPlus size={16} aria-hidden />}
       />
     </ToolbarRow>
   )

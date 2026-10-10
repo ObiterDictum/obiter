@@ -34,6 +34,33 @@ type DocumentWorkspaceProps = {
   layout?: DocumentWorkspaceLayout
 }
 
+// The toolbar's editable-document props are dead on the read-only PDF
+// surface — it early-returns before reading them — but the prop type still
+// requires them, so the inert stubs live in one named constant.
+const noop = () => undefined
+const PDF_TOOLBAR_STUBS = {
+  dirty: false,
+  saving: false,
+  trackChanges: false,
+  commentsOpen: false,
+  changesOpen: false,
+  authoritiesOpen: false,
+  commentCount: 0,
+  changeCount: 0,
+  presence: [],
+  onToggleComments: noop,
+  onToggleChanges: noop,
+  onToggleAuthorities: noop,
+  onInsertAuthority: noop,
+  onToggleTrackChanges: noop,
+  onSave: noop,
+  onInsertParagraph: noop,
+  onDeleteParagraph: noop,
+  onPageBreak: noop,
+  onSectionBreak: noop,
+  canEdit: false,
+}
+
 /**
  * The document is the workspace lifecycle boundary: keying the body on
  * documentId remounts it on a switch, so no unsaved draft, pending insert,
@@ -305,46 +332,26 @@ function PdfWorkspace({
   )
   const activeFindIndex = clampFindIndex(find.index, findHits.length)
 
-  const onJump = (index: number) =>
-    find.jumpTo(findHits, index, (hit) => setPageIndex(hit.pageIndex))
-
   return (
     <WorkspaceShell
       layout={layout}
       // A read-only surface still routes find; save and the edit commands
       // simply have no source here.
-      onKeyDown={(event) => documentWorkspaceKeyDown(event)}
+      onKeyDown={documentWorkspaceKeyDown}
     >
       <WorkspaceRibbon>
         <DocumentWorkspaceToolbar
           kind="pdf"
-          find={find.toolbar(findHits, activeFindIndex, onJump)}
-          dirty={false}
-          saving={false}
-          trackChanges={false}
+          {...PDF_TOOLBAR_STUBS}
+          find={find.toolbar(findHits, activeFindIndex, (hit) =>
+            setPageIndex(hit.pageIndex),
+          )}
           zoom={zoom}
-          commentsOpen={false}
-          changesOpen={false}
-          authoritiesOpen={false}
-          commentCount={0}
-          changeCount={0}
-          presence={[]}
-          onToggleComments={() => undefined}
-          onToggleChanges={() => undefined}
-          onToggleAuthorities={() => undefined}
-          onInsertAuthority={() => undefined}
-          onToggleTrackChanges={() => undefined}
           onZoom={setZoom}
           onExportText={() => {
             if (view.data) downloadPlainText(filename, view.data.text)
           }}
           onDownload={download}
-          onSave={() => undefined}
-          onInsertParagraph={() => undefined}
-          onDeleteParagraph={() => undefined}
-          onPageBreak={() => undefined}
-          onSectionBreak={() => undefined}
-          canEdit={false}
         />
         {downloadError ? (
           <p className="px-3 pb-2 text-sm text-danger" role="status">

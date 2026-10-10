@@ -64,31 +64,26 @@ export type SelectionRefusal =
   | 'clipboard-read'
   | DocumentRangeRefusal
 
+const REFUSAL_MESSAGES = {
+  'join-formatting': JOIN_FORMATTING_BLOCKS_EDIT,
+  'find-structure': FIND_REPLACE_BLOCKS_STRUCTURE,
+  'find-empty': FIND_REPLACE_EMPTY,
+  input: INPUT_BLOCKS_EDIT,
+  clipboard: CLIPBOARD_BLOCKS_CUT,
+  'clipboard-copy': CLIPBOARD_BLOCKS_COPY,
+  'clipboard-read': CLIPBOARD_BLOCKS_PASTE,
+} satisfies Partial<Record<SelectionRefusal, string>>
+
 export function refusalMessage(
   refusal: SelectionRefusal | null,
   hasInsert: boolean,
   hasStructure: boolean,
 ): string | null {
-  switch (refusal) {
-    case 'insert':
-      return hasInsert ? INSERT_BLOCKS_SELECTION : null
-    case 'structure':
-      return hasStructure ? STRUCTURE_BLOCKS_SELECTION : null
-    case 'join-formatting':
-      return JOIN_FORMATTING_BLOCKS_EDIT
-    case 'find-structure':
-      return FIND_REPLACE_BLOCKS_STRUCTURE
-    case 'find-empty':
-      return FIND_REPLACE_EMPTY
-    case 'input':
-      return INPUT_BLOCKS_EDIT
-    case 'clipboard':
-      return CLIPBOARD_BLOCKS_CUT
-    case 'clipboard-copy':
-      return CLIPBOARD_BLOCKS_COPY
-    case 'clipboard-read':
-      return CLIPBOARD_BLOCKS_PASTE
-    default:
-      return null
+  if (refusal === 'insert') {
+    return hasInsert ? INSERT_BLOCKS_SELECTION : null
   }
+  if (refusal === 'structure') {
+    return hasStructure ? STRUCTURE_BLOCKS_SELECTION : null
+  }
+  return (refusal && REFUSAL_MESSAGES[refusal]) || null
 }

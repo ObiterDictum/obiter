@@ -44,6 +44,11 @@ export function editableParagraphs(model: DocumentModelWire) {
   return editableStories(model).flatMap((story) => story.paragraphs)
 }
 
+/** The run texts joined in order — the plain text a paragraph or insert's
+ * runs spell. */
+export const runsText = (runs: readonly { text: string }[]) =>
+  runs.map((run) => run.text).join('')
+
 export function paragraphPlainText(
   paragraph: DocumentParagraphWire,
   drafts?: Record<string, string>,

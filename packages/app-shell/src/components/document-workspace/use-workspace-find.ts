@@ -38,8 +38,8 @@ export function useWorkspaceFind({
    * never jumps the caret into a story that is not being edited. */
   story?: DocumentStoryWire
 }) {
-  const { query, options, index: findIndex, jumpTo, toolbar } = useFindState()
-  const [replaceQuery, setReplaceQuery] = useState('')
+  const { query, options, index: findIndex, toolbar } = useFindState()
+  const [replaceText, onReplace] = useState('')
 
   const findHits = useMemo(
     () => findInDocument(model, drafts.state, query, story, options),
@@ -49,11 +49,6 @@ export function useWorkspaceFind({
   // hits cannot leave the label or navigation on a stale position.
   const activeFindIndex = clampFindIndex(findIndex, findHits.length)
 
-  const onJump = (index: number) =>
-    jumpTo(findHits, index, ({ from }) =>
-      onPlaceCaret(from.paragraphId, from.offset),
-    )
-
   function replace(which: number | 'all') {
     if (!model) return
     const outcome = drafts.replaceHits(
@@ -61,31 +56,34 @@ export function useWorkspaceFind({
       story,
       query,
       options,
-      replaceQuery,
+      replaceText,
       which,
     )
     if (outcome.status === 'applied') {
       onPlaceCaret(outcome.caret.paragraphId, outcome.caret.offset)
-    } else if (outcome.status === 'refused') {
-      // The refusal announces through the same live region a blocked
-      // selection edit uses, with the structure reason reworded for find;
-      // join-formatting already reads as an edit refusal.
-      onRefused(
-        outcome.refusal === 'structure' ? 'find-structure' : outcome.refusal,
-      )
-    } else {
-      // 'empty': the hits were re-derived before the replace, so there was
-      // nothing left to act on — say so instead of a silent no-op click.
-      onRefused('find-empty')
+      return
     }
+    // Every non-applied outcome announces through the same live region a
+    // blocked selection edit uses: a refusal names its reason — structure
+    // reworded for find, join-formatting already reading as an edit refusal
+    // — and 'empty' means the re-derived hits found nothing left to act on.
+    onRefused(
+      outcome.status === 'empty'
+        ? 'find-empty'
+        : outcome.refusal === 'structure'
+          ? 'find-structure'
+          : outcome.refusal,
+    )
   }
 
   return {
     find: {
-      ...toolbar(findHits, activeFindIndex, onJump),
-      replace: replaceQuery,
+      ...toolbar(findHits, activeFindIndex, ({ from }) =>
+        onPlaceCaret(from.paragraphId, from.offset),
+      ),
+      replace: replaceText,
       canReplace: !!findHits.length,
-      onReplace: setReplaceQuery,
+      onReplace,
       onReplaceOne: () => replace(Math.max(activeFindIndex, 0)),
       onReplaceAll: () => replace('all'),
     },
@@ -110,37 +108,42 @@ export function useFindState() {
     setOptions((current) => ({ ...current, [key]: !current[key] }))
     setIndex(-1)
   }
+  /** Selects hit `index` and visits it: the surface decides what a jump
+   * means — placing a caret or turning to a page. */
+  const jumpTo = <T>(
+    hits: readonly T[],
+    index: number,
+    visit: (hit: T) => void,
+  ) => {
+    const hit = hits[index]
+    if (!hit) return
+    setIndex(index)
+    visit(hit)
+  }
   return {
     query,
     options,
     index,
     onQuery,
     onToggleOption,
-    /** Selects hit `index` and visits it: the surface decides what a jump
-     * means — placing a caret or turning to a page. */
-    jumpTo: <T>(hits: readonly T[], index: number, visit: (hit: T) => void) => {
-      const hit = hits[index]
-      if (!hit) return
-      setIndex(index)
-      visit(hit)
-    },
     /** The find controls every workspace find surface shares: the query
      * field, the match count, the match-case and whole-word toggles, and
-     * previous/next navigation that wraps through `jump` with the hit
-     * list's own order. The replace group is a caller's addition — a
-     * read-only surface stops here. */
-    toolbar: (
-      hits: readonly unknown[],
+     * previous/next navigation that selects a hit and visits it — the
+     * surface decides what a jump means: placing a caret or turning to a
+     * page. The replace group is a caller's addition — a read-only surface
+     * stops here. */
+    toolbar: <T>(
+      hits: readonly T[],
       index: number,
-      onJump: (index: number) => void,
+      visit: (hit: T) => void,
     ) => ({
       query,
       options,
       onQuery,
       onToggleOption,
       matchLabel: findMatchLabel(index, hits.length),
-      onNext: () => onJump(nextFindIndex(hits, index)),
-      onPrevious: () => onJump(previousFindIndex(hits, index)),
+      onNext: () => jumpTo(hits, nextFindIndex(hits, index), visit),
+      onPrevious: () => jumpTo(hits, previousFindIndex(hits, index), visit),
     }),
   }
 }

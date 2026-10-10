@@ -7,6 +7,7 @@ import {
   documentStory,
   editableParagraphs,
   editableStoryOf,
+  runsText,
 } from './document-model-text'
 import { drawingFloat, paragraphAnchorXml } from './document-page-floats'
 import { storyBlocks } from './document-page-tables'
@@ -27,7 +28,7 @@ export type LocalInsert = {
 
 export function insertPlainText(insert: LocalInsert): string {
   if (insert.runs && insert.runs.length > 0) {
-    const joined = insert.runs.map((run) => run.text).join('')
+    const joined = runsText(insert.runs)
     return joined.length > 0 ? joined : insert.text
   }
   return insert.text
@@ -35,7 +36,7 @@ export function insertPlainText(insert: LocalInsert): string {
 
 export function insertRuns(insert: LocalInsert): DocumentTextRunWire[] {
   if (insert.runs && insert.runs.length > 0) {
-    const joined = insert.runs.map((run) => run.text).join('')
+    const joined = runsText(insert.runs)
     if (joined.length > 0 || !insert.text) return insert.runs
     return [{ ...insert.runs[0], text: insert.text }]
   }

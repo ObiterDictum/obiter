@@ -4,9 +4,13 @@ import type {
   DocumentStoryWire,
   DocumentTextLayoutSegment,
 } from '@obiter/contracts'
-import { documentStory, effectiveParagraph } from './document-model-text'
 import {
-  editingStoryOfFlowId,
+  documentStory,
+  effectiveParagraph,
+  paragraphPlainText,
+} from './document-model-text'
+import {
+  flowIds,
   insertPlainText,
   storyBodyParagraphIds,
   storyFlowParagraphIds,
@@ -44,13 +48,12 @@ export type TextHit = { start: number; end: number }
  */
 const WORD_CHAR = /[\p{L}\p{M}\p{N}\p{Pc}]/u
 /**
- * The whitespace units ECMAScript counts as `\s`, minus `\n` itself: a query
+ * The whitespace ECMAScript counts as `\s` minus `\n` itself: a query
  * containing a line break matches a break literally, while other query
  * whitespace — space, tab, NBSP — matches a break because a paragraph or
  * line break reads as space.
  */
-const SPACE_UNITS =
-  '\t\v\f\r \xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'
+const SPACE_NOT_BREAK = /[^\S\n]/u
 const BREAK_UNIT = 0x0a
 
 /**
@@ -64,7 +67,7 @@ function unitMatches(needle: number, haystack: number): boolean {
   return (
     needle === haystack ||
     (haystack === BREAK_UNIT &&
-      SPACE_UNITS.includes(String.fromCharCode(needle)))
+      SPACE_NOT_BREAK.test(String.fromCharCode(needle)))
   )
 }
 
@@ -77,7 +80,14 @@ function unitMatches(needle: number, haystack: number): boolean {
  * and 'Σ' are then the same letter for matching, which is also the
  * case-insensitive read the user means.
  */
-const foldText = (text: string) => text.toLowerCase().replaceAll('ς', 'σ')
+const foldText = (text: string) =>
+  text.normalize('NFC').toLowerCase().replaceAll('ς', 'σ')
+
+/** The transform both sides of a scan take — `foldText` when `fold`, plain
+ * NFC otherwise — so a context-sensitive fold can never disagree between
+ * the whole-string needle and the per-cluster text. */
+const matchText = (text: string, fold: boolean) =>
+  fold ? foldText(text) : text.normalize('NFC')
 
 /**
  * Prepare `text` for matching. The text is grouped into grapheme clusters,
@@ -99,9 +109,7 @@ function matchSpace(text: string, fold: boolean): MatchSpace {
   const starts: number[] = []
   const ends: number[] = []
   for (const { segment, index } of GRAPHEME_SEGMENTER.segment(text)) {
-    const piece = fold
-      ? foldText(segment.normalize('NFC'))
-      : segment.normalize('NFC')
+    const piece = matchText(segment, fold)
     const end = index + segment.length
     // One bounds pair for every UTF-16 unit the piece produced — the loop
     // counts down because the unit value itself is never read.
@@ -123,19 +131,15 @@ function matchSpace(text: string, fold: boolean): MatchSpace {
  * changes the text and repays the segment cost once, the honest price of
  * keeping hits against live draft state.
  */
-const matchSpaceCache = new Map<string, MatchSpace>()
-const MATCH_SPACE_CACHE_MAX = 4
+const matchSpaceCache: Array<[string, MatchSpace]> = []
 
 function cachedMatchSpace(text: string, fold: boolean): MatchSpace {
-  const key = `${fold ? 'F' : 'N'}${text}`
-  const cached = matchSpaceCache.get(key)
-  if (cached) return cached
+  const key = `${fold}${text}`
+  const hit = matchSpaceCache.find(([cached]) => cached === key)
+  if (hit) return hit[1]
   const space = matchSpace(text, fold)
-  if (matchSpaceCache.size >= MATCH_SPACE_CACHE_MAX) {
-    const oldest = matchSpaceCache.keys().next().value
-    if (oldest !== undefined) matchSpaceCache.delete(oldest)
-  }
-  matchSpaceCache.set(key, space)
+  if (matchSpaceCache.length > 3) matchSpaceCache.shift()
+  matchSpaceCache.push([key, space])
   return space
 }
 
@@ -147,7 +151,7 @@ function isWordAt(text: string, index: number, before = false): boolean {
   // A negative index reads a unit that does not exist — codePointAt yields
   // undefined, which is never a word character.
   const unit = text.charCodeAt(at)
-  const codePoint = text.codePointAt((unit & 0xfc00) === 0xdc00 ? at - 1 : at)
+  const codePoint = text.codePointAt(unit >>> 10 === 0x37 ? at - 1 : at)
   return WORD_CHAR.test(String.fromCodePoint(codePoint ?? 0))
 }
 
@@ -176,8 +180,7 @@ export function findInText(
   // Normalise before folding, matching the cluster order the text takes: a
   // decomposed 'i'+dot composes to 'İ' first and then folds to 'i'+dot,
   // so both sides of the scan hold the same folded units.
-  const foldedNeedle = needle.normalize('NFC')
-  const pattern = fold ? foldText(foldedNeedle) : foldedNeedle
+  const pattern = matchText(needle, fold)
   if (!pattern) return []
   const [folded, starts, ends] = cachedMatchSpace(haystack, fold)
   const hits: TextHit[] = []
@@ -237,39 +240,33 @@ export function findInDocument(
   story?: DocumentStoryWire,
   options: FindMatchOptions = FIND_MATCH_DEFAULTS,
 ): FindHit[] {
-  if (!model || !query) return []
-  const scoped = story ?? documentStory(model)
+  const scoped = model && query ? (story ?? documentStory(model)) : undefined
   if (!scoped) return []
-  // The ids whose text joins the flow: body paragraphs, plus the pending
-  // inserts whose anchors resolve to this story — an insert anchored in the
-  // margin or notes is not body text here.
-  const flowIds = storyBodyParagraphIds(scoped)
-  state.inserts.forEach((item) => {
-    if (editingStoryOfFlowId(model, state.inserts, item.clientId) === scoped) {
-      flowIds.add(item.clientId)
-    }
-  })
+  // The ids whose text joins the flow: the story's body paragraphs, plus
+  // whichever pending inserts the same flow walk weaves in at them — an
+  // insert anchored to a cell, a text box or another story's paragraph is
+  // searched alone like the paragraph it belongs to.
+  const joinedIds = storyBodyParagraphIds(scoped)
+  flowIds([...joinedIds], state.inserts).forEach((id) => joinedIds.add(id))
   const hits: FindHit[] = []
   // `blockText` resolves each id by scanning every editable story — quadratic
-  // across a long document's flow — so the same effective text comes from
-  // per-id maps built once here: an insert's text, or the paragraph's runs
-  // plus its joined extraRuns with text drafts applied.
-  const paragraphsById = new Map(
-    scoped.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+  // across a long document's flow — so the same effective text is indexed
+  // once here: an insert's text, or the paragraph's runs plus its joined
+  // extraRuns with text drafts applied.
+  const textById = new Map(
+    scoped.paragraphs.map((paragraph) => [
+      paragraph.id,
+      paragraphPlainText(
+        effectiveParagraph(
+          paragraph,
+          state.drafts,
+          state.extraRuns[paragraph.id],
+        ),
+      ),
+    ]),
   )
-  const insertsById = new Map(
-    state.inserts.map((item) => [item.clientId, item]),
-  )
-  const flowText = (id: string): string => {
-    const insert = insertsById.get(id)
-    if (insert) return insertPlainText(insert)
-    const paragraph = paragraphsById.get(id)
-    if (!paragraph) {
-      return (state.extraRuns[id] ?? []).map((run) => run.text).join('')
-    }
-    return effectiveParagraph(paragraph, state.drafts, state.extraRuns[id])
-      .runs.map((run) => run.text)
-      .join('')
+  for (const item of state.inserts) {
+    textById.set(item.clientId, insertPlainText(item))
   }
   // Ordinary flow paragraphs join into one match run with a '\n' for each
   // break, so a literal query crosses a paragraph the way it reads. A
@@ -295,8 +292,8 @@ export function findInDocument(
     state.inserts,
     state.deletedParagraphIds,
   )) {
-    const piece = flowText(id)
-    if (!flowIds.has(id)) {
+    const piece = textById.get(id) ?? ''
+    if (!joinedIds.has(id)) {
       // Search the structural paragraph alone: its edges are not paragraph
       // marks, so a hit may never silently bridge the container the way two
       // unrelated texts were concatenated.
@@ -334,28 +331,23 @@ const hitSlice = (
 function resolveHit(
   hit: TextHit,
   spans: ReadonlyArray<{ id: string; start: number; end: number }>,
-  low = 0,
+  low: number,
 ): FindHit {
-  // Spans are appended in text order, so the covered window ends at the
-  // first span starting past the hit — nothing later can overlap it.
+  // Spans are appended in text order and `low` already sits on the first
+  // one whose end reaches the hit, so every span read here ends at or past
+  // the hit's start. The covered window ends at the first span starting
+  // past the hit — nothing later can overlap it.
   const segments: FindHit['segments'] = []
   for (let index = low; index < spans.length; index += 1) {
     const span = spans[index]
     if (!span || span.start > hit.end) break
-    if (span.end >= hit.start) {
-      segments.push({ paragraphId: span.id, ...hitSlice(hit, span) })
-    }
+    segments.push({ paragraphId: span.id, ...hitSlice(hit, span) })
   }
-  const pick = (
-    segment: (typeof segments)[number] | undefined,
-    key: 'start' | 'end' = 'start',
-  ) => ({
-    paragraphId: segment?.paragraphId ?? '',
-    offset: segment?.[key] ?? 0,
-  })
+  const first = segments[0]
+  const last = segments.at(-1)
   return {
-    from: pick(segments[0]),
-    to: pick(segments.at(-1), 'end'),
+    from: { paragraphId: first?.paragraphId ?? '', offset: first?.start ?? 0 },
+    to: { paragraphId: last?.paragraphId ?? '', offset: last?.end ?? 0 },
     segments,
   }
 }
@@ -430,10 +422,11 @@ export function pdfFindHits(
     const { start, end } = hit
     let pageIndex: number | undefined
     const slices: PdfHitSlice[] = []
-    // A hit no segment covers still needs an honest page: the first segment
-    // after the hit's text — the nearest by start offset, array order
+    // A hit no segment covers still needs an honest page: the nearest
+    // segment after its text — the smallest start offset, array order
     // breaking a tie — else the nearest ending before it, else page 0 when
-    // the layout has no segments at all.
+    // the layout has no segments at all. Both fallbacks are tracked in the
+    // same pass the slices are.
     let after: DocumentTextLayoutSegment | undefined
     let before: DocumentTextLayoutSegment | undefined
     segments.forEach((segment, index) => {

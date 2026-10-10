@@ -279,34 +279,27 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     return snapshot
   }
 
-  function setFormat(update: (current: FormatDrafts) => FormatDrafts) {
-    setBundle((current) => {
-      const next = update(current.state.format)
-      if (next === current.state.format) return current
-      history.record(current.state)
-      return { ...current, state: { ...current.state, format: next } }
-    })
-  }
-
-  function setBreaks(update: (current: BreakDraft[]) => BreakDraft[]) {
-    setBundle((current) => {
-      const next = update(current.state.breaks)
-      if (next === current.state.breaks) return current
-      history.record(current.state)
-      return { ...current, state: { ...current.state, breaks: next } }
-    })
-  }
-
-  function setStructures(
-    update: (current: StructuralDraft[]) => StructuralDraft[],
+  /** The one history-checkpointed field update format, breaks and structures
+   * share: an unchanged field keeps the bundle's identity so no history step
+   * or re-render pays for a no-op write. */
+  function setField<K extends 'format' | 'breaks' | 'structures'>(
+    key: K,
+    update: (current: DraftState[K]) => DraftState[K],
   ) {
     setBundle((current) => {
-      const next = update(current.state.structures)
-      if (next === current.state.structures) return current
+      const next = update(current.state[key])
+      if (next === current.state[key]) return current
       history.record(current.state)
-      return { ...current, state: { ...current.state, structures: next } }
+      return { ...current, state: { ...current.state, [key]: next } }
     })
   }
+  const setFormat = (update: (current: FormatDrafts) => FormatDrafts) =>
+    setField('format', update)
+  const setBreaks = (update: (current: BreakDraft[]) => BreakDraft[]) =>
+    setField('breaks', update)
+  const setStructures = (
+    update: (current: StructuralDraft[]) => StructuralDraft[],
+  ) => setField('structures', update)
 
   return {
     state: bundle.state,

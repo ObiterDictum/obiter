@@ -9,6 +9,7 @@ import {
   editableParagraph,
   editableParagraphs,
   effectiveParagraph,
+  runsText,
 } from './document-model-text'
 import { canJoinParagraphRuns } from './document-run-fidelity'
 import { omitKey, splitRuns } from './document-run-range'
@@ -66,9 +67,7 @@ export function blockText(
   state: EditorState,
   paragraphId: string,
 ): string {
-  return blockRuns(model, state, paragraphId)
-    .map((run) => run.text)
-    .join('')
+  return runsText(blockRuns(model, state, paragraphId))
 }
 
 function editableRuns(
@@ -213,7 +212,7 @@ export function applySplitParagraph(
         {
           clientId: newId,
           afterParagraphId: caret.paragraphId,
-          text: right.map((run) => run.text).join(''),
+          text: runsText(right),
           runs: right,
         },
       ],
