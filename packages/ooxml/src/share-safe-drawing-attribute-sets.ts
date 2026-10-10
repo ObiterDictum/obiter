@@ -51,6 +51,10 @@ export const UNDERLINE_VALUES = [
   'dashHeavy',
   'dashLong',
   'dashLongHeavy',
+  'dotDash',
+  'dotDashHeavy',
+  'dotDotDash',
+  'dotDotDashHeavy',
   'wavy',
   'wavyHeavy',
   'wavyDbl',
@@ -144,16 +148,24 @@ export const BLIP_CSTATE_VALUES = [
   'none',
 ] as const
 
-export const POS_FROM_VALUES = [
+/** `ST_RelFromH` — `wp:positionH@relativeFrom` values, verbatim. */
+export const POS_FROM_H_VALUES = [
   'margin',
   'page',
   'column',
   'character',
-  'line',
-  'paragraph',
-  'text',
   'leftMargin',
   'rightMargin',
+  'insideMargin',
+  'outsideMargin',
+] as const
+
+/** `ST_RelFromV` — `wp:positionV@relativeFrom` values, verbatim. */
+export const POS_FROM_V_VALUES = [
+  'margin',
+  'page',
+  'paragraph',
+  'line',
   'topMargin',
   'bottomMargin',
   'insideMargin',
@@ -169,13 +181,20 @@ export const VERT_TEXT_VALUES = [
   'wordArtVert',
   'eaVert',
   'mongolianVert',
-  'vertTx',
   'wordArtVertRtl',
 ] as const
 
 export const TEXT_ANCHOR_VALUES = ['t', 'ctr', 'b', 'just', 'dist'] as const
 
-export const TEXT_OVERFLOW_VALUES = ['overflow', 'clip', 'ellipsis'] as const
+/** `ST_TextHorzOverflowType` — `horzOverflow` declares two values only. */
+export const TEXT_HORZ_OVERFLOW_VALUES = ['overflow', 'clip'] as const
+
+/** `ST_TextVertOverflowType` — `vertOverflow` additionally allows ellipsis. */
+export const TEXT_VERT_OVERFLOW_VALUES = [
+  'overflow',
+  'clip',
+  'ellipsis',
+] as const
 
 export const FONT_ALIGN_VALUES = ['auto', 't', 'b', 'ctr', 'base'] as const
 
@@ -188,7 +207,7 @@ export const WRAP_TEXT_VALUES = [
   'largest',
 ] as const
 
-export const FONT_REF_INDEX_VALUES = ['major', 'minor'] as const
+export const FONT_REF_INDEX_VALUES = ['major', 'minor', 'none'] as const
 
 export const FLIP_VALUES = ['none', 'x', 'y', 'xy'] as const
 
@@ -298,7 +317,11 @@ export const FLAG_ATTRIBUTES = [
 /** Drawing run properties the text-formatting scopes apply to. */
 export const TEXT_RUN_PROPS = ['rPr', 'defRPr', 'endParaRPr'] as const
 
-/** `a:buAutoNum` numbering schemes — the declared scheme enumeration. */
+/**
+ * `a:buAutoNum` numbering schemes — `ST_TextAutonumberScheme` exactly.
+ * The wider `w:numFmt` list does not apply here: DrawingML bullets
+ * declare only these scheme names.
+ */
 export const AUTONUM_VALUES = [
   'alphaLcParenBoth',
   'alphaUcParenBoth',
@@ -314,9 +337,6 @@ export const AUTONUM_VALUES = [
   'arabic2Minus',
   'arabicDbPeriod',
   'arabicDbPlain',
-  'arabicAiueo',
-  'arabicIroha',
-  'arabicFullWidth',
   'romanLcParenBoth',
   'romanUcParenBoth',
   'romanLcParenR',
@@ -326,38 +346,24 @@ export const AUTONUM_VALUES = [
   'circleNumDbPlain',
   'circleNumWdBlackPlain',
   'circleNumWdWhitePlain',
-  'aiueoFullWidth',
-  'aiueo',
-  'irohaFullWidth',
-  'iroha',
   'hebrew2Minus',
-  'thaiAlphaParenBoth',
-  'thaiAlphaParenR',
   'thaiAlphaPeriod',
-  'thaiNumParenBoth',
-  'thaiNumParenR',
+  'thaiAlphaParenR',
+  'thaiAlphaParenBoth',
   'thaiNumPeriod',
-  'hindiAlphaParenBoth',
-  'hindiAlphaParenR',
+  'thaiNumParenR',
+  'thaiNumParenBoth',
   'hindiAlphaPeriod',
-  'hindiNumParenR',
   'hindiNumPeriod',
+  'hindiNumParenR',
   'hindiAlpha1Period',
-  'ea1JpnCounting',
-  'ea1JpnAiueo',
-  'ea1JpnIroha',
-  'ea1ChsCounting',
-  'ea1ChsCountingThousand',
-  'ea1ChtCounting',
-  'ea1ChtCountingThousand',
-  'ea1KoreanCounting',
-  'ea1KoreanLegal',
-  'ea1KoreanDigital',
-  'ea1KoreanDigital2',
-  'ea1VietCounting',
-  'ordinalText',
-  'cardinalText',
-  'none',
+  'ea1ChsPeriod',
+  'ea1ChsPlain',
+  'ea1ChtPeriod',
+  'ea1ChtPlain',
+  'ea1JpnChsDbPeriod',
+  'ea1JpnKorPlain',
+  'ea1JpnKorPeriod',
 ] as const
 
 /**
@@ -405,23 +411,22 @@ export const SHADOW_ELEMENTS = [
   'reflection',
 ] as const
 
-/** `a:` elements whose `val` is a colour-component percentage. */
+/**
+ * `a:` elements whose `val` carries the unrestricted `ST_Percentage`
+ * union (a signed thousandths integer or a signed `N%` literal).
+ * Elements whose `val` is a narrower percentage type — fixed range,
+ * positive-only, angle, spacing or bullet size — bind their own bound
+ * in `share-safe-drawing-attributes.ts`; `comp`/`inv`/`gray`/`gamma`/
+ * `invGamma` declare no attributes at all, and `sepia` is not an
+ * element the schema declares.
+ */
 export const PERCENT_VAL_ELEMENTS = [
-  'tint',
-  'shade',
-  'comp',
-  'inv',
-  'gray',
-  'alpha',
-  'alphaOff',
-  'alphaMod',
   'lum',
   'lumMod',
   'lumOff',
   'satMod',
   'satOff',
-  'hueMod',
-  'hueOff',
+  'sat',
   'red',
   'green',
   'blue',
@@ -431,9 +436,27 @@ export const PERCENT_VAL_ELEMENTS = [
   'greenMod',
   'blueOff',
   'blueMod',
-  'sepia',
-  'spcPts',
-  'spcPct',
-  'buSzPct',
-  'buSzPts',
+] as const
+
+/**
+ * `a:` elements whose `val` is `ST_PositiveFixedPercentage` — a
+ * thousandths integer in `[0, 100000]` or a `N%`/`N.NN%` literal from
+ * 0 to 100.
+ */
+export const POSITIVE_FIXED_PERCENT_VAL_ELEMENTS = [
+  'tint',
+  'shade',
+  'alpha',
+] as const
+
+/** `a:lightRig dir` — the eight light directions. */
+export const LIGHT_RIG_DIRECTION_VALUES = [
+  'tl',
+  't',
+  'tr',
+  'l',
+  'r',
+  'bl',
+  'b',
+  'br',
 ] as const

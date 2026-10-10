@@ -329,9 +329,9 @@ function finishAttributes(
     }
   }
   const detached = plan.detachedReferences.get(part.name)
-  const strippedIds =
-    plan.stripRelationships.get(relationshipsPartFor(part.name)) ??
-    new Set<string>()
+  const relsPart = relationshipsPartFor(part.name)
+  const strippedIds = plan.stripRelationships.get(relsPart) ?? new Set<string>()
+  const emittedIds = plan.relationshipIds.get(relsPart)
 
   for (const element of elements) {
     if (gone(element)) continue
@@ -363,7 +363,21 @@ function finishAttributes(
           `${part.name} references undeclared relationship ${attribute.value}`,
         )
       }
-      if (!strippedIds.has(attribute.value)) continue
+      if (!strippedIds.has(attribute.value)) {
+        // A kept reference ships the canonical `rId` the declaration was
+        // rewritten to — the original id is identifier text and drops.
+        const canonical = emittedIds?.get(attribute.value)
+        if (canonical === undefined) {
+          refuseShareSafe(
+            'unverifiable-output',
+            `${part.name} references ${attribute.value}, which has no canonical declaration`,
+          )
+        }
+        if (canonical !== attribute.value) {
+          contentPlan.attrOverrides.set(attribute, canonical)
+        }
+        continue
+      }
       const shape = detached?.get(attribute.value)
       // Only a `w:hyperlink` detaches cleanly — its children re-emit as
       // plain text. A drawing surface's `a:hlinkClick`/`a:hlinkHover`

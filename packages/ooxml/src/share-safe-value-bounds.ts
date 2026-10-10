@@ -13,6 +13,7 @@
 export type ShareSafeValueBound =
   | { kind: 'enum'; values: ReadonlySet<string> }
   | { kind: 'shape'; pattern: RegExp }
+  | { kind: 'int-range'; min: number; max: number }
   | { kind: 'external' }
   | { kind: 'union'; bounds: readonly ShareSafeValueBound[] }
 
@@ -22,6 +23,15 @@ export function enumBound(values: readonly string[]): ShareSafeValueBound {
 
 export function shapeBound(pattern: RegExp): ShareSafeValueBound {
   return { kind: 'shape', pattern }
+}
+
+/**
+ * An `xsd:int` restricted to a numeric interval — the `minInclusive` /
+ * `maxInclusive` bounds the percentage and measure types declare, which
+ * a lexical pattern cannot express without losing the grammar.
+ */
+export function intRangeBound(min: number, max: number): ShareSafeValueBound {
+  return { kind: 'int-range', min, max }
 }
 
 /**
@@ -48,6 +58,11 @@ export function boundAllows(
       return bound.values.has(value)
     case 'shape':
       return bound.pattern.test(value)
+    case 'int-range': {
+      if (!/^-?\d{1,19}$/u.test(value)) return false
+      const parsed = Number(value)
+      return parsed >= bound.min && parsed <= bound.max
+    }
     case 'external':
       return true
     case 'union':

@@ -33,6 +33,15 @@ function partExtension(part: SourcePart) {
 }
 
 /**
+ * The extension canonical naming gives a kept image part — the format the
+ * payload inspection already proved from its magic bytes, spelled as the
+ * canonical file suffix (`jpg` normalises to `jpeg`).
+ */
+export function canonicalImageExtension(part: SourcePart) {
+  return IMAGE_FORMATS.get(partExtension(part))
+}
+
+/**
  * Inspects a binary part the inventory classified by its relationship.
  * Returns the payload the transform writes — identical bytes for
  * verifiable formats, a stripped copy for PNG/JPEG/GIF — or refuses.

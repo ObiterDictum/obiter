@@ -3,9 +3,11 @@ import {
   resolveRelationshipTarget,
 } from './parts/rels'
 import { attributeValue, type XmlElement } from './parts/xml-elements'
+import { canonicalRelationshipTarget } from './share-safe-canonical'
 import {
   CONTENT_TYPES_NAMESPACE,
   CONTENT_TYPES_PART,
+  PACKAGE_OWNER,
   PACKAGE_REL_NAMESPACE,
   type ShareSafeContentPlan,
   type ShareSafePlan,
@@ -20,6 +22,68 @@ import { refuseShareSafe } from './share-safe-refusal'
  * element vocabulary. Both refuse a malformed declaration and remove only
  * the entries whose targets no longer ship.
  */
+
+/** `xsd:ID` — an NCName: letter or underscore, then name characters. */
+export const RELATIONSHIP_ID = /^[A-Za-z_][\w.-]{0,127}$/u
+/** `xsd:anyURI` for a declaration slot — bounded, no whitespace. */
+export const RELATIONSHIP_URI = /^\S{1,2048}$/u
+/** `ST_Extension` reduced to the extension alphabet Office writes. */
+export const CONTENT_TYPE_EXTENSION = /^[A-Za-z0-9]{1,32}$/u
+/** `ST_ContentType` — a `token/token` media type with optional params. */
+export const CONTENT_TYPE_MEDIA =
+  /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,127}(?:\s*;\s*[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}="[^"]{0,255}")*$/u
+/** `xsd:anyURI` part names — `/`-rooted, bounded segments. */
+export const CONTENT_TYPE_PART_NAME =
+  /^\/[^\s/]{1,256}(?:\/[^\s/]{1,256}){0,31}$/u
+/** `ST_TargetMode` — the two spellings the enumeration declares. */
+export const RELATIONSHIP_TARGET_MODES = new Set(['Internal', 'External'])
+
+/**
+ * No declaration element carries text: `Relationships`, `Relationship`,
+ * `Types`, `Default` and `Override` are all empty-content or element-only
+ * shapes. Whitespace between declarations is fine; anything else is a
+ * payload riding a channel with no legal text.
+ */
+/**
+ * One text gap inside a declaration element: canonical emission already
+ * drops comments and processing instructions, so only the residue after
+ * those lexical spans matters — it must be whitespace.
+ */
+function assertWhitespaceOnly(fragment: string, partName: string) {
+  const residue = fragment
+    .replace(/<!--[\s\S]*?-->/gu, '')
+    .replace(/<\?[\s\S]*?\?>/gu, '')
+  if (!/^\s*$/u.test(residue)) {
+    refuseShareSafe(
+      'malformed-package',
+      `${partName} carries text inside a declaration element`,
+    )
+  }
+}
+
+function assertWhitespaceDeclarationText(
+  part: SourcePart,
+  elements: readonly XmlElement[],
+  namespaceUri: string,
+) {
+  const source = part.overlay?.source
+  if (source === undefined) return
+  for (const element of elements) {
+    if (
+      element.namespaceUri !== namespaceUri ||
+      element.endTagStart <= element.startTagEnd
+    ) {
+      continue
+    }
+    const children = elements.filter((child) => child.parent === element)
+    let cursor = element.startTagEnd
+    for (const child of children) {
+      assertWhitespaceOnly(source.slice(cursor, child.start), part.name)
+      cursor = child.end
+    }
+    assertWhitespaceOnly(source.slice(cursor, element.endTagStart), part.name)
+  }
+}
 /**
  * `.rels` parts: declarations the plan strips go, declarations whose
  * target no longer ships go, and every survivor is checked against the
@@ -47,6 +111,7 @@ export function analyseRelationshipsPart(
   // Two declarations spelling one `Id` make `r:id` resolution ambiguous —
   // a reader could follow either. Refuse rather than pick.
   const seenIds = new Set<string>()
+  assertWhitespaceDeclarationText(part, elements, PACKAGE_REL_NAMESPACE)
   for (const element of elements) {
     if (element.namespaceUri !== PACKAGE_REL_NAMESPACE) continue
     // Shape is `Relationships` at the root, `Relationship` directly
@@ -71,6 +136,18 @@ export function analyseRelationshipsPart(
         `${part.name} carries an undeclarable relationship`,
       )
     }
+    if (!RELATIONSHIP_ID.test(id)) {
+      refuseShareSafe(
+        'malformed-package',
+        `${part.name} declares an id that is not an xsd:ID`,
+      )
+    }
+    if (!RELATIONSHIP_URI.test(type) || !RELATIONSHIP_URI.test(target)) {
+      refuseShareSafe(
+        'malformed-package',
+        `${part.name} declares an unbounded relationship value`,
+      )
+    }
     if (seenIds.has(id)) {
       refuseShareSafe(
         'malformed-package',
@@ -82,11 +159,21 @@ export function analyseRelationshipsPart(
       contentPlan.removed.add(element)
       continue
     }
-    if (targetMode !== undefined && targetMode.toLowerCase() === 'external') {
-      refuseShareSafe(
-        'external-reference',
-        `${part.name} declares an external relationship`,
-      )
+    if (targetMode !== undefined) {
+      // `TargetMode` is a two-spelling enumeration — anything else,
+      // including a differently-cased `external`, is malformed input.
+      if (!RELATIONSHIP_TARGET_MODES.has(targetMode)) {
+        refuseShareSafe(
+          'malformed-package',
+          `${part.name} declares an unsupported TargetMode`,
+        )
+      }
+      if (targetMode === 'External') {
+        refuseShareSafe(
+          'external-reference',
+          `${part.name} declares an external relationship`,
+        )
+      }
     }
     let resolved: string | undefined
     try {
@@ -101,6 +188,16 @@ export function analyseRelationshipsPart(
     } catch {
       resolved = undefined
     }
+    if (resolved !== undefined) {
+      // A relationship targeting a declaration part — another `.rels` or
+      // the content-types stream — is a shape OPC gives no meaning to.
+      if (resolved.endsWith('.rels') || resolved === CONTENT_TYPES_PART) {
+        refuseShareSafe(
+          'malformed-package',
+          `${part.name} relationship ${id} targets a declaration part`,
+        )
+      }
+    }
     if (resolved === undefined || !kept.has(resolved)) {
       if (resolved !== undefined && dropped.has(resolved)) {
         contentPlan.removed.add(element)
@@ -110,6 +207,52 @@ export function analyseRelationshipsPart(
         'malformed-package',
         `${part.name} relationship ${id} points at a part that does not ship`,
       )
+    }
+
+    // Canonical emission: a surviving declaration ships a generated
+    // `rId<n>` in document order, the target spelled relative to the
+    // canonical owner name, and no `TargetMode` — internal targets are the
+    // only kind that survive, so the attribute carries nothing.
+    const emittedIds =
+      plan.relationshipIds.get(part.name) ?? new Map<string, string>()
+    plan.relationshipIds.set(part.name, emittedIds)
+    const canonicalId = `rId${emittedIds.size + 1}`
+    emittedIds.set(id, canonicalId)
+    const idNode = element.attributes.find(
+      (attribute) =>
+        attribute.namespaceUri === '' && attribute.localName === 'Id',
+    )
+    if (id !== canonicalId && idNode !== undefined) {
+      contentPlan.attrOverrides.set(idNode, canonicalId)
+    }
+    const renamedOwner =
+      owner === PACKAGE_OWNER ? owner : plan.partRenames.get(owner)
+    const renamedTarget = plan.partRenames.get(resolved)
+    if (renamedOwner === undefined || renamedTarget === undefined) {
+      refuseShareSafe(
+        'unverifiable-output',
+        `${part.name} relationship ${id} has no canonical spelling`,
+      )
+    }
+    const canonicalTarget = canonicalRelationshipTarget(
+      renamedOwner,
+      renamedTarget,
+    )
+    if (target !== canonicalTarget) {
+      const targetNode = element.attributes.find(
+        (attribute) =>
+          attribute.namespaceUri === '' && attribute.localName === 'Target',
+      )
+      if (targetNode !== undefined) {
+        contentPlan.attrOverrides.set(targetNode, canonicalTarget)
+      }
+    }
+    const targetModeNode = element.attributes.find(
+      (attribute) =>
+        attribute.namespaceUri === '' && attribute.localName === 'TargetMode',
+    )
+    if (targetModeNode !== undefined) {
+      contentPlan.attrOverrides.set(targetModeNode, undefined)
     }
   }
 }
@@ -148,6 +291,7 @@ export function analyseContentTypesPart(
   // one of them, not by an entry the plan already dropped.
   const shippedDefaults = new Set<string>()
   const shippedOverrides = new Set<string>()
+  assertWhitespaceDeclarationText(part, elements, CONTENT_TYPES_NAMESPACE)
   for (const element of elements) {
     if (element.namespaceUri !== CONTENT_TYPES_NAMESPACE) continue
     if (
@@ -167,6 +311,15 @@ export function analyseContentTypesPart(
         refuseShareSafe(
           'malformed-package',
           `${part.name} carries an undeclarable Default entry`,
+        )
+      }
+      if (
+        !CONTENT_TYPE_EXTENSION.test(extension) ||
+        !CONTENT_TYPE_MEDIA.test(contentType)
+      ) {
+        refuseShareSafe(
+          'malformed-package',
+          `${part.name} declares an out-of-grammar Default entry`,
         )
       }
       const seenDefault = seenDefaults.get(extension.toLowerCase())
@@ -195,6 +348,15 @@ export function analyseContentTypesPart(
         refuseShareSafe(
           'malformed-package',
           `${part.name} carries an undeclarable Override entry`,
+        )
+      }
+      if (
+        !CONTENT_TYPE_PART_NAME.test(partName) ||
+        !CONTENT_TYPE_MEDIA.test(contentType)
+      ) {
+        refuseShareSafe(
+          'malformed-package',
+          `${part.name} declares an out-of-grammar Override entry`,
         )
       }
       const target = partName.replace(/^\//u, '')
