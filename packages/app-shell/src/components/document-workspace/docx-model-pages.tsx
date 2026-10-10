@@ -25,6 +25,7 @@ export function DocxModelPages({
   painted,
   pages,
   zoom,
+  view = 'print',
   editingKind,
   selectedParagraphId,
   restoreCaret,
@@ -49,6 +50,9 @@ export function DocxModelPages({
   painted: DocumentModelWire | undefined
   pages: LaidOutPage[]
   zoom: number
+  /** 'web' is the continuous flow view: the sheets lose their paper chrome
+   * and margin bands and the page measures its content. */
+  view?: 'print' | 'web'
   editingKind: EditingKind
   selectedParagraphId: string | null
   restoreCaret: { paragraphId: string; offset: number } | null
@@ -117,12 +121,18 @@ export function DocxModelPages({
           key={`page-${index + 1}`}
           zoom={zoom}
           width={laid.box.widthPx}
-          height={laid.box.heightPx}
+          height={
+            view === 'web'
+              ? Math.max(laid.contentPx ?? 0, 240)
+              : laid.box.heightPx
+          }
           fontFamily={documentDefaultFace(model.styles).fontFamily}
+          chromeless={view === 'web'}
         >
           <DocumentModelPage
             model={rendered}
             marginEditing={marginEditing}
+            chromeless={view === 'web'}
             onExitMarginEditing={onExitMarginEditing}
             onOpenNoteEditing={onOpenNoteEditing}
             pageNumber={index + 1}

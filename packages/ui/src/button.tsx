@@ -34,7 +34,7 @@ const variantClasses = {
 } satisfies Record<NonNullable<ButtonProps['variant']>, string>
 
 const sizeClasses = {
-  sm: 'h-8 px-3 text-sm gap-1.5',
+  sm: 'h-8 px-3 text-sm gap-1.5 pointer-coarse:h-11',
   md: 'h-10 px-4 text-sm gap-2',
   lg: 'h-12 px-6 text-base gap-2.5',
 } satisfies Record<NonNullable<ButtonProps['size']>, string>

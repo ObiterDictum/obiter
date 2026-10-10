@@ -38,6 +38,18 @@ export type {
   LaidOutTable,
 } from './document-page-blocks'
 
+/**
+ * The flow the paginator fills. Omitted means print layout: each section's
+ * own page box, margins and columns. `{ kind: 'web' }` is the continuous web
+ * layout — the width the desk gives the column, an unbounded frame height
+ * and no margins — so sections stop paginating and the flow ends only at a
+ * stored page break, matching how Word's web view drops sheet chrome.
+ */
+export type DocumentLayoutFlow = { kind: 'web'; widthPx: number }
+
+/** A web frame tall enough that no pagination rule ever fires inside it. */
+const WEB_FRAME_HEIGHT_PX = 10_000_000
+
 export function layoutDocument(
   model: DocumentModelWire,
   drafts?: Record<string, string>,
@@ -49,7 +61,9 @@ export function layoutDocument(
   blocks?: StoryBlock[],
   /** Pending breaks, folded at their caret offset rather than appended. */
   pageBreaks: readonly BreakDraft[] = [],
+  flow?: DocumentLayoutFlow,
 ): LaidOutPage[] {
+  const web = flow?.kind === 'web' ? flow : undefined
   const sections = documentSections(model)
   const breakOffsets = new Map<string, number[]>()
   for (const item of pageBreaks) {
@@ -65,6 +79,17 @@ export function layoutDocument(
     list.sort((left, right) => left - right)
   }
   const geometryFor = (sectionXml: string) => {
+    if (web) {
+      const box: PageBox = {
+        widthPx: web.widthPx,
+        heightPx: WEB_FRAME_HEIGHT_PX,
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+        headerPx: 0,
+        footerPx: 0,
+      }
+      const frame = contentFrame(box)
+      return { box, frame, columns: [{ left: 0, widthPx: frame.widthPx }] }
+    }
     const sectionBox = pageBoxForSection(sectionXml)
     return {
       box: sectionBox,
@@ -108,6 +133,13 @@ export function layoutDocument(
     geometry.columns[session.col] ??
     geometry.columns[0] ?? { left: 0, widthPx: geometry.frame.widthPx }
 
+  // The web flow's page measure is what its blocks filled, since its frame is
+  // unbounded and never wraps.
+  const pushPage = () => {
+    if (web) session.page.contentPx = session.y
+    pages.push(session.page)
+  }
+
   const advance = () => {
     if (session.col + 1 < geometry.columns.length) {
       session.col += 1
@@ -116,7 +148,7 @@ export function layoutDocument(
       session.trailingBreak = false
       return
     }
-    pages.push(session.page)
+    pushPage()
     session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
     session.col = 0
     session.y = 0
@@ -133,7 +165,7 @@ export function layoutDocument(
       session.page.floats.length > 0 ||
       session.page.textBoxes.length > 0
     ) {
-      pages.push(session.page)
+      pushPage()
     }
     session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
     session.col = 0
@@ -215,7 +247,7 @@ export function layoutDocument(
     session.trailingBreak ||
     pages.length === 0
   ) {
-    pages.push(session.page)
+    pushPage()
   }
   return pages
 }

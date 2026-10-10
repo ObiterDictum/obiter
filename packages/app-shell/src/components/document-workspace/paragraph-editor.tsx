@@ -161,7 +161,6 @@ export function ParagraphEditor({
       aria-label="Paragraph text"
       value={text}
       rows={1}
-      spellCheck={false}
       onChange={(event) => {
         // Any text input, including a paste or an IME commit, ends the run.
         clearColumn()

@@ -1,5 +1,6 @@
 import { downloadBlob } from '../../document-edits'
 import { fetchDocumentExport } from '../../document-workspace-api'
+import { refocusCaretBeforeFlight } from './document-actions'
 import { mutationError } from './workspace-chrome'
 
 /**
@@ -32,6 +33,26 @@ export async function exportDocumentAsDocx(
   } catch (error) {
     return mutationError(error)
   }
+}
+
+/**
+ * The ribbon's two export entries. Each refocuses the caret before the
+ * flight — a download that never resolves would otherwise leave focus on a
+ * control the workspace may unmount — and reports the server's message, or
+ * the mutation's refusal, through the workspace's notice slot.
+ */
+export function documentExportHandlers(
+  documentId: string,
+  filename: string,
+  onNotice: (notice: string) => void,
+) {
+  const run = (options?: { shareSafe?: boolean }) => () => {
+    refocusCaretBeforeFlight()
+    void exportDocumentAsDocx(documentId, filename, options).then((message) => {
+      if (message) onNotice(message)
+    })
+  }
+  return { onExportText: run(), onExportShareSafe: run({ shareSafe: true }) }
 }
 
 function skippedCommentsMessage(count: number) {
