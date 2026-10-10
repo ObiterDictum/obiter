@@ -57,6 +57,26 @@ export function ToolbarRow({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * The accessible name a control publishes: a plain label, the `soon` reason
+ * (a literal one or the generic not-available wording), or the reason the
+ * control is currently disabled.
+ */
+function controlCaption(
+  label: string,
+  soon: boolean | string | undefined,
+  disabled: boolean | undefined,
+  disabledReason: string | undefined,
+) {
+  return typeof soon === 'string'
+    ? `${label}: ${soon}`
+    : soon
+      ? `${label} (not available yet)`
+      : disabled && disabledReason
+        ? `${label}: ${disabledReason}`
+        : label
+}
+
 export function IconButton({
   label,
   pressed,
@@ -79,14 +99,7 @@ export function IconButton({
   icon: ReactNode
 }) {
   const unavailable = Boolean(soon)
-  const caption =
-    typeof soon === 'string'
-      ? `${label}: ${soon}`
-      : unavailable
-        ? `${label} (not available yet)`
-        : disabled && disabledReason
-          ? `${label}: ${disabledReason}`
-          : label
+  const caption = controlCaption(label, soon, disabled, disabledReason)
   // A hint discloses what the action does beyond its name — it lives in the
   // tooltip, not the accessible name, so `label` queries keep working.
   const tooltip = hint ? `${caption}: ${hint}` : caption
@@ -140,11 +153,7 @@ export function CaptionButton({
   onClick?: () => void
 }) {
   const unavailable = Boolean(soon)
-  const caption = unavailable
-    ? `${label} (not available yet)`
-    : disabled && disabledReason
-      ? `${label}: ${disabledReason}`
-      : label
+  const caption = controlCaption(label, soon, disabled, disabledReason)
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
@@ -192,14 +201,7 @@ export function RibbonSelect({
   className?: string
 }) {
   const unavailable = Boolean(soon)
-  const caption =
-    typeof soon === 'string'
-      ? `${label}: ${soon}`
-      : unavailable
-        ? `${label} (not available yet)`
-        : disabled && disabledReason
-          ? `${label}: ${disabledReason}`
-          : label
+  const caption = controlCaption(label, soon, disabled, disabledReason)
   return (
     <select
       aria-label={caption}

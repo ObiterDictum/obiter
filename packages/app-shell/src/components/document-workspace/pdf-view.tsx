@@ -87,13 +87,15 @@ export function DocumentPdfPages({
     }),
   )
 
-  const jump = (value: string): boolean => {
-    const target = Number(value)
+  const jump = (input: HTMLInputElement) => {
+    const target = +input.value
     if (!Number.isInteger(target) || target < 1 || target > lastIndex + 1) {
-      return false
+      // A refused jump resets the field to the page being shown — leaving
+      // the refused number displayed claims a page the viewer is not on.
+      input.value = String(pageIndex + 1)
+      return
     }
     onPageIndexChange(target - 1)
-    return true
   }
 
   return (
@@ -104,7 +106,7 @@ export function DocumentPdfPages({
           size="sm"
           aria-label="Previous page"
           disabled={pageIndex === 0}
-          onClick={() => onPageIndexChange(Math.max(0, pageIndex - 1))}
+          onClick={() => onPageIndexChange(pageIndex - 1)}
           iconStart={<CaretLeft size={16} aria-hidden />}
         >
           Previous
@@ -118,18 +120,9 @@ export function DocumentPdfPages({
             aria-label={`Go to page, of ${lastIndex + 1}`}
             className="w-12 rounded-sm border border-line bg-transparent px-1 text-center"
             onKeyDown={(event) => {
-              // A refused jump resets the field to the page being shown —
-              // leaving the refused number displayed claims a page the
-              // viewer is not on.
-              if (event.key === 'Enter' && !jump(event.currentTarget.value)) {
-                event.currentTarget.value = String(pageIndex + 1)
-              }
+              if (event.key === 'Enter') jump(event.currentTarget)
             }}
-            onBlur={(event) => {
-              if (!jump(event.target.value)) {
-                event.target.value = String(pageIndex + 1)
-              }
-            }}
+            onBlur={(event) => jump(event.target)}
           />
           <span aria-hidden="true">/ {lastIndex + 1}</span>
         </label>
@@ -138,7 +131,7 @@ export function DocumentPdfPages({
           size="sm"
           aria-label="Next page"
           disabled={pageIndex >= lastIndex}
-          onClick={() => onPageIndexChange(Math.min(lastIndex, pageIndex + 1))}
+          onClick={() => onPageIndexChange(pageIndex + 1)}
           iconEnd={<CaretRight size={16} aria-hidden />}
         >
           Next
