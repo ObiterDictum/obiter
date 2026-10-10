@@ -5,9 +5,10 @@
  *
  *   - The Obiter half is fully automated: the synthetic full-fidelity fixture
  *     is built deterministically, uploaded through the real API, exported,
- *     hashed, and — once a Word-saved file exists — re-uploaded and
- *     re-exported, with an OOXML-level semantic comparison between the two
- *     exports.
+ *     hashed, and — once a Word-saved file exists — re-uploaded, edited
+ *     through the real immutable-version edit API, and re-exported, with an
+ *     OOXML-level semantic comparison between the two exports that accounts
+ *     for the applied edit.
  *   - The Microsoft Word half is an honest operator step. This script detects
  *     whether a real Word installation is reachable; when it is not, it writes
  *     `word-step.md` with the manual open/save instructions and records
@@ -50,6 +51,7 @@ import path from 'node:path'
 import { buildOoxmlFixture } from '../../packages/ooxml/fixtures/builder'
 import { createClient } from './api-client'
 import { parseArgs } from './args'
+import { planCycle2Edit } from './cycle2-edit'
 import { resolveLane } from './lane'
 import { createRunManifest, sha256 } from './manifest'
 import { compare, summarise } from './summary'
@@ -197,11 +199,46 @@ const secondId = await client.upload(
   wordBytes,
 )
 await client.waitReady(cookie, secondId)
+
+// The edit half of the stated acceptance sequence: one real operation
+// through the immutable-version edit API between the Word-labelled upload
+// and the second export. The base is the current ready version id the model
+// endpoint attests — the route itself rejects a stale base — and the
+// committed version supersedes it, so the export must carry the edit.
+const modelResponse = await client.getModel(cookie, secondId)
+// `fail` exits, so the `??` is a guard, not a default: a document with no
+// plainly editable body run cannot carry the required edit leg.
+const planned =
+  planCycle2Edit(modelResponse.model) ??
+  fail(
+    'the cycle-2 document model exposes no plainly editable body run — ' +
+      'the required edit leg cannot proceed',
+  )
+const edited = await client.editDocument(cookie, secondId, {
+  baseVersionId: modelResponse.versionId,
+  operations: [planned.operation],
+})
+manifest.cycle2Edit = {
+  baseVersionId: modelResponse.versionId,
+  editedVersionId: edited.versionId,
+  editedVersionNumber: edited.versionNumber,
+  operations: [planned.operation],
+  expectedBodySha256: sha256(
+    new TextEncoder().encode(planned.expectedBodyText),
+  ),
+}
+console.log(
+  `cycle-2 edit: ${planned.operation.type} on run ${planned.runId} ` +
+    `committed version ${String(edited.versionNumber)}`,
+)
+
 const secondExport = await client.exportDocx(cookie, secondId)
 record('cycle-2-obiter-export.docx', secondExport)
 const secondSummary = await summarise(secondExport)
 
-const checks = compare(firstSummary, secondSummary)
+const checks = compare(firstSummary, secondSummary, {
+  bodyText: planned.expectedBodyText,
+})
 const semanticPass = checks.every((check) => check.pass)
 manifest.cycle2 = {
   documentId: secondId,
@@ -209,7 +246,7 @@ manifest.cycle2 = {
 }
 manifest.semanticComparison = {
   scope:
-    'ooxml-level: body text, paragraph and story counts, fields, styles, numbering, images, comments, tracked changes, footnotes and endnotes, source-part preservation by part identity and role, package part additions, and relationship bindings. Visual fidelity inside Word is an operator observation, not this check.',
+    'ooxml-level: body text expected as cycle-1 text plus the applied cycle-2 edit, paragraph and story counts, fields, styles, numbering, images, comments, tracked changes, footnotes and endnotes, source-part preservation by part identity and role, package part additions, and relationship bindings by multiplicity. Visual fidelity inside Word is an operator observation, not this check.',
   checks,
   pass: semanticPass,
 }

@@ -52,19 +52,37 @@ Start an isolated lane the same way as for the e2e journey: set
    the run fails. An accepted file is recorded as `manual-reported` —
    observed producer evidence with `verification: "externally-unverified"`,
    the claimed Word version, and the input and cycle-1 artifact hashes it
-   correlates to — then uploaded, exported as
-   `cycle-2-obiter-export.docx`, and compared against cycle 1 at OOXML
-   level (body text, paragraph/story counts, headings, section breaks,
-   fields, styles, numbering, images, comments, tracked changes,
-   footnotes, endnotes, source-part preservation by part identity and
-   role, package part additions, and relationship bindings). A cycle-1
-   part missing from cycle 2 — or demoted from its typed role — fails,
-   including when a same-sized addition keeps the count equal. Parts a
-   producer adds that stay passive (opaque, like `docProps/app.xml`)
-   are recorded by name without failing; an added part that takes an
-   active role — a story, styles, numbering, relationships or
-   content-types part — fails, as does any added or dropped
-   relationship binding, external ones included.
+   correlates to — then uploaded, and once it is `ready` the stated
+   acceptance sequence's **edit** half runs for real: the harness
+   reads the document model, picks the first plainly editable body run
+   (outside field carriers and tracked-change markup), commits one
+   `replace_run_text` through `POST /api/documents/:id/edit` against the
+   current ready version id (the route itself rejects a stale base), and
+   only then exports `cycle-2-obiter-export.docx`. The export is compared
+   against cycle 1 at OOXML level — body text expected as the pre-edit
+   text with exactly the applied operation's change (the expectation is
+   derived from the model plus the operation, never from the export, so a
+   missing edit, a stale-version export or an edit on the wrong run all
+   fail the named `cycle-2 edit applied` check), paragraph/story counts,
+   headings, section breaks, fields, styles, numbering, images, comments,
+   tracked changes, footnotes, endnotes, source-part preservation by part
+   identity and role, package part additions, and relationship bindings
+   by multiplicity. A cycle-1 part missing from cycle 2 — or demoted
+   from its typed role — fails, including when a same-sized addition
+   keeps the count equal. Parts a producer adds that stay passive
+   (opaque, like `docProps/app.xml`) are recorded by name without
+   failing; an added part that takes an active role — a story, styles,
+   numbering, relationships or content-types part — fails, as does any
+   added or dropped relationship binding, external ones included.
+   Bindings compare as a multiset: two relationships may share source,
+   type and target under different ids (producers renumber the ids, so
+   they are excluded), and dropping or adding one copy of a duplicate
+   binding fails with both counts and the delta named. That proves the
+   binding inventory, not reference integrity — a body `r:id` left
+   pointing at a renumbered-away id still dangles, and the comparison
+   cannot see it. The manifest records the edit under `cycle2Edit`: the
+   base and committed version ids, the operation verbatim, and the
+   expected body text's SHA-256.
 6. Writes `manifest.json` with provenance (git SHA, API origin, API-reported
    commit SHA and checkout, server-reported database, runtime, artifact
    SHA-256s, Word evidence) and the check results. `wordAcceptance` is the

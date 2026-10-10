@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
+import type { DocumentEditOperation } from '../../packages/contracts/src/document-edit'
 import type { WordAcceptance, WordProbe, WordRecord } from './word-step'
 
 /**
@@ -42,6 +43,22 @@ export type RoundtripManifest = {
     summary: Record<string, unknown>
   }[]
   word?: WordProbe | WordRecord
+  /**
+   * The real edit applied between the Word-labelled upload and the cycle-2
+   * export: the immutable base version it addressed (the current ready
+   * version the model endpoint attested — the route itself refuses a stale
+   * base), the new immutable version the batch committed, the operation list
+   * verbatim, and the oracle the export's body text was compared against as
+   * a hash — the expectation derived from the model plus the operation, not
+   * from the export itself.
+   */
+  cycle2Edit?: {
+    baseVersionId: string
+    editedVersionId: string
+    editedVersionNumber: number
+    operations: readonly DocumentEditOperation[]
+    expectedBodySha256: string
+  }
   cycle2?: { documentId: string; summary: Record<string, unknown> }
   semanticComparison?: Record<string, unknown>
   /**

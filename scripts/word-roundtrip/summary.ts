@@ -1,4 +1,7 @@
-import type { DocumentRelationshipWire } from '../../packages/contracts/src/document-model'
+import type {
+  DocumentModelWire,
+  DocumentRelationshipWire,
+} from '../../packages/contracts/src/document-model'
 import type { SourcePartRole } from '../../packages/ooxml/src/model'
 import { parseDocx } from '../../packages/ooxml/src/parse'
 import { resolveRelationshipTarget } from '../../packages/ooxml/src/parts/rels'
@@ -44,10 +47,13 @@ export type Summary = {
  * The document story's text, whitespace-normalised. The word-step's
  * relatedness check compares this against the cycle-1 export: a file with
  * different body text is a different document, however it was produced.
+ * Accepts any carrier of a model's stories — a parsed package or a model
+ * response — so the cycle-2 edit oracle can derive its expectation from the
+ * served model with the same normalisation the export summary applies.
  */
-export function documentBodyText(
-  doc: Awaited<ReturnType<typeof parseDocx>>,
-): string {
+export function documentBodyText(doc: {
+  model: Pick<DocumentModelWire, 'stories'>
+}): string {
   const story = doc.model.stories.find((item) => item.kind === 'document')
   return (story?.paragraphs ?? [])
     .map((paragraph) => paragraph.runs.map((run) => run.text).join(''))
@@ -115,16 +121,32 @@ export async function summarise(bytes: Uint8Array): Promise<Summary> {
   }
 }
 
-export function compare(first: Summary, second: Summary) {
+export function compare(
+  first: Summary,
+  second: Summary,
+  expected?: { bodyText?: string },
+) {
   const checks: { name: string; pass: boolean; detail: string }[] = []
   const push = (name: string, pass: boolean, detail: string) =>
     checks.push({ name, pass, detail })
+  // With a cycle-2 edit applied, the export's body text is not expected to
+  // equal cycle 1's: it is expected to equal the pre-edit text with exactly
+  // the declared operation's change. The named check is the proof the edit
+  // reached the export — a missing edit, a stale-version export or a wrong
+  // run all produce body text that is not the expectation. Every other
+  // check stays a cycle-1 identity comparison.
+  const bodyExpectation = expected?.bodyText
+  const bodyPass = second.bodyText === (bodyExpectation ?? first.bodyText)
   push(
-    'body text identical',
-    first.bodyText === second.bodyText,
-    first.bodyText === second.bodyText
-      ? `${String(first.bodyText.length)} chars match`
-      : `cycle 1: "${first.bodyText.slice(0, 80)}…" vs cycle 2: "${second.bodyText.slice(0, 80)}…"`,
+    bodyExpectation === undefined
+      ? 'body text identical'
+      : 'cycle-2 edit applied',
+    bodyPass,
+    bodyPass
+      ? `${String(second.bodyText.length)} chars match`
+      : bodyExpectation === undefined
+        ? `cycle 1: "${first.bodyText.slice(0, 80)}…" vs cycle 2: "${second.bodyText.slice(0, 80)}…"`
+        : `expected: "${bodyExpectation.slice(0, 80)}…" vs export: "${second.bodyText.slice(0, 80)}…"`,
   )
   push(
     'body paragraph count',

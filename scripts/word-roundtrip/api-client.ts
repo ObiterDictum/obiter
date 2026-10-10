@@ -1,9 +1,17 @@
 import { execFileSync } from 'node:child_process'
 
+import type { DocumentEditOperation } from '../../packages/contracts/src/document-edit'
+import { documentEditResponseSchema } from '../../packages/contracts/src/document-edit-request'
+import {
+  documentModelResponseSchema,
+  type DocumentModelWire,
+} from '../../packages/contracts/src/document-model'
+
 /**
  * Thin real-API client for the round-trip: sign-up/sign-in, matter and
- * document upload, readiness polling and export. Every call goes through the
- * authenticated cookie the sign-in returned — no fixtures, no bypass.
+ * document upload, readiness polling, model read, edit and export. Every
+ * call goes through the authenticated cookie the sign-in returned — no
+ * fixtures, no bypass.
  */
 export type RoundtripClient = {
   createAccount(input: {
@@ -19,6 +27,22 @@ export type RoundtripClient = {
     bytes: Uint8Array,
   ): Promise<string>
   waitReady(cookie: string, documentId: string): Promise<void>
+  getModel(
+    cookie: string,
+    documentId: string,
+  ): Promise<{
+    versionId: string
+    versionNumber: number
+    model: DocumentModelWire
+  }>
+  editDocument(
+    cookie: string,
+    documentId: string,
+    input: {
+      baseVersionId: string
+      operations: readonly DocumentEditOperation[]
+    },
+  ): Promise<{ versionId: string; versionNumber: number }>
   exportDocx(cookie: string, documentId: string): Promise<Uint8Array>
 }
 
@@ -148,6 +172,40 @@ export function createClient(opts: {
         await new Promise((resolve) => setTimeout(resolve, 2000))
       }
       fail('document never reached ready status')
+    },
+
+    async getModel(cookie, documentId) {
+      const response = await request(`/api/documents/${documentId}/model`, {
+        cookie,
+      })
+      if (!response.ok) fail(`document model failed: ${await response.text()}`)
+      const parsed = documentModelResponseSchema.safeParse(
+        await response.json(),
+      )
+      return parsed.success
+        ? parsed.data
+        : fail('document model response did not match the contract')
+    },
+
+    async editDocument(cookie, documentId, input) {
+      const response = await request(`/api/documents/${documentId}/edit`, {
+        method: 'POST',
+        cookie,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseVersionId: input.baseVersionId,
+          operations: input.operations,
+        }),
+      })
+      if (!response.ok) {
+        fail(
+          `document edit failed (${response.status}): ${await response.text()}`,
+        )
+      }
+      const parsed = documentEditResponseSchema.safeParse(await response.json())
+      return parsed.success
+        ? parsed.data
+        : fail('document edit response did not match the contract')
     },
 
     async exportDocx(cookie, documentId) {
