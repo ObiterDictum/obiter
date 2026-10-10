@@ -283,7 +283,9 @@ describe('share-safe export', () => {
     )
     const document = await parseDocx(await zipBytes(zip))
     const bytes = await buildShareSafeDocx(document)
-    const scrubbed = await partSource(bytes, 'docProps/real-core.xml')
+    // Wherever the source put it, the emitted part ships under its
+    // canonical name — the source spelling never reaches the archive.
+    const scrubbed = await partSource(bytes, 'docProps/core.xml')
     expect(scrubbed).not.toContain('SECRETPAYLOAD')
   })
 

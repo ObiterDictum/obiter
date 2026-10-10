@@ -1,5 +1,9 @@
 import type { OoxmlDocument } from './model'
 import { parseXmlElements, setOverlayReplacement } from './parts/overlay'
+import {
+  canonicalContentTypesXml,
+  canonicalRelsPartName,
+} from './share-safe-canonical'
 import { emitShareSafePart } from './share-safe-emit'
 import {
   emitCanonicalPart,
@@ -7,6 +11,7 @@ import {
   SHARE_SAFE_CANONICAL_EMITS,
 } from './share-safe-metadata'
 import {
+  CONTENT_TYPES_PART,
   PACKAGE_REL_NAMESPACE,
   PACKAGE_RELATIONSHIPS_PART,
   type ShareSafePlan,
@@ -60,6 +65,21 @@ export function applyShareSafePlan(
       continue
     }
 
+    // The content-types stream is generated wholesale from the plan —
+    // original declarations inform nothing but the kept-part set.
+    if (name === CONTENT_TYPES_PART) {
+      const emitted = canonicalContentTypesXml(plan)
+      if (emitted !== overlay.source) {
+        setOverlayReplacement(overlay, 'share-safe:emit', {
+          start: 0,
+          end: overlay.source.length,
+          value: emitted,
+        })
+        part.dirty = true
+      }
+      continue
+    }
+
     const contentPlan = plan.contentPlans.get(name)
     if (!contentPlan) {
       refuseShareSafe(
@@ -106,5 +126,27 @@ export function applyShareSafePlan(
 
   for (const [name, disposition] of plan.dispositions) {
     if (disposition.kind === 'drop') document.sourceParts.delete(name)
+  }
+
+  // Part names are identifier text: every shipped part emits under the
+  // canonical name its role dictates — `word/document.xml`,
+  // `word/media/image1.png` — so the zip entry itself carries nothing the
+  // author chose. Renames collect first so applying one cannot rewrite
+  // a part the next lookup still expects under its source name.
+  const renames: [string, string][] = []
+  for (const name of document.sourceParts.keys()) {
+    const canonical = name.endsWith('.rels')
+      ? canonicalRelsPartName(name, plan.partRenames)
+      : plan.partRenames.get(name)
+    if (canonical !== undefined && canonical !== name) {
+      renames.push([name, canonical])
+    }
+  }
+  for (const [name, canonical] of renames) {
+    const part = document.sourceParts.get(name)
+    if (part === undefined) continue
+    document.sourceParts.delete(name)
+    part.name = canonical
+    document.sourceParts.set(canonical, part)
   }
 }

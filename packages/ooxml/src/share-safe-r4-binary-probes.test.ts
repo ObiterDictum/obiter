@@ -68,7 +68,7 @@ describe('share-safe r4: binary payloads', () => {
       8,
     ])
     const { binary } = await outputParts(imageSpec('i.png', png([splt])))
-    const emitted = binary.get('word/media/i.png')
+    const emitted = binary.get('word/media/image1.png')
     expect(emitted).toBeDefined()
     expect(new TextDecoder('latin1').decode(emitted!)).not.toContain('SECRET')
     expect(new TextDecoder('latin1').decode(emitted!)).not.toContain('sPLT')
@@ -77,7 +77,7 @@ describe('share-safe r4: binary payloads', () => {
   it('iCCP profile payload does not ship', async () => {
     const iccp = chunk('iCCP', [...new TextEncoder().encode('SECRETPROFILE')])
     const { binary } = await outputParts(imageSpec('i.png', png([iccp])))
-    const emitted = binary.get('word/media/i.png')
+    const emitted = binary.get('word/media/image1.png')
     expect(emitted).toBeDefined()
     expect(new TextDecoder('latin1').decode(emitted!)).not.toContain('SECRET')
   })
@@ -133,7 +133,7 @@ describe('share-safe r4: binary payloads', () => {
       },
     })
     expect(binary.get('word/fonts/f.ttf')).toBeUndefined()
-    const fonts = parts.get('word/fonts.xml') ?? ''
+    const fonts = parts.get('word/fontTable.xml') ?? ''
     expect(fonts).not.toContain('embedRegular')
     expect(fonts).not.toContain('rIdF')
     expect(fonts).toContain('Calibri')
@@ -185,7 +185,7 @@ describe('share-safe r4: binary payloads', () => {
         '<Default Extension="gif" ContentType="image/gif"/>',
       ),
     )
-    const emitted = binary.get('word/media/i.gif')
+    const emitted = binary.get('word/media/image1.gif')
     expect(emitted).toBeDefined()
     expect(new TextDecoder('latin1').decode(emitted!)).not.toContain(
       'SECRETGIF',
@@ -271,7 +271,7 @@ describe('share-safe r4: binary payloads', () => {
         '<Default Extension="jpg" ContentType="image/jpeg"/>',
       ),
     )
-    const emitted = binary.get('word/media/i.jpg')
+    const emitted = binary.get('word/media/image1.jpeg')
     expect(emitted).toBeDefined()
     const text = new TextDecoder('latin1').decode(emitted!)
     expect(text).not.toContain('ExifSECRET')
@@ -299,7 +299,7 @@ describe('share-safe r4: drawing and theme', () => {
         `<a:fontScheme name="SECRETSCHEME"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="x"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>`,
       ),
     )
-    const theme = parts.get('theme/theme1.xml') ?? ''
+    const theme = parts.get('word/theme/theme1.xml') ?? ''
     expect(theme).not.toContain('SECRETTHEMENAME')
     expect(theme).not.toContain('SECRETSCHEME')
     // `typeface` is the font's face name — rendering, not a label.
@@ -312,7 +312,9 @@ describe('share-safe r4: drawing and theme', () => {
         `<a:fontScheme><a:majorFont typeface="SECRETMISPLACED"><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="x"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>`,
       ),
     )
-    expect(parts.get('theme/theme1.xml') ?? '').not.toContain('SECRETMISPLACED')
+    expect(parts.get('word/theme/theme1.xml') ?? '').not.toContain(
+      'SECRETMISPLACED',
+    )
   })
 
   it('a:tbl emits without its tableStyleId pointer', async () => {

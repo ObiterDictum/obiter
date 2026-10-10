@@ -372,7 +372,7 @@ describe('share-safe probes: package-level escapes', () => {
     )
     const bytes = await buildShareSafeDocx(document)
     const zip = await JSZip.loadAsync(bytes)
-    const emitted = await zip.file('word/media/img1.png')?.async('uint8array')
+    const emitted = await zip.file('word/media/image1.png')?.async('uint8array')
     if (emitted === undefined) throw new Error('image part missing')
     expect(new TextDecoder('latin1').decode(emitted)).not.toContain('SECRET')
     expect(emitted.length).toBeLessThan(png.length)

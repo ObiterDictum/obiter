@@ -245,8 +245,12 @@ describe('share-safe r4: package declarations', () => {
       },
     })
     const rels = parts.get('word/_rels/document.xml.rels') ?? ''
-    expect(rels).toContain('Id="rId9"')
-    expect(rels).toContain('Id="rId10"')
+    // Canonical emission renumbers declarations `rId1`, `rId2`, … in
+    // document order — the source ids never reach emitted bytes.
+    expect(rels).toContain('Id="rId1"')
+    expect(rels).toContain('Id="rId2"')
+    expect(rels).not.toContain('Id="rId9"')
+    expect(rels).not.toContain('Id="rId10"')
   })
 
   it('a unique type declared under two targets refuses', async () => {

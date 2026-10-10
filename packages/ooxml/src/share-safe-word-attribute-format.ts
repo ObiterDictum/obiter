@@ -1,80 +1,50 @@
+/**
+ * Run and paragraph formatting attributes — the element → attribute →
+ * value bound table slice covering borders, shading, justification,
+ * tabs, spacing, indentation, font declarations and run effects. Layout
+ * and settings slices live in their sibling modules; the assembled
+ * `WML_FORMAT_ATTRIBUTE_BOUNDS` re-exports all three.
+ */
 import type { ShareSafeValueBound } from './share-safe-value-bounds'
 import {
-  WML_APPEARANCE,
-  WML_BORDER,
-  WML_BORDER_OR_INT,
-  WML_CALENDAR,
-  WML_CHAP_SEP,
-  WML_CHAR_SPC,
   WML_CHARSET,
-  WML_CLR_SCHEME,
   WML_COLOR,
-  WML_DATE,
-  WML_DOC_GRID,
-  WML_DOC_TYPE,
-  WML_DROP_CAP,
   WML_EFFECT,
   WML_EM,
   WML_FONT_FAMILY,
   WML_FONT_HINT,
   WML_FONT_NAME,
-  WML_FRAME_ALIGN,
-  WML_FRAME_ANCHOR,
-  WML_FRAME_WRAP,
-  WML_FRAME_YSPEC,
-  WML_HELP_TYPE,
   WML_HEX2,
   WML_HEX4,
   WML_HEX8,
   WML_HEX20,
-  WML_HEXFLAGS,
   WML_HIGHLIGHT,
-  WML_IDENT,
   WML_INT,
   WML_JC,
   WML_LANG,
   WML_LINE_RULE,
-  WML_LN_RESTART,
-  WML_LOCK,
-  WML_MERGE,
-  WML_MULTILEVEL,
-  WML_NUM_FMT,
-  WML_ORIENT,
-  WML_PG_DISPLAY,
-  WML_PG_OFFSET,
   WML_PITCH,
-  WML_PROOF_ERR,
-  WML_PROOF_STATE,
   WML_PTAB_ALIGN,
   WML_PTAB_LEADER,
   WML_PTAB_REL,
-  WML_SCREEN_SIZE,
   WML_SHD,
-  WML_SHORT_TEXT,
-  WML_STORE_MAPPED,
-  WML_STYLE_TYPE,
-  WML_SUFF,
   WML_TAB_JC,
   WML_TAB_LEADER,
-  WML_TBL_LAYOUT,
-  WML_TBL_OVERLAP,
-  WML_TBL_STYLE_PR,
   WML_TBL_WIDTH,
-  WML_TEXT,
   WML_TEXT_ALIGN,
   WML_TEXT_DIR,
   WML_THEME_COLOR,
   WML_THEME_FONT,
   WML_TIGHTWRAP,
-  WML_TYPE,
   WML_UNDERLINE,
-  WML_VALIGN,
-  WML_VERSION,
   WML_VERT_ALIGN,
-  WML_VIEW,
-  WML_ZOOM,
-  WML_ZORDER,
 } from './share-safe-word-attribute-values'
+import {
+  WML_BORDER,
+  WML_BORDER_OR_INT,
+} from './share-safe-word-attribute-borders'
+import { WML_FORMAT_LAYOUT_ATTRIBUTE_BOUNDS } from './share-safe-word-attribute-format-layout'
+import { WML_FORMAT_SETTINGS_ATTRIBUTE_BOUNDS } from './share-safe-word-attribute-format-settings'
 import { FLAG_BOUND } from './share-safe-value-bounds'
 
 const ONOFF = FLAG_BOUND
@@ -96,15 +66,7 @@ const MARGIN_BORDER_ATTRIBUTES: ReadonlyArray<
   ['type', WML_TBL_WIDTH],
 ]
 
-/**
- * The formatting attribute surface, mapped element → attribute → value
- * bound: layout, borders, shading, spacing, font and frame attributes the
- * copy may carry, each pinned to the enumeration or lexical shape its
- * simple type declares. An attribute a table does not list is not
- * formatting a reader needs; a declared attribute whose value falls
- * outside its bound is a payload, not a format choice.
- */
-export const WML_FORMAT_ATTRIBUTE_BOUNDS: ReadonlyArray<
+const WML_FORMAT_TEXT_ATTRIBUTE_BOUNDS: ReadonlyArray<
   readonly [string, ReadonlyMap<string, ShareSafeValueBound>]
 > = [
   ...(
@@ -299,364 +261,22 @@ export const WML_FORMAT_ATTRIBUTE_BOUNDS: ReadonlyArray<
       ['char', WML_HEX4],
     ]),
   ],
-  [
-    'framePr',
-    new Map([
-      ['w', WML_INT],
-      ['h', WML_INT],
-      ['vSpace', WML_INT],
-      ['hSpace', WML_INT],
-      ['hAnchor', WML_FRAME_ANCHOR],
-      ['vAnchor', WML_FRAME_ANCHOR],
-      ['xAlign', WML_FRAME_ALIGN],
-      ['yAlign', WML_FRAME_YSPEC],
-      ['x', WML_INT],
-      ['y', WML_INT],
-      ['wrap', WML_FRAME_WRAP],
-      ['dropCap', WML_DROP_CAP],
-      ['lines', WML_INT],
-      ['anchorLock', ONOFF],
-    ]),
-  ],
-  [
-    'tblpPr',
-    new Map([
-      ['leftFromText', WML_INT],
-      ['rightFromText', WML_INT],
-      ['topFromText', WML_INT],
-      ['bottomFromText', WML_INT],
-      ['horzAnchor', WML_FRAME_ANCHOR],
-      ['vertAnchor', WML_FRAME_ANCHOR],
-      ['tblpXSpec', WML_FRAME_ALIGN],
-      ['tblpYSpec', WML_FRAME_YSPEC],
-      ['tblpX', WML_INT],
-      ['tblpY', WML_INT],
-    ]),
-  ],
-  ['tblOverlap', new Map([['val', WML_TBL_OVERLAP]])],
-  ['tblLayout', new Map([['type', WML_TBL_LAYOUT]])],
-  ['tblStylePr', new Map([['type', WML_TBL_STYLE_PR]])],
-  ['type', new Map([['val', WML_TYPE]])],
-  ['tblStyleRowBandSize', new Map([['val', WML_INT]])],
-  ['tblStyleColBandSize', new Map([['val', WML_INT]])],
-  [
-    'tblLook',
-    new Map([
-      ['val', WML_HEX4],
-      ['firstRow', ONOFF],
-      ['lastRow', ONOFF],
-      ['firstColumn', ONOFF],
-      ['lastColumn', ONOFF],
-      ['noHBand', ONOFF],
-      ['noVBand', ONOFF],
-    ]),
-  ],
-  [
-    'tblCellSpacing',
-    new Map([
-      ['w', WML_INT],
-      ['type', WML_TBL_WIDTH],
-    ]),
-  ],
-  [
-    'tblInd',
-    new Map([
-      ['w', WML_INT],
-      ['type', WML_TBL_WIDTH],
-    ]),
-  ],
-  [
-    'tblW',
-    new Map([
-      ['w', WML_INT],
-      ['type', WML_TBL_WIDTH],
-    ]),
-  ],
-  [
-    'tcW',
-    new Map([
-      ['w', WML_INT],
-      ['type', WML_TBL_WIDTH],
-    ]),
-  ],
-  ['gridCol', new Map([['w', WML_INT]])],
-  ['gridBefore', new Map([['val', WML_INT]])],
-  ['gridAfter', new Map([['val', WML_INT]])],
-  [
-    'wBefore',
-    new Map([
-      ['w', WML_INT],
-      ['type', WML_TBL_WIDTH],
-    ]),
-  ],
-  [
-    'wAfter',
-    new Map([
-      ['w', WML_INT],
-      ['type', WML_TBL_WIDTH],
-    ]),
-  ],
-  ['gridSpan', new Map([['val', WML_INT]])],
-  ['hMerge', new Map([['val', WML_MERGE]])],
-  ['vMerge', new Map([['val', WML_MERGE]])],
-  ['vAlign', new Map([['val', WML_VALIGN]])],
-  [
-    'trHeight',
-    new Map([
-      ['val', WML_INT],
-      ['hRule', WML_LINE_RULE],
-    ]),
-  ],
-  [
-    'cnfStyle',
-    new Map([
-      ['firstRow', ONOFF],
-      ['lastRow', ONOFF],
-      ['firstColumn', ONOFF],
-      ['lastColumn', ONOFF],
-      ['oddVBand', ONOFF],
-      ['evenVBand', ONOFF],
-      ['oddHBand', ONOFF],
-      ['evenHBand', ONOFF],
-      ['firstRowFirstColumn', ONOFF],
-      ['firstRowLastColumn', ONOFF],
-      ['lastRowFirstColumn', ONOFF],
-      ['lastRowLastColumn', ONOFF],
-    ]),
-  ],
-  [
-    'pgSz',
-    new Map([
-      ['w', WML_INT],
-      ['h', WML_INT],
-      ['orient', WML_ORIENT],
-      ['code', WML_INT],
-    ]),
-  ],
-  [
-    'pgMar',
-    new Map([
-      ['top', WML_INT],
-      ['right', WML_INT],
-      ['bottom', WML_INT],
-      ['left', WML_INT],
-      ['header', WML_INT],
-      ['footer', WML_INT],
-      ['gutter', WML_INT],
-    ]),
-  ],
-  [
-    'pgBorders',
-    new Map([
-      ['zOrder', WML_ZORDER],
-      ['display', WML_PG_DISPLAY],
-      ['offsetFrom', WML_PG_OFFSET],
-    ]),
-  ],
-  [
-    'pgNumType',
-    new Map([
-      ['fmt', WML_NUM_FMT],
-      ['start', WML_INT],
-      ['chapStyle', WML_INT],
-      ['chapSep', WML_CHAP_SEP],
-    ]),
-  ],
-  [
-    'lnNumType',
-    new Map([
-      ['countBy', WML_INT],
-      ['start', WML_INT],
-      ['distance', WML_INT],
-      ['restart', WML_LN_RESTART],
-    ]),
-  ],
-  [
-    'cols',
-    new Map([
-      ['num', WML_INT],
-      ['space', WML_INT],
-      ['equalWidth', ONOFF],
-      ['sep', ONOFF],
-    ]),
-  ],
-  [
-    'docGrid',
-    new Map([
-      ['type', WML_DOC_GRID],
-      ['linePitch', WML_INT],
-      ['charSpace', WML_INT],
-    ]),
-  ],
-  ['numFmt', new Map([['val', WML_NUM_FMT]])],
-  ['multiLevelType', new Map([['val', WML_MULTILEVEL]])],
-  ['suff', new Map([['val', WML_SUFF]])],
-  ['lvlText', new Map([['val', WML_TEXT]])],
-  ['startOverride', new Map([['val', WML_INT]])],
-  ['lvlRestart', new Map([['val', WML_INT]])],
-  ['lvlPicBulletId', new Map([['val', WML_INT]])],
-  ['nsid', new Map([['val', WML_HEX8]])],
-  ['tmpl', new Map([['val', WML_HEX8]])],
-  ['numberingId', new Map([['val', WML_INT]])],
-  [
-    'zoom',
-    new Map([
-      ['val', WML_ZOOM],
-      ['percent', WML_INT],
-    ]),
-  ],
-  ['view', new Map([['val', WML_VIEW]])],
-  ['documentType', new Map([['val', WML_DOC_TYPE]])],
-  [
-    'proofState',
-    new Map([
-      ['spelling', WML_PROOF_STATE],
-      ['grammar', WML_PROOF_STATE],
-    ]),
-  ],
-  ['proofErr', new Map([['type', WML_PROOF_ERR]])],
-  ['defaultTabStop', new Map([['val', WML_INT]])],
-  ['autoHyphenation', new Map([['val', ONOFF]])],
-  ['consecutiveHyphenLimit', new Map([['val', WML_INT]])],
-  ['hyphenationZone', new Map([['val', WML_INT]])],
-  ['doNotHyphenateCaps', new Map([['val', ONOFF]])],
-  ['summaryLength', new Map([['val', WML_INT]])],
-  ['clickAndTypeStyle', new Map([['val', WML_TEXT]])],
-  ['defaultTableStyle', new Map([['val', WML_TEXT]])],
-  ['characterSpacingControl', new Map([['val', WML_CHAR_SPC]])],
-  ['decimalSymbol', new Map([['val', WML_SHORT_TEXT]])],
-  ['listSeparator', new Map([['val', WML_SHORT_TEXT]])],
-  [
-    'clrSchemeMapping',
-    new Map([
-      ['bg1', WML_CLR_SCHEME],
-      ['bg2', WML_CLR_SCHEME],
-      ['t1', WML_CLR_SCHEME],
-      ['t2', WML_CLR_SCHEME],
-      ['accent1', WML_CLR_SCHEME],
-      ['accent2', WML_CLR_SCHEME],
-      ['accent3', WML_CLR_SCHEME],
-      ['accent4', WML_CLR_SCHEME],
-      ['accent5', WML_CLR_SCHEME],
-      ['accent6', WML_CLR_SCHEME],
-      ['hyperlink', WML_CLR_SCHEME],
-      ['followedHyperlink', WML_CLR_SCHEME],
-    ]),
-  ],
-  [
-    'activeWritingStyle',
-    new Map([
-      ['appName', WML_TEXT],
-      ['nat', ONOFF],
-      ['checkStyle', ONOFF],
-      ['dllVersion', WML_INT],
-      ['vendorID', WML_INT],
-    ]),
-  ],
-  ['stylePaneFormatFilter', new Map([['val', WML_HEXFLAGS]])],
-  ['stylePaneSortMethod', new Map([['val', WML_HEXFLAGS]])],
-  ['targetScreenSz', new Map([['val', WML_SCREEN_SIZE]])],
-  ['pixelsPerInch', new Map([['val', WML_INT]])],
-  [
-    'compatSetting',
-    new Map([
-      ['name', WML_IDENT],
-      ['uri', WML_TEXT],
-      ['val', WML_INT],
-    ]),
-  ],
-  ['minVersion', new Map([['val', WML_VERSION]])],
-  [
-    'style',
-    new Map([
-      ['type', WML_STYLE_TYPE],
-      ['styleId', WML_TEXT],
-      ['default', ONOFF],
-      ['customStyle', ONOFF],
-    ]),
-  ],
-  ['pStyle', new Map([['val', WML_TEXT]])],
-  ['rStyle', new Map([['val', WML_TEXT]])],
-  ['tblStyle', new Map([['val', WML_TEXT]])],
-  ['basedOn', new Map([['val', WML_TEXT]])],
-  ['next', new Map([['val', WML_TEXT]])],
-  ['link', new Map([['val', WML_TEXT]])],
-  ['name', new Map([['val', WML_TEXT]])],
-  ['uiPriority', new Map([['val', WML_INT]])],
-  ['divId', new Map([['val', WML_INT]])],
-  ['ilvl', new Map([['val', WML_INT]])],
-  ['lock', new Map([['val', WML_LOCK]])],
-  [
-    'latentStyles',
-    new Map([
-      ['count', WML_INT],
-      ['defLockedState', ONOFF],
-      ['defUIPriority', WML_INT],
-      ['defSemiHidden', ONOFF],
-      ['defUnhideWhenUsed', ONOFF],
-      ['defQFormat', ONOFF],
-    ]),
-  ],
-  [
-    'lsdException',
-    new Map([
-      ['name', WML_TEXT],
-      ['locked', ONOFF],
-      ['uiPriority', WML_INT],
-      ['semiHidden', ONOFF],
-      ['unhideWhenUsed', ONOFF],
-      ['qFormat', ONOFF],
-    ]),
-  ],
-  ['div', new Map([['id', WML_INT]])],
-  ['storeMappedDataAs', new Map([['val', WML_STORE_MAPPED]])],
-  ['calendar', new Map([['val', WML_CALENDAR]])],
-  ['lid', new Map([['val', WML_LANG]])],
-  ['dateFormat', new Map([['val', WML_TEXT]])],
-  ['fullDate', new Map([['val', WML_DATE]])],
-  ['date', new Map([['fullDate', WML_DATE]])],
-  ['appearance', new Map([['val', WML_APPEARANCE]])],
-  ['label', new Map([['val', WML_TEXT]])],
-  ['alias', new Map([['val', WML_TEXT]])],
-  ['tag', new Map([['val', WML_TEXT]])],
-  ['id', new Map([['val', WML_INT]])],
-  [
-    'docVar',
-    new Map([
-      ['name', WML_IDENT],
-      ['val', WML_TEXT],
-    ]),
-  ],
-  [
-    'helpText',
-    new Map([
-      ['type', WML_HELP_TYPE],
-      ['val', WML_TEXT],
-    ]),
-  ],
-  [
-    'statusText',
-    new Map([
-      ['type', WML_HELP_TYPE],
-      ['val', WML_TEXT],
-    ]),
-  ],
-  ['entryMacro', new Map([['val', WML_IDENT]])],
-  ['exitMacro', new Map([['val', WML_IDENT]])],
-  ['format', new Map([['val', WML_TEXT]])],
-  [
-    'listItem',
-    new Map([
-      ['val', WML_TEXT],
-      ['displayText', WML_TEXT],
-      ['value', WML_TEXT],
-    ]),
-  ],
-  ['listEntry', new Map([['val', WML_TEXT]])],
-  ['maxLength', new Map([['val', WML_INT]])],
-  ['size', new Map([['val', WML_INT]])],
-  ['text', new Map([['multiLine', ONOFF]])],
-  ['tabIndex', new Map([['val', WML_INT]])],
+]
+
+/**
+ * The formatting attribute surface, mapped element → attribute → value
+ * bound: layout, borders, shading, spacing, font and frame attributes the
+ * copy may carry, each pinned to the enumeration or lexical shape its
+ * simple type declares. An attribute a table does not list is not
+ * formatting a reader needs; a declared attribute whose value falls
+ * outside its bound is a payload, not a format choice.
+ */
+export const WML_FORMAT_ATTRIBUTE_BOUNDS: ReadonlyArray<
+  readonly [string, ReadonlyMap<string, ShareSafeValueBound>]
+> = [
+  ...WML_FORMAT_TEXT_ATTRIBUTE_BOUNDS,
+  ...WML_FORMAT_LAYOUT_ATTRIBUTE_BOUNDS,
+  ...WML_FORMAT_SETTINGS_ATTRIBUTE_BOUNDS,
 ]
 
 export default WML_FORMAT_ATTRIBUTE_BOUNDS

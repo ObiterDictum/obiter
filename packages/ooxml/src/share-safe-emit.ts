@@ -12,7 +12,7 @@ import {
 import { shareSafeAttributeVerdict } from './share-safe-policy'
 import { refuseShareSafe } from './share-safe-refusal'
 
-const XML_DECLARATION =
+export const XML_DECLARATION =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
 /**
  * XML 1.0 legality: control codes below 0x20 except tab, LF and CR are

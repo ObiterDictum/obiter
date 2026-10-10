@@ -13,6 +13,7 @@ import {
 } from './parts/rels'
 import { attributeValue, isWord, WORD_NAMESPACE } from './parts/xml-elements'
 import { inspectBinaryPayload } from './share-safe-binary'
+import { canonicalPartNames } from './share-safe-canonical'
 import { analyseShareSafePart } from './share-safe-content'
 import {
   CONTENT_TYPES_NAMESPACE,
@@ -88,6 +89,8 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     contentPlans: new Map(),
     binaryPayloads: new Map(),
     bookmarkRenames: new Map(),
+    partRenames: new Map(),
+    relationshipIds: new Map(),
   }
   const dropped = new Set<string>()
   // A `unique` type may repeat only when every declaration names the same
@@ -357,6 +360,16 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     if (payload !== undefined) plan.binaryPayloads.set(name, payload)
   }
 
+  // Canonical names resolve before the content pass: the `.rels` analysis
+  // emits `Target` values spelled against them and relationship ids are
+  // regenerated per owner, so both maps must be complete first.
+  for (const [name, canonical] of canonicalPartNames(
+    plan.dispositions,
+    document.sourceParts,
+  )) {
+    plan.partRenames.set(name, canonical)
+  }
+
   // Every bookmark name the kept surface carries is replaced by a
   // generated `bm<n>` — collection runs across all word parts first so
   // the rewrites the content pass records use the complete map.
@@ -404,21 +417,27 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     }
   }
 
-  for (const [name, disposition] of plan.dispositions) {
-    if (disposition.kind === 'drop') continue
-    const part = document.sourceParts.get(name)
-    if (!part || part.kind !== 'xml') continue
-    plan.contentPlans.set(
-      name,
-      analyseShareSafePart(
-        document,
-        part,
-        disposition,
-        plan,
-        dropped,
-        plan.bookmarkRenames,
-      ),
-    )
+  // Two passes: every `.rels` part analyses first — it assigns the
+  // canonical `rId` values the owner parts' relationship-pointer rewrite
+  // resolves against — then the remaining parts.
+  for (const relationshipsFirst of [true, false]) {
+    for (const [name, disposition] of plan.dispositions) {
+      if (disposition.kind === 'drop') continue
+      const part = document.sourceParts.get(name)
+      if (!part || part.kind !== 'xml') continue
+      if (name.endsWith('.rels') !== relationshipsFirst) continue
+      plan.contentPlans.set(
+        name,
+        analyseShareSafePart(
+          document,
+          part,
+          disposition,
+          plan,
+          dropped,
+          plan.bookmarkRenames,
+        ),
+      )
+    }
   }
   return plan
 }

@@ -25,12 +25,22 @@ import {
   WML_ELEMENT_ATTRIBUTES,
   wmlAttributeVerdict,
 } from './share-safe-word-attributes'
-import { mathAttributeVerdict } from './share-safe-math-attributes'
+import {
+  mathAttributeVerdict,
+  mathElementMissingRequiredAttribute,
+} from './share-safe-math-attributes'
 import {
   embeddedAttributeVerdict,
+  EMBEDDED_REQUIRED_ATTRIBUTES,
   XML_SPACE_VALUES,
 } from './share-safe-drawing-attributes'
 import { EMBEDDED_ELEMENTS } from './share-safe-drawing-vocabulary'
+import {
+  checkDeclarationTagBytes,
+  checkEmittedPartName,
+  isDeclarationPartName,
+} from './share-safe-bytecheck-declarations'
+import { DRAWINGML_MAIN_NAMESPACE, MATH_NAMESPACE } from './share-safe-parts'
 import { refuseShareSafe } from './share-safe-refusal'
 
 /**
@@ -88,6 +98,7 @@ export function checkShareSafeXmlBytes(
   part: SourcePart,
   source: string,
 ): ByteCheckResult {
+  checkEmittedPartName(part)
   const declaration = XML_DECLARATION.exec(source)
   if (!declaration) {
     refuseShareSafe(
@@ -95,18 +106,27 @@ export function checkShareSafeXmlBytes(
       `${part.name} is missing the canonical XML declaration`,
     )
   }
+  // Declaration parts carry no text at all — every byte between tags must
+  // be whitespace, so a spliced payload in a gap refuses.
+  const declarationsOnly = isDeclarationPartName(part.name)
   const declaredPrefixes = new Map<string, string>()
   const bookmarkNames: string[] = []
   const anchorTargets: string[] = []
   const fieldReferences: string[] = []
-  // `Id` values this part's `Relationship` declarations have used — a
-  // duplicate makes `r:id` resolution ambiguous.
-  const relationshipIds = new Set<string>()
+  // Canonical emission numbers `Relationship` declarations `rId1`, `rId2`,
+  // … in order — anything else is a spliced identifier.
+  const relationshipSequence = { next: 1 }
 
   let cursor = declaration[0].length
   while (cursor < source.length) {
     const opening = source.indexOf('<', cursor)
     if (opening === -1) break
+    if (declarationsOnly && !/^\s*$/u.test(source.slice(cursor, opening))) {
+      refuseShareSafe(
+        'unverifiable-output',
+        `${part.name} carries text between declarations`,
+      )
+    }
     if (
       source.startsWith('<!--', opening) ||
       source.startsWith('<![CDATA[', opening) ||
@@ -173,11 +193,18 @@ export function checkShareSafeXmlBytes(
     const elementLocal =
       elementColon === -1 ? tagName : tagName.slice(elementColon + 1)
     const elementUri = declaredPrefixes.get(elementPrefix)
+    const unqualifiedAttributes = new Set<string>()
+    const qualifiedAttributes = new Set<string>()
+    const unqualifiedValues = new Map<string, string>()
     for (const match of attributes) {
       const name = match[1]!
       const value = match[2]!.slice(1, -1)
       if (name === 'xmlns' || name.startsWith('xmlns:')) continue
       const colon = name.indexOf(':')
+      if (colon === -1) {
+        unqualifiedAttributes.add(name)
+        unqualifiedValues.set(name, value)
+      } else qualifiedAttributes.add(name)
       if (colon !== -1) {
         checkPrefixedName(part, name, declaredPrefixes)
         const prefix = name.slice(0, colon)
@@ -246,6 +273,14 @@ export function checkShareSafeXmlBytes(
             )
           }
         } else if (prefix === 'r') {
+          // A relationship pointer ships only the canonical `rId<n>` the
+          // declaration rewrite produced — any other value is a splice.
+          if (!/^rId\d+$/u.test(value)) {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries non-canonical relationship pointer ${name}`,
+            )
+          }
           continue
         } else {
           const attributeUri = declaredPrefixes.get(prefix)
@@ -279,15 +314,6 @@ export function checkShareSafeXmlBytes(
           }
         }
       }
-      if (tagName === 'Relationship' && name === 'Id') {
-        if (relationshipIds.has(value)) {
-          refuseShareSafe(
-            'unverifiable-output',
-            `${part.name} declares relationship ${value} twice`,
-          )
-        }
-        relationshipIds.add(value)
-      }
       if (tagName === 'w:bookmarkStart' && name === 'w:name') {
         if (!BOOKMARK_NAME.test(value)) {
           refuseShareSafe(
@@ -311,7 +337,66 @@ export function checkShareSafeXmlBytes(
         }
       }
     }
+
+    // An element the schema gives a required attribute must show it in
+    // the emitted bytes — a writer that spliced an `a:alphaBiLevel`
+    // without `thresh` or a `Relationship` without `Target` is caught
+    // here, on the same required map the transform applied.
+    if (elementUri !== undefined && EMBEDDED_ELEMENTS.has(elementUri)) {
+      const required = EMBEDDED_REQUIRED_ATTRIBUTES.get(elementLocal)
+      if (required !== undefined) {
+        for (const name of required) {
+          if (!unqualifiedAttributes.has(name)) {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} emits ${tagName} without required ${name}`,
+            )
+          }
+        }
+      }
+      // `a:ext` is two schema types under one local name — a byte-level
+      // check cannot see the parent, so the emitted tag must show either
+      // the extension record's `uri` or the size pair's `cx`/`cy`.
+      if (elementLocal === 'ext' && elementUri === DRAWINGML_MAIN_NAMESPACE) {
+        const carriesExtension = unqualifiedAttributes.has('uri')
+        const carriesSize =
+          unqualifiedAttributes.has('cx') && unqualifiedAttributes.has('cy')
+        if (!carriesExtension && !carriesSize) {
+          refuseShareSafe(
+            'unverifiable-output',
+            `${part.name} emits ${tagName} without required attributes`,
+          )
+        }
+      }
+      if (
+        elementUri === MATH_NAMESPACE &&
+        mathElementMissingRequiredAttribute(elementLocal) &&
+        !qualifiedAttributes.has('m:val')
+      ) {
+        refuseShareSafe(
+          'unverifiable-output',
+          `${part.name} emits ${tagName} without required m:val`,
+        )
+      }
+    }
+    // Package declarations must spell exactly the canonical values the
+    // transform generates — sequential ids, keep-listed types, relative
+    // targets, declared MIME pairs — re-derived from raw bytes.
+    checkDeclarationTagBytes(
+      part,
+      tagName,
+      unqualifiedValues,
+      qualifiedAttributes,
+      relationshipSequence,
+    )
     cursor = tagEnd
+  }
+
+  if (declarationsOnly && !/^\s*$/u.test(source.slice(cursor))) {
+    refuseShareSafe(
+      'unverifiable-output',
+      `${part.name} carries text after its last declaration`,
+    )
   }
 
   // Field instructions surviving in emitted bytes must all be keep-class;

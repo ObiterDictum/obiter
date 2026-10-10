@@ -144,6 +144,16 @@ export type ShareSafePlan = {
   binaryPayloads: Map<string, Uint8Array>
   /** Bookmark names replaced by generated `bm<n>` values. */
   bookmarkRenames: Map<string, string>
+  /**
+   * The canonical name every kept non-declaration part emits under —
+   * original part names are identifier text and never ship.
+   */
+  partRenames: Map<string, string>
+  /**
+   * Relationships part name → original `Id` → generated `rId<n>` the
+   * canonical declaration emits. Owner-part references rewrite through it.
+   */
+  relationshipIds: Map<string, Map<string, string>>
 }
 
 /**

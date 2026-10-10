@@ -48,6 +48,7 @@ import {
 } from './share-safe-word-classes'
 import {
   embeddedAttributeVerdict,
+  embeddedElementRequiredAttributes,
   XML_SPACE_VALUES,
 } from './share-safe-drawing-attributes'
 import {
@@ -56,7 +57,10 @@ import {
   embeddedElementRefusesHidden,
   SHARE_SAFE_EXTENSION_URIS,
 } from './share-safe-drawing-vocabulary'
-import { mathAttributeVerdict } from './share-safe-math-attributes'
+import {
+  mathAttributeVerdict,
+  mathElementMissingRequiredAttribute,
+} from './share-safe-math-attributes'
 
 /**
  * The element-level half of the share-safe policy: what may exist inside a
@@ -129,9 +133,27 @@ export function shareSafeElementVerdict(
         : 'remove'
     }
     const allowed = EMBEDDED_ELEMENTS.get(element.namespaceUri)
-    return allowed !== undefined && allowed.has(element.localName)
-      ? 'keep'
-      : 'refuse'
+    if (allowed === undefined || !allowed.has(element.localName)) {
+      return 'refuse'
+    }
+    // An element missing an attribute the schema marks required is
+    // malformed or was stripped of the slot that carries its semantics —
+    // refuse rather than emit a shape a reader re-interprets.
+    if (
+      element.namespaceUri === MATH_NAMESPACE &&
+      mathElementMissingRequiredAttribute(element.localName) &&
+      attributeValue(element, MATH_NAMESPACE, 'val') === undefined
+    ) {
+      return 'refuse'
+    }
+    const required = embeddedElementRequiredAttributes(element)
+    if (required === 'refuse') return 'refuse'
+    if (required !== undefined) {
+      for (const name of required) {
+        if (attributeValue(element, '', name) === undefined) return 'refuse'
+      }
+    }
+    return 'keep'
   }
   if (
     SHARE_SAFE_REVISION_ELEMENTS.has(element.localName) ||
