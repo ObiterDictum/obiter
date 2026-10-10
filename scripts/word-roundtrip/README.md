@@ -56,7 +56,15 @@ Start an isolated lane the same way as for the e2e journey: set
    `cycle-2-obiter-export.docx`, and compared against cycle 1 at OOXML
    level (body text, paragraph/story counts, headings, section breaks,
    fields, styles, numbering, images, comments, tracked changes,
-   footnotes, endnotes, opaque parts).
+   footnotes, endnotes, source-part preservation by part identity and
+   role, package part additions, and relationship bindings). A cycle-1
+   part missing from cycle 2 — or demoted from its typed role — fails,
+   including when a same-sized addition keeps the count equal. Parts a
+   producer adds that stay passive (opaque, like `docProps/app.xml`)
+   are recorded by name without failing; an added part that takes an
+   active role — a story, styles, numbering, relationships or
+   content-types part — fails, as does any added or dropped
+   relationship binding, external ones included.
 6. Writes `manifest.json` with provenance (git SHA, API origin, API-reported
    commit SHA and checkout, server-reported database, runtime, artifact
    SHA-256s, Word evidence) and the check results. `wordAcceptance` is the

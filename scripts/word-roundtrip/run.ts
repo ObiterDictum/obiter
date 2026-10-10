@@ -209,7 +209,7 @@ manifest.cycle2 = {
 }
 manifest.semanticComparison = {
   scope:
-    'ooxml-level: body text, paragraph and story counts, fields, styles, numbering, images, comments, tracked changes, footnotes and endnotes. Visual fidelity inside Word is an operator observation, not this check.',
+    'ooxml-level: body text, paragraph and story counts, fields, styles, numbering, images, comments, tracked changes, footnotes and endnotes, source-part preservation by part identity and role, package part additions, and relationship bindings. Visual fidelity inside Word is an operator observation, not this check.',
   checks,
   pass: semanticPass,
 }
