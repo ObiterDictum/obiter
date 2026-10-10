@@ -42,7 +42,6 @@ export function DocxWorkspaceRibbon({
   return (
     <WorkspaceRibbon>
       <DocumentWorkspaceToolbar
-        kind="docx"
         dirty={save.dirty}
         saving={save.saving}
         blocked={save.saveState.status === 'blocked'}

@@ -34,8 +34,58 @@ export type {
   DocumentStructureToolbar,
 }
 
+/**
+ * The read-only PDF surface's toolbar — zoom, find and the file actions. It
+ * is its own component rather than a mode of the document toolbar so the
+ * editable-document props never exist on a surface that cannot honour them.
+ */
+export function PdfWorkspaceToolbar({
+  zoom,
+  onZoom,
+  find,
+  onExportText,
+  onDownload,
+}: {
+  zoom: number
+  onZoom: (next: number) => void
+  find?: DocumentFindToolbar
+  onExportText: () => void
+  onDownload?: () => void
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1 px-3 py-2"
+      role="toolbar"
+      aria-label="Document tools"
+    >
+      <ToolbarGroup label="View">
+        <ZoomControls zoom={zoom} onZoom={onZoom} />
+      </ToolbarGroup>
+      {find ? (
+        <ToolbarGroup label="Find">
+          <FindControls find={find} />
+        </ToolbarGroup>
+      ) : null}
+      <ToolbarGroup label="File">
+        <IconButton
+          label="Export"
+          onClick={onExportText}
+          icon={<DownloadSimple size={16} aria-hidden />}
+        />
+        {onDownload ? (
+          <IconButton
+            label="Download"
+            onClick={onDownload}
+            icon={<FileArrowDown size={16} aria-hidden />}
+          />
+        ) : null}
+      </ToolbarGroup>
+      <span className="pl-2 text-xs text-muted">View only, not editable</span>
+    </div>
+  )
+}
+
 export function DocumentWorkspaceToolbar({
-  kind,
   dirty,
   saving,
   blocked,
@@ -60,7 +110,6 @@ export function DocumentWorkspaceToolbar({
   onExportText,
   onExportShareSafe,
   onPrint,
-  onDownload,
   onSave,
   onUndo,
   onRedo,
@@ -88,7 +137,6 @@ export function DocumentWorkspaceToolbar({
   spelling,
   onToggleSpelling,
 }: {
-  kind: 'docx' | 'pdf'
   dirty: boolean
   saving: boolean
   /** The committed save's history could not be reconciled; saving is refused. */
@@ -121,7 +169,6 @@ export function DocumentWorkspaceToolbar({
   onExportText: () => void
   onExportShareSafe?: () => void
   onPrint?: () => void
-  onDownload?: () => void
   onSave: () => void
   onUndo?: () => void
   onRedo?: () => void
@@ -158,40 +205,6 @@ export function DocumentWorkspaceToolbar({
   onToggleSpelling?: () => void
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
-
-  if (kind === 'pdf') {
-    return (
-      <div
-        className="flex flex-wrap items-center gap-1 px-3 py-2"
-        role="toolbar"
-        aria-label="Document tools"
-      >
-        <ToolbarGroup label="View">
-          <ZoomControls zoom={zoom} onZoom={onZoom} />
-        </ToolbarGroup>
-        {find ? (
-          <ToolbarGroup label="Find">
-            <FindControls find={find} />
-          </ToolbarGroup>
-        ) : null}
-        <ToolbarGroup label="File">
-          <IconButton
-            label="Export"
-            onClick={onExportText}
-            icon={<DownloadSimple size={16} aria-hidden />}
-          />
-          {onDownload ? (
-            <IconButton
-              label="Download"
-              onClick={onDownload}
-              icon={<FileArrowDown size={16} aria-hidden />}
-            />
-          ) : null}
-        </ToolbarGroup>
-        <span className="pl-2 text-xs text-muted">View only, not editable</span>
-      </div>
-    )
-  }
 
   return (
     <Tabs defaultValue="home">
