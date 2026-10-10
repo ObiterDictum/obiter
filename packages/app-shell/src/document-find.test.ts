@@ -144,6 +144,37 @@ describe('find in text', () => {
     // Folding is locale-independent: dotless ı and I stay different letters.
     expect(findInText('istanbul', 'I', OPTIONS)).toEqual([{ start: 0, end: 1 }])
     expect(findInText('ıstanbul', 'I', OPTIONS)).toEqual([])
+    // …and there is no multi-letter expansion: 'ß' is only 'ß', never 'ss'.
+    expect(findInText('straße', 'ss', OPTIONS)).toEqual([])
+    expect(findInText('strasse', 'ß', OPTIONS)).toEqual([])
+  })
+
+  it('folds the Greek final sigma the same on both sides', () => {
+    // A case-insensitive query identical to the stored text must find it —
+    // 'ΟΔΟΣ' ends in a sigma whose whole-string fold is 'ς' while a bare
+    // cluster folds to 'σ', and the two sides once disagreed into a miss.
+    expect(findInText('ΟΔΟΣ', 'ΟΔΟΣ', OPTIONS)).toEqual([{ start: 0, end: 4 }])
+    // Final sigma, medial sigma and capital sigma are the same letter for
+    // matching, in both directions.
+    expect(findInText('ΟΔΟΣ', 'οδος', OPTIONS)).toEqual([{ start: 0, end: 4 }])
+    expect(findInText('οδος', 'ΟΔΟΣ', OPTIONS)).toEqual([{ start: 0, end: 4 }])
+    expect(findInText('οδοσ', 'ΟΔΟΣ', OPTIONS)).toEqual([{ start: 0, end: 4 }])
+    expect(findInText('ς', 'Σ', OPTIONS)).toEqual([{ start: 0, end: 1 }])
+    expect(findInText('Σ', 'ς', OPTIONS)).toEqual([{ start: 0, end: 1 }])
+    // Whole word still reads the stored letters: 'οδος' is only a prefix
+    // of 'ΟΔΟΣΑ', but the whole word inside a sentence matches.
+    const whole = { matchCase: false, wholeWord: true }
+    expect(findInText('ΟΔΟΣΑ', 'οδος', whole)).toEqual([])
+    expect(findInText('η ΟΔΟΣ μου', 'οδος', whole)).toEqual([
+      { start: 2, end: 6 },
+    ])
+    // Match case keeps the forms distinct.
+    expect(
+      findInText('ΟΔΟΣ', 'οδος', { matchCase: true, wholeWord: false }),
+    ).toEqual([])
+    expect(
+      findInText('ΟΔΟΣ', 'ΟΔΟΣ', { matchCase: true, wholeWord: false }),
+    ).toEqual([{ start: 0, end: 4 }])
   })
 
   it('keeps word edges honest around combining marks and astral letters', () => {
@@ -223,6 +254,19 @@ describe('find in document', () => {
       ],
     ])
     expect(findInDocument(model, state({}, [], [], {}), '')).toEqual([])
+  })
+
+  it('finds a folded Greek hit at its real UTF-16 offsets', () => {
+    const greek: DocumentModelWire = {
+      ...model,
+      stories: [story([paragraph('p1', 'Η ΟΔΟΣ κλείνει')])],
+    }
+    expect(ends(findInDocument(greek, state({}, [], [], {}), 'οδος'))).toEqual([
+      [
+        { paragraphId: 'p1', offset: 2 },
+        { paragraphId: 'p1', offset: 6 },
+      ],
+    ])
   })
 
   it('crosses a paragraph break through a space in the query', () => {

@@ -90,6 +90,22 @@ describe('pdfFindHits', () => {
     ).toEqual([])
   })
 
+  it('folds the Greek final sigma over the extracted text', () => {
+    const hits = pdfFindHits(
+      view('ΟΔΟΣ means street', [segment(0, 18, 1)]),
+      'οδος',
+      { matchCase: false, wholeWord: false },
+    )
+    expect(hits).toEqual([
+      {
+        start: 0,
+        end: 4,
+        pageIndex: 1,
+        slices: [{ segment: 0, start: 0, end: 4 }],
+      },
+    ])
+  })
+
   it('reports no slices when segments do not cover the hit', () => {
     const hits = pdfFindHits(view('orphan hit', [segment(0, 6, 0)]), 'hit', {
       matchCase: false,
@@ -98,6 +114,34 @@ describe('pdfFindHits', () => {
     // The text still matches — the extractor's layout may not cover it. The
     // hit is honest: found, navigable, with nothing to paint.
     expect(hits).toEqual([{ start: 7, end: 10, pageIndex: 0, slices: [] }])
+  })
+
+  it('navigates an unsegmented mid-document hit to the nearest covered page', () => {
+    // 'gap' sits between the segment on page 0 and the segment on page 2 —
+    // nothing covers it, but landing on page 1 would be a lie about where
+    // the text came from; the first segment after it is the honest page.
+    const hits = pdfFindHits(
+      view('aaa gap zzz', [segment(0, 4, 0), segment(8, 11, 2)]),
+      'gap',
+      { matchCase: false, wholeWord: false },
+    )
+    expect(hits).toEqual([{ start: 4, end: 7, pageIndex: 2, slices: [] }])
+  })
+
+  it('falls back to the last covered page when no segment follows the hit', () => {
+    const hits = pdfFindHits(view('aaa tail', [segment(0, 4, 1)]), 'tail', {
+      matchCase: false,
+      wholeWord: false,
+    })
+    expect(hits).toEqual([{ start: 4, end: 8, pageIndex: 1, slices: [] }])
+  })
+
+  it('uses page 0 for an unsegmented hit only when no segment exists', () => {
+    const hits = pdfFindHits(view('orphan', []), 'orphan', {
+      matchCase: false,
+      wholeWord: false,
+    })
+    expect(hits).toEqual([{ start: 0, end: 6, pageIndex: 0, slices: [] }])
   })
 
   it('returns no hits for an empty query', () => {

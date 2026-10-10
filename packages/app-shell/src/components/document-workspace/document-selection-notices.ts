@@ -32,6 +32,11 @@ export const INPUT_BLOCKS_EDIT =
 export const FIND_REPLACE_BLOCKS_STRUCTURE =
   'That match cannot be replaced because it crosses a table, a text box, or a stored field boundary.'
 
+/** The message shown when a find replace resolves to nothing: the hits the
+ * control read were re-derived from the live state first, so an empty
+ * outcome means the match it named is already gone. */
+export const FIND_REPLACE_EMPTY = 'That match is no longer in the document.'
+
 /** The message shown when a cut could not write the clipboard, so the text was
  * left in the document rather than deleted for a copy that never happened. */
 export const CLIPBOARD_BLOCKS_CUT =
@@ -52,6 +57,7 @@ export type SelectionRefusal =
   | 'structure'
   | 'join-formatting'
   | 'find-structure'
+  | 'find-empty'
   | 'input'
   | 'clipboard'
   | 'clipboard-copy'
@@ -72,6 +78,8 @@ export function refusalMessage(
       return JOIN_FORMATTING_BLOCKS_EDIT
     case 'find-structure':
       return FIND_REPLACE_BLOCKS_STRUCTURE
+    case 'find-empty':
+      return FIND_REPLACE_EMPTY
     case 'input':
       return INPUT_BLOCKS_EDIT
     case 'clipboard':

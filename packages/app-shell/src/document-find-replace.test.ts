@@ -4,7 +4,7 @@ import type {
   DocumentParagraphWire,
   DocumentStoryWire,
 } from '@obiter/contracts'
-import type { FindHit } from './document-find'
+import { findInDocument, type FindHit } from './document-find'
 import { replaceFindHits } from './document-find-replace'
 import { insertPlainText } from './document-edits'
 import { blockText, emptyEditorState } from './document-word-edits'
@@ -82,6 +82,20 @@ describe('replaceFindHits', () => {
       newId,
     )
     expect(all.status === 'applied' && all.state.drafts['p1-r']).toBe('H-l-o')
+  })
+
+  it('replaces a folded Greek hit at its real range', () => {
+    // The hit the fold derives must rewrite the stored letters, not the
+    // folded ones — 'οδος' matches 'ΟΔΟΣ' and the replacement lands where
+    // the stored word sits.
+    const greek = base([paragraph('p1', 'Η ΟΔΟΣ κλείνει')])
+    const state = emptyEditorState()
+    const hits = findInDocument(greek, state, 'οδος')
+    expect(hits).toHaveLength(1)
+    const result = replaceFindHits(greek, state, hits, 'ΠΟΛΗ', 'all', newId)
+    if (result.status !== 'applied') throw new Error('expected applied')
+    expect(blockText(greek, result.state, 'p1')).toBe('Η ΠΟΛΗ κλείνει')
+    expect(result.caret).toEqual({ paragraphId: 'p1', offset: 6 })
   })
 
   it('reports an empty outcome for a hit index that does not exist', () => {
