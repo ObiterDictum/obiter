@@ -9,6 +9,7 @@ import {
   editableParagraph,
   editableParagraphs,
   effectiveParagraph,
+  runsText,
 } from './document-model-text'
 import { canJoinParagraphRuns } from './document-run-fidelity'
 import { omitKey, splitRuns } from './document-run-range'
@@ -66,9 +67,7 @@ export function blockText(
   state: EditorState,
   paragraphId: string,
 ): string {
-  return blockRuns(model, state, paragraphId)
-    .map((run) => run.text)
-    .join('')
+  return runsText(blockRuns(model, state, paragraphId))
 }
 
 function editableRuns(
@@ -192,39 +191,6 @@ export function applyReplaceRange(
   }
 }
 
-export function replaceFindHits(
-  model: DocumentModelWire,
-  state: EditorState,
-  hits: ReadonlyArray<{ paragraphId: string; start: number; end: number }>,
-  replacement: string,
-  which: number | 'all',
-): EditorResult | undefined {
-  if (hits.length === 0) return undefined
-  const selected =
-    which === 'all' ? [...hits].reverse() : hits[which] ? [hits[which]] : []
-  if (selected.length === 0) return undefined
-  let current = state
-  let caret = {
-    paragraphId: selected[0]?.paragraphId ?? '',
-    offset: selected[0]?.start ?? 0,
-  }
-  for (const hit of selected) {
-    if (!hit) continue
-    const result = applyReplaceRange(
-      model,
-      current,
-      hit.paragraphId,
-      hit.start,
-      hit.end,
-      replacement,
-    )
-    if (!result) continue
-    current = result.state
-    caret = result.caret
-  }
-  return { state: current, caret }
-}
-
 export function applySplitParagraph(
   model: DocumentModelWire,
   state: EditorState,
@@ -246,7 +212,7 @@ export function applySplitParagraph(
         {
           clientId: newId,
           afterParagraphId: caret.paragraphId,
-          text: right.map((run) => run.text).join(''),
+          text: runsText(right),
           runs: right,
         },
       ],

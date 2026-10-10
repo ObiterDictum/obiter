@@ -25,6 +25,18 @@ export const JOIN_FORMATTING_BLOCKS_EDIT =
 export const INPUT_BLOCKS_EDIT =
   'That input cannot replace a document selection. Edit the text on each side instead.'
 
+/** The message shown when a find hit cannot be replaced because its range
+ * crosses a boundary replace cannot cover — a table, a text box, or the
+ * markers of a stored field. The match itself stays findable: the refusal is
+ * about rewriting, not about the text not being there. */
+export const FIND_REPLACE_BLOCKS_STRUCTURE =
+  'That match cannot be replaced because it crosses a table, a text box, or a stored field boundary.'
+
+/** The message shown when a find replace resolves to nothing: the hits the
+ * control read were re-derived from the live state first, so an empty
+ * outcome means the match it named is already gone. */
+export const FIND_REPLACE_EMPTY = 'That match is no longer in the document.'
+
 /** The message shown when a cut could not write the clipboard, so the text was
  * left in the document rather than deleted for a copy that never happened. */
 export const CLIPBOARD_BLOCKS_CUT =
@@ -44,33 +56,34 @@ export type SelectionRefusal =
   | 'insert'
   | 'structure'
   | 'join-formatting'
+  | 'find-structure'
+  | 'find-empty'
   | 'input'
   | 'clipboard'
   | 'clipboard-copy'
   | 'clipboard-read'
   | DocumentRangeRefusal
 
+const REFUSAL_MESSAGES = {
+  'join-formatting': JOIN_FORMATTING_BLOCKS_EDIT,
+  'find-structure': FIND_REPLACE_BLOCKS_STRUCTURE,
+  'find-empty': FIND_REPLACE_EMPTY,
+  input: INPUT_BLOCKS_EDIT,
+  clipboard: CLIPBOARD_BLOCKS_CUT,
+  'clipboard-copy': CLIPBOARD_BLOCKS_COPY,
+  'clipboard-read': CLIPBOARD_BLOCKS_PASTE,
+} satisfies Partial<Record<SelectionRefusal, string>>
+
 export function refusalMessage(
   refusal: SelectionRefusal | null,
   hasInsert: boolean,
   hasStructure: boolean,
 ): string | null {
-  switch (refusal) {
-    case 'insert':
-      return hasInsert ? INSERT_BLOCKS_SELECTION : null
-    case 'structure':
-      return hasStructure ? STRUCTURE_BLOCKS_SELECTION : null
-    case 'join-formatting':
-      return JOIN_FORMATTING_BLOCKS_EDIT
-    case 'input':
-      return INPUT_BLOCKS_EDIT
-    case 'clipboard':
-      return CLIPBOARD_BLOCKS_CUT
-    case 'clipboard-copy':
-      return CLIPBOARD_BLOCKS_COPY
-    case 'clipboard-read':
-      return CLIPBOARD_BLOCKS_PASTE
-    default:
-      return null
+  if (refusal === 'insert') {
+    return hasInsert ? INSERT_BLOCKS_SELECTION : null
   }
+  if (refusal === 'structure') {
+    return hasStructure ? STRUCTURE_BLOCKS_SELECTION : null
+  }
+  return (refusal && REFUSAL_MESSAGES[refusal]) || null
 }

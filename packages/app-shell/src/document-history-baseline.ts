@@ -19,6 +19,7 @@ import {
   editableParagraph,
   editableParagraphs,
   editableStoryOf,
+  paragraphPlainText,
 } from './document-model-text'
 import { documentSectionXml } from './document-page-layout'
 import { xmlNumber, xmlTagAttrs } from './document-page-units'
@@ -227,6 +228,16 @@ export function paragraphMapFromLineage(
   )
 }
 
+/** The run ids the sent inserts carry — the parts a tracked insertion's
+ * reversal must reject rather than restore. */
+function sentInsertRunIds(baseline: SaveBaseline) {
+  return new Set(
+    baseline.sent.inserts.flatMap((insert) =>
+      (insert.runs ?? []).map((run) => run.id),
+    ),
+  )
+}
+
 function remapRecordKeys<T>(
   record: Record<string, T>,
   remap: (id: string) => string,
@@ -413,11 +424,7 @@ export function lineageCoversCoveredSlots(
       reversal.fromParagraphId ? [reversal.fromParagraphId] : [],
     ),
   )
-  const insertedRunIds = new Set(
-    baseline.sent.inserts.flatMap((insert) =>
-      (insert.runs ?? []).map((run) => run.id),
-    ),
-  )
+  const insertedRunIds = sentInsertRunIds(baseline)
   for (const slot of baseline.covered) {
     if (slot.kind === 'insert') {
       const entry = lineage.paragraphs.find(
@@ -776,11 +783,7 @@ export function translateSnapshot(
 ): DraftState | null {
   const next = structuredClone(snapshot)
   const identities = savedIdentities(baseline)
-  const insertedRunIds = new Set(
-    baseline.sent.inserts.flatMap((insert) =>
-      (insert.runs ?? []).map((run) => run.id),
-    ),
-  )
+  const insertedRunIds = sentInsertRunIds(baseline)
 
   for (const slot of baseline.covered) {
     switch (slot.kind) {
@@ -1369,7 +1372,7 @@ function restoreInsert(
     // so a missing anchor here means `beforeAnchor` is a string.
     afterParagraphId: anchor ?? (beforeAnchor as string),
     ...(beforeAnchor ? { beforeParagraphId: beforeAnchor } : {}),
-    text: paragraph.runs.map((run) => run.text).join(''),
+    text: paragraphPlainText(paragraph),
     runs: paragraph.runs.map((run) => ({ ...run })),
   }
 }
