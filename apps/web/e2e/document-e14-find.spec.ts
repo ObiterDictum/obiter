@@ -327,8 +327,15 @@ test('PDF find navigates to the hit page and highlights the active slice', async
 
   // Ctrl/Cmd+F routes to the workspace find on the PDF surface, the way the
   // document workspace routes it — the browser's own find is not the tool
-  // for a bounded viewer.
+  // for a bounded viewer. The wrapped match left the viewer on the last
+  // page, so page back before paging forward. Paging re-renders the viewer
+  // and can drop a clicked button's focus onto the page body, outside the
+  // shell — the shortcut is routed only inside the workspace — so park
+  // focus on the focusable shell before pressing it.
+  await page.getByRole('button', { name: 'Previous page' }).click()
+  await expect(page.getByText('page 23 line 1 token-22')).toBeVisible()
   await page.getByRole('button', { name: 'Next page' }).click()
+  await page.locator('#document-workspace').focus()
   await page.keyboard.press('Control+f')
   await expect(findField).toBeFocused()
 })
