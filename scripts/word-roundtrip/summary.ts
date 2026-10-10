@@ -195,22 +195,39 @@ export function compare(first: Summary, second: Summary) {
     ].join('; ') || 'none',
   )
 
-  const firstRels = new Set(first.relationships)
-  const secondRels = new Set(second.relationships)
+  // Bindings are a multiset, not a set: two Relationship elements may carry
+  // the same source part, type and target under different ids — ids are
+  // excluded because producers renumber them, so the duplicates compare
+  // equal only in their multiplicities. A set diff would mask a dropped or
+  // added copy. The check proves the binding inventory, not reference
+  // integrity: a body r:id left naming a renumbered-away id still dangles,
+  // and this comparison cannot see that.
+  const relCounts = (entries: string[]) => {
+    const counts = new Map<string, number>()
+    for (const entry of entries) {
+      counts.set(entry, (counts.get(entry) ?? 0) + 1)
+    }
+    return counts
+  }
+  const firstRels = relCounts(first.relationships)
+  const secondRels = relCounts(second.relationships)
+  const times = (count: number) => (count > 1 ? ` x${String(count)}` : '')
   const relDelta = [
-    ...first.relationships
-      .filter((rel) => !secondRels.has(rel))
-      .map((rel) => `dropped ${rel}`),
-    ...second.relationships
-      .filter((rel) => !firstRels.has(rel))
-      .map((rel) => `added ${rel}`),
+    ...[...firstRels].flatMap(([entry, count]) => {
+      const dropped = count - (secondRels.get(entry) ?? 0)
+      return dropped > 0 ? [`dropped ${entry}${times(dropped)}`] : []
+    }),
+    ...[...secondRels].flatMap(([entry, count]) => {
+      const added = count - (firstRels.get(entry) ?? 0)
+      return added > 0 ? [`added ${entry}${times(added)}`] : []
+    }),
   ]
   push(
     'relationships preserved',
     relDelta.length === 0,
     relDelta.length === 0
       ? `${String(first.relationships.length)} bindings identical`
-      : relDelta.join('; '),
+      : `${String(first.relationships.length)} vs ${String(second.relationships.length)} bindings; ${relDelta.join('; ')}`,
   )
   return checks
 }

@@ -150,3 +150,76 @@ describe('word-roundtrip source-part preservation', () => {
     expect(checks.every((check) => check.pass)).toBe(false)
   })
 })
+
+/*
+ * Relationship bindings are a multiset, not a set: two elements can carry the
+ * same source, type and target under different ids — real packages do this —
+ * and ids are excluded because producers renumber them. A set diff collapses
+ * the duplicates, so a dropped or added second copy is invisible to it; only
+ * multiplicities expose the change. The duplicated fixture binding is
+ * document.xml's styles reference under a second id.
+ */
+const DUPLICATE_STYLES_BINDING =
+  '<Relationship Id="rId101" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+
+const duplicateStylesRel = relsPart(DOCUMENT_RELS, (xml) =>
+  xml.replace(
+    '</Relationships>',
+    `${DUPLICATE_STYLES_BINDING}</Relationships>`,
+  ),
+)
+
+const STYLES_BINDING =
+  'word/document.xml :: ' +
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles' +
+  ' -> word/styles.xml'
+
+describe('word-roundtrip relationship multiplicities', () => {
+  it('fails when one copy of a duplicated binding is dropped', async () => {
+    const first = await summarise(await cycledDocx(duplicateStylesRel))
+    const second = await summarise(await cycledDocx())
+    expect(first.relationships.length).toBe(20)
+    expect(second.relationships.length).toBe(19)
+    const preserved = namedCheck(
+      compare(first, second),
+      'relationships preserved',
+    )
+    expect(preserved.pass).toBe(false)
+    expect(preserved.detail).toContain('20 vs 19')
+    expect(preserved.detail).toContain(`dropped ${STYLES_BINDING}`)
+  })
+
+  it('fails when a duplicate binding is added', async () => {
+    const first = await summarise(await cycledDocx())
+    const second = await summarise(await cycledDocx(duplicateStylesRel))
+    const preserved = namedCheck(
+      compare(first, second),
+      'relationships preserved',
+    )
+    expect(preserved.pass).toBe(false)
+    expect(preserved.detail).toContain('19 vs 20')
+    expect(preserved.detail).toContain(`added ${STYLES_BINDING}`)
+  })
+
+  it('passes when both cycles carry the same duplicates under renumbered ids', async () => {
+    // Producer renumbering is the reason ids are excluded: the .rels ids all
+    // change while every binding — duplicates included — stays identical.
+    const renumber = relsPart(DOCUMENT_RELS, (xml) =>
+      xml.replaceAll('Id="rId', 'Id="rId9'),
+    )
+    const first = await summarise(
+      await cycledDocx((doc) => {
+        duplicateStylesRel(doc)
+        renumber(doc)
+      }),
+    )
+    const second = await summarise(await cycledDocx(duplicateStylesRel))
+    expect(first.relationships.length).toBe(20)
+    const preserved = namedCheck(
+      compare(first, second),
+      'relationships preserved',
+    )
+    expect(preserved.pass).toBe(true)
+    expect(preserved.detail).toContain('20 bindings identical')
+  })
+})
