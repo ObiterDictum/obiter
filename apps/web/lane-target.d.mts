@@ -16,6 +16,16 @@ export declare type LaneTargets = {
   apiOrigin: string
 }
 
+/**
+ * The subset of `fetch` the lane checks use: a single-argument call returning
+ * a Response. Declared rather than `typeof fetch` so tests can inject a fake
+ * without Bun's `preconnect` helper on the function object.
+ */
+export declare type LaneFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>
+
 export declare function resolveLaneTargets(options?: {
   startDirectory?: string
   processEnv?: Record<string, string | undefined> | NodeJS.ProcessEnv
@@ -36,7 +46,7 @@ export declare function verifyServedCheckout(
   targets: LaneTargets,
   options?: {
     worktreeRoot?: string
-    fetchImpl?: typeof fetch
+    fetchImpl?: LaneFetch
     headSha?: string | null
   },
 ): Promise<{ webRoot: string; apiRoot: string; envFile: string | null }>
