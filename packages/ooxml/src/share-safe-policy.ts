@@ -8,11 +8,13 @@ import {
 import {
   CONTENT_TYPE_ATTRIBUTES,
   CONTENT_TYPES_NAMESPACE,
+  DRAWINGML_MAIN_NAMESPACE,
   isAllowedElementNamespace,
   isContentTypeElement,
   isRelationshipPartElement,
   isWordExtensionNamespace,
   MARKUP_COMPAT_NAMESPACE,
+  MATH_NAMESPACE,
   PACKAGE_REL_NAMESPACE,
   RELATIONSHIP_ATTRIBUTES,
   XML_NAMESPACE_URI,
@@ -28,7 +30,7 @@ import {
 } from './share-safe-word-vocabulary'
 import {
   WML_ELEMENT_ATTRIBUTES,
-  WML_ONOFF_ELEMENTS,
+  wmlAttributeVerdict,
 } from './share-safe-word-attributes'
 import {
   hiddenElementRefuses,
@@ -51,7 +53,10 @@ import {
 import {
   EMBEDDED_ELEMENTS,
   EMBEDDED_REMOVE_ELEMENTS,
+  embeddedElementRefusesHidden,
+  SHARE_SAFE_EXTENSION_URIS,
 } from './share-safe-drawing-vocabulary'
+import { mathAttributeVerdict } from './share-safe-math-attributes'
 
 /**
  * The element-level half of the share-safe policy: what may exist inside a
@@ -63,8 +68,6 @@ import {
  * run on this one vocabulary — the classification sets themselves live in
  * `share-safe-word-classes`, the name allow-lists in the vocabulary files.
  */
-
-const ON_OFF_VALUES = new Set(['0', '1', 'true', 'false', 'on', 'off'])
 
 export type ShareSafeElementVerdict = 'keep' | 'remove' | 'unwrap' | 'refuse'
 
@@ -107,9 +110,23 @@ export function shareSafeElementVerdict(
     ) {
       return 'remove'
     }
+    if (embeddedElementRefusesHidden(element)) return 'refuse'
     const removed = EMBEDDED_REMOVE_ELEMENTS.get(element.namespaceUri)
     if (removed !== undefined && removed.has(element.localName)) {
       return 'remove'
+    }
+    // `a:ext` ships only the extensions whose payload vocabulary this
+    // build can bound; every other extension — including one named by
+    // a text-bearing URI — removes whole rather than refusing the copy.
+    if (
+      element.namespaceUri === DRAWINGML_MAIN_NAMESPACE &&
+      element.localName === 'ext'
+    ) {
+      return SHARE_SAFE_EXTENSION_URIS.has(
+        attributeValue(element, '', 'uri') ?? '',
+      )
+        ? 'keep'
+        : 'remove'
     }
     const allowed = EMBEDDED_ELEMENTS.get(element.namespaceUri)
     return allowed !== undefined && allowed.has(element.localName)
@@ -236,19 +253,19 @@ export function shareSafeAttributeVerdict(
       if (attribute.localName === 'displacedByCustomXml') return 'strip'
       // Element-scoped: a `w:` attribute keeps only where the schema
       // declares it — `w:val` or `w:instr` on a `w:p` is a payload
-      // channel, not formatting.
+      // channel, not formatting. A declared pair keeps only a value
+      // inside its enumeration or lexical bound; anything else is a
+      // payload or a malformed document, and the copy refuses rather
+      // than silently flipping semantics by stripping it.
       const declared = WML_ELEMENT_ATTRIBUTES.get(element.localName)
       if (declared === undefined || !declared.has(attribute.localName)) {
         return 'strip'
       }
-      if (
-        attribute.localName === 'val' &&
-        WML_ONOFF_ELEMENTS.has(element.localName) &&
-        !ON_OFF_VALUES.has(attribute.value.trim().toLowerCase())
-      ) {
-        return 'strip'
-      }
-      return 'keep'
+      return wmlAttributeVerdict(
+        element.localName,
+        attribute.localName,
+        attribute.value,
+      )
     }
     // Word-extension, markup-compatibility and foreign attributes are
     // non-semantic metadata here — dropped, never emitted.
@@ -257,10 +274,21 @@ export function shareSafeAttributeVerdict(
   if (EMBEDDED_ELEMENTS.has(element.namespaceUri)) {
     // Unqualified embedded attributes resolve through the bounded
     // vocabulary: element-scoped names with per-placement value bounds,
-    // then the unscoped grammar-bound names. Prefixed attributes have no
-    // legitimate placement here — embedded namespaces declare none.
+    // then the unscoped grammar-bound names. Other embedded namespaces
+    // declare no prefixed attributes — except OMML, whose `m:` attribute
+    // is `m:val` on property elements with per-element bounds.
     if (attribute.namespaceUri === '') {
       return embeddedAttributeVerdict(
+        element.localName,
+        attribute.localName,
+        attribute.value,
+      )
+    }
+    if (
+      element.namespaceUri === MATH_NAMESPACE &&
+      attribute.namespaceUri === MATH_NAMESPACE
+    ) {
+      return mathAttributeVerdict(
         element.localName,
         attribute.localName,
         attribute.value,

@@ -36,12 +36,14 @@ describe('share-safe r4: generic w: attribute channel', () => {
       'w:instr on w:instrText',
       '<w:p><w:r><w:instrText w:instr="SECRETPAYLOAD"> PAGE </w:instrText></w:r></w:p>',
     ],
-    [
-      'a non-onoff w:val on a toggle element',
-      '<w:p><w:pPr><w:keepNext w:val="SECRETPAYLOAD"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>',
-    ],
   ])('%s out of element scope does not ship', async (_label, body) => {
     await expectClean({ body }, ['SECRET'])
+  })
+
+  it('a non-onoff w:val on a toggle element refuses the copy', async () => {
+    await expectRefusal({
+      body: '<w:p><w:pPr><w:keepNext w:val="SECRETPAYLOAD"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>',
+    })
   })
 
   it('keeps a declared w: attribute with a valid value', async () => {

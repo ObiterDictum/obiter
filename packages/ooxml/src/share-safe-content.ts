@@ -42,7 +42,10 @@ import {
   collapseCommentRuns,
   rewriteBookmarks,
 } from './share-safe-word-content'
-import { EMBEDDED_ELEMENTS } from './share-safe-drawing-vocabulary'
+import {
+  EMBEDDED_ELEMENTS,
+  embeddedElementRefusesHidden,
+} from './share-safe-drawing-vocabulary'
 import { refuseShareSafe } from './share-safe-refusal'
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -204,6 +207,9 @@ function refuseReasonFor(element: XmlElement) {
         return 'external-reference' as const
       }
     }
+  }
+  if (embeddedElementRefusesHidden(element)) {
+    return 'hidden-content' as const
   }
   return 'unsupported-structure' as const
 }

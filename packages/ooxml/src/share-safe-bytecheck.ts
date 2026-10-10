@@ -21,7 +21,11 @@ import {
   isFormulaFieldInstruction,
   SHARE_SAFE_FIELD_NAMES,
 } from './share-safe-fields'
-import { WML_ELEMENT_ATTRIBUTES } from './share-safe-word-attributes'
+import {
+  WML_ELEMENT_ATTRIBUTES,
+  wmlAttributeVerdict,
+} from './share-safe-word-attributes'
+import { mathAttributeVerdict } from './share-safe-math-attributes'
 import {
   embeddedAttributeVerdict,
   XML_SPACE_VALUES,
@@ -213,6 +217,25 @@ export function checkShareSafeXmlBytes(
             refuseShareSafe(
               'unverifiable-output',
               `${part.name} carries ${name} out of element scope`,
+            )
+          }
+          // The emitted value must satisfy the same bound the transform
+          // applied — a writer that spliced an out-of-enumeration value
+          // into a declared slot is caught here.
+          if (wmlAttributeVerdict(wmlLocal, local, value) !== 'keep') {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries ${name} outside its bound`,
+            )
+          }
+        } else if (prefix === 'm') {
+          // OMML `m:val` resolves through the same per-element bound the
+          // transform applied; any other `m:` attribute refuses.
+          const mmlLocal = tagName.startsWith('m:') ? tagName.slice(2) : ''
+          if (mathAttributeVerdict(mmlLocal, local, value) !== 'keep') {
+            refuseShareSafe(
+              'unverifiable-output',
+              `${part.name} carries ${name} outside its bound`,
             )
           }
         } else if (prefix === 'mc') {

@@ -1,4 +1,5 @@
 import {
+  DRAWINGML_2010_NAMESPACE,
   DRAWINGML_MAIN_NAMESPACE,
   DRAWINGML_PICTURE_NAMESPACE,
   MATH_NAMESPACE,
@@ -14,7 +15,7 @@ import {
  * drawing, OMML and the Word extension shape namespaces a kept part may
  * emit, plus the unqualified attribute names embedded elements may carry.
  * An element whose namespace has no entry — VML, `urn:` Office legacy
- * namespaces, drawing extensions such as `a14:` — refuses the export.
+ * namespaces, or an unbounded drawing extension — refuses the export.
  */
 
 const DRAWINGML_MAIN_ELEMENTS = new Set([
@@ -395,9 +396,6 @@ const MATH_ELEMENTS = new Set([
   'funcPr',
   'groupChr',
   'groupChrPr',
-  'phantom',
-  'phantomPr',
-  'phantPr',
   'acc',
   'accPr',
   'aln',
@@ -422,6 +420,71 @@ const MATH_ELEMENTS = new Set([
   'msPre',
   'msSub',
   'msSubSup',
+  'shp',
+  'cSp',
+  'cGp',
+  'cGpRule',
+  'interSp',
+  'intraSp',
+  'preSp',
+  'postSp',
+  'smallFrac',
+  'mathFont',
+  'brkBin',
+  'brkBinSub',
+  'defJc',
+  'dispDef',
+  'intLim',
+  'naryLim',
+  'lMargin',
+  'rMargin',
+  'wrapIndent',
+  'mathPr',
+])
+
+/**
+ * Embedded elements whose only purpose is to hide what they contain.
+ * OMML phantoms render their operand invisibly while still occupying
+ * layout space; `a:noFill` under run properties erases a drawing run's
+ * text — both refuse rather than shipping a reader-invisible carrier.
+ */
+const MATH_HIDDEN_ELEMENTS = new Set([
+  'phant',
+  'phantPr',
+  'phantPh',
+  'phantom',
+  'phantomPr',
+  'show',
+])
+
+/** `a:rPr`-class parents whose `a:noFill` child hides text outright. */
+const HIDDEN_FILL_PARENTS = new Set(['defRPr', 'endParaRPr', 'rPr'])
+
+export function embeddedElementRefusesHidden(element: {
+  namespaceUri: string
+  localName: string
+  parent?: { namespaceUri: string; localName: string }
+}): boolean {
+  if (element.namespaceUri === MATH_NAMESPACE) {
+    return MATH_HIDDEN_ELEMENTS.has(element.localName)
+  }
+  return (
+    element.namespaceUri === DRAWINGML_MAIN_NAMESPACE &&
+    element.localName === 'noFill' &&
+    element.parent !== undefined &&
+    element.parent.namespaceUri === DRAWINGML_MAIN_NAMESPACE &&
+    HIDDEN_FILL_PARENTS.has(element.parent.localName)
+  )
+}
+
+/**
+ * Extension URIs (`a:ext uri`) whose payload vocabulary this build can
+ * bound — currently only `a14:useLocalDpi`. Any other `a:ext` removes
+ * whole rather than shipping an opaque payload under a text-bearing
+ * identifier.
+ */
+export const SHARE_SAFE_EXTENSION_URIS = new Set([
+  '{28A0092B-C50C-407E-A947-70E740481C1C}',
 ])
 
 const WPS_ELEMENTS = new Set([
@@ -451,6 +514,7 @@ export const EMBEDDED_ELEMENTS = new Map<string, ReadonlySet<string>>([
   [WPG_NAMESPACE, WPG_ELEMENTS],
   [WPC_NAMESPACE, WPC_ELEMENTS],
   [WP14_NAMESPACE, WP14_ELEMENTS],
+  [DRAWINGML_2010_NAMESPACE, new Set(['useLocalDpi'])],
 ])
 
 /**
