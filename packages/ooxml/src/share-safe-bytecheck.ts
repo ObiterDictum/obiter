@@ -34,7 +34,10 @@ import {
   EMBEDDED_REQUIRED_ATTRIBUTES,
   XML_SPACE_VALUES,
 } from './share-safe-drawing-attributes'
-import { EMBEDDED_ELEMENTS } from './share-safe-drawing-vocabulary'
+import {
+  EMBEDDED_ELEMENTS,
+  embeddedElementRefusesHidden,
+} from './share-safe-drawing-vocabulary'
 import {
   checkDeclarationTagBytes,
   checkEmittedPartName,
@@ -338,8 +341,25 @@ export function checkShareSafeXmlBytes(
       }
     }
 
+    // An element whose refusal needs no parent context — the alpha
+    // erasure family and OMML phantoms — must not appear in emitted
+    // bytes either; the parent-scoped checks (`a:noFill` under run
+    // properties) stay with the plan replay, which sees the tree.
+    if (
+      elementUri !== undefined &&
+      EMBEDDED_ELEMENTS.has(elementUri) &&
+      embeddedElementRefusesHidden({
+        namespaceUri: elementUri,
+        localName: elementLocal,
+      })
+    ) {
+      refuseShareSafe(
+        'unverifiable-output',
+        `${part.name} emits hidden-content element ${tagName}`,
+      )
+    }
     // An element the schema gives a required attribute must show it in
-    // the emitted bytes — a writer that spliced an `a:alphaBiLevel`
+    // the emitted bytes — a writer that spliced an `a:biLevel`
     // without `thresh` or a `Relationship` without `Target` is caught
     // here, on the same required map the transform applied.
     if (elementUri !== undefined && EMBEDDED_ELEMENTS.has(elementUri)) {

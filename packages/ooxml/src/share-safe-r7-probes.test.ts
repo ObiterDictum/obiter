@@ -35,12 +35,18 @@ describe('share-safe r7: alpha family lexical forms', () => {
       FILL('<a:alphaOff val="-100001"/>'),
     ],
     [
-      'alphaOff fully erasing alpha as a literal',
-      FILL('<a:alphaOff val="100%"/>'),
+      'an alphaOff fully erasing alpha as a literal (the offset is additive)',
+      FILL('<a:alphaOff val="-100%"/>'),
     ],
+    ['a negative alphaOff inside range', FILL('<a:alphaOff val="-5%"/>')],
+    ['a negative alphaOff int', FILL('<a:alphaOff val="-1"/>')],
     ['a signed alphaMod', FILL('<a:alphaMod val="-5"/>')],
+    ['a reducing alphaMod', FILL('<a:alphaMod val="99999"/>')],
+    ['a reducing alphaMod literal', FILL('<a:alphaMod val="50%"/>')],
     ['a signed alphaModFix amt', FILL('<a:alphaModFix amt="-10"/>')],
     ['a zero alphaModFix amt literal', FILL('<a:alphaModFix amt="0%"/>')],
+    ['a reducing alphaModFix amt', FILL('<a:alphaModFix amt="50000"/>')],
+    ['a reducing alphaModFix literal', FILL('<a:alphaModFix amt="75%"/>')],
     ['a zero alphaRepl', FILL('<a:alphaRepl a="0"/>')],
     ['an alphaRepl missing its required a', FILL('<a:alphaRepl/>')],
     [
@@ -81,19 +87,25 @@ describe('share-safe r7: alpha family lexical forms', () => {
       'a:alpha val="100000"',
     ],
     [
-      'a negative alphaOff inside range',
-      FILL('<a:alphaOff val="-5%"/>'),
-      'a:alphaOff val="-5%"',
+      'a positive alphaOff inside range',
+      FILL('<a:alphaOff val="5%"/>'),
+      'a:alphaOff val="5%"',
     ],
+    [
+      'a fully deepening alphaOff',
+      FILL('<a:alphaOff val="100%"/>'),
+      'a:alphaOff val="100%"',
+    ],
+    ['a zero alphaOff', FILL('<a:alphaOff val="0"/>'), 'a:alphaOff val="0"'],
     [
       'an alphaMod above 100%',
       FILL('<a:alphaMod val="150%"/>'),
       'a:alphaMod val="150%"',
     ],
     [
-      'an alphaModFix amt literal',
-      FILL('<a:alphaModFix amt="75%"/>'),
-      'a:alphaModFix amt="75%"',
+      'an alphaModFix at 100%',
+      FILL('<a:alphaModFix amt="100%"/>'),
+      'a:alphaModFix amt="100%"',
     ],
     [
       'an alphaRepl replacement alpha',
@@ -101,24 +113,35 @@ describe('share-safe r7: alpha family lexical forms', () => {
       'a:alphaRepl a="80000"',
     ],
     [
-      'an alphaBiLevel threshold',
-      FILL('<a:alphaBiLevel thresh="50000"/>'),
-      'a:alphaBiLevel thresh="50000"',
-    ],
-    [
       'an alphaModFix amt int',
-      FILL('<a:alphaModFix amt="50000"/>'),
-      'a:alphaModFix amt="50000"',
+      FILL('<a:alphaModFix amt="150000"/>'),
+      'a:alphaModFix amt="150000"',
     ],
   ])('%s ships', async (_label, body, emitted) => {
     const { parts } = await outputParts({ body })
     expect(parts.get('word/document.xml')).toContain(emitted)
   })
 
-  it('alpha effect elements ship without attributes', async () => {
+  it.each([
+    ['an alphaBiLevel threshold', FILL('<a:alphaBiLevel thresh="50000"/>')],
+    ['an alphaFloor under a fill', FILL('<a:alphaFloor/>')],
+    ['an alphaInv under a fill', FILL('<a:alphaInv/>')],
+    [
+      'an alphaFloor inside an effect list',
+      SPPR('<a:effectLst><a:alphaFloor/></a:effectLst>'),
+    ],
+    [
+      'an alphaInv inside an effect list',
+      SPPR('<a:effectLst><a:alphaInv/></a:effectLst>'),
+    ],
+  ])('%s refuses the copy', async (_label, body) => {
+    await expectRefusal({ body })
+  })
+
+  it('alpha effect elements that cannot erase ship', async () => {
     const { parts } = await outputParts({
       body: SPPR(
-        '<a:effectLst><a:alphaCeiling/><a:alphaFloor/><a:alphaInv/><a:alphaOutset rad="1000"/></a:effectLst>',
+        '<a:effectLst><a:alphaCeiling/><a:alphaOutset rad="1000"/></a:effectLst>',
       ),
     })
     const story = parts.get('word/document.xml') ?? ''

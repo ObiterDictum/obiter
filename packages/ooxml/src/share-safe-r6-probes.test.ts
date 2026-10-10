@@ -307,9 +307,9 @@ describe('share-safe r6: explicit invisibility', () => {
       ),
     ],
     [
-      'alphaOff erasing the parent alpha',
+      'alphaOff erasing the parent alpha (the offset is additive)',
       SPPR(
-        '<a:solidFill><a:srgbClr val="FF0000"><a:alphaOff val="100000"/></a:srgbClr></a:solidFill>',
+        '<a:solidFill><a:srgbClr val="FF0000"><a:alphaOff val="-100000"/></a:srgbClr></a:solidFill>',
       ),
     ],
     [

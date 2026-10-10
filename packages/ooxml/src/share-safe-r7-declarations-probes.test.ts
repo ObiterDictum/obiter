@@ -294,6 +294,28 @@ describe('share-safe r7: byte-level mirror', () => {
       'an alphaBiLevel without thresh spliced into emitted bytes',
       xml(FILL('<a:alphaBiLevel/>')),
     ],
+    ['an alphaInv spliced into emitted bytes', xml(FILL('<a:alphaInv/>'))],
+    ['an alphaFloor spliced into emitted bytes', xml(FILL('<a:alphaFloor/>'))],
+    [
+      'a negative alphaOff spliced into emitted bytes',
+      xml(FILL('<a:alphaOff val="-100%"/>')),
+    ],
+    [
+      'a below-floor alpha spliced into emitted bytes',
+      xml(FILL('<a:alpha val="999"/>')),
+    ],
+    [
+      'a reducing alphaMod spliced into emitted bytes',
+      xml(FILL('<a:alphaMod val="50%"/>')),
+    ],
+    [
+      'a biLevel without thresh spliced into emitted bytes',
+      xml(SPPR('<a:effectLst><a:biLevel/></a:effectLst>')),
+    ],
+    [
+      'a softEdge without rad spliced into emitted bytes',
+      xml(SPPR('<a:effectLst><a:softEdge/></a:effectLst>')),
+    ],
     [
       'a prstGeom without prst spliced into emitted bytes',
       xml(SPPR('<a:prstGeom/>')),

@@ -75,18 +75,39 @@ const GRAPHIC_DATA_URIS = new Set([
 ])
 
 /**
- * `a:alpha`-family slots where a numeric `0` means fully transparent:
- * `alpha`/`alphaMod` `val`, `alphaRepl` `a` and `alphaModFix` `amt`.
- * `alphaOff` is signed — a negative offset only deepens opacity — but a
- * `+100%` offset erases the parent's alpha entirely, so its erasure bound
- * is checked separately below. Explicit invisibility is a hidden-content
- * carrier, not a style choice.
+ * The alpha family's opacity slots and the minimum each may hold, in
+ * thousandths of a percent. Colour transforms compose in document order
+ * against a base alpha the verdict cannot see, so every slot's floor must
+ * hold on its own:
+ *
+ * - `alpha` and `alphaRepl` declare an absolute alpha — under 1% the
+ *   colour is invisible in every renderer, whichever way the value is
+ *   spelled;
+ * - `alphaMod` and `alphaModFix` multiply the running alpha — any
+ *   multiplier under 100% reduces, and repeated reductions can shrink a
+ *   chain toward invisibility, so only non-reducing modulators keep;
+ * - `alphaOff` is additive, not subtractive — ECMA-376 §20.1.2.3.3: "a
+ *   10% alpha offset increases a 50% opacity to 60%. A -10% alpha offset
+ *   decreases a 50% opacity to 40%" — so any negative offset can complete
+ *   an erasure against the base it composes with and only `0` and above
+ *   keep (`+100%` merely clamps, harmless).
+ *
+ * The floors guarantee a bounded promise — no shipped alpha declaration
+ * can render a colour below 1% of its full opacity — not universal
+ * visibility: luminance and hue transforms can still spell white on
+ * white, the accepted residual class. A value under its floor refuses
+ * like `hidden`/`vanish`: a colour a recipient cannot see is a
+ * hidden-content carrier, not a style choice.
  */
-const TRANSPARENT_ALPHA_SLOTS = new Map<string, string>([
-  ['alpha', 'val'],
-  ['alphaMod', 'val'],
-  ['alphaRepl', 'a'],
-  ['alphaModFix', 'amt'],
+const ALPHA_OPACITY_FLOORS: ReadonlyMap<
+  string,
+  ReadonlyMap<string, number>
+> = new Map([
+  ['alpha', new Map([['val', 1000]])],
+  ['alphaRepl', new Map([['a', 1000]])],
+  ['alphaMod', new Map([['val', 100000]])],
+  ['alphaModFix', new Map([['amt', 100000]])],
+  ['alphaOff', new Map([['val', 0]])],
 ])
 
 /**
@@ -106,7 +127,9 @@ export const EMBEDDED_REQUIRED_ATTRIBUTES: ReadonlyMap<
   ['alphaOff', new Set(['val'])],
   ['alphaMod', new Set(['val'])],
   ['alphaRepl', new Set(['a'])],
-  ['alphaBiLevel', new Set(['thresh'])],
+  ['biLevel', new Set(['thresh'])],
+  ['fillOverlay', new Set(['blend'])],
+  ['softEdge', new Set(['rad'])],
   ...PERCENT_VAL_ELEMENTS.map((name): [string, ReadonlySet<string>] => [
     name,
     new Set(['val']),
@@ -228,24 +251,18 @@ export function embeddedAttributeVerdict(
     }
     return 'strip'
   }
-  // Explicit invisibility values refuse like `hidden`/`vanish` — an
-  // object a recipient cannot see must not ship under the copy. The
-  // comparison is numeric, so `0`, `0%` and `0.0%` all catch.
-  const transparentSlot = TRANSPARENT_ALPHA_SLOTS.get(elementLocalName)
-  if (transparentSlot === attributeLocalName) {
+  // Explicit invisibility refuses like `hidden`/`vanish` — an object a
+  // recipient cannot see must not ship under the copy. The comparison is
+  // numeric, so `0`, `0%`, `-50%` and `0.0%` resolve to thousandths and
+  // catch the floor regardless of lexical form; a value that does not
+  // parse as a percentage falls through to its declared bound.
+  const alphaFloor =
+    ALPHA_OPACITY_FLOORS.get(elementLocalName)?.get(attributeLocalName)
+  if (alphaFloor !== undefined) {
     const thousandths = percentThousandths(value)
-    if (thousandths !== undefined && thousandths <= 0) {
+    if (thousandths !== undefined && thousandths < alphaFloor) {
       return 'refuse-hidden'
     }
-  }
-  // `alphaOff` of +100% leaves the parent fully transparent — the same
-  // invisibility `alpha val="0"` declares, spelled as an offset.
-  if (
-    attributeLocalName === 'val' &&
-    elementLocalName === 'alphaOff' &&
-    (percentThousandths(value) ?? 0) >= 100000
-  ) {
-    return 'refuse-hidden'
   }
   if (attributeLocalName === 'bwMode' && value === 'hidden') {
     return 'refuse-hidden'

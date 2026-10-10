@@ -3205,9 +3205,16 @@
                     when its <code>uri</code> names a supported extension (the
                     <code>a14:useLocalDpi</code> GUID) and removes whole
                     otherwise; OMML <code>m:val</code> attributes bound per
-                    property element; explicit invisibility refuses — zero
-                    <code>alpha</code>/<code>alphaModFix</code> values, an
-                    <code>alphaOff</code> that erases a parent's opacity,
+                    property element; explicit invisibility refuses — an
+                    <code>alpha</code>/<code>alphaRepl</code> declaration below
+                    the 1% floor, an opacity-reducing
+                    <code>alphaMod</code>/<code>alphaModFix</code>
+                    multiplier under 100%, any negative
+                    <code>alphaOff</code> (the offset is additive, so the
+                    erasing direction is negative), the
+                    <code>alphaInv</code>/<code>alphaFloor</code>/
+                    <code>alphaBiLevel</code> elements outright, a negative
+                    <code>alphaOutset</code> inset,
                     <code>bwMode="hidden"</code>, OMML phantom wrappers and
                     <code>a:noFill</code> over drawing-run text; dangling style
                     pointers such as <code>a:tableStyleId</code> are removed;

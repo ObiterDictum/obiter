@@ -314,6 +314,25 @@ const WP_DRAWING_ELEMENTS = new Set([
  */
 const HIDDEN_FILL_PARENTS = new Set(['defRPr', 'endParaRPr', 'rPr'])
 
+/**
+ * `a:` alpha-effect elements whose declared function can erase their
+ * input outright, wherever they sit — `alphaInv` subtracts the running
+ * alpha from 100% (an opaque fill goes transparent), `alphaFloor` zeroes
+ * any alpha under 100%, and `alphaBiLevel` zeroes everything under its
+ * threshold. Whether a given instance erases depends on the base alpha
+ * it composes with, which a per-element check cannot see, so the family
+ * refuses outright. Siblings that can only preserve or deepen opacity
+ * keep: `alphaCeiling` (nonzero alpha → opaque), `alphaOutset` (its
+ * eroding inset form is refused by the non-negative `rad` bound), and
+ * the per-attribute `alpha`/`alphaOff`/`alphaMod`/`alphaModFix`/
+ * `alphaRepl` slots bounded in `share-safe-drawing-attributes.ts`.
+ */
+const ALPHA_ERASURE_ELEMENTS = new Set([
+  'alphaBiLevel',
+  'alphaFloor',
+  'alphaInv',
+])
+
 export function embeddedElementRefusesHidden(element: {
   namespaceUri: string
   localName: string
@@ -322,8 +341,9 @@ export function embeddedElementRefusesHidden(element: {
   if (element.namespaceUri === MATH_NAMESPACE) {
     return mathElementRefusesHidden(element.localName)
   }
+  if (element.namespaceUri !== DRAWINGML_MAIN_NAMESPACE) return false
+  if (ALPHA_ERASURE_ELEMENTS.has(element.localName)) return true
   return (
-    element.namespaceUri === DRAWINGML_MAIN_NAMESPACE &&
     element.localName === 'noFill' &&
     element.parent !== undefined &&
     element.parent.namespaceUri === DRAWINGML_MAIN_NAMESPACE &&
