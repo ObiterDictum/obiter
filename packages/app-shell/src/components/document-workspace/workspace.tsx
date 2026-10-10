@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { FileArrowDown } from '@phosphor-icons/react'
 import { EmptyState } from '@obiter/ui'
 import { downloadBlob, downloadPlainText } from '../../document-edits'
+import { clampFindIndex, pdfFindHits } from '../../document-find'
+import { useFindState } from './use-workspace-find'
 import { workspaceKind } from '../../document-kind'
+import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import {
   fetchDocumentDownload,
   useDocumentPdfView,
@@ -290,13 +293,32 @@ function PdfWorkspace({
   const view = useDocumentPdfView(documentId)
   const [zoom, setZoom] = useState(100)
   const [pageIndex, setPageIndex] = useState(0)
+  const find = useFindState()
   const { downloadError, download } = useDownloadOriginal(documentId, filename)
 
+  // The whole text is searched once per query/options change; only the
+  // current page's slices ever mount, so the DOM stays page-bounded the way
+  // the viewer already is.
+  const findHits = useMemo(
+    () => (view.data ? pdfFindHits(view.data, find.query, find.options) : []),
+    [view.data, find.query, find.options],
+  )
+  const activeFindIndex = clampFindIndex(find.index, findHits.length)
+
+  const onJump = (index: number) =>
+    find.jumpTo(findHits, index, (hit) => setPageIndex(hit.pageIndex))
+
   return (
-    <WorkspaceShell layout={layout}>
+    <WorkspaceShell
+      layout={layout}
+      // A read-only surface still routes find; save and the edit commands
+      // simply have no source here.
+      onKeyDown={(event) => documentWorkspaceKeyDown(event)}
+    >
       <WorkspaceRibbon>
         <DocumentWorkspaceToolbar
           kind="pdf"
+          find={find.toolbar(findHits, activeFindIndex, onJump)}
           dirty={false}
           saving={false}
           trackChanges={false}
@@ -344,6 +366,7 @@ function PdfWorkspace({
             pageIndex={pageIndex}
             onPageIndexChange={setPageIndex}
             zoom={zoom}
+            find={{ hits: findHits, active: activeFindIndex }}
           />
         </DocumentDesk>
       ) : null}

@@ -1,29 +1,37 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { DocumentPdfViewResponse } from '@obiter/contracts'
 import { Button } from '@obiter/ui'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { pdfSliceBounds, type PdfFindHit } from '../../document-find'
 
 /**
  * The stored PDF layout, one page at a time. The segment index is built once
- * per view so a page turn is O(segments on that page), not a scan of the whole
- * document: a 500-page layout's `segments` array is walked exactly once, and
- * only the current page's spans ever mount — the DOM the browser lays out is
- * bounded by a page, not by the document.
+ * per view so a page turn is O(segments on that page), not a scan of the
+ * whole document: a 500-page layout's `segments` array is walked exactly
+ * once, and only the current page's spans ever mount — the DOM the browser
+ * lays out is bounded by a page, not by the document. Find highlights follow
+ * the same bound: hits were computed once over the whole text, and only the
+ * current page's slices mount.
  */
 export function DocumentPdfPages({
   view,
   pageIndex,
   onPageIndexChange,
   zoom,
+  find,
 }: {
   view: DocumentPdfViewResponse
   pageIndex: number
   onPageIndexChange: (index: number) => void
   zoom: number
+  /** The find hit set and the active index; only the current page's slices
+   * ever render, the active one prominent and scrolled into view. */
+  find?: { hits: readonly PdfFindHit[]; active: number }
 }) {
+  const { layout, text } = view
   const segmentsByPage = useMemo(() => {
     const grouped = new Map<number, number[]>()
-    view.layout.segments.forEach((segment, index) => {
+    layout.segments.forEach((segment, index) => {
       const list = grouped.get(segment.pageIndex)
       if (list) {
         list.push(index)
@@ -32,10 +40,16 @@ export function DocumentPdfPages({
       }
     })
     return grouped
-  }, [view])
+  }, [layout])
+  const sheet = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    sheet.current
+      ?.querySelector('[data-pdf-find-slice=active]')
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [pageIndex, find?.active])
 
-  const page = view.layout.pages[pageIndex]
-  const lastIndex = view.layout.pages.length - 1
+  const page = layout.pages[pageIndex]
+  const lastIndex = layout.pages.length - 1
   if (!page) {
     return (
       <p className="text-sm text-muted" role="status">
@@ -46,6 +60,32 @@ export function DocumentPdfPages({
 
   const scale = zoom / 100
   const segmentIndexes = segmentsByPage.get(pageIndex) ?? []
+  const findHighlights = find?.hits.flatMap((hit, hitIndex) =>
+    hit.slices.flatMap((slice) => {
+      const segment = layout.segments[slice.segment]
+      if (!segment || segment.pageIndex !== pageIndex) return []
+      const bounds = pdfSliceBounds(segment, slice)
+      const active = hitIndex === find.active
+      return [
+        <span
+          key={`${hitIndex}:${slice.segment}`}
+          aria-hidden
+          data-pdf-find-slice={active ? 'active' : 'hit'}
+          className={`absolute rounded-[2px] ${
+            active
+              ? 'bg-amber-400/60 ring-1 ring-amber-700/40'
+              : 'bg-amber-300/35'
+          }`}
+          style={{
+            left: (segment.x + bounds.left) * scale,
+            top: (page.height - segment.y - segment.height) * scale,
+            width: Math.max(bounds.width * scale, 2),
+            height: Math.max(segment.height * scale, 4),
+          }}
+        />,
+      ]
+    }),
+  )
 
   const jump = (value: string): boolean => {
     const target = Number(value)
@@ -75,7 +115,7 @@ export function DocumentPdfPages({
             type="text"
             inputMode="numeric"
             defaultValue={pageIndex + 1}
-            aria-label={`Go to page, of ${view.layout.pages.length}`}
+            aria-label={`Go to page, of ${lastIndex + 1}`}
             className="w-12 rounded-sm border border-line bg-transparent px-1 text-center"
             onKeyDown={(event) => {
               // A refused jump resets the field to the page being shown —
@@ -91,7 +131,7 @@ export function DocumentPdfPages({
               }
             }}
           />
-          <span aria-hidden="true">/ {view.layout.pages.length}</span>
+          <span aria-hidden="true">/ {lastIndex + 1}</span>
         </label>
         <Button
           variant="ghost"
@@ -110,6 +150,7 @@ export function DocumentPdfPages({
         aria-label={`PDF page ${pageIndex + 1}`}
       >
         <div
+          ref={sheet}
           className="relative bg-[#fcfcfa] text-[#1f1f1f] shadow-[0_12px_40px_rgba(0,0,0,0.38)] ring-1 ring-black/10"
           style={{
             width: page.width * scale,
@@ -118,8 +159,9 @@ export function DocumentPdfPages({
               "Calibri, 'Segoe UI', 'Liberation Sans', Candara, sans-serif",
           }}
         >
+          {findHighlights}
           {segmentIndexes.map((segmentIndex, index) => {
-            const segment = view.layout.segments[segmentIndex]
+            const segment = layout.segments[segmentIndex]
             if (!segment) return null
             return (
               <span
@@ -134,7 +176,7 @@ export function DocumentPdfPages({
                   lineHeight: 1,
                 }}
               >
-                {view.text.slice(segment.start, segment.end)}
+                {text.slice(segment.start, segment.end)}
               </span>
             )
           })}

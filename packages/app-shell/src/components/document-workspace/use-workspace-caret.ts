@@ -94,6 +94,7 @@ export function useWorkspaceCaret({
     model,
     drafts,
     onPlaceCaret: selectParagraph,
+    onRefused: setSelectionRefusal,
     story: editingStory,
   })
 
@@ -389,13 +390,6 @@ export function useWorkspaceCaret({
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
-  function setFindQuery(query: string) {
-    find.setFindQuery(query)
-  }
-
-  const findHits = find.findHits
-  const activeFindIndex = find.activeFindIndex
-
   function insertAuthority(citation: string, italic: boolean) {
     if (!model) return
     const paragraphId = selectedParagraphId ?? editingStory?.paragraphs[0]?.id
@@ -474,17 +468,10 @@ export function useWorkspaceCaret({
     replaceSelectionRange,
     splitSelectionRange,
     ...clipboard,
-    findQuery: find.findQuery,
-    setFindQuery,
-    replaceQuery: find.replaceQuery,
-    setReplaceQuery: find.setReplaceQuery,
-    findHits,
-    activeFindIndex,
+    // The find surface spreads whole: its keys already carry the workspace
+    // names, including its query setter.
+    ...find,
     selectParagraph,
-    onNextHit: find.onNextHit,
-    onPreviousHit: find.onPreviousHit,
-    onReplaceOne: find.onReplaceOne,
-    onReplaceAll: find.onReplaceAll,
     insertAuthority,
     undoDocument,
     redoDocument,
