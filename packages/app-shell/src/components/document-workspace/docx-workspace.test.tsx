@@ -231,7 +231,12 @@ describe('DocxWorkspace export', () => {
       })
     })
     expect(downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
-    expect(screen.queryByRole('status')).toBeNull()
+    // The only live region left is the find count; no export error announced.
+    expect(
+      screen
+        .queryAllByRole('status')
+        .filter((node) => node.textContent !== '0 found'),
+    ).toEqual([])
   })
 
   it('surfaces an ApiError via the banner when the export fails', async () => {

@@ -25,6 +25,13 @@ export const JOIN_FORMATTING_BLOCKS_EDIT =
 export const INPUT_BLOCKS_EDIT =
   'That input cannot replace a document selection. Edit the text on each side instead.'
 
+/** The message shown when a find hit cannot be replaced because its range
+ * crosses a boundary replace cannot cover — a table, a text box, or the
+ * markers of a stored field. The match itself stays findable: the refusal is
+ * about rewriting, not about the text not being there. */
+export const FIND_REPLACE_BLOCKS_STRUCTURE =
+  'That match cannot be replaced because it crosses a table, a text box, or a stored field boundary.'
+
 /** The message shown when a cut could not write the clipboard, so the text was
  * left in the document rather than deleted for a copy that never happened. */
 export const CLIPBOARD_BLOCKS_CUT =
@@ -44,6 +51,7 @@ export type SelectionRefusal =
   | 'insert'
   | 'structure'
   | 'join-formatting'
+  | 'find-structure'
   | 'input'
   | 'clipboard'
   | 'clipboard-copy'
@@ -62,6 +70,8 @@ export function refusalMessage(
       return hasStructure ? STRUCTURE_BLOCKS_SELECTION : null
     case 'join-formatting':
       return JOIN_FORMATTING_BLOCKS_EDIT
+    case 'find-structure':
+      return FIND_REPLACE_BLOCKS_STRUCTURE
     case 'input':
       return INPUT_BLOCKS_EDIT
     case 'clipboard':

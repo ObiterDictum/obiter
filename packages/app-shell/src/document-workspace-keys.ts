@@ -9,17 +9,21 @@ export type WorkspaceKeyEvent = {
 }
 
 function isForeignFormField(target: EventTarget | null | undefined) {
-  if (!target || !(target instanceof Element)) return false
-  const isField =
-    target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-  if (!isField) return false
+  if (
+    !(target instanceof HTMLInputElement) &&
+    !(target instanceof HTMLTextAreaElement)
+  ) {
+    return false
+  }
   return !target.closest('[data-paragraph-id]')
 }
 
 export function handleDocumentWorkspaceKeys(
   event: WorkspaceKeyEvent,
   handlers: {
-    save: () => void
+    /** Absent on a surface with no save — the platform's own Ctrl/Cmd+S
+     * stays unclaimed there. */
+    save?: () => void
     undo?: () => void
     redo?: () => void
     focusFind?: () => void
@@ -39,7 +43,7 @@ export function handleDocumentWorkspaceKeys(
   // section. Do not swallow their native Ctrl+Z/Ctrl+F so field text can be
   // undone; only document save is still routed from those fields.
   const inForeignField = isForeignFormField(event.target)
-  if (key === 's') {
+  if (key === 's' && handlers.save) {
     event.preventDefault()
     handlers.save()
     return
@@ -95,7 +99,9 @@ export function handleDocumentWorkspaceKeys(
 }
 
 export type WorkspaceKeySources = {
-  save: () => void
+  /** Absent on a surface with no save — the platform's own Ctrl/Cmd+S
+   * stays unclaimed there. */
+  save?: () => void
   undo?: () => void
   redo?: () => void
   print?: () => void
@@ -107,10 +113,13 @@ export type WorkspaceKeySources = {
   }
 }
 
+const focusDocumentFind = () =>
+  document.getElementById('document-find')?.focus()
+
 /** Binds the workspace's command sources to the key handler table. */
 export function documentWorkspaceKeyDown(
   event: WorkspaceKeyEvent,
-  { save, undo, redo, print, format }: WorkspaceKeySources,
+  { save, undo, redo, print, format }: WorkspaceKeySources = {},
 ) {
   const emphasis = format && !format.emphasisUnavailable ? format : undefined
   handleDocumentWorkspaceKeys(event, {
@@ -118,7 +127,7 @@ export function documentWorkspaceKeyDown(
     undo,
     redo,
     print,
-    focusFind: () => document.getElementById('document-find')?.focus(),
+    focusFind: focusDocumentFind,
     toggleBold: emphasis?.onToggleBold,
     toggleItalic: emphasis?.onToggleItalic,
     toggleUnderline: emphasis?.onToggleUnderline,

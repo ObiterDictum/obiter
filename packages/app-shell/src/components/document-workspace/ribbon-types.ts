@@ -12,6 +12,7 @@ import type {
   VertAlignValue,
 } from '../../document-format-types'
 import type { StructuralInsertOutcome } from '../../document-structure-toolbar'
+import type { FindMatchOptions } from '../../document-find'
 
 export type DocumentFormatToolbar = {
   paragraphStyleId: string
@@ -233,13 +234,19 @@ export type DocumentReviewToolbar = {
 
 export type DocumentFindToolbar = {
   query: string
-  replace: string
   matchLabel: string
-  canReplace: boolean
+  /** The literal-match options the hits were computed with; both are explicit
+   * toggles in the find group. */
+  options: FindMatchOptions
   onQuery: (query: string) => void
-  onReplace: (value: string) => void
+  onToggleOption: (key: 'matchCase' | 'wholeWord') => void
   onNext: () => void
   onPrevious: () => void
-  onReplaceOne: () => void
-  onReplaceAll: () => void
+  /** The replace controls; absent on a read-only surface like the PDF view,
+   * which offers find without a replace it could never honour. */
+  replace?: string
+  canReplace?: boolean
+  onReplace?: (value: string) => void
+  onReplaceOne?: () => void
+  onReplaceAll?: () => void
 }

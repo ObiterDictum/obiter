@@ -1,83 +1,92 @@
-import {
-  ArrowsLeftRight,
-  CaretDown,
-  CaretUp,
-  MagnifyingGlass,
-  MagnifyingGlassMinus,
-  MagnifyingGlassPlus,
-  Swap,
-} from '@phosphor-icons/react'
+import { Minus, Plus } from '@phosphor-icons/react'
+import { CaptionButton, IconButton, ToolbarRow } from './ribbon-primitives'
 import type { DocumentFindToolbar } from './ribbon-types'
-import { IconButton } from './ribbon-primitives'
 
 export function ZoomControls({
   zoom,
   onZoom,
 }: {
   zoom: number
-  onZoom: (next: number) => void
+  onZoom: (zoom: number) => void
 }) {
   return (
-    <>
+    <ToolbarRow>
       <IconButton
         label="Zoom out"
-        onClick={() => onZoom(Math.max(75, zoom - 10))}
-        icon={<MagnifyingGlassMinus size={16} aria-hidden />}
+        disabled={zoom <= 50}
+        onClick={() => onZoom(Math.max(50, zoom - 10))}
+        icon={<Minus size={16} aria-hidden />}
       />
-      <span className="w-10 text-center font-mono text-[11px] text-muted">
+      <span className="min-w-12 text-center font-mono text-[11px] text-muted">
         {zoom}%
       </span>
       <IconButton
         label="Zoom in"
-        onClick={() => onZoom(Math.min(140, zoom + 10))}
-        icon={<MagnifyingGlassPlus size={16} aria-hidden />}
+        disabled={zoom >= 200}
+        onClick={() => onZoom(Math.min(200, zoom + 10))}
+        icon={<Plus size={16} aria-hidden />}
       />
-    </>
+    </ToolbarRow>
   )
 }
 
 export function FindControls({ find }: { find: DocumentFindToolbar }) {
+  // The replace group is all-or-none on the toolbar contract: a read-only
+  // surface like PDF omits it whole.
+  const canReplace = find.onReplaceAll !== undefined
   return (
-    <div className="flex min-w-0 items-center gap-1">
-      <MagnifyingGlass size={14} className="shrink-0 text-muted" aria-hidden />
-      <input
-        id="document-find"
-        aria-label="Find in document"
-        className="h-7 w-36 rounded-md border border-line bg-canvas px-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-        value={find.query}
-        onChange={(event) => find.onQuery(event.target.value)}
-      />
-      <span className="min-w-12 font-mono text-[11px] text-muted">
-        {find.matchLabel}
-      </span>
-      <IconButton
-        label="Previous match"
-        onClick={find.onPrevious}
-        icon={<CaretUp size={16} aria-hidden />}
-      />
-      <IconButton
-        label="Next match"
-        onClick={find.onNext}
-        icon={<CaretDown size={16} aria-hidden />}
-      />
-      <input
-        aria-label="Replace in document"
-        className="h-7 w-28 rounded-md border border-line bg-canvas px-2 text-sm text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-        value={find.replace}
-        onChange={(event) => find.onReplace(event.target.value)}
-      />
-      <IconButton
-        label="Replace"
-        disabled={!find.canReplace}
-        onClick={find.onReplaceOne}
-        icon={<ArrowsLeftRight size={16} aria-hidden />}
-      />
-      <IconButton
-        label="Replace all"
-        disabled={!find.canReplace}
-        onClick={find.onReplaceAll}
-        icon={<Swap size={16} aria-hidden />}
-      />
+    <div className="flex flex-col gap-1">
+      <ToolbarRow>
+        <input
+          id="document-find"
+          type="text"
+          value={find.query}
+          onChange={(event) => find.onQuery(event.target.value)}
+          placeholder="Find"
+          aria-label="Find in document"
+          className="h-7 w-32 rounded border border-line bg-canvas px-1.5 text-[12px] text-ink placeholder:text-subtle pointer-coarse:h-11"
+        />
+        <span
+          role="status"
+          className="min-w-12 text-center font-mono text-[11px] text-muted"
+        >
+          {find.matchLabel}
+        </span>
+        <IconButton label="Previous match" onClick={find.onPrevious} icon="‹" />
+        <IconButton label="Next match" onClick={find.onNext} icon="›" />
+        <CaptionButton
+          label="Match case"
+          pressed={find.options.matchCase}
+          onClick={() => find.onToggleOption('matchCase')}
+        />
+        <CaptionButton
+          label="Whole word"
+          pressed={find.options.wholeWord}
+          onClick={() => find.onToggleOption('wholeWord')}
+        />
+      </ToolbarRow>
+      {canReplace ? (
+        <ToolbarRow>
+          <input
+            type="text"
+            value={find.replace}
+            onChange={(event) => find.onReplace?.(event.target.value)}
+            placeholder="Replace with"
+            aria-label="Replace in document"
+            className="h-7 w-32 rounded border border-line bg-canvas px-1.5 text-[12px] text-ink placeholder:text-subtle pointer-coarse:h-11"
+          />
+          <CaptionButton
+            label="Replace"
+            disabled={!find.canReplace}
+            onClick={find.onReplaceOne}
+          />
+          <CaptionButton
+            label="Replace all"
+            disabled={!find.canReplace}
+            onClick={find.onReplaceAll}
+          />
+        </ToolbarRow>
+      ) : null}
     </div>
   )
 }
