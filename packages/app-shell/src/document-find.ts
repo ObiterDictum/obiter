@@ -2,13 +2,16 @@ import type {
   DocumentModelWire,
   DocumentPdfViewResponse,
   DocumentStoryWire,
+  DocumentTextLayoutSegment,
 } from '@obiter/contracts'
-import { documentStory } from './document-model-text'
+import { documentStory, effectiveParagraph } from './document-model-text'
 import {
+  editingStoryOfFlowId,
+  insertPlainText,
   storyBodyParagraphIds,
   storyFlowParagraphIds,
 } from './document-story-flow'
-import { blockText, type EditorState } from './document-word-edits'
+import type { EditorState } from './document-word-edits'
 
 /**
  * The match options the document and PDF find surfaces share. Both are
@@ -66,11 +69,21 @@ function unitMatches(needle: number, haystack: number): boolean {
 }
 
 /**
+ * The fold both sides of the scan share. `toLowerCase` applies the Unicode
+ * default fold — including its one context-sensitive rule, the Greek final
+ * sigma: a word-final 'Σ' becomes 'ς'. A grapheme cluster carries no word
+ * context, so folding per cluster always yields medial 'σ'. Mapping 'ς'
+ * back to 'σ' after the fold makes the two granularities agree — 'σ', 'ς'
+ * and 'Σ' are then the same letter for matching, which is also the
+ * case-insensitive read the user means.
+ */
+const foldText = (text: string) => text.toLowerCase().replaceAll('ς', 'σ')
+
+/**
  * Prepare `text` for matching. The text is grouped into grapheme clusters,
- * each cluster is NFC-normalised and case-folded with Unicode default
- * folding (`toLowerCase`) unless `fold` is false — cluster-level so a
- * context-sensitive fold like the Greek final sigma folds the same way the
- * whole-string needle fold does. `starts` and `ends` map
+ * each cluster is NFC-normalised and — unless `fold` is false — folded with
+ * `foldText`, the same transform the whole needle takes, so the two sides
+ * can never disagree on a context-sensitive fold. `starts` and `ends` map
  * every UTF-16 unit of the produced text to the original cluster range it
  * came from, so a folded match can never split a surrogate pair, land inside
  * a combining sequence, or be corrupted by a fold that changes length
@@ -87,7 +100,7 @@ function matchSpace(text: string, fold: boolean): MatchSpace {
   const ends: number[] = []
   for (const { segment, index } of GRAPHEME_SEGMENTER.segment(text)) {
     const piece = fold
-      ? segment.normalize('NFC').toLowerCase()
+      ? foldText(segment.normalize('NFC'))
       : segment.normalize('NFC')
     const end = index + segment.length
     // One bounds pair for every UTF-16 unit the piece produced — the loop
@@ -99,6 +112,31 @@ function matchSpace(text: string, fold: boolean): MatchSpace {
     produced += piece
   }
   return [produced, starts, ends] as const
+}
+
+/**
+ * The folded text and its offset maps are a pure function of the searched
+ * text and the fold flag, and they are the expensive half of a scan — the
+ * same document re-searched as the query grows must not re-segment it.
+ * Bounded to the last few texts (fold on and off), so a query keystroke or
+ * an options toggle repays only the linear scan; a document keystroke
+ * changes the text and repays the segment cost once, the honest price of
+ * keeping hits against live draft state.
+ */
+const matchSpaceCache = new Map<string, MatchSpace>()
+const MATCH_SPACE_CACHE_MAX = 4
+
+function cachedMatchSpace(text: string, fold: boolean): MatchSpace {
+  const key = `${fold ? 'F' : 'N'}${text}`
+  const cached = matchSpaceCache.get(key)
+  if (cached) return cached
+  const space = matchSpace(text, fold)
+  if (matchSpaceCache.size >= MATCH_SPACE_CACHE_MAX) {
+    const oldest = matchSpaceCache.keys().next().value
+    if (oldest !== undefined) matchSpaceCache.delete(oldest)
+  }
+  matchSpaceCache.set(key, space)
+  return space
 }
 
 /** Whether a word character sits at `index` — or ends there when `before`
@@ -116,12 +154,14 @@ function isWordAt(text: string, index: number, before = false): boolean {
 /**
  * Literal find in one string: no regular expression is built from the
  * needle, so a query means its characters and nothing else. The needle is
- * NFC-normalised and — with `matchCase` off — folded the same way the text
- * is, so a composed 'é' query matches the decomposed 'e'+'́' stored form.
+ * NFC-normalised and — with `matchCase` off — folded through the same
+ * `foldText` the text's clusters take, so a composed 'é' query matches the
+ * decomposed 'e'+'́' stored form and a Greek 'ς' query finds 'Σ' and 'σ'.
  * Known limits, deliberately narrow rather than claimed universal: Turkish
  * 'İ' still folds to 'i'+dot above, so 'i' matches it but offsets map to
- * the whole stored letter; and a fold is locale-independent — 'I' and 'ı'
- * are different letters everywhere.
+ * the whole stored letter; the fold is locale-independent — 'I' and 'ı'
+ * are different letters everywhere; and 'ß' only ever equals 'ß', never
+ * 'ss' — the fold does no multi-letter expansion.
  *
  * Hits are leftmost and non-overlapping, and `wholeWord` then drops a
  * candidate whose edge touches a word character. An empty needle finds
@@ -137,9 +177,9 @@ export function findInText(
   // decomposed 'i'+dot composes to 'İ' first and then folds to 'i'+dot,
   // so both sides of the scan hold the same folded units.
   const foldedNeedle = needle.normalize('NFC')
-  const pattern = fold ? foldedNeedle.toLowerCase() : foldedNeedle
+  const pattern = fold ? foldText(foldedNeedle) : foldedNeedle
   if (!pattern) return []
-  const [folded, starts, ends] = matchSpace(haystack, fold)
+  const [folded, starts, ends] = cachedMatchSpace(haystack, fold)
   const hits: TextHit[] = []
   // The scan runs over the folded pattern, which can be longer than the
   // needle itself when a fold expands — 'İ' folds to 'i' plus a combining
@@ -200,10 +240,37 @@ export function findInDocument(
   if (!model || !query) return []
   const scoped = story ?? documentStory(model)
   if (!scoped) return []
-  // The ids whose text joins the flow: body paragraphs and pending inserts.
+  // The ids whose text joins the flow: body paragraphs, plus the pending
+  // inserts whose anchors resolve to this story — an insert anchored in the
+  // margin or notes is not body text here.
   const flowIds = storyBodyParagraphIds(scoped)
-  state.inserts.forEach((item) => flowIds.add(item.clientId))
+  state.inserts.forEach((item) => {
+    if (editingStoryOfFlowId(model, state.inserts, item.clientId) === scoped) {
+      flowIds.add(item.clientId)
+    }
+  })
   const hits: FindHit[] = []
+  // `blockText` resolves each id by scanning every editable story — quadratic
+  // across a long document's flow — so the same effective text comes from
+  // per-id maps built once here: an insert's text, or the paragraph's runs
+  // plus its joined extraRuns with text drafts applied.
+  const paragraphsById = new Map(
+    scoped.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+  )
+  const insertsById = new Map(
+    state.inserts.map((item) => [item.clientId, item]),
+  )
+  const flowText = (id: string): string => {
+    const insert = insertsById.get(id)
+    if (insert) return insertPlainText(insert)
+    const paragraph = paragraphsById.get(id)
+    if (!paragraph) {
+      return (state.extraRuns[id] ?? []).map((run) => run.text).join('')
+    }
+    return effectiveParagraph(paragraph, state.drafts, state.extraRuns[id])
+      .runs.map((run) => run.text)
+      .join('')
+  }
   // Ordinary flow paragraphs join into one match run with a '\n' for each
   // break, so a literal query crosses a paragraph the way it reads. A
   // structural paragraph — a table cell, a text box — is searched alone: its
@@ -212,9 +279,14 @@ export function findInDocument(
   let flow = ''
   let spans: Array<{ id: string; start: number; end: number }> = []
   const flush = () => {
-    hits.push(
-      ...findInText(flow, query, options).map((hit) => resolveHit(hit, spans)),
-    )
+    // Hits and spans are both in text order, so each hit picks the walk up
+    // where the last left it — the mapping stays linear in the spans rather
+    // than rescanning every span for every hit.
+    let low = 0
+    for (const hit of findInText(flow, query, options)) {
+      while (low < spans.length && (spans[low]?.end ?? 0) < hit.start) low += 1
+      hits.push(resolveHit(hit, spans, low))
+    }
     flow = ''
     spans = []
   }
@@ -223,7 +295,7 @@ export function findInDocument(
     state.inserts,
     state.deletedParagraphIds,
   )) {
-    const piece = blockText(model, state, id)
+    const piece = flowText(id)
     if (!flowIds.has(id)) {
       // Search the structural paragraph alone: its edges are not paragraph
       // marks, so a hit may never silently bridge the container the way two
@@ -262,12 +334,18 @@ const hitSlice = (
 function resolveHit(
   hit: TextHit,
   spans: ReadonlyArray<{ id: string; start: number; end: number }>,
+  low = 0,
 ): FindHit {
-  const segments = spans.flatMap((span) =>
-    span.start <= hit.end && span.end >= hit.start
-      ? [{ paragraphId: span.id, ...hitSlice(hit, span) }]
-      : [],
-  )
+  // Spans are appended in text order, so the covered window ends at the
+  // first span starting past the hit — nothing later can overlap it.
+  const segments: FindHit['segments'] = []
+  for (let index = low; index < spans.length; index += 1) {
+    const span = spans[index]
+    if (!span || span.start > hit.end) break
+    if (span.end >= hit.start) {
+      segments.push({ paragraphId: span.id, ...hitSlice(hit, span) })
+    }
+  }
   const pick = (
     segment: (typeof segments)[number] | undefined,
     key: 'start' | 'end' = 'start',
@@ -332,8 +410,11 @@ export type PdfFindHit = {
  * only finds the text as it was extracted.
  *
  * A hit resolves its slices by scanning the segments once, so a keystroke
- * costs O(text + hits × segments) — linear passes, no DOM work, and the
- * mounted page stays bounded the way the viewer already bounds it.
+ * costs a linear scan over the text and the segments — the fold's match
+ * space is memoised on the text, so only an actual text change re-segments
+ * it. That is the search cost, distinct from the rendering bound: no DOM
+ * work happens here and the mounted page stays bounded the way the viewer
+ * already bounds it.
  */
 export function pdfFindHits(
   view: DocumentPdfViewResponse,
@@ -347,14 +428,32 @@ export function pdfFindHits(
   // segment rather than an assumed order.
   return findInText(view.text, query, options).map((hit) => {
     const { start, end } = hit
-    let pageIndex = 0
+    let pageIndex: number | undefined
     const slices: PdfHitSlice[] = []
+    // A hit no segment covers still needs an honest page: the first segment
+    // after the hit's text — the nearest by start offset, array order
+    // breaking a tie — else the nearest ending before it, else page 0 when
+    // the layout has no segments at all.
+    let after: DocumentTextLayoutSegment | undefined
+    let before: DocumentTextLayoutSegment | undefined
     segments.forEach((segment, index) => {
-      if (segment.end <= start || segment.start >= end) return
-      if (!slices.length) pageIndex = segment.pageIndex
+      if (segment.end <= start) {
+        if (!before || segment.end > before.end) before = segment
+        return
+      }
+      if (segment.start >= end) {
+        if (!after || segment.start < after.start) after = segment
+        return
+      }
+      pageIndex ??= segment.pageIndex
       slices.push({ segment: index, ...hitSlice(hit, segment) })
     })
-    return { start, end, pageIndex, slices }
+    return {
+      start,
+      end,
+      pageIndex: pageIndex ?? after?.pageIndex ?? before?.pageIndex ?? 0,
+      slices,
+    }
   })
 }
 

@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process'
+import { readFileSync, rmSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import {
   createAccount,
@@ -15,10 +19,20 @@ import {
  * crosses a paragraph break, replace-one and replace-all through the real
  * save pipeline, and persistence across a reload. The second journey runs
  * find against a real uploaded PDF: page-indexed hits, active-hit reveal
- * and the bounded one-page mounting the viewer keeps.
+ * and the bounded one-page mounting the viewer keeps. The third journey
+ * proves the Unicode match policy in the browser — the Greek final sigma,
+ * a decomposed accent and an astral letter — plus a field-boundary refusal
+ * that must leave a paired allowed hit untouched, and the exported DOCX
+ * re-parsed for the replaced text and the untouched field machinery.
  */
 
 test.use({ viewport: { width: 1440, height: 900 } })
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..')
+const UNICODE_FIXTURE = path.join('/tmp', 'e14-unicode.docx')
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 function escapePdfText(value: string) {
   return value
@@ -64,6 +78,67 @@ function buildPdf(pages: string[][]) {
     .join('')
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`
   return Buffer.from(pdf)
+}
+
+/*
+ * The Unicode fixture's document.xml: a word-final Greek sigma, a stored
+ * decomposed 'é' (e + combining acute), an astral letter, and a REF field
+ * whose markers span two paragraphs so a cross-break replace over the
+ * first boundary is a real structural refusal. 'marker' pairs give one
+ * refused hit and one allowed hit for the same query.
+ */
+const UNICODE_DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t xml:space="preserve">ΟΔΟΣ means street</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">cafe&#x301; au lait</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">A 𝕏 mark</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">prelude marker</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">marker middle</w:t></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> REF BM1 </w:instrText></w:r></w:p>
+    <w:p><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t xml:space="preserve">field tail</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">also marker</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">marker tail</w:t></w:r></w:p>
+    <w:sectPr/>
+  </w:body>
+</w:document>
+`
+
+/**
+ * A minimal DOCX around `UNICODE_DOCUMENT_XML`, built fresh into /tmp — the
+ * fixture stays synthetic and uncommitted, the same packaging the e4
+ * fixture carries. jszip resolves from @obiter/ooxml, which owns it.
+ */
+function buildUnicodeFixture() {
+  rmSync(UNICODE_FIXTURE, { force: true })
+  execFileSync(
+    'bun',
+    [
+      '-e',
+      `const { default: JSZip } = await import('jszip')
+       const zip = new JSZip()
+       zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
+       zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
+       zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
+       zip.file('word/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>')
+       zip.file('word/document.xml', ${JSON.stringify(UNICODE_DOCUMENT_XML)})
+       await Bun.write('${UNICODE_FIXTURE}', await zip.generateAsync({ type: 'uint8array' }))`,
+    ],
+    { cwd: `${REPO_ROOT}/packages/ooxml`, stdio: 'pipe' },
+  )
+}
+
+/** Reads one part out of a downloaded DOCX — the export's own bytes. */
+function zipPart(docxPath: string, partName: string) {
+  return execFileSync(
+    'python3',
+    [
+      '-c',
+      'import zipfile, sys; sys.stdout.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]).decode())',
+      docxPath,
+      partName,
+    ],
+    { encoding: 'utf-8' },
+  )
 }
 
 test('DOCX find navigates, replaces across a paragraph break, saves and reloads', async ({
@@ -175,8 +250,10 @@ test('PDF find navigates to the hit page and highlights the active slice', async
   request,
 }) => {
   const { email, password } = await createAccount(request)
+  // 24 pages — a document large enough that a query's hits span most of it,
+  // so hit counting, page navigation and the bounded mount are all real.
   const pdf = buildPdf(
-    Array.from({ length: 6 }, (_, index) =>
+    Array.from({ length: 24 }, (_, index) =>
       Array.from(
         { length: 10 },
         (__, row) => `E14 page ${index + 1} line ${row + 1} token-${index}`,
@@ -225,6 +302,20 @@ test('PDF find navigates to the hit page and highlights the active slice', async
   await page.getByRole('button', { name: 'Next match' }).click()
   await expect(page.getByText('page 4 line 2 token-3')).toBeVisible()
 
+  // 'token-2' hits five pages across the whole document — page 3's own
+  // token plus token-20…token-23 on the last four pages, fifty hits — and
+  // Previous from the start wraps to the last one, on the last page.
+  await findField.fill('token-2')
+  await expect(
+    page.getByRole('status').filter({ hasText: 'found' }),
+  ).toHaveText('50 found')
+  await page.getByRole('button', { name: 'Previous match' }).click()
+  await expect(page.getByText('page 24 line 10 token-23')).toBeVisible()
+  await expect(page.getByText('page 4 line 2 token-3')).toHaveCount(0)
+  await expect(
+    page.locator('[data-pdf-find-slice="active"]').first(),
+  ).toBeVisible()
+
   // Match case applies on the PDF surface too: lowercase never matches the
   // stored token.
   await page.getByRole('button', { name: 'Match case' }).click()
@@ -240,4 +331,140 @@ test('PDF find navigates to the hit page and highlights the active slice', async
   await page.getByRole('button', { name: 'Next page' }).click()
   await page.keyboard.press('Control+f')
   await expect(findField).toBeFocused()
+})
+
+test('DOCX find folds Unicode, refuses a protected range, and exports the result', async ({
+  page,
+  request,
+}) => {
+  buildUnicodeFixture()
+  const { email, password } = await createAccount(request)
+  await signIn(page, email, password)
+  await openMatterDocument(page, `E14 unicode ${Date.now()}`, {
+    name: 'e14-unicode.docx',
+    mimeType: DOCX_MIME,
+    buffer: readFileSync(UNICODE_FIXTURE),
+  })
+  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  await openRibbonTab(page, 'Review')
+
+  const findField = page.getByLabel('Find in document')
+  const status = page.getByRole('status').filter({ hasText: /found|\// })
+  const notice = page.locator('[data-selection-status]')
+
+  // The final sigma: a lowercase 'ς' query finds the stored uppercase
+  // word, and so does the query identical to the text — the case the
+  // per-cluster fold once missed.
+  await findField.fill('οδος')
+  await expect(status).toHaveText('1 found')
+  await findField.fill('ΟΔΟΣ')
+  await expect(status).toHaveText('1 found')
+
+  // Whole word reads the stored letters: a prefix is not the word.
+  await findField.fill('οδο')
+  await expect(status).toHaveText('1 found')
+  await page.getByRole('button', { name: 'Whole word' }).click()
+  await expect(status).toHaveText('0 found')
+  await page.getByRole('button', { name: 'Whole word' }).click()
+
+  // Match case keeps the sigma forms distinct.
+  await page.getByRole('button', { name: 'Match case' }).click()
+  await findField.fill('οδος')
+  await expect(status).toHaveText('0 found')
+  await findField.fill('ΟΔΟΣ')
+  await expect(status).toHaveText('1 found')
+  await page.getByRole('button', { name: 'Match case' }).click()
+
+  // A stored decomposed 'é' answers the composed query, and an astral
+  // letter is one letter across its two UTF-16 units.
+  await findField.fill('café')
+  await expect(status).toHaveText('1 found')
+  await findField.fill('𝕏')
+  await expect(status).toHaveText('1 found')
+
+  // 'marker marker' hits twice across a paragraph break: once into the
+  // field's first boundary paragraph, once into an ordinary paragraph.
+  // Replace all validates the whole batch first — a refusal must leave
+  // even the allowed hit untouched.
+  await findField.fill('marker marker')
+  await expect(status).toHaveText('2 found')
+  await page.getByLabel('Replace in document').fill('joined')
+  await page.getByRole('button', { name: 'Replace all' }).click()
+  await expect(notice).toContainText(
+    'cannot be replaced because it crosses a table, a text box, or a stored field boundary',
+  )
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'marker middle' }),
+  ).toHaveCount(1)
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'marker tail' }),
+  ).toHaveCount(1)
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'joined' }),
+  ).toHaveCount(0)
+
+  // The second hit is allowed: navigate to it, replace just it, and the
+  // paragraphs join. One Undo then proves the refused batch left no
+  // history step — the undo lands straight on the successful replace.
+  await page.getByRole('button', { name: 'Next match' }).click()
+  await page.getByRole('button', { name: 'Next match' }).click()
+  await page.getByRole('button', { name: 'Replace', exact: true }).click()
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
+  ).toHaveCount(1)
+  await openRibbonTab(page, 'Home')
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'also marker' }),
+  ).toHaveCount(1)
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'marker tail' }),
+  ).toHaveCount(1)
+  await page.getByRole('button', { name: 'Redo' }).click()
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
+  ).toHaveCount(1)
+  await openRibbonTab(page, 'Review')
+
+  // The folded Greek hit rewrites at its real range and persists through
+  // the save pipeline.
+  await findField.fill('οδος')
+  await expect(status).toHaveText('1 found')
+  await page.getByLabel('Replace in document').fill('ΠΟΛΗ')
+  await page.getByRole('button', { name: 'Replace', exact: true }).click()
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'ΠΟΛΗ means street' }),
+  ).toHaveCount(1)
+
+  await saveAndWait(page)
+  await page.reload({ waitUntil: 'networkidle' })
+  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'ΠΟΛΗ means street' }),
+  ).toHaveCount(1)
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
+  ).toHaveCount(1)
+
+  // The exported DOCX is re-parsed from its own downloaded bytes: the
+  // replacements are in it, and the field machinery the refusal protected
+  // is untouched.
+  await openRibbonTab(page, 'Review')
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export', exact: true }).click(),
+  ])
+  const exportPath = test.info().outputPath('e14-export.docx')
+  await download.saveAs(exportPath)
+  const documentXml = zipPart(exportPath, 'word/document.xml')
+  expect(documentXml).toContain('ΠΟΛΗ means street')
+  expect(documentXml).toContain('also joined tail')
+  expect(documentXml).not.toContain('ΟΔΟΣ means street')
+  expect(documentXml).toContain('w:fldCharType="begin"')
+  expect(documentXml).toContain('w:fldCharType="end"')
+  expect(documentXml).toContain(' REF BM1 ')
 })

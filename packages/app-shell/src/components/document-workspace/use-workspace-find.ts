@@ -73,6 +73,10 @@ export function useWorkspaceFind({
       onRefused(
         outcome.refusal === 'structure' ? 'find-structure' : outcome.refusal,
       )
+    } else {
+      // 'empty': the hits were re-derived before the replace, so there was
+      // nothing left to act on — say so instead of a silent no-op click.
+      onRefused('find-empty')
     }
   }
 
