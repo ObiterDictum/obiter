@@ -14,6 +14,7 @@ import {
 } from './document-run-properties'
 import { paragraphNumPr } from './document-page-lists'
 import { paragraphListKind, pickNumberingId } from './document-list-toggle'
+import { paragraphFormatState } from './document-paragraph-format'
 import {
   formattedParagraphDraft,
   paragraphStyleOptions,
@@ -185,9 +186,11 @@ export function formatControlState(
       .find((item) => item.numberingId === numPr.numId)
       ?.levels?.some((level) => level.ilvl === nextIlvl),
   )
+  const paragraphIds = selectedParagraphIds(ranges)
+  const paragraphFormat = paragraphFormatState(model, format, paragraphIds)
   return {
     paragraph,
-    paragraphIds: selectedParagraphIds(ranges),
+    paragraphIds,
     // A pending insert is not part of the stored story, so its style lives only
     // in the format drafts until the insert is saved. Report it so the style
     // control shows the chosen style instead of "No direct style".
@@ -195,6 +198,9 @@ export function formatControlState(
       paragraph?.styleId ??
       (paragraphId ? (format.paragraphStyles[paragraphId] ?? '') : ''),
     paragraphStyles: paragraphStyleOptions(model),
+    alignment: paragraphFormat.alignment,
+    lineSpacing: paragraphFormat.lineSpacing,
+    indentKind: paragraphFormat.indent,
     bold: flagOnCoveredRuns(covered, 'bold'),
     italic: flagOnCoveredRuns(covered, 'italic'),
     underline: flagOnCoveredRuns(covered, 'underline'),

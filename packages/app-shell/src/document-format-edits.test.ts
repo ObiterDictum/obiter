@@ -157,6 +157,7 @@ describe('document format drafts', () => {
           emphasis: [{ paragraphId: 'p1', from: 2, to: 4, bold: true }],
           paragraphStyles: {},
           numbering: {},
+          paragraphFormats: {},
         },
         [],
       ),
@@ -182,6 +183,7 @@ describe('document format drafts', () => {
           ],
           paragraphStyles: { p1: 'Base' },
           numbering: { p1: { numId: '1', ilvl: 1 } },
+          paragraphFormats: {},
         },
         [],
       ),
@@ -202,6 +204,7 @@ describe('document format drafts', () => {
       emphasis: [{ runId: 'r1', bold: true }],
       paragraphStyles: {},
       numbering: { p1: { numId: '1', ilvl: 1 } },
+      paragraphFormats: {},
     })
     const paragraph = painted.stories[0]?.paragraphs[0]
     expect(paragraph?.runs[0]?.preservedXmlFragments.join('')).toContain(
@@ -214,7 +217,12 @@ describe('document format drafts', () => {
 
   it('indents then outdents using numbering levels', () => {
     const indented = indentList(
-      { emphasis: [], paragraphStyles: {}, numbering: {} },
+      {
+        emphasis: [],
+        paragraphStyles: {},
+        numbering: {},
+        paragraphFormats: {},
+      },
       model,
       model.stories[0]?.paragraphs[0] ?? {
         id: 'p1',
@@ -261,6 +269,7 @@ describe('document format drafts', () => {
       emphasis: [],
       paragraphStyles: {},
       numbering: { p1: { numId: '1', ilvl: 1 } },
+      paragraphFormats: {},
     })
     const fragments =
       painted.stories[0]?.paragraphs[0]?.preservedXmlFragments ?? []
@@ -386,6 +395,7 @@ describe('formatControlState from the selection', () => {
       emphasis: [{ paragraphId: 'p1', from: 4, to: 13, bold: false }],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     }
     expect(
       formatControlState(source, format, 'p1', [
@@ -417,6 +427,7 @@ describe('formatControlState from the selection', () => {
       emphasis: [{ paragraphId: 'p1', from: 4, to: 13, bold: true }],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     }
     expect(
       formatControlState(source, format, 'p1', [
@@ -448,6 +459,7 @@ describe('formatControlState from the selection', () => {
       emphasis: [{ paragraphId: 'p1', from: 5, to: 6, bold: true }],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     }
     // The stored paragraph ends at offset 5: without the drafts this cover is
     // empty and every flag reads false while the screen paints bold.
@@ -552,6 +564,7 @@ describe('character formatting controls', () => {
           ],
           paragraphStyles: {},
           numbering: {},
+          paragraphFormats: {},
         },
         [],
       ),
@@ -586,6 +599,7 @@ describe('character formatting controls', () => {
       ],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     })
     const fragments = (
       painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
@@ -616,6 +630,7 @@ describe('character formatting controls', () => {
         ],
         paragraphStyles: {},
         numbering: {},
+        paragraphFormats: {},
       },
     )
     const fragments = (
@@ -798,6 +813,7 @@ describe('font formatting controls', () => {
           ],
           paragraphStyles: {},
           numbering: {},
+          paragraphFormats: {},
         },
         [],
       ),
@@ -834,6 +850,7 @@ describe('font formatting controls', () => {
       ],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     })
     const fragments = (
       painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
@@ -860,6 +877,7 @@ describe('font formatting controls', () => {
       emphasis: [{ runId: 'r1', fontFamily: 'Georgia' }],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     })
     const fragment = (
       painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
@@ -898,6 +916,7 @@ describe('font formatting controls', () => {
       ],
       paragraphStyles: {},
       numbering: {},
+      paragraphFormats: {},
     })
     const fragments = (
       painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
@@ -1049,6 +1068,8 @@ describe('document-format-edits module size', () => {
       './document-format-controls.ts',
       './document-format-toolbar.ts',
       './document-format-types.ts',
+      './document-paragraph-format.ts',
+      './document-draft-paragraph-format.ts',
       './document-draft-store.ts',
       './document-draft-identity.ts',
       './document-history-caret.ts',
@@ -1059,6 +1080,7 @@ describe('document-format-edits module size', () => {
       './components/document-workspace/toolbar-emphasis-state.test.tsx',
       './components/document-workspace/toolbar-character-formatting.test.tsx',
       './components/document-workspace/toolbar-font-formatting.test.tsx',
+      './components/document-workspace/toolbar-paragraph-formatting.test.tsx',
       './components/document-workspace/model-page-blocks.tsx',
       './components/document-workspace/model-paragraph.tsx',
       './components/document-workspace/model-run.tsx',

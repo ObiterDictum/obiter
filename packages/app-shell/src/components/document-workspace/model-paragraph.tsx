@@ -262,6 +262,7 @@ export function ModelParagraph({
       wrapWidthPx={wrapWidthPx}
       selection={paintSelection}
       carets={carets}
+      continuation={continuation}
     />
   )
 

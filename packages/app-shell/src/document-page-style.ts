@@ -41,6 +41,8 @@ export type ParagraphFace = {
   indentLeftPx?: number
   indentRightPx?: number
   indentFirstPx?: number
+  /** A hanging indent: the first line hangs left of the body indent. */
+  indentHangingPx?: number
   keepNext?: boolean
   keepLines?: boolean
   widowControl?: boolean
@@ -150,7 +152,11 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
     textAlign: face.align,
     paddingLeft: face.indentLeftPx,
     paddingRight: face.indentRightPx,
-    textIndent: face.indentFirstPx,
+    textIndent: face.indentFirstPx
+      ? face.indentFirstPx
+      : face.indentHangingPx
+        ? -face.indentHangingPx
+        : undefined,
     fontWeight:
       face.run.bold === undefined ? undefined : face.run.bold ? 700 : 400,
     fontStyle:
@@ -237,6 +243,7 @@ function faceFromXml(xml: string): ParagraphFace {
     indentLeftPx: twipPx(xmlNumber(ind, 'left')),
     indentRightPx: twipPx(xmlNumber(ind, 'right')),
     indentFirstPx: twipPx(xmlNumber(ind, 'firstLine')),
+    indentHangingPx: twipPx(xmlNumber(ind, 'hanging')),
     keepNext: wordFlag(pPr, 'keepNext'),
     keepLines: wordFlag(pPr, 'keepLines'),
     widowControl: wordFlag(pPr, 'widowControl'),
@@ -290,6 +297,7 @@ function mergeParagraph(...faces: ParagraphFace[]): ParagraphFace {
       indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
       indentRightPx: next.indentRightPx ?? current.indentRightPx,
       indentFirstPx: next.indentFirstPx ?? current.indentFirstPx,
+      indentHangingPx: next.indentHangingPx ?? current.indentHangingPx,
       keepNext: next.keepNext ?? current.keepNext,
       keepLines: next.keepLines ?? current.keepLines,
       widowControl: next.widowControl ?? current.widowControl,

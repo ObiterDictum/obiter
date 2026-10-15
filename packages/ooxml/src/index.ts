@@ -44,7 +44,10 @@ export * from './equivalence'
 export * from './model'
 export * from './model-run-range-edits'
 export type { RunEmphasis } from './model-property-edits'
-export { patchRunEmphasisXml } from './model-property-edits'
+export {
+  patchRunEmphasisXml,
+  patchParagraphFormatXml,
+} from './model-property-edits'
 export * from './model-json'
 export * from './parse'
 export * from './serialise'
