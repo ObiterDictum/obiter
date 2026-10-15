@@ -385,7 +385,12 @@ describe('documentStructureToolbar', () => {
       cellParagraphIds: storyTableCellIds(documentStory(baseModel)),
       offset: 2,
       selectionActive: false,
+      selectionRange: null,
+      deletedParagraphIds: new Set<string>(),
       trackChanges: false,
+      structures,
+      drafts: {},
+      extraRuns: {},
       setStructures: (update) => {
         structures.push(...update([]))
       },

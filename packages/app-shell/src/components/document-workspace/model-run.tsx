@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
@@ -8,10 +8,12 @@ import type {
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import {
+  paragraphPlainText,
   runChangeKinds,
   sliceParagraphRuns,
   type RunSlice,
 } from '../../document-model-text'
+import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
 import type { WrappedLine } from '../../document-page-flow'
 import { readableRunColor } from '../../document-page-media'
 import { runNoteRefs } from '../../document-page-notes'
@@ -27,6 +29,23 @@ import type { ParagraphFace } from '../../document-page-style'
 export const SELECTION_PAINT = '#b8d4f5'
 
 export type ParagraphSelectionRange = { from: number; to: number }
+
+/**
+ * A pending hyperlink painted over the text it covers, in paragraph-model
+ * offsets. `target` rides along for the tooltip; the paint is a styled range
+ * inside the text flow, so it aligns exactly like a selected range.
+ */
+export type ParagraphLinkRange = { from: number; to: number; target: string }
+
+/**
+ * A pending cross-reference: a zero-width marker anchored at `offset`. It
+ * contributes no characters — the label reads the resolved target's text so
+ * the chip shows what the saved field will say without entering the
+ * editable stream.
+ */
+export type ParagraphFieldMarker = { offset: number; label: string }
+
+type LinkOverlay = ParagraphLinkOverlay
 
 /**
  * Paints one paragraph's runs, marking the part a document selection covers.
@@ -49,6 +68,7 @@ export function ParagraphRunPaint({
   linePx,
   wrapWidthPx,
   selection,
+  linkOverlay,
   carets = [],
   continuation = false,
 }: {
@@ -63,10 +83,15 @@ export function ParagraphRunPaint({
   linePx: number
   wrapWidthPx?: number
   selection?: ParagraphSelectionRange
+  linkOverlay?: LinkOverlay
   carets?: DocumentPresence[]
   /** True when this block resumes a paragraph split across a page break. */
   continuation?: boolean
 }) {
+  // A marker exactly at a slice's end belongs to the next slice — except at
+  // the paragraph's own end, where nothing follows. The block end alone
+  // cannot tell the two apart, so the paragraph's full length is the rule.
+  const paragraphEnd = paragraphPlainText(paragraph).length
   const paint = (slices: RunSlice[]) => {
     if (slices.length === 0) {
       return (
@@ -85,6 +110,8 @@ export function ParagraphRunPaint({
         text={text}
         from={from}
         selection={selection}
+        linkOverlay={linkOverlay}
+        paragraphEnd={paragraphEnd}
         paragraphFace={face}
         changes={changes}
         styles={styles}
@@ -128,6 +155,8 @@ function ModelRun({
   text,
   from,
   selection,
+  linkOverlay,
+  paragraphEnd,
   paragraphFace,
   changes,
   styles,
@@ -138,6 +167,8 @@ function ModelRun({
   text: string
   from: number
   selection?: ParagraphSelectionRange
+  linkOverlay?: LinkOverlay
+  paragraphEnd: number
   paragraphFace: ParagraphFace
   changes: DocumentChangeWire[]
   styles: DocumentStyleWire[]
@@ -174,7 +205,14 @@ function ModelRun({
       style={runCss({ ...face, color })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      {selectedParts(text, from, selection)}
+      {rangedParts(
+        text,
+        from,
+        paragraphEnd,
+        selection,
+        linkOverlay,
+        run.hyperlinkTarget,
+      )}
       {notes.map((note) => (
         <sup
           key={`${note.kind}-${note.noteId}-${note.runId}`}
@@ -188,24 +226,114 @@ function ModelRun({
   )
 }
 
-/** Splits a run slice into the unselected and selected parts of the range. */
-function selectedParts(
+/**
+ * Splits a run slice at every overlay boundary — the document selection,
+ * pending hyperlink ranges and pending field markers — and paints each
+ * piece with the overlays that cover it. Every boundary becomes a cut, so a
+ * piece is either wholly covered by an overlay or wholly outside it; markers
+ * anchor at their cut as zero-width spans that shift no glyph.
+ */
+function rangedParts(
   text: string,
   from: number,
+  paragraphEnd: number,
   selection?: ParagraphSelectionRange,
+  overlay?: LinkOverlay,
+  storedLinkTarget?: string,
 ) {
-  if (!selection) return text
-  const start = Math.max(0, Math.min(selection.from - from, text.length))
-  const end = Math.max(0, Math.min(selection.to - from, text.length))
-  if (start >= end) return text
+  const markers = overlay?.fieldMarkers
+  // A stored w:hyperlink wraps whole runs, so the run's target covers this
+  // slice end to end; pending link drafts keep their explicit ranges and win
+  // where the two overlap.
+  const links = [
+    ...(overlay?.links ?? []),
+    ...(storedLinkTarget
+      ? [{ from, to: from + text.length, target: storedLinkTarget }]
+      : []),
+  ]
+  if (!selection && links.length === 0 && !markers?.length) return text
+  const clamp = (offset: number) =>
+    Math.max(0, Math.min(offset - from, text.length))
+  const cuts = new Set<number>([0, text.length])
+  if (selection) {
+    cuts.add(clamp(selection.from))
+    cuts.add(clamp(selection.to))
+  }
+  for (const link of links) {
+    cuts.add(clamp(link.from))
+    cuts.add(clamp(link.to))
+  }
+  const markerOffsets = new Map<number, ParagraphFieldMarker[]>()
+  for (const marker of markers ?? []) {
+    const local = marker.offset - from
+    // A marker at the slice's start is this slice's; at its end it belongs
+    // to the next slice — unless the slice reaches the paragraph's end.
+    if (local < 0 || local >= text.length) {
+      if (local !== text.length || from + local !== paragraphEnd) continue
+    }
+    cuts.add(local)
+    const list = markerOffsets.get(local) ?? []
+    list.push(marker)
+    markerOffsets.set(local, list)
+  }
+  const boundaries = [...cuts].sort((a, b) => a - b)
+  const nodes: ReactNode[] = []
+  const chipsAt = (local: number) =>
+    (markerOffsets.get(local) ?? []).map((marker, index) => (
+      <FieldMarkerAnchor
+        key={`marker-${from + local}-${index}`}
+        label={marker.label}
+      />
+    ))
+  nodes.push(...chipsAt(0))
+  for (let index = 0; index < boundaries.length - 1; index += 1) {
+    const a = boundaries[index] ?? 0
+    const b = boundaries[index + 1] ?? text.length
+    const piece = text.slice(a, b)
+    const selected =
+      selection !== undefined &&
+      from + a >= selection.from &&
+      from + b <= selection.to
+    const link = links.find(
+      (item) => from + a >= item.from && from + b <= item.to,
+    )
+    if (selected || link) {
+      nodes.push(
+        <span
+          key={`part-${a}`}
+          data-selected-text={selected ? 'true' : undefined}
+          data-link-target={link ? link.target : undefined}
+          title={link ? link.target : undefined}
+          className={
+            link
+              ? 'rounded-[1px] text-[#2c4a73] underline decoration-[#2c4a73]'
+              : 'rounded-[1px]'
+          }
+          style={selected ? selectedStyle : undefined}
+        >
+          {piece}
+        </span>,
+      )
+    } else if (piece.length > 0) {
+      nodes.push(piece)
+    }
+    nodes.push(...chipsAt(b))
+  }
+  return nodes
+}
+
+/** The chip's anchor: zero width in flow, so no painted glyph moves. */
+function FieldMarkerAnchor({ label }: { label: string }) {
   return (
-    <>
-      {text.slice(0, start)}
-      <span data-selected-text className="rounded-[1px]" style={selectedStyle}>
-        {text.slice(start, end)}
+    <span className="relative inline-block w-0">
+      <span
+        data-field-marker
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-[1.6em] left-0 z-10 max-w-48 truncate whitespace-nowrap rounded border border-[#7a9cc6] bg-[#eef3fb] px-1 text-[0.6em] leading-4 text-[#2c4a73]"
+      >
+        {label}
       </span>
-      {text.slice(end)}
-    </>
+    </span>
   )
 }
 

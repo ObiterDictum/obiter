@@ -12,9 +12,13 @@ import {
   type DraftSlot,
   type DraftState,
 } from './document-draft-state'
-import { emphasisSlotKey } from './document-save-slots'
+import { emphasisSlotKey, slotLabel } from './document-save-slots'
 import { sectionDraftFields } from './document-section-format'
 import { documentStory } from './document-model-text'
+import {
+  conflictingStructure,
+  structuralKindNoun,
+} from './document-structure-conflicts'
 
 export {
   emptyDraftState,
@@ -186,11 +190,37 @@ export function planDocumentSave(
       )
       .map((paragraph) => paragraph.id),
   )
+  const paragraphWires = new Map(
+    (story?.paragraphs ?? []).map((paragraph) => [paragraph.id, paragraph]),
+  )
   for (const structure of state.structures) {
     const deletedAnchor =
       keep.deletedParagraphIds.includes(structure.paragraphId) ||
       replacedEmptyAnchors.has(structure.paragraphId)
-    if (!paragraphIds.has(structure.paragraphId) || deletedAnchor) {
+    const missingTarget =
+      structure.kind === 'cross-reference' &&
+      (!paragraphIds.has(structure.targetParagraphId) ||
+        keep.deletedParagraphIds.includes(structure.targetParagraphId))
+    // Same-paragraph pairs a writer cannot compose (a link rewrites whole
+    // runs; a field splice poisons its run for a second splice) are held back
+    // like `replacedEmptyAnchors`, so they are disclosed rather than failing
+    // the whole request.
+    const wire = paragraphWires.get(structure.paragraphId)
+    const conflicting = wire
+      ? conflictingStructure(
+          wire,
+          keep.drafts,
+          keep.extraRuns[structure.paragraphId] ?? [],
+          keep.structures,
+          structure,
+        )
+      : undefined
+    if (
+      !paragraphIds.has(structure.paragraphId) ||
+      deletedAnchor ||
+      missingTarget ||
+      conflicting
+    ) {
       blocked.push({
         slot: {
           kind: 'structure',
@@ -198,10 +228,19 @@ export function planDocumentSave(
           id: structure.id,
           structureKind: structure.kind,
         },
-        reason: deletedAnchor
-          ? 'The paragraph this was placed after is marked for deletion.'
-          : 'The paragraph this was placed in is no longer in the document.',
-        label: structure.kind === 'table' ? 'a table' : 'a picture',
+        reason: missingTarget
+          ? 'The paragraph this references is no longer in the document.'
+          : deletedAnchor
+            ? 'The paragraph this was placed after is marked for deletion.'
+            : conflicting
+              ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+              : 'The paragraph this was placed in is no longer in the document.',
+        label: slotLabel({
+          kind: 'structure',
+          key: `structure:${structure.id}`,
+          id: structure.id,
+          structureKind: structure.kind,
+        }),
       })
       continue
     }

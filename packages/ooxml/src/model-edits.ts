@@ -11,6 +11,8 @@ import {
   touchParagraph,
   type LineageRecorder,
 } from './document-lineage'
+import { insertCrossReference } from './cross-reference-edits'
+import { setHyperlink } from './hyperlink-edits'
 import { insertImage } from './image-edits'
 import {
   isSectionOperation,
@@ -99,6 +101,7 @@ export function applyDocumentEdits(
   // separator decision distinct and each image's splice key unique.
   const tableCounts = new Map<string, number>()
   const imageCounts = new Map<string, number>()
+  const structureCounts = new Map<string, number>()
   // Page-break offsets are accumulated per run, run-local, so multiple breaks
   // on one run materialise as a single replacement instead of overlapping
   // `:text:` writes.
@@ -339,6 +342,35 @@ export function applyDocumentEdits(
           lineage,
         )
         imageCounts.set(key, occurrence + 1)
+      }
+    } else if (operation.type === 'set_hyperlink') {
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = structureCounts.get(key) ?? 0
+        setHyperlink(
+          document,
+          operation.paragraph,
+          operation,
+          occurrence,
+          lineage,
+        )
+        structureCounts.set(key, occurrence + 1)
+      }
+    } else if (operation.type === 'insert_cross_reference') {
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = structureCounts.get(key) ?? 0
+        insertCrossReference(
+          document,
+          operation.paragraph,
+          operation.targetParagraph,
+          operation.offset,
+          occurrence,
+          lineage,
+        )
+        structureCounts.set(key, occurrence + 1)
       }
     } else {
       throw new OoxmlError('invalid-document-edit')

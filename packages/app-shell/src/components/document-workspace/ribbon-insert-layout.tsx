@@ -25,6 +25,8 @@ import {
   SECTION_MARGINS_OPTIONS,
 } from '../../document-section-format'
 import { InsertTableDialog } from './insert-table-dialog'
+import { InsertLinkDialog } from './insert-link-dialog'
+import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
 import type {
   DocumentFormatToolbar,
   DocumentStructureToolbar,
@@ -71,6 +73,8 @@ export function InsertRibbon({
 }) {
   const breaksDisabled = Boolean(breakUnavailable)
   const [tableOpen, setTableOpen] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
   return (
     <div
       className="flex min-w-0 flex-wrap items-stretch"
@@ -116,10 +120,20 @@ export function InsertRibbon({
       </ToolbarGroup>
       <ToolbarGroup label="Links">
         <ToolbarRow>
-          <IconButton label="Link" soon icon={<Link size={16} aria-hidden />} />
+          <IconButton
+            label="Link"
+            disabled={!structure || Boolean(structure.linkUnavailable)}
+            disabledReason={structure?.linkUnavailable}
+            onClick={() => setLinkOpen(true)}
+            icon={<Link size={16} aria-hidden />}
+          />
           <IconButton
             label="Cross-reference"
-            soon
+            disabled={
+              !structure || Boolean(structure.crossReferenceUnavailable)
+            }
+            disabledReason={structure?.crossReferenceUnavailable}
+            onClick={() => setCrossReferenceOpen(true)}
             icon={<LinkSimple size={16} aria-hidden />}
           />
         </ToolbarRow>
@@ -155,6 +169,27 @@ export function InsertRibbon({
         open={tableOpen}
         onOpenChange={setTableOpen}
         onInsert={(rows, columns) => structure?.onInsertTable(rows, columns)}
+      />
+      <InsertLinkDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        onInsert={(target) =>
+          structure?.onInsertLink(target) ?? {
+            inserted: false,
+            reason: 'The document is still loading.',
+          }
+        }
+      />
+      <InsertCrossReferenceDialog
+        open={crossReferenceOpen}
+        onOpenChange={setCrossReferenceOpen}
+        targets={structure?.crossReferenceTargets ?? []}
+        onInsert={(targetParagraphId) =>
+          structure?.onInsertCrossReference(targetParagraphId) ?? {
+            inserted: false,
+            reason: 'The document is still loading.',
+          }
+        }
       />
     </div>
   )

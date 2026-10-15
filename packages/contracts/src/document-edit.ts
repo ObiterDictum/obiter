@@ -7,8 +7,10 @@ import {
   editIdSchema,
 } from './document-edit-shared'
 import {
+  insertCrossReferenceOperationSchema,
   insertImageOperationSchema,
   insertTableOperationSchema,
+  setHyperlinkOperationSchema,
 } from './document-edit-structural'
 
 export {
@@ -478,6 +480,8 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     .strict(),
   insertTableOperationSchema,
   insertImageOperationSchema,
+  setHyperlinkOperationSchema,
+  insertCrossReferenceOperationSchema,
 ])
 export type DocumentEditOperation = z.infer<typeof documentEditOperationSchema>
 

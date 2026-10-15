@@ -1,6 +1,14 @@
 import type { DocumentModelWire } from '@obiter/contracts'
+import type { ParagraphRange } from './document-format-toolbar'
 import { documentStory } from './document-model-text'
 import {
+  conflictingStructure,
+  structuralKindNoun,
+  type StructuralPlacement,
+} from './document-structure-conflicts'
+import type { ExtraRuns } from './document-word-edits'
+import {
+  crossReferenceTargetLabel,
   structuralDraftSchema,
   type ImageInsertFields,
   type StructuralDraft,
@@ -38,7 +46,12 @@ export function documentStructureToolbar({
   cellParagraphIds,
   offset,
   selectionActive,
+  selectionRange,
+  deletedParagraphIds,
   trackChanges,
+  structures,
+  drafts,
+  extraRuns,
   setStructures,
 }: {
   paragraphId: string | null
@@ -53,10 +66,38 @@ export function documentStructureToolbar({
   /** The caret's effective-text offset, or null when unresolved. */
   offset: number | null
   selectionActive: boolean
+  /** The selection's range when it sits inside exactly one paragraph. */
+  selectionRange: ParagraphRange | null
+  /** Paragraphs marked for deletion, so a chooser never offers one. */
+  deletedParagraphIds: ReadonlySet<string>
   trackChanges: boolean
+  /** The drafts already held, so a second structural change in the same
+   * paragraph is refused up front rather than blocked at save. */
+  structures: StructuralDraft[]
+  drafts: Record<string, string>
+  extraRuns: ExtraRuns
   setStructures: SetStructures
 }) {
   const story = model ? documentStory(model) : undefined
+  // The same run-level rule the save plan enforces: the reason names the
+  // earlier draft a candidate cannot compose with.
+  const conflictWith = (candidate: StructuralPlacement) => {
+    const wire = story?.paragraphs.find(
+      (paragraph) => paragraph.id === candidate.paragraphId,
+    )
+    const earlier = wire
+      ? conflictingStructure(
+          wire,
+          drafts,
+          extraRuns[candidate.paragraphId] ?? [],
+          structures,
+          candidate,
+        )
+      : undefined
+    return earlier
+      ? `The paragraph already holds a ${structuralKindNoun(earlier.kind)} this cannot be combined with.`
+      : undefined
+  }
   const anchor = story?.paragraphs.some(
     (paragraph) => paragraph.id === paragraphId,
   )
@@ -75,13 +116,51 @@ export function documentStructureToolbar({
     (inTableCell ? 'A table cell cannot hold a table' : undefined)
   const pictureUnavailable =
     baseUnavailable ??
-    (offset == null
+    (offset == null || !paragraphId
       ? 'Place the cursor in the paragraph text to insert a picture'
-      : undefined)
+      : conflictWith({ kind: 'image', paragraphId, offset }))
+  // A link is the inverse of an insertion: it needs a live selection over a
+  // single stored paragraph rather than a collapsed caret.
+  const linkUnavailable = trackChanges
+    ? 'A link is not recorded as a tracked change'
+    : !selectionRange
+      ? selectionActive
+        ? 'Select text within one paragraph to link'
+        : 'Select the text to link'
+      : !story?.paragraphs.some(
+            (paragraph) => paragraph.id === selectionRange.paragraphId,
+          )
+        ? 'Save the new paragraph before linking its text'
+        : conflictWith({
+            kind: 'link',
+            paragraphId: selectionRange.paragraphId,
+            from: selectionRange.from,
+            to: selectionRange.to,
+          })
+  const crossReferenceUnavailable =
+    baseUnavailable ??
+    (offset == null || !paragraphId
+      ? 'Place the cursor in the paragraph text to insert a cross-reference'
+      : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
+  // A bookmark can wrap any stored paragraph, including a table cell's, so the
+  // chooser lists the whole story minus paragraphs marked for deletion — and
+  // minus the host paragraph, whose bookmark would wrap the field itself.
+  const crossReferenceTargets = (story?.paragraphs ?? [])
+    .filter(
+      (paragraph) =>
+        paragraph.id !== paragraphId && !deletedParagraphIds.has(paragraph.id),
+    )
+    .map((paragraph) => ({
+      id: paragraph.id,
+      label: crossReferenceTargetLabel(model, paragraph.id),
+    }))
 
   return {
     tableUnavailable,
     pictureUnavailable,
+    linkUnavailable,
+    crossReferenceUnavailable,
+    crossReferenceTargets,
     insertTable(rows: number, columns: number) {
       if (tableUnavailable || !paragraphId) return
       setStructures((current) => [
@@ -110,6 +189,67 @@ export function documentStructureToolbar({
         return {
           inserted: false,
           reason: 'That image cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
+    },
+    insertLink(target: string): StructuralInsertOutcome {
+      if (linkUnavailable || !selectionRange) {
+        return {
+          inserted: false,
+          reason: linkUnavailable ?? 'No text selected',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'link',
+        paragraphId: selectionRange.paragraphId,
+        from: selectionRange.from,
+        to: selectionRange.to,
+        target,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'Enter an http, https or mailto address.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return { inserted: true }
+    },
+    insertCrossReference(targetParagraphId: string): StructuralInsertOutcome {
+      if (crossReferenceUnavailable || !paragraphId || offset == null) {
+        return {
+          inserted: false,
+          reason: crossReferenceUnavailable ?? 'No anchor',
+        }
+      }
+      if (targetParagraphId === paragraphId) {
+        return {
+          inserted: false,
+          reason: 'A reference cannot point at the paragraph holding it.',
+        }
+      }
+      if (
+        !crossReferenceTargets.some((target) => target.id === targetParagraphId)
+      ) {
+        return {
+          inserted: false,
+          reason: 'That reference target is no longer available.',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'cross-reference',
+        paragraphId,
+        offset,
+        targetParagraphId,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That reference cannot be held as a draft.',
         }
       }
       setStructures((current) => [...current, draft])

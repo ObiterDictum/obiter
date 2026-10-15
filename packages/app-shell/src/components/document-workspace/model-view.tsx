@@ -18,6 +18,7 @@ import { marginBandHeights } from '../../document-page-margin'
 import { storyBlocks } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
+import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
 import { documentListMarkers } from '../../document-page-lists'
 import { documentNotes } from '../../document-page-notes'
 import {
@@ -75,6 +76,7 @@ export function DocumentModelPage({
   pageLayout,
   pageNumber = 1,
   selectionSegments = new Map(),
+  linkOverlays,
   selectionHandlers,
   onFocusParagraph,
   onMoveCaret,
@@ -120,6 +122,8 @@ export function DocumentModelPage({
   }
   pageNumber?: number
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
+  /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
+  linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
@@ -320,6 +324,7 @@ export function DocumentModelPage({
                   storyOf,
                   columnWidthPx: column.widthPx,
                   selectionSegments,
+                  linkOverlays,
                   selectionHandlers,
                   neighbors,
                   onFocusParagraph,
