@@ -110,9 +110,7 @@ export function effectiveRunView(
 export function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
   const { start, end } = run.runRange
   const replacements = [...overlay.replacements.entries()]
-    .filter(
-      ([, replacement]) => replacement.start >= start && replacement.end <= end,
-    )
+    .filter(([, replacement]) => insideRunRange(replacement, start, end))
     .sort((left, right) => left[1].start - right[1].start)
   let cursor = start
   let result = ''
@@ -143,13 +141,30 @@ export function runHasPendingOverlay(overlay: XmlOverlay, run: TextRunAnchor) {
   const { start, end } = run.runRange
   for (const [key, replacement] of overlay.replacements) {
     if (key.startsWith(`${run.wire.id}:`)) return true
-    if (
-      replacement.start >= start &&
-      replacement.end <= end &&
-      replacement.start < end
-    ) {
+    if (insideRunRange(replacement, start, end) && replacement.start < end) {
       return true
     }
   }
   return false
+}
+
+/**
+ * Whether a pending replacement's range lands inside the run's source. A
+ * zero-width insertion exactly at either boundary — a paragraph-level
+ * bookmark marker or splice point — sits before or after the element rather
+ * than inside it, so it neither marks the run rewritten nor folds into its
+ * materialised XML.
+ */
+function insideRunRange(
+  replacement: { start: number; end: number },
+  start: number,
+  end: number,
+) {
+  if (
+    replacement.start === replacement.end &&
+    (replacement.start === start || replacement.start === end)
+  ) {
+    return false
+  }
+  return replacement.start >= start && replacement.end <= end
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 
 import {
+  DOCUMENT_EDIT_HYPERLINK_TARGET_MAX_LENGTH,
   DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH,
   DOCUMENT_EDIT_IMAGE_DIMENSION_MAX,
   DOCUMENT_EDIT_IMAGE_NAME_MAX_LENGTH,
@@ -27,6 +28,21 @@ const image = {
   widthPx: 120,
   heightPx: 80,
   name: 'Figure 1',
+}
+
+const hyperlink = {
+  type: 'set_hyperlink' as const,
+  paragraphId: 'para_1',
+  from: 2,
+  to: 7,
+  target: 'https://example.co.uk/authority',
+}
+
+const crossReference = {
+  type: 'insert_cross_reference' as const,
+  paragraphId: 'para_1',
+  offset: 4,
+  targetParagraphId: 'para_2',
 }
 
 const parse = (operations: unknown[]) =>
@@ -132,5 +148,48 @@ describe('structural edit contracts', () => {
     ] as const) {
       expect(parse([{ ...image, contentType }]).success).toBe(true)
     }
+  })
+
+  it('accepts a hyperlink set, a hyperlink removal and a cross-reference', () => {
+    const parsed = parse([
+      hyperlink,
+      { ...hyperlink, target: null },
+      crossReference,
+      { ...hyperlink, target: 'mailto:clerk@example.co.uk' },
+    ])
+    expect(parsed.success).toBe(true)
+  })
+
+  it.each([
+    ['a javascript URL', { ...hyperlink, target: 'javascript:alert(1)' }],
+    ['a data URL', { ...hyperlink, target: 'data:text/html,<b>x</b>' }],
+    ['a file URL', { ...hyperlink, target: 'file:///etc/passwd' }],
+    ['a relative path', { ...hyperlink, target: '/authorities/1' }],
+    ['no scheme', { ...hyperlink, target: 'example.co.uk' }],
+    ['a missing mailto path', { ...hyperlink, target: 'mailto:' }],
+    ['a missing http host', { ...hyperlink, target: 'https://' }],
+    ['an empty target', { ...hyperlink, target: '' }],
+    [
+      'an overlong target',
+      {
+        ...hyperlink,
+        target: `https://example.co.uk/${'a'.repeat(DOCUMENT_EDIT_HYPERLINK_TARGET_MAX_LENGTH)}`,
+      },
+    ],
+    ['a reversed range', { ...hyperlink, from: 7, to: 2 }],
+    ['an empty range', { ...hyperlink, from: 4, to: 4 }],
+    ['a negative offset', { ...hyperlink, from: -1 }],
+    ['an extra field', { ...hyperlink, anchor: 'rId1' }],
+  ])('rejects a hyperlink with %s', (_label, operation) => {
+    expect(parse([operation]).success).toBe(false)
+  })
+
+  it.each([
+    ['a negative offset', { ...crossReference, offset: -1 }],
+    ['a fractional offset', { ...crossReference, offset: 1.5 }],
+    ['a missing target', { ...crossReference, targetParagraphId: '' }],
+    ['an extra field', { ...crossReference, bookmark: 'x' }],
+  ])('rejects a cross-reference with %s', (_label, operation) => {
+    expect(parse([operation]).success).toBe(false)
   })
 })

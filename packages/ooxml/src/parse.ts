@@ -20,6 +20,7 @@ import {
 } from './parts/rels'
 import { parseStory, type IdentityContext } from './parts/stories'
 import { parseStyles } from './parts/styles'
+import { HYPERLINK_RELATIONSHIP_TYPE } from './structure-xml'
 
 const CONTENT_TYPES_PART = '[Content_Types].xml'
 const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -96,7 +97,24 @@ function parseParts(
     const part = sourceParts.get(partName)
     if (!part || part.kind !== 'xml') continue
     const source = decodePart(part)
-    const parsed = parseStory(partName, kind, source, identity)
+    // Hyperlink `r:id`s resolve on the part that owns the story, so the map
+    // is scoped to its own relationships and to no other kind.
+    const hyperlinkTargets = new Map(
+      relationships
+        .filter(
+          (relationship) =>
+            relationship.sourcePartName === partName &&
+            relationship.type === HYPERLINK_RELATIONSHIP_TYPE,
+        )
+        .map((relationship) => [relationship.id, relationship.target]),
+    )
+    const parsed = parseStory(
+      partName,
+      kind,
+      source,
+      identity,
+      hyperlinkTargets,
+    )
     part.role = 'story'
     part.overlay = createXmlOverlay(source)
     part.trackedChanges = parsed.trackedChanges

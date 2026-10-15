@@ -26,10 +26,21 @@ export function planOperation(
     operation.type === 'insert_break' ||
     operation.type === 'insert_section_break' ||
     operation.type === 'insert_table' ||
-    operation.type === 'insert_image'
+    operation.type === 'insert_image' ||
+    operation.type === 'set_hyperlink'
   ) {
     const paragraph = requireMainParagraph(document, operation.paragraphId)
     return { ...operation, paragraph }
+  }
+  if (operation.type === 'insert_cross_reference') {
+    return {
+      ...operation,
+      paragraph: requireMainParagraph(document, operation.paragraphId),
+      targetParagraph: requireMainParagraph(
+        document,
+        operation.targetParagraphId,
+      ),
+    }
   }
   if (operation.type === 'set_run_emphasis') {
     const runId = operation.runId

@@ -180,6 +180,10 @@ function foldStory(
       changed = true
       continue
     }
+    // A link or cross-reference folds nothing into the model: the link is an
+    // overlay range and the field paints as a zero-width marker, both read
+    // straight from the draft state by `structuralLinkOverlays`.
+    if (draft.kind !== 'image') continue
     const paragraph = paragraphs.find((item) => item.id === draft.paragraphId)
     if (!paragraph) continue
     const relId = nextRelationshipId(draft)

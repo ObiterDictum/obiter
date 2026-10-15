@@ -14,6 +14,7 @@ import {
 } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
+import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
 import {
   contrastFillText,
   imagePartNameForDrawing,
@@ -70,6 +71,8 @@ export type BlockContext = {
   storyOf: (paragraphId: string) => { kind: string; partName: string }
   columnWidthPx: number
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
+  /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
+  linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
   neighbors?: ParagraphNeighborResolver
   onFocusParagraph?: (paragraphId: string) => void
@@ -136,6 +139,7 @@ export function renderBlock(
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
                 story={ctx.storyOf(paragraph.id)}
+                linkOverlay={ctx.linkOverlays?.get(paragraph.id)}
               />,
             ]
           })
@@ -210,6 +214,7 @@ export function renderBlock(
       noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
       story={ctx.storyOf(paragraph.id)}
+      linkOverlay={ctx.linkOverlays?.get(paragraph.id)}
     />,
   ]
 }

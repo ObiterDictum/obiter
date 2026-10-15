@@ -223,7 +223,13 @@ export function slotLabel(slot: DraftSlot): string {
     case 'break':
       return slot.breakKind === 'page' ? 'a page break' : 'a section break'
     case 'structure':
-      return slot.structureKind === 'table' ? 'a table' : 'a picture'
+      return slot.structureKind === 'table'
+        ? 'a table'
+        : slot.structureKind === 'image'
+          ? 'a picture'
+          : slot.structureKind === 'link'
+            ? 'a hyperlink'
+            : 'a cross-reference'
     case 'tracked-reject':
       return 'a tracked change'
   }
