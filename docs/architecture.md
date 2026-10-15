@@ -1409,6 +1409,43 @@ formatting. Whole-run emphasis under tracking is unchanged.
 Rejected: a per-control formatting store; a colour picker for highlight; new
 `set_run_emphasis` operation types for the new properties.
 
+Superseded for Font family, Font size, Font colour and Clear formatting by the
+5 October 2026 entry below.
+
+### Home character formatting: font family, size, colour, clear formatting (5 October 2026)
+
+Context: the 28 September entry left Font family, Font size, Font colour and
+Clear formatting as placeholders. The contract's `runPropertyFields` already
+carried `fontFamily`, `fontSize`, `colour` and `smallCaps` on
+`set_run_emphasis`, and the OOXML writer already applied them untracked and
+inside `w:rPrChange`, but the client `EmphasisPatch`, the paint projection and
+the control-state projection omitted them, so wiring the controls would have
+painted a value no save carried.
+
+Decision: extend the existing one formatting owner again. `EmphasisPatch`, the
+paint projection and `collectFormatOperations` carry the four properties;
+`formatControlState` reads the value every covered run agrees on, so a mixed or
+unset selection reads the placeholder option and one choice makes it uniform;
+the Home controls are select-backed for font family, size and colour. Clear
+formatting writes every direct character property as an explicit `null` through
+the same `set_run_emphasis`, releasing them so the run inherits its style, and
+is one history step. No second formatting owner and no new operation type.
+
+Semantics: font size is Word half-points, the contract's unit (the select label
+shows points); colour is the contract's `auto` or six hex digits. The paint
+writes the same XML the server's `patchRunEmphasisXml` writes — `rFonts` with
+`ascii` and `hAnsi`, `sz` and `szCs` together, `color` — so paint and save
+agree. Clear formatting also clears `smallCaps`, which paint strips even though
+the run face does not colour it.
+
+Tracked changes: unchanged. A tracked partial-range change refuses the font
+controls and Clear formatting with the existing honest message; a whole-run
+change records tracked `rPrChange` as before.
+
+Rejected: a parallel `set_run_properties` type; a custom font-name field or
+colour picker beyond bounded selects; dropping the contract's `smallCaps` from
+clear formatting.
+
 ### Document edit operation batches: one coordinate space (14 September 2026)
 
 Context: `replace_run_text` updates a run's model text but not its source

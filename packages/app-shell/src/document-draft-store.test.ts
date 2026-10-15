@@ -14,11 +14,13 @@ import {
   touchDocumentDraftWriterClaim,
   writeDocumentDraft,
 } from './document-draft-store'
+import { pendingEmphasisSchema } from './document-draft-emphasis'
 import {
   MapStorage,
   scope,
   stateWithText,
 } from './document-draft-store-test-support'
+import { runPropertiesFromFragments } from './document-edits'
 
 describe('document draft keys', () => {
   beforeEach(() => {
@@ -75,6 +77,80 @@ describe('document draft persistence', () => {
     expect(restored.state.drafts).toEqual({ r1: 'hello' })
     expect(restored.state.format.paragraphStyles).toEqual({ p1: 'Heading1' })
     expect(restored.held).toEqual(held)
+  })
+
+  it('round-trips a draft carrying the full character-formatting emphasis', () => {
+    const storage = new MapStorage()
+    const state = stateWithText('hello')
+    state.format.emphasis = [
+      {
+        runId: 'r1',
+        bold: true,
+        italic: false,
+        underline: null,
+        strikethrough: true,
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        highlight: 'yellow',
+        vertAlign: 'superscript',
+        smallCaps: true,
+      },
+    ]
+    expect(
+      writeDocumentDraft(storage, scope, {
+        baseVersionId: 'ver_1',
+        state,
+        held: [],
+      }),
+    ).toBe(true)
+
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    // A schema that rejected any of these keys would fail the parse and delete
+    // the payload, silently destroying the whole unsaved draft.
+    expect(restored.state.format.emphasis).toEqual(state.format.emphasis)
+  })
+
+  it('round-trips a draft whose emphasis came from an out-of-contract run', () => {
+    const storage = new MapStorage()
+    const state = stateWithText('hello')
+    const properties = runPropertiesFromFragments([
+      `<w:rPr><w:rFonts w:ascii="${'A'.repeat(80)}"/><w:sz w:val="4000"/></w:rPr>`,
+    ])
+    // The bounded reader drops only the inherited property, so the emphasis a
+    // reversal builds stays inside the persisted schema.
+    expect(properties.fontFamily).toBeNull()
+    expect(properties.fontSize).toBeNull()
+    state.format.emphasis = [{ runId: 'r1', ...properties }]
+    expect(
+      writeDocumentDraft(storage, scope, {
+        baseVersionId: 'ver_1',
+        state,
+        held: [],
+      }),
+    ).toBe(true)
+
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    expect(restored.state.format.emphasis).toEqual(state.format.emphasis)
+  })
+
+  it('matches the edit contract on font family XML-text validity', () => {
+    expect(
+      pendingEmphasisSchema.safeParse({
+        runId: 'r1',
+        fontFamily: 'A&B',
+      }).success,
+    ).toBe(true)
+    expect(
+      pendingEmphasisSchema.safeParse({
+        runId: 'r1',
+        fontFamily: 'Bad\u0001Name',
+      }).success,
+    ).toBe(false)
   })
 
   it('reports a draft recorded against another stored version as stale and keeps it', () => {

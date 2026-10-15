@@ -58,13 +58,21 @@ describe('DocxWorkspace ribbon', () => {
     expect(screen.getByRole('tab', { name: 'View' })).toBeTruthy()
   })
 
-  it('shows Home font commands that are not wired yet as unavailable', () => {
+  it('wires the Home font commands and keeps the rest unavailable', () => {
     mountWorkspace({})
+    for (const name of ['Font', 'Font size', 'Font colour']) {
+      expect(screen.getByRole('combobox', { name })).toHaveProperty(
+        'disabled',
+        false,
+      )
+    }
     expect(
-      screen.getByRole('combobox', { name: 'Font (not available yet)' }),
-    ).toHaveProperty('disabled', true)
+      screen.getByRole('button', { name: 'Clear formatting' }),
+    ).toHaveProperty('disabled', false)
     expect(
-      screen.getByRole('button', { name: 'Font colour (not available yet)' }),
+      screen.getByRole('combobox', {
+        name: 'Line spacing (not available yet)',
+      }),
     ).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Bullets' })).toHaveProperty(
       'disabled',

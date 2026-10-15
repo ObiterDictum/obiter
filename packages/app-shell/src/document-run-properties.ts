@@ -1,8 +1,11 @@
 import {
+  DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH,
+  DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX,
+  DOCUMENT_EDIT_SIZE_HALF_POINTS_MIN,
   documentEditHighlightSchema,
   documentEditVertAlignSchema,
 } from '@obiter/contracts'
-import { findXmlTagEnd } from '@obiter/ooxml'
+import { decodeXmlReferences, findXmlTagEnd } from '@obiter/ooxml'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 
 /**
@@ -236,4 +239,60 @@ export function runVertAlign(xml: string): VertAlignValue | null {
     documentEditVertAlignSchema.options,
     lowercaseValue(current, prefix, 'vertAlign'),
   )
+}
+
+/** The run's named font, read from `w:rFonts`, or null when it is inherited. */
+export function runFontFamily(xml: string): string | null {
+  const current = withoutTrackedRunProperties(xml)
+  const prefix = xmlPrefix(current)
+  const fonts = tagAttrs(current, prefix, 'rFonts')
+  const raw =
+    wordAttr(fonts, 'ascii', prefix) ?? wordAttr(fonts, 'hAnsi', prefix)
+  if (raw === undefined) return null
+  const decoded = decodeAttributeReferences(raw)
+  return decoded !== null &&
+    decoded.length <= DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH
+    ? decoded
+    : null
+}
+
+/** The run's size in half-points, the unit the edit contract carries. */
+export function runFontSize(xml: string): number | null {
+  const current = withoutTrackedRunProperties(xml)
+  const prefix = xmlPrefix(current)
+  const value = wordAttr(tagAttrs(current, prefix, 'sz'), 'val', prefix)
+  if (value === undefined) return null
+  const size = Number(value)
+  return Number.isInteger(size) &&
+    size >= DOCUMENT_EDIT_SIZE_HALF_POINTS_MIN &&
+    size <= DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX
+    ? size
+    : null
+}
+
+/**
+ * Decodes XML attribute references, returning null when the value is not a
+ * well-formed attribute value. The reference decoder is the shared OOXML lexer
+ * one; a malformed reference is exotic source content, so dropping only the
+ * property keeps the reader and the draft that consumes it from failing on it.
+ */
+function decodeAttributeReferences(value: string): string | null {
+  try {
+    return decodeXmlReferences(value)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The run's colour as the contract spells it: `auto` or six upper-case hex
+ * digits, so a select's options compare against one canonical form.
+ */
+export function runColour(xml: string): string | null {
+  const current = withoutTrackedRunProperties(xml)
+  const prefix = xmlPrefix(current)
+  const value = wordAttr(tagAttrs(current, prefix, 'color'), 'val', prefix)
+  if (!value) return null
+  if (value.toLowerCase() === 'auto') return 'auto'
+  return /^[0-9A-Fa-f]{6}$/u.test(value) ? value.toUpperCase() : null
 }
