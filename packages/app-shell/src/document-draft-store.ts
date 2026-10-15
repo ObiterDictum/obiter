@@ -3,6 +3,7 @@ import { documentTextRunWireSchema } from '@obiter/contracts'
 import { pendingEmphasisSchema } from './document-draft-emphasis'
 import { numberingDraftSchema } from './document-draft-numbering'
 import { paragraphFormatDraftSchema } from './document-draft-paragraph-format'
+import { breakDraftSchema, sectionDraftSchema } from './document-draft-section'
 import type { DraftState } from './document-save-plan'
 import {
   CLAIM_PREFIX,
@@ -82,8 +83,13 @@ export const draftStateSchema = z
           .record(z.string(), paragraphFormatDraftSchema)
           .optional()
           .default({}),
+        // E5 page setup; absent in older drafts, which parse to no changes.
+        section: sectionDraftSchema.optional().default({}),
       })
       .strict(),
+    // A page or section break introduced by E5. Absent in older persisted
+    // drafts, which parse to no pending breaks.
+    breaks: z.array(breakDraftSchema).optional().default([]),
     // A tracked-change rejection group introduced by E50 undo. Absent in older
     // persisted drafts, which parse to no pending rejections.
     trackedRejections: z.array(trackedRejectionSchema).optional().default([]),

@@ -36,6 +36,18 @@ export type LocalInsert = {
 }
 
 /**
+ * A break the workspace holds before save. `offset` addresses the paragraph's
+ * effective text; a section break takes no offset — Word places it after the
+ * paragraph whose `w:pPr` carries the section.
+ */
+export type BreakDraft = {
+  id: string
+  paragraphId: string
+  offset: number
+  kind: 'page' | 'section'
+}
+
+/**
  * The run properties the edit contract can restate, read from a run's preserved
  * fragments. `null` means the run does not set the property directly, which is
  * the value a range emphasis needs to strip an inherited direct setting. One
@@ -221,6 +233,7 @@ export function collectEditOperations(
   deletedParagraphIds: string[],
   extraRuns: Record<string, DocumentTextRunWire[]> = {},
   format: FormatDrafts = emptyFormatDrafts,
+  breaks: BreakDraft[] = [],
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
   const story = documentStory(model)
@@ -263,10 +276,43 @@ export function collectEditOperations(
     operations.push(...appendedRunEmphasis(paragraph, extra, drafts))
   }
 
+  // Formatting and page setup are emitted before the breaks: no format operation
+  // changes text offsets, and the section-break seed and any run-property write
+  // must already be pending when the break is applied. The paginator seeds a
+  // section break from the painted section too, so both paths read the same
+  // geometry.
   const realIds = new Set(
     (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
   )
   const insertById = new Map(inserts.map((item) => [item.clientId, item]))
+  operations.push(
+    ...collectFormatOperations(
+      model,
+      format,
+      deletedParagraphIds,
+      new Set(insertById.keys()),
+    ),
+  )
+
+  // Breaks are applied after the text replacements above, so their offset
+  // addresses the same effective text the client recorded it in.
+  for (const item of breaks) {
+    if (deleted.has(item.paragraphId)) continue
+    if (item.kind === 'page') {
+      operations.push({
+        type: 'insert_break',
+        paragraphId: item.paragraphId,
+        offset: item.offset,
+        kind: 'page',
+      })
+    } else {
+      operations.push({
+        type: 'insert_section_break',
+        paragraphId: item.paragraphId,
+      })
+    }
+  }
+
   for (const id of flowParagraphIds(model, inserts, deletedParagraphIds)) {
     const insert = insertById.get(id)
     if (!insert) continue
@@ -294,14 +340,6 @@ export function collectEditOperations(
   for (const paragraphId of emptyReplacements) {
     operations.push({ type: 'delete_paragraph', paragraphId })
   }
-  operations.push(
-    ...collectFormatOperations(
-      model,
-      format,
-      deletedParagraphIds,
-      new Set(insertById.keys()),
-    ),
-  )
 
   return operations
 }

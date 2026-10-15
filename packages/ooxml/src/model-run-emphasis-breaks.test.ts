@@ -70,6 +70,117 @@ describe('replacement composed with range emphasis across w:br', () => {
     expect(emphasised(runs)).toEqual(['XYcd'])
   })
 
+  it('keeps a page break and formats the text before it', async () => {
+    const { document, paragraph } = await loadRun(
+      '<w:r><w:t>Hello world</w:t></w:r>',
+    )
+    // A pending page-break splice is paragraph-keyed, not run-keyed, so the
+    // emphasis pass must still see it and materialise the run; otherwise it
+    // writes a whole-run replacement over the splice and serialising throws.
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 5,
+        kind: 'page',
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: 0,
+        to: 4,
+        bold: true,
+      },
+    ])
+
+    const xml = await documentXml(document)
+    expect(count(xml, PAGE_BREAK)).toBe(1)
+    const reparsed = await save(document)
+    const runs = paragraphs(reparsed)[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello world')
+    expect(emphasised(runs)).toEqual(['Hell'])
+  })
+
+  it('materialises a whole-run range emphasis over a pending break splice', async () => {
+    const { document, paragraph } = await loadRun(
+      '<w:r><w:t>Hello world</w:t></w:r>',
+    )
+    // The whole-run fast path would write the run's properties while the break
+    // splice's tail still points at the parse-time snapshot, so the tail would
+    // save unstyled. Routing through materialise styles every character.
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_break',
+        paragraphId: paragraph.id,
+        offset: 5,
+        kind: 'page',
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: 0,
+        to: 11,
+        bold: true,
+      },
+    ])
+
+    const xml = await documentXml(document)
+    expect(count(xml, PAGE_BREAK)).toBe(1)
+    const runs = paragraphs(await save(document))[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello world')
+    expect(emphasised(runs)).toEqual(['Hello world'])
+  })
+
+  it('styles exactly the characters a range covers across a folded break', async () => {
+    // A page-break splice folds a run into sibling runs; the reopened tail
+    // duplicates the run's properties. The split must apply emphasis per run,
+    // emit each run's properties once, and style only the covered characters.
+    const cases = [
+      { from: 0, to: 2, bold: 'ab' },
+      { from: 2, to: 4, bold: 'cd' },
+      { from: 0, to: 4, bold: 'abcd' },
+    ]
+    for (const testCase of cases) {
+      const { document, paragraph } = await loadRun(
+        '<w:r><w:rPr><w:i/></w:rPr><w:t>abcd</w:t></w:r>',
+      )
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_break',
+          paragraphId: paragraph.id,
+          offset: 2,
+          kind: 'page',
+        },
+        {
+          type: 'set_run_emphasis',
+          paragraphId: paragraph.id,
+          from: testCase.from,
+          to: testCase.to,
+          bold: true,
+        },
+      ])
+      const xml = await documentXml(document)
+      expect(count(xml, PAGE_BREAK)).toBe(1)
+      for (const runXml of xml.matchAll(/<w:r>([\s\S]*?)<\/w:r>/gu)) {
+        expect(count(runXml[1] ?? '', '<w:rPr')).toBeLessThanOrEqual(1)
+      }
+      const runs = paragraphs(await save(document))[0]?.runs ?? []
+      expect(runs.map((item) => item.text).join('')).toBe('abcd')
+      expect(
+        runs
+          .filter((item) => flag(item, 'b'))
+          .map((item) => item.text)
+          .join(''),
+      ).toBe(testCase.bold)
+      expect(
+        runs
+          .filter((item) => flag(item, 'i'))
+          .map((item) => item.text)
+          .join(''),
+      ).toBe('abcd')
+    }
+  })
+
   it('keeps a column break and formats the text after it', async () => {
     const { document, paragraph, run } = await loadRun(
       `<w:r><w:t>ab</w:t>${COLUMN_BREAK}<w:t>cd</w:t></w:r>`,

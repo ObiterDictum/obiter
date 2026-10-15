@@ -374,6 +374,66 @@ describe('translateSnapshot', () => {
       ),
     ).toBe(false)
   })
+
+  it('reverses a saved section change by restating the pre-save section', () => {
+    const sectioned = model([{ id: 'p1', run: 'r1', text: 'Hello' }])
+    const story = sectioned.stories[0]
+    if (story) {
+      story.preservedXmlFragments = [
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>',
+      ]
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      format: {
+        ...emptyDraftState().format,
+        section: { margins: { top: 720 } },
+      },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [{ kind: 'section', key: 'section' }],
+      sent,
+      fromModel: sectioned,
+    })
+    expect(translated?.format.section).toEqual({
+      margins: {
+        top: 1440,
+        right: 1440,
+        bottom: 1440,
+        left: 1440,
+        header: null,
+        footer: null,
+        gutter: null,
+      },
+    })
+  })
+
+  it('blocks a saved break it cannot remove instead of claiming the reversal', () => {
+    const breakSlot: DraftSlot = {
+      kind: 'break',
+      key: 'break:b1',
+      id: 'b1',
+      breakKind: 'page',
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      breaks: [{ id: 'b1', paragraphId: 'p1', offset: 0, kind: 'page' }],
+    }
+    // The snapshot holds the break as pending work, so undoing the save would
+    // need to remove the saved break, which no operation can express.
+    expect(
+      translateSnapshot({ ...sent }, { covered: [breakSlot], sent, fromModel }),
+    ).toBeNull()
+    // A snapshot that predates the break drops the covered slot and does not
+    // block: it already describes the document without the break.
+    const pre = translateSnapshot(emptyDraftState(), {
+      covered: [breakSlot],
+      sent,
+      fromModel,
+    })
+    expect(pre).not.toBeNull()
+    expect(pre?.breaks).toEqual([])
+  })
 })
 
 /**
@@ -914,5 +974,49 @@ describe('lineage-driven identity', () => {
     expect(
       hasUnresolvedBaselineIdentities(translated ?? emptyDraftState()),
     ).toBe(false)
+  })
+
+  it('remaps a live break draft to the canonical paragraph id', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      breaks: [
+        {
+          id: 'b1',
+          paragraphId: 'para-000001',
+          offset: 0,
+          kind: 'page',
+        },
+      ],
+    }
+    const result = remapLiveDraftState(state, {
+      covered: [],
+      sent: emptyDraftState(),
+      fromModel: baseModel,
+      lineage: {
+        version: 1,
+        baseVersionId: 'ver_1',
+        versionId: 'ver_2',
+        acceptedOperations: [],
+        paragraphs: [
+          {
+            fromParagraphId: 'para-000001',
+            toParagraphId: 'para-w14-00000001',
+            runs: [
+              {
+                runIndex: 0,
+                segments: [
+                  { fromRunId: 'text-000001', fromOffset: 0, toOffset: 5 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      versionId: 'ver_2',
+      toModel: resultModel,
+    })
+    expect(result.state.breaks).toEqual([
+      { id: 'b1', paragraphId: 'para-w14-00000001', offset: 0, kind: 'page' },
+    ])
   })
 })

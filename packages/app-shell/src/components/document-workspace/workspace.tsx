@@ -320,6 +320,8 @@ function PdfWorkspace({
           onSave={() => undefined}
           onInsertParagraph={() => undefined}
           onDeleteParagraph={() => undefined}
+          onPageBreak={() => undefined}
+          onSectionBreak={() => undefined}
           canEdit={false}
         />
         {downloadError ? (

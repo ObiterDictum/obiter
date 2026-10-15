@@ -1,4 +1,5 @@
 import type { DraftSlot, DraftState } from './document-save-plan'
+import { hasSectionDraft } from './document-section-format'
 
 /** Removes the named slots from a draft state, leaving everything else. */
 export function removeDraftSlots(
@@ -51,6 +52,9 @@ export function splitDraftSlots(
   const insertIds = new Set(
     slots.flatMap((slot) => (slot.kind === 'insert' ? [slot.clientId] : [])),
   )
+  const breakIds = new Set(
+    slots.flatMap((slot) => (slot.kind === 'break' ? [slot.id] : [])),
+  )
   const rejections = {
     kept: state.trackedRejections.filter((group) => !drop.has(group.key)),
     taken: state.trackedRejections.filter((group) => drop.has(group.key)),
@@ -65,12 +69,14 @@ export function splitDraftSlots(
         (id) => !drop.has(`delete:${id}`),
       ),
       extraRuns: extraRuns.kept,
+      breaks: state.breaks.filter((item) => !breakIds.has(item.id)),
       trackedRejections: rejections.kept,
       format: {
         paragraphStyles: paragraphStyles.kept,
         numbering: numbering.kept,
         paragraphFormats: paragraphFormats.kept,
         emphasis: emphasis.kept,
+        section: drop.has('section') ? {} : state.format.section,
       },
     },
     removed: {
@@ -80,12 +86,14 @@ export function splitDraftSlots(
         drop.has(`delete:${id}`),
       ),
       extraRuns: extraRuns.taken,
+      breaks: state.breaks.filter((item) => breakIds.has(item.id)),
       trackedRejections: rejections.taken,
       format: {
         paragraphStyles: paragraphStyles.taken,
         numbering: numbering.taken,
         paragraphFormats: paragraphFormats.taken,
         emphasis: emphasis.taken,
+        section: drop.has('section') ? state.format.section : {},
       },
     },
   }
@@ -122,6 +130,8 @@ export function hasDraftState(state: DraftState) {
     Object.keys(state.format.paragraphStyles).length > 0 ||
     Object.keys(state.format.numbering).length > 0 ||
     Object.keys(state.format.paragraphFormats).length > 0 ||
+    hasSectionDraft(state.format.section) ||
+    state.breaks.length > 0 ||
     state.trackedRejections.length > 0
   )
 }
@@ -168,6 +178,10 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
         .find((item) => emphasisSlotKey(item) === slot.key)
       return JSON.stringify(match)
     }
+    case 'section':
+      return JSON.stringify(state.format.section)
+    case 'break':
+      return JSON.stringify(state.breaks.find((item) => item.id === slot.id))
     case 'tracked-reject':
       return JSON.stringify(
         state.trackedRejections.find((group) => group.key === slot.key),
@@ -194,6 +208,10 @@ export function slotLabel(slot: DraftSlot): string {
       return 'paragraph formatting'
     case 'emphasis':
       return 'formatting'
+    case 'section':
+      return 'page setup'
+    case 'break':
+      return slot.breakKind === 'page' ? 'a page break' : 'a section break'
     case 'tracked-reject':
       return 'a tracked change'
   }

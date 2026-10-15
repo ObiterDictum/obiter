@@ -50,6 +50,9 @@ export function DocumentWorkspaceToolbar({
   onRedo,
   onInsertParagraph,
   onDeleteParagraph,
+  onPageBreak,
+  onSectionBreak,
+  breakUnavailable,
   canEdit,
   canUndo,
   canRedo,
@@ -86,6 +89,10 @@ export function DocumentWorkspaceToolbar({
   onRedo?: () => void
   onInsertParagraph: () => void
   onDeleteParagraph: () => void
+  onPageBreak: () => void
+  onSectionBreak: () => void
+  /** The reason a break cannot be inserted at the caret, when it cannot. */
+  breakUnavailable?: string
   canEdit: boolean
   canUndo?: boolean
   canRedo?: boolean
@@ -181,6 +188,9 @@ export function DocumentWorkspaceToolbar({
             commentsOpen={commentsOpen}
             commentCount={commentCount}
             onToggleComments={onToggleComments}
+            onPageBreak={onPageBreak}
+            onSectionBreak={onSectionBreak}
+            breakUnavailable={breakUnavailable}
           />
         </TabsContent>
         <TabsContent value="layout" className="min-w-0 flex-1 pt-0">

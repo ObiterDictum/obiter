@@ -55,7 +55,7 @@ export function ParagraphEditor({
   next?: ArrowNeighbor
   verticalCaret?: VerticalCaretColumn
   selection?: ParagraphSelectionBinding
-  onSelect: () => void
+  onSelect: (offset?: number) => void
   onFocusParagraph?: () => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
   onTextSelection?: (
@@ -439,7 +439,9 @@ export function ParagraphEditor({
       onClick={(event) => {
         event.stopPropagation()
         clearColumn()
-        onSelect()
+        // A mouse press moves the native caret; carry that offset so a break
+        // or format targets the visible caret, not the paragraph start.
+        onSelect(event.currentTarget.selectionStart)
       }}
       onSelect={(event) => {
         const from = event.currentTarget.selectionStart
