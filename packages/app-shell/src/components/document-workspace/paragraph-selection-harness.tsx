@@ -5,7 +5,7 @@ import { fireEvent, screen } from '@testing-library/react'
  * how the product focuses one; jsdom has no hit testing, so the point lookup
  * the click path uses is stubbed the same way the caret suites stub it.
  */
-export function clickParagraph(paragraphId: string) {
+export function clickParagraph(paragraphId: string, offset = 0) {
   const root = document.querySelector(`[data-paragraph-id="${paragraphId}"]`)
   if (!(root instanceof HTMLElement)) {
     throw new Error(`no paragraph ${paragraphId} rendered`)
@@ -22,7 +22,7 @@ export function clickParagraph(paragraphId: string) {
     }
   ).caretPositionFromPoint
   Object.assign(document, {
-    caretPositionFromPoint: () => ({ offsetNode: node, offset: 0 }),
+    caretPositionFromPoint: () => ({ offsetNode: node, offset }),
   })
   const page = textRoot.closest('[data-document-page]') ?? root
   fireEvent.mouseDown(page, { clientX: 1, clientY: 1 })

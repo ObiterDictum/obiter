@@ -192,6 +192,59 @@ describe('POST /api/documents/:id/edit on a run with a text-wrapping break', () 
   })
 })
 
+describe('POST /api/documents/:id/edit with a page break before a run-keyed write', () => {
+  it('holds a break then a same-run text replacement as a 400, not a 500', async () => {
+    const database = new EditDatabase({
+      sizeBytes: String(breakBytes.byteLength),
+    })
+    const storage = new EditStorage()
+    storage.binary.set(sourceKey, breakBytes)
+    const { app } = routeApp(database, storage)
+
+    const response = await app.request(
+      '/api/documents/doc_1/edit',
+      operationsRequest([
+        { type: 'insert_break', paragraphId, offset: 3, kind: 'page' },
+        { type: 'replace_run_text', runId, text: 'abXYcd' },
+      ]),
+    )
+
+    expect(response.status).toBe(400)
+    expect(database.versions.size).toBe(1)
+    expect(storage.writes).toEqual([])
+  })
+
+  it('holds a break then a run-keyed emphasis before a second break as a 400', async () => {
+    const database = new EditDatabase({
+      sizeBytes: String(breakBytes.byteLength),
+    })
+    const storage = new EditStorage()
+    storage.binary.set(sourceKey, breakBytes)
+    const { app } = routeApp(database, storage)
+
+    const response = await app.request(
+      '/api/documents/doc_1/edit',
+      operationsRequest([
+        { type: 'insert_break', paragraphId, offset: 3, kind: 'page' },
+        { type: 'set_run_emphasis', runId, bold: true },
+        { type: 'insert_break', paragraphId, offset: 5, kind: 'page' },
+      ]),
+    )
+
+    expect(response.status).toBe(400)
+    expect(database.versions.size).toBe(1)
+    expect(storage.writes).toEqual([])
+  })
+})
+
+function operationsRequest(operations: unknown[]) {
+  return {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ baseVersionId: 'ver_1', operations }),
+  }
+}
+
 function editRequest(
   ids: { paragraphId: string; runId: string },
   text: string,

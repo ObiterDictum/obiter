@@ -122,6 +122,38 @@ describe('DocumentModelPage', () => {
     expect(screen.queryByRole('img', { name: 'Header image' })).toBeNull()
   })
 
+  it('frames the page with the section page box when given one', () => {
+    render(
+      <DocumentModelPage
+        model={model}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+        pageLayout={{
+          box: {
+            widthPx: 400,
+            heightPx: 300,
+            margin: { top: 20, right: 10, bottom: 30, left: 40 },
+            headerPx: 0,
+            footerPx: 0,
+          },
+          frame: {
+            top: 20,
+            right: 10,
+            bottom: 30,
+            left: 40,
+            widthPx: 350,
+            heightPx: 250,
+          },
+          columns: [{ left: 0, widthPx: 350 }],
+        }}
+      />,
+    )
+    const body = screen.getByLabelText('Document body')
+    expect(body.style.width).toBe('350px')
+    expect(body.style.height).toBe('250px')
+    expect(body.style.marginLeft).toBe('40px')
+  })
+
   it('places header and footer text in the page margins', () => {
     const paged: DocumentModelWire = {
       ...model,

@@ -9,7 +9,7 @@ import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import { patchRunEmphasisXml, type RunEmphasis } from './model-property-edits'
-import { setOverlayReplacement } from './parts/overlay'
+import { setOverlayReplacement, parseXmlElements } from './parts/overlay'
 import { replaceTextRunAtAnchor, wordRunInnerTextXml } from './text-run-edit'
 
 // Shared run-splitting primitives. model-run-emphasis composes them for range
@@ -302,4 +302,64 @@ function splitReplacedRun(
       to: ordered[index + 1] as number,
     })),
   }
+}
+
+// A materialised run is a bare <w:r>; its namespace prefixes are declared on
+// the part root, so wrap it in a synthetic root carrying the part's
+// declarations and shift the parsed ranges back into run coordinates.
+export function parseWrappedRun(partSource: string, runXml: string) {
+  const declarationEnd = partSource.startsWith('<?xml')
+    ? partSource.indexOf('?>') + 2
+    : 0
+  const rootStart = partSource.indexOf('<', declarationEnd)
+  const head = partSource.slice(rootStart, partSource.indexOf('>', rootStart))
+  const declarations =
+    head.match(/xmlns(?::[\w.-]+)?="[^"]*"/gu)?.join(' ') ?? ''
+  const open = `<obiter-run ${declarations}>`
+  const shift = open.length
+  return parseXmlElements(`${open}${runXml}</obiter-run>`).map((element) => ({
+    ...element,
+    depth: element.depth - 1,
+    start: element.start - shift,
+    startTagEnd: element.startTagEnd - shift,
+    endTagStart: element.endTagStart - shift,
+    end: element.end - shift,
+  }))
+}
+
+/**
+ * Coalesces the sibling `<w:r>` elements a folded page-break splice produced
+ * back into one run. The splice duplicates the original run's properties onto
+ * its reopened tail, so keeping every sibling's `w:rPr` would put two into one
+ * run; the first sibling owns the effective properties (a property overlay
+ * writes into the original run's property range, or wire fragments already
+ * carry the patch), and the tail's copy is the stale snapshot. Structural
+ * children (a break, a tab) are emitted in order between the chosen properties
+ * and the run close.
+ */
+export function mergeSiblingRuns(partSource: string, runXml: string) {
+  const elements = parseWrappedRun(partSource, runXml)
+  const runs = elements.filter((element) => element.depth === 0)
+  const first = runs[0]
+  const last = runs.at(-1)
+  if (!first || !last || runs.length <= 1) return runXml
+  const childrenByRun = runs.map((run) =>
+    elements.filter(
+      (element) =>
+        element.depth === 1 &&
+        element.start >= run.start &&
+        element.end <= run.end,
+    ),
+  )
+  const properties = childrenByRun
+    .flat()
+    .find((element) => element.localName === 'rPr')
+  let inner = properties ? runXml.slice(properties.start, properties.end) : ''
+  for (const children of childrenByRun) {
+    for (const child of children) {
+      if (child.localName === 'rPr') continue
+      inner += runXml.slice(child.start, child.end)
+    }
+  }
+  return `${runXml.slice(first.start, first.startTagEnd)}${inner}${runXml.slice(last.endTagStart, last.end)}`
 }

@@ -48,6 +48,15 @@ export {
   patchRunEmphasisXml,
   patchParagraphFormatXml,
 } from './model-property-edits'
+export { insertPropertyChild, stripPropertyChild } from './property-xml'
+export {
+  A4_PAGE_TWIPS,
+  activeSectionXml,
+  patchSectionPropertiesXml,
+  splitSectionHistory,
+  type SectionMarginPatch,
+  type SectionPropertiesPatch,
+} from './section-xml'
 export {
   buildOverrideFragment,
   hasPureStartOverride,

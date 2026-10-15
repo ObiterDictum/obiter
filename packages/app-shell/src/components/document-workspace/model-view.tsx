@@ -10,6 +10,9 @@ import {
   documentPageBox,
   marginStories,
   contentFrame,
+  type ColumnFrame,
+  type ContentFrame,
+  type PageBox,
 } from '../../document-page-layout'
 import { marginBandHeights } from '../../document-page-margin'
 import { storyBlocks } from '../../document-page-tables'
@@ -69,7 +72,7 @@ export function DocumentModelPage({
   pageBlocks,
   pageFloats = [],
   pageTextBoxes = [],
-  pageColumns,
+  pageLayout,
   pageNumber = 1,
   selectionSegments = new Map(),
   selectionHandlers,
@@ -107,7 +110,14 @@ export function DocumentModelPage({
   pageBlocks?: LaidOutBlock[]
   pageFloats?: PageFloat[]
   pageTextBoxes?: PageTextBox[]
-  pageColumns?: Array<{ left: number; widthPx: number }>
+  /** The section's own page geometry, when the paginator knows it. A section
+   * whose geometry differs from the body must be framed with its own box, not
+   * the body-level one. */
+  pageLayout?: {
+    box: PageBox
+    frame: ContentFrame
+    columns: ColumnFrame[]
+  }
   pageNumber?: number
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
   selectionHandlers?: ParagraphSelectionHandlers
@@ -118,9 +128,9 @@ export function DocumentModelPage({
     const story = model.stories.find((item) => item.kind === 'document')
     const headers = marginStories(model, 'header')
     const footers = marginStories(model, 'footer')
-    const page = documentPageBox(model)
+    const page = pageLayout?.box ?? documentPageBox(model)
     const bands = marginBandHeights(model)
-    const frame = contentFrame(page, bands)
+    const frame = pageLayout?.frame ?? contentFrame(page, bands)
     const listMarkers = documentListMarkers(model)
     const notes = documentNotes(model)
     const noteParagraphIds = new Set(
@@ -176,7 +186,7 @@ export function DocumentModelPage({
       storyOf,
       neighbors,
     }
-  }, [model, extraRuns, inserts, deletedParagraphIds])
+  }, [model, extraRuns, inserts, deletedParagraphIds, pageLayout])
   const {
     story,
     headers,
@@ -198,7 +208,7 @@ export function DocumentModelPage({
   }
 
   const blocks: LaidOutBlock[] = pageBlocks ?? storyBlocks(story)
-  const columns = pageColumns ?? [{ left: 0, widthPx: frame.widthPx }]
+  const columns = pageLayout?.columns ?? [{ left: 0, widthPx: frame.widthPx }]
   const firstColumn = columns[0]
   const nextColumn = columns[1]
   const gap =

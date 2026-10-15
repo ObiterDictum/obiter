@@ -12,6 +12,8 @@ import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import {
   applyEmphasisXml,
+  mergeSiblingRuns,
+  parseWrappedRun,
   runPieceXml,
   splitsSurrogate,
 } from './model-run-range-edits'
@@ -22,11 +24,11 @@ import {
 } from './model-property-edits'
 import {
   elementFragment,
-  parseXmlElements,
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
 import { isTextWrappingBreak } from './parts/xml-elements'
+import { hasPendingBreakSplice } from './run-break-splices'
 import { decodeXmlReferences } from './xml-lexemes'
 
 export type RunEmphasisRange = RunEmphasis & { from: number; to: number }
@@ -95,14 +97,17 @@ export function applyRunEmphasisRanges(
       .filter((range) => range.from < range.to)
     if (local.length > 0) {
       const length = run.wire.text.length
-      if (local.every((range) => range.from === 0 && range.to === length)) {
+      if (
+        local.every((range) => range.from === 0 && range.to === length) &&
+        !hasPendingBreakSplice(part.overlay, run.runRange)
+      ) {
         setRunEmphasis(
           document,
           run,
           mergeRunEmphasis(local.map((range) => range.emphasis)),
         )
       } else {
-        const materialise = hasPendingOverlay(part.overlay, run.wire.id)
+        const materialise = hasPendingOverlay(part.overlay, run)
         pending.push({
           runIndex,
           ...splitRun(
@@ -238,10 +243,19 @@ function effectiveView(
   paragraph: ParagraphAnchor,
 ): RunSplitView {
   const folded = materialiseRun(overlay, run)
-  const source = folded.xml
+  // A page-break splice closes and reopens the run, so the folded XML can hold
+  // several sibling `<w:r>` elements for what the model still treats as one
+  // run. Coalesce them into a single run — one property set, the break inline —
+  // so the split machinery styles exactly the characters a range covers and
+  // emits each run's properties once instead of duplicating `w:rPr`.
+  const source = mergeSiblingRuns(overlay.source, folded.xml)
   const elements = parseWrappedRun(overlay.source, source)
-  const root = elements.find((element) => element.depth === 0)
-  if (!root) throw new OoxmlError('invalid-document-edit')
+  const runElements = elements.filter((element) => element.depth === 0)
+  const first = runElements[0]
+  const last = runElements.at(-1)
+  if (!first || !last || runElements.length !== 1) {
+    throw new OoxmlError('invalid-document-edit')
+  }
   const children = elements.filter((element) => element.depth === 1)
   const textElements = children
     .filter((element) => element.localName === 't' && !element.selfClosing)
@@ -269,10 +283,16 @@ function effectiveView(
       (element) => element.localName !== 't' && !isTextWrappingBreak(element),
     )
     .map((element) => elementFragment(source, element))
+  const runRange: XmlElementRange = {
+    start: first.start,
+    startTagEnd: first.startTagEnd,
+    endTagStart: last.endTagStart,
+    end: last.end,
+  }
   const effectiveRun: TextRunAnchor = {
     partName: run.partName,
     wire: run.wire,
-    runRange: elementRange(root),
+    runRange,
     textRanges: textElements.map(({ startTagEnd, endTagStart }) => ({
       start: startTagEnd,
       end: endTagStart,
@@ -287,7 +307,7 @@ function effectiveView(
     paragraph: {
       ...paragraph,
       runs: [effectiveRun],
-      paragraphRange: elementRange(root),
+      paragraphRange: runRange,
     },
     offsetBase: 0,
     fragments,
@@ -325,9 +345,26 @@ function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
   return { xml: result, keys }
 }
 
-function hasPendingOverlay(overlay: XmlOverlay, runId: string) {
-  for (const key of overlay.replacements.keys()) {
-    if (key.startsWith(`${runId}:`)) return true
+/**
+ * Whether the run's text or structure already lives in the overlay. Any
+ * replacement whose range sits inside the run — a run-keyed text or property
+ * write, or a paragraph-keyed page-break splice — means the run's source no
+ * longer maps to its model text, so a range emphasis must materialise the run
+ * before splitting it rather than write a second replacement over that range.
+ * A zero-width insertion exactly at the run's end belongs to the following
+ * boundary (the next run's start, or the paragraph end), not to this run.
+ */
+function hasPendingOverlay(overlay: XmlOverlay, run: TextRunAnchor) {
+  const { start, end } = run.runRange
+  for (const [key, replacement] of overlay.replacements) {
+    if (key.startsWith(`${run.wire.id}:`)) return true
+    if (
+      replacement.start >= start &&
+      replacement.end <= end &&
+      replacement.start < end
+    ) {
+      return true
+    }
   }
   return false
 }
@@ -397,27 +434,4 @@ function elementRange(element: {
     endTagStart: element.endTagStart,
     end: element.end,
   }
-}
-
-// A materialised run is a bare <w:r>; its namespace prefixes are declared on
-// the part root, so wrap it in a synthetic root carrying the part's
-// declarations and shift the parsed ranges back into run coordinates.
-function parseWrappedRun(partSource: string, runXml: string) {
-  const declarationEnd = partSource.startsWith('<?xml')
-    ? partSource.indexOf('?>') + 2
-    : 0
-  const rootStart = partSource.indexOf('<', declarationEnd)
-  const head = partSource.slice(rootStart, partSource.indexOf('>', rootStart))
-  const declarations =
-    head.match(/xmlns(?::[\w.-]+)?="[^"]*"/gu)?.join(' ') ?? ''
-  const open = `<obiter-run ${declarations}>`
-  const shift = open.length
-  return parseXmlElements(`${open}${runXml}</obiter-run>`).map((element) => ({
-    ...element,
-    depth: element.depth - 1,
-    start: element.start - shift,
-    startTagEnd: element.startTagEnd - shift,
-    endTagStart: element.endTagStart - shift,
-    end: element.end - shift,
-  }))
 }

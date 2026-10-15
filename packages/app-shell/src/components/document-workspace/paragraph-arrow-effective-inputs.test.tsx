@@ -152,6 +152,7 @@ function formatDrafts(paragraphId: string): FormatDrafts {
     paragraphStyles: { [paragraphId]: 'Small' },
     numbering: {},
     paragraphFormats: {},
+    section: {},
   }
 }
 
