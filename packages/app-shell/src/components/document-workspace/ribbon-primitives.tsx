@@ -166,12 +166,19 @@ export function RibbonSelect({
   value: string
   options: ReadonlyArray<{ value: string; label: string }>
   disabled?: boolean
-  soon?: boolean
+  /** True for a not-yet control, or the reason a currently-unavailable one is
+   * disabled (a tracked-change refusal), which its accessible name publishes. */
+  soon?: boolean | string
   onChange?: (value: string) => void
   className?: string
 }) {
   const unavailable = Boolean(soon)
-  const caption = unavailable ? `${label} (not available yet)` : label
+  const caption =
+    typeof soon === 'string'
+      ? `${label}: ${soon}`
+      : unavailable
+        ? `${label} (not available yet)`
+        : label
   return (
     <select
       aria-label={caption}
