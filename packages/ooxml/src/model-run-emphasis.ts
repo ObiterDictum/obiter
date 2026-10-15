@@ -6,14 +6,11 @@ import {
   type OoxmlDocument,
   type ParagraphAnchor,
   type TextRunAnchor,
-  type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import {
   applyEmphasisXml,
-  mergeSiblingRuns,
-  parseWrappedRun,
   runPieceXml,
   splitsSurrogate,
 } from './model-run-range-edits'
@@ -22,14 +19,9 @@ import {
   setRunEmphasis,
   type RunEmphasis,
 } from './model-property-edits'
-import {
-  elementFragment,
-  setOverlayReplacement,
-  type XmlOverlay,
-} from './parts/overlay'
-import { isTextWrappingBreak } from './parts/xml-elements'
+import { setOverlayReplacement, type XmlOverlay } from './parts/overlay'
 import { hasPendingBreakSplice } from './run-break-splices'
-import { decodeXmlReferences } from './xml-lexemes'
+import { effectiveRunView, runHasPendingOverlay } from './run-effective'
 
 export type RunEmphasisRange = RunEmphasis & { from: number; to: number }
 
@@ -107,7 +99,7 @@ export function applyRunEmphasisRanges(
           mergeRunEmphasis(local.map((range) => range.emphasis)),
         )
       } else {
-        const materialise = hasPendingOverlay(part.overlay, run)
+        const materialise = runHasPendingOverlay(part.overlay, run)
         pending.push({
           runIndex,
           ...splitRun(
@@ -242,131 +234,10 @@ function effectiveView(
   run: TextRunAnchor,
   paragraph: ParagraphAnchor,
 ): RunSplitView {
-  const folded = materialiseRun(overlay, run)
-  // A page-break splice closes and reopens the run, so the folded XML can hold
-  // several sibling `<w:r>` elements for what the model still treats as one
-  // run. Coalesce them into a single run — one property set, the break inline —
-  // so the split machinery styles exactly the characters a range covers and
-  // emits each run's properties once instead of duplicating `w:rPr`.
-  const source = mergeSiblingRuns(overlay.source, folded.xml)
-  const elements = parseWrappedRun(overlay.source, source)
-  const runElements = elements.filter((element) => element.depth === 0)
-  const first = runElements[0]
-  const last = runElements.at(-1)
-  if (!first || !last || runElements.length !== 1) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-  const children = elements.filter((element) => element.depth === 1)
-  const textElements = children
-    .filter((element) => element.localName === 't' && !element.selfClosing)
-    .map(elementRange)
-  const textBreaks = children
-    .filter((element) => isTextWrappingBreak(element))
-    .map(elementRange)
-  // Mirror the parser: a w:br contributes one text character only when it is a
-  // text-wrapping break. A page or column break is structure and consumes none.
-  let effectiveText = ''
-  for (const element of children) {
-    if (element.localName === 't' && !element.selfClosing) {
-      effectiveText += decodeXmlReferences(
-        source.slice(element.startTagEnd, element.endTagStart),
-      )
-    } else if (isTextWrappingBreak(element)) {
-      effectiveText += '\n'
-    }
-  }
-  if (effectiveText !== run.wire.text) {
-    throw new OoxmlError('invalid-document-edit')
-  }
-  const fragments = children
-    .filter(
-      (element) => element.localName !== 't' && !isTextWrappingBreak(element),
-    )
-    .map((element) => elementFragment(source, element))
-  const runRange: XmlElementRange = {
-    start: first.start,
-    startTagEnd: first.startTagEnd,
-    endTagStart: last.endTagStart,
-    end: last.end,
-  }
-  const effectiveRun: TextRunAnchor = {
-    partName: run.partName,
-    wire: run.wire,
-    runRange,
-    textRanges: textElements.map(({ startTagEnd, endTagStart }) => ({
-      start: startTagEnd,
-      end: endTagStart,
-    })),
-    textElements,
-    textBreaks,
-    runProperties: fragments.filter((fragment) => /<w:rPr\b/u.test(fragment)),
-  }
-  return {
-    source,
-    run: effectiveRun,
-    paragraph: {
-      ...paragraph,
-      runs: [effectiveRun],
-      paragraphRange: runRange,
-    },
-    offsetBase: 0,
-    fragments,
-    consumedKeys: folded.keys,
-  }
-}
-
-/**
- * Fold every overlay replacement inside the run into its source slice, so the
- * returned XML is the run exactly as it would serialise today. Callers then
- * split that text and write a single replacement covering the run, which
- * cannot overlap the folded ones. The consumed keys come back with the fold so
- * the caller removes them only once the paragraph has planned successfully.
- */
-function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
-  const { start, end } = run.runRange
-  const replacements = [...overlay.replacements.entries()]
-    .filter(
-      ([, replacement]) => replacement.start >= start && replacement.end <= end,
-    )
-    .sort((left, right) => left[1].start - right[1].start)
-  let cursor = start
-  let result = ''
-  const keys: string[] = []
-  for (const [key, replacement] of replacements) {
-    if (replacement.start < cursor) {
-      throw new OoxmlError('invalid-document-edit')
-    }
-    result += overlay.source.slice(cursor, replacement.start)
-    result += replacement.value
-    cursor = replacement.end
-    keys.push(key)
-  }
-  result += overlay.source.slice(cursor, end)
-  return { xml: result, keys }
-}
-
-/**
- * Whether the run's text or structure already lives in the overlay. Any
- * replacement whose range sits inside the run — a run-keyed text or property
- * write, or a paragraph-keyed page-break splice — means the run's source no
- * longer maps to its model text, so a range emphasis must materialise the run
- * before splitting it rather than write a second replacement over that range.
- * A zero-width insertion exactly at the run's end belongs to the following
- * boundary (the next run's start, or the paragraph end), not to this run.
- */
-function hasPendingOverlay(overlay: XmlOverlay, run: TextRunAnchor) {
-  const { start, end } = run.runRange
-  for (const [key, replacement] of overlay.replacements) {
-    if (key.startsWith(`${run.wire.id}:`)) return true
-    if (
-      replacement.start >= start &&
-      replacement.end <= end &&
-      replacement.start < end
-    ) {
-      return true
-    }
-  }
-  return false
+  // The shared materialised-run view: pending replacements folded into one
+  // source string, sibling runs a break splice produced coalesced, so the
+  // split machinery styles exactly the characters a range covers.
+  return { offsetBase: 0, ...effectiveRunView(overlay, run, paragraph) }
 }
 
 function textRunIdAllocator(document: OoxmlDocument) {
@@ -420,18 +291,4 @@ function emphasisFragments(
   return patched.some((fragment) => /<w:rPr\b/u.test(fragment))
     ? patched
     : [...patched, patchRunEmphasisXml('<w:rPr/>', emphasis)]
-}
-
-function elementRange(element: {
-  start: number
-  startTagEnd: number
-  endTagStart: number
-  end: number
-}): XmlElementRange {
-  return {
-    start: element.start,
-    startTagEnd: element.startTagEnd,
-    endTagStart: element.endTagStart,
-    end: element.end,
-  }
 }

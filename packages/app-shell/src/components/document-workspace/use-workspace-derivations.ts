@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   extractAuthorities,
@@ -11,8 +11,12 @@ import { withBreakDrafts } from '../../document-section-format'
 import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
 import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
+import { withStructuralDrafts } from '../../document-structure-fold'
+import { pendingImageUrls } from '../../document-structural-drafts'
 import { useDocumentImageUrls } from '../../document-workspace-api'
+import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
+import { useInsertRibbon, type InsertRibbonProps } from './use-insert-ribbon'
 
 type DraftState = Pick<
   ReturnType<typeof useWorkspaceDrafts>,
@@ -22,6 +26,9 @@ type DraftState = Pick<
   | 'format'
   | 'deletedParagraphIds'
   | 'breaks'
+  | 'structures'
+  | 'setBreaks'
+  | 'setStructures'
 >
 
 /**
@@ -54,20 +61,48 @@ export type WorkspaceDerivations = {
    * can explain why it is unavailable. `flowParagraphIds` is the same
    * derivation the deletion operation and the save plan use. */
   deleteParagraphReason: string | undefined
+  /** The Insert ribbon's break and structural controls. */
+  insert: InsertRibbonProps
 }
 
 export function useWorkspaceDerivations({
   documentId,
   model,
   drafts,
+  insert,
 }: {
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
+  /** The caret state the Insert ribbon's availability derives from. */
+  insert: {
+    caret: FormatTarget
+    offset: number | null
+    trackChanges: boolean
+    onImageError: (message: string) => void
+  }
 }): WorkspaceDerivations {
-  const painted = useMemo(
+  const formatted = useMemo(
     () => (model ? formattedModel(model, drafts.format) : undefined),
     [model, drafts.format],
+  )
+  // Pending tables and pictures fold into the painted model through the same
+  // wire mutations — and the same `structure-xml` builders — the save writers
+  // produce, so `storyBlocks`, `paragraphImageXml` and `PageDrawing` render
+  // them through the code a reloaded document uses. With no pending
+  // structures the fold returns `formatted` unchanged, so a keystroke keeps
+  // the block partition memoised below.
+  const painted = useMemo(
+    () =>
+      formatted
+        ? withStructuralDrafts(
+            formatted,
+            drafts.structures,
+            drafts.drafts,
+            new Set(drafts.deletedParagraphIds),
+          )
+        : undefined,
+    [formatted, drafts.structures, drafts.drafts, drafts.deletedParagraphIds],
   )
   // The story's block partition is a pure function of the painted model, so it
   // is scanned once per model rather than once per pagination pass.
@@ -107,7 +142,23 @@ export function useWorkspaceDerivations({
     () => (model ? documentImagePartNames(model) : []),
     [model],
   )
-  const imageUrls = useDocumentImageUrls(documentId, imageParts)
+  const fetchedImageUrls = useDocumentImageUrls(documentId, imageParts)
+  // A pending picture's bytes live in the draft, not the package: its blob URL
+  // is keyed by the pending part name the folded relationship resolves to.
+  const pendingUrls = useMemo(
+    () => pendingImageUrls(drafts.structures),
+    [drafts.structures],
+  )
+  useEffect(() => {
+    const created = pendingUrls
+    return () => {
+      for (const url of Object.values(created)) URL.revokeObjectURL(url)
+    }
+  }, [pendingUrls])
+  const imageUrls = useMemo(
+    () => ({ ...fetchedImageUrls, ...pendingUrls }),
+    [fetchedImageUrls, pendingUrls],
+  )
   const authorities = useMemo(
     () =>
       model
@@ -127,11 +178,21 @@ export function useWorkspaceDerivations({
       drafts.extraRuns,
     ],
   )
+  const insertRibbon = useInsertRibbon(
+    model,
+    painted,
+    insert.caret,
+    insert.offset,
+    insert.trackChanges,
+    drafts,
+    insert.onImageError,
+  )
   return {
     painted,
     pages,
     authorities,
     imageUrls,
+    insert: insertRibbon,
     deleteParagraphReason:
       model &&
       flowParagraphIds(model, drafts.inserts, drafts.deletedParagraphIds)

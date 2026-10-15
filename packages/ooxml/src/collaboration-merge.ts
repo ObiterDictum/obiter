@@ -1,5 +1,6 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
+import { operationConflicts, type ChangedFootprints } from './merge-conflicts'
 import {
   OoxmlError,
   type OoxmlDocument,
@@ -144,22 +145,13 @@ export function remapMergeOperations(
       case 'insert_paragraph_before':
       case 'insert_break':
       case 'insert_section_break':
+      case 'insert_table':
+      case 'insert_image':
         return { ...operation, paragraphId: paragraph(operation.paragraphId) }
       default:
         return operation
     }
   })
-}
-
-type ChangedFootprints = {
-  paragraphStyles: ReadonlySet<string>
-  paragraphOpaque: ReadonlySet<string>
-  paragraphRunChanges: ReadonlySet<string>
-  runText: ReadonlySet<string>
-  runStyles: ReadonlySet<string>
-  runOpaque: ReadonlySet<string>
-  paragraphIds: ReadonlySet<string>
-  runIds: ReadonlySet<string>
 }
 
 function mainStory(document: OoxmlDocument) {
@@ -350,77 +342,6 @@ function changedFootprints(
     paragraphIds,
     runIds,
   }
-}
-
-function operationConflicts(
-  operation: DocumentEditOperation,
-  changes: ChangedFootprints,
-) {
-  if (
-    operation.type === 'insert_paragraph_after' ||
-    operation.type === 'insert_paragraph_before'
-  ) {
-    return !changes.paragraphIds.has(operation.paragraphId)
-  }
-  if (operation.type === 'delete_paragraph') return true
-  if (operation.type === 'set_paragraph_style') {
-    return (
-      !changes.paragraphIds.has(operation.paragraphId) ||
-      changes.paragraphStyles.has(operation.paragraphId) ||
-      changes.paragraphOpaque.has(operation.paragraphId)
-    )
-  }
-  if (operation.type === 'set_paragraph_numbering') {
-    return (
-      !changes.paragraphIds.has(operation.paragraphId) ||
-      changes.paragraphOpaque.has(operation.paragraphId)
-    )
-  }
-  if (operation.type === 'set_paragraph_format') {
-    return (
-      !changes.paragraphIds.has(operation.paragraphId) ||
-      changes.paragraphOpaque.has(operation.paragraphId)
-    )
-  }
-  if (operation.type === 'insert_break') {
-    // The offset addresses this paragraph's text, so a text edit to the same
-    // paragraph in the current version moves the break; refuse rather than
-    // place it at a stale offset.
-    return (
-      !changes.paragraphIds.has(operation.paragraphId) ||
-      changes.paragraphOpaque.has(operation.paragraphId) ||
-      changes.paragraphRunChanges.has(operation.paragraphId)
-    )
-  }
-  if (operation.type === 'insert_section_break') {
-    return (
-      !changes.paragraphIds.has(operation.paragraphId) ||
-      changes.paragraphOpaque.has(operation.paragraphId)
-    )
-  }
-  // A section-properties edit is document-wide and carries no paragraph or run
-  // address, so it has no footprint to conflict with in E5.
-  if (operation.type === 'set_section_properties') return false
-  if (operation.type === 'set_run_emphasis') {
-    if (operation.runId !== undefined) {
-      return (
-        !changes.runIds.has(operation.runId) ||
-        changes.runOpaque.has(operation.runId) ||
-        changes.runStyles.has(operation.runId)
-      )
-    }
-    if (operation.paragraphId === undefined) return true
-    return (
-      !changes.paragraphIds.has(operation.paragraphId) ||
-      changes.paragraphOpaque.has(operation.paragraphId) ||
-      changes.paragraphRunChanges.has(operation.paragraphId)
-    )
-  }
-  if (!changes.runIds.has(operation.runId)) return true
-  if (changes.runOpaque.has(operation.runId)) return true
-  return operation.type === 'replace_run_text'
-    ? changes.runText.has(operation.runId)
-    : changes.runStyles.has(operation.runId)
 }
 
 function paragraphOpaqueFragments(

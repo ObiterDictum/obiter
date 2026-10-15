@@ -1,7 +1,7 @@
 import { parseXmlElements } from './overlay'
 import { requiredAttribute } from './xml-elements'
 
-const CONTENT_TYPES_NAMESPACE =
+export const CONTENT_TYPES_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/content-types'
 
 export type ContentTypeIndex = {

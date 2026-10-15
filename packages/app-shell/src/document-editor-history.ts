@@ -47,9 +47,24 @@ export function popWorkspaceDraft(history: readonly WorkspaceDraftSnapshot[]): {
  * move, closes the run so the next keystroke starts a fresh step.
  */
 export function useWorkspaceDraftHistory() {
-  const [past, setPast] = useState<WorkspaceDraftSnapshot[]>([])
-  const [future, setFuture] = useState<WorkspaceDraftSnapshot[]>([])
+  const [stacks, setStacks] = useState<{
+    past: WorkspaceDraftSnapshot[]
+    future: WorkspaceDraftSnapshot[]
+  }>({ past: [], future: [] })
+  // The synchronous truth `stacks` only catches up to at render: a save
+  // queues `discardRedo` and `translate` in one tick, and the translation
+  // must see the post-discard stacks to compute its honest answer. Every
+  // mutation writes the ref and the state together.
+  const latest = useRef(stacks)
   const group = useRef<TypingGroup | null>(null)
+
+  function commitStacks(next: {
+    past: WorkspaceDraftSnapshot[]
+    future: WorkspaceDraftSnapshot[]
+  }) {
+    latest.current = next
+    setStacks(next)
+  }
 
   function record(snapshot: WorkspaceDraftSnapshot, edit?: HistoryEdit) {
     const now = Date.now()
@@ -60,22 +75,25 @@ export function useWorkspaceDraftHistory() {
       return
     }
     group.current = edit ? nextTypingGroup(edit, now) : null
-    setPast((current) => pushWorkspaceDraft(current, snapshot))
-    setFuture([])
+    commitStacks({
+      past: pushWorkspaceDraft(latest.current.past, snapshot),
+      future: [],
+    })
   }
 
   function clear() {
     group.current = null
-    setPast([])
-    setFuture([])
+    commitStacks({ past: [], future: [] })
   }
 
   /**
-   * Rewrites every snapshot with the save boundary's translation. A snapshot
-   * the boundary cannot express is dropped rather than left replayable, and the
-   * caller is told so it can surface the loss instead of silently continuing.
-   * This is the history's only view of a baseline advance, so undo and redo
-   * always restore a state the saved document can actually hold.
+   * Rewrites every snapshot with the save boundary's translation —
+   * transactionally. Both stacks are computed before either is touched: a
+   * snapshot the boundary cannot express reports unsupported and leaves both
+   * stacks exactly as they were, so the caller holds the operation instead of
+   * losing the unrelated history the snapshot also carries. This is the
+   * history's only view of a baseline advance, so undo and redo always
+   * restore a state the saved document can actually hold.
    */
   function translate(
     rewrite: (
@@ -83,19 +101,11 @@ export function useWorkspaceDraftHistory() {
     ) => WorkspaceDraftSnapshot | null,
   ) {
     group.current = null
-    let translated = true
-    const map = (stack: WorkspaceDraftSnapshot[]) =>
-      stack.flatMap((snapshot) => {
-        const next = rewrite(snapshot)
-        if (!next) {
-          translated = false
-          return []
-        }
-        return [next]
-      })
-    setPast(map)
-    setFuture(map)
-    return { translated }
+    const past = translateStack(latest.current.past, rewrite)
+    const future = translateStack(latest.current.future, rewrite)
+    if (!past || !future) return { translated: false }
+    commitStacks({ past, future })
+    return { translated: true }
   }
 
   /**
@@ -106,24 +116,28 @@ export function useWorkspaceDraftHistory() {
    * history and anything typed but not yet saved are deliberately left alone.
    */
   function discardRedo() {
-    setFuture([])
+    commitStacks({ past: latest.current.past, future: [] })
   }
 
   function stepBack(current: WorkspaceDraftSnapshot) {
-    const popped = popWorkspaceDraft(past)
+    const popped = popWorkspaceDraft(latest.current.past)
     if (!popped) return null
     group.current = null
-    setPast(popped.history)
-    setFuture((branch) => pushWorkspaceDraft(branch, current))
+    commitStacks({
+      past: popped.history,
+      future: pushWorkspaceDraft(latest.current.future, current),
+    })
     return popped.snapshot
   }
 
   function stepForward(current: WorkspaceDraftSnapshot) {
-    const popped = popWorkspaceDraft(future)
+    const popped = popWorkspaceDraft(latest.current.future)
     if (!popped) return null
     group.current = null
-    setFuture(popped.history)
-    setPast((branch) => pushWorkspaceDraft(branch, current))
+    commitStacks({
+      past: pushWorkspaceDraft(latest.current.past, current),
+      future: popped.history,
+    })
     return popped.snapshot
   }
 
@@ -134,7 +148,24 @@ export function useWorkspaceDraftHistory() {
     discardRedo,
     stepBack,
     stepForward,
-    canUndo: past.length > 0,
-    canRedo: future.length > 0,
+    canUndo: stacks.past.length > 0,
+    canRedo: stacks.future.length > 0,
   }
+}
+
+/**
+ * Maps a stack through the boundary rewrite, or null when any snapshot
+ * cannot be expressed — the all-or-nothing half of a `translate` call.
+ */
+function translateStack(
+  stack: readonly WorkspaceDraftSnapshot[],
+  rewrite: (snapshot: WorkspaceDraftSnapshot) => WorkspaceDraftSnapshot | null,
+): WorkspaceDraftSnapshot[] | null {
+  const mapped: WorkspaceDraftSnapshot[] = []
+  for (const snapshot of stack) {
+    const next = rewrite(snapshot)
+    if (!next) return null
+    mapped.push(next)
+  }
+  return mapped
 }
