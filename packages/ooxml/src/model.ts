@@ -133,6 +133,7 @@ export type OoxmlErrorCode =
   | 'model-node-not-found'
   | 'model-node-not-editable'
   | 'invalid-document-edit'
+  | 'last-paragraph-required'
   | 'invalid-tracked-change-decision'
   | 'invalid-model-json'
   | 'comment-anchor-unresolved'
@@ -161,6 +162,9 @@ function errorMessage(code: OoxmlErrorCode) {
   }
   if (code === 'invalid-document-edit') {
     return 'The document edit is invalid.'
+  }
+  if (code === 'last-paragraph-required') {
+    return 'A document must contain at least one paragraph.'
   }
   if (code === 'invalid-tracked-change-decision') {
     return 'The tracked change decision is invalid.'

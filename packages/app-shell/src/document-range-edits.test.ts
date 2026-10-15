@@ -4,7 +4,7 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { collectEditOperations } from './document-edits'
+import { collectEditOperations, flowParagraphIds } from './document-edits'
 import {
   applyReplaceDocumentRange,
   applySplitOverDocumentRange,
@@ -111,6 +111,24 @@ describe('replacing a range across paragraphs', () => {
       { type: 'delete_paragraph', paragraphId: 'p2' },
       { type: 'delete_paragraph', paragraphId: 'p3' },
     ])
+  })
+
+  it('keeps exactly one paragraph when the whole document is selected', () => {
+    const model = doc(para('p1', 'alpha'), para('p2', 'bravo'))
+    const result = applyReplaceDocumentRange(
+      model,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 0 },
+      { paragraphId: 'p2', offset: 5 },
+      '',
+    )
+    const state = result?.state ?? emptyEditorState()
+    // A range needs two endpoints to span paragraphs, so the join always
+    // leaves the head paragraph: a selection cannot reach zero paragraphs.
+    expect(
+      flowParagraphIds(model, state.inserts, state.deletedParagraphIds),
+    ).toEqual(['p1'])
+    expect(blockText(model, state, 'p1')).toBe('')
   })
 
   it('joins across an empty middle paragraph', () => {
