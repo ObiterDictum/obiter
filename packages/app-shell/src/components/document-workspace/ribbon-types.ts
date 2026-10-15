@@ -35,6 +35,24 @@ export type DocumentFormatToolbar = {
   onToggleList: (kind: ListKind) => void
 }
 
+/**
+ * The clipboard controls' availability and handlers. Copy and cut need a live
+ * document selection; paste needs an editable document. A disabled control
+ * carries the reason its accessible name publishes, so the state is announced
+ * rather than only implied by a greyed button.
+ */
+export type DocumentClipboardToolbar = {
+  canCopy: boolean
+  canCut: boolean
+  canPaste: boolean
+  copyReason?: string
+  cutReason?: string
+  pasteReason?: string
+  onCopy: () => void
+  onCut: () => void
+  onPaste: () => void
+}
+
 export type DocumentFindToolbar = {
   query: string
   replace: string

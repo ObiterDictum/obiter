@@ -24,13 +24,16 @@ export function handleDocumentWorkspaceKeys(
     redo?: () => void
     focusFind?: () => void
     print?: () => void
+    toggleBold?: () => void
+    toggleItalic?: () => void
+    toggleUnderline?: () => void
   },
 ) {
   const key = event.key.toLowerCase()
   if (!(event.metaKey || event.ctrlKey)) return
   // AltGr reports as Ctrl+Alt on Windows, so any Alt-combined chord is a
   // character shortcut for the layout, never a document command. One guard
-  // here covers save, undo, redo and find rather than each branch separately.
+  // here covers save, undo, redo, find and the character toggles.
   if (event.altKey) return
   // The find box and the comments box are inputs inside the workspace
   // section. Do not swallow their native Ctrl+Z/Ctrl+F so field text can be
@@ -69,5 +72,24 @@ export function handleDocumentWorkspaceKeys(
   if (!inForeignField && key === 'f' && handlers.focusFind) {
     event.preventDefault()
     handlers.focusFind()
+    return
+  }
+  // Ctrl/Cmd+B/I/U mirror the ribbon character controls. The caller wires these
+  // only while the matching control is available, so a tracked partial range
+  // that refuses the ribbon button also refuses the shortcut rather than
+  // swallowing a keystroke the platform could not have used.
+  if (!inForeignField && !event.shiftKey) {
+    const toggle =
+      key === 'b'
+        ? handlers.toggleBold
+        : key === 'i'
+          ? handlers.toggleItalic
+          : key === 'u'
+            ? handlers.toggleUnderline
+            : undefined
+    if (toggle) {
+      event.preventDefault()
+      toggle()
+    }
   }
 }

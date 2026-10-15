@@ -17,6 +17,9 @@ import type {
   ParagraphSelectionBinding,
   ParagraphSelectionHandlers,
 } from './paragraph-selection-binding'
+import { revealTypingLine } from './paragraph-reveal'
+
+export { revealTypingLine } from './paragraph-reveal'
 
 export type { ParagraphSelectionBinding, ParagraphSelectionHandlers }
 export function ParagraphEditor({
@@ -104,6 +107,23 @@ export function ParagraphEditor({
     }
     revealTypingLine(node)
   }, [selected, restoreCaret, selectionFrom, selectionTo, selectionDirection])
+
+  /** Sends a paste or drop payload through the same path, reporting whether the
+   * event was ours: a live document selection always is (an empty payload is a
+   * refused replacement), a caret paste only when there is text and a handler,
+   * so the native insert stays untouched otherwise. */
+  function applyPayload(node: HTMLTextAreaElement, data: string): boolean {
+    const from = node.selectionStart
+    const to = node.selectionEnd
+    if (selection?.active) {
+      if (data.length > 0) selection.onPasteText?.(data, from, to)
+      else selection.onRejectInput()
+      return true
+    }
+    if (!selection?.onPasteText || data.length === 0) return false
+    selection.onPasteText(data, from, to)
+    return true
+  }
 
   function focusEnd(node: HTMLTextAreaElement): {
     anchor: number
@@ -193,16 +213,17 @@ export function ParagraphEditor({
         if (selection?.active) applyDomInput(event.currentTarget.value)
       }}
       onDrop={(event) => {
-        if (!selection?.active) return
+        const data = event.dataTransfer?.getData('text/plain') ?? ''
+        // A drop carries the same payload a paste does, so it takes the same
+        // path: a multi-line payload splits into paragraphs instead of being
+        // written into one textarea as hard breaks.
+        if (!applyPayload(event.currentTarget, data)) return
         event.preventDefault()
-        const data = event.dataTransfer.getData('text/plain')
-        if (data.length > 0) selection.onReplaceRange(data)
-        else selection.onRejectInput()
       }}
       onDragOver={(event) => {
-        // A drop over a live selection is ours to handle; refusing the default
-        // keeps the browser from inserting into one paragraph of the range.
-        if (selection?.active) event.preventDefault()
+        // The drop is ours whenever this field can paste at all; refusing the
+        // default keeps the browser from inserting into one paragraph.
+        if (selection?.active || selection?.onPasteText) event.preventDefault()
       }}
       onMouseDown={() => {
         clearColumn()
@@ -397,15 +418,13 @@ export function ParagraphEditor({
         onMoveCaret(step.paragraphId, step.offset)
       }}
       onPaste={(event) => {
-        if (!selection?.active) return
-        event.preventDefault()
         // An empty or text-less clipboard payload (an image-only copy, a
         // format-only clipboard) must not replace a live selection with an
         // empty string, which would read as an accidental delete. Whitespace
         // and newlines are meaningful text and pass the length check.
         const data = event.clipboardData?.getData('text/plain') ?? ''
-        if (data.length > 0) selection.onReplaceRange(data)
-        else selection.onRejectInput()
+        if (!applyPayload(event.currentTarget, data)) return
+        event.preventDefault()
       }}
       onCopy={(event) => {
         if (!selection?.active) return
@@ -475,25 +494,4 @@ function arrowKey(
     key === 'ArrowDown'
     ? key
     : null
-}
-
-export function revealTypingLine(node: HTMLElement) {
-  const page = node.closest('[data-document-page]')
-  if (page instanceof HTMLElement) {
-    page.scrollTop = 0
-    for (const slot of page.querySelectorAll('[aria-label="Document body"]')) {
-      if (slot instanceof HTMLElement) slot.scrollTop = 0
-    }
-  }
-  const desk = node.closest('[data-document-desk]')
-  if (!(desk instanceof HTMLElement)) return
-  const deskBox = desk.getBoundingClientRect()
-  const box = node.getBoundingClientRect()
-  if (box.height <= 0) return
-  if (box.top >= deskBox.top && box.bottom <= deskBox.bottom) return
-  if (box.top < deskBox.top) {
-    desk.scrollTop += box.top - deskBox.top - 8
-    return
-  }
-  desk.scrollTop += box.bottom - deskBox.bottom + 8
 }
