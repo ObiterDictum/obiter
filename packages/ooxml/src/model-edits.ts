@@ -14,8 +14,8 @@ import {
   type LineageRecorder,
 } from './document-lineage'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
+import { setParagraphNumbering } from './numbering-edits'
 import {
-  setParagraphNumbering,
   setParagraphFormat,
   setRunEmphasis,
   type RunEmphasis,

@@ -13,6 +13,12 @@ export const DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX = 1_638
 export const DOCUMENT_EDIT_TWIP_MIN = 0
 export const DOCUMENT_EDIT_TWIP_MAX = 31_680
 export const DOCUMENT_EDIT_COLOUR_PATTERN = /^(auto|[0-9A-Fa-f]{6})$/
+/**
+ * The largest list restart value the contract accepts. Word stores a start
+ * override as a decimal number, but no real list starts past a signed 16-bit
+ * count; the bound keeps a hostile client from writing an unbounded marker.
+ */
+export const DOCUMENT_EDIT_NUMBERING_START_MAX = 32_767
 
 export const documentEditHighlightSchema = z.enum([
   'yellow',
@@ -264,6 +270,18 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
       paragraphId: editIdSchema,
       numId: editIdSchema.nullable(),
       ilvl: z.number().int().min(0).max(8).optional(),
+      /**
+       * Restart the list at this number. `null`/absent leaves the numbering
+       * instance as-is; a value points the paragraph at an instance that
+       * carries `w:lvlOverride`/`w:startOverride` for `ilvl`.
+       */
+      startOverride: z
+        .number()
+        .int()
+        .min(1)
+        .max(DOCUMENT_EDIT_NUMBERING_START_MAX)
+        .nullable()
+        .optional(),
     })
     .strict()
     .superRefine((operation, context) => {
@@ -272,6 +290,13 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
           code: 'custom',
           path: ['ilvl'],
           message: 'ilvl is required when numId is set.',
+        })
+      }
+      if (operation.startOverride != null && operation.numId === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['startOverride'],
+          message: 'startOverride requires a numbering instance.',
         })
       }
     }),

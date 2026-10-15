@@ -1,8 +1,14 @@
 import type {
   DocumentModelWire,
+  DocumentNumberingWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { patchParagraphFormatXml, patchRunEmphasisXml } from '@obiter/ooxml'
+import {
+  buildOverrideFragment,
+  hasPureStartOverride,
+  patchParagraphFormatXml,
+  patchRunEmphasisXml,
+} from '@obiter/ooxml'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 import type {
   FormatDrafts,
@@ -16,15 +22,91 @@ export function formattedModel(
   format: FormatDrafts,
 ): DocumentModelWire {
   const emphasisByRun = runEmphasisIndex(format)
+  const numbering = paintedNumbering(model, format)
+  const paintedFormat = numbering.instances.length
+    ? { ...format, numbering: numbering.drafts }
+    : format
   return {
     ...model,
+    numbering: numbering.instances.length
+      ? [...model.numbering, ...numbering.instances]
+      : model.numbering,
     stories: model.stories.map((story) => ({
       ...story,
       paragraphs: story.paragraphs.map((paragraph) =>
-        formattedParagraph(paragraph, format, emphasisByRun),
+        formattedParagraph(paragraph, paintedFormat, emphasisByRun),
       ),
     })),
   }
+}
+
+/**
+ * Drafts whose restart the model cannot yet name. The server creates or reuses
+ * an instance on save, so before that the paragraph's `w:numPr` still points at
+ * the source and the markers would number on. Synthesising a private instance
+ * for the draft — with the override folded into the paragraph's own level —
+ * points the painted `w:numPr` at it so the marker visibly restarts now. A draft
+ * that already names an instance carrying the override is left alone, so the
+ * paint and the save agree on the instance id.
+ */
+function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
+  const drafts = { ...format.numbering }
+  const instances: DocumentNumberingWire[] = []
+  for (const [paragraphId, draft] of Object.entries(format.numbering)) {
+    const start = draft.startOverride
+    if (!draft.numId || start === undefined || start === null) continue
+    const source = model.numbering.find(
+      (instance) => instance.numberingId === draft.numId,
+    )
+    if (!source) continue
+    const ilvl = draft.ilvl ?? 0
+    if (hasPureStartOverride(source.sourceFragment, ilvl, start)) continue
+    const abstractId = source.abstractNumberingId
+    // The server refuses a restart whose source names no abstract numbering
+    // (`resolveParagraphNumbering` throws invalid-document-edit), so a preview
+    // that synthesised one would claim a restart the save rejects.
+    if (!abstractId) continue
+    // The server reuses an instance that already carries a pure override for
+    // the same abstract numbering, level and start. Searching the model and
+    // the instances synthesised earlier in this pass the same way makes two
+    // paragraphs restarted in one action share one counter (1., 2.), not paint
+    // one counter each (1., 1.) and diverge from the save.
+    const matching = [...model.numbering, ...instances].find(
+      (instance) =>
+        instance.abstractNumberingId === abstractId &&
+        hasPureStartOverride(instance.sourceFragment, ilvl, start),
+    )
+    if (matching) {
+      drafts[paragraphId] = { ...draft, numId: matching.numberingId }
+      continue
+    }
+    const numberingId = `draft:${paragraphId}`
+    instances.push({
+      numberingId,
+      abstractNumberingId: abstractId,
+      startOverride: start,
+      // Mirror the server's created instance with the same builder, so a later
+      // paragraph with this resolution tuple recognises it as reusable exactly
+      // as the server recognises the instance it created.
+      sourceFragment: buildOverrideFragment(
+        source.sourceFragment,
+        'w',
+        abstractId,
+        numberingId,
+        ilvl,
+        start,
+      ),
+      ...(source.levels
+        ? {
+            levels: source.levels.map((level) =>
+              level.ilvl === ilvl ? { ...level, start } : { ...level },
+            ),
+          }
+        : {}),
+    })
+    drafts[paragraphId] = { ...draft, numId: numberingId }
+  }
+  return { drafts, instances }
 }
 
 function runEmphasisIndex(format: FormatDrafts) {
@@ -67,12 +149,31 @@ export function projectRangeEmphasis(
 }
 
 export function paragraphStyleOptions(model: DocumentModelWire) {
-  return model.styles.flatMap((style) => {
-    if (!/w:type\s*=\s*"paragraph"/i.test(style.sourceFragment)) return []
-    const name =
-      xmlAttr(xmlTagAttrs(style.sourceFragment, 'name'), 'val') ?? style.styleId
-    return [{ styleId: style.styleId, name }]
-  })
+  const seen = new Set<string>()
+  const options: Array<{ styleId: string; name: string }> = []
+  for (const style of model.styles) {
+    if (seen.has(style.styleId)) continue
+    if (!isParagraphStyle(style.sourceFragment)) continue
+    seen.add(style.styleId)
+    options.push({
+      styleId: style.styleId,
+      name:
+        xmlAttr(xmlTagAttrs(style.sourceFragment, 'name'), 'val') ??
+        style.styleId,
+    })
+  }
+  return options
+}
+
+/**
+ * A `w:style` is a paragraph style unless it explicitly names another kind.
+ * OOXML defaults an omitted `w:type` to paragraph, so requiring the attribute
+ * would drop a valid style; excluding the named non-paragraph kinds keeps a
+ * character style out of the gallery.
+ */
+function isParagraphStyle(sourceFragment: string) {
+  const type = sourceFragment.match(/w:type\s*=\s*["']([^"']*)["']/iu)?.[1]
+  return type === undefined || type === 'paragraph'
 }
 function paintRangeEmphasis(
   paragraph: DocumentParagraphWire,

@@ -7,9 +7,14 @@ import { documentStory, paragraphPlainText } from './document-model-text'
 import { snapEmphasisRange } from './document-format-paint'
 import { paragraphFormatFields } from './document-paragraph-format'
 import { paragraphNumPr } from './document-page-lists'
+import {
+  findNumberingInstance,
+  findRestartInstance,
+} from './document-list-toggle'
 import type {
   EmphasisPatch,
   FormatDrafts,
+  NumberingDraft,
   PendingEmphasis,
 } from './document-format-types'
 
@@ -132,6 +137,9 @@ export function collectFormatOperations(
       paragraphId,
       numId: numbering.numId,
       ...(numbering.ilvl !== undefined ? { ilvl: numbering.ilvl } : {}),
+      ...(numbering.startOverride !== undefined
+        ? { startOverride: numbering.startOverride }
+        : {}),
     })
   }
   for (const [paragraphId, paragraphFormat] of Object.entries(
@@ -280,16 +288,17 @@ export function indentList(
   const current =
     format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
   if (!current?.numId) return format
-  const ilvl = Math.min(8, (current.ilvl ?? 0) + 1)
-  const instance = model.numbering.find(
-    (item) => item.numberingId === current.numId,
-  )
-  if (!instance?.levels?.some((level) => level.ilvl === ilvl)) return format
+  const instance = findNumberingInstance(model, current.numId)
+  // Clamp to the levels the instance actually defines: a numbering definition
+  // can skip a level, and asking for `ilvl + 1` would then name a level the
+  // instance does not have.
+  const next = nextDefinedLevel(instance?.levels, current.ilvl ?? 0)
+  if (next === undefined) return format
   return {
     ...format,
     numbering: {
       ...format.numbering,
-      [paragraph.id]: { numId: current.numId, ilvl },
+      [paragraph.id]: { numId: current.numId, ilvl: next },
     },
   }
 }
@@ -302,15 +311,73 @@ export function outdentList(
   const current =
     format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
   if (!current?.numId) return format
-  const ilvl = current.ilvl ?? 0
+  const instance = findNumberingInstance(model, current.numId)
+  // A dangling numbering definition cannot be outdented without emitting an
+  // operation the server would reject; leave the paragraph alone instead.
+  if (!instance) return format
+  const previous = previousDefinedLevel(instance.levels, current.ilvl ?? 0)
   return {
     ...format,
     numbering: {
       ...format.numbering,
       [paragraph.id]:
-        ilvl <= 0 ? { numId: null } : { numId: current.numId, ilvl: ilvl - 1 },
+        previous === undefined
+          ? { numId: null }
+          : { numId: current.numId, ilvl: previous },
     },
   }
+}
+
+/**
+ * Restarts the target's list at 1 by pointing it at a numbering instance with a
+ * start override. The draft carries the effective instance and level so the
+ * save and the paint agree; the writer de-duplicates the override instance.
+ */
+export function restartList(
+  format: FormatDrafts,
+  model: DocumentModelWire,
+  paragraph: DocumentParagraphWire,
+): FormatDrafts {
+  const current =
+    format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
+  if (!current?.numId) return format
+  const source = findNumberingInstance(model, current.numId)
+  if (!source) return format
+  const ilvl = current.ilvl ?? 0
+  // Mirror the server's resolution: point the draft at the instance the save
+  // will reuse when one already carries this restart, so the painted `w:numPr`
+  // and the saved one name the same instance. The create case keeps the source
+  // id and relies on the paint's virtual instance for the marker.
+  const matching = findRestartInstance(model, source, ilvl, 1)
+  const draft: NumberingDraft = {
+    numId: matching?.numberingId ?? current.numId,
+    ilvl,
+    startOverride: 1,
+  }
+  return {
+    ...format,
+    numbering: { ...format.numbering, [paragraph.id]: draft },
+  }
+}
+
+function nextDefinedLevel(
+  levels: ReadonlyArray<{ ilvl: number }> | undefined,
+  current: number,
+) {
+  return (levels ?? [])
+    .map((level) => level.ilvl)
+    .filter((ilvl) => ilvl > current && ilvl <= 8)
+    .sort((left, right) => left - right)[0]
+}
+
+function previousDefinedLevel(
+  levels: ReadonlyArray<{ ilvl: number }> | undefined,
+  current: number,
+) {
+  return (levels ?? [])
+    .map((level) => level.ilvl)
+    .filter((ilvl) => ilvl < current && ilvl >= 0)
+    .sort((left, right) => right - left)[0]
 }
 
 export function continueList(
@@ -327,9 +394,19 @@ export function continueList(
     const numPr =
       format.numbering[previous.id] ?? paragraphNumPr(previous, model.styles)
     if (!numPr?.numId) continue
+    // A previous paragraph may point at a numbering definition this model no
+    // longer holds; copying it would emit an operation the server rejects, so
+    // keep looking rather than continue from a dangling list.
+    if (!findNumberingInstance(model, numPr.numId)) continue
     return {
       ...format,
-      numbering: { ...format.numbering, [paragraph.id]: numPr },
+      numbering: {
+        ...format.numbering,
+        [paragraph.id]: {
+          numId: numPr.numId,
+          ...(numPr.ilvl !== undefined ? { ilvl: numPr.ilvl } : {}),
+        },
+      },
     }
   }
   return format
