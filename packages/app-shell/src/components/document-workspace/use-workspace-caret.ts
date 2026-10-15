@@ -13,7 +13,6 @@ import {
   reconcileSelection,
   selectionCollapsed,
   selectionDirection,
-  selectionPlainText,
   selectionSegmentMap,
   wholeDocumentSelection,
   type DocumentSelection,
@@ -31,6 +30,7 @@ import {
   type SelectionRefusal,
 } from './document-selection-notices'
 import { useWorkspaceFind } from './use-workspace-find'
+import { useWorkspaceClipboard } from './use-workspace-clipboard'
 import { useCaretLineageRemap } from './caret-lineage'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 
@@ -136,6 +136,22 @@ export function useWorkspaceCaret({
     insertIds.size > 0,
     structuralIds.size > 0,
   )
+  const clipboard = useWorkspaceClipboard({
+    model,
+    selection: resolvedSelection,
+    selectionActive,
+    context,
+    selectedRange,
+    replaceSelection: replaceSelectionRange,
+    selectedParagraphId,
+    selectionParagraphIds: new Set(segments.keys()),
+    isStructuralParagraph: (paragraphId) => structuralIds.has(paragraphId),
+    formatRange,
+    restoreCaret,
+    placeCaret: selectParagraph,
+    setRefusal: setSelectionRefusal,
+    paste: drafts.paste,
+  })
 
   function clearSelectionState() {
     setSelection(null)
@@ -192,7 +208,9 @@ export function useWorkspaceCaret({
     setSelectionRefusal(null)
     setSelectedParagraphId(paragraphId)
     setRestoreCaret(offset == null ? null : { paragraphId, offset })
-    if (offset != null) setFormatRange({ from: offset, to: offset })
+    // A reseat without an offset is a focus, not a caret, so the previous
+    // paragraph's format range must not survive as a phantom selection.
+    setFormatRange(offset == null ? null : { from: offset, to: offset })
   }
 
   /**
@@ -305,13 +323,16 @@ export function useWorkspaceCaret({
     return range
   }
 
-  function replaceSelectionRange(text: string) {
-    const range = selectedRange()
-    if (!model || !range) return
+  function replaceSelectionRange(
+    text: string,
+    range?: { start: SelectionEndpoint; end: SelectionEndpoint },
+  ) {
+    const resolved = range ?? selectedRange()
+    if (!model || !resolved) return
     const caret = drafts.replaceDocumentRange(
       model,
-      range.start,
-      range.end,
+      resolved.start,
+      resolved.end,
       text,
     )
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
@@ -350,36 +371,6 @@ export function useWorkspaceCaret({
     if (!model || !range) return
     const caret = drafts.splitDocumentRange(model, range.start, range.end)
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
-  }
-
-  function copySelection(clipboard: DataTransfer | null) {
-    if (!resolvedSelection) return
-    clipboard?.setData(
-      'text/plain',
-      selectionPlainText(context, resolvedSelection),
-    )
-  }
-
-  function cutSelection(clipboard: DataTransfer | null) {
-    // Validate the range before the clipboard is touched, so a refused edit
-    // cannot leave text in the clipboard that was never removed. The deletion
-    // then runs through the same path validated here.
-    const range = selectedRange()
-    if (!range || !resolvedSelection || !model) return
-    if (!clipboard) {
-      setSelectionRefusal('clipboard')
-      return
-    }
-    try {
-      clipboard.setData(
-        'text/plain',
-        selectionPlainText(context, resolvedSelection),
-      )
-    } catch {
-      setSelectionRefusal('clipboard')
-      return
-    }
-    replaceSelectionRange('')
   }
 
   function setFindQuery(query: string) {
@@ -463,8 +454,7 @@ export function useWorkspaceCaret({
     focusParagraph,
     replaceSelectionRange,
     splitSelectionRange,
-    copySelection,
-    cutSelection,
+    ...clipboard,
     findQuery: find.findQuery,
     setFindQuery,
     replaceQuery: find.replaceQuery,

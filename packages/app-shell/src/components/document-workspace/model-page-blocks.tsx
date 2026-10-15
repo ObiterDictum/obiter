@@ -155,7 +155,8 @@ export function renderBlock(
         insert={insert}
         selected={ctx.selectedParagraphId === insert.clientId}
         verticalCaret={ctx.verticalCaret}
-        onSelect={() => ctx.onSelectParagraph(insert.clientId)}
+        onSelect={(offset) => ctx.onSelectParagraph(insert.clientId, offset)}
+        onPasteText={ctx.selectionHandlers?.onPasteText}
         onTextChange={ctx.onInsertTextChange}
         onInsertParagraph={ctx.onInsertParagraph}
         onDeleteParagraph={ctx.onDeleteParagraph}

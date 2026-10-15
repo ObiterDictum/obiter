@@ -237,6 +237,15 @@ export function ModelParagraph({
               toModelEndpoint(focus, paragraph.id, start),
               toModelEndpoint(anchor, paragraph.id, start),
             ),
+          onPasteText: selectionHandlers.onPasteText
+            ? (text, from, to) =>
+                selectionHandlers.onPasteText?.(
+                  paragraph.id,
+                  text,
+                  start + from,
+                  start + to,
+                )
+            : undefined,
         }
       : undefined
   const runPaint = (

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
-import { downloadBlob, selectedParagraphLength } from '../../document-edits'
+import { selectedParagraphLength } from '../../document-edits'
 import {
   documentFormatToolbar,
   type FormatTarget,
@@ -17,7 +17,6 @@ import {
   useResolveDocumentComment,
   useCreateDocumentComment,
   useTrackedChangeDecision,
-  fetchDocumentExport,
 } from '../../document-workspace-api'
 import { DocumentModelPage } from './model-view'
 import { DocumentSaveBanners } from './save-banners'
@@ -30,6 +29,9 @@ import { useDocumentSave } from './use-document-save'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
+import { documentClipboardToolbar } from './use-workspace-clipboard'
+import { exportDocumentAsDocx } from './document-workspace-export'
+import { selectionAnnouncement } from './document-workspace-status'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
 import { DocumentDesk, DocumentPage, DocumentPrintStyle } from './document-page'
@@ -141,6 +143,10 @@ export function DocxWorkspace({
     splitSelectionRange,
     copySelection,
     cutSelection,
+    copyToClipboard,
+    cutToClipboard,
+    pasteText,
+    pasteFromClipboard,
     clearSelection,
     mirrorSelection,
     findQuery,
@@ -182,31 +188,27 @@ export function DocxWorkspace({
     onSplitRange: splitSelectionRange,
     onCopyRange: copySelection,
     onCutRange: cutSelection,
+    onPasteText: (paragraphId, text, from, to) =>
+      pasteText(text, { paragraphId, from, to }),
     onClear: clearSelection,
     onRejectInput: rejectSelectionInput,
     onEscapeBlur: blurParagraph,
   }
-  const selectionStatus =
-    selectionNotice ?? selectionAnnouncement(selectionSegments.size)
-
-  async function exportDocx() {
-    try {
-      const { blob, skippedCommentCount } =
-        await fetchDocumentExport(documentId)
-      downloadBlob(
-        /\.docx$/iu.test(filename) ? filename : `${filename}.docx`,
-        blob,
-      )
-      if (skippedCommentCount > 0) {
-        setBanner(skippedCommentsMessage(skippedCommentCount))
-      }
-    } catch (error) {
-      setBanner(mutationError(error))
-    }
-  }
-
   // Print reports only refusal or absence; printing itself saves nothing.
   const transientBanner = printBanner ?? save.notice ?? banner
+
+  const format = painted
+    ? documentFormatToolbar(
+        painted,
+        drafts.format,
+        selectedParagraphId,
+        drafts.setFormat,
+        formatTarget,
+        trackChanges,
+        drafts.drafts,
+        drafts.extraRuns,
+      )
+    : undefined
 
   const ribbon = (
     <WorkspaceRibbon>
@@ -234,7 +236,9 @@ export function DocxWorkspace({
         onToggleTrackChanges={() => setTrackChanges((value) => !value)}
         onZoom={setZoom}
         onExportText={() => {
-          void exportDocx()
+          void exportDocumentAsDocx(documentId, filename).then((message) => {
+            if (message) setBanner(message)
+          })
         }}
         onPrint={printDocument}
         onSave={save.save}
@@ -250,20 +254,14 @@ export function DocxWorkspace({
           if (selectId) selectParagraph(selectId)
         }}
         deleteParagraphReason={deleteParagraphReason}
-        format={
-          painted
-            ? documentFormatToolbar(
-                painted,
-                drafts.format,
-                selectedParagraphId,
-                drafts.setFormat,
-                formatTarget,
-                trackChanges,
-                drafts.drafts,
-                drafts.extraRuns,
-              )
-            : undefined
-        }
+        format={format}
+        clipboard={documentClipboardToolbar({
+          editable: true,
+          selectionActive,
+          onCopy: () => void copyToClipboard(),
+          onCut: () => void cutToClipboard(),
+          onPaste: () => void pasteFromClipboard(),
+        })}
         find={{
           query: findQuery,
           replace: replaceQuery,
@@ -305,7 +303,7 @@ export function DocxWorkspace({
           state and any refusal is announced rather than only painted. No
           role="status" so the transient banner stays the only status region. */}
       <p className="sr-only" aria-live="polite" data-selection-status>
-        {selectionStatus}
+        {selectionNotice ?? selectionAnnouncement(selectionSegments.size)}
       </p>
     </WorkspaceRibbon>
   )
@@ -320,6 +318,18 @@ export function DocxWorkspace({
           redo: redoDocument,
           print: printDocument,
           focusFind: () => document.getElementById('document-find')?.focus(),
+          toggleBold:
+            format && !format.emphasisUnavailable
+              ? format.onToggleBold
+              : undefined,
+          toggleItalic:
+            format && !format.emphasisUnavailable
+              ? format.onToggleItalic
+              : undefined,
+          toggleUnderline:
+            format && !format.emphasisUnavailable
+              ? format.onToggleUnderline
+              : undefined,
         })
       }
     >
@@ -353,9 +363,7 @@ export function DocxWorkspace({
                       pageTextBoxes={laid.textBoxes}
                       pageColumns={laid.columns}
                       selectedParagraphId={selectedParagraphId}
-                      onSelectParagraph={(paragraphId, offset) =>
-                        selectParagraph(paragraphId, offset)
-                      }
+                      onSelectParagraph={selectParagraph}
                       onTextSelection={(paragraphId, from, to, direction) => {
                         setFormatRange({ from, to })
                         mirrorSelection(paragraphId, from, to, direction)
@@ -482,16 +490,4 @@ export function DocxWorkspace({
       ) : null}
     </WorkspaceShell>
   )
-}
-
-function selectionAnnouncement(paragraphCount: number) {
-  if (paragraphCount <= 0) return ''
-  if (paragraphCount === 1) return '1 paragraph selected.'
-  return `${String(paragraphCount)} paragraphs selected. Bold, italic and underline apply to the whole selection.`
-}
-
-function skippedCommentsMessage(count: number) {
-  return count === 1
-    ? '1 comment could not be placed in the exported document and was skipped.'
-    : `${count} comments could not be placed in the exported document and were skipped.`
 }

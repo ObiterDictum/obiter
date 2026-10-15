@@ -30,6 +30,14 @@ export const INPUT_BLOCKS_EDIT =
 export const CLIPBOARD_BLOCKS_CUT =
   'The clipboard could not be written, so the text was not deleted.'
 
+/** The message shown when a copy was refused by the clipboard, so the user
+ * knows nothing reached the clipboard rather than assuming it did. */
+export const CLIPBOARD_BLOCKS_COPY =
+  'The clipboard could not be written, so nothing was copied.'
+
+/** The message shown when the clipboard could not be read for a paste. */
+export const CLIPBOARD_BLOCKS_PASTE = 'The clipboard could not be read.'
+
 /** Why the last selection action was refused. The message is derived from the
  * kind, so a refusal cannot outlive the condition that produced it. */
 export type SelectionRefusal =
@@ -38,6 +46,8 @@ export type SelectionRefusal =
   | 'join-formatting'
   | 'input'
   | 'clipboard'
+  | 'clipboard-copy'
+  | 'clipboard-read'
   | DocumentRangeRefusal
 
 export function refusalMessage(
@@ -56,6 +66,10 @@ export function refusalMessage(
       return INPUT_BLOCKS_EDIT
     case 'clipboard':
       return CLIPBOARD_BLOCKS_CUT
+    case 'clipboard-copy':
+      return CLIPBOARD_BLOCKS_COPY
+    case 'clipboard-read':
+      return CLIPBOARD_BLOCKS_PASTE
     default:
       return null
   }
