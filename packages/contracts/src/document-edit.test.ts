@@ -8,9 +8,11 @@ import {
   DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
   DOCUMENT_EDIT_TWIP_MAX,
+} from './document-edit'
+import {
   documentEditRequestSchema,
   documentEditResponseSchema,
-} from './document-edit'
+} from './document-edit-request'
 
 describe('document edit contracts', () => {
   const operation = {

@@ -5,10 +5,12 @@ import { documentVersionLineageSchema } from './document-lineage'
 import {
   DOCUMENT_EDIT_OPERATION_MAX_COUNT,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
-  documentEditOperationsSchema,
-  documentEditResponseSchema,
   editIdSchema,
 } from './document-edit'
+import {
+  documentEditOperationsSchema,
+  documentEditResponseSchema,
+} from './document-edit-request'
 
 export const DOCUMENT_COLLABORATION_PARTICIPANT_MAX_COUNT = 50
 

@@ -979,6 +979,20 @@ export function translateSnapshot(
         Object.assign(next, removeDraftSlots(next, [slot]))
         break
       }
+      case 'structure': {
+        // A snapshot that still holds the saved structure as pending work
+        // finds it on disk after the save: the covered slot drops and the
+        // rest of the snapshot — unrelated typed drafts especially —
+        // survives translation. A snapshot that predates the structure
+        // describes the document without it, so restoring it would need a
+        // removal no operation expresses: the boundary is explicitly
+        // unsupported rather than silently claimed.
+        if (snapshot.structures.some((item) => item.id === slot.id)) {
+          Object.assign(next, removeDraftSlots(next, [slot]))
+          break
+        }
+        return null
+      }
       default: {
         // Any other slot (there is none the editor produces today): a snapshot
         // that still holds it loses it to the new baseline and never replays

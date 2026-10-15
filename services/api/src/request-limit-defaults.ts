@@ -1,6 +1,13 @@
 /** Default JSON request body cap (48 KiB). */
 export const DEFAULT_JSON_BODY_MAX_BYTES = 49_152
 
+/**
+ * Default request body cap for the two document-edit routes (12 MiB). Edit
+ * batches carry base64 rasters the 48 KiB JSON cap cannot hold; every other
+ * route keeps the general limit.
+ */
+export const DEFAULT_DOCUMENT_EDIT_MAX_BYTES = 12 * 1024 * 1024
+
 /** Default multipart document upload cap (25 MiB). */
 export const DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES = 25 * 1024 * 1024
 

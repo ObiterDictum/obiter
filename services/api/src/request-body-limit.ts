@@ -9,6 +9,14 @@ import {
 
 const MATTER_DOCUMENTS_UPLOAD_PATH = /^\/api\/matters\/[^/]+\/documents$/
 
+/**
+ * The only routes admitted past the general JSON cap. Edit batches carry
+ * base64 picture payloads that cannot fit 48 KiB; the image contract bound
+ * sits below this transport cap so a maximum-sized picture still parses.
+ */
+const DOCUMENT_EDIT_PATH =
+  /^\/api\/documents\/[^/]+\/(?:edit|collaboration\/merge)$/
+
 interface RequestBodyLimit {
   maxBytes: number
   limitKind: 'json' | 'upload'
@@ -30,6 +38,13 @@ function requestBodyMaxBytes(
     return {
       maxBytes: limits.documentUploadMaxBytes,
       limitKind: 'upload',
+    }
+  }
+
+  if (method === 'POST' && DOCUMENT_EDIT_PATH.test(path)) {
+    return {
+      maxBytes: limits.documentEditMaxBytes,
+      limitKind: 'json',
     }
   }
 
