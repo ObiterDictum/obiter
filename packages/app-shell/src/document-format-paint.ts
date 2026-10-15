@@ -2,11 +2,12 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { patchRunEmphasisXml } from '@obiter/ooxml'
+import { patchParagraphFormatXml, patchRunEmphasisXml } from '@obiter/ooxml'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 import type {
   FormatDrafts,
   NumberingDraft,
+  ParagraphFormatDraft,
   PendingEmphasis,
 } from './document-format-types'
 
@@ -168,6 +169,7 @@ function formattedParagraph(
 ): DocumentParagraphWire {
   const styleId = format.paragraphStyles[paragraph.id]
   const numbering = format.numbering[paragraph.id]
+  const paragraphFormat = format.paragraphFormats[paragraph.id]
   return {
     ...paragraph,
     ...(styleId !== undefined
@@ -175,13 +177,11 @@ function formattedParagraph(
         ? { styleId: undefined }
         : { styleId }
       : {}),
-    preservedXmlFragments: numbering
-      ? patchFragments(
-          paragraph.preservedXmlFragments,
-          numberingXml(paragraph.preservedXmlFragments, numbering),
-          /<w:pPr\b/u,
-        )
-      : paragraph.preservedXmlFragments,
+    preservedXmlFragments: paragraphPropertiesFragments(
+      paragraph,
+      numbering,
+      paragraphFormat,
+    ),
     runs: paragraph.runs.map((run) => {
       const emphasis = emphasisByRun.get(run.id)
       if (!emphasis) return run
@@ -197,13 +197,34 @@ function formattedParagraph(
   }
 }
 
-function numberingXml(fragments: readonly string[], numbering: NumberingDraft) {
+/**
+ * Applies the pending style-independent paragraph layout and numbering to one
+ * `w:pPr`. Formatting runs after numbering so both patches read the same
+ * fragment; the server's `setParagraphFormat` and `setParagraphNumbering`
+ * write the same elements, so paint and save cannot disagree.
+ */
+function paragraphPropertiesFragments(
+  paragraph: DocumentParagraphWire,
+  numbering: NumberingDraft | undefined,
+  paragraphFormat: ParagraphFormatDraft | undefined,
+) {
+  if (!numbering && !paragraphFormat) return paragraph.preservedXmlFragments
   const current =
-    fragments.find((fragment) => /<w:pPr\b/u.test(fragment)) ?? '<w:pPr/>'
+    paragraph.preservedXmlFragments.find((fragment) =>
+      /<w:pPr\b/u.test(fragment),
+    ) ?? '<w:pPr/>'
+  let next = numbering ? numberingXml(current, numbering) : current
+  if (paragraphFormat) {
+    next = patchParagraphFormatXml(next, paragraphFormat)
+  }
+  return patchFragments(paragraph.preservedXmlFragments, next, /<w:pPr\b/u)
+}
+
+function numberingXml(fragment: string, numbering: NumberingDraft) {
   const base =
-    current.trim() === '' || /\/\s*>$/u.test(current)
+    fragment.trim() === '' || /\/\s*>$/u.test(fragment)
       ? '<w:pPr/>'
-      : strip(current, 'numPr')
+      : strip(fragment, 'numPr')
   if (numbering.numId === null) return base
   const numPr = `<w:numPr><w:ilvl w:val="${String(numbering.ilvl ?? 0)}"/><w:numId w:val="${numbering.numId}"/></w:numPr>`
   if (/\/\s*>$/u.test(base)) {

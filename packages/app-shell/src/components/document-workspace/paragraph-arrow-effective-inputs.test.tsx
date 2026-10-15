@@ -151,6 +151,7 @@ function formatDrafts(paragraphId: string): FormatDrafts {
     emphasis: [],
     paragraphStyles: { [paragraphId]: 'Small' },
     numbering: {},
+    paragraphFormats: {},
   }
 }
 

@@ -69,7 +69,12 @@ export function emptyDraftState(): DraftState {
     inserts: [],
     deletedParagraphIds: [],
     extraRuns: {},
-    format: { emphasis: [], paragraphStyles: {}, numbering: {} },
+    format: {
+      emphasis: [],
+      paragraphStyles: {},
+      numbering: {},
+      paragraphFormats: {},
+    },
     trackedRejections: [],
   }
 }
@@ -85,6 +90,7 @@ export type DraftSlot =
   | { kind: 'delete'; key: string; paragraphId: string }
   | { kind: 'paragraph-style'; key: string; paragraphId: string }
   | { kind: 'numbering'; key: string; paragraphId: string }
+  | { kind: 'paragraph-format'; key: string; paragraphId: string }
   | { kind: 'emphasis'; key: string }
   | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 
@@ -296,6 +302,36 @@ export function planDocumentSave(
       label: onInsert
         ? 'list formatting on a new paragraph'
         : 'list formatting',
+    })
+  }
+
+  for (const [paragraphId, paragraphFormat] of Object.entries(
+    state.format.paragraphFormats,
+  )) {
+    if (paragraphIds.has(paragraphId)) {
+      keep.format.paragraphFormats[paragraphId] = paragraphFormat
+      covered.push({
+        kind: 'paragraph-format',
+        key: `pformat:${paragraphId}`,
+        paragraphId,
+      })
+      continue
+    }
+    // Paragraph layout is a separate operation with no paragraph id of its own
+    // until the insert has run, so it cannot be composed onto the insert.
+    const onInsert = insertById.has(paragraphId)
+    blocked.push({
+      slot: {
+        kind: 'paragraph-format',
+        key: `pformat:${paragraphId}`,
+        paragraphId,
+      },
+      reason: onInsert
+        ? 'Paragraph formatting on a paragraph that has not been saved yet cannot be sent separately.'
+        : 'This paragraph is no longer in the document.',
+      label: onInsert
+        ? 'paragraph formatting on a new paragraph'
+        : 'paragraph formatting',
     })
   }
 
