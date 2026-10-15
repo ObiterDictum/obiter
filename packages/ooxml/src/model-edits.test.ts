@@ -351,7 +351,7 @@ describe('OOXML document edits', () => {
       applyDocumentEdits(single, [
         { type: 'delete_paragraph', paragraphId: onlyId },
       ]),
-    ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
+    ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
   })
 
   it('replaces the only paragraph when an insert lands before the delete', async () => {
@@ -371,6 +371,26 @@ describe('OOXML document edits', () => {
     expect(mainParagraphs(single)).toMatchObject([
       { runs: [{ text: 'Typed line' }] },
     ])
+  })
+
+  it('keeps the only paragraph in the body when tracking its deletion', async () => {
+    const single = await parseSingleParagraphFixture()
+    const onlyId = mainParagraphs(single)[0]?.id
+    if (!onlyId) throw new Error('Single paragraph is missing.')
+
+    // A tracked delete records the word-compatible deleted markup instead of
+    // removing the paragraph, so the persisted body still holds a paragraph and
+    // the last-paragraph invariant holds without an untracked-style refusal.
+    applyDocumentEdits(
+      single,
+      [{ type: 'delete_paragraph', paragraphId: onlyId }],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+
+    const xml = await zipText(await serialiseDocx(single), 'word/document.xml')
+    expect(xml).toContain('<w:del ')
+    const reparsed = await parseDocx(await serialiseDocx(single))
+    expect(mainParagraphs(reparsed).length).toBe(1)
   })
 
   it('folds a tracked type-then-bold batch into the inserted run', async () => {
@@ -525,7 +545,7 @@ describe('OOXML document edits', () => {
     ).toBe(true)
   })
 
-  it('accepts a tracked blank-line deletion by removing the paragraph', async () => {
+  it('refuses accepting the only paragraph mark deletion', async () => {
     const document = await parseEmptyParagraphFixture()
     const onlyId = mainParagraphs(document)[0]?.id
     if (!onlyId) throw new Error('Empty paragraph is missing.')
@@ -541,11 +561,103 @@ describe('OOXML document edits', () => {
     )
     if (!deletion) throw new Error('Tracked blank deletion is missing.')
 
-    applyTrackedChangeDecisions(reparsed, [deletion.id], 'accept')
-    const remaining = mainParagraphs(
-      await parseDocx(await serialiseDocx(reparsed)),
+    // Accepting the mark would remove the only `w:p`, so the decision is
+    // refused with the same typed reason the edit guard uses.
+    expect(() =>
+      applyTrackedChangeDecisions(reparsed, [deletion.id], 'accept'),
+    ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
+  })
+
+  it('leaves a refused accept untouched', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:rPr><w:del w:id="0" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"/></w:rPr></w:pPr><w:del w:id="1" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"><w:r><w:delText>Gone</w:delText></w:r></w:del></w:p></w:body></w:document>',
     )
-    expect(remaining).toEqual([])
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const mark = document.model.changes.find(({ ooxmlId }) => ooxmlId === '0')
+    const run = document.model.changes.find(({ ooxmlId }) => ooxmlId === '1')
+    if (!mark || !run) throw new Error('Crafted tracked changes are missing.')
+
+    expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
+    const beforeXml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(() =>
+      applyTrackedChangeDecisions(document, [mark.id], 'accept'),
+    ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
+    // The refused decision must not have folded the sibling change or touched
+    // the source: the serialised part is byte-identical.
+    expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
+    expect(
+      await zipText(await serialiseDocx(document), 'word/document.xml'),
+    ).toBe(beforeXml)
+  })
+
+  it('accepts a paragraph mark deletion when another paragraph survives', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:rPr><w:del w:id="0" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"/></w:rPr></w:pPr></w:p><w:p><w:r><w:t>Kept</w:t></w:r></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const deletion = document.model.changes.find(
+      ({ kind, author }) => kind === 'delete' && author === 'Review Author',
+    )
+    if (!deletion) throw new Error('Paragraph-mark deletion is missing.')
+
+    applyTrackedChangeDecisions(document, [deletion.id], 'accept')
+    const remaining = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )
+    expect(remaining).toMatchObject([{ runs: [{ text: 'Kept' }] }])
+  })
+
+  it('refuses rejecting the only tracked-insert shell', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"><w:r><w:t>Typed</w:t></w:r></w:ins></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const shellId = mainParagraphs(document)[0]?.id
+    const insert = document.model.changes.find(({ kind }) => kind === 'insert')
+    if (!shellId || !insert) throw new Error('Tracked insert shell is missing.')
+
+    expect(() =>
+      applyTrackedChangeDecisions(document, [insert.id], 'reject', [shellId]),
+    ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
+  })
+
+  it('rejects a tracked-insert shell when another paragraph survives', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"><w:r><w:t>Typed</w:t></w:r></w:ins></w:p><w:p><w:r><w:t>Kept</w:t></w:r></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const shellId = mainParagraphs(document)[0]?.id
+    const insert = document.model.changes.find(({ kind }) => kind === 'insert')
+    if (!shellId || !insert) throw new Error('Tracked insert shell is missing.')
+
+    applyTrackedChangeDecisions(document, [insert.id], 'reject', [shellId])
+    const remaining = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )
+    expect(remaining).toMatchObject([{ runs: [{ text: 'Kept' }] }])
   })
 
   it('parses a Word paragraph-mark deletion and restores it on reject', async () => {

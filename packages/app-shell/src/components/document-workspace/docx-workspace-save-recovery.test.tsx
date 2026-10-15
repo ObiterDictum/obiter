@@ -59,9 +59,10 @@ describe('E45 a rejected save must not poison later saves', () => {
   })
 
   it('saves later valid work when the server rejects one change in the batch', async () => {
-    // Models the server's atomic batch rule for this document: one paragraph
-    // and no inserts means deleting every paragraph is rejected. The typed text
-    // in the same batch is valid and must still reach the server.
+    // Models the server's atomic batch rule: the delete operation is rejected
+    // while the typed text in the same batch is valid and must still reach the
+    // server. The document holds two paragraphs so the client itself keeps the
+    // deletion valid (E0 refuses deleting the final paragraph).
     const saved: string[] = []
     const editAsync = vi.fn(
       async (input: { operations: DocumentEditOperation[] }) => {
@@ -77,7 +78,7 @@ describe('E45 a rejected save must not poison later saves', () => {
         return { documentId: 'doc_1', versionId: version, versionNumber: 2 }
       },
     )
-    mountSaveWorkspace({ editAsync })
+    mountSaveWorkspace({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
