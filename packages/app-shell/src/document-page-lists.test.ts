@@ -124,4 +124,26 @@ describe('documentListMarkers', () => {
     ]
     expect(documentListMarkers(model).get('p1')).toBeUndefined()
   })
+
+  it('does not apply an override declared at another level to ilvl 0', () => {
+    const model = listModel()
+    const instance = model.numbering[0]
+    if (!instance) throw new Error('expected numbering instance')
+    model.numbering[0] = {
+      ...instance,
+      startOverride: 5,
+      sourceFragment:
+        '<w:num w:numId="1"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="2"><w:startOverride w:val="5"/></w:lvlOverride></w:num>',
+      levels: [
+        { ilvl: 0, start: 1, numFmt: 'decimal', lvlText: '%1.' },
+        { ilvl: 1, start: 1, numFmt: 'lowerLetter', lvlText: '(%2)' },
+        { ilvl: 2, start: 5, numFmt: 'decimal', lvlText: '%3.' },
+      ],
+    }
+    // The instance's first override is at ilvl 2; p1 and p3 sit at ilvl 0 and
+    // must keep counting from the abstract start.
+    const markers = documentListMarkers(model)
+    expect(markers.get('p1')?.text).toBe('1.')
+    expect(markers.get('p3')?.text).toBe('2.')
+  })
 })

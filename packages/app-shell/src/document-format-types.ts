@@ -45,6 +45,8 @@ export type PendingEmphasis = EmphasisPatch & {
 export type NumberingDraft = {
   numId: string | null
   ilvl?: number
+  /** Restart the list at this number; absent/`null` leaves it as-is. */
+  startOverride?: number | null
 }
 
 export type ParagraphIndentationDraft = {

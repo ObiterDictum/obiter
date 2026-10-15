@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 
 import {
   DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH,
+  DOCUMENT_EDIT_NUMBERING_START_MAX,
   DOCUMENT_EDIT_OPERATION_MAX_COUNT,
   DOCUMENT_EDIT_RUN_MAX_COUNT,
   DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX,
@@ -443,5 +444,41 @@ describe('document edit contracts', () => {
         ],
       }).success,
     ).toBe(true)
+  })
+
+  it('accepts a bounded list start override and rejects the rest', () => {
+    const parse = (startOverride: unknown) =>
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: '1',
+            ilvl: 0,
+            startOverride,
+          },
+        ],
+      }).success
+    expect(parse(1)).toBe(true)
+    expect(parse(DOCUMENT_EDIT_NUMBERING_START_MAX)).toBe(true)
+    expect(parse(null)).toBe(true)
+    expect(parse(0)).toBe(false)
+    expect(parse(DOCUMENT_EDIT_NUMBERING_START_MAX + 1)).toBe(false)
+    expect(parse(1.5)).toBe(false)
+    // An override without an instance has nothing to attach to.
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: null,
+            startOverride: 1,
+          },
+        ],
+      }).success,
+    ).toBe(false)
   })
 })

@@ -211,6 +211,31 @@ describe('run and paragraph property families', () => {
     expect(xml).toContain('w:before="240"')
   })
 
+  it('round-trips a paragraph style on insert_paragraph_after', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const paragraph = mainParagraphs(document)[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      documentEditOperationSchema.parse({
+        type: 'insert_paragraph_after',
+        paragraphId: paragraph.id,
+        text: 'Styled insert',
+        styleId: 'Heading1',
+      }),
+    ])
+    const inserted = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )[1]
+
+    expect(inserted?.styleId).toBe('Heading1')
+    expect(inserted?.preservedXmlFragments.join('')).toContain(
+      '<w:pStyle w:val="Heading1"/>',
+    )
+  })
+
   it('round-trips a partial range highlight, strikethrough and vertical align', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
