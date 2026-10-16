@@ -23,8 +23,19 @@ export const documentCursorSchema = z
   .strict()
 export type DocumentCursor = z.infer<typeof documentCursorSchema>
 
+/**
+ * One heartbeat row exists per (document, user, client): the client id is a
+ * per-tab nonce, so two tabs of one account are distinct participants and a
+ * tab closing removes only its own cursor. Optional in the request so an
+ * older client heartbeating without it keeps a single identity per user.
+ */
+export const documentPresenceClientIdSchema = z.string().min(1).max(64)
+
 export const documentPresenceUpdateRequestSchema = z
-  .object({ cursor: documentCursorSchema.nullable() })
+  .object({
+    cursor: documentCursorSchema.nullable(),
+    clientId: documentPresenceClientIdSchema.optional(),
+  })
   .strict()
 export type DocumentPresenceUpdateRequest = z.infer<
   typeof documentPresenceUpdateRequestSchema
@@ -33,6 +44,7 @@ export type DocumentPresenceUpdateRequest = z.infer<
 export const documentPresenceSchema = z
   .object({
     userId: z.string().min(1),
+    clientId: documentPresenceClientIdSchema.optional(),
     cursor: documentCursorSchema.nullable(),
   })
   .strict()

@@ -10,7 +10,8 @@ import {
 import type { StorageService } from '../storage'
 import {
   documentNotFound,
-  resolveCurrentReadyDocumentVersion,
+  requestedVersionSelection,
+  resolveReadyDocumentVersion,
 } from './document-route-shared'
 
 export function createDocumentMediaRoutes(pool: Pool, storage: StorageService) {
@@ -18,11 +19,13 @@ export function createDocumentMediaRoutes(pool: Pool, storage: StorageService) {
   const imageParts = createDocumentImagePartCache()
 
   routes.get('/api/documents/:id/media', async (c) => {
-    const resolved = await resolveCurrentReadyDocumentVersion(
+    const resolved = await resolveReadyDocumentVersion(
       c,
       pool,
       c.req.param('id'),
       'docx',
+      'view',
+      requestedVersionSelection(c),
     )
     if (resolved instanceof Response) return resolved
 

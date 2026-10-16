@@ -25,6 +25,7 @@ import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
 import { createDocumentCollaborationRoutes } from './routes/document-collaboration'
+import { createDocumentCompareRoutes } from './routes/document-compare'
 import { createDocumentContentRoutes } from './routes/document-content'
 import { createDocumentEditRoutes } from './routes/document-edit'
 import { createDocumentExportRoutes } from './routes/document-export'
@@ -46,7 +47,7 @@ import { apiRequestLimitsFromEnv } from './request-limits'
 import { createRequestBodyLimitMiddleware } from './request-body-limit'
 import { createTrackedChangeRoutes } from './routes/tracked-changes'
 import { createVerificationRunRoutes } from './routes/verification-runs'
-import { DocumentPresenceRegistry } from './document-presence'
+import { PostgresDocumentPresence } from './document-presence-store'
 import { createLocalStorage, type StorageService } from './storage'
 
 type Auth = ReturnType<typeof createAuth>
@@ -171,7 +172,7 @@ export function createApiApp(
     env.nodeEnv === 'development'
       ? readDevelopmentApiProvenance(env.localEnvFile)
       : null
-  const presence = new DocumentPresenceRegistry()
+  const presence = new PostgresDocumentPresence(pool)
   const requestLimits = apiRequestLimitsFromEnv(env)
   const app = new Hono<{ Variables: AppVariables }>()
 
@@ -314,6 +315,7 @@ export function createApiApp(
   app.route('/', createOrganisationsRoutes(pool, env))
   app.route('/', createDocumentsRoutes(pool, storage, requestLimits))
   app.route('/', createDocumentCollaborationRoutes(pool, storage, presence))
+  app.route('/', createDocumentCompareRoutes(pool, storage))
   app.route('/', createDocumentContentRoutes(pool, storage))
   app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))

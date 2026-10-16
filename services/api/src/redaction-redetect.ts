@@ -15,16 +15,12 @@ export async function redetectRedactionRun(input: {
   runId: string
   requestId: string
 }) {
-  const sourceRun = await getRedactionRun(
-    input.pool,
-    {
-      id: input.userId,
-      organisationId: input.organisationId,
-      role: 'member',
-    },
-    input.runId,
-    'edit',
-  )
+  const user = {
+    id: input.userId,
+    organisationId: input.organisationId,
+    role: 'member' as const,
+  }
+  const sourceRun = await getRedactionRun(input.pool, user, input.runId, 'edit')
   if (!sourceRun) return { kind: 'not_found' as const }
   if (sourceRun.detectionMode === 'model+supplement')
     return { kind: 'already_model_detected' as const }
@@ -36,7 +32,7 @@ export async function redetectRedactionRun(input: {
   )
   if (existing) return { kind: 'existing' as const, run: existing }
 
-  const sourceObjectKey = await getRunTextObjectKey(input.pool, sourceRun)
+  const sourceObjectKey = await getRunTextObjectKey(input.pool, sourceRun, user)
   if (!sourceObjectKey) return { kind: 'source_unavailable' as const }
   const text = await input.storage.readText(sourceObjectKey)
 

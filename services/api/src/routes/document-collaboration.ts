@@ -13,9 +13,10 @@ import {
 import type { AuthzVariables } from '../authz'
 import { createCollaborationMergeVersion } from '../document-collaboration-versions'
 import {
-  DocumentPresenceRegistry,
   validateDocumentCursor,
+  type DocumentPresenceBackend,
 } from '../document-presence'
+import { PostgresDocumentPresence } from '../document-presence-store'
 import { isCanonicalReadyDocxVersion } from '../document-version-commit'
 import { DocumentEditInvalidError } from '../document-versions'
 import type { StorageService } from '../storage'
@@ -29,7 +30,7 @@ type RouteContext = Context<{ Variables: AuthzVariables }>
 export function createDocumentCollaborationRoutes(
   pool: Pool,
   storage: StorageService,
-  presence = new DocumentPresenceRegistry(),
+  presence: DocumentPresenceBackend = new PostgresDocumentPresence(pool),
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
@@ -55,10 +56,11 @@ export function createDocumentCollaborationRoutes(
       currentVersionNumber: resolved.version.versionNumber,
       changed:
         sinceVersionId === undefined || sinceVersionId !== resolved.version.id,
-      participants: presence.read(
-        resolved.user.organisationId,
-        resolved.document.id,
-      ),
+      participants: await presence.read({
+        organisationId: resolved.user.organisationId,
+        documentId: resolved.document.id,
+        versionId: resolved.version.id,
+      }),
     })
     return c.json(response)
   })
@@ -88,10 +90,15 @@ export function createDocumentCollaborationRoutes(
       return validationFailed(c, 'The presence update request is invalid.')
     }
 
-    presence.update(
-      resolved.user.organisationId,
-      resolved.document.id,
-      resolved.user.id,
+    await presence.update(
+      {
+        organisationId: resolved.user.organisationId,
+        matterId: resolved.document.matterId,
+        documentId: resolved.document.id,
+        versionId: resolved.version.id,
+        userId: resolved.user.id,
+        clientId: request.data.clientId ?? '',
+      },
       request.data.cursor,
     )
     return c.body(null, 204)

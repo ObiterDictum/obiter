@@ -12,7 +12,10 @@ import {
 } from '../document-artifact-store'
 import { createDocumentMediaResponse } from '../document-media-response'
 import type { StorageService } from '../storage'
-import { resolveCurrentReadyDocumentVersion } from './document-route-shared'
+import {
+  requestedVersionSelection,
+  resolveReadyDocumentVersion,
+} from './document-route-shared'
 
 export class DocumentDownloadError extends DocumentArtifactStoreError {
   constructor() {
@@ -96,11 +99,13 @@ export function createDocumentContentRoutes(
   // its comment-embedding /export; this route is the byte-identical way back
   // to what was uploaded (PDF, TXT, and anything else with no viewer).
   routes.get('/api/documents/:id/download', async (c) => {
-    const resolved = await resolveCurrentReadyDocumentVersion(
+    const resolved = await resolveReadyDocumentVersion(
       c,
       pool,
       c.req.param('id'),
       null,
+      'view',
+      requestedVersionSelection(c),
     )
     if (resolved instanceof Response) return resolved
 
@@ -139,11 +144,13 @@ export function createDocumentContentRoutes(
   // bound is the upload cap (MAX_DOCUMENT_UPLOAD_BYTES, 25 MB); a stored
   // text that fails the response schema still fails closed below.
   routes.get('/api/documents/:id/text', async (c) => {
-    const resolved = await resolveCurrentReadyDocumentVersion(
+    const resolved = await resolveReadyDocumentVersion(
       c,
       pool,
       c.req.param('id'),
       'txt',
+      'view',
+      requestedVersionSelection(c),
     )
     if (resolved instanceof Response) return resolved
 
