@@ -3,10 +3,13 @@ import { describe, expect, it } from 'bun:test'
 import { buildShareSafeDocx, parseDocx, ShareSafeRefusal } from './index'
 import { createXmlOverlay, parseXmlElements } from './parts/overlay'
 import type { XmlAttribute, XmlElement } from './parts/xml-elements'
+import { cloneDocument } from './serialise'
 import { assertShareSafeShape } from './share-safe-content'
 import { emitShareSafePart } from './share-safe-emit'
+import { SHARE_SAFE_MAX_FIELD_NESTING } from './share-safe-fields'
+import { planShareSafeCopy } from './share-safe-inventory'
 import type { ShareSafeContentPlan } from './share-safe-parts'
-import { probePackage, W } from './share-safe-probe-kit'
+import { MC, probePackage, W, W14 } from './share-safe-probe-kit'
 
 const PACKAGE_REL_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships'
@@ -104,6 +107,67 @@ describe('share-safe declaration cost', () => {
     // quadratic work exceeds it, linear work does not.
     const error = await buildShareSafeDocx(document).catch((thrown) => thrown)
     expect(error).not.toBeInstanceOf(ShareSafeRefusal)
+  })
+})
+
+describe('share-safe content cost', () => {
+  // Timed on the plan, not the whole build: the verifier re-parses the emitted
+  // package through `parseDocx`, whose own cost is a separate concern, so a
+  // whole-build measurement would hide a share-safe regression behind it.
+  async function planBody(body: string) {
+    const pkg = await parseDocx(await probePackage({}))
+    const part = pkg.sourceParts.get('word/document.xml')
+    if (!part) throw new Error('document part is missing')
+    part.overlay = createXmlOverlay(
+      `<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:mc="${MC}"><w:body>${body}</w:body></w:document>`,
+    )
+    const started = Date.now()
+    planShareSafeCopy(cloneDocument(pkg))
+    return Date.now() - started
+  }
+
+  const alternate = `<mc:AlternateContent><mc:Choice xmlns:w14="${W14}" Requires="w14"><w:p/></mc:Choice><mc:Fallback><w:t>FB</w:t></mc:Fallback></mc:AlternateContent>`
+
+  function commentRun() {
+    return '<w:r><w:commentReference w:id="1"/></w:r>'
+  }
+
+  function flatField(index: number) {
+    return `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE ${index} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`
+  }
+
+  // Each shape is the one a pass used to rescan the whole element list for.
+  // The 5 s bound is the runner's timeout: the quadratic versions exceeded it.
+  it('plans 16000 compatibility blocks in linear time', async () => {
+    expect(
+      await planBody(`<w:p><w:r>${alternate.repeat(16_000)}</w:r></w:p>`),
+    ).toBeLessThan(5_000)
+  })
+
+  it('plans 16000 comment-marker runs in linear time', async () => {
+    expect(
+      await planBody(`<w:p>${commentRun().repeat(16_000)}</w:p>`),
+    ).toBeLessThan(5_000)
+  })
+
+  it('plans 16000 flat fields in linear time', async () => {
+    const fields = Array.from({ length: 16_000 }, (_, index) =>
+      flatField(index),
+    ).join('')
+    expect(await planBody(`<w:p>${fields}</w:p>`)).toBeLessThan(5_000)
+  })
+
+  it('refuses a part nesting fields past the cap', async () => {
+    const depth = SHARE_SAFE_MAX_FIELD_NESTING + 1
+    const nested =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'.repeat(depth) +
+      '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>'.repeat(depth)
+    const error = await planBody(`<w:p>${nested}</w:p>`).catch(
+      (thrown) => thrown,
+    )
+    expect(error).toBeInstanceOf(ShareSafeRefusal)
+    expect((error as ShareSafeRefusal).reason).toBe('oversized-structure')
   })
 })
 

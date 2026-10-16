@@ -84,6 +84,13 @@ export const FIELD_REFERENCE_NAMES = new Set([
   'REF',
 ])
 
+/**
+ * Field nesting this pass reconstructs. Every enclosing span's element list
+ * grows with depth, so a part built from thousands of nested fields is
+ * quadratic work; Word's own nesting limit is far below this.
+ */
+export const SHARE_SAFE_MAX_FIELD_NESTING = 100
+
 /** The `=` formula field is written as `{ =… }` with no field name. */
 export function isFormulaFieldInstruction(instruction: string) {
   return instruction.trimStart().startsWith('=')
@@ -142,6 +149,8 @@ export interface FieldAnalysis {
   orphanMarkers: XmlElement[]
   /** A field the analysis could not bound — the copy refuses. */
   refused: boolean
+  /** The part nests fields past `SHARE_SAFE_MAX_FIELD_NESTING`. */
+  depthExceeded: boolean
 }
 
 /**
@@ -157,6 +166,8 @@ export function analyseFieldSpans(
 ): FieldAnalysis {
   interface Frame {
     begin: XmlElement
+    /** Index of `begin` in `elements`, so a closed span is a slice. */
+    beginIndex: number
     instr: XmlElement[]
     instruction: string
     separates: XmlElement[]
@@ -167,7 +178,8 @@ export function analyseFieldSpans(
   const orphanMarkers: XmlElement[] = []
   let refused = false
 
-  for (const element of elements) {
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]
     if (gone(element)) continue
     // Only w: field machinery is spanned; a:fld inside a shape's txBody
     // carries no instruction text this pass owns.
@@ -189,8 +201,17 @@ export function analyseFieldSpans(
     if (element.localName === 'fldChar') {
       const type = attributeValue(element, element.namespaceUri, 'fldCharType')
       if (type === 'begin') {
+        if (frames.length >= SHARE_SAFE_MAX_FIELD_NESTING) {
+          return {
+            spans: [],
+            orphanMarkers: [],
+            refused: false,
+            depthExceeded: true,
+          }
+        }
         frames.push({
           begin: element,
+          beginIndex: index,
           instr: [],
           instruction: '',
           separates: [],
@@ -208,7 +229,7 @@ export function analyseFieldSpans(
       } else if (type === 'end') {
         frames.pop()
         top.end = element
-        spans.push(assemble(top))
+        spans.push(assemble(top, index))
       } else {
         // Unknown marker type — refuse rather than guess its shape.
         refused = true
@@ -244,36 +265,28 @@ export function analyseFieldSpans(
     orphanMarkers.push(frame.begin, ...frame.instr, ...frame.separates)
   }
 
-  return { spans, orphanMarkers, refused }
+  return { spans, orphanMarkers, refused, depthExceeded: false }
 
-  function assemble(frame: Frame): FieldSpan {
+  function assemble(frame: Frame, endIndex: number): FieldSpan {
     // Flattening drops [begin, lastSeparate-or-endStart) plus the end
     // marker; removing drops the whole [begin, end] span including the
-    // cached result.
+    // cached result. Elements are in document order, so a closed span's
+    // elements are the contiguous slice from `begin` to `end` — scanning the
+    // whole part per field is quadratic in a field-heavy part.
     const boundary =
       frame.separates.length > 0
         ? frame.separates[frame.separates.length - 1]
         : frame.end
-    const dropped: XmlElement[] = []
-    const whole: XmlElement[] = []
-    for (const element of elements) {
-      const inside =
-        element.start >= frame.begin.start &&
-        frame.end !== undefined &&
-        element.end <= frame.end.end
-      if (inside) whole.push(element)
-      if (
-        inside &&
+    const range = elements.slice(frame.beginIndex, endIndex + 1)
+    const dropped = range.filter(
+      (element) =>
         boundary !== undefined &&
-        (element.end <= boundary.end || element === frame.end)
-      ) {
-        dropped.push(element)
-      }
-    }
+        (element.end <= boundary.end || element === frame.end),
+    )
     return {
       instruction: frame.instruction,
       dropped,
-      whole,
+      whole: range,
       instrText: frame.instr,
       end: frame.end,
       simple: undefined,

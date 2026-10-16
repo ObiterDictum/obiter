@@ -54,13 +54,13 @@ const MC_ALTERNATE = /^(AlternateContent|Choice|Fallback)$/u
 const WORD_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/word/'
 
 /**
- * The share-safe content passes are linear in one part's element count
- * (children are indexed once and field removal propagates through a
- * worklist), but they still walk every element of every kept part. These
- * caps are the backstop for that cost: a pathological part is refused
- * rather than processed. They sit far above real toolchain output — the
- * largest part observed in the corpus (a full `styles.xml`) holds ~9k
- * elements and ~14k attributes.
+ * Backstop for the share-safe content passes' cost. Those passes are linear
+ * in one part's element count (children are indexed once, field assembly is
+ * a slice, and removal propagates through a worklist), and nested fields are
+ * capped separately by `SHARE_SAFE_MAX_FIELD_NESTING`; these caps refuse a
+ * part whose parsed shape is still past anything a real document carries.
+ * They sit far above real toolchain output — the largest part observed in
+ * the corpus (a full `styles.xml`) holds ~9k elements and ~14k attributes.
  */
 const SHARE_SAFE_MAX_PART_ELEMENTS = 100_000
 const SHARE_SAFE_MAX_PART_ATTRIBUTES = 200_000
