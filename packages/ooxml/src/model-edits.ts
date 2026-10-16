@@ -41,6 +41,7 @@ import {
 } from './model-run-emphasis'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { insertTable } from './table-edits'
+import { insertTableOfContents } from './table-of-contents-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import {
   createTrackedEditWriter,
@@ -413,6 +414,30 @@ export function applyDocumentEdits(
           lineage,
         )
         structureCounts.set(key, occurrence + 1)
+      }
+    } else if (operation.type === 'insert_table_of_contents') {
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = structureCounts.get(key) ?? 0
+        const inserted = insertTableOfContents(
+          document,
+          mainStory,
+          operation.paragraph,
+          operation.offset,
+          occurrence,
+          deletedIds,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
+        )
+        structureCounts.set(key, occurrence + 1)
+        // The field's tail paragraph is the anchor's post-split half: a later
+        // table or paragraph insert at the same anchor chains after it, the
+        // same way the serialised output places it after the tail's `</w:p>`.
+        postAnchorTails.set(key, inserted.lastWire)
+        postAnchorCounts.set(
+          key,
+          (postAnchorCounts.get(key) ?? 0) + inserted.appended,
+        )
       }
     } else {
       throw new OoxmlError('invalid-document-edit')

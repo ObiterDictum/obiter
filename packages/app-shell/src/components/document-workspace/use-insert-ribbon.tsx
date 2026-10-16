@@ -49,7 +49,9 @@ export function useInsertRibbon(
     onClose: () => void
   },
   drafts: {
-    deletedParagraphIds: string[]
+    /** The batch's effective deletions — the shared set the save partition
+     * and the pending fold read, so availability agrees with the save. */
+    deletedParagraphIds: ReadonlySet<string>
     drafts: Record<string, string>
     extraRuns: Record<string, DocumentTextRunWire[]>
     structures: StructuralDraft[]
@@ -86,11 +88,12 @@ export function useInsertRibbon(
   const structure = documentStructureToolbar({
     paragraphId,
     model,
+    painted,
     cellParagraphIds,
     offset,
     selectionActive,
     selectionRange,
-    deletedParagraphIds: new Set(drafts.deletedParagraphIds),
+    deletedParagraphIds: drafts.deletedParagraphIds,
     trackChanges,
     structures: drafts.structures,
     drafts: drafts.drafts,
@@ -114,6 +117,7 @@ export function useInsertRibbon(
       crossReferenceTargets: structure.crossReferenceTargets,
       pageNumberUnavailable: structure.pageNumberUnavailable,
       footnoteUnavailable: structure.footnoteUnavailable,
+      tableOfContentsUnavailable: structure.tableOfContentsUnavailable,
       editingStoryKind:
         margin.editingKind === 'document' ? undefined : margin.editingKind,
       headerUnavailable,
@@ -126,6 +130,10 @@ export function useInsertRibbon(
         structure.insertCrossReference(targetParagraphId),
       onInsertPageNumber: () => {
         const outcome = structure.insertPageNumber()
+        if (!outcome.inserted) onImageError(outcome.reason)
+      },
+      onInsertTableOfContents: () => {
+        const outcome = structure.insertTableOfContents()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertFootnote: () => {

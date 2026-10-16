@@ -34,6 +34,7 @@ export type PlannedOperation =
           | 'set_hyperlink'
           | 'insert_footnote'
           | 'insert_page_number'
+          | 'insert_table_of_contents'
       }
     > & { paragraph: ParagraphAnchor })
   | (Extract<DocumentEditOperation, { type: 'insert_cross_reference' }> & {
@@ -124,11 +125,14 @@ export function validatePlannedOperations(
     ) {
       throw new OoxmlError('invalid-document-edit')
     }
-    // A reference to a paragraph deleted earlier in the batch would write a
+    // A reference to a paragraph deleted anywhere in the batch would write a
     // bookmark the delete then removes — the REF dangles, so refuse instead.
+    // `deletedIds` collects every planned `delete_paragraph`, explicit marks
+    // and empty-replacement deletes alike, and deletes are emitted last, so
+    // `alreadyDeleted` could never see the batch's own deletions.
     if (
       operation.type === 'insert_cross_reference' &&
-      alreadyDeleted.has(operation.targetParagraph.wire.id)
+      deletedIds.has(operation.targetParagraph.wire.id)
     ) {
       throw new OoxmlError('invalid-document-edit')
     }
@@ -168,7 +172,8 @@ export function validateTrackedOperations(
       operation.type === 'set_hyperlink' ||
       operation.type === 'insert_cross_reference' ||
       operation.type === 'insert_footnote' ||
-      operation.type === 'insert_page_number'
+      operation.type === 'insert_page_number' ||
+      operation.type === 'insert_table_of_contents'
     ) {
       throw new OoxmlError('model-node-not-editable')
     }

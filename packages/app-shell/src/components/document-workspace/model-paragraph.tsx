@@ -87,6 +87,7 @@ export function ModelParagraph({
   continuation = false,
   pageStart = false,
   pageNumber = 1,
+  pageReferences,
   listMarker,
   noteMark,
   noteKind,
@@ -137,6 +138,8 @@ export function ModelParagraph({
   pageStart?: boolean
   /** The page this block paints on: resolves `PAGE` fields in stored runs. */
   pageNumber?: number
+  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
+  pageReferences?: ReadonlyMap<string, number>
   listMarker?: ListMarker
   noteMark?: string
   noteKind?: NoteKind
@@ -271,6 +274,7 @@ export function ModelParagraph({
       carets={carets}
       continuation={continuation}
       pageNumber={pageNumber}
+      pageReferences={pageReferences}
     />
   )
 

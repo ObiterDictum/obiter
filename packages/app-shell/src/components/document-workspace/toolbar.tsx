@@ -207,6 +207,7 @@ export function DocumentWorkspaceToolbar({
             authoritiesOpen={authoritiesOpen}
             onToggleAuthorities={onToggleAuthorities}
             onInsertAuthority={onInsertAuthority}
+            structure={structure}
           />
         </TabsContent>
         <TabsContent value="review" className="min-w-0 flex-1 pt-0">
@@ -229,16 +230,23 @@ export function DocumentWorkspaceToolbar({
           <ViewRibbon zoom={zoom} onZoom={onZoom} />
         </TabsContent>
         <div className="ml-auto flex shrink-0 items-center self-center pr-1">
-          <Button
-            size="sm"
-            aria-label="Save"
-            disabled={!dirty || saving || blocked}
-            loading={saving}
-            onClick={onSave}
-            iconStart={<FloppyDisk size={16} aria-hidden />}
-          >
-            Save
-          </Button>
+          {/* preventDefault keeps the caret in the editor while the save
+              flight runs, so keystrokes typed during it still land. Keyboard
+              activation instead leaves focus on the button; the save path
+              hands it back before `saving` disables the control and the
+              browser drops focus to document.body. */}
+          <span onMouseDown={(event) => event.preventDefault()}>
+            <Button
+              size="sm"
+              aria-label="Save"
+              disabled={!dirty || saving || blocked}
+              loading={saving}
+              onClick={onSave}
+              iconStart={<FloppyDisk size={16} aria-hidden />}
+            >
+              Save
+            </Button>
+          </span>
         </div>
       </div>
     </Tabs>

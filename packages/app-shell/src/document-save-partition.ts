@@ -1,4 +1,8 @@
-import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
+import {
+  PAGE_STORY_KINDS,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
+} from '@obiter/contracts'
 import {
   emptyDraftState,
   isPendingBaselineId,
@@ -6,11 +10,12 @@ import {
   type DraftSlot,
   type DraftState,
 } from './document-draft-state'
-import { editableStories } from './document-model-text'
+import { documentStory, editableStories } from './document-model-text'
 import {
-  emptiedParagraphDeletes,
+  batchParagraphDeletions,
   LAST_PARAGRAPH_MESSAGE,
 } from './document-edits'
+import { storyTableCellIds } from './document-page-tables'
 import { footnoteNoteParagraphId } from './document-structural-drafts'
 import { partitionFormatDrafts } from './document-format-partition'
 import { emphasisSlotKey, slotLabel } from './document-save-slots'
@@ -19,6 +24,11 @@ import {
   conflictingStructure,
   structuralKindNoun,
 } from './document-structure-conflicts'
+import {
+  isTableOfContentsHeading,
+  tableOfContentsAnchorBlock,
+  tableOfContentsHeadingsBlock,
+} from './document-toc-availability'
 
 /**
  * A tracked-change decision the save can send: the group's persisted `w:id`s
@@ -180,22 +190,47 @@ export function partitionDraftState(
     covered.push({ kind: 'delete', key: `delete:${paragraphId}`, paragraphId })
   }
 
-  // A runless paragraph with typed text pending is replaced by an insert plus
-  // a delete in the same batch (`emptyReplacements`), so a structure anchored
-  // to it would anchor a paragraph the batch removes — the writer would drop
-  // the insertion silently. Block it instead.
-  const replacedEmptyAnchors = new Set(
-    editable
-      .flatMap((story) => story.paragraphs)
-      .filter(
-        (paragraph) =>
-          paragraph.runs.length === 0 &&
-          (state.extraRuns[paragraph.id] ?? []).some(
-            (run) => (state.drafts[run.id] ?? run.text).length > 0,
-          ),
-      )
-      .map((paragraph) => paragraph.id),
+  // The batch's resolved deletions, computed once so the partition and every
+  // painted surface read the same answer (`batchParagraphDeletions`):
+  // `applied` is the marks minus the deletions the emptied-story guard
+  // refuses, and `effective` adds the runless paragraphs a pending
+  // replacement deletes implicitly — no draft marks those, but the writer's
+  // `deletedIds` collects their `delete_paragraph` ops all the same. A check
+  // reading only `keep.deletedParagraphIds` would pass a structure, a heading
+  // or a reference target the writer then refuses.
+  const deletions = batchParagraphDeletions(
+    model,
+    keep.inserts,
+    keep.deletedParagraphIds,
+    keep.extraRuns,
+    keep.drafts,
   )
+  if (deletions.emptied.size > 0) {
+    // A restored or constructed draft state can hold deletions that would
+    // empty an editable story — the body's last paragraph, or a
+    // header/footer's only one. Block them rather than send a batch the
+    // server must reject; the client guard already stops the editor creating
+    // this state, so this is the save-plan safety net.
+    for (const slot of covered) {
+      if (slot.kind !== 'delete' || !deletions.emptied.has(slot.paragraphId)) {
+        continue
+      }
+      blocked.push({
+        slot,
+        reason:
+          deletions.emptied.get(slot.paragraphId) ?? LAST_PARAGRAPH_MESSAGE,
+        label: 'a deletion',
+      })
+    }
+    covered = covered.filter(
+      (slot) =>
+        slot.kind !== 'delete' || !deletions.emptied.has(slot.paragraphId),
+    )
+    keep.deletedParagraphIds = keep.deletedParagraphIds.filter(
+      (id) => !deletions.emptied.has(id),
+    )
+  }
+  const batchDeletions = deletions.effective
   const paragraphWires = new Map(
     editable
       .flatMap((story) => story.paragraphs)
@@ -209,14 +244,36 @@ export function partitionDraftState(
   // Why each blocked structure was held back, so the deferred note text can
   // disclose the same reason rather than blaming a missing anchor paragraph.
   const blockedStructureReasons = new Map<string, string>()
+  // The table-of-contents facts the shared refusal predicate reads, computed
+  // lazily so a save holding no such draft does not re-parse the tables. The
+  // heading set is the painted view restricted to stored paragraphs: a
+  // paragraph deleted earlier in the batch is gone, and a `set_paragraph_style`
+  // the same batch carries is already applied — the writer sees both when it
+  // captures entries, so a freshly styled heading must count.
+  let tocFacts:
+    | { cellIds: ReadonlySet<string>; headings: DocumentParagraphWire[] }
+    | undefined
+  const tableOfContentsFacts = () => {
+    const story = documentStory(model)
+    tocFacts ??= {
+      cellIds: storyTableCellIds(story),
+      headings: (story?.paragraphs ?? []).filter((paragraph) => {
+        if (batchDeletions.has(paragraph.id)) return false
+        const pendingStyle = state.format.paragraphStyles[paragraph.id]
+        const effective = { ...paragraph }
+        if (pendingStyle === null) delete effective.styleId
+        else if (pendingStyle !== undefined) effective.styleId = pendingStyle
+        return isTableOfContentsHeading(effective, model.styles)
+      }),
+    }
+    return tocFacts
+  }
   for (const structure of state.structures) {
-    const deletedAnchor =
-      keep.deletedParagraphIds.includes(structure.paragraphId) ||
-      replacedEmptyAnchors.has(structure.paragraphId)
+    const deletedAnchor = batchDeletions.has(structure.paragraphId)
     const missingTarget =
       structure.kind === 'cross-reference' &&
       (!paragraphIds.has(structure.targetParagraphId) ||
-        keep.deletedParagraphIds.includes(structure.targetParagraphId))
+        batchDeletions.has(structure.targetParagraphId))
     // A footnote's reference lives in the body alone: an anchor in any other
     // editable story is a placement the writer must reject, so it is blocked
     // here rather than sent to fail. A page number carries the same rule
@@ -224,7 +281,8 @@ export function partitionDraftState(
     // body, a header or a footer.
     const anchorStoryKind = paragraphStoryKind.get(structure.paragraphId)
     const nonBodyAnchor =
-      structure.kind === 'footnote' &&
+      (structure.kind === 'footnote' ||
+        structure.kind === 'table-of-contents') &&
       anchorStoryKind !== undefined &&
       anchorStoryKind !== 'document'
     const nonPageAnchor =
@@ -236,6 +294,22 @@ export function partitionDraftState(
     // like `replacedEmptyAnchors`, so they are disclosed rather than failing
     // the whole request.
     const wire = paragraphWires.get(structure.paragraphId)
+    // A reloaded table-of-contents draft is refused for every reason the
+    // ribbon would refuse the insertion now: the shared wire-level predicate
+    // keeps the two surfaces from drifting, and anything it cannot see — an
+    // anchor inside `w:sdt` content — stays the writer's last line.
+    const tableOfContentsBlock =
+      structure.kind === 'table-of-contents' && wire !== undefined
+        ? (tableOfContentsAnchorBlock(
+            wire,
+            tableOfContentsFacts().cellIds,
+            model.changes,
+          ) ??
+          tableOfContentsHeadingsBlock(
+            tableOfContentsFacts().headings,
+            model.changes,
+          ))
+        : undefined
     const conflicting = wire
       ? conflictingStructure(
           wire,
@@ -251,19 +325,23 @@ export function partitionDraftState(
       missingTarget ||
       nonBodyAnchor ||
       nonPageAnchor ||
+      tableOfContentsBlock ||
       conflicting
     ) {
       const reason = nonBodyAnchor
-        ? 'A footnote can only be placed in the body.'
+        ? structure.kind === 'table-of-contents'
+          ? 'A table of contents can only be placed in the body.'
+          : 'A footnote can only be placed in the body.'
         : nonPageAnchor
           ? 'A page number needs a page of its own: the body, a header or a footer.'
           : missingTarget
             ? 'The paragraph this references is no longer in the document.'
             : deletedAnchor
               ? 'The paragraph this was placed after is marked for deletion.'
-              : conflicting
-                ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
-                : 'The paragraph this was placed in is no longer in the document.'
+              : (tableOfContentsBlock ??
+                (conflicting
+                  ? `The paragraph already holds a ${structuralKindNoun(conflicting.kind)} this cannot be combined with.`
+                  : 'The paragraph this was placed in is no longer in the document.'))
       blockedStructureReasons.set(structure.id, reason)
       blocked.push({
         slot: {
@@ -408,35 +486,6 @@ export function partitionDraftState(
         ? { removeParagraphIds: [...group.removeParagraphIds] }
         : {}),
     })
-  }
-
-  // A restored or constructed draft state can hold deletions that would empty
-  // an editable story — the body's last paragraph, or a header/footer's only
-  // one. Block the deletes inside each emptied story rather than send a batch
-  // the server must reject; the client guard already stops the editor creating
-  // this state, so this is the save-plan safety net.
-  const emptiedDeletes = emptiedParagraphDeletes(
-    model,
-    keep.inserts,
-    keep.deletedParagraphIds,
-  )
-  if (emptiedDeletes.size > 0) {
-    for (const slot of covered) {
-      if (slot.kind !== 'delete' || !emptiedDeletes.has(slot.paragraphId)) {
-        continue
-      }
-      blocked.push({
-        slot,
-        reason: emptiedDeletes.get(slot.paragraphId) ?? LAST_PARAGRAPH_MESSAGE,
-        label: 'a deletion',
-      })
-    }
-    covered = covered.filter(
-      (slot) => slot.kind !== 'delete' || !emptiedDeletes.has(slot.paragraphId),
-    )
-    keep.deletedParagraphIds = keep.deletedParagraphIds.filter(
-      (id) => !emptiedDeletes.has(id),
-    )
   }
 
   return { keep, covered, blocked, pending, rejections }
