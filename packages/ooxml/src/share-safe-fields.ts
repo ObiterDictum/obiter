@@ -85,11 +85,11 @@ export const FIELD_REFERENCE_NAMES = new Set([
 ])
 
 /**
- * Field nesting this pass reconstructs. Every enclosing span's element list
- * grows with depth, so a part built from thousands of nested fields is
- * quadratic work; Word's own nesting limit is far below this.
+ * Field nesting this pass reconstructs. Every enclosing span materialises
+ * its element list and indexing entry, so a deeply nested part costs depth ×
+ * elements in time and memory. Real documents nest a handful of fields.
  */
-export const SHARE_SAFE_MAX_FIELD_NESTING = 100
+export const SHARE_SAFE_MAX_FIELD_NESTING = 32
 
 /** The `=` formula field is written as `{ =… }` with no field name. */
 export function isFormulaFieldInstruction(instruction: string) {
@@ -270,25 +270,29 @@ export function analyseFieldSpans(
   function assemble(frame: Frame, endIndex: number): FieldSpan {
     // Flattening drops [begin, lastSeparate-or-endStart) plus the end
     // marker; removing drops the whole [begin, end] span including the
-    // cached result. Elements are in document order, so a closed span's
-    // elements are the contiguous slice from `begin` to `end` — scanning the
-    // whole part per field is quadratic in a field-heavy part.
+    // cached result. Elements are in document order, so a span's elements
+    // are the contiguous slice from `begin` to `end` — but a container that
+    // opens inside the span and outlives the end marker (the run holding
+    // `end`, its paragraph, a table) must not be taken with it, so the slice
+    // is bounded again by the end marker's own end. Scanning the whole part
+    // per field is quadratic in a field-heavy part.
+    const end = elements[endIndex]
     const boundary =
       frame.separates.length > 0
         ? frame.separates[frame.separates.length - 1]
-        : frame.end
-    const range = elements.slice(frame.beginIndex, endIndex + 1)
-    const dropped = range.filter(
-      (element) =>
-        boundary !== undefined &&
-        (element.end <= boundary.end || element === frame.end),
+        : end
+    const whole = elements
+      .slice(frame.beginIndex, endIndex + 1)
+      .filter((element) => element.end <= end.end)
+    const dropped = whole.filter(
+      (element) => element.end <= boundary.end || element === end,
     )
     return {
       instruction: frame.instruction,
       dropped,
-      whole: range,
+      whole,
       instrText: frame.instr,
-      end: frame.end,
+      end,
       simple: undefined,
     }
   }
