@@ -248,6 +248,112 @@ describe('run formatting when the caret is elsewhere', () => {
   })
 })
 
+describe('paragraph editor alignment', () => {
+  it('does not repeat the paragraph indent on the textarea', () => {
+    render(
+      <DocumentModelPage
+        model={doc({
+          id: 'p1',
+          runs: [
+            { id: 'p1-r', text: 'Alice Example', preservedXmlFragments: [] },
+          ],
+          preservedXmlFragments: [
+            '<w:pPr><w:ind w:left="720" w:right="360"/></w:pPr>',
+          ],
+        })}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    // The paragraph container carries the indent and the painted runs sit in
+    // the same space, so a padding here would drift the textarea's text — and
+    // with it the native caret and the wrapping — away from the paint.
+    expect(field.style.paddingLeft).toBe('0px')
+    expect(field.style.paddingRight).toBe('0px')
+    // A form control resets `text-indent`, so the editor must carry the
+    // paragraph's own rather than inherit it.
+    expect(field.style.textIndent).toBe('')
+    const paragraph = document.querySelector('[data-paragraph-id="p1"]')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('expected a paragraph')
+    }
+    expect(paragraph.style.paddingLeft).toBe('48px')
+    expect(paragraph.style.paddingRight).toBe('24px')
+  })
+
+  it('carries the paragraph first-line indent on the textarea itself', () => {
+    render(
+      <DocumentModelPage
+        model={doc({
+          id: 'p1',
+          runs: [
+            { id: 'p1-r', text: 'Alice Example', preservedXmlFragments: [] },
+          ],
+          preservedXmlFragments: ['<w:pPr><w:ind w:firstLine="720"/></w:pPr>'],
+        })}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    const paragraph = document.querySelector('[data-paragraph-id="p1"]')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('expected a paragraph')
+    }
+    // The paragraph carries the indent, and the textarea repeats it because a
+    // form control resets `text-indent` rather than inheriting it: without
+    // this the caret sits behind the painted glyphs on line 1.
+    expect(paragraph.style.textIndent).toBe('48px')
+    expect(field.style.textIndent).toBe('48px')
+  })
+
+  it('gives a list paragraph and its textarea the same zero special indent', () => {
+    const list = doc({
+      id: 'p1',
+      runs: [{ id: 'p1-r', text: 'Alice Example', preservedXmlFragments: [] }],
+      preservedXmlFragments: [
+        '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:ind w:firstLine="720"/></w:pPr>',
+      ],
+    })
+    render(
+      <DocumentModelPage
+        model={{
+          ...list,
+          numbering: [
+            {
+              numberingId: '1',
+              abstractNumberingId: '0',
+              sourceFragment: '<w:num w:numId="1"/>',
+              levels: [{ ilvl: 0, numFmt: 'decimal' }],
+            },
+          ],
+        }}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    const paragraph = document.querySelector('[data-paragraph-id="p1"]')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('expected a paragraph')
+    }
+    // A list's indent is the marker column the row lays out, so the face's
+    // first-line indent applies to neither the container nor the textarea.
+    expect(paragraph.style.textIndent).toBe('0px')
+    expect(field.style.textIndent).toBe('0px')
+  })
+})
+
 describe('run formatting on the caret paragraph', () => {
   it('renders a uniformly bold paragraph at weight 700 while it holds the caret', () => {
     render(
