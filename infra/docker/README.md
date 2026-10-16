@@ -57,7 +57,7 @@ docker compose ps            # wait for postgres to be "healthy"
 
 ### Apply migrations
 
-Apply the SQL migrations to both databases with the runner (`services/api/src/migrate.ts`), which applies them in version order, records each in `schema_migrations`, and wraps each file in one transaction with that insert. It takes no default database URL, so name the target:
+Apply the SQL migrations to both databases with the runner (`services/api/src/migrate.ts`), which applies them in version order, records each in `schema_migrations`, and wraps each file in one transaction with that insert. It has no built-in fallback (it reads `DATABASE_URL` only when `--database-url` is absent), so name the target explicitly:
 
 ```sh
 for db in obiter obiter_test; do
