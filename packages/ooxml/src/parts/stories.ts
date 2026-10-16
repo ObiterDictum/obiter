@@ -25,6 +25,7 @@ import { elementFragment, parseXmlElements } from './overlay'
 import { isTrackedChange, trackedChange } from './tracked-change-nodes'
 import {
   attributeValue,
+  childrenByParent,
   elementRange,
   isTextWrappingBreak,
   isWord,
@@ -61,7 +62,7 @@ const NO_ELEMENTS: readonly XmlElement[] = []
  * 20,000 deep).
  */
 class PartIndex {
-  private readonly children = new Map<XmlElement, XmlElement[]>()
+  private readonly children: Map<XmlElement, XmlElement[]>
   private readonly byRun = new Map<XmlElement, XmlElement[]>()
   private readonly byParagraph = new Map<XmlElement, XmlElement[]>()
   private readonly nearestRun = new Map<XmlElement, XmlElement | undefined>()
@@ -74,12 +75,10 @@ class PartIndex {
   private readonly trackedSubtree = new Set<XmlElement>()
 
   constructor(private readonly elements: readonly XmlElement[]) {
+    this.children = childrenByParent(elements)
     for (const element of elements) {
       const parent = element.parent
       if (parent !== undefined) {
-        const siblings = this.children.get(parent)
-        if (siblings) siblings.push(element)
-        else this.children.set(parent, [element])
         if (isTrackedChange(parent) || this.trackedAncestor.has(parent)) {
           this.trackedAncestor.add(element)
         }
