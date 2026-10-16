@@ -58,6 +58,8 @@ function story(
     paragraphs,
     preservedXmlFragments: [],
     ...overrides,
+    fields: [],
+    unanchoredFieldParagraphIds: [],
   }
 }
 

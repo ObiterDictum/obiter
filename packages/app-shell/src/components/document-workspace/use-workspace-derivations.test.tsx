@@ -37,6 +37,8 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         kind: 'document',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],
@@ -81,6 +83,7 @@ function derivations(
       useWorkspaceDerivations({
         documentId: 'doc_1',
         model: base,
+        legalChecksOpen: false,
         drafts: {
           drafts: {},
           inserts: [],

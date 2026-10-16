@@ -24,6 +24,8 @@ function model(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
         partName: 'word/document.xml',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

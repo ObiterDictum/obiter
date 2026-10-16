@@ -111,6 +111,8 @@ export type DocumentStructureToolbar = {
   linkUnavailable?: string
   /** The reason no cross-reference can be inserted, when it cannot. */
   crossReferenceUnavailable?: string
+  /** The reason the selection cannot take a defined-term mark, when it cannot. */
+  definedTermUnavailable?: string
   /** The reason no page number can be inserted at the caret, when it cannot. */
   pageNumberUnavailable?: string
   /** The reason no footnote can be inserted at the caret, when it cannot. */
@@ -118,6 +120,12 @@ export type DocumentStructureToolbar = {
   /** The reason no table of contents can be inserted at the caret, when it
    * cannot. */
   tableOfContentsUnavailable?: string
+  /** The reason no table of authorities can be inserted at the caret, when
+   * it cannot. */
+  tableOfAuthoritiesUnavailable?: string
+  /** The reason the table of authorities under the caret cannot update,
+   * when it cannot. */
+  tableOfAuthoritiesUpdateUnavailable?: string
   /** The paragraphs a cross-reference can point at, in story order. */
   crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
   /** The non-body story open for editing, when one is — pressed state for
@@ -141,6 +149,8 @@ export type DocumentStructureToolbar = {
   onInsertLink: (target: string) => StructuralInsertOutcome
   /** Holds a pending cross-reference at the caret to the target paragraph. */
   onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
+  /** Holds a pending defined-term mark over the selection's range. */
+  onMarkDefinedTerm: () => void
   /** Holds a pending `PAGE` field at the caret in the active story. */
   onInsertPageNumber: () => void
   /**
@@ -148,6 +158,16 @@ export type DocumentStructureToolbar = {
    * the entry paragraphs the save writes.
    */
   onInsertTableOfContents: () => void
+  /**
+   * Holds a pending `TOA` field at the body caret: the folded model grows
+   * the mark runs, bookmarks and entry paragraphs the save writes.
+   */
+  onInsertTableOfAuthorities: () => void
+  /**
+   * Holds a pending refresh of the stored `TOA` field under the caret:
+   * the folded model rewrites its generated paragraphs in place.
+   */
+  onUpdateTableOfAuthorities: () => void
   /**
    * Holds a pending footnote reference at the body caret and opens the
    * footnotes story so the note's text is typed into its folded body.

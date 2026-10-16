@@ -7,13 +7,19 @@ import type {
 import { DocumentAuthoritiesPanel } from './authorities-panel'
 import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
+import { LegalChecksPanel } from './legal-checks-panel'
 import type { ChangeReview } from './use-change-review'
 import type { AuthorityHit } from '../../document-authorities'
+import type { LegalChecksFocus } from './ribbon-review'
+import type { checkCrossReferences } from '../../document-cross-reference-check'
+import type { checkDefinedTerms } from '../../document-defined-terms'
 
 export function WorkspaceSidePanels({
   commentsOpen,
   changesOpen,
   authoritiesOpen,
+  legalChecksOpen,
+  legalChecks,
   comments,
   importedComments,
   orphanedReplies,
@@ -34,6 +40,13 @@ export function WorkspaceSidePanels({
   commentsOpen: boolean
   changesOpen: boolean
   authoritiesOpen: boolean
+  /** The section the panel is focused on; null while it is closed. */
+  legalChecksOpen: LegalChecksFocus | null
+  /** The check derivations, or null while the model loads. */
+  legalChecks: {
+    references: ReturnType<typeof checkCrossReferences>
+    terms: ReturnType<typeof checkDefinedTerms>
+  } | null
   comments: DocumentComment[]
   importedComments: DocumentImportedCommentThread[]
   orphanedReplies: DocumentCommentReply[]
@@ -95,6 +108,18 @@ export function WorkspaceSidePanels({
         >
           <DocumentAuthoritiesPanel
             citations={authorities}
+            onSelect={onSelectAuthority}
+          />
+        </div>
+      ) : null}
+      {legalChecksOpen ? (
+        <div
+          data-print-hide
+          className="w-full rounded-md bg-surface p-4 lg:w-80"
+        >
+          <LegalChecksPanel
+            checks={legalChecks}
+            focus={legalChecksOpen}
             onSelect={onSelectAuthority}
           />
         </div>

@@ -20,11 +20,7 @@ import {
   type XmlOverlay,
 } from './parts/overlay'
 import { W14_NAMESPACE } from './structure-xml'
-import {
-  entryParagraphWire,
-  TOC_FIELD_END_RUN,
-  type TocEntry,
-} from './table-of-contents-xml'
+import { TOC_FIELD_END_RUN } from './table-of-contents-xml'
 
 /**
  * The pPr the tail paragraph carries: the anchor's properties as they will
@@ -179,20 +175,20 @@ export function tocSpliceReplacement(
 /**
  * The wire counterpart of the source splice: the anchor's run list is split
  * at `offset`, the head runs stay on the anchor wire and the tail's — behind
- * the field `end` run — move to a new wire after the entry wires. The tail
+ * the field `end` run — move to a new wire after the inserted wires. The tail
  * keeps the paragraph's pPr fragment; other preserved children stay on the
- * head, which is where they serialise.
+ * head, which is where they serialise. `insertedWires` is the field's
+ * result paragraphs — entries for a table of contents, heading plus
+ * entries for a table of authorities.
  */
 export function spliceParagraphWires(
   document: OoxmlDocument,
   story: DocumentStoryWire,
   paragraph: ParagraphAnchor,
   offset: number,
-  entries: readonly TocEntry[],
-  paraIds: readonly string[],
+  insertedWires: readonly DocumentParagraphWire[],
   tailParaId: string,
   pPrCopy: string,
-  tabPosition: number,
   lineage?: { recorder: LineageRecorder; operationIndex: number },
 ) {
   const wire = paragraph.wire
@@ -259,24 +255,19 @@ export function spliceParagraphWires(
       /^<w:pPr\b/u.test(fragment),
     ),
   }
-  const entryWires = entries.map((entry, index) =>
-    entryParagraphWire(
-      nextRunId,
-      entry,
-      paraIds[index] ?? '',
-      index === 0,
-      tabPosition,
-    ),
-  )
   story.paragraphs.splice(
     story.paragraphs.indexOf(wire) + 1,
     0,
-    ...entryWires,
+    ...insertedWires,
     tailWire,
   )
   if (lineage) {
-    for (const entry of entryWires) {
-      recordInsertedParagraph(lineage.recorder, entry, lineage.operationIndex)
+    for (const inserted of insertedWires) {
+      recordInsertedParagraph(
+        lineage.recorder,
+        inserted,
+        lineage.operationIndex,
+      )
     }
     // The tail derives from the anchor rather than existing before — a
     // paragraph split — so its origin names the anchor, not null.

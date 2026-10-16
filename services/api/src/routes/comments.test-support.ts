@@ -85,6 +85,8 @@ const commentModel = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],

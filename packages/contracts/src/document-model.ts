@@ -65,11 +65,76 @@ export const documentParagraphWireSchema = z.object({
 })
 export type DocumentParagraphWire = z.infer<typeof documentParagraphWireSchema>
 
+/**
+ * One stored field the parser paired from the story's source markup: a
+ * complex `w:fldChar` field or a self-contained `w:fldSimple`. The wire's
+ * paragraph and run fragments lose element parentage and sibling order —
+ * whether a field's `end` run leads its paragraph, or a `w:tbl` sits inside
+ * the field's range — so the parser records the pairings and the shape facts
+ * consumers need here, where they are still computable.
+ */
+export const documentFieldWireSchema = z.object({
+  /** The paragraph holding the field's `begin` — the anchor an update
+   * operation names — or the paragraph a `w:fldSimple` sits in. */
+  headId: z.string().min(1),
+  /** The paragraph holding the field's `end`; absent when the field never
+   * closes in this part or its `end` lands in unmodelled markup. */
+  tailId: z.string().min(1).optional(),
+  /** The field's `end` arrived inside this part. */
+  closed: z.boolean(),
+  /**
+   * The paragraphs holding the field's boundary markers — its `begin`,
+   * `separate` and `end` characters, or the `w:fldSimple` element itself.
+   * A deletion removing some but not all leaves the stored field
+   * unbalanced, so any removal touching them must cover them all.
+   */
+  boundaryIds: z.array(z.string().min(1)).min(1),
+  /** Every paragraph the field's range covers, head through tail. */
+  paragraphIds: z.array(z.string().min(1)).min(1),
+  /** The paragraphs carrying the field's stored result — `paragraphIds`
+   * minus the tail — the span an in-place refresh rewrites. */
+  resultIds: z.array(z.string().min(1)),
+  /** The decoded field instruction — ` TOA \h \c "1" `, ` REF _Ref1 ` —
+   * for the consumers classifying the field. */
+  instruction: z.string(),
+  /**
+   * True only when the stored shape proves the range rewrite an in-place
+   * refresh performs: the field closes, its `begin` is the head
+   * paragraph's first field character, a `separate` sits in that
+   * paragraph, the `end` leads a different tail paragraph inside a
+   * direct-child run holding nothing else, and no non-paragraph sibling
+   * interrupts the range.
+   */
+  rangeReplaceable: z.boolean(),
+  /**
+   * Every boundary marker sits inside a paragraph the model carries.
+   * `false` means `boundaryIds` cannot enumerate every carrier — a marker
+   * hides inside tracked or otherwise unmodelled markup — so no deletion
+   * touching the listed paragraphs can prove the field stays balanced.
+   */
+  boundariesAnchored: z.boolean(),
+})
+export type DocumentFieldWire = z.infer<typeof documentFieldWireSchema>
+
 export const documentStoryWireSchema = z.object({
   partName: z.string().min(1),
   kind: documentStoryKindSchema,
   paragraphs: z.array(documentParagraphWireSchema),
   preservedXmlFragments: z.array(z.string()),
+  /**
+   * The stored fields the parser paired in this story, in document order.
+   * Required so a cached model written before the wire carried field
+   * metadata fails validation and regenerates rather than claiming no
+   * fields exist.
+   */
+  fields: z.array(documentFieldWireSchema),
+  /**
+   * Paragraphs carrying a boundary marker of a field whose `begin` — or
+   * another marker — sits inside markup the model does not carry, so the
+   * field's full carrier set cannot be enumerated. A deletion touching one
+   * of them is never provably balanced, so it is refused outright.
+   */
+  unanchoredFieldParagraphIds: z.array(z.string().min(1)),
 })
 export type DocumentStoryWire = z.infer<typeof documentStoryWireSchema>
 

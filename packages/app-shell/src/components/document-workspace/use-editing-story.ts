@@ -20,6 +20,8 @@ const emptyFootnotesStory: DocumentStoryWire = {
   kind: 'footnotes',
   paragraphs: [],
   preservedXmlFragments: [],
+  fields: [],
+  unanchoredFieldParagraphIds: [],
 }
 
 /**

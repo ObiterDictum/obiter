@@ -220,6 +220,34 @@ export type DocumentEditInsertCrossReferenceOperation = z.infer<
 >
 
 /**
+ * A `_Def_` bookmark pair around `[from, to)` of `paragraphId`'s effective
+ * text — the editor's defined-term mark. It inserts no text, so it cannot
+ * shift an offset; the writer names the bookmark from the covered words
+ * (`definedTermBookmarkName`) and refuses a range whose text cannot name a
+ * term. `paragraphId` must name a body paragraph.
+ */
+export const markDefinedTermOperationSchema = z
+  .object({
+    type: z.literal('mark_defined_term'),
+    paragraphId: editIdSchema,
+    from: characterOffsetSchema,
+    to: characterOffsetSchema,
+  })
+  .strict()
+  .superRefine((operation, context) => {
+    if (operation.from >= operation.to) {
+      context.addIssue({
+        code: 'custom',
+        path: ['to'],
+        message: 'from and to must form a non-empty forward range.',
+      })
+    }
+  })
+export type DocumentEditMarkDefinedTermOperation = z.infer<
+  typeof markDefinedTermOperationSchema
+>
+
+/**
  * A `PAGE` field spliced at `offset` in `paragraphId`. The field carries an
  * empty stored result; the reader resolves the number at paint time and Word
  * recomputes it on repagination, so the operation takes no value. `paragraphId`
@@ -287,4 +315,61 @@ export const insertTableOfContentsOperationSchema = z
   .strict()
 export type DocumentEditInsertTableOfContentsOperation = z.infer<
   typeof insertTableOfContentsOperationSchema
+>
+
+/**
+ * The most distinct citations a written `TOA` field lists, and the most
+ * citation occurrences it marks. The operation carries no entry or mark
+ * payload — citations are captured at save — so the writer is what refuses
+ * a document whose citation count would write an unbounded field or an
+ * unbounded number of `TA` marks.
+ */
+export const DOCUMENT_EDIT_TABLE_OF_AUTHORITIES_MAX_ENTRIES = 500
+export const DOCUMENT_EDIT_TABLE_OF_AUTHORITIES_MAX_OCCURRENCES = 2_000
+
+/**
+ * A `TOA` field whose result is a heading paragraph plus one paragraph per
+ * distinct neutral citation the body holds, spliced at `offset` in
+ * `paragraphId` — the same multi-paragraph shape a table of contents takes:
+ * the anchor splits into head and tail around the caret, the field's begin,
+ * instruction and separator open the heading paragraph between them, and
+ * the end marker opens the tail. The writer also writes a hidden `TA` mark
+ * after every citation occurrence in the body and a `_ToA` bookmark around
+ * every citing paragraph, which the entries' `PAGEREF` fields resolve.
+ *
+ * Entries and marks are computed from the document's stored paragraphs when
+ * the save applies the operation — a stored snapshot, never recomputed — so
+ * the operation carries no payload. `paragraphId` must name a body-level
+ * paragraph.
+ */
+export const insertTableOfAuthoritiesOperationSchema = z
+  .object({
+    type: z.literal('insert_table_of_authorities'),
+    paragraphId: editIdSchema,
+    /** Caret offset in the paragraph's effective text. */
+    offset: characterOffsetSchema,
+  })
+  .strict()
+export type DocumentEditInsertTableOfAuthoritiesOperation = z.infer<
+  typeof insertTableOfAuthoritiesOperationSchema
+>
+
+/**
+ * Regenerates a stored `TOA` field's result in place. `paragraphId` names
+ * the paragraph holding the field's `begin` — the generated heading
+ * paragraph — and the writer rewrites every paragraph up to the one
+ * holding the field's `end`: rediscovering the body's citations, splicing
+ * a `TA` mark only where an occurrence is not already marked, reusing the
+ * `_ToA` bookmarks it finds, and rebuilding the entries and `PAGEREF`
+ * fields. Payload-free for the same reason the insertion is: the client
+ * identifies the field, the server derives everything else.
+ */
+export const updateTableOfAuthoritiesOperationSchema = z
+  .object({
+    type: z.literal('update_table_of_authorities'),
+    paragraphId: editIdSchema,
+  })
+  .strict()
+export type DocumentEditUpdateTableOfAuthoritiesOperation = z.infer<
+  typeof updateTableOfAuthoritiesOperationSchema
 >

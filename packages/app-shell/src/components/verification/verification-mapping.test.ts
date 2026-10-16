@@ -29,6 +29,8 @@ function model(): DocumentModelWire {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
       {
         partName: 'word/footnotes.xml',
@@ -47,6 +49,8 @@ function model(): DocumentModelWire {
           },
         ],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

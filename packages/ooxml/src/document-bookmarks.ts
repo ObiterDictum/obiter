@@ -183,7 +183,7 @@ function nextNameIndex(taken: ReadonlySet<string>, namePrefix: string) {
  * and pending replacements, since a same-batch bookmark exists only as a
  * pending value.
  */
-function nextBookmarkId(overlay: XmlOverlay) {
+export function nextBookmarkId(overlay: XmlOverlay) {
   let next = 0
   for (const element of parseXmlElements(overlay.source)) {
     if (!isWord(element, 'bookmarkStart')) continue

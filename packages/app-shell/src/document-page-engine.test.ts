@@ -38,6 +38,8 @@ function modelOf(
         kind: 'document',
         paragraphs,
         preservedXmlFragments: sectPr ? [sectPr] : [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],
@@ -102,6 +104,8 @@ describe('layoutDocument', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     })
