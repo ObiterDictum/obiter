@@ -884,6 +884,36 @@ describe('document comment routes', () => {
     expect(database.comments.size).toBe(1)
   })
 
+  it('does not replay a comment client key whose stored row is another organisation', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    // The document foreign key pins a stored row's organisation, so this
+    // state is unreachable through the API; seeding it directly proves the
+    // replay SELECT is organisation-scoped. Without the filter the replay
+    // returns this row (same payload), disclosing another organisation's
+    // comment.
+    database.seedComment({
+      id: 'cmt_other_org',
+      organisationId: 'org_other',
+      authorId: 'usr_actor',
+      clientKey: 'shared-key',
+      body: 'Other organisation note',
+      paragraphId: 'para-1',
+      startOffset: 0,
+      endOffset: 1,
+    })
+
+    const response = await createComment(routeApp(database).app, {
+      body: 'Other organisation note',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      clientKey: 'shared-key',
+    })
+
+    // Fail closed rather than replay a row outside the caller's organisation.
+    expect(response.status).toBe(500)
+    expect(await response.text()).not.toContain('cmt_other_org')
+    expect(database.comments.size).toBe(1)
+  })
+
   it('replays a retried reply by client key without a duplicate', async () => {
     const database = new TestDatabase({ access: 'edit' })
     const existing = database.seedComment()
@@ -902,6 +932,29 @@ describe('document comment routes', () => {
     expect(database.audits.map(({ action }) => action)).toEqual([
       'document.comment_reply',
     ])
+  })
+
+  it('does not replay a reply client key whose stored row is another organisation', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const parent = database.seedComment()
+    // Same unreachable state as the comment case above, seeded directly.
+    database.seedReply({
+      id: 'cmtr_other_org',
+      organisationId: 'org_other',
+      authorId: 'usr_actor',
+      clientKey: 'reply-cross',
+      commentId: parent.id,
+      body: 'Cross-organisation reply',
+    })
+
+    const response = await replyToComment(routeApp(database).app, parent.id, {
+      body: 'Cross-organisation reply',
+      clientKey: 'reply-cross',
+    })
+
+    expect(response.status).toBe(500)
+    expect(await response.text()).not.toContain('cmtr_other_org')
+    expect(database.replies.size).toBe(1)
   })
 
   it('conflicts when a reply client key is reused with a different payload', async () => {

@@ -271,12 +271,20 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('client_key = $3')
         ) {
           this.queries.push(sql)
-          const [documentId, authorId, clientKey] = parameters as string[]
+          // Mirror the query's own scope: only organisations the SQL names
+          // are filtered, so dropping the predicate in the source makes the
+          // other organisation's row match again and the guard test fails.
+          // Match the predicate itself, not the column name: `organisation_id`
+          // would appear in the projection if a column list ever grew one.
+          const scoped = sql.includes('organisation_id = $4')
+          const [documentId, authorId, clientKey, organisationId] =
+            parameters as string[]
           const existing = [...stagedComments.values()].find(
             (comment) =>
               comment.documentId === documentId &&
               comment.authorId === authorId &&
-              comment.clientKey === clientKey,
+              comment.clientKey === clientKey &&
+              (!scoped || comment.organisationId === organisationId),
           )
           return { rows: existing ? [commentRow(existing)] : [] }
         }
@@ -285,12 +293,15 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('client_key = $3')
         ) {
           this.queries.push(sql)
-          const [documentId, authorId, clientKey] = parameters as string[]
+          const scoped = sql.includes('organisation_id = $4')
+          const [documentId, authorId, clientKey, organisationId] =
+            parameters as string[]
           const existing = [...stagedReplies.values()].find(
             (reply) =>
               reply.documentId === documentId &&
               reply.authorId === authorId &&
-              reply.clientKey === clientKey,
+              reply.clientKey === clientKey &&
+              (!scoped || reply.organisationId === organisationId),
           )
           return { rows: existing ? [replyRow(existing)] : [] }
         }

@@ -74,7 +74,10 @@ export async function createDocumentComment(
     if (row === undefined) {
       // The client key already exists for this author and document: replay
       // only when the stored row carries the same payload, so a reused key
-      // cannot silently return a comment it did not create.
+      // cannot silently return a comment it did not create. The organisation
+      // filter is belt-and-braces — the document foreign key already pins the
+      // row's organisation — but keeps the replay scope uniform with every
+      // other comment query.
       const stored = (
         await client.query<CommentRow>(
           `
@@ -83,8 +86,14 @@ export async function createDocumentComment(
             where document_id = $1
               and author_id = $2
               and client_key = $3
+              and organisation_id = $4
           `,
-          [input.documentId, input.authorId, input.clientKey ?? ''],
+          [
+            input.documentId,
+            input.authorId,
+            input.clientKey ?? '',
+            input.organisationId,
+          ],
         )
       ).rows[0]
       if (!stored) throw new CommentsDatabaseError()

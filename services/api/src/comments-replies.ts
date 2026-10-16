@@ -126,7 +126,10 @@ export async function createDocumentCommentReply(
     if (row === undefined) {
       // Client-key replay: the stored row must carry the same payload —
       // parent, parent's imported fingerprint, and body — or the key was
-      // reused for a different reply and the request conflicts.
+      // reused for a different reply and the request conflicts. The
+      // organisation filter is belt-and-braces — the document foreign key
+      // already pins the row's organisation — but keeps the replay scope
+      // uniform with every other reply query.
       const stored = (
         await client.query<ReplyRow>(
           `
@@ -135,8 +138,14 @@ export async function createDocumentCommentReply(
             where document_id = $1
               and author_id = $2
               and client_key = $3
+              and organisation_id = $4
           `,
-          [input.documentId, input.authorId, input.clientKey ?? ''],
+          [
+            input.documentId,
+            input.authorId,
+            input.clientKey ?? '',
+            input.organisationId,
+          ],
         )
       ).rows[0]
       if (!stored) throw new CommentsDatabaseError()
