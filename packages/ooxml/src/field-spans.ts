@@ -1,5 +1,6 @@
 import {
   attributeValue,
+  childrenByParent,
   isWord,
   nearestWordAncestor,
   WORD_NAMESPACE,
@@ -95,15 +96,17 @@ function fieldCharType(element: XmlElement) {
  */
 function leadingMarkupOnly(
   source: string,
-  elements: readonly XmlElement[],
+  childrenOf: (element: XmlElement) => readonly XmlElement[],
   container: XmlElement,
   bound: XmlElement,
   allowed: readonly string[],
 ) {
   let cursor = container.startTagEnd
-  for (const element of elements) {
-    if (element.parent !== container) continue
-    if (element.start >= bound.start) break
+  for (const element of windowOf(
+    childrenOf(container),
+    container.startTagEnd,
+    bound.start,
+  )) {
     if (source.slice(cursor, element.start).trim().length > 0) return false
     if (!allowed.some((name) => isWord(element, name))) return false
     cursor = element.end
@@ -118,12 +121,50 @@ function leadingMarkupOnly(
  * markup supports. A field still open at the part's end is emitted with
  * `end` undefined so a consumer sees it rather than the field vanishing.
  */
+/** Index of the first element whose start is at or after `position`. */
+function firstAtOrAfter(ordered: readonly XmlElement[], position: number) {
+  let low = 0
+  let high = ordered.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (ordered[middle].start < position) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
+/**
+ * The slice of an ordered element list starting at `from` and stopping before
+ * `to` (or at the end when `to` is undefined). Elements are in document order,
+ * so a binary search skips the prefix a whole-list scan would walk: pairing a
+ * part's fields is otherwise fields × elements.
+ */
+function windowOf(
+  ordered: readonly XmlElement[],
+  from: number,
+  to: number | undefined,
+) {
+  const window: XmlElement[] = []
+  for (
+    let index = firstAtOrAfter(ordered, from);
+    index < ordered.length;
+    index += 1
+  ) {
+    const element = ordered[index]
+    if (to !== undefined && element.start >= to) break
+    window.push(element)
+  }
+  return window
+}
+
 export function fieldSpans(
   elements: readonly XmlElement[],
   source: string,
 ): StoredFieldSpan[] {
   const spans: StoredFieldSpan[] = []
   const open: OpenField[] = []
+  const children = childrenByParent(elements)
+  const childrenOf = (element: XmlElement) => children.get(element) ?? []
 
   const paragraphsOf = (frame: {
     begin?: XmlElement
@@ -159,16 +200,14 @@ export function fieldSpans(
   const interrupted = (beginParagraph: XmlElement, end: XmlElement) => {
     const parent = beginParagraph.parent
     if (parent === undefined) return true
-    for (const element of elements) {
-      if (element.end <= beginParagraph.end) continue
-      if (element.start >= end.start) break
-      if (
-        element.parent === parent &&
-        !isWord(element, 'p') &&
-        !isWord(element, 'sectPr')
-      ) {
-        return true
-      }
+    // Only a child of the paragraph's parent can match the parent test, and a
+    // child before the paragraph cannot sit between it and the field's end.
+    for (const element of windowOf(
+      childrenOf(parent),
+      beginParagraph.end,
+      end.start,
+    )) {
+      if (!isWord(element, 'p') && !isWord(element, 'sectPr')) return true
     }
     return false
   }
@@ -185,11 +224,11 @@ export function fieldSpans(
     if (endRun === undefined || !isWord(endRun, 'r')) return false
     if (endRun.parent !== endParagraph) return false
     return (
-      leadingMarkupOnly(source, elements, endParagraph, endRun, [
+      leadingMarkupOnly(source, childrenOf, endParagraph, endRun, [
         'pPr',
         'bookmarkStart',
         'bookmarkEnd',
-      ]) && leadingMarkupOnly(source, elements, endRun, end, ['rPr'])
+      ]) && leadingMarkupOnly(source, childrenOf, endRun, end, ['rPr'])
     )
   }
 
@@ -198,11 +237,12 @@ export function fieldSpans(
     beginParagraph: XmlElement | undefined,
   ) => {
     if (beginParagraph === undefined) return false
-    for (const element of elements) {
-      if (element.end <= beginParagraph.startTagEnd) continue
-      if (element.start >= beginParagraph.endTagStart) break
+    for (const element of windowOf(
+      elements,
+      beginParagraph.startTagEnd,
+      beginParagraph.endTagStart,
+    )) {
       if (
-        element.start >= beginParagraph.startTagEnd &&
         isWord(element, 'fldChar') &&
         fieldCharType(element) === FIELD_CHAR_BEGIN
       ) {
@@ -229,13 +269,13 @@ export function fieldSpans(
     const rangeParagraphs =
       beginParagraph === undefined
         ? []
-        : elements.filter(
-            (element) =>
-              isWord(element, 'p') &&
-              element.parent === beginParagraph.parent &&
-              element.start >= beginParagraph.start &&
-              (frame.end === undefined || element.start <= frame.end.start),
-          )
+        : windowOf(
+            beginParagraph.parent === undefined
+              ? []
+              : childrenOf(beginParagraph.parent),
+            beginParagraph.start,
+            frame.end === undefined ? undefined : frame.end.start + 1,
+          ).filter((element) => isWord(element, 'p'))
     spans.push({
       ...frame,
       boundaryParagraphs,
