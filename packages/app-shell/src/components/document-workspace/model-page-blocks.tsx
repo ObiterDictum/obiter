@@ -14,7 +14,7 @@ import {
 } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
-import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
+import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import {
   contrastFillText,
   imagePartNameForDrawing,
@@ -68,6 +68,10 @@ export type BlockContext = {
   listMarkers: ReturnType<typeof documentListMarkers>
   noteMarks: Map<string, { mark: string; kind: NoteKind }>
   noteParagraphIds: Set<string>
+  /** The part name of the footnotes story open for editing, while one is:
+   * a note paragraph only becomes editable inside that story's entries,
+   * never as body text. */
+  editableNotePart?: string
   storyOf: (paragraphId: string) => { kind: string; partName: string }
   columnWidthPx: number
   /** The page this context renders: resolves `PAGE` fields in stored runs. */
@@ -199,7 +203,14 @@ export function renderBlock(
       }
       restoreCaret={ctx.restoreCaret}
       verticalCaret={ctx.verticalCaret}
-      editing={ctx.editing && !ctx.noteParagraphIds.has(paragraph.id)}
+      editing={
+        ctx.noteParagraphIds.has(paragraph.id)
+          ? // A note body paints in the body flow but belongs to its notes
+            // story: it is editable only while that story is open, the same
+            // open/close contract the margin band keeps.
+            ctx.editableNotePart === ctx.storyOf(paragraph.id).partName
+          : ctx.editing
+      }
       presence={ctx.presence}
       currentUserId={ctx.currentUserId}
       storyPartName={ctx.storyPartName}

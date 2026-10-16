@@ -11,10 +11,8 @@ import {
   documentStructureToolbar,
   storyTableCellIds,
 } from '../../document-structure-toolbar'
-import {
-  readImageInsert,
-  type StructuralDraft,
-} from '../../document-structural-drafts'
+import { readImageInsert } from '../../document-image-inserts'
+import type { StructuralDraft } from '../../document-structural-drafts'
 import type { DocumentStructureToolbar } from './ribbon-types'
 
 export type InsertRibbonProps = {
@@ -44,9 +42,10 @@ export function useInsertRibbon(
   offset: number | null,
   trackChanges: boolean,
   margin: {
-    /** The margin story open for editing, or 'document' for the body. */
-    editingKind: 'document' | 'header' | 'footer'
-    onOpen: (kind: 'header' | 'footer') => void
+    /** The story open for editing, or 'document' for the body. */
+    editingKind: 'document' | 'header' | 'footer' | 'footnotes'
+    /** Opens a story; a named paragraph lands the caret there. */
+    onOpen: (kind: 'header' | 'footer' | 'footnotes', selectId?: string) => void
     onClose: () => void
   },
   drafts: {
@@ -114,6 +113,7 @@ export function useInsertRibbon(
       crossReferenceUnavailable: structure.crossReferenceUnavailable,
       crossReferenceTargets: structure.crossReferenceTargets,
       pageNumberUnavailable: structure.pageNumberUnavailable,
+      footnoteUnavailable: structure.footnoteUnavailable,
       editingStoryKind:
         margin.editingKind === 'document' ? undefined : margin.editingKind,
       headerUnavailable,
@@ -127,6 +127,17 @@ export function useInsertRibbon(
       onInsertPageNumber: () => {
         const outcome = structure.insertPageNumber()
         if (!outcome.inserted) onImageError(outcome.reason)
+      },
+      onInsertFootnote: () => {
+        const outcome = structure.insertFootnote()
+        if (!outcome.inserted) {
+          onImageError(outcome.reason)
+          return
+        }
+        // The folded note body is where the note's text is typed: opening
+        // the story lands the caret there so the insertion reads as one
+        // gesture rather than a draft the user has to hunt for.
+        margin.onOpen('footnotes', outcome.noteParagraphId)
       },
       onInsertPicture: () => pictureInput.current?.click(),
       picturePicker: (

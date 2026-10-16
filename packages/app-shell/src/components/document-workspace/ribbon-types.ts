@@ -113,18 +113,24 @@ export type DocumentStructureToolbar = {
   crossReferenceUnavailable?: string
   /** The reason no page number can be inserted at the caret, when it cannot. */
   pageNumberUnavailable?: string
+  /** The reason no footnote can be inserted at the caret, when it cannot. */
+  footnoteUnavailable?: string
   /** The paragraphs a cross-reference can point at, in story order. */
   crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
-  /** The margin story open for editing, when one is — pressed state for the
-   * Header and Footer buttons. */
-  editingStoryKind?: 'header' | 'footer'
+  /** The non-body story open for editing, when one is — pressed state for
+   * the Header and Footer buttons. */
+  editingStoryKind?: 'header' | 'footer' | 'footnotes'
   /** The reason the header cannot be opened for editing, when it cannot. */
   headerUnavailable?: string
   /** The reason the footer cannot be opened for editing, when it cannot. */
   footerUnavailable?: string
-  /** Opens the final section's header or footer for editing; the body is
-   * inert until the story closes. */
-  onOpenStory: (kind: 'header' | 'footer') => void
+  /** Opens the final section's header or footer — or the footnotes story —
+   * for editing; the body is inert until the story closes. A named paragraph
+   * lands the caret there instead of the story's first. */
+  onOpenStory: (
+    kind: 'header' | 'footer' | 'footnotes',
+    selectId?: string,
+  ) => void
   /** Returns the caret to the body, closing the open margin story. */
   onCloseStory: () => void
   onInsertTable: (rows: number, columns: number) => void
@@ -134,6 +140,11 @@ export type DocumentStructureToolbar = {
   onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
   /** Holds a pending `PAGE` field at the caret in the active story. */
   onInsertPageNumber: () => void
+  /**
+   * Holds a pending footnote reference at the body caret and opens the
+   * footnotes story so the note's text is typed into its folded body.
+   */
+  onInsertFootnote: () => void
   /** Opens the picture file picker; the picked file becomes the insertion. */
   onInsertPicture: () => void
   /**

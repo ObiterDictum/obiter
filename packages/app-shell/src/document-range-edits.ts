@@ -12,11 +12,11 @@ import {
   blockRuns,
   blockText,
   joinIntoPrevious,
-  writeRange,
   type EditorCaret,
   type EditorResult,
   type EditorState,
 } from './document-word-edits'
+import { writeRange } from './document-write-runs'
 
 /** Why a document range cannot be replaced. `structure` means the range would
  * cross a paragraph that is not ordinary body text (a table cell, say), which

@@ -1,5 +1,6 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
+import { assertNoteStoriesKeepParagraph } from './footnote-edits'
 import {
   OoxmlError,
   type OoxmlDocument,
@@ -31,6 +32,7 @@ export type PlannedOperation =
           | 'insert_table'
           | 'insert_image'
           | 'set_hyperlink'
+          | 'insert_footnote'
           | 'insert_page_number'
       }
     > & { paragraph: ParagraphAnchor })
@@ -90,6 +92,27 @@ export function validatePlannedOperations(
         throw new OoxmlError('last-paragraph-required')
       }
     }
+    // The same invariant, per note entry: the part-level count above cannot
+    // see a `w:footnote` emptied while its siblings survive.
+    assertNoteStoriesKeepParagraph(
+      document,
+      planned.filter(
+        (
+          operation,
+        ): operation is Extract<
+          PlannedOperation,
+          {
+            type:
+              | 'insert_paragraph_after'
+              | 'insert_paragraph_before'
+              | 'delete_paragraph'
+          }
+        > =>
+          operation.type === 'insert_paragraph_after' ||
+          operation.type === 'insert_paragraph_before' ||
+          operation.type === 'delete_paragraph',
+      ),
+    )
   }
 
   const alreadyDeleted = new Set<string>()
@@ -144,6 +167,7 @@ export function validateTrackedOperations(
       operation.type === 'insert_image' ||
       operation.type === 'set_hyperlink' ||
       operation.type === 'insert_cross_reference' ||
+      operation.type === 'insert_footnote' ||
       operation.type === 'insert_page_number'
     ) {
       throw new OoxmlError('model-node-not-editable')

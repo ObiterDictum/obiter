@@ -51,6 +51,12 @@ const model: DocumentModelWire = {
       paragraphs: [paragraph('n1', 'A note')],
       preservedXmlFragments: [],
     },
+    {
+      partName: 'word/endnotes.xml',
+      kind: 'endnotes',
+      paragraphs: [paragraph('e1', 'An endnote')],
+      preservedXmlFragments: [],
+    },
   ],
   styles: [],
   numbering: [],
@@ -60,14 +66,16 @@ const model: DocumentModelWire = {
 }
 
 describe('editable stories', () => {
-  it('covers the body, header and footer but not the notes', () => {
+  it('covers the body, the margins and footnotes but not endnotes', () => {
     expect(editableStories(model).map((story) => story.kind)).toEqual([
       'document',
       'header',
       'footer',
+      'footnotes',
     ])
     expect(editableParagraph(model, 'h1')?.runs[0]?.text).toBe('Running head')
-    expect(editableParagraph(model, 'n1')).toBeUndefined()
+    expect(editableParagraph(model, 'n1')?.runs[0]?.text).toBe('A note')
+    expect(editableParagraph(model, 'e1')).toBeUndefined()
     expect(editableStoryOf(model, 'f2')?.partName).toBe('word/footer1.xml')
   })
 
@@ -158,8 +166,8 @@ describe('margin text edits in the save plan', () => {
     ])
   })
 
-  it('does not collect edits against notes or other read-only stories', () => {
-    expect(collectEditOperations(model, { 'n1-r': 'Changed' }, [], [])).toEqual(
+  it('does not collect edits against endnotes or other read-only stories', () => {
+    expect(collectEditOperations(model, { 'e1-r': 'Changed' }, [], [])).toEqual(
       [],
     )
   })

@@ -11,19 +11,22 @@ export type ParagraphRunSpan = { start: number; end: number }
 export type StructuralPlacement =
   | { kind: 'table'; paragraphId: string }
   | {
-      kind: 'image' | 'cross-reference' | 'page-number'
+      kind: 'image' | 'cross-reference' | 'page-number' | 'footnote'
       paragraphId: string
       offset: number
     }
   | { kind: 'link'; paragraphId: string; from: number; to: number }
 
 /**
- * A zero-width field splice at one offset. A `REF` field and a `PAGE` field
- * share the same five-run shape, so they share the conflict rules: each
- * poisons strictly-inside splices on the run it lands in.
+ * A zero-width splice at one offset. A `REF` field, a `PAGE` field and a
+ * footnote reference share the same shape — a run cut open for element-only
+ * content — so they share the conflict rules: each poisons strictly-inside
+ * splices on the run it lands in.
  */
-function isFieldSplice(kind: StructuralPlacement['kind']) {
-  return kind === 'cross-reference' || kind === 'page-number'
+function isZeroWidthSplice(kind: StructuralPlacement['kind']) {
+  return (
+    kind === 'cross-reference' || kind === 'page-number' || kind === 'footnote'
+  )
 }
 
 /**
@@ -80,7 +83,7 @@ export function structuralDraftConflict(
   if (later.kind === 'link') {
     if (earlier.kind === 'table') return false
     const covered = coveredRuns(spans, later)
-    if (isFieldSplice(earlier.kind)) {
+    if (isZeroWidthSplice(earlier.kind)) {
       // The field's zero-width splice counts as pending on the run it opens
       // at, so a boundary offset poisons the following run too.
       const occupied = occupiedRun(spans, earlier.offset)
@@ -90,7 +93,7 @@ export function structuralDraftConflict(
   }
   if (
     earlier.kind !== 'table' &&
-    isFieldSplice(earlier.kind) &&
+    isZeroWidthSplice(earlier.kind) &&
     later.kind !== 'table'
   ) {
     // A second splice strictly inside the field's run cannot fold the field
@@ -143,6 +146,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'cross-reference'
     case 'page-number':
       return 'page number'
+    case 'footnote':
+      return 'footnote'
   }
 }
 
@@ -161,7 +166,7 @@ function storedLinkConflict(
   if (candidate.kind === 'table' || candidate.kind === 'link') {
     return undefined
   }
-  if (candidate.kind !== 'image' && !isFieldSplice(candidate.kind)) {
+  if (candidate.kind !== 'image' && !isZeroWidthSplice(candidate.kind)) {
     return undefined
   }
   const index = spans.findIndex(
