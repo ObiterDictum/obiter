@@ -7,6 +7,8 @@ import {
 import { formattedModel } from '../../document-format-edits'
 import {
   batchParagraphDeletions,
+  FIELD_BOUNDARY_MESSAGE,
+  FIELD_METADATA_MESSAGE,
   LAST_NOTE_PARAGRAPH_MESSAGE,
   LAST_PARAGRAPH_MESSAGE,
   PENDING_STRUCTURE_MESSAGE,
@@ -25,6 +27,10 @@ import {
   structuralLinkOverlays,
   type ParagraphLinkOverlay,
 } from '../../document-structure-overlays'
+import { checkCrossReferences } from '../../document-cross-reference-check'
+import { checkDefinedTerms } from '../../document-defined-terms'
+import type { TableOfAuthoritiesFacts } from '../../document-legal-toolbar'
+import { createTableOfAuthoritiesFacts } from '../../document-toa-availability'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -86,6 +92,15 @@ export type WorkspaceDerivations = {
    * paragraph they paint over, in painted-text offsets.
    */
   linkOverlays: ReadonlyMap<string, ParagraphLinkOverlay>
+  /**
+   * The stored-markup legal checks: cross-reference fields against the
+   * document's bookmarks, and `_Def_` defined-term marks against the body's
+   * effective text. `null` while the model is loading.
+   */
+  legalChecks: {
+    references: ReturnType<typeof checkCrossReferences>
+    terms: ReturnType<typeof checkDefinedTerms>
+  } | null
 }
 
 /** The disabled reason Delete paragraph shows for `paragraphId`, or undefined
@@ -105,6 +120,8 @@ function deleteReasonForParagraph(
     deletedParagraphIds,
     paragraphId,
   )
+  if (refusal === 'field-boundary') return FIELD_BOUNDARY_MESSAGE
+  if (refusal === 'field-metadata') return FIELD_METADATA_MESSAGE
   if (refusal === 'last-note-paragraph') return LAST_NOTE_PARAGRAPH_MESSAGE
   if (refusal === 'last-paragraph') return LAST_PARAGRAPH_MESSAGE
   if (
@@ -121,10 +138,17 @@ export function useWorkspaceDerivations({
   model,
   drafts,
   insert,
+  legalChecksOpen,
 }: {
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
+  /**
+   * The legal-checks panel's open state: the stored-markup checks are a
+   * whole-document scan that only the panel reads, so they run when it is
+   * open and report `null` — "checks unavailable" — when it is closed.
+   */
+  legalChecksOpen: boolean
   /** The caret state the Insert ribbon's availability derives from. */
   insert: {
     caret: FormatTarget
@@ -264,12 +288,76 @@ export function useWorkspaceDerivations({
         : [],
     [model, drafts.drafts, drafts.inserts, deletions, drafts.extraRuns],
   )
+  // The citations a table of authorities captures, computed by the same
+  // owner the save partition reads — pending styles and effective
+  // deletions applied — so the ribbon's disabled reason and the
+  // partition's block read one answer, and the update control names the
+  // same field the save's `fields` map finds.
+  const toaFacts = useMemo<TableOfAuthoritiesFacts>(() => {
+    if (!model) {
+      return {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      }
+    }
+    return createTableOfAuthoritiesFacts({
+      model,
+      batchDeletions: deletions.effective,
+      drafts: drafts.drafts,
+      extraRuns: drafts.extraRuns,
+      paragraphStyles: drafts.format.paragraphStyles,
+    })()
+  }, [
+    model,
+    deletions,
+    drafts.drafts,
+    drafts.extraRuns,
+    drafts.format.paragraphStyles,
+  ])
   // Links and field markers carry no model change, so they are grouped into
   // an overlay map here rather than folded like a table. The painted model
   // feeds the marker labels so a reference names the target's current text.
   const linkOverlays = useMemo(
     () => structuralLinkOverlays(painted, drafts.structures),
     [painted, drafts.structures],
+  )
+  // The legal checks read the stored model plus pending structure — the same
+  // paragraphs and fields the save will write — so `effective` deletions are
+  // what count as gone, matching the writer's answer. They run only while
+  // the panel is open: both checks scan every stored field and `_Def_`
+  // bookmark in the document, and nothing else consumes the result.
+  const legalChecks = useMemo(
+    () =>
+      model && legalChecksOpen
+        ? {
+            references: checkCrossReferences(
+              model,
+              drafts.structures,
+              deletions.effective,
+              drafts.drafts,
+              drafts.extraRuns,
+            ),
+            terms: checkDefinedTerms(
+              model,
+              drafts.structures,
+              drafts.inserts,
+              deletions.effective,
+              drafts.drafts,
+              drafts.extraRuns,
+            ),
+          }
+        : null,
+    [
+      model,
+      legalChecksOpen,
+      drafts.structures,
+      deletions,
+      drafts.drafts,
+      drafts.extraRuns,
+      drafts.inserts,
+    ],
   )
   const insertRibbon = useInsertRibbon(
     model,
@@ -279,6 +367,7 @@ export function useWorkspaceDerivations({
     insert.trackChanges,
     insert.margin,
     { ...drafts, deletedParagraphIds: deletions.effective },
+    toaFacts,
     insert.onImageError,
   )
   return {
@@ -288,6 +377,7 @@ export function useWorkspaceDerivations({
     imageUrls,
     insert: insertRibbon,
     linkOverlays,
+    legalChecks,
     deleteParagraphReason:
       model && insert.paragraphId
         ? deleteReasonForParagraph(

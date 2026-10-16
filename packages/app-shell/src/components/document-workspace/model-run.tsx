@@ -305,7 +305,14 @@ function rangedParts(
       ? [{ from, to: from + text.length, target: storedLinkTarget }]
       : []),
   ]
-  if (!selection && links.length === 0 && !markers?.length) return text
+  const marks = overlay?.marks ?? []
+  if (
+    !selection &&
+    links.length === 0 &&
+    marks.length === 0 &&
+    !markers?.length
+  )
+    return text
   const clamp = (offset: number) =>
     Math.max(0, Math.min(offset - from, text.length))
   const cuts = new Set<number>([0, text.length])
@@ -316,6 +323,10 @@ function rangedParts(
   for (const link of links) {
     cuts.add(clamp(link.from))
     cuts.add(clamp(link.to))
+  }
+  for (const mark of marks) {
+    cuts.add(clamp(mark.from))
+    cuts.add(clamp(mark.to))
   }
   const markerOffsets = new Map<number, ParagraphFieldMarker[]>()
   for (const marker of markers ?? []) {
@@ -351,17 +362,23 @@ function rangedParts(
     const link = links.find(
       (item) => from + a >= item.from && from + b <= item.to,
     )
-    if (selected || link) {
+    const marked = marks.some(
+      (item) => from + a >= item.from && from + b <= item.to,
+    )
+    if (selected || link || marked) {
       nodes.push(
         <span
           key={`part-${a}`}
           data-selected-text={selected ? 'true' : undefined}
           data-link-target={link ? link.target : undefined}
+          data-defined-term={marked ? 'pending' : undefined}
           title={link ? link.target : undefined}
           className={
             link
               ? 'rounded-[1px] text-[#2c4a73] underline decoration-[#2c4a73]'
-              : 'rounded-[1px]'
+              : marked
+                ? 'rounded-[1px] underline decoration-double decoration-[#6a4f8a]'
+                : 'rounded-[1px]'
           }
           style={selected ? selectedStyle : undefined}
         >

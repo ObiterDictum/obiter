@@ -170,6 +170,8 @@ describe('section pagination', () => {
           kind: 'document',
           paragraphs: [p1, paragraph('p2'), paragraph('p3')],
           preservedXmlFragments: [NORMAL],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
       styles: [],
@@ -216,6 +218,8 @@ describe('section pagination', () => {
             paragraph('p2'),
           ],
           preservedXmlFragments: [NORMAL],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -252,6 +256,8 @@ describe('section pagination', () => {
             paragraph('p2'),
           ],
           preservedXmlFragments: [NORMAL],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }
@@ -423,6 +429,8 @@ function model(paragraphIds: string[]): DocumentModelWire {
         kind: 'document',
         paragraphs: paragraphIds.map((id) => paragraph(id)),
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],
@@ -457,6 +465,8 @@ function modelWithParagraphFragments(
           preservedXmlFragments: fragments[id] ?? [],
         })),
         preservedXmlFragments: [NORMAL],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
   }
@@ -471,6 +481,8 @@ function modelWithSection(sect: string): DocumentModelWire {
         kind: 'document',
         paragraphs: [paragraph('p1')],
         preservedXmlFragments: [sect],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
   }

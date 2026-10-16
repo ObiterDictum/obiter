@@ -38,6 +38,8 @@ function indentedModel(indentAttr: string, continuation = false) {
         kind: 'document',
         paragraphs: [paragraph],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

@@ -138,6 +138,8 @@ function model(text = 'Hello', styleId?: string): DocumentModelWire {
         kind: 'document',
         paragraphs: [paragraph],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [

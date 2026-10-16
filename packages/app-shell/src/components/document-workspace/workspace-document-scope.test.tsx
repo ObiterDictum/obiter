@@ -126,6 +126,8 @@ function model(runs: Array<[string, string]>): DocumentModelWire {
         kind: 'document',
         paragraphs,
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

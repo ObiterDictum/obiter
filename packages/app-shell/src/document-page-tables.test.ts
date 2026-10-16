@@ -16,6 +16,8 @@ describe('storyTables', () => {
       kind: 'document',
       paragraphs: [],
       preservedXmlFragments: [tableXml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     expect(tables).toEqual([
       {
@@ -61,6 +63,8 @@ describe('storyBlocks', () => {
         },
       ],
       preservedXmlFragments: [tableXml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     expect(blocks.map((block) => block.type)).toEqual(['table'])
   })
@@ -85,6 +89,8 @@ describe('storyBlocks', () => {
         },
       ],
       preservedXmlFragments: [xml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     expect(blocks.map((block) => block.type)).toEqual(['table', 'paragraph'])
     const table = blocks[0]
@@ -124,6 +130,8 @@ describe('storyBlocks', () => {
         },
       ],
       preservedXmlFragments: [xml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     const table = blocks[0]
     if (table?.type !== 'table') throw new Error('expected table')
@@ -169,6 +177,8 @@ describe('storyBlocks', () => {
         },
       ],
       preservedXmlFragments: [xml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     expect(blocks.map((block) => block.type)).toEqual(['table'])
     const table = blocks[0]
@@ -203,6 +213,8 @@ describe('storyBlocks', () => {
         },
       ],
       preservedXmlFragments: [xml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     const table = blocks[0]
     if (table?.type !== 'table') throw new Error('expected table')
@@ -225,6 +237,8 @@ describe('storyTables with drawings', () => {
       kind: 'header',
       paragraphs: [],
       preservedXmlFragments: [xml],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     })
     expect(tables[0]?.rows[0]?.cells.map((cell) => cell.fill)).toEqual([
       '#A6A6A6',
@@ -247,6 +261,8 @@ describe('storyTables with drawings', () => {
         kind: 'document',
         paragraphs: [],
         preservedXmlFragments: [xml],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       })
       expect(performance.now() - start).toBeLessThan(1000)
       expect(tables).toEqual([])

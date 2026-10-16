@@ -1,11 +1,17 @@
 import {
   documentEditHyperlinkTargetSchema,
+  type DocumentFieldWire,
   type DocumentParagraphWire,
   type DocumentStoryKind,
   type DocumentStoryWire,
   type DocumentTextRunWire,
 } from '@obiter/contracts'
 
+import {
+  fieldSpans,
+  spanNestedInField,
+  spanRangeReplaceable,
+} from '../field-spans'
 import type {
   ModelIdAllocator,
   ParagraphAnchor,
@@ -97,17 +103,90 @@ export function parseStory(
       ),
     )
 
+  const { fields, unanchoredFieldParagraphIds } = storyFields(
+    source,
+    elements,
+    paragraphAnchors,
+  )
+
   return {
     story: {
       partName,
       kind,
       paragraphs,
       preservedXmlFragments: storyStructureFragments(source, elements, kind),
+      fields,
+      unanchoredFieldParagraphIds,
     },
     anchors,
     paragraphAnchors,
     trackedChanges,
   }
+}
+
+/**
+ * The part's stored fields lowered onto the wire. Pairing and shape facts
+ * are only computable here, while element parentage and sibling order
+ * still exist: `headId`/`tailId`/`boundaryIds`/`paragraphIds` name the
+ * wire ids of the paragraphs the span covers, `instruction` carries the
+ * decoded field text for classification, and `rangeReplaceable` proves the
+ * shape an in-place refresh rewrites. A field whose carriers the model
+ * cannot all name — a marker inside tracked markup the wire drops, or one
+ * floating outside every `w:p` — records `boundariesAnchored: false`; a
+ * field whose very head is unmodelled cannot name an anchor at all, so its
+ * modelled carriers land in `unanchoredFieldParagraphIds` and any deletion
+ * touching them is refused outright.
+ */
+function storyFields(
+  source: string,
+  elements: XmlElement[],
+  paragraphAnchors: readonly ParagraphAnchor[],
+) {
+  const ids = new Map(
+    paragraphAnchors.map((anchor) => [
+      anchor.paragraphRange.start,
+      anchor.wire.id,
+    ]),
+  )
+  const carrierId = (element: XmlElement | undefined) =>
+    element === undefined ? undefined : ids.get(element.start)
+  const fields: DocumentFieldWire[] = []
+  const unanchored = new Set<string>()
+  const spans = fieldSpans(elements, source)
+  for (const span of spans) {
+    const boundaryIds = span.boundaryParagraphs.flatMap((element) => {
+      const id = ids.get(element.start)
+      return id === undefined ? [] : [id]
+    })
+    const headId = carrierId(span.beginParagraph)
+    if (headId === undefined) {
+      for (const id of boundaryIds) unanchored.add(id)
+      continue
+    }
+    const tailId = carrierId(span.endParagraph)
+    const paragraphIds = span.rangeParagraphs.flatMap((element) => {
+      const id = ids.get(element.start)
+      return id === undefined ? [] : [id]
+    })
+    fields.push({
+      headId,
+      ...(tailId === undefined ? {} : { tailId }),
+      closed: span.end !== undefined,
+      boundaryIds,
+      paragraphIds,
+      resultIds: paragraphIds.filter((id) => id !== tailId),
+      instruction: span.instruction,
+      rangeReplaceable:
+        spanRangeReplaceable(span) &&
+        !spanNestedInField(spans, span) &&
+        tailId !== undefined &&
+        paragraphIds.length === span.rangeParagraphs.length,
+      boundariesAnchored:
+        !span.boundaryUnanchored &&
+        boundaryIds.length === span.boundaryParagraphs.length,
+    })
+  }
+  return { fields, unanchoredFieldParagraphIds: [...unanchored] }
 }
 
 function parseParagraph(

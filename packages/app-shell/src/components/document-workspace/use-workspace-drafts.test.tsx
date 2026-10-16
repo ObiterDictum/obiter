@@ -33,6 +33,8 @@ function model(text: string): DocumentModelWire {
         kind: 'document',
         paragraphs: [paragraph],
         preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
       },
     ],
     styles: [],

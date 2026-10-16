@@ -21,6 +21,8 @@ const emptyModel: DocumentModelWire = {
         },
       ],
       preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
     },
   ],
   styles: [],
@@ -83,6 +85,8 @@ describe('marginStories', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
         {
           partName: 'word/footer2.xml',
@@ -95,6 +99,8 @@ describe('marginStories', () => {
             },
           ],
           preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
         },
       ],
     }

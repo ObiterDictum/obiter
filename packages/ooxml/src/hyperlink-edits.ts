@@ -102,7 +102,7 @@ export function setHyperlink(
   part.dirty = true
 }
 
-interface CoveringRun {
+export interface CoveringRun {
   anchor: TextRunAnchor
   runStart: number
   localFrom: number
@@ -112,7 +112,7 @@ interface CoveringRun {
 }
 
 /** Runs whose effective text intersects `[from, to)`, in document order. */
-function coveringRuns(
+export function coveringRuns(
   paragraph: ParagraphAnchor,
   from: number,
   to: number,

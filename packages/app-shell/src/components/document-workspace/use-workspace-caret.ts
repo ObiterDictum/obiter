@@ -396,7 +396,7 @@ export function useWorkspaceCaret({
   const findHits = find.findHits
   const activeFindIndex = find.activeFindIndex
 
-  function insertAuthority(citation: string) {
+  function insertAuthority(citation: string, italic: boolean) {
     if (!model) return
     const paragraphId = selectedParagraphId ?? editingStory?.paragraphs[0]?.id
     if (!paragraphId) return
@@ -404,7 +404,14 @@ export function useWorkspaceCaret({
       restoreCaret?.paragraphId === paragraphId
         ? restoreCaret.offset
         : blockText(model, state ?? emptyState, paragraphId).length
-    const caret = drafts.insertText(model, paragraphId, offset, citation)
+    // The citation style only shapes what is written now — the house style's
+    // italic is a formatting draft over the inserted range in the same
+    // history step, so undo removes text and styling together.
+    const caret = italic
+      ? drafts.insertStyledText(model, paragraphId, offset, citation, {
+          italic: true,
+        })
+      : drafts.insertText(model, paragraphId, offset, citation)
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
