@@ -1,7 +1,6 @@
 /**
  * The References ribbon: authorities, defined terms, cross-references and
- * notes. Split out of `ribbon-review.tsx` to keep each ribbon module under
- * the file ceiling.
+ * notes.
  */
 import {
   ArrowsClockwise,
