@@ -139,6 +139,39 @@ describe('share-safe r4: field and bookmark channels', () => {
     expect(story).not.toContain('commentReference')
   })
 
+  it('keeps a keep-class field whose result carries text beside a comment marker', async () => {
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>7</w:t></w:r><w:r><w:commentReference w:id="1"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('PAGE')
+    expect(story).toContain('7')
+    expect(story).not.toContain('commentReference')
+  })
+
+  it('keeps a keep-class field whose result carries a comment range', async () => {
+    // The usual shape when a comment is anchored on a field's result.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:commentRangeStart w:id="1"/><w:t>7</w:t><w:commentRangeEnd w:id="1"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('PAGE')
+    expect(story).toContain('7')
+    expect(story).not.toContain('commentRange')
+  })
+
+  it('still closes a keep-class field half-removed beside a comment marker', async () => {
+    // A comment marker alone no longer closes the span, but a real trigger must
+    // still do so: the exclusion must not become a way for a partial field to
+    // ship.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:commentReference w:id="1"/></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> SET x "SECRETVAL" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).not.toContain('PAGE')
+    expect(story).not.toContain('SECRETVAL')
+  })
+
   it('SET field nested inside a kept field is dropped', async () => {
     const { parts } = await outputParts({
       body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> QUOTE </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText> SET x "SECRETVAL" </w:instrText><w:fldChar w:fldCharType="end"/><w:fldChar w:fldCharType="end"/></w:r></w:p>',
