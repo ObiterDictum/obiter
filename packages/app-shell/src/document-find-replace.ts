@@ -14,11 +14,17 @@ import {
 
 /**
  * The outcome a find replace reports: the replacement landed with the caret
- * it leaves, it was refused with the canonical range reason before anything
- * mutated, or there was no hit to act on. A refused batch never half-applies:
- * every covered range is validated before the first write, and the state is
- * immutable — a mid-batch refusal returns the reason with the pre-edit state
- * untouched.
+ * it leaves, it was refused with the canonical range reason, or there was no
+ * hit to act on. A refused batch never half-applies — the state is immutable,
+ * so a refusal returns the reason with the pre-edit state — but the two kinds
+ * of hit are checked at different times: a cross-paragraph range is checked
+ * against the pre-edit state before the first write, while a
+ * within-paragraph hit is checked as it applies. A range that was valid
+ * against the original state can still be invalid against the state an
+ * earlier replacement in the same batch produced — a cross-paragraph join
+ * moves runs into a paragraph whose tail a later hit then joins away, and
+ * that join can become unstatable — and that refuses the whole batch rather
+ * than applying part of it.
  */
 export type FindReplaceResult =
   | { status: 'applied'; state: EditorState; caret: EditorCaret }
@@ -31,7 +37,9 @@ export type FindReplaceResult =
  * an offset can never address text that is no longer there. 'all' applies in
  * reverse document order so an earlier replacement cannot shift a later
  * hit's offsets, and the inserted replacement text is never re-matched — the
- * hit list is captured before the first write.
+ * hit list is captured before the first write. Cross-paragraph ranges are
+ * pre-checked against the pre-edit state; a hit the sequence itself makes
+ * unstatable (see `FindReplaceResult`) refuses the whole batch.
  *
  * A hit inside one paragraph rewrites that paragraph's run text the way
  * typing does. A hit covering paragraph breaks goes through the document
