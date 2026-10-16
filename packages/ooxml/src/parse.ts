@@ -21,6 +21,7 @@ import {
 } from './parts/rels'
 import { parseStory, type IdentityContext } from './parts/stories'
 import { parseStyles } from './parts/styles'
+import { markUndecidableChanges } from './tracked-change-decisions'
 import { HYPERLINK_RELATIONSHIP_TYPE } from './structure-xml'
 
 const CONTENT_TYPES_PART = '[Content_Types].xml'
@@ -129,7 +130,11 @@ function parseParts(
       paragraphAnchors.set(anchor.wire.id, anchor)
   }
 
-  matchMovePairs([...trackedChanges.values()])
+  const changeNodes = [...trackedChanges.values()]
+  matchMovePairs(changeNodes)
+  // Pairing has run, so this is where the engine's static decidability lands
+  // on the wire for every surface that lists the changes.
+  markUndecidableChanges(changeNodes)
 
   const styles = parseOptionalTypedPart(
     sourceParts,
@@ -172,25 +177,33 @@ function matchMovePairs(changes: TrackedChangeNode[]) {
     if (
       (change.wire.elementName !== 'moveFrom' &&
         change.wire.elementName !== 'moveTo') ||
-      change.wire.ooxmlId === undefined
+      change.moveGroup === undefined
     ) {
       continue
     }
-    const matches = moves.get(change.wire.ooxmlId) ?? []
+    const matches = moves.get(change.moveGroup) ?? []
     matches.push(change)
-    moves.set(change.wire.ooxmlId, matches)
+    moves.set(change.moveGroup, matches)
   }
-  for (const matches of moves.values()) {
-    const from = matches.filter(({ wire }) => wire.elementName === 'moveFrom')
-    const to = matches.filter(({ wire }) => wire.elementName === 'moveTo')
-    if (matches.length !== 2 || from.length !== 1 || to.length !== 1) continue
+  for (const [key, members] of moves) {
+    const from = members.filter(({ wire }) => wire.elementName === 'moveFrom')
+    const to = members.filter(({ wire }) => wire.elementName === 'moveTo')
     const fromNode = from[0]
     const toNode = to[0]
-    if (!fromNode || !toNode) continue
-    fromNode.validMoveCounterpart = true
-    toNode.validMoveCounterpart = true
-    fromNode.wire.pairId = toNode.wire.id
-    toNode.wire.pairId = fromNode.wire.id
+    // A container-named group is a real move with at least one member on
+    // each side. The shared-w:id fallback is tolerated legacy markup, so it
+    // keeps the strict one-from-one-to rule.
+    const paired = key.startsWith('name:')
+      ? from.length > 0 && to.length > 0
+      : members.length === 2 && from.length === 1 && to.length === 1
+    if (!paired || !fromNode || !toNode) continue
+    for (const member of members) {
+      member.validMoveCounterpart = true
+      member.wire.pairId =
+        member.wire.elementName === 'moveFrom'
+          ? toNode.wire.id
+          : fromNode.wire.id
+    }
   }
 }
 

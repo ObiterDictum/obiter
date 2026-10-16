@@ -1,31 +1,96 @@
-import type { DocumentChangeWire } from '@obiter/contracts'
-import { Button, EmptyState } from '@obiter/ui'
+import { Button, EmptyState, cn } from '@obiter/ui'
+import type { ChangeReview } from './use-change-review'
 
-export function DocumentChangesPanel({
-  changes,
-  pending,
-  error,
-  onDecide,
-}: {
-  changes: DocumentChangeWire[]
-  pending: boolean
-  error: string | null
-  onDecide: (action: 'accept' | 'reject', changeId: string) => void
-}) {
+export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
+  const { changes } = review
+  const decideBlocked = review.pending || Boolean(review.unavailable)
+  // Disabled controls cannot show their own tooltip, so the notes below carry
+  // the reasons and the controls point at them with aria-describedby.
+  const barrierNoteId = 'changes-review-unavailable'
   return (
     <aside
       className="flex w-full flex-col gap-5 lg:max-w-sm"
       aria-label="Tracked changes"
     >
       <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold text-ink">Tracked changes</h3>
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-ink">Tracked changes</h3>
+          {changes.length > 0 ? (
+            <p className="font-mono text-[11px] text-subtle">
+              {review.activeIndex >= 0 ? review.activeIndex + 1 : '—'} of{' '}
+              {changes.length}
+            </p>
+          ) : null}
+        </div>
         <p className="text-xs leading-relaxed text-muted">
           Accept or reject a change to write a new immutable version.
         </p>
+        {changes.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!review.canPrevious}
+              onClick={review.goToPrevious}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!review.canNext}
+              onClick={review.goToNext}
+            >
+              Next
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={review.pending || Boolean(review.bulkUnavailable)}
+              aria-describedby={
+                review.bulkUnavailable ? barrierNoteId : undefined
+              }
+              onClick={() => review.decideAll('accept')}
+            >
+              {review.undecidableCount > 0
+                ? 'Accept all supported'
+                : 'Accept all'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={review.pending || Boolean(review.bulkUnavailable)}
+              aria-describedby={
+                review.bulkUnavailable ? barrierNoteId : undefined
+              }
+              onClick={() => review.decideAll('reject')}
+            >
+              {review.undecidableCount > 0
+                ? 'Reject all supported'
+                : 'Reject all'}
+            </Button>
+          </div>
+        ) : null}
+        {changes.length > 0 && review.bulkUnavailable ? (
+          <p
+            id={barrierNoteId}
+            className="text-xs leading-relaxed text-muted"
+            role="note"
+          >
+            {review.bulkUnavailable}
+          </p>
+        ) : null}
+        {review.undecidableCount > 0 ? (
+          <p className="text-xs leading-relaxed text-muted" role="note">
+            {review.undecidableCount === 1
+              ? 'One listed change cannot be decided here; it stays listed and unchanged in the document.'
+              : `${review.undecidableCount} listed changes cannot be decided here; they stay listed and unchanged in the document.`}
+          </p>
+        ) : null}
       </div>
-      {error ? (
+      {review.error ? (
         <p className="text-sm text-danger" role="alert">
-          {error}
+          {review.error}
         </p>
       ) : null}
       {changes.length === 0 ? (
@@ -35,47 +100,81 @@ export function DocumentChangesPanel({
         />
       ) : (
         <ul className="flex flex-col gap-3">
-          {changes.map((change) => (
-            <li
-              key={change.id}
-              className="flex flex-col gap-2 border-t border-line pt-3"
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-medium text-ink">
-                  {change.author ?? 'Unknown author'}
-                </p>
-                <p className="font-mono text-[11px] text-subtle">
-                  {change.date
-                    ? new Date(change.date).toLocaleString()
-                    : 'No date'}
-                </p>
-              </div>
-              <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">
-                {change.kind}
-                {change.elementName ? ` · ${change.elementName}` : ''}
-              </p>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                {change.text || 'Property change'}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  disabled={pending}
-                  onClick={() => onDecide('accept', change.id)}
+          {changes.map((change, index) => {
+            const isActive = index === review.activeIndex
+            const undecidableReason = review.undecidableReason(change)
+            const undecidableNoteId = `change-${change.id}-undecidable`
+            const describedBy =
+              [
+                undecidableReason ? undecidableNoteId : null,
+                decideBlocked ? barrierNoteId : null,
+              ]
+                .filter((id): id is string => id !== null)
+                .join(' ') || undefined
+            return (
+              <li
+                key={change.id}
+                aria-current={isActive ? 'true' : undefined}
+                className={cn(
+                  'flex flex-col gap-2 border-t border-line pt-3',
+                  isActive && 'rounded-md bg-raised p-2 ring-1 ring-line',
+                )}
+              >
+                <button
+                  type="button"
+                  className="flex flex-col gap-2 text-left"
+                  aria-label={isActive ? 'Current change' : 'Show this change'}
+                  onClick={() => review.goTo(index)}
                 >
-                  Accept
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() => onDecide('reject', change.id)}
-                >
-                  Reject
-                </Button>
-              </div>
-            </li>
-          ))}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-medium text-ink">
+                      {change.author ?? 'Unknown author'}
+                    </p>
+                    <p className="font-mono text-[11px] text-subtle">
+                      {change.date
+                        ? new Date(change.date).toLocaleString()
+                        : 'No date'}
+                    </p>
+                  </div>
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">
+                    {change.kind}
+                    {change.elementName ? ` · ${change.elementName}` : ''}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                    {change.text || 'Property change'}
+                  </p>
+                </button>
+                {undecidableReason ? (
+                  <p
+                    id={undecidableNoteId}
+                    className="text-xs leading-relaxed text-muted"
+                    role="note"
+                  >
+                    {undecidableReason}
+                  </p>
+                ) : null}
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={decideBlocked || Boolean(undecidableReason)}
+                    aria-describedby={describedBy}
+                    onClick={() => review.decideChange('accept', change)}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={decideBlocked || Boolean(undecidableReason)}
+                    aria-describedby={describedBy}
+                    onClick={() => review.decideChange('reject', change)}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </aside>

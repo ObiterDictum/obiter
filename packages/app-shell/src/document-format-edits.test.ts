@@ -92,7 +92,9 @@ describe('emphasis addressing from the caret selection', () => {
 })
 
 describe('tracked emphasis from the client path', () => {
-  it('does not queue a range emphasis while track changes is on', () => {
+  it('queues a range emphasis while track changes is on', () => {
+    // The engine records a mid-run selection as a w:rPrChange, so the client
+    // must queue the draft rather than refuse it.
     let format: FormatDrafts = emptyFormatDrafts
     const toolbar = documentFormatToolbar(
       model,
@@ -104,11 +106,11 @@ describe('tracked emphasis from the client path', () => {
       { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 1, to: 4 }] },
       true,
     )
-    expect(toolbar.emphasisUnavailable).toMatch(
-      /partial formatting is not yet recorded as a tracked change/i,
-    )
+    expect(toolbar.emphasisUnavailable).toBeUndefined()
     toolbar.onToggleBold()
-    expect(format.emphasis).toEqual([])
+    expect(format.emphasis).toEqual([
+      { paragraphId: 'p1', from: 1, to: 4, bold: true },
+    ])
   })
 
   it('still queues whole-run emphasis while track changes is on', () => {
@@ -128,28 +130,60 @@ describe('tracked emphasis from the client path', () => {
     expect(format.emphasis).toEqual([{ runId: 'r1', bold: true }])
   })
 
-  it('refuses the character formatting controls on a tracked partial selection', () => {
+  it('queues every character formatting control on a tracked partial selection', () => {
     let format: FormatDrafts = emptyFormatDrafts
-    const toolbar = documentFormatToolbar(
-      model,
-      format,
-      'p1',
-      (update) => {
-        format = update(format)
+    const toolbar = () =>
+      documentFormatToolbar(
+        model,
+        format,
+        'p1',
+        (update) => {
+          format = update(format)
+        },
+        { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 1, to: 4 }] },
+        true,
+      )
+    expect(toolbar().emphasisUnavailable).toBeUndefined()
+    toolbar().onToggleStrikethrough()
+    toolbar().onToggleHighlight()
+    toolbar().onToggleSuperscript()
+    toolbar().onFontFamily('Georgia')
+    toolbar().onFontSize(28)
+    toolbar().onColour('FF0000')
+    toolbar().onToggleSubscript()
+    // Subscript owns vertAlign on the same tracked range: the queued draft
+    // restates superscript as subscript rather than stacking a second entry.
+    expect(format.emphasis).toEqual([
+      {
+        paragraphId: 'p1',
+        from: 1,
+        to: 4,
+        strikethrough: true,
+        highlight: 'yellow',
+        fontFamily: 'Georgia',
+        fontSize: 28,
+        colour: 'FF0000',
+        vertAlign: 'subscript',
       },
-      { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 1, to: 4 }] },
-      true,
-    )
-    expect(toolbar.emphasisUnavailable).toMatch(/tracked change/i)
-    toolbar.onToggleStrikethrough()
-    toolbar.onToggleHighlight()
-    toolbar.onToggleSuperscript()
-    toolbar.onToggleSubscript()
-    toolbar.onFontFamily('Georgia')
-    toolbar.onFontSize(28)
-    toolbar.onColour('FF0000')
-    toolbar.onClearFormatting()
-    expect(format.emphasis).toEqual([])
+    ])
+    toolbar().onClearFormatting()
+    expect(format.emphasis).toEqual([
+      {
+        paragraphId: 'p1',
+        from: 1,
+        to: 4,
+        bold: null,
+        italic: null,
+        underline: null,
+        strikethrough: null,
+        fontFamily: null,
+        fontSize: null,
+        colour: null,
+        highlight: null,
+        vertAlign: null,
+        smallCaps: null,
+      },
+    ])
   })
 })
 

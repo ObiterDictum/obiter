@@ -21,6 +21,7 @@ export interface ButtonProps {
   render?: BaseButtonRender
   'aria-label'?: string
   'aria-pressed'?: boolean
+  'aria-describedby'?: string
   'data-testid'?: string
 }
 

@@ -255,25 +255,36 @@ describe('formatting a cross-paragraph selection', () => {
     ])
   })
 
-  it('fails closed with tracked changes on instead of partial formatting', () => {
+  it('queues one range per selected paragraph under track changes', () => {
+    // Mid-run ranges are recorded as w:rPrChange, so tracking no longer
+    // refuses them: the save carries every selected paragraph's range.
     const { editAsync } = mount()
     selectAcrossBoundary()
     fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
     fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Home' }))
 
-    const bold = screen.getByRole('button', {
-      name: 'Bold: Partial formatting is not yet recorded as a tracked change',
-    })
-    expect(bold).toHaveProperty('disabled', true)
-    fireEvent.click(bold)
-    // Nothing was applied to one paragraph of the selection.
-    expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty(
-      'disabled',
-      true,
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
     save()
-    expect(editAsync).not.toHaveBeenCalled()
+    const call = editAsync.mock.calls[0]?.[0] as
+      { trackChanges?: boolean } | undefined
+    expect(call?.trackChanges).toBe(true)
+    expect(saveOperations(editAsync)).toEqual([
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 2,
+        to: 5,
+        bold: true,
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p2',
+        from: 0,
+        to: 2,
+        bold: true,
+      },
+    ])
   })
 
   it('applies a paragraph style to every selected paragraph', () => {
