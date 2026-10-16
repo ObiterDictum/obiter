@@ -152,10 +152,10 @@ export function layoutParagraph(
     // after the whole paragraph.
     const nextBreak = breaks.find((at) => at > offset)
     const pageStart = session.y === 0 && session.broken && !continuation
-    const before = continuation || pageStart ? 0 : face.marginTopPx
+    const before = continuation || pageStart ? 0 : (face.marginTopPx ?? 0)
     const remaining = frame.heightPx - session.y
     const needed =
-      before + linePx + (text.length === 0 ? face.marginBottomPx : 0)
+      before + linePx + (text.length === 0 ? (face.marginBottomPx ?? 0) : 0)
     if (
       session.y > 0 &&
       (continuation ? needed > remaining : needed >= remaining)
@@ -205,7 +205,7 @@ export function layoutParagraph(
       continue
     }
     const used =
-      fragment.heightPx + (fragment.complete ? face.marginBottomPx : 0)
+      fragment.heightPx + (fragment.complete ? (face.marginBottomPx ?? 0) : 0)
     if (
       session.y > 0 &&
       (continuation

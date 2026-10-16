@@ -15,7 +15,6 @@ import {
   indentationPatch,
   paragraphFormatOf,
   paragraphFormatState,
-  paragraphIndentKindDirect,
 } from './document-paragraph-format'
 import {
   clearableSlots,
@@ -266,7 +265,7 @@ describe('indentation paint and release', () => {
     expect(hanging).toContain('w:hanging="720"')
   })
 
-  it('clears only the special indent for None, preserving left and right', () => {
+  it('cancels the special indent for None, preserving left and right', () => {
     const bothSides = modelWith([
       paragraph(
         'p1',
@@ -282,21 +281,27 @@ describe('indentation paint and release', () => {
       ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
     expect(released).toContain('w:left="720"')
     expect(released).toContain('w:right="360"')
-    expect(released).not.toMatch(/w:(firstLine|hanging)=/u)
+    // An explicit zero, not a release: releasing the direct attribute would
+    // let a style's own indent paint again.
+    expect(released).toContain('w:firstLine="0"')
+    expect(released).not.toMatch(/w:hanging=/u)
   })
 
-  it('removes an empty ind element when None clears the only indent', () => {
+  it('leaves an explicit zero when None clears the only indent', () => {
     const specialOnly = modelWith([
       paragraph('p1', '<w:pPr><w:ind w:firstLine="720"/></w:pPr>'),
     ])
-    const released =
+    const cancelled =
       formattedModel(
         specialOnly,
         setParagraphFormatDraft(emptyFormatDrafts, 'p1', {
           indentation: indentationPatch('none'),
         }),
       ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
-    expect(released).not.toMatch(/<w:ind\b/u)
+    // The element stays, carrying a zero: that is what overrides an indent the
+    // paragraph's style would otherwise paint. Releasing the attribute instead
+    // would leave the style free to indent the paragraph again.
+    expect(cancelled).toContain('<w:ind w:firstLine="0"/>')
   })
 })
 
@@ -373,20 +378,23 @@ describe('indentation None no-op', () => {
     expect(collectFormatOperations(zeroed, state.format(), [])).toEqual([])
   })
 
-  it('is a no-op when the special indent is not direct', () => {
+  it('paints a style-inherited indent, which None then cancels', () => {
     const state = toolbarWith(styleFirstLine)
-    // None releases the direct attributes only, and this paragraph's
-    // first-line indent comes from its style: there is nothing to release,
-    // so no draft, no history step and no operation.
+    // The style's own `w:firstLine` reaches the merged face, so the control
+    // reads First line rather than None.
     expect(
-      paragraphIndentKindDirect(styleFirstLine, state.format(), 'p1'),
-    ).toBe('none')
+      paragraphFormatState(styleFirstLine, state.format(), ['p1']).indent,
+    ).toBe('first')
     state.toolbar.onIndentKind('none')
-    expect(state.format()).toBe(emptyFormatDrafts)
-    expect(state.historySteps()).toBe(0)
-    expect(collectFormatOperations(styleFirstLine, state.format(), [])).toEqual(
-      [],
-    )
+    // None writes an explicit zero, which overrides the style instead of
+    // releasing the (absent) direct attribute and letting the style paint.
+    expect(state.format().paragraphFormats.p1).toEqual({
+      indentation: { firstLine: 0, hanging: null },
+    })
+    expect(
+      paragraphFormatState(styleFirstLine, state.format(), ['p1']).indent,
+    ).toBe('none')
+    expect(state.historySteps()).toBe(1)
   })
 
   it('replaces a pending special indent with the clear', () => {
@@ -397,7 +405,7 @@ describe('indentation None no-op', () => {
     })
     state.toolbar.onIndentKind('none')
     expect(state.format().paragraphFormats.p1).toEqual({
-      indentation: { firstLine: null, hanging: null },
+      indentation: { firstLine: 0, hanging: null },
     })
   })
 })

@@ -76,12 +76,12 @@ export function indentationPatch(
       hanging: DEFAULT_INDENT_TWIPS,
     }
   }
-  // Nulls only the direct attributes. The control's no-op check reads the
-  // direct indent (`paragraphIndentKindDirect`), so an indent inherited from
-  // the paragraph style alone is not dirtied. A paragraph that also carries
-  // the style's indent keeps painting it after the direct one is released —
-  // that is a real edit, not a no-op.
-  return { firstLine: null, hanging: null }
+  // None cancels the indent outright: an explicit `w:firstLine="0"` overrides
+  // an indent inherited from the paragraph's style, which merely releasing the
+  // direct attribute would not — the style's value would paint again. Zero is
+  // a valid twip, and the two attributes are mutually exclusive in OOXML, so
+  // hanging is released rather than zeroed.
+  return { firstLine: 0, hanging: null }
 }
 
 /**
@@ -173,31 +173,6 @@ export function paragraphIndentLeftPx(
     paragraphFace(formattedParagraphDraft(stored, format), model.styles)
       .indentLeftPx ?? 0
   )
-}
-
-/**
- * The special indent one paragraph carries directly — its own `w:firstLine` or
- * `w:hanging`, with any pending draft folded in. `Indent: None` releases only
- * those direct attributes, so its no-op check has to read this rather than the
- * merged (style-inclusive) face: a special indent inherited from the paragraph
- * style keeps painting First line/Hanging after the click.
- */
-export function paragraphIndentKindDirect(
-  model: DocumentModelWire,
-  format: FormatDrafts,
-  paragraphId: string,
-): IndentKind {
-  const stored = editableParagraph(model, paragraphId)
-  if (!stored) return 'none'
-  const indentation = paragraphFormatOf(
-    formattedParagraphDraft(stored, format),
-  ).indentation
-  // Truthy, matching `indentKind`: `w:firstLine="0"` / `w:hanging="0"` is
-  // how Word spells "no special indent", so a zero is not an indent to
-  // release.
-  if (indentation?.hanging) return 'hanging'
-  if (indentation?.firstLine) return 'first'
-  return 'none'
 }
 
 /**

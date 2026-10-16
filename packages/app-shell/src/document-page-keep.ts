@@ -116,7 +116,8 @@ export function paragraphMetrics(
   return {
     linePx,
     lineCount,
-    heightPx: face.marginTopPx + lineCount * linePx + face.marginBottomPx,
+    heightPx:
+      (face.marginTopPx ?? 0) + lineCount * linePx + (face.marginBottomPx ?? 0),
     keepNext: face.keepNext === true,
     keepLines: face.keepLines === true,
     widowControl: face.widowControl !== false,
