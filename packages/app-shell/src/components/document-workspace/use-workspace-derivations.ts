@@ -6,6 +6,7 @@ import {
 } from '../../document-authorities'
 import { formattedModel } from '../../document-format-edits'
 import {
+  batchParagraphDeletions,
   LAST_NOTE_PARAGRAPH_MESSAGE,
   LAST_PARAGRAPH_MESSAGE,
   PENDING_STRUCTURE_MESSAGE,
@@ -28,6 +29,12 @@ import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useInsertRibbon, type InsertRibbonProps } from './use-insert-ribbon'
+
+const NO_DELETIONS = {
+  emptied: new Map<string, string>(),
+  applied: new Set<string>(),
+  effective: new Set<string>(),
+}
 
 type DraftState = Pick<
   ReturnType<typeof useWorkspaceDrafts>,
@@ -146,6 +153,31 @@ export function useWorkspaceDerivations({
     () => (model ? formattedModel(model, drafts.format) : undefined),
     [model, drafts.format],
   )
+  // The deleted sets the batch resolves to, computed once for every surface:
+  // `effective` is what the writer will treat as gone (the applied marks plus
+  // the runless paragraphs a pending replacement deletes implicitly), which
+  // the structural fold, the Insert ribbon and the authorities index all read;
+  // `applied` is only the outright deletes, which the page paint uses because
+  // a replaced paragraph still shows its typed text.
+  const deletions = useMemo(
+    () =>
+      model
+        ? batchParagraphDeletions(
+            model,
+            drafts.inserts,
+            drafts.deletedParagraphIds,
+            drafts.extraRuns,
+            drafts.drafts,
+          )
+        : NO_DELETIONS,
+    [
+      model,
+      drafts.inserts,
+      drafts.deletedParagraphIds,
+      drafts.extraRuns,
+      drafts.drafts,
+    ],
+  )
   // Pending tables and pictures fold into the painted model through the same
   // wire mutations — and the same `structure-xml` builders — the save writers
   // produce, so `storyBlocks`, `paragraphImageXml` and `PageDrawing` render
@@ -159,10 +191,10 @@ export function useWorkspaceDerivations({
             formatted,
             drafts.structures,
             drafts.drafts,
-            new Set(drafts.deletedParagraphIds),
+            deletions.effective,
           )
         : undefined,
-    [formatted, drafts.structures, drafts.drafts, drafts.deletedParagraphIds],
+    [formatted, drafts.structures, drafts.drafts, deletions],
   )
   // The story's block partition is a pure function of the painted model, so it
   // is scanned once per model rather than once per pagination pass.
@@ -226,17 +258,11 @@ export function useWorkspaceDerivations({
             model,
             drafts.drafts,
             drafts.inserts,
-            drafts.deletedParagraphIds,
+            [...deletions.applied],
             drafts.extraRuns,
           )
         : [],
-    [
-      model,
-      drafts.drafts,
-      drafts.inserts,
-      drafts.deletedParagraphIds,
-      drafts.extraRuns,
-    ],
+    [model, drafts.drafts, drafts.inserts, deletions, drafts.extraRuns],
   )
   // Links and field markers carry no model change, so they are grouped into
   // an overlay map here rather than folded like a table. The painted model
@@ -252,7 +278,7 @@ export function useWorkspaceDerivations({
     insert.offset,
     insert.trackChanges,
     insert.margin,
-    drafts,
+    { ...drafts, deletedParagraphIds: deletions.effective },
     insert.onImageError,
   )
   return {

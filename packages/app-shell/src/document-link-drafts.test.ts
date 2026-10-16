@@ -179,6 +179,34 @@ describe('link and cross-reference drafts', () => {
     ])
   })
 
+  it('blocks a cross-reference whose target the batch replaces', () => {
+    // A runless paragraph carrying typed text is deleted by the insert plus
+    // delete the batch emits — the writer's `deletedIds` holds it even
+    // though no draft marks it. A reference pointing there would bookmark a
+    // paragraph the batch removes, so it is held back exactly like a
+    // reference to an explicitly deleted one.
+    const base = model([
+      paragraph('p1', 'text'),
+      { id: 'p2', runs: [], preservedXmlFragments: [] },
+    ])
+    const plan = planDocumentSave(base, {
+      ...emptyDraftState(),
+      extraRuns: {
+        p2: [{ id: 'p2-e', text: 'Typed', preservedXmlFragments: [] }],
+      },
+      structures: [crossReferenceDraft('s1', 'p1', 'p2')],
+    })
+    // The replacement still saves; only the reference is held back.
+    expect(plan.operations).toEqual([
+      { type: 'insert_paragraph_after', paragraphId: 'p2', text: 'Typed' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+    expect(plan.blocked.map((item) => item.slot)).toEqual([
+      expect.objectContaining({ structureKind: 'cross-reference' }),
+    ])
+    expect(plan.blocked[0]?.reason).toContain('references')
+  })
+
   it('blocks a second structural draft a writer cannot compose in the same run', () => {
     const base = model([
       paragraph('p1', 'See the cited sections'),

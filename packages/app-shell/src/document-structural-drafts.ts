@@ -98,6 +98,21 @@ export type StructuralFootnoteDraft = {
 }
 
 /**
+ * A pending `TOC` field at `offset` in `paragraphId` — the one draft whose
+ * fold is multi-paragraph: the painted model splits the anchor into head
+ * and tail around one entry paragraph per document heading, captured when
+ * the fold runs, exactly as the save writer captures them when the batch
+ * applies. The draft itself is still only a placement: entry text, page
+ * references and `_Toc` bookmarks are all generated, never held.
+ */
+export type StructuralTableOfContentsDraft = {
+  id: string
+  kind: 'table-of-contents'
+  paragraphId: string
+  offset: number
+}
+
+/**
  * The paragraph id the pending footnote's note body folds under. It is not a
  * stored paragraph and never becomes one: the note's own `w14` id is only
  * allocated by the save writer.
@@ -113,6 +128,7 @@ export type StructuralDraft =
   | StructuralCrossReferenceDraft
   | StructuralPageNumberDraft
   | StructuralFootnoteDraft
+  | StructuralTableOfContentsDraft
 
 /**
  * The persisted form of a structural draft, bounded to exactly the fields the
@@ -177,6 +193,14 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
     .object({
       id: z.string().min(1),
       kind: z.literal('footnote'),
+      paragraphId: z.string().min(1),
+      offset: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('table-of-contents'),
       paragraphId: z.string().min(1),
       offset: z.number().int().min(0),
     })
@@ -260,6 +284,14 @@ export function structuralEditOperations(
         paragraphId: structure.paragraphId,
         offset: structure.offset,
         text,
+      })
+      continue
+    }
+    if (structure.kind === 'table-of-contents') {
+      operations.push({
+        type: 'insert_table_of_contents',
+        paragraphId: structure.paragraphId,
+        offset: structure.offset,
       })
       continue
     }

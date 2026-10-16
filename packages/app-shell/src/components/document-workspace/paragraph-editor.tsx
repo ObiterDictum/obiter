@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { cn } from '@obiter/ui'
 import { stepSelectionFocus } from '../../document-selection'
@@ -84,9 +84,9 @@ export function ParagraphEditor({
   const selectionDirection = selection?.direction
   const selectionFocus = selection?.focus
   // Browser selection and focus are the one external boundary here: the model
-  // owns the selection and the DOM has to be told, so this stays an effect
-  // rather than derived rendering. It also keeps the caret after Enter.
-  useEffect(() => {
+  // owns the selection and the DOM has to be told — a layout effect so the
+  // save swap's remount refocuses inside the commit and keeps the caret.
+  useLayoutEffect(() => {
     if (!selected) return
     const node = field.current
     if (!node) return

@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@obiter/ui'
+import { refocusCaret } from './document-actions'
 
 /**
  * Confirmation for discarding unsaved document work. Opening the dialog is
@@ -38,6 +39,15 @@ export function DiscardWorkDialog({
     try {
       await onConfirm()
       setOpen(false)
+      // The pending state disabled the focused confirm, so focus already
+      // dropped to document.body; closing then restores to a trigger every
+      // caller's confirm has just unmounted with its banner. Once the
+      // dialog's own restore has run — a frame later — hand the stranded
+      // focus to the caret rather than losing the next typed burst. A
+      // surviving restore target (or a deliberate click elsewhere) wins.
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) refocusCaret()
+      })
     } catch (caught) {
       setError(
         caught instanceof Error

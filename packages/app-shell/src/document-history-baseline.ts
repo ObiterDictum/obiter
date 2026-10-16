@@ -56,6 +56,13 @@ export type SaveBaseline = {
   /** The model the snapshots were recorded against. */
   fromModel: DocumentModelWire
   /**
+   * The version the request was planned against. Structural sharing can keep
+   * `fromModel` referentially identical to a reloaded model whose projection
+   * did not change, so "still the pre-flight model" is a version test, not a
+   * reference test.
+   */
+  fromVersionId?: string
+  /**
    * The authoritative lineage the server returned for the accepted batch. When
    * present, identity is read from it rather than inferred from a diff.
    */
@@ -740,6 +747,10 @@ const STRUCTURE_KIND_REMOVABLE = {
   'cross-reference': false,
   'page-number': false,
   footnote: false,
+  // `insert_table_of_contents` has no inverse either: the generated entry
+  // paragraphs and their bookmarks are baseline content once saved, and the
+  // edit vocabulary has no remove-field operation to reverse them with.
+  'table-of-contents': false,
 } satisfies Record<StructureKind, boolean>
 
 /**
@@ -1092,12 +1103,13 @@ export function translateSnapshot(
         break
       }
       case 'break': {
-        // There is no operation that removes a break. A snapshot that holds
-        // the saved break as pending work cannot be re-expressed against the
-        // saved document, so the boundary blocks rather than claiming the
-        // reversal; a snapshot that predates the break simply forgets the
-        // covered slot, since the document without it already lacks the break.
-        if (snapshot.breaks.some((item) => item.id === slot.id)) return null
+        // There is no operation that removes a break, so the slot drops the
+        // way a non-removable structure does: a snapshot holding the saved
+        // break as pending work describes the document the save produced, so
+        // the covered slot is forgotten and the rest of the snapshot — typed
+        // drafts especially — survives translation; a snapshot that predates
+        // the break keeps the stored break as baseline content undo cannot
+        // offer to remove.
         Object.assign(next, removeDraftSlots(next, [slot]))
         break
       }

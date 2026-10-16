@@ -76,6 +76,8 @@ export type BlockContext = {
   columnWidthPx: number
   /** The page this context renders: resolves `PAGE` fields in stored runs. */
   pageNumber?: number
+  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
+  pageReferences?: ReadonlyMap<string, number>
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
@@ -142,6 +144,7 @@ export function renderBlock(
                 styles={ctx.model.styles}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
                 pageNumber={ctx.pageNumber}
+                pageReferences={ctx.pageReferences}
                 wrapWidthPx={wrapWidthPx}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
@@ -225,6 +228,7 @@ export function renderBlock(
       continuation={block.continuation}
       pageStart={block.pageStart}
       pageNumber={ctx.pageNumber}
+      pageReferences={ctx.pageReferences}
       listMarker={ctx.listMarkers.get(paragraph.id)}
       noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
