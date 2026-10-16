@@ -94,6 +94,9 @@ export function emptyDraftState(): DraftState {
   }
 }
 
+/** Every structural draft kind a save slot can cover. */
+export type StructureKind = StructuralDraft['kind']
+
 /**
  * A named region of draft state. Slots are the unit of clearing after a save
  * and of discarding a change the server will not accept.
@@ -113,13 +116,7 @@ export type DraftSlot =
       kind: 'structure'
       key: string
       id: string
-      structureKind:
-        | 'table'
-        | 'image'
-        | 'link'
-        | 'cross-reference'
-        | 'page-number'
-        | 'footnote'
+      structureKind: StructureKind
     }
   | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 
