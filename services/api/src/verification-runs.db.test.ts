@@ -51,12 +51,11 @@ describe('verification run persistence', () => {
   let seed: OrganisationIsolationSeed
 
   beforeAll(async () => {
-    // The test database is migrated before the suite runs (CI applies the SQL
-    // files directly), so this suite assumes the schema, like the other
-    // database-backed suites here. It must not call runMigrations: that would
-    // re-apply 0003 against a schema 0019 has already dropped search_vector
-    // from, because the pre-applied migrations are absent from
-    // schema_migrations.
+    // The test database is migrated by the runner before the suite runs — CI
+    // and scripts/ci-local.sh both require every file recorded in
+    // schema_migrations — so this suite assumes the schema, like the other
+    // database-backed suites here. It does not call runMigrations: everything
+    // is already recorded, so a run would only skip files.
     seed = await seedOrganisationIsolation(pool)
   })
 

@@ -170,9 +170,13 @@ jobs:
             echo "Times New Roman: $TNR_MATCH" >&2
             exit 1
           fi
-          for f in packages/database/migrations/*.sql; do
-            psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
-          done
+          # Through the runner, not `psql -f` per file: the runner records each
+          # file in schema_migrations and wraps it in one transaction with that
+          # insert, which is the production path and what the local mirror
+          # (scripts/ci-local.sh) requires. `psql -f` runs in autocommit and
+          # records nothing, so it would leave a half-applied file applied and
+          # the tracking table empty.
+          bun run db:migrate --database-url="postgres://obiter:obiter@localhost:5432/obiter_test"
 
       # The redaction-renderer suite launches the Playwright Chromium it ships
       # against. Playwright fetches browsers on demand, not during install, so
