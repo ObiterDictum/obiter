@@ -13,7 +13,6 @@ import {
   indentationPatch,
   lineSpacingPatch,
   outdentList,
-  paragraphFormatState,
   paragraphIndentLeftPx,
   restartList,
   setParagraphFormatDraft,
@@ -39,7 +38,10 @@ import type {
   FormatDrafts,
   HighlightValue,
 } from './document-format-types'
-import type { IndentKind } from './document-paragraph-format'
+import {
+  paragraphIndentKindDirect,
+  type IndentKind,
+} from './document-paragraph-format'
 import type { ExtraRuns } from './document-word-edits'
 
 export type ParagraphRange = {
@@ -250,14 +252,15 @@ export function documentFormatToolbar(
       forEachFormatParagraph((current, id) => {
         // None is a special-indent control: it clears only a first-line or
         // hanging indent and keeps any direct left/right indent. When the
-        // paragraph has no special indent to clear, restate its draft unchanged
-        // so the reference-equal skip in `setFormat` records no history step
-        // and the save emits no operation. `paragraphFormatState` reads the
-        // pending draft over the stored paragraph, so a draft that already
-        // cleared the indent is a no-op too.
+        // paragraph carries no *direct* special indent to clear, restate its
+        // draft unchanged so the reference-equal skip in `setFormat` records
+        // no history step and the save emits no operation. Read the direct
+        // layout, not the merged face: a special indent inherited from the
+        // paragraph style is not something this click changes, and reading
+        // the merged value would dirty the document for no on-disk change.
         if (
           kind === 'none' &&
-          paragraphFormatState(model, current, [id]).indent === 'none'
+          paragraphIndentKindDirect(model, current, id) === 'none'
         ) {
           return current
         }

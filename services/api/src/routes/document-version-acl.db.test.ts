@@ -93,6 +93,41 @@ function storageForTwoVersions(seed: TwoVersionSeed) {
   return storage
 }
 
+/**
+ * A third version carrying byte-identical source under a different recorded
+ * hash, so a comparison sees differing bytes with an identical model — the
+ * case the package-parts note exists for.
+ */
+async function seedByteOnlyVariant(seed: TwoVersionSeed) {
+  const versionId = `${seed.currentVersionId}_bytes`
+  const objectKey = createDocumentObjectKey({
+    organisationId: seed.orgId,
+    matterId: seed.matterId,
+    documentId: seed.documentId,
+    versionId,
+  })
+  await pool.query(
+    `insert into document_versions (
+       id, organisation_id, matter_id, matter_document_id, filename,
+       file_type, size_bytes, object_key, text_object_key, document_status,
+       failure_reason, version_number, content_sha256, sync_state, created_by,
+       created_at, updated_at
+     ) values ($1, $2, $3, $4, 'synthetic.docx', 'docx', $5, $6, null,
+       'ready', null, 3, $7, 'synced', $8, now(), now())`,
+    [
+      versionId,
+      seed.orgId,
+      seed.matterId,
+      seed.documentId,
+      plainSourceBytes.byteLength,
+      objectKey,
+      '0'.repeat(64),
+      seed.ownerId,
+    ],
+  )
+  return { versionId, objectKey }
+}
+
 function readApp(pool: Pool, storage: unknown, user: AuthzUser) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
   routes.use('*', async (c, next) => {
@@ -327,6 +362,7 @@ describe('version comparison', () => {
         base: { versionId: string }
         target: { versionId: string }
         entries: unknown[]
+        notes: string[]
         identical: boolean
       }
       expect(body.base.versionId).toBe(seed.currentVersionId)
@@ -335,6 +371,38 @@ describe('version comparison', () => {
       // lacks: the difference is real, not a metadata echo.
       expect(body.entries.length).toBeGreaterThan(0)
       expect(body.identical).toBe(false)
+      // The entries explain the difference, so the package-parts caveat does
+      // not fire — it is reserved for a byte difference no entry covers.
+      expect(body.notes).toEqual([])
+    } finally {
+      await cleanupMatter(pool, seed)
+    }
+  })
+
+  it('notes that package parts may differ when no entry explains the difference', async () => {
+    const seed = await seedTwoVersions('edit')
+    try {
+      const variant = await seedByteOnlyVariant(seed)
+      const storage = storageForTwoVersions(seed)
+      storage.binary.set(variant.objectKey, Buffer.from(plainSourceBytes))
+      const editor = readApp(pool, storage, editorUser(seed))
+      const response = await editor.request(
+        `/api/documents/${seed.documentId}/compare?baseVersionId=${seed.currentVersionId}&targetVersionId=${variant.versionId}`,
+      )
+
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as {
+        entries: unknown[]
+        notes: string[]
+        identical: boolean
+      }
+      // Same model, different bytes: no entry explains the difference, so the
+      // caveat is the honest answer rather than a clean comparison.
+      expect(body.entries).toEqual([])
+      expect(body.identical).toBe(false)
+      expect(body.notes).toEqual([
+        'The comparison covers the document model; package parts outside it may also differ.',
+      ])
     } finally {
       await cleanupMatter(pool, seed)
     }
