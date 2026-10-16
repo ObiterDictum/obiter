@@ -151,9 +151,11 @@ describe('share-safe content cost', () => {
   })
 
   it('plans one run holding many comment references in linear time', async () => {
-    // A run that keeps text is never collapsed: one run holding many
-    // markers used to re-run the text check per marker.
-    const body = `<w:p><w:r>STRAY${'<w:commentReference w:id="1"/>'.repeat(16_000)}</w:r></w:p>`
+    // A run that keeps text is never collapsed, and it used to re-run the text
+    // check per marker. This many markers is what gives the bound teeth: at
+    // half of it the quadratic version took ~7.0 s, only 1.4x over the bound,
+    // so a faster machine could pass it with the bug present.
+    const body = `<w:p><w:r>STRAY${'<w:commentReference w:id="1"/>'.repeat(32_000)}</w:r></w:p>`
     expect(await planBody(body)).toBeLessThan(5_000)
   })
 
