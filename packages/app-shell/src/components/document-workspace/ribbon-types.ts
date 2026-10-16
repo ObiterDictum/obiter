@@ -250,3 +250,6 @@ export type DocumentFindToolbar = {
   onReplaceOne?: () => void
   onReplaceAll?: () => void
 }
+
+/** The legal-checks section a ribbon can open. */
+export type LegalChecksFocus = 'terms' | 'references'
