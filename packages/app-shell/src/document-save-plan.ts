@@ -19,6 +19,7 @@ export type {
   BlockedDraft,
   DraftSlot,
   DraftState,
+  StructureKind,
   TrackedRejection,
 } from './document-draft-state'
 
