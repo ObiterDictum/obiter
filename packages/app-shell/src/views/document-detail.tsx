@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, FileText, Trash } from '@phosphor-icons/react'
 import {
@@ -18,6 +18,8 @@ import {
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import { DocumentVersionView } from '../components/document-workspace/document-version-view'
+import { DocumentVersionCompare } from '../components/document-workspace/version-compare'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
 
 /**
@@ -41,6 +43,17 @@ export function DocumentDetailLayoutView({
   const { data: me } = useCurrentUser()
   const document = useDocument(documentId)
   const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
+  // Naming a version the detail query did not return selects nothing — a
+  // viewer sees only the current version's row, so historical ids are never
+  // selectable from this surface in the first place.
+  const [selectedVersionId, setSelectedVersionId] = useState<string>()
+  const selectedVersion = document.data?.versions.find(
+    (version) => version.id === selectedVersionId,
+  )
+  const viewingHistorical =
+    selectedVersion !== undefined &&
+    selectedVersion.documentStatus === 'ready' &&
+    selectedVersion.id !== document.data?.document.currentVersionId
 
   // The document is loaded by id alone; guard against the URL's matterId not
   // matching the document's actual matter. Render not-found rather than show a
@@ -171,11 +184,25 @@ export function DocumentDetailLayoutView({
           <DocumentMetadata
             document={loaded.document}
             versions={loaded.versions}
-          />
-          <DocumentWorkspace
             documentId={documentId}
-            version={loaded.document.currentVersion}
+            onViewVersion={setSelectedVersionId}
           />
+          {/* Selecting a historical version swaps the editor for the
+              read-only view. The editor unmounts; its drafts are persisted
+              per tab (E45), so Back to current restores the live work rather
+              than losing it. */}
+          {viewingHistorical && selectedVersion ? (
+            <DocumentVersionView
+              documentId={documentId}
+              version={selectedVersion}
+              onExit={() => setSelectedVersionId(undefined)}
+            />
+          ) : (
+            <DocumentWorkspace
+              documentId={documentId}
+              version={loaded.document.currentVersion}
+            />
+          )}
         </>
       ) : null}
 
@@ -211,9 +238,13 @@ export function DocumentDetailLayoutView({
 function DocumentMetadata({
   document,
   versions,
+  documentId,
+  onViewVersion,
 }: {
   document: import('../documents').MatterDocumentRecord
   versions: import('../documents').DocumentVersionRecord[]
+  documentId: string
+  onViewVersion: (versionId: string) => void
 }) {
   const current = document.currentVersion
   const sizeLabel = current ? formatBytes(Number(current.sizeBytes)) : '—'
@@ -285,11 +316,20 @@ function DocumentMetadata({
                     >
                       View
                     </a>
+                  ) : version.documentStatus === 'ready' ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewVersion(version.id)}
+                      className="text-sm font-medium text-brand hover:text-brand-pressed"
+                    >
+                      View
+                    </button>
                   ) : null}
                 </div>
               </li>
             ))}
           </ul>
+          <DocumentVersionCompare documentId={documentId} versions={versions} />
         </section>
       ) : null}
     </>
