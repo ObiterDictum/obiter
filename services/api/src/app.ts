@@ -12,6 +12,7 @@ import { updateProfileInputSchema } from '@obiter/contracts'
 import { updateUserName } from './account-database'
 import { appendPasswordChangedAudit } from './auth-change-audit'
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
+import { readDatabaseIdentity } from './database-identity'
 import type { ApiEnv } from './env'
 import type { CorpusAccess } from './database-pools'
 import { createAuth } from './auth'
@@ -92,11 +93,26 @@ interface DevelopmentApiProvenance {
   commitSha: string
   checkoutRoot: string
   envFile: string | null
+  /**
+   * The database this process's pool is bound to. Lane checks need to prove
+   * the API writes where the run declared — a CLI flag alone cannot attest
+   * that — so the server reports its own identity rather than leaving the
+   * check to compare against a file the API may not have read.
+   */
+  databaseName: string | null
 }
 
 function readDevelopmentApiProvenance(
   envFile: string | null,
+  databaseUrl: string,
 ): DevelopmentApiProvenance | null {
+  let databaseName: string | null = null
+  try {
+    databaseName = readDatabaseIdentity(databaseUrl, 'DATABASE_URL').database
+  } catch {
+    // Health must stay useful on a malformed env; the lane check treats a
+    // null name as "cannot prove the write target" and refuses.
+  }
   try {
     const checkoutRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       cwd: process.cwd(),
@@ -108,7 +124,7 @@ function readDevelopmentApiProvenance(
     }).trim()
 
     return checkoutRoot && commitSha
-      ? { checkoutRoot, commitSha, envFile }
+      ? { checkoutRoot, commitSha, envFile, databaseName }
       : null
   } catch {
     // A source checkout is expected in development, but health must remain
@@ -171,7 +187,7 @@ export function createApiApp(
   // expose filesystem paths or build metadata in production.
   const developmentProvenance =
     env.nodeEnv === 'development'
-      ? readDevelopmentApiProvenance(env.localEnvFile)
+      ? readDevelopmentApiProvenance(env.localEnvFile, env.databaseUrl)
       : null
   const presence = new PostgresDocumentPresence(pool)
   const requestLimits = apiRequestLimitsFromEnv(env)

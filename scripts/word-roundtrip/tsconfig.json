@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "bun"],
+    // lane.ts imports apps/web/lane-target.mjs and @obiter/config/local-env so
+    // the harness enforces the same lane contract Playwright does; allowJs
+    // infers those types from the real source, checkJs stays off so the .mjs
+    // files are not newly typechecked by this tsconfig.
+    "allowJs": true
+  },
+  "include": ["."]
+}

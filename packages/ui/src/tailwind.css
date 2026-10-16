@@ -117,4 +117,29 @@
     outline: 2px solid var(--obiter-brand);
     outline-offset: 2px;
   }
+
+  /* Motion users asked the platform to reduce: every animation and
+     transition completes immediately, so nothing essential is lost —
+     the app has no motion-only affordances. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Forced colours: the platform overrides custom backgrounds, which strips
+     the secondary fill a pressed ribbon control uses. The outline keeps a
+     pressed toggle distinguishable, and focus stays visible, under Windows
+     High Contrast and the forced-colors media query generally. */
+  @media (forced-colors: active) {
+    [aria-pressed='true'] {
+      outline: 1px solid Highlight;
+      outline-offset: -1px;
+    }
+  }
 }

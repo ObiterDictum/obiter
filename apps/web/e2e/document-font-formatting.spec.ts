@@ -110,7 +110,8 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
@@ -171,7 +172,10 @@ async function enableTracking(page: Page) {
   await page.getByRole('tab', { name: 'Home' }).click()
 }
 
-type EditBody = { operations?: Array<Record<string, unknown>> }
+type EditBody = {
+  trackChanges?: boolean
+  operations?: Array<Record<string, unknown>>
+}
 
 function isEditBody(value: unknown): value is EditBody {
   return typeof value === 'object' && value !== null && 'operations' in value
@@ -309,7 +313,7 @@ test('clear formatting removes direct character formatting and saves nulls', asy
   )
 })
 
-test('refuses font formatting and clear formatting on a tracked partial selection', async ({
+test('queues font formatting and clear formatting on a tracked partial selection', async ({
   page,
   request,
 }) => {
@@ -317,19 +321,50 @@ test('refuses font formatting and clear formatting on a tracked partial selectio
   const matter = `E2 tracked ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
+  const editBodies: EditBody[] = []
+  page.on('request', (outgoing) => {
+    if (/\/api\/documents\/[^/]+\/edit$/u.test(outgoing.url())) {
+      const body = outgoing.postDataJSON()
+      if (isEditBody(body)) editBodies.push(body)
+    }
+  })
+
   await enableTracking(page)
   await selectFirst(page, HEADING, SELECTED.length)
 
-  // A tracked range split has no rPrChange writer, so the font controls and
-  // Clear formatting hold and surface the refusal instead of painting a change
-  // the save would drop.
-  await expect(page.getByLabel(/^Font:/u)).toBeDisabled()
-  await expect(page.getByLabel(/^Font size:/u)).toBeDisabled()
-  await expect(page.getByLabel(/^Font colour:/u)).toBeDisabled()
+  // A tracked range split is recorded as a w:rPrChange, so the font controls
+  // and Clear formatting stay available and queue a draft instead of
+  // refusing.
+  await expect(fontFamily(page)).toBeEnabled()
+  await expect(fontSize(page)).toBeEnabled()
+  await expect(fontColour(page)).toBeEnabled()
   await expect(
-    page.getByRole('button', {
-      name: /^Clear formatting: Partial formatting is not yet recorded/u,
+    page.getByRole('button', { name: 'Clear formatting', exact: true }),
+  ).toBeEnabled()
+
+  await fontFamily(page).selectOption('Georgia')
+  await fontSize(page).selectOption({ label: '12' })
+  await expect(fontFamily(page)).toHaveValue('Georgia')
+  await expect(fontSize(page)).toHaveValue('24')
+  const trackedStyle = await paintedStyle(page, SELECTED)
+  expect(trackedStyle?.fontFamily).toContain('Georgia')
+  expect(trackedStyle?.fontSize).toBe('16px')
+  await shot(page, '05-tracked-range-queued')
+
+  await saveAndWait(page)
+
+  // The batch flew tracked and addressed the selection as a paragraph range,
+  // the address a mid-run split has to carry.
+  expect(editBodies.at(-1)?.trackChanges).toBe(true)
+  const operations = editBodies.flatMap((body) => body.operations ?? [])
+  expect(operations).toContainEqual(
+    expect.objectContaining({
+      type: 'set_run_emphasis',
+      paragraphId: expect.any(String),
+      from: 0,
+      to: SELECTED.length,
+      fontFamily: 'Georgia',
+      fontSize: 24,
     }),
-  ).toBeDisabled()
-  await shot(page, '05-tracked-range-refusal')
+  )
 })

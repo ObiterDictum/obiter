@@ -117,6 +117,7 @@ describe('createApiApp', () => {
         commitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
         checkoutRoot: expect.stringContaining('/'),
         envFile: '/tmp/lane-security/.env',
+        databaseName: 'obiter',
       },
     })
 
