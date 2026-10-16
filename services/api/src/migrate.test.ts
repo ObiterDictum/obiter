@@ -203,6 +203,22 @@ describe('migration guard lexing', () => {
       'create table "o\'brien" (x int);\ncommit;\n',
     ],
     ['a statement sharing a line with another', 'select 1; commit;\n'],
+    [
+      'a statement after a nested block comment',
+      "/* a /* b */ it's */\ncommit;\n",
+    ],
+    [
+      'a statement after an identifier ending in $',
+      'create table a$$b$$ (x int);\ncommit;\n',
+    ],
+    [
+      'a statement after a non-ASCII identifier',
+      'create table caf\u00e9$$ (x int);\ncommit;\n',
+    ],
+    [
+      'a statement after a plain string containing a backslash',
+      "select case when x then 'a' else'b\\' end;\ncommit;\n",
+    ],
   ])('refuses %s', (_label, sql) => {
     expect(() => assertNoTransactionControl('0001_x.sql', sql)).toThrow(
       'carries transaction control',
@@ -220,6 +236,10 @@ describe('migration guard lexing', () => {
     ],
     ['a transaction word inside a plain string', "select 'commit;';\n"],
     ['a column named commit_sha', 'select commit_sha from runs;\n'],
+    [
+      'a SQL-standard function body',
+      'create function f() returns int begin atomic\n  select 1;\nend;\n',
+    ],
   ])('allows %s', (_label, sql) => {
     expect(() => assertNoTransactionControl('0001_x.sql', sql)).not.toThrow()
   })

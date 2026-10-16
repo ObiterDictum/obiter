@@ -35,17 +35,23 @@ export function listMigrationFiles(migrationsDir: string) {
  * transaction per file, covering the tracking insert — then no longer holds,
  * and a later failure cannot roll the file back.
  *
- * Bare `end` is deliberately absent: `CASE … end` closes expressions, so only
- * `end work`/`end transaction` is unambiguous. The anchor is the start of a
- * line, which is the convention these files follow; a statement sharing a line
- * with another is not caught, and the guard is a backstop rather than a
- * parser.
+ * Bare `end` is deliberately absent: `CASE … end` closes an expression, so only
+ * `end work`/`end transaction` is unambiguous. `begin atomic` is a SQL-standard
+ * function body, not a transaction block. The scanner emits a newline after
+ * every terminator, so a statement is caught wherever it starts, not only at
+ * the start of a line in the source.
  */
 const TRANSACTION_CONTROL =
-  /^\s*(?:begin|commit|rollback|abort|start\s+transaction|end\s+(?:work|transaction))\b/imu
+  /^\s*(?:begin(?!\s+atomic\b)|commit|rollback|abort|start\s+transaction|end\s+(?:work|transaction))\b/imu
 
-/** Identifier characters: a `$` inside them does not open a dollar quote. */
-const IDENTIFIER_CHARACTER = /[A-Za-z0-9_]/
+/** Characters Postgres allows inside an identifier, `$` and non-ASCII included. */
+function isIdentifierCharacter(character: string) {
+  return (
+    character === '$' ||
+    /[A-Za-z0-9_]/.test(character) ||
+    character.charCodeAt(0) >= 0x80
+  )
+}
 
 /**
  * Skips a quoted run from its opening quote and returns the index after it. A
@@ -85,61 +91,89 @@ function skipQuoted(
  * `do $$ … begin … end; $$` body and a `CASE … end` are the reasons the scan is
  * needed at all: migrations legitimately contain both.
  *
- * A statement terminator is followed by a newline so a statement sharing its
- * line with another starts at the beginning of one, where the anchored pattern
- * below can see it.
+ * `inIdentifier` carries the one piece of state a look-back cannot: an
+ * identifier may contain `$` and non-ASCII, so `a$b$`, `a$$b$$` and `café$$`
+ * are identifiers while `$$` after `(`, whitespace or a terminator opens a
+ * dollar quote. The same state recognises the `E` of `E'…'`, so `else'b\'` is a
+ * plain string.
+ *
+ * A statement terminator is followed by a newline, so a statement sharing its
+ * line with another starts at the beginning of one.
  */
 function withoutQuotedOrComments(sql: string) {
   let bare = ''
   let index = 0
+  let inIdentifier = false
+  let escapeIntroducer = false
   while (index < sql.length) {
     const character = sql[index]
     if (character === '-' && sql[index + 1] === '-') {
       const newline = sql.indexOf('\n', index)
       index = newline === -1 ? sql.length : newline
       bare += '\n'
+      inIdentifier = false
+      escapeIntroducer = false
       continue
     }
     if (character === '/' && sql[index + 1] === '*') {
-      const end = sql.indexOf('*/', index + 2)
-      index = end === -1 ? sql.length : end + 2
+      // Postgres nests block comments, so the matching `*/` closes the
+      // outermost one.
+      let depth = 1
+      index += 2
+      while (index < sql.length && depth > 0) {
+        if (sql[index] === '/' && sql[index + 1] === '*') {
+          depth += 1
+          index += 2
+          continue
+        }
+        if (sql[index] === '*' && sql[index + 1] === '/') {
+          depth -= 1
+          index += 2
+          continue
+        }
+        index += 1
+      }
+      inIdentifier = false
+      escapeIntroducer = false
       continue
     }
     if (character === '"') {
       index = skipQuoted(sql, index, '"', false)
+      inIdentifier = false
+      escapeIntroducer = false
       continue
     }
     if (character === "'") {
-      // `E'…'` is an escape string: a backslash escapes the next character.
-      const introducer = index > 0 ? sql[index - 1] : ''
-      const escapeString =
-        (introducer === 'e' || introducer === 'E') &&
-        (index < 2 || !IDENTIFIER_CHARACTER.test(sql[index - 2]))
-      index = skipQuoted(sql, index, "'", escapeString)
+      index = skipQuoted(sql, index, "'", escapeIntroducer)
+      inIdentifier = false
+      escapeIntroducer = false
       continue
     }
-    if (character === '$') {
-      // A `$` inside an identifier (`a$b$c`) is part of the identifier, not the
-      // start of a dollar quote.
-      const previous = index > 0 ? sql[index - 1] : ''
-      if (!IDENTIFIER_CHARACTER.test(previous)) {
-        let tagEnd = index + 1
-        while (tagEnd < sql.length && IDENTIFIER_CHARACTER.test(sql[tagEnd])) {
-          tagEnd += 1
-        }
-        if (sql[tagEnd] === '$') {
-          const tag = sql.slice(index, tagEnd + 1)
-          const end = sql.indexOf(tag, tagEnd + 1)
-          index = end === -1 ? sql.length : end + tag.length
-          continue
-        }
+    if (character === '$' && !inIdentifier) {
+      let tagEnd = index + 1
+      while (tagEnd < sql.length && /[A-Za-z0-9_]/.test(sql[tagEnd])) {
+        tagEnd += 1
+      }
+      if (sql[tagEnd] === '$') {
+        const tag = sql.slice(index, tagEnd + 1)
+        const end = sql.indexOf(tag, tagEnd + 1)
+        index = end === -1 ? sql.length : end + tag.length
+        inIdentifier = false
+        escapeIntroducer = false
+        continue
       }
     }
     if (character === ';') {
       bare += ';\n'
       index += 1
+      inIdentifier = false
+      escapeIntroducer = false
       continue
     }
+    // The `E` only introduces an escape string where an identifier does not
+    // already contain it.
+    escapeIntroducer = !inIdentifier && (character === 'e' || character === 'E')
+    inIdentifier = isIdentifierCharacter(character)
     bare += character
     index += 1
   }
