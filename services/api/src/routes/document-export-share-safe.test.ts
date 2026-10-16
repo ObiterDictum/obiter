@@ -67,7 +67,7 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     )
   })
 
-  it('refuses a version carrying tracked changes and audits nothing', async () => {
+  it('refuses a version carrying tracked changes and audits the bounded reason', async () => {
     const tracked = await trackedChangesDocx()
     const database = new TestDatabase({ access: 'view' })
     const storage = new MemoryStorage(tracked)
@@ -81,7 +81,22 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     expect(JSON.parse(body)).toMatchObject({
       error: { code: 'share_safe_export_refused' },
     })
-    expect(database.audits).toEqual([])
+    // The refusal is audited with the bounded policy class only — no part
+    // names, attribute values or document text reach the record.
+    expect(database.audits).toEqual([
+      {
+        entityType: 'document',
+        entityId: 'doc_1',
+        action: 'document.export_refused',
+        metadata: {
+          matterId: 'mtr_1',
+          versionId: 'ver_1',
+          shareSafe: true,
+          refusalReason: 'tracked-changes',
+        },
+      },
+    ])
+    expect(JSON.stringify(database.audits)).not.toContain('IN THE HIGH COURT')
     // The response is the error envelope, not document bytes: the refusal is
     // a JSON body well under the source package's size.
     expect(body.length).toBeLessThan(tracked.byteLength)
@@ -123,6 +138,19 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     expect(await response.json()).toMatchObject({
       error: { code: 'share_safe_export_refused' },
     })
+    expect(database.audits).toEqual([
+      {
+        entityType: 'document',
+        entityId: 'doc_1',
+        action: 'document.export_refused',
+        metadata: {
+          matterId: 'mtr_1',
+          versionId: 'ver_1',
+          shareSafe: true,
+          refusalReason: 'tracked-changes',
+        },
+      },
+    ])
   })
 
   it('carries a faithful Unicode name through filename*', async () => {

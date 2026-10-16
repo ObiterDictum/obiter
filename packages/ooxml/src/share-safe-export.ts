@@ -46,6 +46,27 @@ export { ShareSafeRefusal }
  *    relationships, a part declared under two roles, dangling pointers;
  *  - fields that fetch (`INCLUDETEXT`, `INCLUDEPICTURE`, `LINK`, `DDE`,
  *    `HYPERLINK`, …): the instruction embeds the address.
+ *
+ * Module ownership — which allow-list file owns which namespace or part
+ * class, and what rewrites it:
+ *  - WordprocessingML: `share-safe-word-vocabulary` (elements) and
+ *    `share-safe-word-attributes` (attributes, split into the
+ *    `share-safe-word-attribute-*` modules for value shapes) own the
+ *    allow-list; `share-safe-word-classes` owns the revision, hidden and
+ *    pointer classes; `share-safe-word-content` rewrites the part.
+ *  - DrawingML and WordprocessingDrawing: `share-safe-drawing-vocabulary`,
+ *    `share-safe-drawing-attributes`, `share-safe-drawing-attribute-bounds`.
+ *  - Math (OMML): `share-safe-math-vocabulary`, `share-safe-math-attributes`.
+ *  - Preset colours and shapes: `share-safe-preset-attributes`,
+ *    `share-safe-preset-colors`.
+ *  - Package declarations (`_rels`, `[Content_Types].xml`):
+ *    `share-safe-declarations`; canonical bytes: `share-safe-canonical`.
+ *  - Document properties (`docProps`): `share-safe-metadata`.
+ *  The verdicts these lists feed live in `share-safe-policy`; the per-part
+ *  content pass in `share-safe-content`; the part graph in
+ *  `share-safe-inventory`; emission in `share-safe-emit`; and the independent
+ *  byte, binary and whole-output verification in `share-safe-bytecheck`,
+ *  `share-safe-binary` and `share-safe-verify`.
  */
 export async function buildShareSafeDocx(
   document: OoxmlDocument,

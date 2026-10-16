@@ -136,6 +136,12 @@ export function emitShareSafePart(
       seen.add(key)
       const override = contentPlan.attrOverrides.get(attribute)
       const value = override === undefined ? attribute.value : override
+      if (override !== undefined && carriesControlCharacter(override)) {
+        refuseShareSafe(
+          'malformed-package',
+          `${part.name} carries a control character in a rewritten attribute`,
+        )
+      }
       attributes += ` ${canonicalName(attribute.namespaceUri, attribute.localName)}="${escapeXmlAttribute(value)}"`
     }
     if (isRoot) {
@@ -149,6 +155,15 @@ export function emitShareSafePart(
     }
     const override = contentPlan.textOverrides.get(element)
     if (override !== undefined) {
+      // Overrides carry rewritten field instructions: an author byte that is
+      // not legal XML 1.0 text refuses here exactly as it does on the source
+      // text and CDATA paths, rather than emitting an invalid document.
+      if (carriesControlCharacter(override)) {
+        refuseShareSafe(
+          'malformed-package',
+          `${part.name} carries a control character in a rewritten text override`,
+        )
+      }
       return `<${name}${attributes}>${escapeXmlText(override)}</${name}>`
     }
     if (element.selfClosing || element.endTagStart <= element.startTagEnd) {

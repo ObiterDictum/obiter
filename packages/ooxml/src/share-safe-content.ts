@@ -53,6 +53,17 @@ const MC_ALTERNATE = /^(AlternateContent|Choice|Fallback)$/u
 const WORD_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/word/'
 
 /**
+ * Share-safe passes are super-linear in one part's element count — the
+ * `AlternateContent` branch scan and the comment-run collapse both rescan
+ * the whole element list per candidate — so a valid but pathological part
+ * burns CPU per request. The caps refuse that shape rather than process it.
+ * They sit far above real toolchain output: the largest part observed in
+ * the corpus (a full `styles.xml`) holds ~9k elements and ~14k attributes.
+ */
+const SHARE_SAFE_MAX_PART_ELEMENTS = 100_000
+const SHARE_SAFE_MAX_PART_ATTRIBUTES = 200_000
+
+/**
  * The single content pass over one kept XML part. Everything the emitter
  * needs is decided here — which elements never emit, which wrappers lose
  * their tags, which texts and attributes are rewritten — so the
@@ -96,6 +107,20 @@ export function analyseShareSafePart(
     elements = parseXmlElements(source)
   } catch {
     refuseShareSafe('malformed-package', `${part.name} is not parseable XML`)
+  }
+  if (elements.length > SHARE_SAFE_MAX_PART_ELEMENTS) {
+    refuseShareSafe(
+      'oversized-structure',
+      `${part.name} holds ${elements.length} elements, over the share-safe cap`,
+    )
+  }
+  let attributeCount = 0
+  for (const element of elements) attributeCount += element.attributes.length
+  if (attributeCount > SHARE_SAFE_MAX_PART_ATTRIBUTES) {
+    refuseShareSafe(
+      'oversized-structure',
+      `${part.name} holds ${attributeCount} attributes, over the share-safe cap`,
+    )
   }
   if (!part.overlay) {
     part.overlay = createXmlOverlay(source)

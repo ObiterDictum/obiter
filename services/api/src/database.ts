@@ -56,6 +56,7 @@ export interface AuditRecordInput {
     | 'document.comment_resolve'
     | 'document.comment_reopen'
     | 'document.export'
+    | 'document.export_refused'
     | 'document.markings'
     | 'redaction.run_create'
     | 'redaction.run_redetect'

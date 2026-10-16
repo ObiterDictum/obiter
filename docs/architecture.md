@@ -850,8 +850,10 @@ blanket 500. The skipped count is surfaced in the
 `x-obiter-comments-skipped` response header and in the audit row, and the
 editor shows a banner when comments were skipped. Audit `document.export`
 with matter, version, `commentCount`, and `skippedCommentCount` only: no
-filename, object key, or comment bodies. The toolbar downloads that package
-instead of a `.txt` reconstruction.
+filename, object key, or comment bodies. A share-safe refusal audits
+`document.export_refused` with the bounded refusal reason class only — never
+the diagnostic detail, part names, or document text. The toolbar downloads
+that package instead of a `.txt` reconstruction.
 
 ### M1.25 find and undo: local draft history (13 August 2026)
 
