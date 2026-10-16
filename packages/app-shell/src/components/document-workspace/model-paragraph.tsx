@@ -296,6 +296,8 @@ export function ModelParagraph({
       )}
       style={{
         ...paragraphCss(face),
+        // A list's special indent is the marker column the row lays out.
+        ...(listMarker ? { textIndent: 'none' } : {}),
         lineHeight: `${linePx}px`,
         marginTop: continuation || pageStart ? 0 : face.marginTopPx,
         paddingLeft: indentLeftPx + padLeftPx,
@@ -384,6 +386,11 @@ export function ModelParagraph({
                   ...paragraphCss(face),
                   marginTop: 0,
                   marginBottom: 0,
+                  // The container carries the indent; repeating it here would
+                  // drift the textarea's text from the painted runs.
+                  paddingLeft: 0,
+                  paddingRight: 0,
+                  textIndent: undefined,
                   height: editorHeight,
                   lineHeight: `${linePx}px`,
                   whiteSpace: 'pre-wrap',

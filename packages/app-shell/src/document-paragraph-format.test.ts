@@ -312,8 +312,8 @@ describe('indentation None no-op', () => {
     paragraph('p1', '<w:pPr><w:ind w:left="720"/></w:pPr>'),
   ])
 
-  // A special indent that comes from the paragraph's style is not something
-  // None can clear: it releases the direct attributes only.
+  // A special indent that comes from the paragraph's style is cancelled by an
+  // explicit zero, so None has real work to do on this paragraph.
   const styleFirstLine = {
     ...modelWith([]),
     styles: [
@@ -395,6 +395,16 @@ describe('indentation None no-op', () => {
       paragraphFormatState(styleFirstLine, state.format(), ['p1']).indent,
     ).toBe('none')
     expect(state.historySteps()).toBe(1)
+    // The save carries the cancel, not a release.
+    expect(collectFormatOperations(styleFirstLine, state.format(), [])).toEqual(
+      [
+        {
+          type: 'set_paragraph_format',
+          paragraphId: 'p1',
+          indentation: { firstLine: 0, hanging: null },
+        },
+      ],
+    )
   })
 
   it('replaces a pending special indent with the clear', () => {

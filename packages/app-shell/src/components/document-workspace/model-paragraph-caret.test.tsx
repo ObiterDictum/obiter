@@ -248,6 +248,41 @@ describe('run formatting when the caret is elsewhere', () => {
   })
 })
 
+describe('paragraph editor alignment', () => {
+  it('does not repeat the paragraph indent on the textarea', () => {
+    render(
+      <DocumentModelPage
+        model={doc({
+          id: 'p1',
+          runs: [
+            { id: 'p1-r', text: 'Alice Example', preservedXmlFragments: [] },
+          ],
+          preservedXmlFragments: [
+            '<w:pPr><w:ind w:left="720" w:right="360"/></w:pPr>',
+          ],
+        })}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    // The paragraph container carries the indent and the painted runs sit in
+    // the same space, so a padding here would drift the textarea's text — and
+    // with it the native caret and the wrapping — away from the paint.
+    expect(field.style.paddingLeft).toBe('0px')
+    expect(field.style.paddingRight).toBe('0px')
+    const paragraph = document.querySelector('[data-paragraph-id="p1"]')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('expected a paragraph')
+    }
+    expect(paragraph.style.paddingLeft).toBe('48px')
+    expect(paragraph.style.paddingRight).toBe('24px')
+  })
+})
+
 describe('run formatting on the caret paragraph', () => {
   it('renders a uniformly bold paragraph at weight 700 while it holds the caret', () => {
     render(
