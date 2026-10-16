@@ -22,17 +22,10 @@ import { RELATIONSHIPS_NAMESPACE } from '../structure-xml'
 import { decodeXmlReferences } from '../xml-lexemes'
 import { resolveMoveRanges } from './move-ranges'
 import { elementFragment, parseXmlElements } from './overlay'
-import {
-  containsTrackedChange,
-  hasDeletedParagraphMark,
-  hasTrackedChangeAncestor,
-  isTrackedChange,
-  trackedChange,
-} from './tracked-change-nodes'
+import { isTrackedChange, trackedChange } from './tracked-change-nodes'
 import {
   attributeValue,
   elementRange,
-  isDescendantOf,
   isTextWrappingBreak,
   isWord,
   nearestWordAncestor,
@@ -55,6 +48,136 @@ export type ParsedStory = {
   trackedChanges: TrackedChangeNode[]
 }
 
+const NO_ELEMENTS: readonly XmlElement[] = []
+
+/**
+ * One pass over a part's element list, indexing what the story walk asks for
+ * over and over: children, the nearest enclosing `w:r`/`w:p`, and the tracked
+ * change and `mc:Fallback` facts. Without it every paragraph and every run
+ * scans the whole list, so a part costs runs × elements — 2,000 field-bearing
+ * paragraphs took ~30 s before this. Elements are in document order, so a
+ * parent is always seen before its children: ancestor facts are computed
+ * forward and subtree facts backward, with no recursion (a part may nest
+ * 20,000 deep).
+ */
+class PartIndex {
+  private readonly children = new Map<XmlElement, XmlElement[]>()
+  private readonly byRun = new Map<XmlElement, XmlElement[]>()
+  private readonly byParagraph = new Map<XmlElement, XmlElement[]>()
+  private readonly nearestRun = new Map<XmlElement, XmlElement | undefined>()
+  private readonly nearestParagraph = new Map<
+    XmlElement,
+    XmlElement | undefined
+  >()
+  private readonly trackedAncestor = new Set<XmlElement>()
+  private readonly insideFallback = new Set<XmlElement>()
+  private readonly trackedSubtree = new Set<XmlElement>()
+
+  constructor(private readonly elements: readonly XmlElement[]) {
+    for (const element of elements) {
+      const parent = element.parent
+      if (parent !== undefined) {
+        const siblings = this.children.get(parent)
+        if (siblings) siblings.push(element)
+        else this.children.set(parent, [element])
+        if (isTrackedChange(parent) || this.trackedAncestor.has(parent)) {
+          this.trackedAncestor.add(element)
+        }
+        if (
+          parent.localName === 'Fallback' ||
+          this.insideFallback.has(parent)
+        ) {
+          this.insideFallback.add(element)
+        }
+      }
+      const run =
+        parent === undefined
+          ? undefined
+          : isWord(parent, 'r')
+            ? parent
+            : this.nearestRun.get(parent)
+      this.nearestRun.set(element, run)
+      this.bucket(this.byRun, run, element)
+      const paragraph =
+        parent === undefined
+          ? undefined
+          : isWord(parent, 'p')
+            ? parent
+            : this.nearestParagraph.get(parent)
+      this.nearestParagraph.set(element, paragraph)
+      this.bucket(this.byParagraph, paragraph, element)
+    }
+    for (let index = elements.length - 1; index >= 0; index -= 1) {
+      const element = elements[index]
+      if (isTrackedChange(element)) {
+        this.trackedSubtree.add(element)
+        continue
+      }
+      for (const child of this.children.get(element) ?? NO_ELEMENTS) {
+        if (this.trackedSubtree.has(child)) {
+          this.trackedSubtree.add(element)
+          break
+        }
+      }
+    }
+  }
+
+  root() {
+    return this.elements.find(({ depth }) => depth === 0)
+  }
+
+  childrenOf(element: XmlElement) {
+    return this.children.get(element) ?? NO_ELEMENTS
+  }
+
+  /** Elements whose nearest enclosing `w:r` is `run`, in document order. */
+  descendantsOfRun(run: XmlElement) {
+    return this.byRun.get(run) ?? NO_ELEMENTS
+  }
+
+  /** Elements whose nearest enclosing `w:p` is `paragraph`. */
+  descendantsOfParagraph(paragraph: XmlElement) {
+    return this.byParagraph.get(paragraph) ?? NO_ELEMENTS
+  }
+
+  inTrackedChange(element: XmlElement) {
+    return this.trackedAncestor.has(element)
+  }
+
+  isInsideFallback(element: XmlElement) {
+    return this.insideFallback.has(element)
+  }
+
+  /** The element itself or a descendant is a tracked change. */
+  containsTrackedChange(element: XmlElement) {
+    return this.trackedSubtree.has(element)
+  }
+
+  /** A `w:del` on the paragraph's own mark, which deletes the paragraph. */
+  hasDeletedParagraphMark(paragraph: XmlElement) {
+    const properties = this.childrenOf(paragraph).find((element) =>
+      isWord(element, 'pPr'),
+    )
+    if (!properties) return false
+    const mark = this.childrenOf(properties).find((element) =>
+      isWord(element, 'rPr'),
+    )
+    if (!mark) return false
+    return this.childrenOf(mark).some((element) => isWord(element, 'del'))
+  }
+
+  private bucket(
+    into: Map<XmlElement, XmlElement[]>,
+    key: XmlElement | undefined,
+    element: XmlElement,
+  ) {
+    if (key === undefined) return
+    const entries = into.get(key)
+    if (entries) entries.push(element)
+    else into.set(key, [element])
+  }
+}
+
 export function parseStory(
   partName: string,
   kind: DocumentStoryKind,
@@ -67,17 +190,18 @@ export function parseStory(
   const anchors: TextRunAnchor[] = []
   const paragraphAnchors: ParagraphAnchor[] = []
 
+  const index = new PartIndex(elements)
   for (const paragraph of elements.filter(
     (element) =>
       isWord(element, 'p') &&
-      !hasTrackedChangeAncestor(element) &&
-      !hasDeletedParagraphMark(element, elements) &&
-      !isInsideFallback(element),
+      !index.inTrackedChange(element) &&
+      !index.hasDeletedParagraphMark(element) &&
+      !index.isInsideFallback(element),
   )) {
     const parsed = parseParagraph(
       partName,
       source,
-      elements,
+      index,
       paragraph,
       identity,
       hyperlinkTargets,
@@ -90,7 +214,7 @@ export function parseStory(
   const moveRanges = resolveMoveRanges(partName, elements)
   const trackedChanges = elements
     .filter(isTrackedChange)
-    .filter((element) => !hasTrackedChangeAncestor(element))
+    .filter((element) => !index.inTrackedChange(element))
     .map((element) =>
       trackedChange(
         partName,
@@ -114,7 +238,7 @@ export function parseStory(
       partName,
       kind,
       paragraphs,
-      preservedXmlFragments: storyStructureFragments(source, elements, kind),
+      preservedXmlFragments: storyStructureFragments(source, index, kind),
       fields,
       unanchoredFieldParagraphIds,
     },
@@ -192,7 +316,7 @@ function storyFields(
 function parseParagraph(
   partName: string,
   source: string,
-  elements: XmlElement[],
+  index: PartIndex,
   paragraphElement: XmlElement,
   identity: IdentityContext,
   hyperlinkTargets: ReadonlyMap<string, string> | undefined,
@@ -213,35 +337,35 @@ function parseParagraph(
       : identity.allocator.nextParagraphId(),
     identity,
   )
-  const propertiesElement = elements.find(
-    (element) => element.parent === paragraphElement && isWord(element, 'pPr'),
-  )
+  const propertiesElement = index
+    .childrenOf(paragraphElement)
+    .find((element) => isWord(element, 'pPr'))
   const styleElement = propertiesElement
-    ? elements.find(
-        (element) =>
-          element.parent === propertiesElement && isWord(element, 'pStyle'),
-      )
+    ? index
+        .childrenOf(propertiesElement)
+        .find((element) => isWord(element, 'pStyle'))
     : undefined
   const styleId = styleElement
     ? attributeValue(styleElement, WORD_NAMESPACE, 'val')
     : undefined
   const runs: DocumentTextRunWire[] = []
   const anchors: TextRunAnchor[] = []
-  const runElements = elements.filter(
-    (element) =>
-      isWord(element, 'r') &&
-      nearestWordAncestor(element, 'p') === paragraphElement &&
-      !hasTrackedChangeAncestor(element) &&
-      !isInsideFallback(element),
-  )
+  const runElements = index
+    .descendantsOfParagraph(paragraphElement)
+    .filter(
+      (element) =>
+        isWord(element, 'r') &&
+        !index.inTrackedChange(element) &&
+        !index.isInsideFallback(element),
+    )
 
-  runElements.forEach((runElement, index) => {
+  runElements.forEach((runElement, runIndex) => {
     const parsed = parseRun(
       partName,
       source,
-      elements,
+      index,
       runElement,
-      index === 0 ? sourceTextId : undefined,
+      runIndex === 0 ? sourceTextId : undefined,
       identity,
       hyperlinkTargets,
     )
@@ -255,12 +379,11 @@ function parseParagraph(
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
     runs,
-    preservedXmlFragments: elements
+    preservedXmlFragments: index
+      .childrenOf(paragraphElement)
       .filter(
         (element) =>
-          element.parent === paragraphElement &&
-          !isWord(element, 'r') &&
-          !containsTrackedChange(element, elements),
+          !isWord(element, 'r') && !index.containsTrackedChange(element),
       )
       .map((element) => elementFragment(source, element)),
   }
@@ -277,10 +400,7 @@ function parseParagraph(
       ...(styleElement
         ? { paragraphStyleRange: elementRange(styleElement) }
         : {}),
-      hasTrackedChanges: elements.some(
-        (element) =>
-          isTrackedChange(element) && isDescendantOf(element, paragraphElement),
-      ),
+      hasTrackedChanges: index.containsTrackedChange(paragraphElement),
       runs: anchors,
     } satisfies ParagraphAnchor,
   }
@@ -289,7 +409,7 @@ function parseParagraph(
 function parseRun(
   partName: string,
   source: string,
-  elements: XmlElement[],
+  index: PartIndex,
   runElement: XmlElement,
   paragraphTextId: string | undefined,
   identity: IdentityContext,
@@ -303,22 +423,22 @@ function parseRun(
       : identity.allocator.nextTextRunId(),
     identity,
   )
-  const textElements = elements.filter(
-    (element) =>
-      isWord(element, 't') &&
-      nearestWordAncestor(element, 'r') === runElement &&
-      !hasTrackedChangeAncestor(element) &&
-      !isInsideFallback(element),
-  )
-  const propertiesElements = elements.filter(
-    (element) => element.parent === runElement && isWord(element, 'rPr'),
-  )
+  const textElements = index
+    .descendantsOfRun(runElement)
+    .filter(
+      (element) =>
+        isWord(element, 't') &&
+        !index.inTrackedChange(element) &&
+        !index.isInsideFallback(element),
+    )
+  const propertiesElements = index
+    .childrenOf(runElement)
+    .filter((element) => isWord(element, 'rPr'))
   const propertiesElement = propertiesElements[0]
   const styleElement = propertiesElement
-    ? elements.find(
-        (element) =>
-          element.parent === propertiesElement && isWord(element, 'rStyle'),
-      )
+    ? index
+        .childrenOf(propertiesElement)
+        .find((element) => isWord(element, 'rStyle'))
     : undefined
   const styleId = styleElement
     ? attributeValue(styleElement, WORD_NAMESPACE, 'val')
@@ -326,11 +446,9 @@ function parseRun(
   const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
     .map(elementRange)
-  const textBreaks = elements
-    .filter(
-      (element) =>
-        element.parent === runElement && isTextWrappingBreak(element),
-    )
+  const textBreaks = index
+    .childrenOf(runElement)
+    .filter(isTextWrappingBreak)
     .map(elementRange)
   const textRanges = anchoredTextElements.map((element) => ({
     start: element.startTagEnd,
@@ -342,14 +460,14 @@ function parseRun(
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
     ...(hyperlinkTarget ? { hyperlinkTarget } : {}),
-    text: runPlainText(source, elements, runElement, textElements),
-    preservedXmlFragments: elements
+    text: runPlainText(source, index, runElement, textElements),
+    preservedXmlFragments: index
+      .childrenOf(runElement)
       .filter(
         (element) =>
-          element.parent === runElement &&
           !isWord(element, 't') &&
           !isTextWrappingBreak(element) &&
-          !containsTrackedChange(element, elements),
+          !index.containsTrackedChange(element),
       )
       .map((element) => elementFragment(source, element)),
   }
@@ -400,7 +518,7 @@ function runHyperlinkTarget(
 
 function runPlainText(
   source: string,
-  elements: readonly XmlElement[],
+  index: PartIndex,
   runElement: XmlElement,
   textElements: readonly XmlElement[],
 ) {
@@ -408,9 +526,10 @@ function runPlainText(
     textElements.filter((element) => !element.selfClosing),
   )
   const parts: string[] = []
-  for (const element of elements) {
-    if (nearestWordAncestor(element, 'r') !== runElement) continue
-    if (hasTrackedChangeAncestor(element) || isInsideFallback(element)) continue
+  for (const element of index.descendantsOfRun(runElement)) {
+    if (index.inTrackedChange(element) || index.isInsideFallback(element)) {
+      continue
+    }
     if (textNodes.has(element)) {
       parts.push(
         decodeXmlReferences(
@@ -426,25 +545,23 @@ function runPlainText(
 
 function storyStructureFragments(
   source: string,
-  elements: XmlElement[],
+  index: PartIndex,
   kind: DocumentStoryKind,
 ) {
-  const root = elements.find(({ depth }) => depth === 0)
+  const root = index.root()
   if (!root) return []
   const container =
     kind === 'document'
-      ? elements.find(
-          (element) => element.parent === root && isWord(element, 'body'),
-        )
+      ? index.childrenOf(root).find((element) => isWord(element, 'body'))
       : root
   if (!container) return []
-  return elements
+  return index
+    .childrenOf(container)
     .filter(
       (element) =>
-        element.parent === container &&
         !isWord(element, 'p') &&
         !isWord(element, 'body') &&
-        !containsTrackedChange(element, elements),
+        !index.containsTrackedChange(element),
     )
     .map((element) => elementFragment(source, element))
 }
@@ -455,13 +572,4 @@ function uniqueId(candidate: string, identity: IdentityContext) {
     id = `${candidate}-${identity.allocator.nextTextRunId()}`
   identity.usedIds.add(id)
   return id
-}
-
-function isInsideFallback(element: XmlElement) {
-  let parent = element.parent
-  while (parent) {
-    if (parent.localName === 'Fallback') return true
-    parent = parent.parent
-  }
-  return false
 }
