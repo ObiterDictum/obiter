@@ -15,6 +15,7 @@ import {
   indentationPatch,
   paragraphFormatOf,
   paragraphFormatState,
+  paragraphIndentKindDirect,
 } from './document-paragraph-format'
 import {
   clearableSlots,
@@ -306,6 +307,36 @@ describe('indentation None no-op', () => {
     paragraph('p1', '<w:pPr><w:ind w:left="720"/></w:pPr>'),
   ])
 
+  // A special indent that comes from the paragraph's style is not something
+  // None can clear: it releases the direct attributes only.
+  const styleFirstLine = {
+    ...modelWith([]),
+    styles: [
+      {
+        styleId: 'Body',
+        sourceFragment:
+          '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/><w:pPr><w:ind w:firstLine="720"/></w:pPr></w:style>',
+      },
+    ],
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: [
+          {
+            id: 'p1',
+            styleId: 'Body',
+            runs: [{ id: 'p1-r', text: 'text', preservedXmlFragments: [] }],
+            preservedXmlFragments: [],
+          },
+        ],
+        preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
+      },
+    ],
+  } satisfies DocumentModelWire
+
   function toolbarWith(model: DocumentModelWire) {
     let format = emptyFormatDrafts
     let historySteps = 0
@@ -327,6 +358,22 @@ describe('indentation None no-op', () => {
     expect(state.format()).toBe(emptyFormatDrafts)
     expect(state.historySteps()).toBe(0)
     expect(collectFormatOperations(leftOnly, state.format(), [])).toEqual([])
+  })
+
+  it('is a no-op when the special indent is not direct', () => {
+    const state = toolbarWith(styleFirstLine)
+    // None releases the direct attributes only, and this paragraph's
+    // first-line indent comes from its style: there is nothing to release,
+    // so no draft, no history step and no operation.
+    expect(
+      paragraphIndentKindDirect(styleFirstLine, state.format(), 'p1'),
+    ).toBe('none')
+    state.toolbar.onIndentKind('none')
+    expect(state.format()).toBe(emptyFormatDrafts)
+    expect(state.historySteps()).toBe(0)
+    expect(collectFormatOperations(styleFirstLine, state.format(), [])).toEqual(
+      [],
+    )
   })
 
   it('replaces a pending special indent with the clear', () => {

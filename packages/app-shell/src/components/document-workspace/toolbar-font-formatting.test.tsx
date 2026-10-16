@@ -16,10 +16,13 @@ import {
   multiParagraphModel,
   paragraph,
 } from './docx-workspace-harness'
+import { fontColourSelectValue } from './ribbon-home'
 import { clickParagraph, nativeSelect } from './paragraph-selection-harness'
 
 const DECORATED_XML =
   '<w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:i/><w:u w:val="single"/><w:strike/><w:highlight w:val="yellow"/><w:vertAlign w:val="superscript"/><w:sz w:val="28"/><w:szCs w:val="28"/><w:color w:val="FF0000"/><w:smallCaps/></w:rPr>'
+
+const AUTO_COLOUR_XML = '<w:rPr><w:color w:val="auto"/></w:rPr>'
 
 function helloModel() {
   return multiParagraphModel([
@@ -134,6 +137,38 @@ describe('the font formatting controls', () => {
     expect(fontSelect('Font').value).toBe('Georgia')
     expect(fontSelect('Font size').value).toBe('28')
     expect(fontSelect('Font colour').value).toBe('FF0000')
+  })
+
+  it('paints an explicit auto colour as Automatic, not a blank control', () => {
+    const auto = multiParagraphModel([
+      {
+        id: 'p1',
+        runs: [
+          {
+            id: 'p1-r',
+            text: 'Hello',
+            preservedXmlFragments: [AUTO_COLOUR_XML],
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+      paragraph('p2', 'tail'),
+    ])
+    mountWorkspace({ models: { doc_1: auto } })
+    clickParagraph('p1')
+    nativeSelect(0, 5)
+
+    // The contract's `auto` is not one of the five hex swatches and has no
+    // option of its own. A browser leaves a select whose value matches no
+    // option blank, so the control must be given the Automatic value — the
+    // mapping is the testable part, since React coerces an unmatched value to
+    // the first option and hides the difference here.
+    expect(fontColourSelectValue('auto')).toBe('')
+    expect(fontColourSelectValue('FF0000')).toBe('FF0000')
+    expect(fontColourSelectValue(null)).toBe('')
+    const select = fontSelect('Font colour')
+    expect(select.value).toBe('')
+    expect(select.selectedOptions[0]?.textContent).toBe('Automatic')
   })
 
   it('clears every direct character property through one save operation', async () => {

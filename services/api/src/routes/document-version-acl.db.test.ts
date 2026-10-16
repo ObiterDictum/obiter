@@ -327,6 +327,7 @@ describe('version comparison', () => {
         base: { versionId: string }
         target: { versionId: string }
         entries: unknown[]
+        notes: string[]
         identical: boolean
       }
       expect(body.base.versionId).toBe(seed.currentVersionId)
@@ -335,6 +336,9 @@ describe('version comparison', () => {
       // lacks: the difference is real, not a metadata echo.
       expect(body.entries.length).toBeGreaterThan(0)
       expect(body.identical).toBe(false)
+      // The entries explain the difference, so the package-parts caveat does
+      // not fire — it is reserved for a byte difference no entry covers.
+      expect(body.notes).toEqual([])
     } finally {
       await cleanupMatter(pool, seed)
     }

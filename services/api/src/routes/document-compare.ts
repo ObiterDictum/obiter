@@ -70,12 +70,13 @@ export function createDocumentCompareRoutes(
     const byteIdentical =
       base.version.contentSha256 === target.version.contentSha256
     const notes: string[] = []
-    if (!byteIdentical) {
+    if (!byteIdentical && compared.entries.length === 0) {
       // The model covers paragraphs, formatting, story structure, styles,
       // numbering, relationships, revisions and comments — not opaque package
       // parts like media bytes. When the files differ but no entry explains
       // why, the difference is outside the compared surface; say so rather
-      // than reporting a clean document.
+      // than reporting a clean document. A difference the entries already
+      // explain needs no caveat.
       notes.push(
         'The comparison covers the document model; package parts outside it may also differ.',
       )

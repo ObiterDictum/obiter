@@ -79,6 +79,15 @@ const DEFAULT_FONT = { value: '', label: 'Default font' }
 const DEFAULT_SIZE = { value: '', label: 'Default size' }
 const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
 
+/**
+ * The contract's `auto` is an explicit direct colour, not the absent one: the
+ * select shows it as Automatic rather than a value no option matches (which
+ * renders blank in a browser).
+ */
+export function fontColourSelectValue(colour: string | null | undefined) {
+  return colour === 'auto' ? '' : (colour ?? '')
+}
+
 export function HomeRibbon({
   canEdit,
   canUndo,
@@ -204,7 +213,7 @@ export function HomeRibbon({
           <RibbonSelect
             label="Font colour"
             className="w-20"
-            value={format?.colour ?? ''}
+            value={fontColourSelectValue(format?.colour)}
             options={[DEFAULT_COLOUR, ...FONT_COLOURS]}
             disabled={!editing}
             soon={format?.emphasisUnavailable}

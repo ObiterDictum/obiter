@@ -76,11 +76,11 @@ export function indentationPatch(
       hanging: DEFAULT_INDENT_TWIPS,
     }
   }
-  // Known limitation: this nulls only the direct attributes. `indentKind` reads
-  // the merged (style-inclusive) face, so a `firstLine`/`hanging` inherited from
-  // the paragraph style still paints First line/Hanging while this click dirties
-  // the document without changing what is painted; clearing it would need to
-  // name the style's value rather than release the direct one.
+  // Nulls only the direct attributes. The control's no-op check reads the
+  // direct indent (`paragraphIndentKindDirect`), so an indent inherited from
+  // the paragraph style alone is not dirtied. A paragraph that also carries
+  // the style's indent keeps painting it after the direct one is released —
+  // that is a real edit, not a no-op.
   return { firstLine: null, hanging: null }
 }
 
@@ -173,6 +173,28 @@ export function paragraphIndentLeftPx(
     paragraphFace(formattedParagraphDraft(stored, format), model.styles)
       .indentLeftPx ?? 0
   )
+}
+
+/**
+ * The special indent one paragraph carries directly — its own `w:firstLine` or
+ * `w:hanging`, with any pending draft folded in. `Indent: None` releases only
+ * those direct attributes, so its no-op check has to read this rather than the
+ * merged (style-inclusive) face: a special indent inherited from the paragraph
+ * style keeps painting First line/Hanging after the click.
+ */
+export function paragraphIndentKindDirect(
+  model: DocumentModelWire,
+  format: FormatDrafts,
+  paragraphId: string,
+): IndentKind {
+  const stored = editableParagraph(model, paragraphId)
+  if (!stored) return 'none'
+  const indentation = paragraphFormatOf(
+    formattedParagraphDraft(stored, format),
+  ).indentation
+  if (indentation?.hanging !== undefined) return 'hanging'
+  if (indentation?.firstLine !== undefined) return 'first'
+  return 'none'
 }
 
 /**
