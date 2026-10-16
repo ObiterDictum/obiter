@@ -126,6 +126,19 @@ describe('share-safe r4: field and bookmark channels', () => {
     })
   })
 
+  it('keeps a keep-class field whose whole result is a comment marker', async () => {
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:commentReference w:id="1"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    // The comment surface is not the author's field content, so its removal
+    // must not close the span: the field ships with an empty result rather
+    // than taking its instruction with it.
+    expect(story).toContain('PAGE')
+    expect(story).toContain('fldChar')
+    expect(story).not.toContain('commentReference')
+  })
+
   it('SET field nested inside a kept field is dropped', async () => {
     const { parts } = await outputParts({
       body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> QUOTE </w:instrText><w:fldChar w:fldCharType="begin"/><w:instrText> SET x "SECRETVAL" </w:instrText><w:fldChar w:fldCharType="end"/><w:fldChar w:fldCharType="end"/></w:r></w:p>',
