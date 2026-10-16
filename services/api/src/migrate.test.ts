@@ -1,9 +1,14 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 import type { Pool, PoolClient } from 'pg'
-import { listMigrationFiles, runMigrations } from './migrate'
+import {
+  assertNoTransactionControl,
+  listMigrationFiles,
+  resolveMigrationsDir,
+  runMigrations,
+} from './migrate'
 
 function fixtureDir(files: Record<string, string>) {
   const dir = mkdtempSync(join(tmpdir(), 'obiter-migrate-test-'))
@@ -104,5 +109,57 @@ describe('migration runner', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  it('refuses a migration that carries its own transaction control', async () => {
+    const dir = fixtureDir({
+      '0001_ok.sql': 'select 1',
+      '0002_wrapped.sql': 'begin;\nselect 2;\ncommit;\n',
+    })
+    try {
+      const { pool, statements } = createMockPool()
+      await expect(runMigrations(pool, dir)).rejects.toThrow(
+        'Migration 0002_wrapped.sql carries transaction control (begin;)',
+      )
+      // Nothing was applied: no transaction opened for the refused file, and
+      // the earlier file is not recorded as part of a failed run.
+      expect(statements.filter((s) => s === 'begin')).toHaveLength(0)
+      expect(
+        statements.some((s) => s.startsWith('insert into schema_migrations')),
+      ).toBe(false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('allows a dollar-quoted block whose body uses PL/pgSQL begin/end', async () => {
+    const dir = fixtureDir({
+      '0001_plpgsql.sql':
+        'do $$\ndeclare\n  x int;\nbegin\n  x := 1;\nend;\n$$;\n',
+    })
+    try {
+      const { pool } = createMockPool()
+      await expect(runMigrations(pool, dir)).resolves.toEqual({
+        applied: ['0001_plpgsql.sql'],
+        skipped: [],
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('ships no migration carrying transaction control', () => {
+    const dir = resolveMigrationsDir()
+    const files = listMigrationFiles(dir)
+    expect(files.length).toBeGreaterThan(0)
+    const offenders = files.filter((file) => {
+      try {
+        assertNoTransactionControl(file, readFileSync(join(dir, file), 'utf8'))
+        return false
+      } catch {
+        return true
+      }
+    })
+    expect(offenders).toEqual([])
   })
 })

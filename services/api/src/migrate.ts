@@ -28,6 +28,50 @@ export function listMigrationFiles(migrationsDir: string) {
 }
 
 /**
+ * Transaction control a migration must not carry. Postgres has no nested
+ * transactions: a `begin` inside the runner's transaction is a no-op, but a
+ * `commit` ends the runner's transaction early, so the file's statements
+ * commit before its `schema_migrations` row does. The runner's promise — one
+ * transaction per file, covering the tracking insert — then no longer holds,
+ * and a later failure cannot roll the file back.
+ *
+ * The terminator is required, and bare `end` is deliberately absent: `CASE …
+ * end` closes expressions, so only `end work`/`end transaction` would be
+ * unambiguous, and the `begin`/`commit` spelling is what this guards. A file
+ * that opens a transaction is caught by its opening statement.
+ */
+const TRANSACTION_CONTROL =
+  /^\s*(?:begin|commit|rollback)(?:\s+(?:transaction|work))?\s*;|^\s*start\s+transaction\s*;/imu
+
+/**
+ * Strips dollar-quoted regions and comments, which are not statements: a
+ * `do $$ … begin … end; $$` block's PL/pgSQL body is code, not transaction
+ * control, and migrations legitimately contain them.
+ */
+function withoutDollarQuoted(sql: string) {
+  return sql
+    .replace(/\$(\w*)\$[\s\S]*?\$\1\$/gu, '')
+    .replace(/--[^\n]*/gu, '')
+    .replace(/\/\*[\s\S]*?\*\//gu, '')
+}
+
+/**
+ * Refuses a migration that carries its own transaction control, naming the
+ * statement so the author removes it rather than discovering a half-applied
+ * file later.
+ */
+export function assertNoTransactionControl(filename: string, sql: string) {
+  const match = TRANSACTION_CONTROL.exec(withoutDollarQuoted(sql))
+  if (match) {
+    throw new Error(
+      `Migration ${filename} carries transaction control (${match[0].trim()}). ` +
+        'The runner already wraps each file in a transaction with its tracking insert; ' +
+        'remove the statement so a failure rolls the whole file back.',
+    )
+  }
+}
+
+/**
  * Applies pending migrations in filename order, tracking each in
  * schema_migrations. Idempotent: already-recorded files are skipped, so a
  * second run is a no-op. Each migration runs in its own transaction with its
@@ -58,6 +102,16 @@ export async function runMigrations(
       )
       const done = new Set(recorded.rows.map((row) => row.filename))
       const result: MigrationResult = { applied: [], skipped: [] }
+      // Validate every pending file before applying any: transaction control is
+      // a static problem, and discovering it halfway down the list would leave
+      // the database advanced by the files before it.
+      for (const file of files) {
+        if (done.has(file)) continue
+        assertNoTransactionControl(
+          file,
+          readFileSync(join(migrationsDir, file), 'utf8'),
+        )
+      }
       for (const file of files) {
         if (done.has(file)) {
           result.skipped.push(file)
