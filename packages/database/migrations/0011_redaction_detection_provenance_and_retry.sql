@@ -4,8 +4,6 @@
 -- successful model re-detection run to the source run it replaces. Legacy
 -- provenance is mapped conservatively, with unrecognised rows marked unknown.
 
-begin;
-
 alter table redaction_runs
   add column if not exists detection_mode text,
   add column if not exists replaces_run_id text;
@@ -55,4 +53,3 @@ create unique index if not exists redaction_runs_live_replacement_idx
   on redaction_runs (organisation_id, replaces_run_id)
   where replaces_run_id is not null and deleted_at is null;
 
-commit;

@@ -28,6 +28,97 @@ export function listMigrationFiles(migrationsDir: string) {
 }
 
 /**
+ * Transaction control a migration must not carry. Postgres has no nested
+ * transactions: a `begin` inside the runner's transaction is a no-op, but a
+ * `commit` ends the runner's transaction early, so the file's statements
+ * commit before its `schema_migrations` row does. The runner's promise — one
+ * transaction per file, covering the tracking insert — then no longer holds,
+ * and a later failure cannot roll the file back.
+ *
+ * Bare `end` is deliberately absent: `CASE … end` closes expressions, so only
+ * `end work`/`end transaction` is unambiguous. The anchor is the start of a
+ * line, which is the convention these files follow; a statement sharing a line
+ * with another is not caught, and the guard is a backstop rather than a
+ * parser.
+ */
+const TRANSACTION_CONTROL =
+  /^\s*(?:begin|commit|rollback|abort|start\s+transaction|end\s+(?:work|transaction))\b/imu
+
+/**
+ * Strips comments, single-quoted strings and dollar-quoted regions — none of
+ * which are statements — in one left-to-right pass. Each construct is skipped
+ * where it starts, so a `$$` or `'` inside another construct cannot swallow a
+ * real statement (a `$$` in a comment must not hide a following `commit;`).
+ * A `do $$ … begin … end; $$` body and a `CASE … end` are the reasons the
+ * scan is needed at all: migrations legitimately contain both.
+ */
+function withoutQuotedOrComments(sql: string) {
+  let bare = ''
+  let index = 0
+  while (index < sql.length) {
+    const character = sql[index]
+    if (character === '-' && sql[index + 1] === '-') {
+      const newline = sql.indexOf('\n', index)
+      index = newline === -1 ? sql.length : newline
+      bare += '\n'
+      continue
+    }
+    if (character === '/' && sql[index + 1] === '*') {
+      const end = sql.indexOf('*/', index + 2)
+      index = end === -1 ? sql.length : end + 2
+      continue
+    }
+    if (character === "'") {
+      index += 1
+      while (index < sql.length) {
+        if (sql[index] !== "'") {
+          index += 1
+          continue
+        }
+        // A doubled quote is an escaped quote, not the end of the string.
+        if (sql[index + 1] === "'") {
+          index += 2
+          continue
+        }
+        index += 1
+        break
+      }
+      continue
+    }
+    if (character === '$') {
+      let tagEnd = index + 1
+      while (tagEnd < sql.length && /[A-Za-z0-9_]/.test(sql[tagEnd]))
+        tagEnd += 1
+      if (sql[tagEnd] === '$') {
+        const tag = sql.slice(index, tagEnd + 1)
+        const end = sql.indexOf(tag, tagEnd + 1)
+        index = end === -1 ? sql.length : end + tag.length
+        continue
+      }
+    }
+    bare += character
+    index += 1
+  }
+  return bare
+}
+
+/**
+ * Refuses a migration that carries its own transaction control, naming the
+ * statement so the author removes it rather than discovering a half-applied
+ * file later.
+ */
+export function assertNoTransactionControl(filename: string, sql: string) {
+  const match = TRANSACTION_CONTROL.exec(withoutQuotedOrComments(sql))
+  if (match) {
+    throw new Error(
+      `Migration ${filename} carries transaction control (${match[0].trim()}). ` +
+        'The runner already wraps each file in a transaction with its tracking insert; ' +
+        'remove the statement so a failure rolls the whole file back.',
+    )
+  }
+}
+
+/**
  * Applies pending migrations in filename order, tracking each in
  * schema_migrations. Idempotent: already-recorded files are skipped, so a
  * second run is a no-op. Each migration runs in its own transaction with its
@@ -58,6 +149,16 @@ export async function runMigrations(
       )
       const done = new Set(recorded.rows.map((row) => row.filename))
       const result: MigrationResult = { applied: [], skipped: [] }
+      // Validate every pending file before applying any: transaction control is
+      // a static problem, and discovering it halfway down the list would leave
+      // the database advanced by the files before it.
+      for (const file of files) {
+        if (done.has(file)) continue
+        assertNoTransactionControl(
+          file,
+          readFileSync(join(migrationsDir, file), 'utf8'),
+        )
+      }
       for (const file of files) {
         if (done.has(file)) {
           result.skipped.push(file)
