@@ -114,13 +114,6 @@ function leadingMarkupOnly(
   return source.slice(cursor, bound.start).trim().length === 0
 }
 
-/**
- * Pairs every field in one part's element stream. Complex fields stack —
- * a `PAGEREF` inside a `TOA` result is its own span, closed by its own
- * `end` — and an element order walk is the only pairing the serialised
- * markup supports. A field still open at the part's end is emitted with
- * `end` undefined so a consumer sees it rather than the field vanishing.
- */
 /** Index of the first element whose start is at or after `position`. */
 function firstAtOrAfter(ordered: readonly XmlElement[], position: number) {
   let low = 0
@@ -157,6 +150,13 @@ function windowOf(
   return window
 }
 
+/**
+ * Pairs every field in one part's element stream. Complex fields stack —
+ * a `PAGEREF` inside a `TOA` result is its own span, closed by its own
+ * `end` — and an element order walk is the only pairing the serialised
+ * markup supports. A field still open at the part's end is emitted with
+ * `end` undefined so a consumer sees it rather than the field vanishing.
+ */
 export function fieldSpans(
   elements: readonly XmlElement[],
   source: string,
@@ -270,8 +270,10 @@ export function fieldSpans(
       beginParagraph === undefined
         ? []
         : windowOf(
+            // A parentless paragraph is the part's root, which the old
+            // parent test matched against itself.
             beginParagraph.parent === undefined
-              ? []
+              ? [beginParagraph]
               : childrenOf(beginParagraph.parent),
             beginParagraph.start,
             frame.end === undefined ? undefined : frame.end.start + 1,

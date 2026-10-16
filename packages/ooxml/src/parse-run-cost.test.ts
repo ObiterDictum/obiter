@@ -8,8 +8,9 @@ import { probePackage, W } from './share-safe-probe-kit'
  * count. Both used to scan the whole element list once per paragraph, per run
  * and per field, so a field-bearing document cost paragraphs × elements: 1,000
  * field paragraphs took ~4.7 s and 4,000 took ~95 s. A part this size now
- * parses in well under a second, so the runner's 5 s limit is the assertion —
- * a regression to the old shape exceeds it by an order of magnitude.
+ * parses in well under a second, so a fixed bound is the assertion — the old
+ * shape needs minutes (a plain ratio between two sizes is the weaker check and
+ * catches it only narrowly, so both are here).
  */
 function fieldHeavyDocument(paragraphs: number) {
   const body = Array.from(
@@ -25,7 +26,10 @@ describe('field-heavy part cost', () => {
     const bytes = await probePackage({
       document: fieldHeavyDocument(8000),
     })
+    const started = Date.now()
     const document = await parseDocx(bytes)
+    // ~0.9 s linear; the old shape takes minutes, so the bound is wide.
+    expect(Date.now() - started).toBeLessThan(5_000)
     const story = document.model.stories[0]
     expect(story?.paragraphs).toHaveLength(8000)
     expect(story?.fields).toHaveLength(8000)
