@@ -14,6 +14,46 @@ export function documentStory(
   return model.stories.find((story) => story.kind === kind)
 }
 
+/**
+ * The story kinds the workspace can edit: the body and the header and footer
+ * margin stories. Footnote, endnote and comment stories stay read-only,
+ * matching the writer's editable-story set.
+ */
+const EDITABLE_STORY_KINDS: ReadonlySet<DocumentStoryWire['kind']> = new Set([
+  'document',
+  'header',
+  'footer',
+])
+
+export function editableStories(model: DocumentModelWire): DocumentStoryWire[] {
+  return model.stories.filter((story) => EDITABLE_STORY_KINDS.has(story.kind))
+}
+
+/** The story — body, header or footer — `paragraphId` belongs to. */
+export function editableStoryOf(
+  model: DocumentModelWire,
+  paragraphId: string,
+): DocumentStoryWire | undefined {
+  return editableStories(model).find((story) =>
+    story.paragraphs.some((paragraph) => paragraph.id === paragraphId),
+  )
+}
+
+/** `paragraphId`'s wire in whichever editable story owns it. */
+export function editableParagraph(
+  model: DocumentModelWire,
+  paragraphId: string,
+): DocumentParagraphWire | undefined {
+  return editableStoryOf(model, paragraphId)?.paragraphs.find(
+    (paragraph) => paragraph.id === paragraphId,
+  )
+}
+
+/** Every paragraph across the editable stories, in story order. */
+export function editableParagraphs(model: DocumentModelWire) {
+  return editableStories(model).flatMap((story) => story.paragraphs)
+}
+
 export function paragraphPlainText(
   paragraph: DocumentParagraphWire,
   drafts?: Record<string, string>,
@@ -207,9 +247,7 @@ export function cursorForSelection(
   model: DocumentModelWire,
   paragraphId: string,
 ): DocumentCursor | null {
-  const paragraph = documentStory(model)?.paragraphs.find(
-    (item) => item.id === paragraphId,
-  )
+  const paragraph = editableParagraph(model, paragraphId)
   const run = paragraph?.runs[0]
   if (!paragraph || !run) return null
   return { paragraphId: paragraph.id, runId: run.id, offset: 0 }

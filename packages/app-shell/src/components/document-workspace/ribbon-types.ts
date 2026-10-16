@@ -111,13 +111,29 @@ export type DocumentStructureToolbar = {
   linkUnavailable?: string
   /** The reason no cross-reference can be inserted, when it cannot. */
   crossReferenceUnavailable?: string
+  /** The reason no page number can be inserted at the caret, when it cannot. */
+  pageNumberUnavailable?: string
   /** The paragraphs a cross-reference can point at, in story order. */
   crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
+  /** The margin story open for editing, when one is — pressed state for the
+   * Header and Footer buttons. */
+  editingStoryKind?: 'header' | 'footer'
+  /** The reason the header cannot be opened for editing, when it cannot. */
+  headerUnavailable?: string
+  /** The reason the footer cannot be opened for editing, when it cannot. */
+  footerUnavailable?: string
+  /** Opens the final section's header or footer for editing; the body is
+   * inert until the story closes. */
+  onOpenStory: (kind: 'header' | 'footer') => void
+  /** Returns the caret to the body, closing the open margin story. */
+  onCloseStory: () => void
   onInsertTable: (rows: number, columns: number) => void
   /** Applies a pending hyperlink to the current selection's range. */
   onInsertLink: (target: string) => StructuralInsertOutcome
   /** Holds a pending cross-reference at the caret to the target paragraph. */
   onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
+  /** Holds a pending `PAGE` field at the caret in the active story. */
+  onInsertPageNumber: () => void
   /** Opens the picture file picker; the picked file becomes the insertion. */
   onInsertPicture: () => void
   /**

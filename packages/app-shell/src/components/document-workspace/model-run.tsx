@@ -10,12 +10,11 @@ import { cn } from '@obiter/ui'
 import {
   paragraphPlainText,
   runChangeKinds,
-  sliceParagraphRuns,
   type RunSlice,
 } from '../../document-model-text'
 import type { ParagraphLinkOverlay } from '../../document-structural-drafts'
 import type { WrappedLine } from '../../document-page-flow'
-import { readableRunColor } from '../../document-page-media'
+import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace } from '../../document-page-style'
 import type { ParagraphFace } from '../../document-page-style'
@@ -71,6 +70,7 @@ export function ParagraphRunPaint({
   linkOverlay,
   carets = [],
   continuation = false,
+  pageNumber = 1,
 }: {
   paragraph: DocumentParagraphWire
   drafts?: Record<string, string>
@@ -87,6 +87,8 @@ export function ParagraphRunPaint({
   carets?: DocumentPresence[]
   /** True when this block resumes a paragraph split across a page break. */
   continuation?: boolean
+  /** The page this block paints on: resolves `PAGE` fields in stored runs. */
+  pageNumber?: number
 }) {
   // A marker exactly at a slice's end belongs to the next slice — except at
   // the paragraph's own end, where nothing follows. The block end alone
@@ -139,15 +141,62 @@ export function ParagraphRunPaint({
         data-line-from={start + line.from}
         data-line-to={start + line.to}
       >
-        {line.text
-          ? paint(
-              sliceParagraphRuns(paragraph, start + line.from, start + line.to),
-            )
-          : paint([])}
+        {paint(
+          paintSlices(
+            paragraph,
+            start + line.from,
+            start + line.to,
+            pageNumber,
+          ),
+        )}
       </div>
     ))
   }
-  return paint(sliceParagraphRuns(paragraph, start, end))
+  return paint(paintSlices(paragraph, start, end, pageNumber))
+}
+
+/**
+ * The painted slices of a paragraph in `[from, to)`. Same model offsets
+ * `sliceParagraphRuns` produces — text drafts are already applied to
+ * `run.text` — except for a field run, whose stored text is not what the
+ * field displays: this writer stores an empty result run and Word stores a
+ * stale one, so the slice carries the instruction resolved through
+ * `runDisplayText`. A field is zero-width in the model, so its resolved
+ * text paints in the one block that owns its offset without shifting any
+ * caret or selection offset.
+ */
+function paintSlices(
+  paragraph: DocumentParagraphWire,
+  from: number,
+  to: number,
+  pageNumber: number,
+): RunSlice[] {
+  const length = paragraph.runs.reduce((n, run) => n + run.text.length, 0)
+  const slices: RunSlice[] = []
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const start = cursor
+    const end = start + run.text.length
+    cursor = end
+    const display = runDisplayText(run, pageNumber)
+    if (display !== run.text) {
+      if (
+        start >= from &&
+        (start < to || (start === length && to === length))
+      ) {
+        slices.push({ run, text: display, from: start })
+      }
+      continue
+    }
+    if (end <= from || start >= to) continue
+    const sliceFrom = start + Math.max(0, from - start)
+    slices.push({
+      run,
+      text: run.text.slice(Math.max(0, from - start), Math.max(0, to - start)),
+      from: sliceFrom,
+    })
+  }
+  return slices
 }
 
 function ModelRun({

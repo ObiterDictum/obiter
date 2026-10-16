@@ -23,6 +23,13 @@ const tableDraft = (id: string, paragraphId: string): StructuralDraft => ({
   columns: 2,
 })
 
+const pageNumberDraft = (id: string, paragraphId: string): StructuralDraft => ({
+  id,
+  kind: 'page-number',
+  paragraphId,
+  offset: 0,
+})
+
 const paragraph = (id: string, text = 'text'): DocumentParagraphWire => ({
   id,
   runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
@@ -85,6 +92,31 @@ describe('translateSnapshot structure slots', () => {
         fromModel,
       }),
     ).toBeNull()
+  })
+
+  it('translates a snapshot predating a saved page-number field', () => {
+    // No operation removes a stored field splice, so the page number stays
+    // baseline content: the predating snapshot survives translation rather
+    // than blocking the whole boundary — the same treatment a saved break
+    // gives it — and undo simply offers no removal for the field.
+    const pageNumberSent: DraftState = {
+      ...emptyDraftState(),
+      structures: [pageNumberDraft('pn1', 'p1')],
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [
+        {
+          kind: 'structure',
+          key: 'structure:pn1',
+          id: 'pn1',
+          structureKind: 'page-number',
+        },
+      ],
+      sent: pageNumberSent,
+      fromModel,
+    })
+    expect(translated).not.toBeNull()
+    expect(translated?.structures).toEqual([])
   })
 })
 

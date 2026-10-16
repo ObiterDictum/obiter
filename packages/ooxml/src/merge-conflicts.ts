@@ -83,9 +83,12 @@ export function operationConflicts(
       changes.paragraphOpaque.has(operation.paragraphId)
     )
   }
-  if (operation.type === 'insert_break') {
+  if (
+    operation.type === 'insert_break' ||
+    operation.type === 'insert_page_number'
+  ) {
     // The offset addresses this paragraph's text, so a text edit to the same
-    // paragraph in the current version moves the break; refuse rather than
+    // paragraph in the current version moves the splice; refuse rather than
     // place it at a stale offset.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||

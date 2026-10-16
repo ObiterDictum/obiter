@@ -1,6 +1,10 @@
 import { useMemo } from 'react'
-import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
-import type { LocalInsert } from '../../document-edits'
+import type {
+  DocumentModelWire,
+  DocumentPresence,
+  DocumentStoryWire,
+} from '@obiter/contracts'
+import { storyFlowParagraphIds, type LocalInsert } from '../../document-edits'
 import {
   emptyFormatDrafts,
   type PendingEmphasis,
@@ -23,6 +27,7 @@ import { documentListMarkers } from '../../document-page-lists'
 import { documentNotes } from '../../document-page-notes'
 import {
   blockEndOffset,
+  bodyParagraphCaret,
   paragraphClickCaret,
   pageClickCaret,
 } from './model-click-caret'
@@ -35,7 +40,8 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
-import { PageMarginBand } from './page-margin-band'
+import { PageMarginBand, type EditableMargin } from './page-margin-band'
+import { useMarginEdit } from './use-margin-edit'
 
 /**
  * The omitted-prop defaults for the structural draft inputs. A `[]` in the
@@ -80,6 +86,8 @@ export function DocumentModelPage({
   selectionHandlers,
   onFocusParagraph,
   onMoveCaret,
+  marginEditing,
+  onExitMarginEditing,
 }: {
   model: DocumentModelWire
   selectedParagraphId: string | null
@@ -127,6 +135,12 @@ export function DocumentModelPage({
   selectionHandlers?: ParagraphSelectionHandlers
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
+  /** The header/footer story open for editing, resolved on this model. While
+   * set the body is inert and the matching margin band renders editable. */
+  marginEditing?: DocumentStoryWire
+  /** A click on the body while a margin story is open closes the story, the
+   * way Word leaves header editing — the click then lands as a body caret. */
+  onExitMarginEditing?: () => void
 }) {
   const derived = useMemo(() => {
     const story = model.stories.find((item) => item.kind === 'document')
@@ -148,26 +162,26 @@ export function DocumentModelPage({
           : []
       }),
     )
-    // A footnote or endnote paragraph is rendered inside the same page flow as
-    // the body, so its story has to travel with the element: verification
-    // locations are story-scoped, and a paragraph id alone is not unique.
+    // A paragraph outside the body renders inside another story's part, so
+    // its story has to travel with the element: verification locations are
+    // story-scoped, and a paragraph id alone is not unique.
     const storyByParagraph = new Map<
       string,
       { kind: string; partName: string }
     >()
-    for (const note of notes) {
-      const kind = note.kind === 'footnote' ? 'footnotes' : 'endnotes'
-      const partName =
-        model.stories.find((item) => item.kind === kind)?.partName ??
-        story?.partName ??
-        ''
-      for (const paragraph of note.paragraphs) {
-        storyByParagraph.set(paragraph.id, { kind, partName })
+    for (const item of model.stories) {
+      if (item.kind === 'document') continue
+      for (const paragraph of item.paragraphs) {
+        storyByParagraph.set(paragraph.id, {
+          kind: item.kind,
+          partName: item.partName,
+        })
       }
     }
     const bodyStory = { kind: 'document', partName: story?.partName ?? '' }
     const storyOf = (paragraphId: string) =>
       storyByParagraph.get(paragraphId) ?? bodyStory
+    const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
     // One resolver over the story's flow order per model. Building it inside
     // the per-paragraph render walked the whole document for every paragraph
     // and made a render O(n^2) on a long document.
@@ -177,6 +191,7 @@ export function DocumentModelPage({
       inserts,
       deletedParagraphIds,
       paragraphs: story?.paragraphs ?? [],
+      order,
     })
     return {
       story,
@@ -188,6 +203,7 @@ export function DocumentModelPage({
       noteParagraphIds,
       noteMarks,
       storyOf,
+      order,
       neighbors,
     }
   }, [model, extraRuns, inserts, deletedParagraphIds, pageLayout])
@@ -201,8 +217,25 @@ export function DocumentModelPage({
     noteParagraphIds,
     noteMarks,
     storyOf,
+    order,
     neighbors,
   } = derived
+
+  const marginEdit = useMarginEdit(
+    marginEditing,
+    model,
+    inserts,
+    deletedParagraphIds,
+    drafts,
+    extraRuns,
+  )
+  // A click only places the caret inside the story open for editing: while a
+  // margin story is open the body stays inert, and while it is not the margin
+  // paragraphs are read-only paint.
+  const editableIds = useMemo(
+    () => new Set(marginEdit ? marginEdit.order : order),
+    [marginEdit, order],
+  )
   if (!story || story.paragraphs.length === 0) {
     return (
       <p className="px-24 py-24 text-[15px] leading-[1.15] text-[#6b6862]">
@@ -217,6 +250,69 @@ export function DocumentModelPage({
   const nextColumn = columns[1]
   const gap =
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
+
+  // The fields every block context on this page shares — the body column and
+  // the editable margin band differ only in the story they bind.
+  const sharedCtx = {
+    model,
+    selectedParagraphId,
+    onSelectParagraph,
+    onTextSelection,
+    drafts,
+    emphasis,
+    onRunTextChange,
+    presence,
+    currentUserId,
+    inserts,
+    deletedParagraphIds,
+    onInsertTextChange,
+    onInsertParagraph,
+    onDeleteParagraph,
+    onJoinPrevious,
+    onWordEdit,
+    restoreCaret,
+    verticalCaret,
+    imageUrls,
+    listMarkers,
+    noteMarks,
+    noteParagraphIds,
+    storyOf,
+    selectionSegments,
+    linkOverlays,
+    selectionHandlers,
+    onFocusParagraph,
+    onMoveCaret,
+    pageNumber,
+  }
+  // While a margin story is open the body keeps painting exactly as before
+  // but takes no caret, edits, or selection; the band holding the story gets
+  // the full block context instead.
+  const editableMargin: EditableMargin | undefined =
+    marginEdit && marginEditing
+      ? {
+          partName: marginEdit.partName,
+          blocks: marginEdit.blocks,
+          ctx: {
+            ...sharedCtx,
+            storyPartName: marginEditing.partName,
+            editing,
+            paragraphs: marginEditing.paragraphs,
+            columnWidthPx: frame.widthPx,
+            neighbors: marginEdit.neighbors,
+          },
+        }
+      : undefined
+  const headerEdit =
+    editableMargin &&
+    headers.some((item) => item.partName === editableMargin.partName)
+      ? editableMargin
+      : undefined
+  const footerEdit =
+    editableMargin &&
+    footers.some((item) => item.partName === editableMargin.partName)
+      ? editableMargin
+      : undefined
+  const bodyEditing = editing && !editableMargin
 
   return (
     <div
@@ -233,17 +329,46 @@ export function DocumentModelPage({
         delete event.currentTarget.dataset.pointerDown
         if (down && down !== `${event.clientX},${event.clientY}`) return
         const endOffset = (id: string) =>
-          blockEndOffset(id, story.paragraphs, drafts, inserts, extraRuns)
+          blockEndOffset(
+            id,
+            (marginEditing ?? story).paragraphs,
+            drafts,
+            inserts,
+            extraRuns,
+          )
+        const include = (id: string) => editableIds.has(id)
         const paragraphEl = event.target.closest('[data-paragraph-id]')
         if (paragraphEl instanceof HTMLElement) {
+          const paragraphId = paragraphEl.dataset.paragraphId
+          // A click on the body while a margin story is open leaves margin
+          // editing, the way Word does; the same click places the body caret.
+          if (marginEditing && paragraphId && !include(paragraphId)) {
+            const hit = bodyParagraphCaret(
+              paragraphEl,
+              event.clientX,
+              event.clientY,
+              event.currentTarget,
+              story.paragraphs,
+              drafts,
+              inserts,
+              extraRuns,
+            )
+            if (hit) {
+              clearVerticalColumn(verticalCaret)
+              onExitMarginEditing?.()
+              onSelectParagraph(hit.paragraphId, hit.offset)
+            }
+            return
+          }
           const caret = paragraphClickCaret(
             paragraphEl,
             event.clientX,
             event.clientY,
             event.currentTarget,
             endOffset,
+            include,
           )
-          if (caret) {
+          if (caret && include(caret.paragraphId)) {
             clearVerticalColumn(verticalCaret)
             onSelectParagraph(caret.paragraphId, caret.offset)
             return
@@ -253,6 +378,7 @@ export function DocumentModelPage({
           event.currentTarget,
           event.clientY,
           endOffset,
+          include,
         )
         if (caret) {
           clearVerticalColumn(verticalCaret)
@@ -264,7 +390,12 @@ export function DocumentModelPage({
         stories={headers}
         label="Document header"
         edge="top"
-        className="pointer-events-none shrink-0 overflow-hidden"
+        className={
+          headerEdit
+            ? 'shrink-0'
+            : 'pointer-events-none shrink-0 overflow-hidden'
+        }
+        editable={headerEdit}
         heightPx={frame.top}
         relationships={model.relationships}
         imageUrls={imageUrls}
@@ -296,39 +427,12 @@ export function DocumentModelPage({
               .filter((block) => (block.column ?? 0) === columnIndex)
               .flatMap((block, index) =>
                 renderBlock(block, index, {
-                  model,
+                  ...sharedCtx,
                   storyPartName: story.partName,
-                  selectedParagraphId,
-                  onSelectParagraph,
-                  onTextSelection,
-                  drafts,
-                  emphasis,
-                  onRunTextChange,
-                  editing,
-                  presence,
-                  currentUserId,
-                  inserts,
-                  deletedParagraphIds,
-                  onInsertTextChange,
-                  onInsertParagraph,
-                  onDeleteParagraph,
-                  onJoinPrevious,
-                  onWordEdit,
-                  restoreCaret,
-                  verticalCaret,
-                  imageUrls,
+                  editing: bodyEditing,
                   paragraphs: story.paragraphs,
-                  listMarkers,
-                  noteMarks,
-                  noteParagraphIds,
-                  storyOf,
                   columnWidthPx: column.widthPx,
-                  selectionSegments,
-                  linkOverlays,
-                  selectionHandlers,
                   neighbors,
-                  onFocusParagraph,
-                  onMoveCaret,
                 }),
               )}
           </div>
@@ -346,13 +450,19 @@ export function DocumentModelPage({
           imageUrls={imageUrls}
           selectionSegments={selectionSegments}
           selectionHandlers={selectionHandlers}
+          pageNumber={pageNumber}
         />
       </div>
       <PageMarginBand
         stories={footers}
         label="Document footer"
         edge="bottom"
-        className="pointer-events-none mt-auto flex shrink-0 flex-col justify-end overflow-hidden"
+        className={
+          footerEdit
+            ? 'mt-auto flex shrink-0 flex-col justify-end'
+            : 'pointer-events-none mt-auto flex shrink-0 flex-col justify-end overflow-hidden'
+        }
+        editable={footerEdit}
         heightPx={frame.bottom}
         relationships={model.relationships}
         imageUrls={imageUrls}

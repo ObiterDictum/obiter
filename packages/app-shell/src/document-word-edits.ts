@@ -1,14 +1,13 @@
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
-import {
-  flowParagraphIds,
-  insertRuns,
-  removeInsert,
-  type LocalInsert,
-} from './document-edits'
-import { documentStory, effectiveParagraph } from './document-model-text'
+import { insertRuns, removeInsert, type LocalInsert } from './document-edits'
+import { editableParagraph, effectiveParagraph } from './document-model-text'
 import { canJoinParagraphRuns } from './document-run-fidelity'
 import { omitKey, replaceRunRange, splitRuns } from './document-run-range'
-import { storyBodyParagraphIds } from './document-story-flow'
+import {
+  editingStoryOfFlowId,
+  storyBodyParagraphIds,
+  storyFlowOrder,
+} from './document-story-flow'
 
 export type ExtraRuns = Record<string, DocumentTextRunWire[]>
 
@@ -40,9 +39,7 @@ export function blockRuns(
 ): DocumentTextRunWire[] {
   const insert = state.inserts.find((item) => item.clientId === paragraphId)
   if (insert) return insertRuns(insert)
-  const paragraph = documentStory(model)?.paragraphs.find(
-    (item) => item.id === paragraphId,
-  )
+  const paragraph = editableParagraph(model, paragraphId)
   if (!paragraph) return []
   const extras = state.extraRuns[paragraphId] ?? []
   return effectiveParagraph(paragraph, state.drafts, extras).runs
@@ -149,16 +146,17 @@ export function applyDeleteForward(
   return joinIntoPrevious(model, state, nextId)
 }
 
-/** The paragraph after `paragraphId` in the editable flow, if any. */
+/** The paragraph after `paragraphId` in its story's editable flow, if any. */
 function nextParagraphId(
   model: DocumentModelWire,
   state: EditorState,
   paragraphId: string,
 ): string | undefined {
-  const order = flowParagraphIds(
+  const order = storyFlowOrder(
     model,
     state.inserts,
     state.deletedParagraphIds,
+    paragraphId,
   )
   return order[order.indexOf(paragraphId) + 1]
 }
@@ -255,10 +253,11 @@ export function joinIntoPrevious(
   paragraphId: string,
 ): EditorResult | undefined {
   if (paragraphJoinRefusal(model, state, paragraphId)) return undefined
-  const order = flowParagraphIds(
+  const order = storyFlowOrder(
     model,
     state.inserts,
     state.deletedParagraphIds,
+    paragraphId,
   )
   const index = order.indexOf(paragraphId)
   if (index <= 0) return undefined
@@ -307,16 +306,17 @@ export function paragraphJoinRefusal(
   state: EditorState,
   paragraphId: string,
 ): JoinRefusal | null {
-  const order = flowParagraphIds(
+  const order = storyFlowOrder(
     model,
     state.inserts,
     state.deletedParagraphIds,
+    paragraphId,
   )
   const index = order.indexOf(paragraphId)
   if (index <= 0) return null
   const previousId = order[index - 1]
   if (!previousId) return null
-  const story = documentStory(model)
+  const story = editingStoryOfFlowId(model, state.inserts, paragraphId)
   const body = story ? storyBodyParagraphIds(story) : new Set<string>()
   const inserts = new Set(state.inserts.map((item) => item.clientId))
   const joinable = (id: string) => body.has(id) || inserts.has(id)
@@ -424,9 +424,7 @@ function writeRuns(
     }
   }
   const originalIds = new Set(
-    documentStory(model)
-      ?.paragraphs.find((item) => item.id === paragraphId)
-      ?.runs.map((run) => run.id) ?? [],
+    editableParagraph(model, paragraphId)?.runs.map((run) => run.id) ?? [],
   )
   const drafts = { ...state.drafts }
   for (const id of originalIds) {

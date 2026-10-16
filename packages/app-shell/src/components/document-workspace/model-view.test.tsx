@@ -102,6 +102,36 @@ const narrowTableModel: DocumentModelWire = {
   ],
 }
 
+/** The five runs `insertPageNumber` stores: the result run holds no text —
+ * the instruction resolves at paint time. */
+function storedPageFieldRuns(prefix: string) {
+  return [
+    {
+      id: `${prefix}-begin`,
+      text: '',
+      preservedXmlFragments: ['<w:fldChar w:fldCharType="begin"/>'],
+    },
+    {
+      id: `${prefix}-instr`,
+      text: '',
+      preservedXmlFragments: [
+        '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
+      ],
+    },
+    {
+      id: `${prefix}-sep`,
+      text: '',
+      preservedXmlFragments: ['<w:fldChar w:fldCharType="separate"/>'],
+    },
+    { id: `${prefix}-result`, text: '', preservedXmlFragments: [] },
+    {
+      id: `${prefix}-end`,
+      text: '',
+      preservedXmlFragments: ['<w:fldChar w:fldCharType="end"/>'],
+    },
+  ]
+}
+
 afterEach(() => {
   cleanup()
 })
@@ -695,6 +725,41 @@ describe('DocumentModelPage', () => {
     expect(
       footer.querySelector('[style*="translateX"]')?.parentElement?.children,
     ).toHaveLength(3)
+  })
+
+  it('paints a stored PAGE field in the body with the page number', () => {
+    const fielded: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [
+                { id: 'r0', text: 'Page ', preservedXmlFragments: [] },
+                ...storedPageFieldRuns('pf'),
+              ],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+    }
+    render(
+      <DocumentModelPage
+        model={fielded}
+        pageNumber={2}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+      />,
+    )
+    const body = screen.getByLabelText('Document body')
+    expect(body.querySelector('[data-paragraph-id="p1"]')?.textContent).toBe(
+      'Page 2',
+    )
   })
 
   it('paints header grey flanks around a logo when the table is missing', () => {
