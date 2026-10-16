@@ -22,7 +22,9 @@ const modelHook = vi.hoisted(() => ({
   useDocumentTrackedChanges: vi.fn(),
   useDocumentCollaborationSync: vi.fn(),
   useCreateDocumentComment: vi.fn(),
+  useReplyDocumentComment: vi.fn(),
   useResolveDocumentComment: vi.fn(),
+  useReopenDocumentComment: vi.fn(),
   useEditDocument: vi.fn(),
   useCollaborationMerge: vi.fn(),
   useTrackedChangeDecision: vi.fn(),
@@ -56,7 +58,9 @@ mock.module('../../document-workspace-api', () =>
         useDocumentTrackedChanges: modelHook.useDocumentTrackedChanges,
         useDocumentCollaborationSync: modelHook.useDocumentCollaborationSync,
         useCreateDocumentComment: modelHook.useCreateDocumentComment,
+        useReplyDocumentComment: modelHook.useReplyDocumentComment,
         useResolveDocumentComment: modelHook.useResolveDocumentComment,
+        useReopenDocumentComment: modelHook.useReopenDocumentComment,
         useEditDocument: modelHook.useEditDocument,
         useCollaborationMerge: modelHook.useCollaborationMerge,
         useTrackedChangeDecision: modelHook.useTrackedChangeDecision,
@@ -227,6 +231,7 @@ function model(): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
@@ -419,13 +424,17 @@ export function mount(
       model: options.model ?? model(),
     },
   })
-  modelHook.useDocumentComments.mockReturnValue({ data: { comments: [] } })
+  modelHook.useDocumentComments.mockReturnValue({
+    data: { comments: [], importedComments: [], orphanedReplies: [] },
+  })
   modelHook.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
   modelHook.useDocumentCollaborationSync.mockReturnValue({
     data: { changed: false, participants: [], currentVersionId: 'ver_1' },
   })
   modelHook.useCreateDocumentComment.mockReturnValue(idleMutation())
+  modelHook.useReplyDocumentComment.mockReturnValue(idleMutation())
   modelHook.useResolveDocumentComment.mockReturnValue(idleMutation())
+  modelHook.useReopenDocumentComment.mockReturnValue(idleMutation())
   modelHook.useEditDocument.mockReturnValue(idleMutation())
   modelHook.useCollaborationMerge.mockReturnValue(idleMutation())
   modelHook.useTrackedChangeDecision.mockReturnValue(idleMutation())

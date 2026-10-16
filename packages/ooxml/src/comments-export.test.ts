@@ -164,8 +164,32 @@ describe('product comment DOCX export', () => {
       comments.indexOf('Earlier id'),
     )
 
+    // The resolved thread records its done flag in commentsExtended: the new
+    // part, its relationship, and its content-type override are the only
+    // additional parts the export is allowed to touch.
+    const extended = requiredXml(outputParts, 'word/commentsExtended.xml')
+    const doneEntry = extended.match(
+      /<w15:commentEx w15:paraId="([0-9A-F]{8})" w15:done="1"\/>/u,
+    )
+    expect(doneEntry?.[1]).toBeTruthy()
+    expect(comments).toContain(`<w:p w14:paraId="${doneEntry?.[1]}"`)
+    expect(extended.match(/<w15:commentEx/gu)).toHaveLength(1)
+    expect(requiredXml(outputParts, '[Content_Types].xml')).toContain(
+      'PartName="/word/commentsExtended.xml"',
+    )
+    expect(requiredXml(outputParts, 'word/_rels/document.xml.rels')).toContain(
+      'relationships/commentsExtended',
+    )
+
     for (const [name, bytes] of inputParts) {
-      if (name === 'word/document.xml' || name === 'word/comments.xml') continue
+      if (
+        name === 'word/document.xml' ||
+        name === 'word/comments.xml' ||
+        name === '[Content_Types].xml' ||
+        name === 'word/_rels/document.xml.rels'
+      ) {
+        continue
+      }
       expect(outputParts.get(name), name).toEqual(bytes)
     }
   })
@@ -281,5 +305,154 @@ describe('product comment DOCX export', () => {
     const outputParts = await zipParts(output)
 
     expect(outputParts).toEqual(inputParts)
+  })
+
+  it('threads a product reply under its comment in commentsExtended', async () => {
+    const document = await fixtureDocument()
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+    const head = comment('cmt_head', paragraph.id, 0, 5, 'Head note')
+    head.replies = [
+      {
+        imported: false,
+        id: 'rpl_1',
+        body: 'Reply body',
+        author: { id: 'usr_2', name: 'Priya Second' },
+        createdAt: '2026-08-11T12:00:00.000Z',
+      },
+    ]
+
+    const bytes = await serialiseDocxWithComments(document, [head])
+    const parts = await zipParts(bytes)
+    const commentsXml = requiredXml(parts, 'word/comments.xml')
+    const extended = requiredXml(parts, 'word/commentsExtended.xml')
+
+    expect(commentsXml).toContain('Head note')
+    expect(commentsXml).toContain('Reply body')
+    // The head and reply both carry paraIds and the reply's commentEx names
+    // the head's paraId as its parent.
+    const headParaId =
+      /<w:comment w:id="1"[^>]*><w:p w14:paraId="([0-9A-F]+)"/u.exec(
+        commentsXml,
+      )?.[1]
+    expect(headParaId).toBeDefined()
+    expect(extended).toContain(`w15:paraIdParent="${headParaId as string}"`)
+  })
+
+  it('round-trips an exported comment thread through a reparse', async () => {
+    const document = await fixtureDocument()
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+    const head = comment('cmt_head', paragraph.id, 0, 5, 'Head note')
+    head.replies = [
+      {
+        imported: false,
+        id: 'rpl_1',
+        body: 'Reply body',
+        author: { id: 'usr_2', name: 'Priya Second' },
+        createdAt: '2026-08-11T12:00:00.000Z',
+      },
+    ]
+
+    const reparsed = await parseDocx(
+      await serialiseDocxWithComments(document, [head]),
+    )
+
+    const exported = reparsed.model.comments.find(
+      (entry) => entry.body === 'Head note',
+    )
+    const reply = reparsed.model.comments.find(
+      (entry) => entry.body === 'Reply body',
+    )
+    expect(exported?.author).toBe('Sol Reviewer')
+    expect(exported?.anchor?.paragraphId).toBe(paragraph.id)
+    expect(exported?.anchor?.startOffset).toBe(0)
+    expect(exported?.anchor?.endOffset).toBe(5)
+    expect(reply?.author).toBe('Priya Second')
+    expect(reply?.parentId).toBe(exported?.id)
+  })
+
+  it('threads a product reply under an imported comment head', async () => {
+    const document = await fixtureDocument()
+    const imported = document.model.comments.find(
+      (entry) => entry.id === 'ooxml-0',
+    )
+    if (!imported) throw new Error('Fixture comment is missing.')
+
+    const bytes = await serialiseDocxWithComments(
+      document,
+      [],
+      [
+        {
+          ooxmlId: imported.ooxmlId,
+          paraId: imported.paraId,
+          reply: {
+            imported: false,
+            id: 'rpl_9',
+            body: 'Product reply on a foreign thread',
+            author: { id: 'usr_1', name: 'Sol Reviewer' },
+            createdAt: '2026-08-12T12:00:00.000Z',
+          },
+        },
+      ],
+    )
+    const parts = await zipParts(bytes)
+    const commentsXml = requiredXml(parts, 'word/comments.xml')
+
+    // The foreign comment survives byte-identical in its own element and the
+    // reply is appended as a new comment after it.
+    expect(commentsXml).toContain('Fictional review comment')
+    expect(commentsXml).toContain('Product reply on a foreign thread')
+  })
+})
+
+describe('imported comment extraction', () => {
+  it('exposes the package comment with its anchored range', async () => {
+    const document = await fixtureDocument()
+
+    const imported = document.model.comments.find(
+      (entry) => entry.id === 'ooxml-0',
+    )
+    expect(imported?.author).toBe('Alice Example')
+    expect(imported?.body).toBe('Fictional review comment')
+    expect(imported?.resolved).toBe(false)
+    expect(imported?.parentId).toBeNull()
+    expect(imported?.anchor).not.toBeNull()
+
+    const paragraph = document.model.stories
+      .flatMap((story) => story.paragraphs)
+      .find((entry) => entry.id === imported?.anchor?.paragraphId)
+    const text = paragraph?.runs.map((run) => run.text).join('') ?? ''
+    expect(
+      text.slice(imported?.anchor?.startOffset, imported?.anchor?.endOffset),
+    ).toBe('Commented text')
+  })
+
+  it('keeps a comment whose body markers are missing listed but unanchored', async () => {
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const part = zip.file('word/document.xml')
+    if (!part) throw new Error('Fixture part is missing.')
+    zip.file(
+      'word/document.xml',
+      (await part.async('string'))
+        .replace('<w:commentRangeStart w:id="0"/>', '')
+        .replace('<w:commentRangeEnd w:id="0"/>', '')
+        .replace(
+          '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="0"/></w:r>',
+          '',
+        ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+
+    const imported = document.model.comments.find(
+      (entry) => entry.id === 'ooxml-0',
+    )
+    expect(imported?.body).toBe('Fictional review comment')
+    expect(imported?.anchor).toBeNull()
   })
 })

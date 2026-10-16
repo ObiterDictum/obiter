@@ -167,6 +167,7 @@ function singleParagraphModel(): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

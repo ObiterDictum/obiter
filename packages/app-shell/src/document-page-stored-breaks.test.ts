@@ -59,6 +59,7 @@ function modelOf(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

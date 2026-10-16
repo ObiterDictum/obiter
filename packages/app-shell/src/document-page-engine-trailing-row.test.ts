@@ -59,6 +59,7 @@ function modelOf(
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

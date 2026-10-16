@@ -28,6 +28,7 @@ const emptyModel: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 describe('documentPageBox', () => {

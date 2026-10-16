@@ -59,6 +59,7 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 describe('emphasis addressing from the caret selection', () => {
@@ -308,6 +309,7 @@ function modelWithRuns(
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
@@ -1142,6 +1144,7 @@ describe('list and style hardening', () => {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 
   const first = twoParagraphs.stories[0]?.paragraphs[0]

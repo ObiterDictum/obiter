@@ -13,6 +13,9 @@ import type {
   DocumentCommentCreateRequest,
   DocumentCommentCreateResponse,
   DocumentCommentListResponse,
+  DocumentCommentReopenResponse,
+  DocumentCommentReplyCreateRequest,
+  DocumentCommentReplyCreateResponse,
   DocumentCommentResolveResponse,
   DocumentEditRequest,
   DocumentEditResponse,
@@ -285,12 +288,47 @@ export function useCreateDocumentComment(documentId: string) {
   })
 }
 
+export function useReplyDocumentComment(documentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    // `commentId` is either a product `cmt_` id or an imported `ooxml-` thread
+    // head; the route tells them apart by prefix.
+    mutationFn: (input: {
+      commentId: string
+      reply: DocumentCommentReplyCreateRequest
+    }) =>
+      apiFetch<DocumentCommentReplyCreateResponse>(
+        `/api/documents/${documentId}/comments/${input.commentId}/replies`,
+        { method: 'POST', body: JSON.stringify(input.reply) },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: workspaceKeys.comments(documentId),
+      }),
+  })
+}
+
 export function useResolveDocumentComment(documentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (commentId: string) =>
       apiFetch<DocumentCommentResolveResponse>(
         `/api/documents/${documentId}/comments/${commentId}/resolve`,
+        { method: 'PATCH', body: JSON.stringify({}) },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: workspaceKeys.comments(documentId),
+      }),
+  })
+}
+
+export function useReopenDocumentComment(documentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (commentId: string) =>
+      apiFetch<DocumentCommentReopenResponse>(
+        `/api/documents/${documentId}/comments/${commentId}/reopen`,
         { method: 'PATCH', body: JSON.stringify({}) },
       ),
     onSuccess: () =>
