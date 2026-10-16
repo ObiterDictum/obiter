@@ -9,7 +9,7 @@ import { emitShareSafePart } from './share-safe-emit'
 import { SHARE_SAFE_MAX_FIELD_NESTING } from './share-safe-fields'
 import { planShareSafeCopy } from './share-safe-inventory'
 import type { ShareSafeContentPlan } from './share-safe-parts'
-import { MC, probePackage, W, W14 } from './share-safe-probe-kit'
+import { MC, outputParts, probePackage, W, W14 } from './share-safe-probe-kit'
 
 const PACKAGE_REL_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships'
@@ -144,10 +144,17 @@ describe('share-safe content cost', () => {
     ).toBeLessThan(5_000)
   })
 
-  it('plans 16000 comment-marker runs in linear time', async () => {
+  it('plans 32000 comment-marker runs in linear time', async () => {
     expect(
-      await planBody(`<w:p>${commentRun().repeat(16_000)}</w:p>`),
+      await planBody(`<w:p>${commentRun().repeat(32_000)}</w:p>`),
     ).toBeLessThan(5_000)
+  })
+
+  it('plans one run holding many comment references in linear time', async () => {
+    // A run that keeps text is never collapsed: one run holding many
+    // markers used to re-run the text check per marker.
+    const body = `<w:p><w:r>STRAY${'<w:commentReference w:id="1"/>'.repeat(16_000)}</w:r></w:p>`
+    expect(await planBody(body)).toBeLessThan(5_000)
   })
 
   it('plans 16000 flat fields in linear time', async () => {
@@ -168,6 +175,28 @@ describe('share-safe content cost', () => {
     )
     expect(error).toBeInstanceOf(ShareSafeRefusal)
     expect((error as ShareSafeRefusal).reason).toBe('oversized-structure')
+  })
+})
+
+describe('share-safe field span extent', () => {
+  // A remove-class field drops its whole span, but only the elements the span
+  // actually contains: a container that opens inside the span and outlives the
+  // end marker keeps its later content.
+  it('keeps text after a remove-class end marker in the same run', async () => {
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> SET x "v" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/><w:t>AFTERINRUN</w:t></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('AFTERINRUN')
+    expect(story).not.toContain('SET')
+  })
+
+  it('keeps paragraphs after a multi-paragraph remove-class field', async () => {
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r></w:p><w:p><w:r><w:instrText> SET x "v" </w:instrText></w:r></w:p><w:p><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>TAILP3</w:t></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('TAILP3')
   })
 })
 

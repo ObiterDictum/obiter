@@ -62,10 +62,16 @@ export function collapseCommentRuns(
     }
     carries.add(run)
   }
+  const decided = new Set<XmlElement>()
   for (const element of elements) {
     if (!isWord(element, 'commentReference')) continue
     const run = nearestRun(element)
     if (!run || contentPlan.removed.has(run) || carries.has(run)) continue
+    // One run can carry many comment references, and a run that keeps text
+    // is never collapsed: decide each run once, or the same run is examined
+    // per marker.
+    if (decided.has(run)) continue
+    decided.add(run)
     const text = innerTextExcluding(source, run, removedByStart)
     if (text.trim() === '') contentPlan.removed.add(run)
   }
