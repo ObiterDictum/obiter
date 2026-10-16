@@ -22,8 +22,9 @@ import {
  * within-paragraph hit is checked as it applies. A range that was valid
  * against the original state can still be invalid against the state an
  * earlier replacement in the same batch produced — a cross-paragraph join
- * can move or delete a paragraph a later hit names — and that refuses the
- * whole batch rather than applying part of it.
+ * moves runs into a paragraph whose tail a later hit then joins away, and
+ * that join can become unstatable — and that refuses the whole batch rather
+ * than applying part of it.
  */
 export type FindReplaceResult =
   | { status: 'applied'; state: EditorState; caret: EditorCaret }
@@ -37,8 +38,8 @@ export type FindReplaceResult =
  * reverse document order so an earlier replacement cannot shift a later
  * hit's offsets, and the inserted replacement text is never re-matched — the
  * hit list is captured before the first write. Cross-paragraph ranges are
- * pre-checked against the pre-edit state; a hit that the sequence itself
- * invalidates (see `FindReplaceResult`) refuses the whole batch.
+ * pre-checked against the pre-edit state; a hit the sequence itself makes
+ * unstatable (see `FindReplaceResult`) refuses the whole batch.
  *
  * A hit inside one paragraph rewrites that paragraph's run text the way
  * typing does. A hit covering paragraph breaks goes through the document

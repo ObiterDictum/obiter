@@ -174,6 +174,33 @@ describe('replaceFindHits', () => {
     expect(result.state.deletedParagraphIds).toEqual(['p3', 'p2'])
   })
 
+  it('refuses the whole batch when a join makes a later join unstatable', () => {
+    // Each hit applies alone, but 'all' goes from the end: p3's styled runs
+    // join into the empty p2 first (legal), and the p1←p2 join is then
+    // refused because p2 carries runs the save cannot restate over a join.
+    // A batch that passed every pre-check can still refuse part-way, so the
+    // whole batch refuses and nothing is written.
+    const spread = base([
+      paragraph('p1', 'Alpha end'),
+      { id: 'p2', runs: [], preservedXmlFragments: [] },
+      paragraph('p3', 'gamma', { styleId: 'Emphasis' }),
+    ])
+    const hits = findInDocument(spread, emptyEditorState(), '\n')
+    expect(hits).toHaveLength(2)
+    const state = emptyEditorState()
+    expect(
+      replaceFindHits(spread, state, [hits[0]], ' ', 'all', newId).status,
+    ).toBe('applied')
+    expect(
+      replaceFindHits(spread, state, [hits[1]], ' ', 'all', newId).status,
+    ).toBe('applied')
+    const result = replaceFindHits(spread, state, hits, ' ', 'all', newId)
+    expect(result.status === 'refused' && result.refusal).toBe(
+      'join-formatting',
+    )
+    expect(state).toEqual(emptyEditorState())
+  })
+
   it('refuses a batch whose range splits a stored field boundary', () => {
     const fielded = base(
       [
