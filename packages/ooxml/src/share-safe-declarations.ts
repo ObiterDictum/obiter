@@ -2,7 +2,11 @@ import {
   relationshipSourcePartName,
   resolveRelationshipTarget,
 } from './parts/rels'
-import { attributeValue, type XmlElement } from './parts/xml-elements'
+import {
+  attributeValue,
+  childrenByParent,
+  type XmlElement,
+} from './parts/xml-elements'
 import { canonicalRelationshipTarget } from './share-safe-canonical'
 import {
   CONTENT_TYPES_NAMESPACE,
@@ -68,6 +72,10 @@ function assertWhitespaceDeclarationText(
 ) {
   const source = part.overlay?.source
   if (source === undefined) return
+  // The children index is built once: filtering the whole element list per
+  // element is quadratic, and a declaration-heavy part is exactly the shape
+  // an attacker would send to burn CPU.
+  const children = childrenByParent(elements)
   for (const element of elements) {
     if (
       element.namespaceUri !== namespaceUri ||
@@ -75,9 +83,9 @@ function assertWhitespaceDeclarationText(
     ) {
       continue
     }
-    const children = elements.filter((child) => child.parent === element)
+    const childElements = children.get(element) ?? []
     let cursor = element.startTagEnd
-    for (const child of children) {
+    for (const child of childElements) {
       assertWhitespaceOnly(source.slice(cursor, child.start), part.name)
       cursor = child.end
     }

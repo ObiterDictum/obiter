@@ -46,6 +46,35 @@ export { ShareSafeRefusal }
  *    relationships, a part declared under two roles, dangling pointers;
  *  - fields that fetch (`INCLUDETEXT`, `INCLUDEPICTURE`, `LINK`, `DDE`,
  *    `HYPERLINK`, …): the instruction embeds the address.
+ *
+ * Module ownership — which allow-list file owns which namespace or part
+ * class, and what rewrites it:
+ *  - WordprocessingML: `share-safe-word-vocabulary` (elements) and
+ *    `share-safe-word-attributes` (attributes, split into the
+ *    `share-safe-word-attribute-*` modules for value shapes, with
+ *    `share-safe-value-bounds` holding the shared value bounds) own the
+ *    allow-list; `share-safe-word-classes` owns the revision, hidden,
+ *    comment-marker and pointer classes; `share-safe-fields` owns the field
+ *    instruction allow-list, the fetcher refusal and field-span analysis;
+ *    `share-safe-word-content` rewrites the part.
+ *  - DrawingML and WordprocessingDrawing: `share-safe-drawing-vocabulary`,
+ *    `share-safe-drawing-attributes` (with `-drawing-attribute-sets` and
+ *    `-drawing-attribute-bounds`).
+ *  - Math (OMML): `share-safe-math-vocabulary`, `share-safe-math-attributes`.
+ *  - Preset colours and shapes: `share-safe-preset-attributes`,
+ *    `share-safe-preset-colors`.
+ *  - Package declarations (`_rels`, `[Content_Types].xml`):
+ *    `share-safe-declarations`; canonical part naming and declaration
+ *    emission: `share-safe-canonical`.
+ *  - Document properties (`docProps`): `share-safe-metadata`.
+ *  The plan types and canonical namespace prefixes live in
+ *  `share-safe-parts`; the verdicts those lists feed in `share-safe-policy`;
+ *  the per-part content pass in `share-safe-content`; the part graph in
+ *  `share-safe-inventory`; the applied plan in `share-safe-transform`;
+ *  emission in `share-safe-emit`; the independent byte, declaration-byte,
+ *  binary and whole-output verification in `share-safe-bytecheck`,
+ *  `share-safe-bytecheck-declarations`, `share-safe-binary` and
+ *  `share-safe-verify`; refusals in `share-safe-refusal`.
  */
 export async function buildShareSafeDocx(
   document: OoxmlDocument,

@@ -54,16 +54,20 @@ interface StoredReply {
 
 interface TestDatabaseOptions extends SharedTestDatabaseOptions {
   commentsDocumentMissing?: boolean
+  auditFailure?: boolean
 }
 
 export class TestDatabase extends SharedTestDatabase {
   comments = new Map<string, StoredComment>()
   replies = new Map<string, StoredReply>()
   audits: Array<{
+    organisationId: string
+    userId: string
     entityType: string
     entityId: string
     action: string
     metadata: Record<string, unknown>
+    requestId: string
   }> = []
   private nextComment = 1
   private readonly exportOptions: TestDatabaseOptions
@@ -180,13 +184,26 @@ export class TestDatabase extends SharedTestDatabase {
         }
         if (sql.includes('insert into audit_logs')) {
           this.queries.push(sql)
-          const [, , entityType, entityId, action, metadata] =
-            parameters as string[]
+          if (this.exportOptions.auditFailure) {
+            throw new Error('audit insert failed')
+          }
+          const [
+            organisationId,
+            userId,
+            entityType,
+            entityId,
+            action,
+            metadata,
+            requestId,
+          ] = parameters as string[]
           this.audits.push({
+            organisationId,
+            userId,
             entityType,
             entityId,
             action,
             metadata: JSON.parse(metadata) as Record<string, unknown>,
+            requestId,
           })
           return { rows: [] }
         }

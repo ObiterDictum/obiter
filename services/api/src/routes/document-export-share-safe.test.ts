@@ -50,6 +50,8 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     ).not.toContain('Internal-only review note')
     expect(database.audits).toEqual([
       {
+        organisationId: 'org_1',
+        userId: 'usr_viewer',
         entityType: 'document',
         entityId: 'doc_1',
         action: 'document.export',
@@ -60,6 +62,7 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
           commentCount: 0,
           skippedCommentCount: 0,
         },
+        requestId: 'req_export',
       },
     ])
     expect(JSON.stringify(database.audits)).not.toContain(
@@ -67,7 +70,7 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     )
   })
 
-  it('refuses a version carrying tracked changes and audits nothing', async () => {
+  it('refuses a version carrying tracked changes and audits the bounded reason', async () => {
     const tracked = await trackedChangesDocx()
     const database = new TestDatabase({ access: 'view' })
     const storage = new MemoryStorage(tracked)
@@ -81,7 +84,25 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     expect(JSON.parse(body)).toMatchObject({
       error: { code: 'share_safe_export_refused' },
     })
-    expect(database.audits).toEqual([])
+    // The refusal is audited with the bounded policy class only — no part
+    // names, attribute values or document text reach the record.
+    expect(database.audits).toEqual([
+      {
+        organisationId: 'org_1',
+        userId: 'usr_viewer',
+        entityType: 'document',
+        entityId: 'doc_1',
+        action: 'document.export_refused',
+        metadata: {
+          matterId: 'mtr_1',
+          versionId: 'ver_1',
+          shareSafe: true,
+          refusalReason: 'tracked-changes',
+        },
+        requestId: 'req_export',
+      },
+    ])
+    expect(JSON.stringify(database.audits)).not.toContain('IN THE HIGH COURT')
     // The response is the error envelope, not document bytes: the refusal is
     // a JSON body well under the source package's size.
     expect(body.length).toBeLessThan(tracked.byteLength)
@@ -123,6 +144,40 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     expect(await response.json()).toMatchObject({
       error: { code: 'share_safe_export_refused' },
     })
+    expect(database.audits).toEqual([
+      {
+        organisationId: 'org_1',
+        userId: 'usr_viewer',
+        entityType: 'document',
+        entityId: 'doc_1',
+        action: 'document.export_refused',
+        metadata: {
+          matterId: 'mtr_1',
+          versionId: 'ver_1',
+          shareSafe: true,
+          refusalReason: 'tracked-changes',
+        },
+        requestId: 'req_export',
+      },
+    ])
+  })
+
+  it('fails loudly when the refusal cannot be audited', async () => {
+    const tracked = await trackedChangesDocx()
+    const database = new TestDatabase({ access: 'view', auditFailure: true })
+    const response = await routeApp(
+      database,
+      new MemoryStorage(tracked),
+    ).app.request('/api/documents/doc_1/export?mode=share-safe')
+
+    // An unrecordable refusal is not silently reported as a clean refusal:
+    // the audit failure surfaces as the standard storage error, matching the
+    // success path, and no bytes ship either way.
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(database.audits).toEqual([])
   })
 
   it('carries a faithful Unicode name through filename*', async () => {

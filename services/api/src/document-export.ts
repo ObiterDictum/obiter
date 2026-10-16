@@ -115,7 +115,7 @@ export async function exportDocumentDocx(
 
   const embedded =
     input.shareSafe === true
-      ? await shareSafeBytes(source)
+      ? await shareSafeEmbedded(pool, input, source)
       : listed.comments.length === 0 && listed.replies.length === 0
         ? { bytes: Uint8Array.from(source), skippedCommentCount: 0 }
         : await embedComments(source, listed)
@@ -167,6 +167,49 @@ export function shareSafeExportFilename(filename: string) {
   const trimmed =
     stem.slice(0, Math.max(1, budget)).replace(/[.\s]+$/u, '') || 'document'
   return `${trimmed}${SHARE_SAFE_SUFFIX}`
+}
+
+/**
+ * A refused share-safe export is a safety event worth an audit row. The audit
+ * records the bounded reason class only — the free-text detail can name parts
+ * and shapes inside the private package, so it never reaches the record. The
+ * refusal itself is unchanged; if the audit write fails, that failure
+ * propagates as the standard storage error, exactly as it does on the success
+ * path, rather than being swallowed.
+ */
+async function shareSafeEmbedded(
+  pool: Pool,
+  input: {
+    organisationId: string
+    matterId: string
+    documentId: string
+    version: ExportVersion
+    userId: string
+    requestId: string
+  },
+  source: Buffer,
+) {
+  try {
+    return await shareSafeBytes(source)
+  } catch (error) {
+    if (error instanceof ShareSafeExportRefusalError) {
+      await appendAuditLog(pool, {
+        organisationId: input.organisationId,
+        userId: input.userId,
+        entityType: 'document',
+        entityId: input.documentId,
+        action: 'document.export_refused',
+        metadata: {
+          matterId: input.matterId,
+          versionId: input.version.id,
+          shareSafe: true,
+          refusalReason: error.refusalReason,
+        },
+        requestId: input.requestId,
+      })
+    }
+    throw error
+  }
 }
 
 async function shareSafeBytes(source: Buffer) {

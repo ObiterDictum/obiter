@@ -32,32 +32,49 @@ export function collapseCommentRuns(
   elements: readonly XmlElement[],
   contentPlan: ShareSafeContentPlan,
 ) {
+  // Every run's fate is decided from the removal state the element pass
+  // left, so the carries flag is computed once. Collapsing adds only `w:r`
+  // elements to `removed`, and a run that reaches the collapse decision
+  // below has no non-rPr descendant — runs can nest, since a text box holds
+  // one — so no later collapse can sit inside it and change what it
+  // excludes.
+  const removedByStart = [...contentPlan.removed].sort(
+    (left, right) => left.start - right.start,
+  )
+  const runProperties = new Map<XmlElement, XmlElement>()
+  for (const element of elements) {
+    if (
+      isWord(element, 'rPr') &&
+      element.parent !== undefined &&
+      isWord(element.parent, 'r')
+    ) {
+      runProperties.set(element.parent, element)
+    }
+  }
+  const carries = new Set<XmlElement>()
+  for (const element of elements) {
+    if (contentPlan.removed.has(element) || isWord(element, 'rPr')) continue
+    const run = nearestRun(element)
+    if (run === undefined || contentPlan.removed.has(run)) continue
+    const properties = runProperties.get(run)
+    if (properties !== undefined && isDescendantOf(element, properties)) {
+      continue
+    }
+    carries.add(run)
+  }
+  const decided = new Set<XmlElement>()
   for (const element of elements) {
     if (!isWord(element, 'commentReference')) continue
     const run = nearestRun(element)
-    if (!run || contentPlan.removed.has(run)) continue
-    const carries = elements.some(
-      (candidate) =>
-        !contentPlan.removed.has(candidate) &&
-        isDescendantOf(candidate, run) &&
-        !isWord(candidate, 'rPr') &&
-        !isInsideRunProperties(elements, candidate, run),
-    )
-    if (carries) continue
-    const text = innerTextExcluding(source, run, contentPlan.removed)
+    if (!run || contentPlan.removed.has(run) || carries.has(run)) continue
+    // One run can carry many comment references, and a run that keeps text
+    // is never collapsed: decide each run once, or the same run is examined
+    // per marker.
+    if (decided.has(run)) continue
+    decided.add(run)
+    const text = innerTextExcluding(source, run, removedByStart)
     if (text.trim() === '') contentPlan.removed.add(run)
   }
-}
-
-function isInsideRunProperties(
-  elements: readonly XmlElement[],
-  element: XmlElement,
-  run: XmlElement,
-) {
-  const properties = elements.find(
-    (candidate) => candidate.parent === run && isWord(candidate, 'rPr'),
-  )
-  return properties !== undefined && isDescendantOf(element, properties)
 }
 
 function nearestRun(element: XmlElement) {
@@ -77,16 +94,30 @@ function nearestRun(element: XmlElement) {
 function innerTextExcluding(
   source: string,
   element: XmlElement,
-  removed: ReadonlySet<XmlElement>,
+  removedByStart: readonly XmlElement[],
 ) {
-  const boundaries = [...removed]
-    .filter(
-      (candidate) =>
-        isDescendantOf(candidate, element) &&
-        candidate.start >= element.startTagEnd &&
-        candidate.end <= element.endTagStart,
-    )
-    .sort((left, right) => left.start - right.start)
+  // `removedByStart` is sorted once by the caller: binary-search to the
+  // first removed element inside this element's content range, then walk
+  // only that window. Filtering the whole removed set per candidate run is
+  // quadratic in a comment-heavy part.
+  let low = 0
+  let high = removedByStart.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (removedByStart[middle].start < element.startTagEnd) low = middle + 1
+    else high = middle
+  }
+  const boundaries: XmlElement[] = []
+  for (let index = low; index < removedByStart.length; index += 1) {
+    const candidate = removedByStart[index]
+    if (candidate.start > element.endTagStart) break
+    if (
+      candidate.end <= element.endTagStart &&
+      isDescendantOf(candidate, element)
+    ) {
+      boundaries.push(candidate)
+    }
+  }
   let text = ''
   let cursor = element.startTagEnd
   for (const range of boundaries) {
@@ -123,6 +154,12 @@ export function analyseWordFields(
     (start, end) => xmlInnerText(source, start, end),
     gone,
   )
+  if (fields.depthExceeded) {
+    refuseShareSafe(
+      'oversized-structure',
+      `${part.name} nests fields past the share-safe cap`,
+    )
+  }
   if (fields.refused) {
     refuseShareSafe(
       'malformed-package',
@@ -178,21 +215,44 @@ export function analyseWordFields(
     contentPlan.textOverrides.set(first, rewritten)
     for (const element of rest) contentPlan.textOverrides.set(element, '')
   }
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const span of fields.spans) {
-      const keptBySpan = span.whole.filter(
-        (element) => !span.dropped.includes(element),
-      )
-      if (!keptBySpan.some((element) => contentPlan.removed.has(element))) {
-        continue
-      }
-      for (const element of span.whole) {
-        if (!contentPlan.removed.has(element)) {
-          contentPlan.removed.add(element)
-          changed = true
-        }
+  // A span the element pass half-removed closes over its whole span, and
+  // that closure propagates between spans that share elements. Propagate it
+  // with a worklist instead of rescanning every span to a fixpoint, which is
+  // quadratic when a part is built from many nested fields.
+  const triggerElements = new Map<FieldSpan, XmlElement[]>()
+  const spansByElement = new Map<XmlElement, FieldSpan[]>()
+  for (const span of fields.spans) {
+    const dropped = new Set(span.dropped)
+    triggerElements.set(
+      span,
+      span.whole.filter((element) => !dropped.has(element)),
+    )
+    for (const element of span.whole) {
+      const containing = spansByElement.get(element)
+      if (containing) containing.push(span)
+      else spansByElement.set(element, [span])
+    }
+  }
+  const triggerable = (span: FieldSpan) =>
+    (triggerElements.get(span) ?? []).some((element) =>
+      contentPlan.removed.has(element),
+    )
+  const processed = new Set<FieldSpan>()
+  const queue: FieldSpan[] = []
+  const enqueueIfTriggerable = (span: FieldSpan) => {
+    if (processed.has(span) || !triggerable(span)) return
+    processed.add(span)
+    queue.push(span)
+  }
+  for (const span of fields.spans) enqueueIfTriggerable(span)
+  while (queue.length > 0) {
+    const span = queue.pop()
+    if (span === undefined) break
+    for (const element of span.whole) {
+      if (contentPlan.removed.has(element)) continue
+      contentPlan.removed.add(element)
+      for (const containing of spansByElement.get(element) ?? []) {
+        enqueueIfTriggerable(containing)
       }
     }
   }

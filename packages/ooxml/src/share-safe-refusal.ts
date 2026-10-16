@@ -27,6 +27,10 @@ export type ShareSafeRefusalReason =
   /** Input that cannot be read unambiguously: unparseable XML, non-UTF-8
    * parts, case-variant part names, dangling or duplicated declarations. */
   | 'malformed-package'
+  /** A part whose element or attribute count exceeds the share-safe shape
+   * caps: valid OOXML, but a shape whose super-linear passes this layer
+   * refuses to run. */
+  | 'oversized-structure'
   /** The sanitised output failed the independent verification pass. */
   | 'unverifiable-output'
 
