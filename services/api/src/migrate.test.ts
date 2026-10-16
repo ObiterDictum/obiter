@@ -119,7 +119,7 @@ describe('migration runner', () => {
     try {
       const { pool, statements } = createMockPool()
       await expect(runMigrations(pool, dir)).rejects.toThrow(
-        'Migration 0002_wrapped.sql carries transaction control (begin;)',
+        'Migration 0002_wrapped.sql carries transaction control (begin)',
       )
       // Nothing was applied: no transaction opened for the refused file, and
       // the earlier file is not recorded as part of a failed run.
@@ -132,17 +132,42 @@ describe('migration runner', () => {
     }
   })
 
-  it('allows a dollar-quoted block whose body uses PL/pgSQL begin/end', async () => {
+  it('allows transaction words inside quoted strings and dollar-quoted bodies', async () => {
+    // Each fixture puts the keyword at the start of a line inside the quoted
+    // region, so the scan is what keeps it from reading as a statement.
     const dir = fixtureDir({
-      '0001_plpgsql.sql':
-        'do $$\ndeclare\n  x int;\nbegin\n  x := 1;\nend;\n$$;\n',
+      '0001_dollar.sql':
+        'insert into notes (body) values ($tag$\ncommit;\n$tag$);\n',
+      '0002_literal.sql':
+        "insert into notes (body) values ('\nrollback;\n');\n",
+      '0003_plpgsql.sql':
+        'create function f() returns void as $$\nbegin\n  perform 1;\nend;\n$$ language plpgsql;\n',
     })
     try {
       const { pool } = createMockPool()
       await expect(runMigrations(pool, dir)).resolves.toEqual({
-        applied: ['0001_plpgsql.sql'],
+        applied: ['0001_dollar.sql', '0002_literal.sql', '0003_plpgsql.sql'],
         skipped: [],
       })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    'abort;',
+    'end work;',
+    'end transaction;',
+    'commit and chain;',
+    'begin isolation level serializable;',
+    'start transaction read write;',
+  ])('refuses %s as transaction control', async (statement) => {
+    const dir = fixtureDir({ '0001_wrapped.sql': `select 1;\n${statement}\n` })
+    try {
+      const { pool } = createMockPool()
+      await expect(runMigrations(pool, dir)).rejects.toThrow(
+        'carries transaction control',
+      )
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

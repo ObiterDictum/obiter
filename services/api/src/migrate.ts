@@ -35,24 +35,71 @@ export function listMigrationFiles(migrationsDir: string) {
  * transaction per file, covering the tracking insert — then no longer holds,
  * and a later failure cannot roll the file back.
  *
- * The terminator is required, and bare `end` is deliberately absent: `CASE …
- * end` closes expressions, so only `end work`/`end transaction` would be
- * unambiguous, and the `begin`/`commit` spelling is what this guards. A file
- * that opens a transaction is caught by its opening statement.
+ * Bare `end` is deliberately absent: `CASE … end` closes expressions, so only
+ * `end work`/`end transaction` is unambiguous. The anchor is the start of a
+ * line, which is the convention these files follow; a statement sharing a line
+ * with another is not caught, and the guard is a backstop rather than a
+ * parser.
  */
 const TRANSACTION_CONTROL =
-  /^\s*(?:begin|commit|rollback)(?:\s+(?:transaction|work))?\s*;|^\s*start\s+transaction\s*;/imu
+  /^\s*(?:begin|commit|rollback|abort|start\s+transaction|end\s+(?:work|transaction))\b/imu
 
 /**
- * Strips dollar-quoted regions and comments, which are not statements: a
- * `do $$ … begin … end; $$` block's PL/pgSQL body is code, not transaction
- * control, and migrations legitimately contain them.
+ * Strips comments, single-quoted strings and dollar-quoted regions — none of
+ * which are statements — in one left-to-right pass. Each construct is skipped
+ * where it starts, so a `$$` or `'` inside another construct cannot swallow a
+ * real statement (a `$$` in a comment must not hide a following `commit;`).
+ * A `do $$ … begin … end; $$` body and a `CASE … end` are the reasons the
+ * scan is needed at all: migrations legitimately contain both.
  */
-function withoutDollarQuoted(sql: string) {
-  return sql
-    .replace(/\$(\w*)\$[\s\S]*?\$\1\$/gu, '')
-    .replace(/--[^\n]*/gu, '')
-    .replace(/\/\*[\s\S]*?\*\//gu, '')
+function withoutQuotedOrComments(sql: string) {
+  let bare = ''
+  let index = 0
+  while (index < sql.length) {
+    const character = sql[index]
+    if (character === '-' && sql[index + 1] === '-') {
+      const newline = sql.indexOf('\n', index)
+      index = newline === -1 ? sql.length : newline
+      bare += '\n'
+      continue
+    }
+    if (character === '/' && sql[index + 1] === '*') {
+      const end = sql.indexOf('*/', index + 2)
+      index = end === -1 ? sql.length : end + 2
+      continue
+    }
+    if (character === "'") {
+      index += 1
+      while (index < sql.length) {
+        if (sql[index] !== "'") {
+          index += 1
+          continue
+        }
+        // A doubled quote is an escaped quote, not the end of the string.
+        if (sql[index + 1] === "'") {
+          index += 2
+          continue
+        }
+        index += 1
+        break
+      }
+      continue
+    }
+    if (character === '$') {
+      let tagEnd = index + 1
+      while (tagEnd < sql.length && /[A-Za-z0-9_]/.test(sql[tagEnd]))
+        tagEnd += 1
+      if (sql[tagEnd] === '$') {
+        const tag = sql.slice(index, tagEnd + 1)
+        const end = sql.indexOf(tag, tagEnd + 1)
+        index = end === -1 ? sql.length : end + tag.length
+        continue
+      }
+    }
+    bare += character
+    index += 1
+  }
+  return bare
 }
 
 /**
@@ -61,7 +108,7 @@ function withoutDollarQuoted(sql: string) {
  * file later.
  */
 export function assertNoTransactionControl(filename: string, sql: string) {
-  const match = TRANSACTION_CONTROL.exec(withoutDollarQuoted(sql))
+  const match = TRANSACTION_CONTROL.exec(withoutQuotedOrComments(sql))
   if (match) {
     throw new Error(
       `Migration ${filename} carries transaction control (${match[0].trim()}). ` +
