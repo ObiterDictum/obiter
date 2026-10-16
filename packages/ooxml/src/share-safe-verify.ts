@@ -222,10 +222,7 @@ function verifyCustomProperties(document: OoxmlDocument) {
   if (!part?.overlay) {
     refuseShareSafe('malformed-package', 'custom properties part is malformed')
   }
-  // Captured once: the guard narrows the optional overlay, and a local keeps
-  // that narrowing across the calls below.
-  const overlay = part.overlay
-  const elements = parseXmlElements(overlay.source)
+  const elements = parseXmlElements(part.overlay.source)
   for (const element of elements) {
     if (
       element.namespaceUri !== CUSTOM_PROPERTIES_NAMESPACE ||
@@ -247,7 +244,7 @@ function verifyCustomProperties(document: OoxmlDocument) {
     )
     const text = value
       ? decodeXmlReferences(
-          overlay.source.slice(value.startTagEnd, value.endTagStart),
+          part.overlay.source.slice(value.startTagEnd, value.endTagStart),
         ).trim()
       : ''
     if (
