@@ -44,13 +44,50 @@ export function listMigrationFiles(migrationsDir: string) {
 const TRANSACTION_CONTROL =
   /^\s*(?:begin|commit|rollback|abort|start\s+transaction|end\s+(?:work|transaction))\b/imu
 
+/** Identifier characters: a `$` inside them does not open a dollar quote. */
+const IDENTIFIER_CHARACTER = /[A-Za-z0-9_]/
+
 /**
- * Strips comments, single-quoted strings and dollar-quoted regions — none of
- * which are statements — in one left-to-right pass. Each construct is skipped
- * where it starts, so a `$$` or `'` inside another construct cannot swallow a
- * real statement (a `$$` in a comment must not hide a following `commit;`).
- * A `do $$ … begin … end; $$` body and a `CASE … end` are the reasons the
- * scan is needed at all: migrations legitimately contain both.
+ * Skips a quoted run from its opening quote and returns the index after it. A
+ * doubled quote is an escaped quote, except where backslash escapes apply
+ * (`E'…'`), which consume the next character whatever it is.
+ */
+function skipQuoted(
+  sql: string,
+  start: number,
+  quote: string,
+  backslashEscapes: boolean,
+) {
+  let index = start + 1
+  while (index < sql.length) {
+    if (backslashEscapes && sql[index] === '\\') {
+      index += 2
+      continue
+    }
+    if (sql[index] !== quote) {
+      index += 1
+      continue
+    }
+    if (sql[index + 1] === quote) {
+      index += 2
+      continue
+    }
+    return index + 1
+  }
+  return sql.length
+}
+
+/**
+ * Strips comments, quoted strings and dollar-quoted regions — none of which are
+ * statements — in one left-to-right pass. Each construct is skipped where it
+ * starts, so a `$$` or `'` inside another construct cannot swallow a real
+ * statement (a `$$` in a comment must not hide a following `commit;`). A
+ * `do $$ … begin … end; $$` body and a `CASE … end` are the reasons the scan is
+ * needed at all: migrations legitimately contain both.
+ *
+ * A statement terminator is followed by a newline so a statement sharing its
+ * line with another starts at the beginning of one, where the anchored pattern
+ * below can see it.
  */
 function withoutQuotedOrComments(sql: string) {
   let bare = ''
@@ -68,33 +105,40 @@ function withoutQuotedOrComments(sql: string) {
       index = end === -1 ? sql.length : end + 2
       continue
     }
+    if (character === '"') {
+      index = skipQuoted(sql, index, '"', false)
+      continue
+    }
     if (character === "'") {
-      index += 1
-      while (index < sql.length) {
-        if (sql[index] !== "'") {
-          index += 1
-          continue
-        }
-        // A doubled quote is an escaped quote, not the end of the string.
-        if (sql[index + 1] === "'") {
-          index += 2
-          continue
-        }
-        index += 1
-        break
-      }
+      // `E'…'` is an escape string: a backslash escapes the next character.
+      const introducer = index > 0 ? sql[index - 1] : ''
+      const escapeString =
+        (introducer === 'e' || introducer === 'E') &&
+        (index < 2 || !IDENTIFIER_CHARACTER.test(sql[index - 2]))
+      index = skipQuoted(sql, index, "'", escapeString)
       continue
     }
     if (character === '$') {
-      let tagEnd = index + 1
-      while (tagEnd < sql.length && /[A-Za-z0-9_]/.test(sql[tagEnd]))
-        tagEnd += 1
-      if (sql[tagEnd] === '$') {
-        const tag = sql.slice(index, tagEnd + 1)
-        const end = sql.indexOf(tag, tagEnd + 1)
-        index = end === -1 ? sql.length : end + tag.length
-        continue
+      // A `$` inside an identifier (`a$b$c`) is part of the identifier, not the
+      // start of a dollar quote.
+      const previous = index > 0 ? sql[index - 1] : ''
+      if (!IDENTIFIER_CHARACTER.test(previous)) {
+        let tagEnd = index + 1
+        while (tagEnd < sql.length && IDENTIFIER_CHARACTER.test(sql[tagEnd])) {
+          tagEnd += 1
+        }
+        if (sql[tagEnd] === '$') {
+          const tag = sql.slice(index, tagEnd + 1)
+          const end = sql.indexOf(tag, tagEnd + 1)
+          index = end === -1 ? sql.length : end + tag.length
+          continue
+        }
       }
+    }
+    if (character === ';') {
+      bare += ';\n'
+      index += 1
+      continue
     }
     bare += character
     index += 1

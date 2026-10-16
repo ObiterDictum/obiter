@@ -188,3 +188,39 @@ describe('migration runner', () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe('migration guard lexing', () => {
+  it.each([
+    ['a statement after $$ in a comment', '-- costs $$\ncommit;\n'],
+    ['a statement after an escape string', "select E'it\\'s';\ncommit;\n"],
+    ['a statement after a doubled quote', "select 'it''s';\ncommit;\n"],
+    [
+      'a statement after a $ inside an identifier',
+      'create table a$b$ (x int);\ncommit;\n',
+    ],
+    [
+      'a statement after a quoted identifier',
+      'create table "o\'brien" (x int);\ncommit;\n',
+    ],
+    ['a statement sharing a line with another', 'select 1; commit;\n'],
+  ])('refuses %s', (_label, sql) => {
+    expect(() => assertNoTransactionControl('0001_x.sql', sql)).toThrow(
+      'carries transaction control',
+    )
+  })
+
+  it.each([
+    [
+      'a CASE expression closing with end',
+      'select case when true then 1\nend;\n',
+    ],
+    [
+      'a transaction word inside a dollar-quoted body',
+      'do $fn$\nbegin\n  commit;\nend\n$fn$;\n',
+    ],
+    ['a transaction word inside a plain string', "select 'commit;';\n"],
+    ['a column named commit_sha', 'select commit_sha from runs;\n'],
+  ])('allows %s', (_label, sql) => {
+    expect(() => assertNoTransactionControl('0001_x.sql', sql)).not.toThrow()
+  })
+})
