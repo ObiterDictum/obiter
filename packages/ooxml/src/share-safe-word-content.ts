@@ -15,6 +15,7 @@ import {
   type FieldSpan,
 } from './share-safe-fields'
 import { fieldInstructionName } from './field-instructions'
+import { SHARE_SAFE_COMMENT_MARKERS } from './share-safe-word-classes'
 import { refuseShareSafe } from './share-safe-refusal'
 
 /**
@@ -31,7 +32,7 @@ export function collapseCommentRuns(
   source: string,
   elements: readonly XmlElement[],
   contentPlan: ShareSafeContentPlan,
-) {
+): Set<XmlElement> {
   // Every run's fate is decided from the removal state the element pass
   // left, so the carries flag is computed once. Collapsing adds only `w:r`
   // elements to `removed`, and a run that reaches the collapse decision
@@ -63,6 +64,7 @@ export function collapseCommentRuns(
     carries.add(run)
   }
   const decided = new Set<XmlElement>()
+  const collapsed = new Set<XmlElement>()
   for (const element of elements) {
     if (!isWord(element, 'commentReference')) continue
     const run = nearestRun(element)
@@ -73,8 +75,12 @@ export function collapseCommentRuns(
     if (decided.has(run)) continue
     decided.add(run)
     const text = innerTextExcluding(source, run, removedByStart)
-    if (text.trim() === '') contentPlan.removed.add(run)
+    if (text.trim() === '') {
+      contentPlan.removed.add(run)
+      collapsed.add(run)
+    }
   }
+  return collapsed
 }
 
 function nearestRun(element: XmlElement) {
@@ -147,6 +153,7 @@ export function analyseWordFields(
   gone: (element: XmlElement) => boolean,
   bookmarkRenames: ReadonlyMap<string, string>,
   contentPlan: ShareSafeContentPlan,
+  collapsedCommentRuns: ReadonlySet<XmlElement>,
 ) {
   const fields = analyseFieldSpans(
     source,
@@ -233,9 +240,18 @@ export function analyseWordFields(
       else spansByElement.set(element, [span])
     }
   }
+  // A comment surface is not the author's field content: the element pass
+  // removes its markers and the collapse above removes a run left holding
+  // only them. Neither half-removes the span, or a keep-class field whose
+  // whole result is a comment marker would take its cached result with it.
+  const isCommentSurface = (element: XmlElement) =>
+    collapsedCommentRuns.has(element) ||
+    (element.namespaceUri === WORD_NAMESPACE &&
+      SHARE_SAFE_COMMENT_MARKERS.has(element.localName))
   const triggerable = (span: FieldSpan) =>
-    (triggerElements.get(span) ?? []).some((element) =>
-      contentPlan.removed.has(element),
+    (triggerElements.get(span) ?? []).some(
+      (element) =>
+        contentPlan.removed.has(element) && !isCommentSurface(element),
     )
   const processed = new Set<FieldSpan>()
   const queue: FieldSpan[] = []
