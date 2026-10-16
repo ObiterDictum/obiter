@@ -29,6 +29,7 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+  comments: [],
 }
 
 function readColour(value: string): string | null {

@@ -522,6 +522,7 @@ describe('vertical movement across astral characters', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
     const result = step
       ? applyDeleteBackward(model, emptyEditorState(), step)

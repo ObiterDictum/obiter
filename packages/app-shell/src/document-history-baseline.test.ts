@@ -41,6 +41,7 @@ function model(
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

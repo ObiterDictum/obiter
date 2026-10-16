@@ -1,5 +1,7 @@
+import { readFile } from 'node:fs/promises'
 import { Hono } from 'hono'
 import { Pool } from 'pg'
+import { parseDocx, serialiseModelJson } from '@obiter/ooxml'
 import { createTestPool } from '../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import type { AuthzVariables } from '../authz'
@@ -18,8 +20,19 @@ import { createRedactLifecycleRoutes } from './redact-lifecycle'
 import { createRedactReviewRoutes } from './redact-review'
 import { createRedactRunCreationRoutes } from './redact-run-creation'
 
+const commentModelJson = serialiseModelJson(
+  await parseDocx(await readFile('../../data/evals/redact/demo-fixture.docx')),
+)
+
+// The comments list now reads the serving model to merge the package's own
+// threads; every other read or write still fails loudly, so a denied path
+// touching storage keeps failing the test.
+const modelJsonByKey = new Map<string, string>()
+
 const storage = {
-  readText: async () => {
+  readText: async (key: string) => {
+    const cached = modelJsonByKey.get(key)
+    if (cached !== undefined) return cached
     throw new Error('isolation tests must not read storage')
   },
   writeText: async () => undefined,
@@ -93,6 +106,15 @@ describe('organisation isolation against Postgres (V10)', () => {
 
   beforeAll(async () => {
     seed = await seedOrganisationIsolation(pool)
+    for (const tenant of [
+      [seed.orgA, seed.matterA, seed.documentA, seed.versionA],
+      [seed.orgB, seed.matterB, seed.documentB, seed.versionB],
+    ]) {
+      modelJsonByKey.set(
+        `org/${tenant[0]}/matters/${tenant[1]}/documents/${tenant[2]}/versions/${tenant[3]}/model.json`,
+        commentModelJson,
+      )
+    }
   })
 
   afterAll(async () => {

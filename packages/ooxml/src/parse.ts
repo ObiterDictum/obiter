@@ -8,6 +8,7 @@ import {
   type SourcePart,
   type TrackedChangeNode,
 } from './model'
+import { extractImportedComments } from './comment-import'
 import { loadOoxmlZipEntries } from './package-loader'
 import { parseContentTypes, isXmlPart } from './parts/content-types'
 import { parseNumbering } from './parts/numbering'
@@ -152,6 +153,11 @@ function parseParts(
       relationships,
       preservedXmlFragments,
       changes: [...trackedChanges.values()].map(({ wire }) => wire),
+      comments: extractImportedComments({
+        relationships,
+        sourceParts,
+        paragraphAnchors,
+      }),
     },
     sourceParts,
     textRunAnchors,

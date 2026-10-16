@@ -75,6 +75,7 @@ function listModel(): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 

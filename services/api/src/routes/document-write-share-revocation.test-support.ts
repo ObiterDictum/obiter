@@ -46,7 +46,7 @@ const trackedModelJson = JSON.stringify(trackedModel)
 const trackedBytesSha256 = createHash('sha256')
   .update(trackedSourceBytes)
   .digest('hex')
-const anchor = {
+export const anchor = {
   paragraphId: plainParagraph.id,
   startOffset: 0,
   endOffset: 1,
@@ -181,12 +181,14 @@ export async function seedMatter(
     [seed.versionId, seed.documentId],
   )
   await pool.query(
+    // The racing writer is the editor, so the seeded comment must be theirs:
+    // resolution is author-or-manager, not any editor.
     `insert into document_comments (
        id, organisation_id, matter_id, document_id, anchor_version_id,
        paragraph_id, start_offset, end_offset, body, author_id, author_name,
        resolved_at, resolved_by, created_at, updated_at
      ) values ($1, $2, $3, $4, $5, $6, 0, 1, 'Seeded comment', $7,
-       'Race Owner', null, null, now(), now())`,
+       'Race Editor', null, null, now(), now())`,
     [
       seed.commentId,
       seed.orgId,
@@ -194,7 +196,7 @@ export async function seedMatter(
       seed.documentId,
       seed.versionId,
       anchor.paragraphId,
-      seed.ownerId,
+      seed.editorId,
     ],
   )
   if (access !== null) {

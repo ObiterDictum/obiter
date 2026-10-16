@@ -7,7 +7,7 @@ import {
   locateOffset,
   preserveTextOpeningTag,
   type InsertionPoint,
-} from './comment-anchors'
+} from './text-offsets'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import { OoxmlError, type ParagraphAnchor, type TextRunAnchor } from './model'
 import { splitsSurrogate } from './model-run-range-edits'

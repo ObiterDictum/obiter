@@ -3,8 +3,10 @@ import { documentCommentSchema, type DocumentComment } from '@obiter/contracts'
 
 import { placeCommentAnchors } from './comment-anchors'
 import {
+  appendCommentsExtended,
   appendProductComments,
   prepareCommentsPackage,
+  type ImportedThreadReply,
 } from './comments-package'
 import { OoxmlError, type OoxmlDocument, type SourcePart } from './model'
 import { assertOoxmlPackageCentralDirectory } from './package-loader'
@@ -39,21 +41,30 @@ export async function serialiseDocx(document: OoxmlDocument) {
 export async function serialiseDocxWithComments(
   document: OoxmlDocument,
   comments: readonly DocumentComment[],
+  importedReplies: readonly ImportedThreadReply[] = [],
 ) {
-  if (comments.length === 0) return serialiseDocx(document)
+  if (comments.length === 0 && importedReplies.length === 0) {
+    return serialiseDocx(document)
+  }
 
   try {
     const validatedComments = comments.map((comment) =>
       documentCommentSchema.parse(comment),
     )
     const exportedDocument = cloneDocument(document)
-    const prepared = prepareCommentsPackage(exportedDocument, validatedComments)
+    const prepared = prepareCommentsPackage(
+      exportedDocument,
+      validatedComments,
+      importedReplies,
+    )
     placeCommentAnchors(exportedDocument, prepared.allocated)
-    appendProductComments(
+    const extendedEntries = appendProductComments(
       exportedDocument,
       prepared.partName,
       prepared.allocated,
+      prepared.importedReplies,
     )
+    appendCommentsExtended(exportedDocument, extendedEntries)
     return await serialiseDocx(exportedDocument)
   } catch (error) {
     if (error instanceof OoxmlError) throw error

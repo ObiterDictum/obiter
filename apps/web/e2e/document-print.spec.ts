@@ -94,6 +94,7 @@ const MODEL = {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   },
 }
 
@@ -129,7 +130,9 @@ async function mockWorkspace(page: Page) {
     route.fulfill({ json: MODEL }),
   )
   await page.route('**/api/documents/doc_print/comments', (route) =>
-    route.fulfill({ json: { comments: [] } }),
+    route.fulfill({
+      json: { comments: [], importedComments: [], orphanedReplies: [] },
+    }),
   )
   await page.route('**/api/documents/doc_print/tracked-changes', (route) =>
     route.fulfill({ json: { changes: [] } }),

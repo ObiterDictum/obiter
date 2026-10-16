@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
+import { useCommentAnchors } from './comment-target'
 import { storyFlowParagraphIds } from '../../document-edits'
 import { cursorForSelection } from '../../document-model-text'
 import {
@@ -70,21 +71,17 @@ export function useWorkspaceCaret({
   const [verticalCaret] = useState(createVerticalCaretColumn)
   // The story the caret belongs to — the body, or the final section's
   // header/footer while one is open.
-  const {
-    editingKind,
-    editingStory,
-    openEditingStory,
-    closeEditingStory,
-    resetEditingStory,
-  } = useEditingStory({
-    model,
-    verticalCaret,
-    setSelection,
-    setSelectionRefusal,
-    setSelectedParagraphId,
-    setRestoreCaret,
-    setFormatRange,
-  })
+  const { editingKind, editingStory, openEditingStory, closeEditingStory } =
+    useEditingStory({
+      documentId,
+      model,
+      verticalCaret,
+      setSelection,
+      setSelectionRefusal,
+      setSelectedParagraphId,
+      setRestoreCaret,
+      setFormatRange,
+    })
   useCaretLineageRemap({
     paragraphRemap: drafts.paragraphRemap,
     setSelectedParagraphId,
@@ -99,15 +96,6 @@ export function useWorkspaceCaret({
     onPlaceCaret: selectParagraph,
     story: editingStory,
   })
-
-  // A column run never spans documents, and this workspace is reused when the
-  // selected document changes. Neither does an open margin story.
-  const caretDocument = useRef<string | null>(null)
-  if (caretDocument.current !== documentId) {
-    caretDocument.current = documentId
-    clearVerticalColumn(verticalCaret)
-    resetEditingStory()
-  }
 
   const state: EditorState | null = model
     ? {
@@ -434,6 +422,14 @@ export function useWorkspaceCaret({
       ? cursorForSelection(model, selectedParagraphId)
       : null
 
+  const { commentTarget, revealCommentAnchor } = useCommentAnchors({
+    order,
+    selection: resolvedSelection,
+    selectedParagraphId,
+    formatRange,
+    actions: { closeEditingStory, selectParagraph, extendSelection },
+  })
+
   return {
     selectedParagraphId,
     restoreCaret,
@@ -464,6 +460,8 @@ export function useWorkspaceCaret({
     selectionNotice,
     selectAll,
     extendSelection,
+    commentTarget,
+    revealCommentAnchor,
     collapseSelection,
     focusParagraph,
     replaceSelectionRange,

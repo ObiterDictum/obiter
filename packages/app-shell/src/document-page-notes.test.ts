@@ -64,6 +64,7 @@ describe('document notes', () => {
       relationships: [],
       preservedXmlFragments: [],
       changes: [],
+      comments: [],
     }
 
     expect(documentNotes(model)).toEqual([

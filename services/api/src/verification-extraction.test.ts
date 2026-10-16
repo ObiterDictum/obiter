@@ -28,6 +28,7 @@ function model(text: string): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
@@ -40,6 +41,7 @@ function modelWith(stories: DocumentModelWire['stories']): DocumentModelWire {
     relationships: [],
     preservedXmlFragments: [],
     changes: [],
+    comments: [],
   }
 }
 
