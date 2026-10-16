@@ -66,7 +66,7 @@ export function relationshipKind(type: string) {
   return undefined
 }
 
-function relationshipSourcePartName(partName: string) {
+export function relationshipSourcePartName(partName: string) {
   if (partName === '_rels/.rels') return ''
   const marker = '/_rels/'
   const index = partName.lastIndexOf(marker)

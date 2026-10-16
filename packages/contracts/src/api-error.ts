@@ -51,6 +51,14 @@ export const apiErrorCodeSchema = z.enum([
   'payload_too_large',
   'ooxml_limits_exceeded',
   'hydration_budget_exceeded',
+  // Share-safe export could not prove the package free of private material
+  // (undecidable tracked changes, embedded objects, unverifiable parts), so
+  // it refused rather than emit an unsafe file.
+  'share_safe_export_refused',
+  // A finalized redaction output cannot return to the document: the run is
+  // not document-linked, the output is not an editable DOCX, or its stored
+  // bytes no longer match the hash recorded at finalization.
+  'redaction_return_unavailable',
 ])
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>
 

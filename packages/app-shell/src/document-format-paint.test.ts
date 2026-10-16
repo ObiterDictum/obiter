@@ -38,6 +38,12 @@ describe('painted list restart without an abstract numbering', () => {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 
   it('does not synthesise an instance the save would reject', () => {

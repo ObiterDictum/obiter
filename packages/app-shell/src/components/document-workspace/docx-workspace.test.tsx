@@ -93,9 +93,22 @@ describe('DocxWorkspace ribbon', () => {
       }),
     ).toHaveProperty('disabled', true)
     openRibbonTab('Layout')
+    // The E12 classification controls are live: they commit immutable marking
+    // versions against the saved document.
     expect(
-      screen.getByRole('button', { name: 'Privileged (not available yet)' }),
-    ).toHaveProperty('disabled', true)
+      screen.getByRole('combobox', { name: 'Document type' }),
+    ).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: 'Privileged' })).toHaveProperty(
+      'disabled',
+      false,
+    )
+    expect(screen.getByRole('button', { name: 'Draft' })).toHaveProperty(
+      'disabled',
+      false,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Without prejudice' }),
+    ).toHaveProperty('disabled', false)
     openRibbonTab('References')
     expect(
       screen.getByRole('button', { name: 'Insert authority' }),
@@ -106,6 +119,11 @@ describe('DocxWorkspace ribbon', () => {
     // rather than claiming the capability does not exist.
     expect(
       screen.getByRole('button', { name: 'Redact this document' }),
+    ).toHaveProperty('disabled', false)
+    // Share-safe export is a live route: refusal comes from the server, not a
+    // placeholder control.
+    expect(
+      screen.getByRole('button', { name: 'Share-safe export' }),
     ).toHaveProperty('disabled', false)
   })
 
@@ -208,7 +226,9 @@ describe('DocxWorkspace export', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => {
-      expect(fetchDocumentExport).toHaveBeenCalledWith('doc_1')
+      expect(fetchDocumentExport).toHaveBeenCalledWith('doc_1', {
+        shareSafe: undefined,
+      })
     })
     expect(downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
     expect(screen.queryByRole('status')).toBeNull()
@@ -231,6 +251,44 @@ describe('DocxWorkspace export', () => {
       expect(
         screen.getByText('The API could not complete the request.'),
       ).toBeTruthy()
+    })
+    expect(downloadBlob).not.toHaveBeenCalled()
+  })
+
+  it('requests the share-safe export under the mode and its download name', async () => {
+    const blob = new Blob()
+    fetchDocumentExport.mockResolvedValue({
+      blob,
+      skippedCommentCount: 0,
+      filename: 'brief-share-safe.docx',
+    })
+    mountWorkspace({})
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Share-safe export' }))
+
+    await waitFor(() => {
+      expect(fetchDocumentExport).toHaveBeenCalledWith('doc_1', {
+        shareSafe: true,
+      })
+    })
+    expect(downloadBlob).toHaveBeenCalledWith('brief-share-safe.docx', blob)
+  })
+
+  it('surfaces a share-safe refusal instead of downloading', async () => {
+    fetchDocumentExport.mockRejectedValue(
+      new ApiError(
+        'share_safe_export_refused',
+        'This document cannot be shared safely: it still carries tracked changes, hidden text, embedded objects, or other content a share-safe export cannot prove clean.',
+        422,
+        'req_export',
+      ),
+    )
+    mountWorkspace({})
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Share-safe export' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/cannot be shared safely/u)).toBeTruthy()
     })
     expect(downloadBlob).not.toHaveBeenCalled()
   })
@@ -433,5 +491,136 @@ describe('DocxWorkspace find and undo', () => {
     expect(
       screen.getByLabelText('Pending paragraph').getAttribute('aria-current'),
     ).toBe('true')
+  })
+})
+
+describe('DocxWorkspace markings', () => {
+  it('commits a marking toggle as a new version and reflects it', async () => {
+    let current = 1
+    const markingsAsync = vi.fn(
+      (
+        _input: unknown,
+        callbacks?: { onSuccess?: (data: { versionId: string }) => void },
+      ) => {
+        current = 2
+        callbacks?.onSuccess?.({ versionId: 'ver_2' })
+      },
+    )
+    mountWorkspace({
+      markingsAsync,
+      modelFor: () => ({
+        versionId: `ver_${String(current)}`,
+        versionNumber: current,
+        model: {
+          ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          markings: {
+            documentKind: null,
+            draft: current === 2,
+            privileged: false,
+            withoutPrejudice: false,
+          },
+        },
+      }),
+    })
+    openRibbonTab('Layout')
+    fireEvent.click(screen.getByRole('button', { name: 'Draft' }))
+
+    await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
+    expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
+      baseVersionId: 'ver_1',
+      markings: {
+        documentKind: null,
+        draft: true,
+        privileged: false,
+        withoutPrejudice: false,
+      },
+    })
+    // The reloaded model (ver_2) carries the marking; the control reflects it.
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: 'Draft' })
+          .getAttribute('aria-pressed'),
+      ).toBe('true'),
+    )
+  })
+
+  it('commits a document kind selection with the stored flags preserved', async () => {
+    const markingsAsync = vi.fn()
+    mountWorkspace({
+      markingsAsync,
+      models: {
+        doc_1: {
+          ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          markings: {
+            // A kind this build does not list is still offered and kept.
+            documentKind: 'externally-authored-kind',
+            draft: false,
+            privileged: true,
+            withoutPrejudice: false,
+          },
+        },
+      },
+    })
+    openRibbonTab('Layout')
+    const select = screen.getByRole('combobox', { name: 'Document type' })
+    // The unknown kind renders as a selectable value rather than vanishing.
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toContain('externally-authored-kind')
+    fireEvent.change(select, { target: { value: 'letter' } })
+
+    await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
+    expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
+      baseVersionId: 'ver_1',
+      markings: {
+        documentKind: 'letter',
+        draft: false,
+        privileged: true,
+        withoutPrejudice: false,
+      },
+    })
+  })
+
+  it('names the unsaved-edits reason on the disabled controls', async () => {
+    mountWorkspace({})
+    selectBodyParagraph()
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Unsaved' },
+    })
+    openRibbonTab('Layout')
+
+    for (const name of ['Draft', 'Privileged', 'Without prejudice']) {
+      const control = screen.getByRole('button', {
+        name: `${name}: Save or discard unsaved edits before marking.`,
+      })
+      expect(control).toHaveProperty('disabled', true)
+      expect(control.getAttribute('aria-pressed')).toBe('false')
+    }
+    expect(
+      screen.getByRole('combobox', {
+        name: 'Document type: Save or discard unsaved edits before marking.',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('treats a stale-base 409 like a save conflict: the reload banner appears', async () => {
+    const markingsAsync = vi.fn(
+      (_input: unknown, callbacks?: { onError?: (error: Error) => void }) =>
+        callbacks?.onError?.(staleConflict),
+    )
+    mountWorkspace({ markingsAsync })
+    openRibbonTab('Layout')
+    fireEvent.click(screen.getByRole('button', { name: 'Privileged' }))
+
+    await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(
+        screen.getByText('The document has changed since editing began.'),
+      ).toBeTruthy(),
+    )
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
   })
 })

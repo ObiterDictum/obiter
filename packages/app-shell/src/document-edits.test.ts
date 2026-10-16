@@ -47,6 +47,12 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 }
 
 function blankParagraphModel(styleId?: string): DocumentModelWire {

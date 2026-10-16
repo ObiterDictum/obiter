@@ -62,6 +62,12 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 }
 
 describe('emphasis addressing from the caret selection', () => {
@@ -348,6 +354,12 @@ function modelWithRuns(
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 }
 
@@ -1185,6 +1197,12 @@ describe('list and style hardening', () => {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 
   const first = twoParagraphs.stories[0]?.paragraphs[0]

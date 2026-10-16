@@ -16,6 +16,8 @@ export type XmlElement = ExpandedName & {
   selfClosing: boolean
   parent?: XmlElement
   attributes: XmlAttribute[]
+  /** In-scope prefix → namespace URI bindings at this element. */
+  namespaces?: ReadonlyMap<string, string>
 }
 
 export function extendNamespaces(
