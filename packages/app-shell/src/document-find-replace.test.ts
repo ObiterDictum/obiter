@@ -132,10 +132,10 @@ describe('replaceFindHits', () => {
     expect(result.caret).toEqual({ paragraphId: 'p1', offset: 10 })
   })
 
-  it('replaces every hit atomically, validating before the first write', () => {
+  it('refuses the whole batch before any write when a cross-paragraph range cannot join', () => {
     // The second hit's tail carries a character style the save cannot
-    // restate over a join, so the whole batch must refuse — and nothing may
-    // have changed.
+    // restate over a join, so the pre-check refuses the batch — and nothing
+    // may have changed.
     const styled = base([
       paragraph('p1', 'Alpha end'),
       paragraph('p2', 'start beta', { styleId: 'Emphasis' }),
@@ -147,6 +147,31 @@ describe('replaceFindHits', () => {
       'join-formatting',
     )
     expect(state).toEqual(emptyEditorState())
+  })
+
+  it('applies several cross-paragraph hits in one batch', () => {
+    const spread = base([
+      paragraph('p1', 'Alpha end'),
+      paragraph('p2', 'start beta'),
+      paragraph('p3', 'gamma tail'),
+    ])
+    // Both hits cover a break and neither pre-check refuses; 'all' applies
+    // them from the end of the document so the earlier join cannot shift the
+    // later one.
+    const hits = [hit(['p1', 5], ['p2', 5]), hit(['p2', 5], ['p3', 5])]
+    const result = replaceFindHits(
+      spread,
+      emptyEditorState(),
+      hits,
+      '-',
+      'all',
+      newId,
+    )
+    if (result.status !== 'applied') throw new Error('expected applied')
+    // The end hit joins p2/p3 first, then the earlier hit joins p1 into that
+    // join, so p2's tail after its first five characters comes along.
+    expect(blockText(spread, result.state, 'p1')).toBe('Alpha-- tail')
+    expect(result.state.deletedParagraphIds).toEqual(['p3', 'p2'])
   })
 
   it('refuses a batch whose range splits a stored field boundary', () => {
