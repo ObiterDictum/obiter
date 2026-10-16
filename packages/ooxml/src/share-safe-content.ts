@@ -205,7 +205,11 @@ export function analyseShareSafePart(
     analyseContentTypesPart(part, elements, plan, contentPlan)
   }
   if (family === 'word') {
-    collapseCommentRuns(source, elements, contentPlan)
+    const collapsedCommentRuns = collapseCommentRuns(
+      source,
+      elements,
+      contentPlan,
+    )
     analyseWordFields(
       part,
       source,
@@ -213,6 +217,7 @@ export function analyseShareSafePart(
       gone,
       bookmarkRenames,
       contentPlan,
+      collapsedCommentRuns,
     )
   }
   finishAttributes(document, part, elements, gone, plan, contentPlan)
