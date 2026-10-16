@@ -7,7 +7,6 @@ import {
 } from '../../document-format-edits'
 import { findMatchLabel } from '../../document-find'
 import { documentStory } from '../../document-model-text'
-import { documentDefaultFace } from '../../document-page-style'
 import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import {
   useDocumentComments,
@@ -18,7 +17,7 @@ import {
   useCreateDocumentComment,
   useTrackedChangeDecision,
 } from '../../document-workspace-api'
-import { DocumentModelPage } from './model-view'
+import { DocxModelPages } from './docx-model-pages'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
@@ -34,7 +33,7 @@ import { exportDocumentAsDocx } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
-import { DocumentDesk, DocumentPage, DocumentPrintStyle } from './document-page'
+import { DocumentDesk, DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import {
   ConflictBanner,
@@ -124,6 +123,10 @@ export function DocxWorkspace({
     setFormatRange,
     verticalCaret,
     cursor,
+    editingKind,
+    editingStory,
+    openEditingStory,
+    closeEditingStory,
     selectionActive,
     selectionDirection,
     selectionSegments,
@@ -190,6 +193,12 @@ export function DocxWorkspace({
       offset: formatRange?.to ?? null,
       trackChanges,
       onImageError: setBanner,
+      editingStory: editingKind === 'document' ? undefined : editingStory,
+      margin: {
+        editingKind,
+        onOpen: openEditingStory,
+        onClose: closeEditingStory,
+      },
     },
   })
   const selectionHandlers: ParagraphSelectionHandlers = {
@@ -349,79 +358,30 @@ export function DocxWorkspace({
           <DocumentDesk>
             <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6 lg:flex-row">
               <div className="flex w-full flex-col gap-6 lg:w-auto">
-                {pages.map((laid, index) => (
-                  <DocumentPage
-                    key={`page-${index + 1}`}
-                    zoom={zoom}
-                    width={laid.box.widthPx}
-                    height={laid.box.heightPx}
-                    fontFamily={documentDefaultFace(model.styles).fontFamily}
-                  >
-                    <DocumentModelPage
-                      model={painted ?? model}
-                      pageNumber={index + 1}
-                      pageBlocks={laid.blocks}
-                      pageFloats={laid.floats}
-                      pageTextBoxes={laid.textBoxes}
-                      pageLayout={laid}
-                      selectedParagraphId={selectedParagraphId}
-                      onSelectParagraph={selectParagraph}
-                      onTextSelection={(paragraphId, from, to, direction) => {
-                        setFormatRange({ from, to })
-                        mirrorSelection(paragraphId, from, to, direction)
-                      }}
-                      selectionSegments={selectionSegments}
-                      linkOverlays={linkOverlays}
-                      selectionHandlers={selectionHandlers}
-                      onFocusParagraph={focusParagraph}
-                      onMoveCaret={moveCaret}
-                      drafts={drafts.drafts}
-                      emphasis={drafts.format.emphasis}
-                      onRunTextChange={(runId, text) =>
-                        drafts.setDrafts((current) => ({
-                          ...current,
-                          [runId]: text,
-                        }))
-                      }
-                      editing
-                      presence={presence}
-                      currentUserId={me?.user.id}
-                      inserts={drafts.inserts}
-                      deletedParagraphIds={drafts.deletedParagraphIds}
-                      extraRuns={drafts.extraRuns}
-                      imageUrls={imageUrls}
-                      onInsertTextChange={(clientId, text) =>
-                        drafts.setInserts((current) =>
-                          current.map((item) =>
-                            item.clientId === clientId
-                              ? { ...item, text }
-                              : item,
-                          ),
-                        )
-                      }
-                      onInsertParagraph={(afterParagraphId) =>
-                        selectParagraph(drafts.insertAfter(afterParagraphId), 0)
-                      }
-                      onDeleteParagraph={(paragraphId) => {
-                        const { selectId } = drafts.deleteParagraph(paragraphId)
-                        if (selectId) selectParagraph(selectId)
-                      }}
-                      onWordEdit={(edit) => {
-                        const outcome = drafts.handleWordEdit(model, edit)
-                        if (outcome?.status === 'applied') {
-                          selectParagraph(
-                            outcome.caret.paragraphId,
-                            outcome.caret.offset,
-                          )
-                        } else if (outcome?.status === 'refused') {
-                          reportJoinRefusal(outcome.refusal)
-                        }
-                      }}
-                      restoreCaret={restoreCaret}
-                      verticalCaret={verticalCaret}
-                    />
-                  </DocumentPage>
-                ))}
+                <DocxModelPages
+                  model={model}
+                  painted={painted}
+                  pages={pages}
+                  zoom={zoom}
+                  editingKind={editingKind}
+                  selectedParagraphId={selectedParagraphId}
+                  restoreCaret={restoreCaret}
+                  verticalCaret={verticalCaret}
+                  drafts={drafts}
+                  presence={presence}
+                  currentUserId={me?.user.id}
+                  imageUrls={imageUrls}
+                  selectionSegments={selectionSegments}
+                  linkOverlays={linkOverlays}
+                  selectionHandlers={selectionHandlers}
+                  selectParagraph={selectParagraph}
+                  setFormatRange={setFormatRange}
+                  mirrorSelection={mirrorSelection}
+                  focusParagraph={focusParagraph}
+                  moveCaret={moveCaret}
+                  reportJoinRefusal={reportJoinRefusal}
+                  onExitMarginEditing={closeEditingStory}
+                />
               </div>
               <WorkspaceSidePanels
                 commentsOpen={commentsOpen}
@@ -474,9 +434,14 @@ export function DocxWorkspace({
                   )
                 }}
                 authorities={authorities}
-                onSelectAuthority={(paragraphId) =>
+                // An authority always names a body paragraph, so selecting
+                // one leaves margin editing the way a body click does before
+                // the caret lands — otherwise the caret parks on an inert
+                // body paragraph the format controls still target.
+                onSelectAuthority={(paragraphId) => {
+                  closeEditingStory()
                   selectParagraph(paragraphId)
-                }
+                }}
               />
             </div>
             <VerificationMarkerLayer model={model} />

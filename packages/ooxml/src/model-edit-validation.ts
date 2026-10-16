@@ -31,6 +31,7 @@ export type PlannedOperation =
           | 'insert_table'
           | 'insert_image'
           | 'set_hyperlink'
+          | 'insert_page_number'
       }
     > & { paragraph: ParagraphAnchor })
   | (Extract<DocumentEditOperation, { type: 'insert_cross_reference' }> & {
@@ -40,7 +41,7 @@ export type PlannedOperation =
   | Extract<DocumentEditOperation, { type: 'set_section_properties' }>
 
 export function validatePlannedOperations(
-  paragraphCount: number,
+  document: OoxmlDocument,
   planned: readonly PlannedOperation[],
   tracking: boolean,
 ) {
@@ -55,19 +56,40 @@ export function validatePlannedOperations(
     }
     deletedIds.add(operation.paragraph.wire.id)
   }
-  const insertCount = planned.filter(
-    (operation) =>
-      operation.type === 'insert_paragraph_after' ||
-      operation.type === 'insert_paragraph_before',
-  ).length
-  // An untracked delete removes the paragraph from the body. A tracked delete
-  // only wraps the paragraph (and its paragraph mark) in Word-compatible
-  // deleted markup, so the body still holds the paragraph and the invariant
-  // holds without this guard. Refusing the untracked case keeps the persisted
-  // document structurally valid; the reason is its own code so the caller can
-  // report it without matching English text.
-  if (!tracking && paragraphCount - deletedIds.size + insertCount < 1) {
-    throw new OoxmlError('last-paragraph-required')
+  // The last-paragraph invariant holds per story: an untracked delete removes
+  // the paragraph from the part it lives in, and a `w:hdr`/`w:ftr` part with
+  // no block-level child is as invalid as an empty body. A tracked delete only
+  // wraps the paragraph in deleted markup, so the count holds without the
+  // guard. Refusing keeps the persisted document structurally valid; the
+  // reason is its own code so the caller can report it without matching
+  // English text.
+  if (!tracking) {
+    const insertsByPart = new Map<string, number>()
+    const deletesByPart = new Map<string, number>()
+    for (const operation of planned) {
+      if (!('paragraph' in operation)) continue
+      const partName = operation.paragraph.partName
+      if (operation.type === 'delete_paragraph') {
+        deletesByPart.set(partName, (deletesByPart.get(partName) ?? 0) + 1)
+      } else if (
+        operation.type === 'insert_paragraph_after' ||
+        operation.type === 'insert_paragraph_before'
+      ) {
+        insertsByPart.set(partName, (insertsByPart.get(partName) ?? 0) + 1)
+      }
+    }
+    for (const [partName, deleted] of deletesByPart) {
+      const story = document.model.stories.find(
+        (item) => item.partName === partName,
+      )
+      if (
+        story &&
+        story.paragraphs.length - deleted + (insertsByPart.get(partName) ?? 0) <
+          1
+      ) {
+        throw new OoxmlError('last-paragraph-required')
+      }
+    }
   }
 
   const alreadyDeleted = new Set<string>()
@@ -121,7 +143,8 @@ export function validateTrackedOperations(
       operation.type === 'insert_table' ||
       operation.type === 'insert_image' ||
       operation.type === 'set_hyperlink' ||
-      operation.type === 'insert_cross_reference'
+      operation.type === 'insert_cross_reference' ||
+      operation.type === 'insert_page_number'
     ) {
       throw new OoxmlError('model-node-not-editable')
     }

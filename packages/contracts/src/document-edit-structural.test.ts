@@ -45,6 +45,12 @@ const crossReference = {
   targetParagraphId: 'para_2',
 }
 
+const pageNumber = {
+  type: 'insert_page_number' as const,
+  paragraphId: 'para_1',
+  offset: 4,
+}
+
 const parse = (operations: unknown[]) =>
   documentEditRequestSchema.safeParse({
     baseVersionId: 'ver_1',
@@ -190,6 +196,22 @@ describe('structural edit contracts', () => {
     ['a missing target', { ...crossReference, targetParagraphId: '' }],
     ['an extra field', { ...crossReference, bookmark: 'x' }],
   ])('rejects a cross-reference with %s', (_label, operation) => {
+    expect(parse([operation]).success).toBe(false)
+  })
+
+  it('accepts a page-number insertion', () => {
+    const parsed = parse([pageNumber])
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.operations[0]).toEqual(pageNumber)
+  })
+
+  it.each([
+    ['a negative offset', { ...pageNumber, offset: -1 }],
+    ['a fractional offset', { ...pageNumber, offset: 1.5 }],
+    ['a value', { ...pageNumber, page: 3 }],
+    ['an extra field', { ...pageNumber, targetParagraphId: 'para_2' }],
+  ])('rejects a page number with %s', (_label, operation) => {
     expect(parse([operation]).success).toBe(false)
   })
 })

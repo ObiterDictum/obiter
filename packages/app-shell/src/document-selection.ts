@@ -272,6 +272,21 @@ export function stepSelectionFocus(input: {
 }
 
 /**
+ * The editor emits offsets local to the block it renders. A step that stays in
+ * this paragraph is therefore base-relative; a step into a neighbour already
+ * names a model offset, and the two are told apart by the paragraph id.
+ */
+export function toModelEndpoint(
+  endpoint: SelectionEndpoint,
+  paragraphId: string,
+  base: number,
+): SelectionEndpoint {
+  return endpoint.paragraphId === paragraphId
+    ? { paragraphId, offset: base + endpoint.offset }
+    : endpoint
+}
+
+/**
  * One horizontal step from `offset`, never landing inside a surrogate pair.
  * A low surrogate is stepped over when moving left and a high surrogate when
  * moving right, so the focus always sits on a code point boundary.

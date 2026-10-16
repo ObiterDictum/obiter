@@ -18,6 +18,7 @@ import {
   isSectionOperation,
   planOperation,
   runEmphasisFields,
+  storyOfParagraph,
   trackedRunIdOf,
 } from './model-edit-plan'
 import {
@@ -26,6 +27,7 @@ import {
 } from './model-edit-validation'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
 import { setParagraphNumbering } from './numbering-edits'
+import { insertPageNumber } from './page-number-edits'
 import { setParagraphFormat, setRunEmphasis } from './model-property-edits'
 import {
   insertPageBreak,
@@ -77,7 +79,7 @@ export function applyDocumentEdits(
     planOperation(document, runParagraphs, operation, styleIds, numberingIds),
   )
   const deletedIds = validatePlannedOperations(
-    mainStory.paragraphs.length,
+    document,
     planned,
     tracking !== undefined,
   )
@@ -198,13 +200,17 @@ export function applyDocumentEdits(
     ) {
       const position =
         operation.type === 'insert_paragraph_before' ? 'before' : 'after'
+      // The wire splice lands in the anchor's own story: an insert after a
+      // header paragraph joins the header's paragraph list, not the body's.
+      const anchorStory = storyOfParagraph(document, operation.paragraph)
+      if (!anchorStory) throw new OoxmlError('model-node-not-editable')
       if (trackedWriter) {
         // A tracked batch cannot carry structural insertions, so the
         // post-anchor maps stay empty and the tracked insert chains count on
         // their own.
         const count = insertionCounts.get(operation.paragraphId) ?? 0
         trackedWriter.insertParagraphAfter(
-          mainStory,
+          anchorStory,
           operation.paragraph,
           insertParagraphRuns(operation),
           operation.styleId,
@@ -227,7 +233,7 @@ export function applyDocumentEdits(
             : (insertionCounts.get(operation.paragraphId) ?? 0)
         const inserted = insertParagraphAfter(
           document,
-          mainStory,
+          anchorStory,
           operation.paragraph,
           insertParagraphRuns(operation),
           operation.styleId,
@@ -255,9 +261,11 @@ export function applyDocumentEdits(
           lineage ? { recorder: lineage, operationIndex } : undefined,
         )
       } else {
+        const anchorStory = storyOfParagraph(document, operation.paragraph)
+        if (!anchorStory) throw new OoxmlError('model-node-not-editable')
         deleteParagraph(
           document,
-          mainStory,
+          anchorStory,
           operation.paragraph,
           lineage ? { recorder: lineage, operationIndex } : undefined,
         )
@@ -366,6 +374,22 @@ export function applyDocumentEdits(
           document,
           operation.paragraph,
           operation.targetParagraph,
+          operation.offset,
+          occurrence,
+          lineage,
+        )
+        structureCounts.set(key, occurrence + 1)
+      }
+    } else if (operation.type === 'insert_page_number') {
+      // A PAGE field has no tracked form either; the field's instruction and
+      // characters would need matching tracked markup across five runs.
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = structureCounts.get(key) ?? 0
+        insertPageNumber(
+          document,
+          operation.paragraph,
           operation.offset,
           occurrence,
           lineage,

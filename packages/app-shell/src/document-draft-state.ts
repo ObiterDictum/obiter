@@ -1,12 +1,24 @@
-import type { BreakDraft, LocalInsert } from './document-edits'
+import type { LocalInsert } from './document-story-flow'
 import type { FormatDrafts } from './document-format-edits'
 import type { StructuralDraft } from './document-structural-drafts'
 import type { ExtraRuns } from './document-word-edits'
 
 /**
+ * A break the workspace holds before save. `offset` addresses the paragraph's
+ * effective text; a section break takes no offset — Word places it after the
+ * paragraph whose `w:pPr` carries the section.
+ */
+export type BreakDraft = {
+  id: string
+  paragraphId: string
+  offset: number
+  kind: 'page' | 'section'
+}
+
+/**
  * The draft state that a save request is derived from. Kept apart from
- * `document-save-plan.ts`, which is at its source ceiling carrying the
- * planner alone; every slot kind the plan covers is declared here.
+ * `document-save-plan.ts`, which carries the planner; every slot kind the plan
+ * covers is declared here.
  */
 export type DraftState = {
   drafts: Record<string, string>
@@ -101,7 +113,8 @@ export type DraftSlot =
       kind: 'structure'
       key: string
       id: string
-      structureKind: 'table' | 'image' | 'link' | 'cross-reference'
+      structureKind:
+        'table' | 'image' | 'link' | 'cross-reference' | 'page-number'
     }
   | { kind: 'tracked-reject'; key: string; ooxmlIds: string[] }
 

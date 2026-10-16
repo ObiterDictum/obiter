@@ -235,6 +235,10 @@ type NeighborSource = {
   extraRuns?: ExtraRuns
   inserts: LocalInsert[]
   paragraphs: DocumentParagraphWire[]
+  /** The flow order to resolve neighbours in. The body's order is derived
+   * when absent; a margin story passes its own so the caret never steps out
+   * of the story it is editing. */
+  order?: string[]
 }
 
 /**
@@ -248,11 +252,9 @@ type NeighborSource = {
 export function paragraphNeighborResolver(
   ctx: NeighborSource & { deletedParagraphIds: string[] },
 ): ParagraphNeighborResolver {
-  const order = flowParagraphIds(
-    ctx.model,
-    ctx.inserts,
-    ctx.deletedParagraphIds,
-  )
+  const order =
+    ctx.order ??
+    flowParagraphIds(ctx.model, ctx.inserts, ctx.deletedParagraphIds)
   const index = new Map(order.map((id, at) => [id, at]))
   return (paragraphId, wrapWidthPx, drafts) => {
     const at = index.get(paragraphId)
