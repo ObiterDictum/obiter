@@ -57,17 +57,15 @@ docker compose ps            # wait for postgres to be "healthy"
 
 ### Apply migrations
 
-There is no standalone migration runner script yet. Apply the SQL migrations in version order against both databases with `psql` (client and server both use the `obiter` superuser locally):
+Apply the SQL migrations to both databases with the runner (`services/api/src/migrate.ts`), which applies them in version order, records each in `schema_migrations`, and wraps each file in one transaction with that insert. It has no built-in fallback (it reads `DATABASE_URL` only when `--database-url` is absent), so name the target explicitly:
 
 ```sh
 for db in obiter obiter_test; do
-  for f in ../../packages/database/migrations/*.sql; do
-    psql "postgres://obiter:obiter@localhost:5432/$db" -f "$f"
-  done
+  bun run db:migrate --database-url="postgres://obiter:obiter@localhost:5432/$db"
 done
 ```
 
-> Run migrations from this directory (`infra/docker`) so the relative paths resolve. If a runner script is added later, update this section.
+> Run this from the repository root so `bun run` resolves. The API applies the same migrations at startup, so a running API needs no separate step. Applying the files directly with `psql` would leave `schema_migrations` empty, which `scripts/ci-local.sh` rejects and which makes the API re-apply migrations on its next start.
 
 ### Seed data
 
