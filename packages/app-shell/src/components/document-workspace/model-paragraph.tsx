@@ -278,6 +278,9 @@ export function ModelParagraph({
     />
   )
 
+  const faceCss = paragraphCss(face)
+  // A form control resets `text-indent`; a list's or continuation's is 0.
+  const specialIndent = listMarker || continuation ? 0 : faceCss.textIndent
   return (
     <div
       data-paragraph-id={paragraph.id}
@@ -295,9 +298,8 @@ export function ModelParagraph({
         face.align === 'justify' && 'text-justify',
       )}
       style={{
-        ...paragraphCss(face),
-        // A list's special indent is the marker column the row lays out.
-        ...(listMarker ? { textIndent: 'none' } : {}),
+        ...faceCss,
+        ...(listMarker ? { textIndent: 0 } : {}),
         lineHeight: `${linePx}px`,
         marginTop: continuation || pageStart ? 0 : face.marginTopPx,
         paddingLeft: indentLeftPx + padLeftPx,
@@ -383,14 +385,12 @@ export function ModelParagraph({
                   )
                 }
                 style={{
-                  ...paragraphCss(face),
+                  ...faceCss,
                   marginTop: 0,
                   marginBottom: 0,
-                  // The container carries the indent; repeating it here would
-                  // drift the textarea's text from the painted runs.
                   paddingLeft: 0,
                   paddingRight: 0,
-                  textIndent: undefined,
+                  textIndent: specialIndent,
                   height: editorHeight,
                   lineHeight: `${linePx}px`,
                   whiteSpace: 'pre-wrap',

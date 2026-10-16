@@ -289,35 +289,32 @@ function paragraphAlign(jc: string | undefined): ParagraphFace['align'] {
 
 function mergeParagraph(...faces: ParagraphFace[]): ParagraphFace {
   return faces.reduce<ParagraphFace>(
-    (current, next) => {
-      // First-line and hanging are mutually exclusive in OOXML: a face that
-      // names either overrides both, so a direct `w:firstLine` cannot leave an
-      // inherited `w:hanging` behind it (and `indentKind` reads hanging first).
-      const indentPair =
-        next.indentFirstPx !== undefined || next.indentHangingPx !== undefined
-          ? {
-              indentFirstPx: next.indentFirstPx,
-              indentHangingPx: next.indentHangingPx,
-            }
-          : {
-              indentFirstPx: current.indentFirstPx,
-              indentHangingPx: current.indentHangingPx,
-            }
-      return {
-        align: next.align ?? current.align,
-        // `??`, not `||`: a direct 0 spacing overrides a style's value.
-        marginTopPx: next.marginTopPx ?? current.marginTopPx,
-        marginBottomPx: next.marginBottomPx ?? current.marginBottomPx,
-        lineHeight: next.lineHeight ?? current.lineHeight,
-        indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
-        indentRightPx: next.indentRightPx ?? current.indentRightPx,
-        ...indentPair,
-        keepNext: next.keepNext ?? current.keepNext,
-        keepLines: next.keepLines ?? current.keepLines,
-        widowControl: next.widowControl ?? current.widowControl,
-        run: mergeRun(current.run, next.run),
-      }
-    },
+    (current, next) => ({
+      align: next.align ?? current.align,
+      // `??`, not `||`: a direct 0 spacing overrides a style's value.
+      marginTopPx: next.marginTopPx ?? current.marginTopPx,
+      marginBottomPx: next.marginBottomPx ?? current.marginBottomPx,
+      lineHeight: next.lineHeight ?? current.lineHeight,
+      indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
+      indentRightPx: next.indentRightPx ?? current.indentRightPx,
+      // First-line and hanging are mutually exclusive in OOXML: a face naming
+      // either overrides both, or a direct `w:firstLine` would leave an
+      // inherited `w:hanging` behind it (`indentKind` reads hanging first).
+      indentFirstPx:
+        next.indentFirstPx ??
+        (next.indentHangingPx === undefined
+          ? current.indentFirstPx
+          : undefined),
+      indentHangingPx:
+        next.indentHangingPx ??
+        (next.indentFirstPx === undefined
+          ? current.indentHangingPx
+          : undefined),
+      keepNext: next.keepNext ?? current.keepNext,
+      keepLines: next.keepLines ?? current.keepLines,
+      widowControl: next.widowControl ?? current.widowControl,
+      run: mergeRun(current.run, next.run),
+    }),
     {
       keepNext: false,
       keepLines: false,
