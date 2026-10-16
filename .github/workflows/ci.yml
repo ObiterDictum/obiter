@@ -142,6 +142,8 @@ jobs:
           # base-14 fonts to them, and pdf-glyph-layout.test.ts measures cover
           # against rendered ink. Without them the runner substitutes a different
           # face and the contain checks fail by fractions of a point.
+          # postgresql-client is kept so a failing run can be inspected with psql;
+          # fontconfig and fonts-liberation are required by the PDF glyph tests.
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client fontconfig fonts-liberation
           mkdir -p /tmp/obiter-fontconfig-cache
           fc-cache -f
