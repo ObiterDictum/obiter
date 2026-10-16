@@ -14,6 +14,14 @@ import {
 import { documentListMarkers } from './document-page-lists'
 import { editingStoryFor } from './document-page-layout'
 import { editingStoryOfFlowId } from './document-story-flow'
+import type { EditorState } from './document-word-edits'
+
+const emptyState: EditorState = {
+  drafts: {},
+  inserts: [],
+  deletedParagraphIds: [],
+  extraRuns: {},
+}
 
 function paragraph(id: string, text: string) {
   return {
@@ -194,24 +202,18 @@ describe('find inside the open story', () => {
   it('scopes hits to the given story', () => {
     const hits = findInDocument(
       model,
-      {},
-      [],
-      [],
-      {},
+      emptyState,
       'text',
       editingStoryFor(model, 'document'),
     )
-    expect(hits.map((hit) => hit.paragraphId)).toEqual(['p1'])
+    expect(hits.map((hit) => hit.from.paragraphId)).toEqual(['p1'])
     const margin = findInDocument(
       model,
-      {},
-      [],
-      [],
-      {},
+      emptyState,
       'Page',
       editingStoryFor(model, 'footer'),
     )
-    expect(margin.map((hit) => hit.paragraphId)).toEqual(['f1'])
+    expect(margin.map((hit) => hit.from.paragraphId)).toEqual(['f1'])
   })
 })
 

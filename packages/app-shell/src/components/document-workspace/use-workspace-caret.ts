@@ -19,7 +19,11 @@ import {
   type SelectionEndpoint,
   type SelectionOrder,
 } from '../../document-selection'
-import { blockText, type EditorState } from '../../document-word-edits'
+import {
+  blockText,
+  emptyEditorState,
+  type EditorState,
+} from '../../document-word-edits'
 import {
   clearVerticalColumn,
   createVerticalCaretColumn,
@@ -94,6 +98,7 @@ export function useWorkspaceCaret({
     model,
     drafts,
     onPlaceCaret: selectParagraph,
+    onRefused: setSelectionRefusal,
     story: editingStory,
   })
 
@@ -298,7 +303,7 @@ export function useWorkspaceCaret({
     }
     // Selecting the whole body would bridge every structural paragraph in it,
     // so it is refused the same way an unsaved insert is.
-    if (order.some((id) => structuralIds.has(id))) {
+    if (structuralIds.size > 0) {
       setSelectionRefusal('structure')
       return
     }
@@ -325,12 +330,9 @@ export function useWorkspaceCaret({
     const range = orderedSelection(order, resolvedSelection)
     const from = order.indexOf(range.start.paragraphId)
     const to = order.indexOf(range.end.paragraphId)
-    for (let index = from; index <= to; index += 1) {
-      const id = order[index]
-      if (id !== undefined && insertIds.has(id)) {
-        setSelectionRefusal('insert')
-        return null
-      }
+    if (order.slice(from, to + 1).some((id) => insertIds.has(id))) {
+      setSelectionRefusal('insert')
+      return null
     }
     if (model && state) {
       const refusal = documentRangeRefusal(model, state, range.start, range.end)
@@ -389,13 +391,6 @@ export function useWorkspaceCaret({
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
-  function setFindQuery(query: string) {
-    find.setFindQuery(query)
-  }
-
-  const findHits = find.findHits
-  const activeFindIndex = find.activeFindIndex
-
   function insertAuthority(citation: string, italic: boolean) {
     if (!model) return
     const paragraphId = selectedParagraphId ?? editingStory?.paragraphs[0]?.id
@@ -403,7 +398,7 @@ export function useWorkspaceCaret({
     const offset =
       restoreCaret?.paragraphId === paragraphId
         ? restoreCaret.offset
-        : blockText(model, state ?? emptyState, paragraphId).length
+        : blockText(model, state ?? emptyEditorState(), paragraphId).length
     // The citation style only shapes what is written now — the house style's
     // italic is a formatting draft over the inserted range in the same
     // history step, so undo removes text and styling together.
@@ -474,26 +469,12 @@ export function useWorkspaceCaret({
     replaceSelectionRange,
     splitSelectionRange,
     ...clipboard,
-    findQuery: find.findQuery,
-    setFindQuery,
-    replaceQuery: find.replaceQuery,
-    setReplaceQuery: find.setReplaceQuery,
-    findHits,
-    activeFindIndex,
+    // The find surface spreads whole: its keys already carry the workspace
+    // names, including its query setter.
+    ...find,
     selectParagraph,
-    onNextHit: find.onNextHit,
-    onPreviousHit: find.onPreviousHit,
-    onReplaceOne: find.onReplaceOne,
-    onReplaceAll: find.onReplaceAll,
     insertAuthority,
     undoDocument,
     redoDocument,
   }
-}
-
-const emptyState: EditorState = {
-  drafts: {},
-  inserts: [],
-  deletedParagraphIds: [],
-  extraRuns: {},
 }

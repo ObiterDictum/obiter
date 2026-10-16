@@ -1,5 +1,5 @@
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
-import { editableParagraph } from './document-model-text'
+import { editableParagraph, runsText } from './document-model-text'
 import { omitKey, replaceRunRange } from './document-run-range'
 import type { EditorState } from './document-word-edits'
 
@@ -30,7 +30,7 @@ export function appendRuns(
       ...state,
       inserts: state.inserts.map((item) =>
         item.clientId === paragraphId
-          ? { ...item, runs, text: runs.map((run) => run.text).join('') }
+          ? { ...item, runs, text: runsText(runs) }
           : item,
       ),
     }
@@ -73,7 +73,7 @@ export function writeRuns(
       ...state,
       inserts: state.inserts.map((item) =>
         item.clientId === paragraphId
-          ? { ...item, runs, text: runs.map((run) => run.text).join('') }
+          ? { ...item, runs, text: runsText(runs) }
           : item,
       ),
     }
