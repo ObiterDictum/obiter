@@ -15,9 +15,10 @@ import {
 } from './xml-elements'
 
 // Tracked-change elements are parsed as opaque subtrees by the story parser and
-// exposed as `TrackedChangeNode` records. The predicates here are the single
-// owner of "is this node inside a tracked change", used both by this module and
-// by the story parser when it skips tracked content.
+// exposed as `TrackedChangeNode` records. `isTrackedChange` is the single owner
+// of "is this element a tracked change"; the story parser's hot walk
+// precomputes the ancestor and subtree answers from it (`PartIndex` in
+// stories.ts) instead of re-walking the part per paragraph.
 const TRACKED_CHANGE_NAMES = new Set([
   'ins',
   'del',
@@ -53,45 +54,6 @@ export function nearestTrackedChangeAncestor(element: XmlElement) {
     parent = parent.parent
   }
   return undefined
-}
-
-export function containsTrackedChange(
-  element: XmlElement,
-  elements: readonly XmlElement[],
-) {
-  return (
-    isTrackedChange(element) ||
-    elements.some(
-      (candidate) =>
-        isTrackedChange(candidate) && isDescendantOf(candidate, element),
-    )
-  )
-}
-
-export function hasTrackedChangeAncestor(element: XmlElement) {
-  let parent = element.parent
-  while (parent) {
-    if (isTrackedChange(parent)) return true
-    parent = parent.parent
-  }
-  return false
-}
-
-export function hasDeletedParagraphMark(
-  paragraph: XmlElement,
-  elements: readonly XmlElement[],
-) {
-  const properties = elements.find(
-    (element) => element.parent === paragraph && isWord(element, 'pPr'),
-  )
-  if (!properties) return false
-  const markProperties = elements.find(
-    (element) => element.parent === properties && isWord(element, 'rPr'),
-  )
-  if (!markProperties) return false
-  return elements.some(
-    (element) => element.parent === markProperties && isWord(element, 'del'),
-  )
 }
 
 function isParagraphMarkDeletion(element: XmlElement) {

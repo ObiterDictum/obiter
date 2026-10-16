@@ -24,12 +24,12 @@ export const documentModelWorkerConcurrency = 2
  * legitimate document measured on the reference host, a styled
  * 5091-paragraph fixture inside every package guard, parses in about 210 s
  * under Node and 105 s under Bun, so this is roughly three times the slowest
- * observed legitimate load under the slower runtime. Parse time is
- * quadratic in paragraph count because of pre-existing per-paragraph
- * full-document scans in `@obiter/ooxml` (see `containsTrackedChange`), so
- * documents far beyond the measured envelope can still exceed this deadline
- * and fail with the curated store error; removing those scans is a separate
- * follow-up, not a reason to let callers park forever.
+ * observed legitimate load under the slower runtime. Parsing is now linear
+ * in paragraph and run count — the per-paragraph and per-field full-document
+ * scans in `@obiter/ooxml` were removed — but documents far beyond the
+ * measured envelope, or ones carrying very many fields, tracked changes or
+ * moves, can still exceed this deadline and fail with the curated store
+ * error; that is not a reason to let callers park forever.
  */
 export const documentModelTaskTimeoutMs = 600_000
 
