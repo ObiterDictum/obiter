@@ -34,8 +34,13 @@ export function collapseCommentRuns(
 ) {
   // Every run's fate is decided from the removal state the element pass
   // left, so the carries flag is computed once. Collapsing adds only `w:r`
-  // elements to `removed`, and a run is never a descendant of another run,
-  // so no run's carries can depend on another run's collapse.
+  // elements to `removed`, and a run that reaches the collapse decision
+  // below has no non-rPr descendant — runs can nest, since a text box holds
+  // one — so no later collapse can sit inside it and change what it
+  // excludes.
+  const removedByStart = [...contentPlan.removed].sort(
+    (left, right) => left.start - right.start,
+  )
   const runProperties = new Map<XmlElement, XmlElement>()
   for (const element of elements) {
     if (
@@ -61,7 +66,7 @@ export function collapseCommentRuns(
     if (!isWord(element, 'commentReference')) continue
     const run = nearestRun(element)
     if (!run || contentPlan.removed.has(run) || carries.has(run)) continue
-    const text = innerTextExcluding(source, run, contentPlan.removed)
+    const text = innerTextExcluding(source, run, removedByStart)
     if (text.trim() === '') contentPlan.removed.add(run)
   }
 }
@@ -83,16 +88,30 @@ function nearestRun(element: XmlElement) {
 function innerTextExcluding(
   source: string,
   element: XmlElement,
-  removed: ReadonlySet<XmlElement>,
+  removedByStart: readonly XmlElement[],
 ) {
-  const boundaries = [...removed]
-    .filter(
-      (candidate) =>
-        isDescendantOf(candidate, element) &&
-        candidate.start >= element.startTagEnd &&
-        candidate.end <= element.endTagStart,
-    )
-    .sort((left, right) => left.start - right.start)
+  // `removedByStart` is sorted once by the caller: binary-search to the
+  // first removed element inside this element's content range, then walk
+  // only that window. Filtering the whole removed set per candidate run is
+  // quadratic in a comment-heavy part.
+  let low = 0
+  let high = removedByStart.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (removedByStart[middle].start < element.startTagEnd) low = middle + 1
+    else high = middle
+  }
+  const boundaries: XmlElement[] = []
+  for (let index = low; index < removedByStart.length; index += 1) {
+    const candidate = removedByStart[index]
+    if (candidate.start > element.endTagStart) break
+    if (
+      candidate.end <= element.endTagStart &&
+      isDescendantOf(candidate, element)
+    ) {
+      boundaries.push(candidate)
+    }
+  }
   let text = ''
   let cursor = element.startTagEnd
   for (const range of boundaries) {
@@ -129,6 +148,12 @@ export function analyseWordFields(
     (start, end) => xmlInnerText(source, start, end),
     gone,
   )
+  if (fields.depthExceeded) {
+    refuseShareSafe(
+      'oversized-structure',
+      `${part.name} nests fields past the share-safe cap`,
+    )
+  }
   if (fields.refused) {
     refuseShareSafe(
       'malformed-package',
