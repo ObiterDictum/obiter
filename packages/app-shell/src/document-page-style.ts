@@ -35,8 +35,8 @@ export type RunFace = {
 
 export type ParagraphFace = {
   align?: 'left' | 'center' | 'right' | 'justify'
-  marginTopPx: number
-  marginBottomPx: number
+  marginTopPx?: number
+  marginBottomPx?: number
   lineHeight?: string
   indentLeftPx?: number
   indentRightPx?: number
@@ -99,8 +99,8 @@ export function paragraphFace(
   )
   return {
     ...merged,
-    marginTopPx: merged.marginTopPx,
-    marginBottomPx: merged.marginBottomPx,
+    marginTopPx: merged.marginTopPx ?? 0,
+    marginBottomPx: merged.marginBottomPx ?? 0,
     keepNext: merged.keepNext ?? false,
     keepLines: merged.keepLines ?? false,
     widowControl: merged.widowControl ?? true,
@@ -289,23 +289,36 @@ function paragraphAlign(jc: string | undefined): ParagraphFace['align'] {
 
 function mergeParagraph(...faces: ParagraphFace[]): ParagraphFace {
   return faces.reduce<ParagraphFace>(
-    (current, next) => ({
-      align: next.align ?? current.align,
-      marginTopPx: next.marginTopPx || current.marginTopPx,
-      marginBottomPx: next.marginBottomPx || current.marginBottomPx,
-      lineHeight: next.lineHeight ?? current.lineHeight,
-      indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
-      indentRightPx: next.indentRightPx ?? current.indentRightPx,
-      indentFirstPx: next.indentFirstPx ?? current.indentFirstPx,
-      indentHangingPx: next.indentHangingPx ?? current.indentHangingPx,
-      keepNext: next.keepNext ?? current.keepNext,
-      keepLines: next.keepLines ?? current.keepLines,
-      widowControl: next.widowControl ?? current.widowControl,
-      run: mergeRun(current.run, next.run),
-    }),
+    (current, next) => {
+      // First-line and hanging are mutually exclusive in OOXML: a face that
+      // names either overrides both, so a direct `w:firstLine` cannot leave an
+      // inherited `w:hanging` behind it (and `indentKind` reads hanging first).
+      const indentPair =
+        next.indentFirstPx !== undefined || next.indentHangingPx !== undefined
+          ? {
+              indentFirstPx: next.indentFirstPx,
+              indentHangingPx: next.indentHangingPx,
+            }
+          : {
+              indentFirstPx: current.indentFirstPx,
+              indentHangingPx: current.indentHangingPx,
+            }
+      return {
+        align: next.align ?? current.align,
+        // `??`, not `||`: a direct 0 spacing overrides a style's value.
+        marginTopPx: next.marginTopPx ?? current.marginTopPx,
+        marginBottomPx: next.marginBottomPx ?? current.marginBottomPx,
+        lineHeight: next.lineHeight ?? current.lineHeight,
+        indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
+        indentRightPx: next.indentRightPx ?? current.indentRightPx,
+        ...indentPair,
+        keepNext: next.keepNext ?? current.keepNext,
+        keepLines: next.keepLines ?? current.keepLines,
+        widowControl: next.widowControl ?? current.widowControl,
+        run: mergeRun(current.run, next.run),
+      }
+    },
     {
-      marginTopPx: 0,
-      marginBottomPx: 0,
       keepNext: false,
       keepLines: false,
       widowControl: true,
@@ -330,8 +343,14 @@ function lineHeight(
   return String(line / 240)
 }
 
-function twipPx(value: number | undefined): number {
-  return value === undefined ? 0 : twipToPx(value)
+/**
+ * Absent stays absent: `mergeParagraph` falls back to the style chain on
+ * `undefined` but not on `0`, so mapping an absent attribute to 0 would let a
+ * paragraph's silence override its style. `w:firstLine="0"` — Word's spelling
+ * of "no indent" — is a real 0 and does override.
+ */
+function twipPx(value: number | undefined): number | undefined {
+  return value === undefined ? undefined : twipToPx(value)
 }
 
 function wordFlag(xml: string, name: string): boolean | undefined {

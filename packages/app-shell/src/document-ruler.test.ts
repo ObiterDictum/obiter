@@ -1,5 +1,6 @@
 import '@obiter/test-dom'
 import { describe, expect, it } from 'bun:test'
+import type { DocumentModelWire } from '@obiter/contracts'
 import {
   RULER_CM_PX,
   rulerLabel,
@@ -7,6 +8,7 @@ import {
   rulerTicks,
   type RulerGeometry,
 } from './document-ruler'
+import { paragraphFace } from './document-page-style'
 
 const GEOMETRY: RulerGeometry = {
   box: {
@@ -61,6 +63,52 @@ describe('rulerMarkers', () => {
       },
     })
     expect(hanging.firstLinePx).toBe(25)
+  })
+
+  it('draws a hanging indent the paragraph style supplies', () => {
+    const model = {
+      version: 1,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              styleId: 'Hang',
+              runs: [{ id: 'p1-r', text: 'text', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
+        },
+      ],
+      styles: [
+        {
+          styleId: 'Hang',
+          sourceFragment:
+            '<w:style w:type="paragraph" w:styleId="Hang"><w:name w:val="Hang"/><w:pPr><w:ind w:left="480" w:hanging="240"/></w:pPr></w:style>',
+        },
+      ],
+      numbering: [],
+      relationships: [],
+      preservedXmlFragments: [],
+      changes: [],
+      comments: [],
+      markings: {
+        documentKind: null,
+        draft: false,
+        privileged: false,
+        withoutPrejudice: false,
+      },
+    } as DocumentModelWire
+    const face = paragraphFace(model.stories[0]!.paragraphs[0]!, model.styles)
+    // The style's hanging indent reaches the face, so the marker hangs left of
+    // the text block rather than sitting on it.
+    expect(face.indentHangingPx).toBe(16)
+    expect(rulerMarkers({ columnWidthPx: 602, face }).firstLinePx).toBe(32 - 16)
   })
 
   it('hangs a list marker left of its text indent', () => {
