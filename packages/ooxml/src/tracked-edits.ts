@@ -283,6 +283,16 @@ export function createTrackedEditWriter(
     },
 
     /**
+     * The marker attributes a fresh run piece's `w:rPrChange` carries. The
+     * range-emphasis path allocates one per covered piece, so every split
+     * piece's marker gets its own persisted `w:id` the way every other
+     * tracked write does.
+     */
+    changeAttributes(prefix: string) {
+      return attributes(prefix, 'rPrChange')
+    },
+
+    /**
      * The changes created since the previous call, in order. The lineage uses
      * them to name a reversal by persisted `w:id`, not by run position.
      */

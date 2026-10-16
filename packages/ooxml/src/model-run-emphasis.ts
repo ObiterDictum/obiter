@@ -11,6 +11,7 @@ import { requireEditablePart } from './model-edit-overlay'
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import {
   applyEmphasisXml,
+  applyTrackedEmphasisXml,
   runPieceXml,
   splitsSurrogate,
 } from './model-run-range-edits'
@@ -19,6 +20,7 @@ import {
   setRunEmphasis,
   type RunEmphasis,
 } from './model-property-edits'
+import { appendPropertyChange } from './tracked-edit-xml'
 import { setOverlayReplacement, type XmlOverlay } from './parts/overlay'
 import { hasPendingBreakSplice } from './run-break-splices'
 import { effectiveRunView, runHasPendingOverlay } from './run-effective'
@@ -133,6 +135,121 @@ export function applyRunEmphasisRanges(
   }
 }
 
+/**
+ * The tracked form of `applyRunEmphasisRanges`. The covered runs split at the
+ * same boundaries, but each covered piece's patched properties carry a
+ * `w:rPrChange` marker holding its previous properties, so accepting keeps
+ * the new formatting and rejecting restores it — no widening the range to the
+ * whole run. A run covered whole goes through the tracked writer's property
+ * path, so it is still recorded rather than silently rewritten.
+ *
+ * A covered run carrying a pending overlay cannot split under tracking: the
+ * pieces would re-emit a pending tracked write's change id, which the
+ * decision map cannot name twice. The batch fails closed instead.
+ */
+export function applyTrackedRunEmphasisRanges(
+  document: OoxmlDocument,
+  paragraph: ParagraphAnchor,
+  ranges: readonly RunEmphasisRange[],
+  tracked: {
+    setRunEmphasis(anchor: TextRunAnchor, emphasis: RunEmphasis): void
+    /**
+     * The marker attributes a fresh piece's `w:rPrChange` carries; allocating
+     * one per call gives every piece its own persisted `w:id`.
+     */
+    changeAttributes(prefix: string): string
+  },
+  lineage?: LineageRecorder,
+) {
+  const part = requireEditablePart(document, paragraph.partName)
+  const text = paragraph.runs.map((run) => run.wire.text).join('')
+  for (const range of ranges) {
+    if (
+      range.from < 0 ||
+      range.to > text.length ||
+      range.from >= range.to ||
+      splitsSurrogate(text, range.from) ||
+      splitsSurrogate(text, range.to)
+    ) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+  }
+
+  const nextId = textRunIdAllocator(document)
+  const pending: Array<{
+    runIndex: number
+    xml: string
+    wires: DocumentTextRunWire[]
+    originParts: Array<{ run: DocumentTextRunWire; from: number; to: number }>
+  }> = []
+  let runStart = 0
+  paragraph.runs.forEach((run, runIndex) => {
+    const runEnd = runStart + run.wire.text.length
+    const local = ranges
+      .map((range) => ({
+        from: Math.max(range.from, runStart) - runStart,
+        to: Math.min(range.to, runEnd) - runStart,
+        emphasis: range,
+      }))
+      .filter((range) => range.from < range.to)
+    if (local.length > 0) {
+      const length = run.wire.text.length
+      if (hasPendingBreakSplice(part.overlay, run.runRange)) {
+        throw new OoxmlError('model-node-not-editable')
+      }
+      if (local.every((range) => range.from === 0 && range.to === length)) {
+        tracked.setRunEmphasis(
+          run,
+          mergeRunEmphasis(local.map((range) => range.emphasis)),
+        )
+      } else {
+        if (runHasPendingOverlay(part.overlay, run)) {
+          throw new OoxmlError('model-node-not-editable')
+        }
+        pending.push({
+          runIndex,
+          ...splitRun(
+            part.overlay,
+            run,
+            paragraph,
+            runStart,
+            local,
+            false,
+            nextId,
+            (pieceXml, emphasis, fragments) => {
+              const prefix = /^<([^:>\s]+):/u.exec(pieceXml)?.[1] ?? 'w'
+              const attributes = tracked.changeAttributes(prefix)
+              return {
+                xml: applyTrackedEmphasisXml(pieceXml, emphasis, attributes),
+                fragments: trackedEmphasisFragments(
+                  fragments,
+                  emphasis,
+                  attributes,
+                  prefix,
+                ),
+              }
+            },
+          ),
+        })
+      }
+    }
+    runStart = runEnd
+  })
+
+  for (const item of pending.reverse()) {
+    const run = paragraph.runs[item.runIndex]
+    if (!run) throw new OoxmlError('invalid-document-edit')
+    if (lineage) recordSplitRun(lineage, run.wire, item.originParts)
+    setOverlayReplacement(part.overlay, `${run.wire.id}:split`, {
+      start: run.runRange.start,
+      end: run.runRange.end,
+      value: item.xml,
+    })
+    paragraph.wire.runs.splice(item.runIndex, 1, ...item.wires)
+    part.dirty = true
+  }
+}
+
 type LocalRange = { from: number; to: number; emphasis: RunEmphasis }
 
 interface SplitRunResult {
@@ -142,6 +259,18 @@ interface SplitRunResult {
   consumedKeys: readonly string[]
 }
 
+/**
+ * How a covered piece's XML and preserved fragments are patched. The untracked
+ * caller paints the emphasis directly; the tracked caller wraps the patched
+ * properties in a `w:rPrChange` marker and returns matching fragments, so the
+ * wire model and the part XML carry the same change.
+ */
+type SplitPatch = (
+  pieceXml: string,
+  emphasis: RunEmphasis,
+  fragments: readonly string[],
+) => { xml: string; fragments: string[] }
+
 function splitRun(
   overlay: XmlOverlay,
   run: TextRunAnchor,
@@ -150,6 +279,7 @@ function splitRun(
   local: readonly LocalRange[],
   materialise: boolean,
   nextId: () => string,
+  patch?: SplitPatch,
 ): SplitRunResult {
   const view = materialise
     ? effectiveView(overlay, run, paragraph)
@@ -163,7 +293,7 @@ function splitRun(
   const parts: Array<{
     xml: string
     text: string
-    emphasis?: RunEmphasis
+    fragments: string[]
   }> = []
   for (let index = 0; index < ordered.length - 1; index += 1) {
     const start = ordered[index]!
@@ -184,10 +314,16 @@ function splitRun(
         ? undefined
         : locateOffset(view.source, view.paragraph, view.offsetBase + end)
     const pieceXml = runPieceXml(view.source, view.run, startCut, endCut)
+    const patched =
+      emphasis &&
+      (patch?.(pieceXml, emphasis, view.fragments) ?? {
+        xml: applyEmphasisXml(pieceXml, emphasis),
+        fragments: emphasisFragments(view.fragments, emphasis),
+      })
     parts.push({
-      xml: emphasis ? applyEmphasisXml(pieceXml, emphasis) : pieceXml,
+      xml: patched ? patched.xml : pieceXml,
       text: run.wire.text.slice(start, end),
-      ...(emphasis ? { emphasis } : {}),
+      fragments: patched ? patched.fragments : [...view.fragments],
     })
   }
   const wires = parts.map((part, index) => ({
@@ -197,9 +333,7 @@ function splitRun(
       ? { hyperlinkTarget: run.wire.hyperlinkTarget }
       : {}),
     text: part.text,
-    preservedXmlFragments: part.emphasis
-      ? emphasisFragments(view.fragments, part.emphasis)
-      : [...view.fragments],
+    preservedXmlFragments: part.fragments,
   }))
   return {
     xml: parts.map((part) => part.xml).join(''),
@@ -294,4 +428,34 @@ function emphasisFragments(
   return patched.some((fragment) => /<w:rPr\b/u.test(fragment))
     ? patched
     : [...patched, patchRunEmphasisXml('<w:rPr/>', emphasis)]
+}
+
+/**
+ * The tracked counterpart of `emphasisFragments`: the piece's wire fragments
+ * carry the same patched properties and `w:rPrChange` marker the part XML
+ * does, so a later materialisation replays the change rather than a bare
+ * format edit.
+ */
+function trackedEmphasisFragments(
+  fragments: readonly string[],
+  emphasis: RunEmphasis,
+  attributes: string,
+  prefix: string,
+) {
+  const propertiesPattern = new RegExp(`<${prefix}:rPr\\b`, 'u')
+  const marked = (current: string) =>
+    appendPropertyChange(
+      patchRunEmphasisXml(current, emphasis),
+      prefix,
+      'rPr',
+      attributes,
+      current,
+    )
+  let patched = false
+  const next = fragments.map((fragment) => {
+    if (patched || !propertiesPattern.test(fragment)) return fragment
+    patched = true
+    return marked(fragment)
+  })
+  return patched ? next : [...next, marked(`<${prefix}:rPr/>`)]
 }

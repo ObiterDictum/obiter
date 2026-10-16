@@ -14,6 +14,7 @@ import type {
 } from '../model'
 import { RELATIONSHIPS_NAMESPACE } from '../structure-xml'
 import { decodeXmlReferences } from '../xml-lexemes'
+import { resolveMoveRanges } from './move-ranges'
 import { elementFragment, parseXmlElements } from './overlay'
 import {
   containsTrackedChange,
@@ -80,6 +81,7 @@ export function parseStory(
     paragraphAnchors.push(parsed.anchor)
   }
 
+  const moveRanges = resolveMoveRanges(partName, elements)
   const trackedChanges = elements
     .filter(isTrackedChange)
     .filter((element) => !hasTrackedChangeAncestor(element))
@@ -91,6 +93,7 @@ export function parseStory(
         element,
         paragraphAnchors,
         identity.nextChangeId(),
+        moveRanges,
       ),
     )
 
