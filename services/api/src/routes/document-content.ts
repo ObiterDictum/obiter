@@ -59,22 +59,6 @@ function downloadContentType(fileType: string) {
   return 'application/octet-stream'
 }
 
-function downloadFilename(filename: string) {
-  const slash = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'))
-  const leaf = slash === -1 ? filename : filename.slice(slash + 1)
-  let next = ''
-  for (const ch of leaf) {
-    const code = ch.charCodeAt(0)
-    if (code < 32 || code === 127 || ch === '"' || ch === '/' || ch === '\\') {
-      continue
-    }
-    next += ch
-  }
-  const cleaned = next.trim()
-  const base = cleaned.length > 0 ? cleaned : 'document'
-  return base.length <= 200 ? base : base.slice(0, 200)
-}
-
 function expectedSourceKey(
   version: Pick<
     DownloadVersion,
@@ -128,7 +112,7 @@ export function createDocumentContentRoutes(
       // memory is safe (byteOffset/length keep pooled Buffers windowed).
       new Uint8Array(source.buffer, source.byteOffset, source.length),
       downloadContentType(version.fileType),
-      downloadFilename(version.filename),
+      version.filename,
     )
   })
 

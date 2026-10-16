@@ -105,6 +105,13 @@ export {
   levelStartOverride,
 } from './numbering-edits'
 export type { ImportedThreadReply } from './comments-package'
+export {
+  CUSTOM_PROPERTIES_PART,
+  readDocumentMarkings,
+} from './parts/custom-properties'
+export { writeDocumentMarkings } from './parts/custom-properties-write'
+export { buildShareSafeDocx, ShareSafeRefusal } from './share-safe-export'
+export type { ShareSafeRefusalReason } from './share-safe-refusal'
 export * from './model-json'
 export * from './parse'
 export * from './serialise'

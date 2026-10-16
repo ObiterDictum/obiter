@@ -64,6 +64,12 @@ type PreparedVersionCommitInput = DocumentVersionScope & {
   /** E50 lineage for the resulting version, minus the id commit assigns. */
   lineage?: Omit<DocumentVersionLineage, 'versionId'> | null
   audit: PreparedVersionAudit
+  /**
+   * Runs after the version row, pointer move, and audits, inside the same
+   * transaction — used by provenance writes that must commit atomically with
+   * the version they name (e.g. the redaction return marker).
+   */
+  onCommitted?: (client: PoolClient, versionId: string) => Promise<void>
 }
 
 export type PreparedVersionCommitResult =
@@ -241,6 +247,8 @@ export async function commitPreparedVersion(
       metadata: input.audit.metadata(versionId),
       requestId: input.requestId,
     })
+
+    if (input.onCommitted) await input.onCommitted(client, versionId)
 
     commitIssued = true
     await client.query('commit')

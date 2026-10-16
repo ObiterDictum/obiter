@@ -12,6 +12,18 @@ const hooks = vi.hoisted(() => ({
   useSpanDecision: vi.fn(() => ({})),
   useFinalizeRun: vi.fn(() => ({})),
   useRedetectRun: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useReturnToDocument: vi.fn(
+    (): {
+      mutate: ReturnType<typeof vi.fn>
+      isPending: boolean
+      error?: { message: string } | null
+      data?: {
+        documentId: string
+        versionId: string
+        versionNumber: number
+      }
+    } => ({ mutate: vi.fn(), isPending: false }),
+  ),
 }))
 
 const sourcePreviewHooks = vi.hoisted(() => ({
@@ -78,6 +90,7 @@ const baseRun = {
   detectionMode: 'model+supplement' as const,
   replacesRunId: null,
   replacementRunId: null,
+  returnedDocumentVersionId: null,
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 }
@@ -330,5 +343,142 @@ describe('legacy finalized output', () => {
     expect(
       screen.getByRole('button', { name: 'Download editable copy' }),
     ).toHaveProperty('disabled', false)
+  })
+})
+
+describe('return to document', () => {
+  const docxOutput = {
+    outputMimeType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    outputFilename: 'brief-redacted.docx',
+    securePdf: false,
+  }
+
+  function documentBoundRun(overrides: Record<string, unknown> = {}) {
+    return {
+      ...baseRun,
+      documentId: 'doc_1',
+      documentVersionId: 'ver_1',
+      summary: summary(docxOutput),
+      ...overrides,
+    }
+  }
+
+  beforeEach(() => {
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      data: {
+        // mimeType intentionally absent: the view falls back to
+        // summary.outputMimeType, which each case controls.
+        filename: 'brief-redacted.docx',
+        text: null,
+        artifactId: 'art_1',
+        sha256: null,
+        securePdf: false,
+      },
+    })
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: new Blob(['docx-bytes'], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+      error: null,
+    })
+  })
+
+  it('sends the version the run redacted as the stale base', () => {
+    const mutate = vi.fn()
+    hooks.useReturnToDocument.mockReturnValue({
+      mutate,
+      isPending: false,
+      error: null,
+    })
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: documentBoundRun(),
+    })
+
+    renderView()
+    fireEvent.click(screen.getByRole('button', { name: 'Return to document' }))
+    expect(mutate).toHaveBeenCalledWith({ baseVersionId: 'ver_1' })
+  })
+
+  it('shows the returned badge and an open-document path once returned', () => {
+    const onOpenDocument = vi.fn()
+    hooks.useReturnToDocument.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: null,
+      data: { documentId: 'doc_1', versionId: 'ver_9', versionNumber: 9 },
+    })
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: documentBoundRun({ returnedDocumentVersionId: 'ver_9' }),
+    })
+
+    render(
+      <RedactionReviewView
+        runId="red_1"
+        onOpenRun={onOpenRun}
+        onOpenDocument={onOpenDocument}
+      />,
+    )
+    expect(screen.getByText('Returned to document')).toBeTruthy()
+    expect(screen.getByText(/Saved as version 9 of the/)).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: 'Return to document' }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open document' }))
+    expect(onOpenDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ documentId: 'doc_1' }),
+    )
+  })
+
+  it('surfaces a stale-head refusal instead of pretending the return landed', () => {
+    hooks.useReturnToDocument.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: {
+        message:
+          'The document changed after this run redacted it. Reload the document before returning the output.',
+      },
+    })
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: documentBoundRun(),
+    })
+
+    renderView()
+    expect(screen.getByRole('alert').textContent).toContain(
+      'document changed after this run redacted it',
+    )
+  })
+
+  it('never offers the return for non-document, non-DOCX or superseded runs', () => {
+    // No document link; secure-PDF output; a superseded run whose decisions no
+    // longer describe the source. None may offer the handoff.
+    for (const data of [
+      { ...baseRun, summary: summary(docxOutput) },
+      {
+        ...baseRun,
+        documentId: 'doc_1',
+        documentVersionId: 'ver_1',
+        summary: summary(),
+      },
+      {
+        ...baseRun,
+        documentId: 'doc_1',
+        documentVersionId: 'ver_1',
+        replacementRunId: 'red_2',
+        summary: summary(docxOutput),
+      },
+    ]) {
+      hooks.useRedactionRun.mockReturnValue({ isPending: false, data })
+      const { unmount } = renderView()
+      expect(
+        screen.queryByRole('button', { name: 'Return to document' }),
+      ).toBeNull()
+      unmount()
+    }
   })
 })

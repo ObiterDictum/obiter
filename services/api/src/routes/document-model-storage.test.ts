@@ -12,6 +12,14 @@ import {
   TestDatabase,
 } from './document-model.test-support'
 
+/** Removes a top-level model field, producing the shape a cache written before
+ * the field existed would hold — the route must regenerate, not serve it. */
+function modelJsonWithout(field: string, json: string) {
+  const value = JSON.parse(json) as Record<string, unknown>
+  delete value[field]
+  return JSON.stringify(value)
+}
+
 describe('GET /api/documents/:id/model storage boundary', () => {
   it('serves a validated cache hit to a view grantee with only wrapper fields', async () => {
     const database = new TestDatabase({ access: 'view' })
@@ -72,7 +80,11 @@ describe('GET /api/documents/:id/model storage boundary', () => {
     ['an invalid wire value', JSON.stringify({ version: 1, stories: 'no' })],
     [
       'a legacy value without its own comments field',
-      cachedModelJson.replace(/,"comments":\[.*\]\}$/u, '}'),
+      modelJsonWithout('comments', cachedModelJson),
+    ],
+    [
+      'a legacy value without stored markings',
+      modelJsonWithout('markings', cachedModelJson),
     ],
     [
       'a legacy value without stored field metadata',

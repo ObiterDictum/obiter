@@ -95,6 +95,12 @@ const commentModel = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 } satisfies DocumentModelWire
 
 export const cachedCommentModelJson = JSON.stringify(commentModel)

@@ -369,8 +369,10 @@ class EditTransaction {
       (parameters[4] === 'document.version_create' ||
         parameters[4] === 'document.edit' ||
         parameters[4] === 'document.collaboration_merge' ||
+        parameters[4] === 'document.markings' ||
         parameters[4] === 'document.tracked_change_accept' ||
-        parameters[4] === 'document.tracked_change_reject')
+        parameters[4] === 'document.tracked_change_reject' ||
+        parameters[4] === 'redaction.return_to_document')
     ) {
       this.requireLockedWrite()
       this.recordQuery(sql)

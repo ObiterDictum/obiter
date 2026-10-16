@@ -3,7 +3,9 @@ import { describe, expect, it } from 'bun:test'
 import {
   DOCUMENT_EXPORT_CONTENT_TYPE,
   documentExportFilename,
+  shareSafeExportFilename,
 } from '../document-export'
+import { DOWNLOAD_FILENAME_MAX_LENGTH } from '../download-filename'
 import { importedCommentFingerprint } from '../imported-comment-fingerprint'
 import {
   expectDocument404,
@@ -26,6 +28,20 @@ describe('documentExportFilename', () => {
     expect(documentExportFilename('report.txt')).toBe('report.txt.docx')
     expect(documentExportFilename('')).toBe('document.docx')
     expect(documentExportFilename('bad\u0000name.docx')).toBe('badname.docx')
+  })
+})
+
+describe('shareSafeExportFilename', () => {
+  it('keeps the share-safe marker when the stem needs truncating', () => {
+    const name = shareSafeExportFilename(`${'a'.repeat(300)}.docx`)
+    expect(name).toHaveLength(DOWNLOAD_FILENAME_MAX_LENGTH)
+    expect(name.endsWith('-share-safe.docx')).toBe(true)
+  })
+
+  it('appends the share-safe marker for an ordinary name', () => {
+    expect(shareSafeExportFilename('letter.docx')).toBe(
+      'letter-share-safe.docx',
+    )
   })
 })
 
@@ -159,6 +175,7 @@ describe('GET /api/documents/:id/export response', () => {
         metadata: {
           matterId: 'mtr_1',
           versionId: 'ver_1',
+          shareSafe: false,
           commentCount: 0,
           skippedCommentCount: 0,
         },
@@ -204,6 +221,7 @@ describe('GET /api/documents/:id/export response', () => {
         metadata: {
           matterId: 'mtr_1',
           versionId: 'ver_1',
+          shareSafe: false,
           commentCount: 1,
           skippedCommentCount: 0,
         },
@@ -246,6 +264,7 @@ describe('GET /api/documents/:id/export response', () => {
         metadata: {
           matterId: 'mtr_1',
           versionId: 'ver_1',
+          shareSafe: false,
           commentCount: 2,
           skippedCommentCount: 1,
         },

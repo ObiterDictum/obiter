@@ -97,6 +97,12 @@ const MODEL = {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   },
 }
 
@@ -222,10 +228,16 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
       .evaluate((element) => element.textContent),
   ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
 
+  // A review panel is private workspace chrome: open one before printing so
+  // the run proves panels inside the desk do not reach the printer.
+  await page.getByRole('tab', { name: 'Review' }).click()
+  await page.getByRole('button', { name: 'Comments', exact: true }).click()
+
   // Print media: chrome is out, the painted document (drafts included) stays.
   await page.emulateMedia({ media: 'print' })
   await expect(page.getByRole('tab', { name: 'Review' })).toBeHidden()
   await expect(page.getByRole('button', { name: 'Save' })).toBeHidden()
+  await expect(page.locator('[data-print-hide]')).toBeHidden()
   await expect(desk).toContainText('Edited paragraph one')
   await expect(desk).toContainText('Inserted paragraph')
   await expect(desk).toContainText('Cell one')

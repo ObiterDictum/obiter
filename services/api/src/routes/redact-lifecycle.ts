@@ -1,5 +1,9 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
+import {
+  redactionReturnRequestSchema,
+  redactionReturnResponseSchema,
+} from '@obiter/contracts'
 import { requireManageRole } from '../authz'
 import {
   buildAuditReport,
@@ -14,6 +18,7 @@ import {
   restoreRedactionRunWithAudit,
   softDeleteRedactionRun,
 } from '../redaction-database'
+import { returnRedactionToDocument } from '../redaction-return'
 import { redetectRedactionRun } from '../redaction-redetect'
 import type { StorageService } from '../storage'
 import {
@@ -136,6 +141,69 @@ export function createRedactLifecycleRoutes(
         409,
       )
     return c.json({ run: publicRun(result.run) })
+  })
+
+  /**
+   * E12 handoff: commits the run's finalized DOCX output as a new immutable
+   * version of the source document and links it back on the run. `stale`
+   * (409) means the document head moved past the version the run redacted —
+   * re-run redaction on the current version rather than losing the edits.
+   */
+  routes.post('/api/redaction-runs/:runId/return-to-document', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const request = redactionReturnRequestSchema.safeParse(
+      await c.req.json().catch(() => null),
+    )
+    if (!request.success) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'The return request is invalid.',
+        400,
+      )
+    }
+
+    const result = await returnRedactionToDocument(pool, storage, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      runId: c.req.param('runId'),
+      baseVersionId: request.data.baseVersionId,
+      requestId: c.get('requestId'),
+    })
+    if (result.status === 'not_found') {
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    }
+    if (result.status === 'unavailable') {
+      return errorResponse(
+        c,
+        'redaction_return_unavailable',
+        'This redaction output cannot be returned to the document.',
+        422,
+      )
+    }
+    if (result.status === 'stale') {
+      return errorResponse(
+        c,
+        'conflict_detected',
+        'The document changed since this redaction output was produced.',
+        409,
+      )
+    }
+    return c.json(
+      redactionReturnResponseSchema.parse({
+        status: result.status,
+        documentId: result.documentId,
+        versionId: result.versionId,
+        versionNumber: result.versionNumber,
+      }),
+      result.status === 'returned' ? 201 : 200,
+    )
   })
 
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {

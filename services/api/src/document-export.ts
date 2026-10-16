@@ -1,9 +1,12 @@
 import type { Pool } from 'pg'
 import type { DocumentComment, DocumentCommentReply } from '@obiter/contracts'
 import {
+  buildShareSafeDocx,
   OoxmlError,
   parseDocx,
   serialiseDocxWithComments,
+  ShareSafeRefusal,
+  type ShareSafeRefusalReason,
   validateCommentAnchor,
   type ImportedThreadReply,
 } from '@obiter/ooxml'
@@ -19,6 +22,11 @@ import {
   type DocumentVersionRecord,
 } from './database'
 import { DocumentArtifactStoreError } from './document-artifact-store'
+import {
+  DOWNLOAD_FILENAME_MAX_LENGTH,
+  downloadContentDisposition,
+  safeDownloadFilename,
+} from './download-filename'
 import type { StorageService } from './storage'
 
 export const DOCUMENT_EXPORT_CONTENT_TYPE =
@@ -37,6 +45,23 @@ type ExportVersion = Pick<
 export class DocumentExportError extends DocumentArtifactStoreError {
   constructor() {
     super('The document could not be exported.')
+  }
+}
+
+/**
+ * The package failed the share-safe policy — tracked changes, hidden text,
+ * embedded objects or residue the sanitiser could not verify out. Maps to a
+ * 422 `share_safe_export_refused`: a refusal, not a broken export.
+ */
+export class ShareSafeExportRefusalError extends DocumentExportError {
+  /** The bounded policy class — safe for telemetry; carries no part names,
+   * attribute values or document text. */
+  readonly refusalReason: ShareSafeRefusalReason
+
+  constructor(reason: ShareSafeRefusalReason) {
+    super()
+    this.name = 'ShareSafeExportRefusalError'
+    this.refusalReason = reason
   }
 }
 
@@ -59,9 +84,15 @@ export async function exportDocumentDocx(
     version: ExportVersion
     userId: string
     requestId: string
+    shareSafe?: boolean
   },
 ): Promise<DocumentExportResult> {
-  const listed = await listComments(pool, input)
+  // Share-safe export embeds nothing: product comments are exactly the
+  // collaboration metadata the mode exists to keep out of the file.
+  const listed: ListedDocumentComments | null =
+    input.shareSafe === true
+      ? { comments: [], replies: [] }
+      : await listComments(pool, input)
   if (listed === null) return { status: 'not_found' }
 
   const expectedSourceKey = createDocumentObjectKey({
@@ -83,9 +114,11 @@ export async function exportDocumentDocx(
   }
 
   const embedded =
-    listed.comments.length === 0 && listed.replies.length === 0
-      ? { bytes: Uint8Array.from(source), skippedCommentCount: 0 }
-      : await embedComments(source, listed)
+    input.shareSafe === true
+      ? await shareSafeBytes(source)
+      : listed.comments.length === 0 && listed.replies.length === 0
+        ? { bytes: Uint8Array.from(source), skippedCommentCount: 0 }
+        : await embedComments(source, listed)
 
   await appendAuditLog(pool, {
     organisationId: input.organisationId,
@@ -96,6 +129,7 @@ export async function exportDocumentDocx(
     metadata: {
       matterId: input.matterId,
       versionId: input.version.id,
+      shareSafe: input.shareSafe === true,
       commentCount: listed.comments.length,
       skippedCommentCount: embedded.skippedCommentCount,
     },
@@ -105,23 +139,56 @@ export async function exportDocumentDocx(
   return {
     status: 'ok',
     bytes: embedded.bytes,
-    filename: documentExportFilename(input.version.filename),
+    filename:
+      input.shareSafe === true
+        ? shareSafeExportFilename(input.version.filename)
+        : documentExportFilename(input.version.filename),
     skippedCommentCount: embedded.skippedCommentCount,
   }
 }
 
 export function documentExportFilename(filename: string) {
-  const slash = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'))
-  const leaf = slash === -1 ? filename : filename.slice(slash + 1)
-  const cleaned = stripUnsafeDownloadChars(leaf)
-  const base = cleaned.length > 0 ? cleaned : 'document'
-  const withExt = /\.docx$/iu.test(base) ? base : `${base}.docx`
-  return withExt.length <= 200 ? withExt : `${withExt.slice(0, 196)}.docx`
+  return safeDownloadFilename(filename, { extension: '.docx' })
 }
 
 export function documentExportContentDisposition(filename: string) {
-  const ascii = filename.replace(/[^\u0020-\u007e]/gu, '_').replace(/"/gu, '')
-  return `attachment; filename="${ascii}"`
+  return downloadContentDisposition(documentExportFilename(filename))
+}
+
+const SHARE_SAFE_SUFFIX = '-share-safe.docx'
+
+export function shareSafeExportFilename(filename: string) {
+  const safe = safeDownloadFilename(filename, { extension: '.docx' })
+  const stem = safe.replace(/\.docx$/iu, '')
+  // The suffix is part of the length budget: truncating the assembled name
+  // against `.docx` alone would drop `-share-safe` — the marker that tells a
+  // recipient which policy produced the file.
+  const budget = DOWNLOAD_FILENAME_MAX_LENGTH - SHARE_SAFE_SUFFIX.length
+  const trimmed =
+    stem.slice(0, Math.max(1, budget)).replace(/[.\s]+$/u, '') || 'document'
+  return `${trimmed}${SHARE_SAFE_SUFFIX}`
+}
+
+async function shareSafeBytes(source: Buffer) {
+  let document
+  try {
+    document = await parseDocx(Uint8Array.from(source))
+  } catch {
+    throw new DocumentExportError()
+  }
+  try {
+    return {
+      bytes: await buildShareSafeDocx(document),
+      skippedCommentCount: 0,
+    }
+  } catch (error) {
+    if (error instanceof ShareSafeRefusal) {
+      // `reason` is the bounded class — the free-text detail can name parts
+      // and shapes from the private package, so it never leaves the layer.
+      throw new ShareSafeExportRefusalError(error.reason)
+    }
+    throw new DocumentExportError()
+  }
 }
 
 async function listComments(
@@ -218,16 +285,4 @@ async function embedComments(
   } catch {
     throw new DocumentExportError()
   }
-}
-
-function stripUnsafeDownloadChars(value: string) {
-  let next = ''
-  for (const ch of value) {
-    const code = ch.charCodeAt(0)
-    if (code < 32 || code === 127 || ch === '"' || ch === '/' || ch === '\\') {
-      continue
-    }
-    next += ch
-  }
-  return next.trim()
 }

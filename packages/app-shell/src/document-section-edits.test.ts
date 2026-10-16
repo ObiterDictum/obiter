@@ -180,6 +180,12 @@ describe('section pagination', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      markings: {
+        documentKind: null,
+        draft: false,
+        privileged: false,
+        withoutPrejudice: false,
+      },
     }
     const pages = layoutDocument(model)
     expect(pages).toHaveLength(2)
@@ -439,6 +445,12 @@ function model(paragraphIds: string[]): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 }
 

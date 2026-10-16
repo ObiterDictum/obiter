@@ -128,6 +128,7 @@ const standaloneRun: RedactionRunRow = {
   detection_mode: 'model+supplement',
   replaces_run_id: null,
   replacement_run_id: null,
+  returned_document_version_id: null,
   created_by: 'usr_creator',
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',

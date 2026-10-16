@@ -106,6 +106,7 @@ describe('Redact 3 delivered acceptance criteria', () => {
       detectionMode: 'model+supplement',
       replacesRunId: null,
       replacementRunId: null,
+      returnedDocumentVersionId: null,
       createdBy: 'usr_demo',
       createdAt: decidedAt,
       updatedAt: decidedAt,

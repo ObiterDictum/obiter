@@ -10,6 +10,7 @@ import {
 } from './model'
 import { extractImportedComments } from './comment-import'
 import { loadOoxmlZipEntries } from './package-loader'
+import { readDocumentMarkings } from './parts/custom-properties'
 import { parseContentTypes, isXmlPart } from './parts/content-types'
 import { parseNumbering } from './parts/numbering'
 import { createOpaquePart } from './parts/opaque'
@@ -162,6 +163,10 @@ function parseParts(
         relationships,
         sourceParts,
         paragraphAnchors,
+      }),
+      markings: readDocumentMarkings({
+        model: { relationships },
+        sourceParts,
       }),
     },
     sourceParts,

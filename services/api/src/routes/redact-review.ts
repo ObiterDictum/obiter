@@ -14,6 +14,10 @@ import {
 } from '@obiter/redaction-policy'
 import { appendAuditLog } from '../database'
 import { createDocumentMediaResponse } from '../document-media-response'
+import {
+  downloadContentDisposition,
+  safeDownloadFilename,
+} from '../download-filename'
 import { findUncoveredRegions } from '../extraction-coverage'
 import {
   buildHardRedactionPdf,
@@ -198,22 +202,6 @@ function isSecurePdfOutput(run: FinalizedRun, mimeType: string) {
   if (mimeType !== 'application/pdf') return false
   if (run.summary.outputMode === 'pseudonymised') return false
   return run.summary.securePdf === true || run.summary.outputMode === 'redacted'
-}
-
-/** Header-safe filename: strip quotes, controls and non-ASCII code points. */
-/**
- * Header-safe filename: take only the basename, then strip path separators,
- * quotes, controls and non-ASCII code points. A source filename is user input,
- * so `../../../etc/passwd.docx` must not survive into Content-Disposition.
- */
-function asciiSafeFilename(filename: string) {
-  const base = filename.split(/[\\/]/u).pop() ?? ''
-  const cleaned = base
-    .normalize('NFKD')
-    .replace(/[^\x20-\x7e]/gu, '')
-    .replace(/["\\:]/gu, '')
-    .trim()
-  return cleaned.length > 0 ? cleaned : 'redacted.pdf'
 }
 
 function isBinaryOutput(mimeType: string) {
@@ -858,7 +846,9 @@ export function createRedactReviewRoutes(
       )
     const mimeType = outputMimeTypeOf(run)
     const filename = outputFilenameOf(run, mimeType)
-    const safeName = asciiSafeFilename(filename)
+    const disposition = downloadContentDisposition(
+      safeDownloadFilename(filename, { fallback: 'redacted-output' }),
+    )
     if (isBinaryOutput(mimeType)) {
       if (!storage.readBinary)
         return errorResponse(
@@ -872,7 +862,7 @@ export function createRedactReviewRoutes(
         status: 200,
         headers: {
           'content-type': mimeType,
-          'content-disposition': `attachment; filename="${safeName}"`,
+          'content-disposition': disposition,
           'cache-control': 'private',
           'x-content-type-options': 'nosniff',
         },
@@ -883,7 +873,7 @@ export function createRedactReviewRoutes(
       status: 200,
       headers: {
         'content-type': 'text/plain; charset=utf-8',
-        'content-disposition': `attachment; filename="${safeName}"`,
+        'content-disposition': disposition,
         'cache-control': 'private',
         'x-content-type-options': 'nosniff',
       },

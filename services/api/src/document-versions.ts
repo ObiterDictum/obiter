@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 import type {
   DocumentEditOperation,
+  DocumentMarkingsWire,
   DocumentTrackedChangeDecisionRequest,
   DocumentVersionLineage,
 } from '@obiter/contracts'
@@ -13,6 +14,7 @@ import {
   createLineageRecorder,
   parseDocx,
   serialiseDocx,
+  writeDocumentMarkings,
 } from '@obiter/ooxml'
 import type { AuditRecordInput, DocumentVersionRecord } from './database'
 import { lockMatterForEdit } from './matter-lock'
@@ -50,10 +52,15 @@ type TrackedChangeDecisionVersionInput = VersionMutationInput & {
   removeParagraphIds?: readonly string[]
 }
 
+type MarkingsVersionInput = VersionMutationInput & {
+  markings: DocumentMarkingsWire
+}
+
 type MutationAudit = {
   action: Extract<
     AuditRecordInput['action'],
     | 'document.edit'
+    | 'document.markings'
     | 'document.tracked_change_accept'
     | 'document.tracked_change_reject'
   >
@@ -181,6 +188,53 @@ export async function createTrackedChangeDecisionVersion(
         : {}),
     }),
   })
+}
+
+/**
+ * Markings are metadata-only, but they still ride the immutable-version
+ * pipeline: a new classification commits a new version, so the audit trail
+ * can say exactly which revision was marked Privileged or Without prejudice.
+ * The lineage is the identity map — paragraphs and runs are untouched, so a
+ * restore anchored on the previous version still resolves.
+ */
+export async function createMarkingsVersion(
+  pool: Pool,
+  storage: StorageService,
+  input: MarkingsVersionInput,
+): Promise<CreateEditedVersionResult> {
+  let lineage: Omit<DocumentVersionLineage, 'versionId'> | undefined
+  const editedBytes = await prepareSource(storage, input, (document) => {
+    writeDocumentMarkings(document, input.markings)
+    const recorder = createLineageRecorder(document.model)
+    const canonicalParagraphIds = canonicaliseParagraphIdentities(document)
+    const { versionId: _versionId, ...built } = buildVersionLineage({
+      recorder,
+      model: document.model,
+      canonicalParagraphIds,
+      baseVersionId: input.baseVersionId,
+      versionId: '',
+      runAddressesReliable: true,
+    })
+    lineage = built
+  })
+  return createPreparedVersion(
+    pool,
+    storage,
+    input,
+    editedBytes,
+    {
+      action: 'document.markings',
+      metadata: (versionId) => ({
+        baseVersionId: input.baseVersionId,
+        newVersionId: versionId,
+        documentKind: input.markings.documentKind,
+        draft: input.markings.draft,
+        privileged: input.markings.privileged,
+        withoutPrejudice: input.markings.withoutPrejudice,
+      }),
+    },
+    lineage ?? null,
+  )
 }
 
 export async function readDocumentTrackedChanges(

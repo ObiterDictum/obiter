@@ -46,6 +46,12 @@ const model: DocumentModelWire = {
     },
   ],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 }
 
 const tabledModel: DocumentModelWire = {

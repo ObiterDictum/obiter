@@ -19,6 +19,7 @@ import type {
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
+  DocumentMarkingsToolbar,
   DocumentReviewToolbar,
   DocumentStructureToolbar,
 } from './ribbon-types'
@@ -28,6 +29,7 @@ export type {
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
+  DocumentMarkingsToolbar,
   DocumentReviewToolbar,
   DocumentStructureToolbar,
 }
@@ -56,6 +58,7 @@ export function DocumentWorkspaceToolbar({
   onToggleTrackChanges,
   onZoom,
   onExportText,
+  onExportShareSafe,
   onPrint,
   onDownload,
   onSave,
@@ -75,6 +78,7 @@ export function DocumentWorkspaceToolbar({
   clipboard,
   find,
   review,
+  markings,
 }: {
   kind: 'docx' | 'pdf'
   dirty: boolean
@@ -107,6 +111,7 @@ export function DocumentWorkspaceToolbar({
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
+  onExportShareSafe?: () => void
   onPrint?: () => void
   onDownload?: () => void
   onSave: () => void
@@ -130,6 +135,8 @@ export function DocumentWorkspaceToolbar({
   find?: DocumentFindToolbar
   /** The tracked-change review controls; absent outside an editable model. */
   review?: DocumentReviewToolbar
+  /** The Layout ribbon's classification controls; absent while unloaded. */
+  markings?: DocumentMarkingsToolbar
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
 
@@ -224,7 +231,7 @@ export function DocumentWorkspaceToolbar({
           />
         </TabsContent>
         <TabsContent value="layout" className="min-w-0 flex-1 pt-0">
-          <LayoutRibbon format={format} />
+          <LayoutRibbon format={format} markings={markings} />
         </TabsContent>
         <TabsContent value="references" className="min-w-0 flex-1 pt-0">
           <ReferencesRibbon
@@ -251,6 +258,7 @@ export function DocumentWorkspaceToolbar({
             onToggleChanges={onToggleChanges}
             onToggleTrackChanges={onToggleTrackChanges}
             onExportText={onExportText}
+            onExportShareSafe={onExportShareSafe}
             onPrint={onPrint}
           />
         </TabsContent>

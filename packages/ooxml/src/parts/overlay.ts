@@ -231,7 +231,13 @@ export function escapeXmlAttribute(value: string) {
     .replaceAll("'", '&apos;')
 }
 
-function parseStartTag(body: string): ParsedStartTag {
+/**
+ * Parses one start tag's body — the slice between `<` and `>` — into its
+ * qualified name, raw attribute values (still entity-encoded) and
+ * self-closing flag. Exported for the field-instruction scan, which walks
+ * XML fragments that are not complete documents.
+ */
+export function parseStartTag(body: string): ParsedStartTag {
   const selfClosing = /\/\s*$/u.test(body)
   const content = selfClosing ? body.replace(/\/\s*$/u, '') : body
   let cursor = skipWhitespace(content, 0)

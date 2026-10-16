@@ -57,6 +57,12 @@ export interface RedactionRunRecord {
   detectionMode: DetectionMode
   replacesRunId: string | null
   replacementRunId: string | null
+  /**
+   * The document version this run's finalized output was returned into
+   * (E12). Present only after a successful return-to-document; doubles as the
+   * idempotence marker, so a retried return resolves to this version.
+   */
+  returnedDocumentVersionId: string | null
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -86,6 +92,7 @@ export interface RedactionRunRow {
   detection_mode: unknown
   replaces_run_id: string | null
   replacement_run_id: string | null
+  returned_document_version_id: string | null
   created_by: string
   created_at: Date | string
   updated_at: Date | string
@@ -103,7 +110,7 @@ export const redactionRunColumns = `run.id, run.organisation_id, run.matter_id, 
   run.document_version_id, run.source_filename, run.source_text_object_key, run.source_file_object_key,
   run.source_layout_object_key, run.source_mime_type, run.status, run.policy_mode,
   run.spans_json, run.decisions_json, run.output_artifact_id, run.summary_json, run.detector_version,
-  run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
+  run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.returned_document_version_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
 export const redactionRunsFrom = `from redaction_runs run
   left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id
   left join redaction_runs replacement on replacement.organisation_id = run.organisation_id
@@ -224,6 +231,7 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     detectionMode: detectionModeSchema.parse(row.detection_mode),
     replacesRunId: row.replaces_run_id ?? null,
     replacementRunId: row.replacement_run_id,
+    returnedDocumentVersionId: row.returned_document_version_id ?? null,
     createdBy: row.created_by,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),

@@ -23,6 +23,7 @@ import {
   useRedactionOutput,
   useRedactionOutputFile,
   useRedactionRun,
+  useReturnToDocument,
   useSpanDecision,
 } from './hooks'
 import { useRedactionSource } from './source-preview-hooks'
@@ -299,9 +300,13 @@ function finalizedOutputCopy(run: RedactionRun, securePdf: boolean) {
 function FinalizedOutput({
   run,
   outputQuery,
+  onOpenDocument,
 }: {
   run: RedactionRun
   outputQuery: ReturnType<typeof useRedactionOutput>
+  /** Opens the source document's page after a return; absent where the host
+   * cannot route there. */
+  onOpenDocument?: (run: RedactionRun) => void
 }) {
   const output = outputQuery.data
   const mimeType =
@@ -343,6 +348,19 @@ function FinalizedOutput({
   const artifactBlob = () =>
     isFile && artifact ? artifact : output?.text != null ? textBlob() : null
 
+  // The E12 handoff back to the editor: only a document-linked run whose
+  // output is editable DOCX can return, and a superseded run's output never
+  // can — its review decisions no longer describe the source. The base the
+  // request names is the version the run redacted; a moved head is refused
+  // server-side rather than overwritten here.
+  const returnable =
+    run.documentId !== null &&
+    run.documentVersionId !== null &&
+    isDocx &&
+    !run.replacementRunId
+  const returned = run.returnedDocumentVersionId ?? null
+  const returnToDocument = useReturnToDocument(run.id)
+
   return (
     <section className="px-4 py-4 sm:px-5" aria-label="Redaction output">
       <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
@@ -364,7 +382,7 @@ function FinalizedOutput({
               </p>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="primary"
               disabled={!downloadReady}
@@ -387,7 +405,43 @@ function FinalizedOutput({
             >
               {copy.share}
             </Button>
+            {returned ? (
+              <>
+                <Badge tone="success">Returned to document</Badge>
+                {onOpenDocument && run.documentId ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => onOpenDocument(run)}
+                  >
+                    Open document
+                  </Button>
+                ) : null}
+              </>
+            ) : returnable ? (
+              <Button
+                variant="secondary"
+                loading={returnToDocument.isPending}
+                onClick={() =>
+                  returnToDocument.mutate({
+                    baseVersionId: run.documentVersionId!,
+                  })
+                }
+              >
+                Return to document
+              </Button>
+            ) : null}
           </div>
+          {returned && returnToDocument.data ? (
+            <p className="mt-2 text-xs text-muted" role="status">
+              Saved as version {returnToDocument.data.versionNumber} of the
+              source document; the original version is unchanged.
+            </p>
+          ) : null}
+          {returnToDocument.error ? (
+            <p className="mt-2 text-sm text-danger" role="alert">
+              {returnToDocument.error.message}
+            </p>
+          ) : null}
         </header>
         <div className="px-4 py-4 sm:px-5 md:px-6">
           {outputQuery.isPending || (isFile && fileQuery.isPending) ? (
@@ -448,9 +502,13 @@ function zeroSpanBody(run: RedactionRun) {
 export function RedactionReviewView({
   runId,
   onOpenRun,
+  onOpenDocument,
 }: {
   runId: string
   onOpenRun: (runId: string) => void
+  /** Opens a source document's own page after a return-to-document; absent
+   * where the host has no route for it. */
+  onOpenDocument?: (run: RedactionRun) => void
 }) {
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
@@ -550,7 +608,11 @@ export function RedactionReviewView({
         <div className="flex flex-col gap-4 overflow-y-auto p-5 sm:p-6">
           <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
           {run.status === 'finalized' ? (
-            <FinalizedOutput run={run} outputQuery={outputQuery} />
+            <FinalizedOutput
+              run={run}
+              outputQuery={outputQuery}
+              onOpenDocument={onOpenDocument}
+            />
           ) : (
             <EmptyState
               title="No sensitive data was detected in this document"
@@ -639,7 +701,11 @@ export function RedactionReviewView({
           aria-label="Document"
         >
           {run.status === 'finalized' ? (
-            <FinalizedOutput run={run} outputQuery={outputQuery} />
+            <FinalizedOutput
+              run={run}
+              outputQuery={outputQuery}
+              onOpenDocument={onOpenDocument}
+            />
           ) : pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data ? (
             <PdfReviewDocument
               file={sourceFileQuery.data}

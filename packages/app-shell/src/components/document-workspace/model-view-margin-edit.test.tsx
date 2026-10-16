@@ -46,6 +46,12 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 }
 
 /** The five runs `insertPageNumber` stores: the result run holds no text —

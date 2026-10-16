@@ -38,6 +38,12 @@ const twoParagraphs: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  markings: {
+    documentKind: null,
+    draft: false,
+    privileged: false,
+    withoutPrejudice: false,
+  },
 }
 
 describe('applyDeleteBackward', () => {
@@ -125,6 +131,12 @@ describe('applyDeleteBackward', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      markings: {
+        documentKind: null,
+        draft: false,
+        privileged: false,
+        withoutPrejudice: false,
+      },
     }
     expect(
       applyDeleteBackward(only, emptyEditorState(), {
@@ -192,6 +204,12 @@ describe('field-boundary joins', () => {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
   }
 
   it('refuses to join away a paragraph holding only one boundary', () => {

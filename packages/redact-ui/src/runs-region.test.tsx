@@ -68,6 +68,7 @@ describe('RedactionRunsRegion', () => {
             status: 'ready_for_review',
             detectionMode: 'heuristics+supplement',
             replacementRunId: 'red_model',
+            returnedDocumentVersionId: null,
             summary: { totalSpans: 0, reviewedCount: 0 },
           },
           {
