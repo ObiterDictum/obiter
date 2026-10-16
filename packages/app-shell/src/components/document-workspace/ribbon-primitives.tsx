@@ -19,7 +19,7 @@ export function RibbonTab({
     <TabsTrigger
       value={value}
       className={cn(
-        'rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] font-medium tracking-wide text-muted',
+        'rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] font-medium tracking-wide text-muted pointer-coarse:min-h-11 pointer-coarse:items-center',
         'hover:text-ink',
         'data-[selected]:border-brand data-[selected]:bg-transparent data-[selected]:text-ink',
       )}
@@ -94,7 +94,7 @@ export function IconButton({
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
       size="sm"
-      className="h-7 w-7 px-0"
+      className="h-7 w-7 px-0 pointer-coarse:h-11 pointer-coarse:w-11"
       aria-label={caption}
       aria-pressed={pressed}
       disabled={disabled || unavailable}
@@ -149,7 +149,7 @@ export function CaptionButton({
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
       size="sm"
-      className="h-7 max-w-32 px-2 text-[11px]"
+      className="h-7 max-w-32 px-2 text-[11px] pointer-coarse:h-11"
       aria-label={caption}
       aria-pressed={pressed}
       disabled={disabled || unavailable}
@@ -205,7 +205,7 @@ export function RibbonSelect({
       aria-label={caption}
       disabled={disabled || unavailable}
       className={cn(
-        'h-7 rounded-md border border-line bg-canvas px-1.5 text-[12px] text-ink',
+        'h-7 rounded-md border border-line bg-canvas px-1.5 text-[12px] text-ink pointer-coarse:h-11',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,
       )}

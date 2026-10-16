@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { browserPrint, requestDocumentPrint } from '../../document-print'
+import {
+  browserPrint,
+  requestDocumentPrint,
+  type DocumentPrintOutcome,
+} from '../../document-print'
 
 /**
  * Owns the print request and its banner. Printing the painted pages saves
@@ -9,7 +13,7 @@ import { browserPrint, requestDocumentPrint } from '../../document-print'
 export function useDocumentPrint() {
   const [printBanner, setPrintBanner] = useState<string | null>(null)
 
-  function printDocument() {
+  function printDocument(): DocumentPrintOutcome {
     const outcome = requestDocumentPrint(browserPrint())
     setPrintBanner(
       outcome.status === 'unsupported'
@@ -18,6 +22,7 @@ export function useDocumentPrint() {
           ? `Printing failed: ${outcome.message}`
           : null,
     )
+    return outcome
   }
 
   return { printBanner, printDocument }

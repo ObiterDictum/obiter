@@ -246,16 +246,18 @@ test('fails closed when a server cannot be attributed at all', async () => {
     /Could not determine which checkout/,
   )
 
-  await assert.rejects(
-    verifyServedCheckout(targets, {
-      worktreeRoot: root,
-      fetchImpl: async (url) =>
-        url.endsWith('/api/health')
-          ? { ok: true, status: 200, json: async () => ({ status: 'ok' }) }
-          : fakeServers({ root, envFile: join(root, '.env') })(url),
-    }),
-    /reported no development provenance/,
-  )
+  for (const healthBody of [{ status: 'ok' }, null]) {
+    await assert.rejects(
+      verifyServedCheckout(targets, {
+        worktreeRoot: root,
+        fetchImpl: async (url) =>
+          url.endsWith('/api/health')
+            ? { ok: true, status: 200, json: async () => healthBody }
+            : fakeServers({ root, envFile: join(root, '.env') })(url),
+      }),
+      /reported no development provenance/,
+    )
+  }
 })
 
 test('commonDirectory is the shared parent of the embedded paths', () => {

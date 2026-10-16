@@ -61,3 +61,36 @@ export function refocusCaretBeforeFlight(): void {
   if (active.closest(TYPED_TEXT_FIELD) !== null) return
   refocusCaret()
 }
+
+/**
+ * Wrap a control's step so ribbon and keyboard share the refocus contract:
+ * undo, redo, print and reload can each disable or unmount the focused
+ * control mid-step — an emptied stack disables the button, a cleared banner
+ * unmounts it — so focus is handed to the caret before the step can drop it
+ * to document.body and lose the typed burst.
+ */
+export function withCaretRefocus(step: () => void): () => void {
+  return () => {
+    refocusCaretBeforeFlight()
+    step()
+  }
+}
+
+/**
+ * Navigation-pane arrival: after `selectParagraph` has mounted the target's
+ * editor (one frame later), scroll its block into the desk's viewport and
+ * hand DOM focus to its field, so a keyboard or pointer choice lands a real
+ * caret rather than just marking state.
+ */
+export function revealParagraph(paragraphId: string): void {
+  if (typeof document === 'undefined') return
+  requestAnimationFrame(() => {
+    const region = document.querySelector<HTMLElement>(
+      `[data-paragraph-id="${CSS.escape(paragraphId)}"]`,
+    )
+    if (region && typeof region.scrollIntoView === 'function') {
+      region.scrollIntoView({ block: 'center' })
+    }
+    refocusCaret()
+  })
+}

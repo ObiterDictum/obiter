@@ -165,8 +165,13 @@ function model(text = 'Hello', styleId?: string): DocumentModelWire {
 
 /** A stored document with one paragraph per text, ids `p1`, `p2`, ... A test
  * that needs a deletion the client keeps valid (the E45 containment probes)
- * supplies two so the delete is not the last-paragraph refusal. */
-function modelWithParagraphs(texts: readonly string[]): DocumentModelWire {
+ * supplies two so the delete is not the last-paragraph refusal. `styleIds`
+ * pairs a paragraph index with the stored style `Heading1`, which resolves to
+ * outline level 1 through the built-in heading identifier. */
+function modelWithParagraphs(
+  texts: readonly string[],
+  styleIds?: readonly (string | undefined)[],
+): DocumentModelWire {
   const base = model(texts[0] ?? '')
   const story = base.stories[0]
   if (!story) return base
@@ -177,6 +182,7 @@ function modelWithParagraphs(texts: readonly string[]): DocumentModelWire {
         ...story,
         paragraphs: texts.map((text, index) => ({
           id: `p${String(index + 1)}`,
+          ...(styleIds?.[index] ? { styleId: styleIds[index] } : {}),
           runs: [
             { id: `r${String(index + 1)}`, text, preservedXmlFragments: [] },
           ],
@@ -223,6 +229,8 @@ export type SaveWorkspaceOptions = {
   body?: string
   /** One stored paragraph per text; defaults to a single `body` paragraph. */
   paragraphs?: readonly string[]
+  /** Parallel to `paragraphs`: the stored style id for that paragraph. */
+  styleIds?: readonly (string | undefined)[]
   /** Rendered next to the workspace, inside the draft-status provider. */
   beside?: ReactNode
 }
@@ -255,7 +263,7 @@ export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
       versionId: currentVersionId,
       versionNumber: 1,
       model: options.paragraphs
-        ? modelWithParagraphs(options.paragraphs)
+        ? modelWithParagraphs(options.paragraphs, options.styleIds)
         : model(options.body ?? 'Hello'),
     },
   }))

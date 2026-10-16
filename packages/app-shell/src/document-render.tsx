@@ -1,5 +1,6 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import { layoutDocument, type LaidOutPage } from './document-page-engine'
+import { documentSections, pageBoxForSection } from './document-page-layout'
 import { documentDefaultFace } from './document-page-style'
 import {
   DocumentDesk,
@@ -44,7 +45,12 @@ export function StaticDocumentPages({
     <DocumentDesk>
       <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6">
         <div className="flex w-full flex-col gap-6">
-          <DocumentPrintStyle box={pages[0]?.box} />
+          {/* `@page` is the document's stored first-section box, derived from
+              the model rather than a painted page so no layout flow's
+              internal frame can reach the print contract. */}
+          <DocumentPrintStyle
+            box={pageBoxForSection(documentSections(model)[0]?.xml ?? '')}
+          />
           {pages.map((laid, index) => (
             <DocumentPage
               key={`page-${index + 1}`}
