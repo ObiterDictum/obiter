@@ -8,6 +8,7 @@ import {
   DOCUMENT_EDIT_TABLE_MAX_COLUMNS,
   DOCUMENT_EDIT_TABLE_MAX_ROWS,
 } from './document-edit-structural'
+import { DOCUMENT_EDIT_TEXT_MAX_LENGTH } from './document-edit-shared'
 import { documentEditRequestSchema } from './document-edit-request'
 
 const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUg=='
@@ -49,6 +50,13 @@ const pageNumber = {
   type: 'insert_page_number' as const,
   paragraphId: 'para_1',
   offset: 4,
+}
+
+const footnote = {
+  type: 'insert_footnote' as const,
+  paragraphId: 'para_1',
+  offset: 4,
+  text: 'Note body text',
 }
 
 const parse = (operations: unknown[]) =>
@@ -212,6 +220,34 @@ describe('structural edit contracts', () => {
     ['a value', { ...pageNumber, page: 3 }],
     ['an extra field', { ...pageNumber, targetParagraphId: 'para_2' }],
   ])('rejects a page number with %s', (_label, operation) => {
+    expect(parse([operation]).success).toBe(false)
+  })
+
+  it('accepts a footnote insertion and normalises its note text', () => {
+    const parsed = parse([footnote, { ...footnote, text: 'a\r\nb\rc' }])
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.operations[0]).toEqual(footnote)
+    expect(parsed.data.operations[1]).toEqual({
+      ...footnote,
+      text: 'a\nb\nc',
+    })
+  })
+
+  it.each([
+    ['a negative offset', { ...footnote, offset: -1 }],
+    ['a fractional offset', { ...footnote, offset: 0.5 }],
+    ['a missing text', { ...footnote, text: undefined }],
+    [
+      'an unsupported XML character in the text',
+      { ...footnote, text: 'badtext' },
+    ],
+    [
+      'overlong text',
+      { ...footnote, text: 'x'.repeat(DOCUMENT_EDIT_TEXT_MAX_LENGTH + 1) },
+    ],
+    ['an extra field', { ...footnote, noteId: 'fn_1' }],
+  ])('rejects a footnote with %s', (_label, operation) => {
     expect(parse([operation]).success).toBe(false)
   })
 })

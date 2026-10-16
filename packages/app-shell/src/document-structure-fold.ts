@@ -11,10 +11,9 @@ import {
   IMAGE_RELATIONSHIP_TYPE,
 } from '@obiter/ooxml'
 import { storyTableCellIds } from './document-page-tables'
-import {
-  pendingImageTarget,
-  type StructuralDraft,
-} from './document-structural-drafts'
+import { foldFootnoteDrafts, spliceRunAtOffset } from './document-footnote-fold'
+import { pendingImageTarget } from './document-image-inserts'
+import type { StructuralDraft } from './document-structural-drafts'
 
 /**
  * Folds pending table and image drafts into a copy of the model, mutating the
@@ -101,8 +100,18 @@ export function withStructuralDrafts(
     changed ||= result.changed
     return result.story
   })
-  if (!changed) return model
-  return { ...model, stories, relationships }
+  if (!changed && active.every((structure) => structure.kind !== 'footnote')) {
+    return model
+  }
+  const withBodyFolds = { ...model, stories, relationships }
+  const folded = foldFootnoteDrafts(
+    withBodyFolds,
+    active.filter((structure) => structure.kind === 'footnote'),
+    drafts,
+    nextParaId,
+  )
+  if (folded === withBodyFolds) return changed ? withBodyFolds : model
+  return folded
 }
 
 const emptyDeleted: ReadonlySet<string> = new Set()
@@ -238,41 +247,13 @@ function spliceDrawingRun(
     text: '',
     preservedXmlFragments: [drawingXml],
   }
-  const runs = [...paragraph.runs]
-  let cursor = 0
-  for (let index = 0; index < runs.length; index += 1) {
-    const run = runs[index]
-    if (!run) break
-    const effective = drafts[run.id] ?? run.text
-    if (effective.length === 0) continue
-    const end = cursor + effective.length
-    if (draft.offset <= cursor) {
-      runs.splice(index, 0, drawingRun)
-      return { ...paragraph, runs }
-    }
-    if (draft.offset < end) {
-      const within = draft.offset - cursor
-      const drafted = drafts[run.id] !== undefined
-      const head: DocumentTextRunWire = {
-        ...run,
-        ...(drafted ? { id: `${draft.id}:head` } : {}),
-        text: effective.slice(0, within),
-      }
-      const tail: DocumentTextRunWire = {
-        ...run,
-        id: `${draft.id}:tail`,
-        text: effective.slice(within),
-        preservedXmlFragments: run.preservedXmlFragments.filter((fragment) =>
-          /^<w:rPr\b/u.test(fragment),
-        ),
-      }
-      runs.splice(index, 1, head, drawingRun, tail)
-      return { ...paragraph, runs }
-    }
-    cursor = end
-  }
-  runs.push(drawingRun)
-  return { ...paragraph, runs }
+  return spliceRunAtOffset(
+    paragraph,
+    draft.offset,
+    drawingRun,
+    drafts,
+    `${draft.id}:drawing`,
+  )
 }
 
-export { pendingImagePartName } from './document-structural-drafts'
+export { pendingImagePartName } from './document-image-inserts'

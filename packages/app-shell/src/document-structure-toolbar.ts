@@ -1,4 +1,4 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import { PAGE_STORY_KINDS, type DocumentModelWire } from '@obiter/contracts'
 import type { ParagraphRange } from './document-format-toolbar'
 import { documentStory, editableParagraph } from './document-model-text'
 import {
@@ -7,10 +7,11 @@ import {
   type StructuralPlacement,
 } from './document-structure-conflicts'
 import type { ExtraRuns } from './document-word-edits'
+import type { ImageInsertFields } from './document-image-inserts'
+import { crossReferenceTargetLabel } from './document-structure-overlays'
 import {
-  crossReferenceTargetLabel,
+  footnoteNoteParagraphId,
   structuralDraftSchema,
-  type ImageInsertFields,
   type StructuralDraft,
 } from './document-structural-drafts'
 
@@ -24,6 +25,15 @@ export { storyTableCellIds } from './document-page-tables'
  */
 export type StructuralInsertOutcome =
   { inserted: true } | { inserted: false; reason: string }
+
+/**
+ * A footnote insertion names the folded paragraph the caret should move to —
+ * the pending note body — so the ribbon can open the footnote story and land
+ * the caret where the note's text is typed.
+ */
+export type FootnoteInsertOutcome =
+  | { inserted: true; noteParagraphId: string }
+  | { inserted: false; reason: string }
 
 type SetStructures = (
   update: (current: StructuralDraft[]) => StructuralDraft[],
@@ -146,23 +156,40 @@ export function documentStructureToolbar({
     (offset == null || !paragraphId
       ? 'Place the cursor in the paragraph text to insert a cross-reference'
       : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
-  // A page number anchors in whichever editable story the caret sits in —
-  // body, header or footer — not just the body. A selection has no single
-  // insertion point, and a pending insert has no server id yet.
-  const editableAnchor = Boolean(
-    paragraphId && model && editableParagraph(model, paragraphId),
-  )
+  // A footnote is a body-only splice like a picture, plus the table-cell rule
+  // a block shares: the writer anchors the reference in `word/document.xml`,
+  // and a note on cell text has no entry to hang from in this slice.
+  const footnoteUnavailable =
+    baseUnavailable ??
+    (inTableCell
+      ? 'A table cell cannot hold a footnote'
+      : offset == null || !paragraphId
+        ? 'Place the cursor in the paragraph text to insert a footnote'
+        : conflictWith({ kind: 'footnote', paragraphId, offset }))
+  // A page number anchors in whichever story a `PAGE` field resolves in —
+  // body, header or footer — not just the body. A note story has no page of
+  // its own, so a caret there refuses honestly rather than drafting a field
+  // the save plan must block. A selection has no single insertion point,
+  // and a pending insert has no server id yet.
+  const anchorStory =
+    paragraphId && model
+      ? model.stories.find((story) =>
+          story.paragraphs.some((paragraph) => paragraph.id === paragraphId),
+        )
+      : undefined
   const pageNumberUnavailable = trackChanges
     ? 'Insertions are not recorded as a tracked change'
     : selectionActive
       ? 'Collapse the selection to insert a page number'
       : !paragraphId
         ? 'Place the cursor in a paragraph to insert a page number'
-        : !editableAnchor
-          ? 'Save the new paragraph before inserting into it'
-          : offset == null
-            ? 'Place the cursor in the paragraph text to insert a page number'
-            : conflictWith({ kind: 'page-number', paragraphId, offset })
+        : anchorStory && !PAGE_STORY_KINDS.has(anchorStory.kind)
+          ? 'A page number needs a page of its own: the body, a header or a footer.'
+          : !anchorStory
+            ? 'Save the new paragraph before inserting into it'
+            : offset == null
+              ? 'Place the cursor in the paragraph text to insert a page number'
+              : conflictWith({ kind: 'page-number', paragraphId, offset })
   // A bookmark can wrap any stored paragraph, including a table cell's, so the
   // chooser lists the whole story minus paragraphs marked for deletion — and
   // minus the host paragraph, whose bookmark would wrap the field itself.
@@ -183,6 +210,7 @@ export function documentStructureToolbar({
     crossReferenceUnavailable,
     crossReferenceTargets,
     pageNumberUnavailable,
+    footnoteUnavailable,
     insertTable(rows: number, columns: number) {
       if (tableUnavailable || !paragraphId) return
       setStructures((current) => [
@@ -276,6 +304,31 @@ export function documentStructureToolbar({
       }
       setStructures((current) => [...current, draft])
       return { inserted: true }
+    },
+    insertFootnote(): FootnoteInsertOutcome {
+      if (footnoteUnavailable || !paragraphId || offset == null) {
+        return {
+          inserted: false,
+          reason: footnoteUnavailable ?? 'No anchor',
+        }
+      }
+      const draft: StructuralDraft = {
+        id: crypto.randomUUID(),
+        kind: 'footnote',
+        paragraphId,
+        offset,
+      }
+      if (!structuralDraftSchema.safeParse(draft).success) {
+        return {
+          inserted: false,
+          reason: 'That footnote cannot be held as a draft.',
+        }
+      }
+      setStructures((current) => [...current, draft])
+      return {
+        inserted: true,
+        noteParagraphId: footnoteNoteParagraphId(draft),
+      }
     },
     insertPageNumber(): StructuralInsertOutcome {
       if (pageNumberUnavailable || !paragraphId || offset == null) {

@@ -162,7 +162,7 @@ export function createWorkspaceDraftEdits({
   function deleteParagraph(paragraphId: string): ParagraphDeletionOutcome {
     const plan = planParagraphDeletion(getModel(), getState(), paragraphId)
     if (plan.kind === 'refused')
-      return { status: 'refused', reason: 'last-paragraph', selectId: null }
+      return { status: 'refused', reason: plan.reason, selectId: null }
     if (plan.kind === 'unchanged') return { status: 'deleted', selectId: null }
     // The invariant is checked before this checkpoint, so a refused deletion
     // leaves no undo entry and no pending edit operation behind.

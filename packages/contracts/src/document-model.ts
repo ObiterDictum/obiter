@@ -10,6 +10,33 @@ export const documentStoryKindSchema = z.enum([
 ])
 export type DocumentStoryKind = z.infer<typeof documentStoryKindSchema>
 
+/**
+ * The story kinds the edit surface can write to: the body, the
+ * header/footer margin stories, and the footnotes story. Endnote and
+ * comment stories stay read-only. The OOXML writer gates operations on this
+ * set and the workspace's editable-model helpers share it — contract-level
+ * because the workspace draft path must not reach the writer package (the
+ * same constraint that keeps `imageExtensionForContentType` in this
+ * package).
+ */
+export const EDITABLE_STORY_KINDS: ReadonlySet<DocumentStoryKind> = new Set([
+  'document',
+  'header',
+  'footer',
+  'footnotes',
+])
+
+/**
+ * The stories a `PAGE` field resolves in: the body and the margins a page
+ * number paints over. A note story has no page of its own, so a field
+ * anchored there could never resolve.
+ */
+export const PAGE_STORY_KINDS: ReadonlySet<DocumentStoryKind> = new Set([
+  'document',
+  'header',
+  'footer',
+])
+
 export const documentTextRunWireSchema = z.object({
   id: z.string().min(1),
   sourceTextId: z.string().min(1).optional(),

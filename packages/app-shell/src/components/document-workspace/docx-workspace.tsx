@@ -194,6 +194,7 @@ export function DocxWorkspace({
       trackChanges,
       onImageError: setBanner,
       editingStory: editingKind === 'document' ? undefined : editingStory,
+      paragraphId: selectedParagraphId,
       margin: {
         editingKind,
         onOpen: openEditingStory,
@@ -381,6 +382,9 @@ export function DocxWorkspace({
                   moveCaret={moveCaret}
                   reportJoinRefusal={reportJoinRefusal}
                   onExitMarginEditing={closeEditingStory}
+                  onOpenNoteEditing={(paragraphId) =>
+                    openEditingStory('footnotes', paragraphId)
+                  }
                 />
               </div>
               <WorkspaceSidePanels

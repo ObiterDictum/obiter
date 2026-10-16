@@ -12,6 +12,7 @@ import {
   type LineageRecorder,
 } from './document-lineage'
 import { insertCrossReference } from './cross-reference-edits'
+import { insertFootnote } from './footnote-edits'
 import { setHyperlink } from './hyperlink-edits'
 import { insertImage } from './image-edits'
 import {
@@ -377,6 +378,23 @@ export function applyDocumentEdits(
           operation.offset,
           occurrence,
           lineage,
+        )
+        structureCounts.set(key, occurrence + 1)
+      }
+    } else if (operation.type === 'insert_footnote') {
+      // A footnote writes a package part and a relationship — no tracked
+      // form — so validateTrackedOperations refuses it before any write.
+      if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+      if (!deletedLater) {
+        const key = operation.paragraph.wire.id
+        const occurrence = structureCounts.get(key) ?? 0
+        insertFootnote(
+          document,
+          operation.paragraph,
+          operation.offset,
+          operation.text,
+          occurrence,
+          lineage ? { recorder: lineage, operationIndex } : undefined,
         )
         structureCounts.set(key, occurrence + 1)
       }

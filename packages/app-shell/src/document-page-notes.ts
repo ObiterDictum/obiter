@@ -1,6 +1,7 @@
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
+  DocumentStoryWire,
 } from '@obiter/contracts'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 
@@ -64,6 +65,29 @@ export function documentNotes(model: DocumentModelWire): NoteBody[] {
     }
   }
   return ordered
+}
+
+/**
+ * The paragraph-id groups of a notes story, one per note element in fragment
+ * order — the separator entries included. A note's `w:p` children are the
+ * only paragraphs its entry may hold, so a join must not cross a boundary
+ * and a delete may not empty a group. The same count-slicing
+ * `noteStoryBodies` uses binds paragraphs to their owning entry: each
+ * fragment contributes at least one paragraph.
+ */
+export function noteEntryGroups(story: DocumentStoryWire): string[][] {
+  const groups: string[][] = []
+  let cursor = 0
+  for (const fragment of story.preservedXmlFragments) {
+    const count = Math.max(1, (fragment.match(/<w:p\b/giu) ?? []).length)
+    groups.push(
+      story.paragraphs
+        .slice(cursor, cursor + count)
+        .map((paragraph) => paragraph.id),
+    )
+    cursor += count
+  }
+  return groups
 }
 
 function noteStoryBodies(

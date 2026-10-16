@@ -6,20 +6,24 @@ import {
 } from '../../document-authorities'
 import { formattedModel } from '../../document-format-edits'
 import {
+  LAST_NOTE_PARAGRAPH_MESSAGE,
   LAST_PARAGRAPH_MESSAGE,
+  PENDING_STRUCTURE_MESSAGE,
+  paragraphDeletionRefusal,
   storyFlowParagraphIds,
+  type LocalInsert,
 } from '../../document-edits'
-import { documentStory } from '../../document-model-text'
+import { documentStory, editableParagraph } from '../../document-model-text'
 import { withBreakDrafts } from '../../document-section-format'
 import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
 import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
 import { withStructuralDrafts } from '../../document-structure-fold'
+import { pendingImageUrls } from '../../document-image-inserts'
 import {
-  pendingImageUrls,
   structuralLinkOverlays,
   type ParagraphLinkOverlay,
-} from '../../document-structural-drafts'
+} from '../../document-structure-overlays'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { FormatTarget } from '../../document-format-edits'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -77,6 +81,34 @@ export type WorkspaceDerivations = {
   linkOverlays: ReadonlyMap<string, ParagraphLinkOverlay>
 }
 
+/** The disabled reason Delete paragraph shows for `paragraphId`, or undefined
+ * when the deletion is allowed. The refusal names a last-paragraph invariant;
+ * a paragraph the stored model does not claim and no pending insert owns —
+ * a folded table or note paragraph — belongs to a pending structure and is
+ * removed with that insertion instead. */
+function deleteReasonForParagraph(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  deletedParagraphIds: readonly string[],
+  paragraphId: string,
+): string | undefined {
+  const refusal = paragraphDeletionRefusal(
+    model,
+    inserts,
+    deletedParagraphIds,
+    paragraphId,
+  )
+  if (refusal === 'last-note-paragraph') return LAST_NOTE_PARAGRAPH_MESSAGE
+  if (refusal === 'last-paragraph') return LAST_PARAGRAPH_MESSAGE
+  if (
+    !editableParagraph(model, paragraphId) &&
+    !inserts.some((insert) => insert.clientId === paragraphId)
+  ) {
+    return PENDING_STRUCTURE_MESSAGE
+  }
+  return undefined
+}
+
 export function useWorkspaceDerivations({
   documentId,
   model,
@@ -96,9 +128,16 @@ export function useWorkspaceDerivations({
      * the story the last-paragraph rule is measured on. Undefined means the
      * body. */
     editingStory?: DocumentStoryWire
+    /** The paragraph Delete paragraph targets — the caret's owner — so its
+     * disabled reason can name the invariant that refuses it, including a
+     * note entry's last paragraph inside a story that keeps others. */
+    paragraphId: string | null
     margin: {
-      editingKind: 'document' | 'header' | 'footer'
-      onOpen: (kind: 'header' | 'footer') => void
+      editingKind: 'document' | 'header' | 'footer' | 'footnotes'
+      onOpen: (
+        kind: 'header' | 'footer' | 'footnotes',
+        selectId?: string,
+      ) => void
       onClose: () => void
     }
   }
@@ -224,13 +263,20 @@ export function useWorkspaceDerivations({
     insert: insertRibbon,
     linkOverlays,
     deleteParagraphReason:
-      model &&
-      storyFlowParagraphIds(
-        insert.editingStory ?? documentStory(model),
-        drafts.inserts,
-        drafts.deletedParagraphIds,
-      ).length <= 1
-        ? LAST_PARAGRAPH_MESSAGE
-        : undefined,
+      model && insert.paragraphId
+        ? deleteReasonForParagraph(
+            model,
+            drafts.inserts,
+            drafts.deletedParagraphIds,
+            insert.paragraphId,
+          )
+        : model &&
+            storyFlowParagraphIds(
+              insert.editingStory ?? documentStory(model),
+              drafts.inserts,
+              drafts.deletedParagraphIds,
+            ).length <= 1
+          ? LAST_PARAGRAPH_MESSAGE
+          : undefined,
   }
 }

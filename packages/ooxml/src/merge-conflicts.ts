@@ -85,7 +85,8 @@ export function operationConflicts(
   }
   if (
     operation.type === 'insert_break' ||
-    operation.type === 'insert_page_number'
+    operation.type === 'insert_page_number' ||
+    operation.type === 'insert_footnote'
   ) {
     // The offset addresses this paragraph's text, so a text edit to the same
     // paragraph in the current version moves the splice; refuse rather than
