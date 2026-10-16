@@ -41,8 +41,7 @@ export function insertPropertyChild(
 
 /**
  * Applies `patch` to a wire's property fragment — its `w:rPr` or `w:pPr` —
- * appending `patch(empty)` when the wire carries none. Shared by the
- * paragraph-numbering and model-property writers, which otherwise copy it.
+ * appending `patch(empty)` when the wire carries none.
  */
 export function patchPropertyFragments(
   wire: { preservedXmlFragments: string[] },

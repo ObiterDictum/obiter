@@ -251,5 +251,5 @@ export type DocumentFindToolbar = {
   onReplaceAll?: () => void
 }
 
-/** Which legal-checks section the panel is showing; null when it is closed. */
+/** The legal-checks section a ribbon can open. */
 export type LegalChecksFocus = 'terms' | 'references'

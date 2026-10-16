@@ -249,8 +249,10 @@ export function useWorkspaceDerivations({
     () => (painted ? withBreakDrafts(painted, drafts.breaks) : undefined),
     [painted, drafts.breaks],
   )
-  // Pagination is the expensive derivation, so it reruns only when the broken
-  // model, the draft text, the page breaks, or the block partition changes.
+  // Pagination is the expensive derivation, so it is memoised rather than run
+  // on every render; it reruns only when one of its inputs changes — the
+  // broken model, the block partition, the draft text, the pending inserts and
+  // runs, the page breaks, or the layout flow.
   const pages = useMemo(
     () =>
       broken
@@ -304,14 +306,14 @@ export function useWorkspaceDerivations({
       for (const url of Object.values(created)) URL.revokeObjectURL(url)
     }
   }, [pendingUrls])
-  // One merged map for every consumer, so the fetched URLs and the pending
-  // blobs are combined once per change rather than per consumer.
+  // Memoised for cost: without it the spread allocates a fresh map on every
+  // render, including caret and selection renders that change neither input.
   const imageUrls = useMemo(
     () => ({ ...fetchedImageUrls, ...pendingUrls }),
     [fetchedImageUrls, pendingUrls],
   )
-  // Referential contract: downstream memos put `authorities` in their own
-  // dependency arrays, so its identity must not change unless an input does.
+  // Memoised for cost: `extractAuthorities` walks the whole model plus the
+  // pending drafts, which must not rerun on caret and selection renders.
   const authorities = useMemo(
     () =>
       model
