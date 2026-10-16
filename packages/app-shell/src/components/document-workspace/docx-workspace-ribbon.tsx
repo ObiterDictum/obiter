@@ -7,7 +7,7 @@ import type {
   DocumentMarkingsToolbar,
   DocumentReviewToolbar,
 } from './ribbon-types'
-import type { LegalChecksFocus } from './ribbon-review'
+import type { LegalChecksFocus } from './ribbon-types'
 import type { InsertRibbonProps } from './use-insert-ribbon'
 import type { DocumentSave } from './use-document-save'
 import type { WorkspaceDrafts } from './use-workspace-drafts'

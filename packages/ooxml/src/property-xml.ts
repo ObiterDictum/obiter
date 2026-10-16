@@ -38,3 +38,25 @@ export function insertPropertyChild(
   const position = propertyChildInsertPosition(fragment, localName)
   return `${fragment.slice(0, position)}${instruction}${fragment.slice(position)}`
 }
+
+/**
+ * Applies `patch` to a wire's property fragment — its `w:rPr` or `w:pPr` —
+ * appending `patch(empty)` when the wire carries none. Shared by the
+ * paragraph-numbering and model-property writers, which otherwise copy it.
+ */
+export function patchPropertyFragments(
+  wire: { preservedXmlFragments: string[] },
+  patch: (xml: string) => string,
+  empty: string,
+) {
+  const index = wire.preservedXmlFragments.findIndex((fragment) =>
+    /<w:(?:rPr|pPr)\b/u.test(fragment),
+  )
+  if (index === -1) {
+    wire.preservedXmlFragments.push(patch(empty))
+    return
+  }
+  wire.preservedXmlFragments[index] = patch(
+    wire.preservedXmlFragments[index] ?? empty,
+  )
+}

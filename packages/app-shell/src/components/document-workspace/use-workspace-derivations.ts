@@ -249,6 +249,8 @@ export function useWorkspaceDerivations({
     () => (painted ? withBreakDrafts(painted, drafts.breaks) : undefined),
     [painted, drafts.breaks],
   )
+  // Pagination is the expensive derivation, so it reruns only when the broken
+  // model, the draft text, the page breaks, or the block partition changes.
   const pages = useMemo(
     () =>
       broken
@@ -283,6 +285,8 @@ export function useWorkspaceDerivations({
         : undefined,
     [broken],
   )
+  // Read from the model alone, so a keystroke that only changes draft text
+  // does not rescan the package's parts.
   const imageParts = useMemo(
     () => (model ? documentImagePartNames(model) : []),
     [model],
@@ -300,10 +304,14 @@ export function useWorkspaceDerivations({
       for (const url of Object.values(created)) URL.revokeObjectURL(url)
     }
   }, [pendingUrls])
+  // One merged map for every consumer, so the fetched URLs and the pending
+  // blobs are combined once per change rather than per consumer.
   const imageUrls = useMemo(
     () => ({ ...fetchedImageUrls, ...pendingUrls }),
     [fetchedImageUrls, pendingUrls],
   )
+  // Referential contract: downstream memos put `authorities` in their own
+  // dependency arrays, so its identity must not change unless an input does.
   const authorities = useMemo(
     () =>
       model

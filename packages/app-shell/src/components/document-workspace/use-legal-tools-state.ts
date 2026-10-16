@@ -5,7 +5,7 @@ import {
   writeCitationStyle,
   type CitationStyle,
 } from '../../document-preferences'
-import type { LegalChecksFocus } from './ribbon-review'
+import type { LegalChecksFocus } from './ribbon-types'
 
 /**
  * The References ribbon's legal-tool state: the persisted citation style and
