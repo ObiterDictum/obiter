@@ -360,6 +360,19 @@ describe('indentation None no-op', () => {
     expect(collectFormatOperations(leftOnly, state.format(), [])).toEqual([])
   })
 
+  it('is a no-op for a zero-valued special indent', () => {
+    // Word writes `<w:ind w:left="0" w:firstLine="0"/>` for "no indent":
+    // a zero is absent, not a special indent to release.
+    const zeroed = modelWith([
+      paragraph('p1', '<w:pPr><w:ind w:left="0" w:firstLine="0"/></w:pPr>'),
+    ])
+    const state = toolbarWith(zeroed)
+    state.toolbar.onIndentKind('none')
+    expect(state.format()).toBe(emptyFormatDrafts)
+    expect(state.historySteps()).toBe(0)
+    expect(collectFormatOperations(zeroed, state.format(), [])).toEqual([])
+  })
+
   it('is a no-op when the special indent is not direct', () => {
     const state = toolbarWith(styleFirstLine)
     // None releases the direct attributes only, and this paragraph's

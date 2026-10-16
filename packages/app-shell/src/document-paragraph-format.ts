@@ -192,8 +192,11 @@ export function paragraphIndentKindDirect(
   const indentation = paragraphFormatOf(
     formattedParagraphDraft(stored, format),
   ).indentation
-  if (indentation?.hanging !== undefined) return 'hanging'
-  if (indentation?.firstLine !== undefined) return 'first'
+  // Truthy, matching `indentKind`: `w:firstLine="0"` / `w:hanging="0"` is
+  // how Word spells "no special indent", so a zero is not an indent to
+  // release.
+  if (indentation?.hanging) return 'hanging'
+  if (indentation?.firstLine) return 'first'
   return 'none'
 }
 
