@@ -11,7 +11,11 @@ import {
   findChildRange,
   writePropertyChildren,
 } from './model-properties'
-import { insertPropertyChild, stripPropertyChild } from './property-xml'
+import {
+  insertPropertyChild,
+  patchPropertyFragments,
+  stripPropertyChild,
+} from './property-xml'
 import { escapeXmlAttribute } from './parts/overlay'
 import { hasPendingBreakSplice } from './run-break-splices'
 
@@ -62,7 +66,7 @@ export function setRunEmphasis(
     propertiesName: 'rPr',
     children: runEmphasisChildren(emphasis),
   })
-  patchWireFragments(
+  patchPropertyFragments(
     anchor.wire,
     (xml) => patchRunEmphasisXml(xml, emphasis),
     '<w:rPr/>',
@@ -90,7 +94,7 @@ export function setParagraphFormat(
     propertiesName: 'pPr',
     children: paragraphFormatChildren(format, existingSpacing, existingInd),
   })
-  patchWireFragments(
+  patchPropertyFragments(
     anchor.wire,
     (xml) => patchParagraphFormatXml(xml, format),
     '<w:pPr/>',
@@ -450,21 +454,4 @@ function upsertElement(
   const without = stripPropertyChild(fragment, localName)
   if (!instruction) return without
   return insertPropertyChild(without, localName, instruction)
-}
-
-function patchWireFragments(
-  wire: { preservedXmlFragments: string[] },
-  patch: (xml: string) => string,
-  empty: string,
-) {
-  const index = wire.preservedXmlFragments.findIndex((fragment) =>
-    /<w:(?:rPr|pPr)\b/u.test(fragment),
-  )
-  if (index === -1) {
-    wire.preservedXmlFragments.push(patch(empty))
-    return
-  }
-  wire.preservedXmlFragments[index] = patch(
-    wire.preservedXmlFragments[index] ?? empty,
-  )
 }

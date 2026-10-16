@@ -1,7 +1,11 @@
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { writePropertyChildren } from './model-properties'
-import { insertPropertyChild, stripPropertyChild } from './property-xml'
+import {
+  insertPropertyChild,
+  patchPropertyFragments,
+  stripPropertyChild,
+} from './property-xml'
 import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
 
 export type ParagraphNumbering = {
@@ -30,7 +34,7 @@ export function setParagraphNumbering(
     propertiesName: 'pPr',
     children: [{ localName: 'numPr', instruction, apply: true }],
   })
-  patchParagraphFragments(
+  patchPropertyFragments(
     anchor.wire,
     (xml) => patchParagraphNumberingXml(xml, resolved),
     '<w:pPr/>',
@@ -339,21 +343,4 @@ function nextNumberingId(document: OoxmlDocument) {
     if (Number.isInteger(value) && value > max) max = value
   }
   return String(max + 1)
-}
-
-function patchParagraphFragments(
-  wire: { preservedXmlFragments: string[] },
-  patch: (xml: string) => string,
-  empty: string,
-) {
-  const index = wire.preservedXmlFragments.findIndex((fragment) =>
-    /<w:(?:rPr|pPr)\b/u.test(fragment),
-  )
-  if (index === -1) {
-    wire.preservedXmlFragments.push(patch(empty))
-    return
-  }
-  wire.preservedXmlFragments[index] = patch(
-    wire.preservedXmlFragments[index] ?? empty,
-  )
 }

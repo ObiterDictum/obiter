@@ -8,14 +8,12 @@ import {
 import { HomeRibbon } from './ribbon-home'
 import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
-import {
-  ReferencesRibbon,
-  ReviewRibbon,
-  ViewRibbon,
-  type LegalChecksFocus,
-} from './ribbon-review'
+import { ReferencesRibbon } from './ribbon-references'
+import { ReviewRibbon } from './ribbon-review'
+import { ViewRibbon } from './ribbon-view'
 import { IconButton, RibbonTab, ToolbarGroup } from './ribbon-primitives'
 import type {
+  LegalChecksFocus,
   DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,

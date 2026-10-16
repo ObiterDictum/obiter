@@ -57,6 +57,8 @@ export function useWorkspaceView() {
       },
     }
   }, [])
+  // The print listeners are memoised with no dependencies, so they cannot
+  // close over `view`; they read the latest value from this ref instead.
   useEffect(() => {
     viewRef.current = view
   }, [view])

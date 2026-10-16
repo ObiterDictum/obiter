@@ -10,7 +10,7 @@ import { DocumentCommentsPanel } from './comments-panel'
 import { LegalChecksPanel } from './legal-checks-panel'
 import type { ChangeReview } from './use-change-review'
 import type { AuthorityHit } from '../../document-authorities'
-import type { LegalChecksFocus } from './ribbon-review'
+import type { LegalChecksFocus } from './ribbon-types'
 import type { checkCrossReferences } from '../../document-cross-reference-check'
 import type { checkDefinedTerms } from '../../document-defined-terms'
 
