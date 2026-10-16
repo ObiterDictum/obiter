@@ -8,6 +8,7 @@ import {
 } from './parts/overlay'
 import {
   attributeValue,
+  childrenByParent,
   isWord,
   WORD_NAMESPACE,
   type XmlElement,
@@ -51,6 +52,43 @@ import { refuseShareSafe } from './share-safe-refusal'
 const decoder = new TextDecoder('utf-8', { fatal: true })
 const MC_ALTERNATE = /^(AlternateContent|Choice|Fallback)$/u
 const WORD_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/word/'
+
+/**
+ * Backstop for the share-safe content passes' cost. Those passes are linear
+ * in one part's element count (children are indexed once, field assembly is
+ * a slice, and removal propagates through a worklist), and nested fields are
+ * capped separately by `SHARE_SAFE_MAX_FIELD_NESTING`; these caps refuse a
+ * part whose parsed shape is still past anything a real document carries.
+ * They sit far above real toolchain output — the largest part observed in
+ * the corpus (a full `styles.xml`) holds ~9k elements and ~14k attributes.
+ */
+const SHARE_SAFE_MAX_PART_ELEMENTS = 100_000
+const SHARE_SAFE_MAX_PART_ATTRIBUTES = 200_000
+
+/**
+ * Refuses a kept part whose parsed shape exceeds the share-safe caps above.
+ * Separate from the content pass so the boundary itself is testable without
+ * building a document.
+ */
+export function assertShareSafeShape(
+  partName: string,
+  elements: readonly XmlElement[],
+) {
+  if (elements.length > SHARE_SAFE_MAX_PART_ELEMENTS) {
+    refuseShareSafe(
+      'oversized-structure',
+      `${partName} holds ${elements.length} elements, over the share-safe cap`,
+    )
+  }
+  let attributeCount = 0
+  for (const element of elements) attributeCount += element.attributes.length
+  if (attributeCount > SHARE_SAFE_MAX_PART_ATTRIBUTES) {
+    refuseShareSafe(
+      'oversized-structure',
+      `${partName} holds ${attributeCount} attributes, over the share-safe cap`,
+    )
+  }
+}
 
 /**
  * The single content pass over one kept XML part. Everything the emitter
@@ -97,6 +135,7 @@ export function analyseShareSafePart(
   } catch {
     refuseShareSafe('malformed-package', `${part.name} is not parseable XML`)
   }
+  assertShareSafeShape(part.name, elements)
   if (!part.overlay) {
     part.overlay = createXmlOverlay(source)
   }
@@ -228,6 +267,10 @@ function resolveAlternateContent(
   gone: (element: XmlElement) => boolean,
   contentPlan: ShareSafeContentPlan,
 ) {
+  // Children indexed once: the branch scan would otherwise filter the whole
+  // element list per `mc:AlternateContent`, which is quadratic in a part
+  // built entirely of compatibility blocks.
+  const children = childrenByParent(elements)
   for (const element of elements) {
     if (element.namespaceUri !== MARKUP_COMPAT_NAMESPACE || gone(element)) {
       continue
@@ -247,8 +290,8 @@ function resolveAlternateContent(
       }
       continue
     }
-    const branches = elements.filter(
-      (candidate) => candidate.parent === element && !gone(candidate),
+    const branches = (children.get(element) ?? []).filter(
+      (candidate) => !gone(candidate),
     )
     if (
       branches.length === 0 ||

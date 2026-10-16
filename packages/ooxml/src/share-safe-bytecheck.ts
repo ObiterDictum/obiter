@@ -170,9 +170,9 @@ export function checkShareSafeXmlBytes(
       ...inner.matchAll(/([A-Za-z_][\w.:-]*)\s*=\s*("[^"]*"|'[^']*')/gu),
     ]
     for (const match of attributes) {
-      const name = match[1]!
+      const name = match[1]
       if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue
-      const value = match[2]!.slice(1, -1)
+      const value = match[2].slice(1, -1)
       const prefix = name === 'xmlns' ? '' : name.slice(6)
       if (!SAFE_NAMESPACE_URIS.has(value)) {
         refuseShareSafe(
@@ -200,8 +200,8 @@ export function checkShareSafeXmlBytes(
     const qualifiedAttributes = new Set<string>()
     const unqualifiedValues = new Map<string, string>()
     for (const match of attributes) {
-      const name = match[1]!
-      const value = match[2]!.slice(1, -1)
+      const name = match[1]
+      const value = match[2].slice(1, -1)
       if (name === 'xmlns' || name.startsWith('xmlns:')) continue
       const colon = name.indexOf(':')
       if (colon === -1) {
