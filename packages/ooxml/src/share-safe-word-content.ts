@@ -32,32 +32,38 @@ export function collapseCommentRuns(
   elements: readonly XmlElement[],
   contentPlan: ShareSafeContentPlan,
 ) {
+  // Every run's fate is decided from the removal state the element pass
+  // left, so the carries flag is computed once. Collapsing adds only `w:r`
+  // elements to `removed`, and a run is never a descendant of another run,
+  // so no run's carries can depend on another run's collapse.
+  const runProperties = new Map<XmlElement, XmlElement>()
+  for (const element of elements) {
+    if (
+      isWord(element, 'rPr') &&
+      element.parent !== undefined &&
+      isWord(element.parent, 'r')
+    ) {
+      runProperties.set(element.parent, element)
+    }
+  }
+  const carries = new Set<XmlElement>()
+  for (const element of elements) {
+    if (contentPlan.removed.has(element) || isWord(element, 'rPr')) continue
+    const run = nearestRun(element)
+    if (run === undefined || contentPlan.removed.has(run)) continue
+    const properties = runProperties.get(run)
+    if (properties !== undefined && isDescendantOf(element, properties)) {
+      continue
+    }
+    carries.add(run)
+  }
   for (const element of elements) {
     if (!isWord(element, 'commentReference')) continue
     const run = nearestRun(element)
-    if (!run || contentPlan.removed.has(run)) continue
-    const carries = elements.some(
-      (candidate) =>
-        !contentPlan.removed.has(candidate) &&
-        isDescendantOf(candidate, run) &&
-        !isWord(candidate, 'rPr') &&
-        !isInsideRunProperties(elements, candidate, run),
-    )
-    if (carries) continue
+    if (!run || contentPlan.removed.has(run) || carries.has(run)) continue
     const text = innerTextExcluding(source, run, contentPlan.removed)
     if (text.trim() === '') contentPlan.removed.add(run)
   }
-}
-
-function isInsideRunProperties(
-  elements: readonly XmlElement[],
-  element: XmlElement,
-  run: XmlElement,
-) {
-  const properties = elements.find(
-    (candidate) => candidate.parent === run && isWord(candidate, 'rPr'),
-  )
-  return properties !== undefined && isDescendantOf(element, properties)
 }
 
 function nearestRun(element: XmlElement) {
@@ -178,21 +184,44 @@ export function analyseWordFields(
     contentPlan.textOverrides.set(first, rewritten)
     for (const element of rest) contentPlan.textOverrides.set(element, '')
   }
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const span of fields.spans) {
-      const keptBySpan = span.whole.filter(
-        (element) => !span.dropped.includes(element),
-      )
-      if (!keptBySpan.some((element) => contentPlan.removed.has(element))) {
-        continue
-      }
-      for (const element of span.whole) {
-        if (!contentPlan.removed.has(element)) {
-          contentPlan.removed.add(element)
-          changed = true
-        }
+  // A span the element pass half-removed closes over its whole span, and
+  // that closure propagates between spans that share elements. Propagate it
+  // with a worklist instead of rescanning every span to a fixpoint, which is
+  // quadratic when a part is built from many nested fields.
+  const triggerElements = new Map<FieldSpan, XmlElement[]>()
+  const spansByElement = new Map<XmlElement, FieldSpan[]>()
+  for (const span of fields.spans) {
+    const dropped = new Set(span.dropped)
+    triggerElements.set(
+      span,
+      span.whole.filter((element) => !dropped.has(element)),
+    )
+    for (const element of span.whole) {
+      const containing = spansByElement.get(element)
+      if (containing) containing.push(span)
+      else spansByElement.set(element, [span])
+    }
+  }
+  const triggerable = (span: FieldSpan) =>
+    (triggerElements.get(span) ?? []).some((element) =>
+      contentPlan.removed.has(element),
+    )
+  const processed = new Set<FieldSpan>()
+  const queue: FieldSpan[] = []
+  const enqueueIfTriggerable = (span: FieldSpan) => {
+    if (processed.has(span) || !triggerable(span)) return
+    processed.add(span)
+    queue.push(span)
+  }
+  for (const span of fields.spans) enqueueIfTriggerable(span)
+  while (queue.length > 0) {
+    const span = queue.pop()
+    if (span === undefined) break
+    for (const element of span.whole) {
+      if (contentPlan.removed.has(element)) continue
+      contentPlan.removed.add(element)
+      for (const containing of spansByElement.get(element) ?? []) {
+        enqueueIfTriggerable(containing)
       }
     }
   }

@@ -172,8 +172,10 @@ export function shareSafeExportFilename(filename: string) {
 /**
  * A refused share-safe export is a safety event worth an audit row. The audit
  * records the bounded reason class only — the free-text detail can name parts
- * and shapes inside the private package, so it never reaches the record, and
- * the recipient-facing refusal envelope is unchanged.
+ * and shapes inside the private package, so it never reaches the record. The
+ * refusal itself is unchanged; if the audit write fails, that failure
+ * propagates as the standard storage error, exactly as it does on the success
+ * path, rather than being swallowed.
  */
 async function shareSafeEmbedded(
   pool: Pool,

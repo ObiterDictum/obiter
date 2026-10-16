@@ -101,6 +101,23 @@ export function isDescendantOf(element: XmlElement, ancestor: XmlElement) {
   return false
 }
 
+/**
+ * Direct children of each element, in document order. Passes that need an
+ * element's children build this once: filtering the whole element list per
+ * element is quadratic in a part where every element is a candidate.
+ */
+export function childrenByParent(elements: readonly XmlElement[]) {
+  const index = new Map<XmlElement, XmlElement[]>()
+  for (const element of elements) {
+    const parent = element.parent
+    if (parent === undefined) continue
+    const siblings = index.get(parent)
+    if (siblings) siblings.push(element)
+    else index.set(parent, [element])
+  }
+  return index
+}
+
 export function elementRange(element: XmlElement) {
   return {
     start: element.start,

@@ -169,6 +169,8 @@ describe('GET /api/documents/:id/export response', () => {
     expect(storage.binaryReads).toEqual([sourceObjectKey])
     expect(database.audits).toEqual([
       {
+        organisationId: 'org_1',
+        userId: 'usr_viewer',
         entityType: 'document',
         entityId: 'doc_1',
         action: 'document.export',
@@ -179,6 +181,7 @@ describe('GET /api/documents/:id/export response', () => {
           commentCount: 0,
           skippedCommentCount: 0,
         },
+        requestId: 'req_export',
       },
     ])
     expect(JSON.stringify(database.audits)).not.toContain('private.docx')
@@ -215,6 +218,8 @@ describe('GET /api/documents/:id/export response', () => {
     expect(commentsXml).not.toContain('private.docx')
     expect(database.audits).toEqual([
       {
+        organisationId: 'org_1',
+        userId: 'usr_viewer',
         entityType: 'document',
         entityId: 'doc_1',
         action: 'document.export',
@@ -225,6 +230,7 @@ describe('GET /api/documents/:id/export response', () => {
           commentCount: 1,
           skippedCommentCount: 0,
         },
+        requestId: 'req_export',
       },
     ])
     expect(JSON.stringify(database.audits)).not.toContain(
@@ -258,6 +264,8 @@ describe('GET /api/documents/:id/export response', () => {
     expect(commentsXml).not.toContain('Stale review note')
     expect(database.audits).toEqual([
       {
+        organisationId: 'org_1',
+        userId: 'usr_viewer',
         entityType: 'document',
         entityId: 'doc_1',
         action: 'document.export',
@@ -268,6 +276,7 @@ describe('GET /api/documents/:id/export response', () => {
           commentCount: 2,
           skippedCommentCount: 1,
         },
+        requestId: 'req_export',
       },
     ])
   })
