@@ -46,11 +46,15 @@ const TRANSACTION_CONTROL =
 
 /** Characters Postgres allows inside an identifier, `$` and non-ASCII included. */
 function isIdentifierCharacter(character: string) {
-  return (
-    character === '$' ||
-    /[A-Za-z0-9_]/.test(character) ||
-    character.charCodeAt(0) >= 0x80
-  )
+  return character === '$' || isDollarTagCharacter(character)
+}
+
+/**
+ * Characters a dollar-quote tag may contain. Postgres tags are identifiers, so
+ * non-ASCII letters count; `$` itself delimits rather than continues one.
+ */
+function isDollarTagCharacter(character: string) {
+  return /[A-Za-z0-9_]/.test(character) || character.charCodeAt(0) >= 0x80
 }
 
 /**
@@ -151,7 +155,7 @@ function withoutQuotedOrComments(sql: string) {
     }
     if (character === '$' && !inIdentifier) {
       let tagEnd = index + 1
-      while (tagEnd < sql.length && /[A-Za-z0-9_]/.test(sql[tagEnd])) {
+      while (tagEnd < sql.length && isDollarTagCharacter(sql[tagEnd])) {
         tagEnd += 1
       }
       if (sql[tagEnd] === '$') {

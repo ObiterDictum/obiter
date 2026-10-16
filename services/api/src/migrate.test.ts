@@ -219,6 +219,10 @@ describe('migration guard lexing', () => {
       'a statement after a plain string containing a backslash',
       "select case when x then 'a' else'b\\' end;\ncommit;\n",
     ],
+    [
+      'a statement after a non-ASCII dollar-quote tag',
+      "select $\u00e9$it's$\u00e9$;\ncommit;\n",
+    ],
   ])('refuses %s', (_label, sql) => {
     expect(() => assertNoTransactionControl('0001_x.sql', sql)).toThrow(
       'carries transaction control',
@@ -238,7 +242,7 @@ describe('migration guard lexing', () => {
     ['a column named commit_sha', 'select commit_sha from runs;\n'],
     [
       'a SQL-standard function body',
-      'create function f() returns int begin atomic\n  select 1;\nend;\n',
+      'create function f() returns int\nbegin atomic\n  select 1;\nend;\n',
     ],
   ])('allows %s', (_label, sql) => {
     expect(() => assertNoTransactionControl('0001_x.sql', sql)).not.toThrow()
