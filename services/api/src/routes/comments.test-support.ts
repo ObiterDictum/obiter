@@ -274,7 +274,9 @@ export class TestDatabase extends SharedTestDatabase {
           // Mirror the query's own scope: only organisations the SQL names
           // are filtered, so dropping the predicate in the source makes the
           // other organisation's row match again and the guard test fails.
-          const scoped = sql.includes('organisation_id')
+          // Match the predicate itself, not the column name: `organisation_id`
+          // would appear in the projection if a column list ever grew one.
+          const scoped = sql.includes('organisation_id = $4')
           const [documentId, authorId, clientKey, organisationId] =
             parameters as string[]
           const existing = [...stagedComments.values()].find(
@@ -291,7 +293,7 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('client_key = $3')
         ) {
           this.queries.push(sql)
-          const scoped = sql.includes('organisation_id')
+          const scoped = sql.includes('organisation_id = $4')
           const [documentId, authorId, clientKey, organisationId] =
             parameters as string[]
           const existing = [...stagedReplies.values()].find(
