@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
-import { findMatchLabel } from '../../document-find'
 import { documentStory } from '../../document-model-text'
 import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import {
@@ -159,17 +158,8 @@ export function DocxWorkspace({
     pasteFromClipboard,
     clearSelection,
     mirrorSelection,
-    findQuery,
-    setFindQuery,
-    replaceQuery,
-    setReplaceQuery,
-    findHits,
-    activeFindIndex,
+    find,
     selectParagraph,
-    onNextHit,
-    onPreviousHit,
-    onReplaceOne,
-    onReplaceAll,
     insertAuthority,
     undoDocument,
     redoDocument,
@@ -356,18 +346,7 @@ export function DocxWorkspace({
           onCut: () => void cutToClipboard(),
           onPaste: () => void pasteFromClipboard(),
         }),
-        find: {
-          query: findQuery,
-          replace: replaceQuery,
-          matchLabel: findMatchLabel(activeFindIndex, findHits.length),
-          canReplace: findHits.length > 0,
-          onQuery: setFindQuery,
-          onReplace: setReplaceQuery,
-          onNext: onNextHit,
-          onPrevious: onPreviousHit,
-          onReplaceOne,
-          onReplaceAll,
-        },
+        find,
         review: {
           unavailable: changeReview.unavailable ?? undefined,
           bulkUnavailable: changeReview.bulkUnavailable,

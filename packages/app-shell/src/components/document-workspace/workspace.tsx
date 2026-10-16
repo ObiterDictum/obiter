@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FileArrowDown } from '@phosphor-icons/react'
 import { EmptyState } from '@obiter/ui'
 import { downloadBlob, downloadPlainText } from '../../document-edits'
+import { clampFindIndex, pdfFindHits } from '../../document-find'
+import { useFindState } from './use-workspace-find'
 import { workspaceKind } from '../../document-kind'
+import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import {
   fetchDocumentDownload,
   useDocumentPdfView,
@@ -16,7 +19,7 @@ import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
 import { IconButton, ToolbarGroup } from './ribbon-primitives'
-import { DocumentWorkspaceToolbar } from './toolbar'
+import { PdfWorkspaceToolbar } from './toolbar'
 import {
   LoadingBlock,
   QueryError,
@@ -290,39 +293,52 @@ function PdfWorkspace({
   const view = useDocumentPdfView(documentId)
   const [zoom, setZoom] = useState(100)
   const [pageIndex, setPageIndex] = useState(0)
+  const find = useFindState()
   const { downloadError, download } = useDownloadOriginal(documentId, filename)
 
+  // The shell's key routing only sees chords from focus inside it, but a
+  // control disabled under the pointer — 'Next page' on the last page —
+  // drops focus to the document body, outside the shell, where the
+  // browser's own find would answer the chord over a single mounted page.
+  // Route that dead-focus case at document level while this read-only
+  // surface is mounted: focus owned by anything else — a field, a dialog,
+  // a region outside the workspace — is never claimed, and the listener
+  // leaves with the surface.
+  useEffect(() => {
+    const route = (event: KeyboardEvent) => {
+      if (event.target === document.body) documentWorkspaceKeyDown(event)
+    }
+    document.addEventListener('keydown', route)
+    return () => document.removeEventListener('keydown', route)
+  }, [])
+
+  // The whole text is searched once per query/options change; only the
+  // current page's slices ever mount, so the DOM stays page-bounded the way
+  // the viewer already is.
+  const findHits = useMemo(
+    () => (view.data ? pdfFindHits(view.data, find.query, find.options) : []),
+    [view.data, find.query, find.options],
+  )
+  const activeFindIndex = clampFindIndex(find.index, findHits.length)
+
   return (
-    <WorkspaceShell layout={layout}>
+    <WorkspaceShell
+      layout={layout}
+      // A read-only surface still routes find; save and the edit commands
+      // simply have no source here.
+      onKeyDown={documentWorkspaceKeyDown}
+    >
       <WorkspaceRibbon>
-        <DocumentWorkspaceToolbar
-          kind="pdf"
-          dirty={false}
-          saving={false}
-          trackChanges={false}
+        <PdfWorkspaceToolbar
+          find={find.toolbar(findHits, activeFindIndex, (hit) =>
+            setPageIndex(hit.pageIndex),
+          )}
           zoom={zoom}
-          commentsOpen={false}
-          changesOpen={false}
-          authoritiesOpen={false}
-          commentCount={0}
-          changeCount={0}
-          presence={[]}
-          onToggleComments={() => undefined}
-          onToggleChanges={() => undefined}
-          onToggleAuthorities={() => undefined}
-          onInsertAuthority={() => undefined}
-          onToggleTrackChanges={() => undefined}
           onZoom={setZoom}
           onExportText={() => {
             if (view.data) downloadPlainText(filename, view.data.text)
           }}
           onDownload={download}
-          onSave={() => undefined}
-          onInsertParagraph={() => undefined}
-          onDeleteParagraph={() => undefined}
-          onPageBreak={() => undefined}
-          onSectionBreak={() => undefined}
-          canEdit={false}
         />
         {downloadError ? (
           <p className="px-3 pb-2 text-sm text-danger" role="status">
@@ -344,6 +360,7 @@ function PdfWorkspace({
             pageIndex={pageIndex}
             onPageIndexChange={setPageIndex}
             zoom={zoom}
+            find={{ hits: findHits, active: activeFindIndex }}
           />
         </DocumentDesk>
       ) : null}

@@ -233,6 +233,51 @@ describe('DocumentWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
   })
 
+  it('routes the find chord from document-body focus, and only while mounted', () => {
+    workspaceApi.useDocumentPdfView.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        documentId: 'doc_1',
+        versionId: 'ver_1',
+        versionNumber: 1,
+        text: 'Judgment text',
+        layout: {
+          version: 1,
+          pages: [{ width: 200, height: 200 }],
+          segments: [],
+        },
+      },
+    })
+    const { unmount } = renderWorkspace(
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={version({ filename: 'bundle.pdf', fileType: 'pdf' })}
+      />,
+    )
+    const field = screen.getByLabelText('Find in document')
+
+    // A control disabled under the pointer — 'Next page' on the last page —
+    // drops focus to the body, outside the shell's key routing. The chord
+    // still reaches the workspace find: claimed once, focused once.
+    expect(fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true })).toBe(
+      false,
+    )
+    expect(document.activeElement).toBe(field)
+
+    // Focus owned outside the workspace keeps the platform's own find.
+    field.blur()
+    const outside = document.body.appendChild(document.createElement('button'))
+    expect(fireEvent.keyDown(outside, { key: 'f', ctrlKey: true })).toBe(true)
+    expect(document.activeElement).not.toBe(field)
+
+    // The route leaves with the surface: unmounted, the chord is unclaimed.
+    unmount()
+    expect(fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true })).toBe(
+      true,
+    )
+  })
+
   it('omits the page heading when opened in the matter pane', () => {
     workspaceApi.useDocumentPdfView.mockReturnValue({
       isLoading: false,

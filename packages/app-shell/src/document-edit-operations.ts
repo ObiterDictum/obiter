@@ -11,7 +11,7 @@ import {
   type FormatDrafts,
 } from './document-format-edits'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
-import { editableStories } from './document-model-text'
+import { editableStories, runsText } from './document-model-text'
 import {
   runColour,
   runFlag,
@@ -299,9 +299,7 @@ function extraParagraphPayload(
     ),
   }))
   const formatted = payload.some((run) => Object.keys(run).length > 1)
-  return formatted
-    ? { runs: payload }
-    : { text: payload.map((run) => run.text).join('') }
+  return formatted ? { runs: payload } : { text: runsText(payload) }
 }
 
 /**

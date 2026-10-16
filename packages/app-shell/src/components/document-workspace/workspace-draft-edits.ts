@@ -1,5 +1,10 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
 import type { ParagraphDeletionOutcome } from '../../document-edits'
+import { findInDocument, type FindMatchOptions } from '../../document-find'
+import {
+  replaceFindHits,
+  type FindReplaceResult,
+} from '../../document-find-replace'
 import { mergeEmphasis } from '../../document-format-edits'
 import { planParagraphDeletion } from '../../document-paragraph-deletion'
 import type { DraftState } from '../../document-save-plan'
@@ -12,7 +17,6 @@ import {
 import {
   applyInsertText,
   applyWordEdit,
-  replaceFindHits,
   wordEditJoinRefusal,
   type EditorResult,
   type WordEditOutcome,
@@ -98,17 +102,30 @@ export function createWorkspaceDraftEdits({
     return result.caret
   }
 
+  /**
+   * Replaces one find hit — `which` indexes the hit list — or every hit for
+   * 'all'. The hits are re-derived from the live state with the same query
+   * and options the find field is showing, so a render-stale offset can never
+   * reach the document; the batch is one history step, and a refused range
+   * leaves the draft untouched.
+   */
   function replaceHits(
     model: DocumentModelWire,
-    hits: ReadonlyArray<{ paragraphId: string; start: number; end: number }>,
+    story: DocumentStoryWire | undefined,
+    query: string,
+    options: FindMatchOptions,
     replacement: string,
     which: number | 'all',
-  ) {
-    const result = replaceFindHits(model, getState(), hits, replacement, which)
-    if (!result) return null
+  ): FindReplaceResult {
+    const state = getState()
+    const hits = findInDocument(model, state, query, story, options)
+    const result = replaceFindHits(model, state, hits, replacement, which, () =>
+      crypto.randomUUID(),
+    )
+    if (result.status !== 'applied') return result
     checkpoint()
     commitEditor(result)
-    return result.caret
+    return result
   }
 
   function insertText(
