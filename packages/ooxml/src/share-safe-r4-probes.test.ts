@@ -139,6 +139,68 @@ describe('share-safe r4: field and bookmark channels', () => {
     expect(story).not.toContain('commentReference')
   })
 
+  it('collapses an annotation-reference run rather than shipping an empty shell', async () => {
+    // `annotationRef` is the other reference a run can hold alone. The marker is
+    // removed with the comments surface, and once it goes the run carries
+    // nothing: the field around it must keep its instruction without leaving a
+    // dead `<w:r/>` where its result was.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:annotationRef/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('PAGE')
+    expect(story).not.toContain('annotationRef')
+    // Every other run in this story carries content, so any run left empty is
+    // the shell that the emptied annotation run used to become.
+    expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+  })
+
+  it('collapses a run left holding only a range marker', async () => {
+    // A range marker is the same kind of surface: the element pass removes it,
+    // and a run that held nothing else is then a dead shell. Conforming markup
+    // puts range markers between runs, but the parser accepts them inside one —
+    // this file's own comment-range case builds that — so the shell is real.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:t>a</w:t></w:r><w:r><w:commentRangeEnd w:id="1"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).not.toContain('commentRangeEnd')
+    expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+  })
+
+  it('keeps character data a run writes beside a range marker', async () => {
+    // The empty-text check is the only guard for this shape. Character data is
+    // not an element, so the carries set never sees it, and collapsing the run
+    // would delete `BARE` from the document.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:commentRangeStart w:id="1"/>BARE<w:commentRangeEnd w:id="1"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('BARE')
+    expect(story).not.toContain('commentRange')
+  })
+
+  it('collapses a run left holding only its formatting', async () => {
+    // The shell a collapse removes can carry the run's properties, so the run is
+    // not always literally empty: a formatted marker run leaves
+    // `<w:r><w:rPr>…</w:rPr></w:r>` unless the collapse takes it. The empty-run
+    // regex in the case above would not match that.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).not.toContain('annotationRef')
+    expect(story).not.toContain('CommentReference')
+    // The run itself has to go, not just its contents: dropping the properties
+    // and keeping the run would leave `<w:r/>`, and stripping the marker while
+    // keeping `<w:r><w:rPr>…</w:rPr></w:r>` would leave a shell the two name
+    // assertions above cannot see.
+    expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+    expect(story).not.toMatch(
+      /<w:r(?:\s[^>]*)?>\s*<w:rPr>[\s\S]*?<\/w:rPr>\s*<\/w:r>/,
+    )
+  })
+
   it('keeps a keep-class field whose result carries text beside a comment marker', async () => {
     const { parts } = await outputParts({
       body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>7</w:t></w:r><w:r><w:commentReference w:id="1"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
