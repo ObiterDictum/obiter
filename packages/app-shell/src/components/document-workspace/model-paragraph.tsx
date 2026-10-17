@@ -13,11 +13,9 @@ import {
   type PendingEmphasis,
 } from '../../document-format-types'
 import {
-  deleteCharBeforeOffset,
   effectiveParagraph,
   paragraphPlainText,
   sliceContainsOffset,
-  textDiff,
 } from '../../document-model-text'
 import { paragraphInlineXml } from '../../document-page-floats'
 import { firstLineIndentPx, wrapLines } from '../../document-page-flow'
@@ -39,18 +37,12 @@ import type {
   ParagraphSelectionBinding,
   ParagraphSelectionHandlers,
 } from './paragraph-editor'
-import { ParagraphEditor } from './paragraph-editor'
+import { ModelParagraphEditor } from './model-paragraph-editor'
 import { ParagraphRunPaint, type ParagraphSelectionRange } from './model-run'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 
-export type ParagraphWordEdit = {
-  type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
-  paragraphId: string
-  offset: number
-  from?: number
-  to?: number
-  insert?: string
-}
+export type { ParagraphWordEdit } from './model-paragraph-editor'
+import type { ParagraphWordEdit } from './model-paragraph-editor'
 
 export function ModelParagraph({
   paragraph,
@@ -364,9 +356,18 @@ export function ModelParagraph({
               >
                 {runPaint}
               </div>
-              <ParagraphEditor
-                paragraphId={paragraph.id}
-                text={sliceText}
+              <ModelParagraphEditor
+                paragraph={paragraph}
+                effective={effective}
+                fullText={fullText}
+                start={start}
+                end={end}
+                sliceText={sliceText}
+                face={face}
+                faceCss={faceCss}
+                onBodyEdge={onBodyEdge}
+                editorHeight={editorHeight}
+                linePx={linePx}
                 selected={holdsCaret}
                 restoreCaret={restore}
                 lines={lines}
@@ -384,109 +385,16 @@ export function ModelParagraph({
                     direction,
                   )
                 }
-                style={{
-                  ...faceCss,
-                  marginTop: 0,
-                  marginBottom: 0,
-                  paddingLeft: 0,
-                  paddingRight: 0,
-                  textIndent: onBodyEdge ? 0 : faceCss.textIndent,
-                  height: editorHeight,
-                  lineHeight: `${linePx}px`,
-                  whiteSpace: 'pre-wrap',
-                  overflowWrap: 'normal',
-                  wordBreak: 'normal',
-                  textAlign: face.align ?? 'left',
-                  color: 'transparent',
-                  backgroundColor: 'transparent',
-                }}
                 onSelect={(local) =>
                   local == null
                     ? onSelectParagraph(paragraph.id)
                     : onSelectParagraph(paragraph.id, start + local)
                 }
-                onChangeText={(next) => {
-                  const diff = textDiff(sliceText, next)
-                  if (onWordEdit) {
-                    onWordEdit({
-                      type: 'replace',
-                      paragraphId: paragraph.id,
-                      offset: start + diff.from,
-                      from: start + diff.from,
-                      to: start + diff.to,
-                      insert: diff.insert,
-                    })
-                    return
-                  }
-                  const first = effective.runs[0]
-                  if (first) {
-                    onRunTextChange?.(
-                      first.id,
-                      fullText.slice(0, start) + next + fullText.slice(end),
-                    )
-                  }
-                }}
-                onBackspace={(local) => {
-                  const offset = start + local
-                  if (onWordEdit) {
-                    onWordEdit({
-                      type: 'deleteBackward',
-                      paragraphId: paragraph.id,
-                      offset,
-                    })
-                    return
-                  }
-                  if (offset > 0) {
-                    const next = deleteCharBeforeOffset(
-                      effective,
-                      undefined,
-                      offset,
-                    )
-                    if (next) onRunTextChange?.(next.runId, next.text)
-                    return
-                  }
-                  if (onJoinPrevious?.(paragraph.id)) return
-                  if (fullText.length === 0) onDeleteParagraph?.(paragraph.id)
-                }}
-                onDelete={(local) => {
-                  const offset = start + local
-                  if (onWordEdit) {
-                    onWordEdit({
-                      type: 'deleteForward',
-                      paragraphId: paragraph.id,
-                      offset,
-                    })
-                    return
-                  }
-                  if (offset < fullText.length) {
-                    const next = deleteCharBeforeOffset(
-                      effective,
-                      undefined,
-                      offset + 1,
-                    )
-                    if (next) onRunTextChange?.(next.runId, next.text)
-                  }
-                }}
-                onEnter={(local) => {
-                  if (onWordEdit) {
-                    onWordEdit({
-                      type: 'split',
-                      paragraphId: paragraph.id,
-                      offset: start + local,
-                    })
-                    return
-                  }
-                  onInsertParagraph?.(paragraph.id)
-                }}
-                onLineBreak={(local) => {
-                  if (onWordEdit) {
-                    onWordEdit({
-                      type: 'lineBreak',
-                      paragraphId: paragraph.id,
-                      offset: start + local,
-                    })
-                  }
-                }}
+                onWordEdit={onWordEdit}
+                onRunTextChange={onRunTextChange}
+                onJoinPrevious={onJoinPrevious}
+                onDeleteParagraph={onDeleteParagraph}
+                onInsertParagraph={onInsertParagraph}
               />
             </>
           ) : (
