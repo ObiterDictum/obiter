@@ -184,14 +184,6 @@ export function countLines(
 }
 
 /**
- * Display spans for a paragraph in the browser's visual line model: one row per
- * hard-break segment plus soft wraps, and the empty row a trailing break opens.
- * A row's `to` excludes the newline that terminates it, so a hard break leaves
- * a one code unit gap before the next row while a soft wrap shares its
- * boundary, which `lineIndex` in `paragraph-arrow.ts` relies on to decide caret
- * ownership at a break.
- */
-/**
  * Line 1's indent for one paragraph block's wrap. `bodyEdge` is true when the
  * block begins on the body edge rather than at the paragraph's first code unit:
  * a list, whose marker carries the indent as its own marker column; a
@@ -209,14 +201,6 @@ export function firstLineIndentPx(
   return bodyEdge ? 0 : paragraphTextIndentPx(face)
 }
 
-/**
- * Display spans for a paragraph in the browser's visual line model: one row per
- * hard-break segment plus soft wraps, and the empty row a trailing break opens.
- * A row's `to` excludes the newline that terminates it, so a hard break leaves
- * a one code unit gap before the next row while a soft wrap shares its
- * boundary, which `lineIndex` in `paragraph-arrow.ts` relies on to decide caret
- * ownership at a break.
- */
 /**
  * Display spans for a paragraph in the browser's visual line model: one row per
  * hard-break segment plus soft wraps, and the empty row a trailing break opens.
