@@ -191,6 +191,14 @@ describe('share-safe r4: field and bookmark channels', () => {
     const story = parts.get('word/document.xml') ?? ''
     expect(story).not.toContain('annotationRef')
     expect(story).not.toContain('CommentReference')
+    // The run itself has to go, not just its contents: dropping the properties
+    // and keeping the run would leave `<w:r/>`, and stripping the marker while
+    // keeping `<w:r><w:rPr>…</w:rPr></w:r>` would leave a shell the two name
+    // assertions above cannot see.
+    expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+    expect(story).not.toMatch(
+      /<w:r(?:\s[^>]*)?>\s*<w:rPr>[\s\S]*?<\/w:rPr>\s*<\/w:r>/,
+    )
   })
 
   it('keeps a keep-class field whose result carries text beside a comment marker', async () => {
