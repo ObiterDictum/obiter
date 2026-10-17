@@ -99,11 +99,15 @@ export function trackedChangeLookup(
   }
   // Paragraph ranges come from the part's tree, so any two are nested or
   // disjoint. The innermost range holding an element is therefore the one with
-  // the last start that still holds it: walk back from there and stop at the
-  // first that does, which is at most the nesting depth.
+  // the last start that still holds it, and the ranges that could hold it are
+  // exactly its enclosing chain. Following that chain is what keeps a change no
+  // range covers — one inside a paragraph whose mark is deleted, a row-level
+  // insert — from walking every earlier range before answering that nothing
+  // holds it.
   const ordered = [...paragraphs].sort(
     (left, right) => left.paragraphRange.start - right.paragraphRange.start,
   )
+  const enclosing = nearestEnclosing(ordered)
   return {
     inside: (element) => inside.get(element) ?? NO_ELEMENTS,
     childrenOf: (element) => children.get(element) ?? NO_ELEMENTS,
@@ -120,9 +124,9 @@ export function trackedChangeLookup(
           low = middle + 1
         else high = middle
       }
-      for (let index = low - 1; index >= 0; index -= 1) {
+      for (let index = low - 1; index >= 0; index = enclosing[index] ?? -1) {
         const anchor = ordered[index]
-        if (anchor === undefined) break
+        if (anchor === undefined) return undefined
         if (
           anchor.paragraphRange.start <= element.start &&
           anchor.paragraphRange.end >= element.end
@@ -133,6 +137,33 @@ export function trackedChangeLookup(
       return undefined
     },
   }
+}
+
+/**
+ * For each range in a start-sorted, nested-or-disjoint list, the index of the
+ * nearest earlier range that encloses it, or -1 when none does. One stack pass:
+ * a range is enclosed by the last range still open past its start.
+ */
+function nearestEnclosing(ordered: readonly ParagraphAnchor[]): number[] {
+  const enclosing: number[] = []
+  const open: number[] = []
+  for (let index = 0; index < ordered.length; index += 1) {
+    const end = ordered[index]?.paragraphRange.end
+    if (end === undefined) continue
+    // Starts ascend, so every range on the stack begins at or before this one:
+    // it encloses this range exactly when it also ends at or after it. Ranges
+    // that merely touch — one ending where the next begins — do not, and
+    // treating them as enclosing would make the chain step through every
+    // sibling, which is the walk this exists to avoid.
+    while (open.length > 0) {
+      const candidate = ordered[open[open.length - 1] ?? -1]
+      if (candidate !== undefined && candidate.paragraphRange.end >= end) break
+      open.pop()
+    }
+    enclosing.push(open.length > 0 ? (open[open.length - 1] ?? -1) : -1)
+    open.push(index)
+  }
+  return enclosing
 }
 
 function isParagraphMarkDeletion(element: XmlElement) {
