@@ -47,6 +47,9 @@ import { classifyManifest } from './desktop-manifest.mjs'
  * the same ratchet margin the web budget uses, so an ordinary addition passes
  * while a return to a larger shape fails. main and preload are contract-sized
  * entry bundles where a percentage is meaningless and are given absolute limits.
+ * An entry re-measured since the file was written states its own margin, because
+ * a bucket that has grown steadily needs a re-record rather than an ever-larger
+ * ratchet.
  */
 export const BUDGETS = {
   // 3,330,189 B, re-measured at the indent-paint fix (the recorded baseline was
@@ -55,8 +58,12 @@ export const BUDGETS = {
   // screen lands here; the headroom is 2.1% rather than the usual 10%, which
   // still fails a return to a larger shape.
   rendererInitialJsBytes: 3_400_000,
-  // 83,069 B.
-  rendererInitialCssBytes: 91_000,
+  // 90,525 B, re-recorded after the editor programme grew it from the recorded
+  // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
+  // entry above settled on for the same reason: the previous ceiling carried
+  // 0.5%, so the next ordinary stylesheet addition would have failed the build
+  // for a reason unrelated to its own change.
+  rendererInitialCssBytes: 93_000,
   // 774,344 B (the PDF viewer chunk).
   lazyChunksBytes: 850_000,
   largestLazyChunkBytes: 850_000,
@@ -70,8 +77,10 @@ export const BUDGETS = {
   // 456 B. Absolute: the preload bridge is a small fixed contract surface, and
   // a deliberate addition of a few methods should pass.
   preloadBundleBytes: 2_000,
-  // 5,343,300 B: everything the packager reads from out/.
-  applicationPayloadBytes: 5_870_000,
+  // 5,655,726 B, re-recorded from the recorded 5,343,300 B: everything the
+  // packager reads from out/. 2.0% headroom, for the same reason as the CSS
+  // entry above.
+  applicationPayloadBytes: 5_770_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']
