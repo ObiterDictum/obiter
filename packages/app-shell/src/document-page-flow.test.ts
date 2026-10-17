@@ -323,8 +323,8 @@ describe('first-line indent', () => {
   it('applies the indent to a paragraph first row, not to a later fragment', () => {
     // A continuation starts mid-paragraph, so its opening row is a body row and
     // both surfaces have to leave it the full width.
-    const body = fragmentAt(WRAP_TEXT, 10, 0, WRAP_WIDTH)
-    const indented = fragmentAt(WRAP_TEXT, 10, FIRST_LINE, WRAP_WIDTH)
+    const body = fragmentAt(WRAP_TEXT, 10, 0, WRAP_WIDTH, LINE_PX)
+    const indented = fragmentAt(WRAP_TEXT, 10, FIRST_LINE, WRAP_WIDTH, LINE_PX)
     expect(indented.shown).toBe(body.shown)
     expect(indented.consumed).toBe(body.consumed)
     // The same indent at offset 0 does move the row, or the equality above

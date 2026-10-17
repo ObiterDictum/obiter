@@ -135,11 +135,14 @@ export function ParagraphRunPaint({
           height: linePx,
           // The wrapper inherits the paragraph's text-indent, which would then
           // apply to the first line of every one of these wrapped blocks and so
-          // indent every line. Only the paragraph's first block keeps it; the
-          // rest reset it. A continuation block resumes mid-paragraph at a page
-          // break, so no line on it carries the special first-line/hanging
-          // indent, including its first.
-          textIndent: index === 0 && !continuation ? undefined : 0,
+          // indent every line. Only the paragraph's own opening block keeps it;
+          // the rest reset it. A block that resumes mid-paragraph — a
+          // continuation, or the block a page break inside the paragraph opens,
+          // which the layout reports with `continuation` false and an offset
+          // above zero — begins on the body edge, so no line on it carries the
+          // special first-line or hanging indent, its first line included.
+          textIndent:
+            index === 0 && !continuation && start === 0 ? undefined : 0,
         }}
         data-line-from={start + line.from}
         data-line-to={start + line.to}

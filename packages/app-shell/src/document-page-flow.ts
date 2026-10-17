@@ -192,13 +192,15 @@ export function countLines(
  * ownership at a break.
  */
 /**
- * Line 1's indent for one paragraph block's wrap. A list's marker carries the
- * indent as its own marker column and a continuation starts mid-paragraph, so
- * both begin on the body edge; only a paragraph's opening block is held back by
- * its first-line indent. The paint applies the same number as CSS
- * `text-indent`, which is why it is read from the face rather than passed in,
- * and the editor's textarea has to state it as well because a form control
- * resets `text-indent` and would otherwise start line 1 on the body edge.
+ * Line 1's indent for one paragraph block's wrap. `bodyEdge` is true when the
+ * block begins on the body edge rather than at the paragraph's first code unit:
+ * a list, whose marker carries the indent as its own marker column; a
+ * continuation; or the block a page break inside the paragraph opens, which the
+ * layout reports with `continuation` false and an offset above zero. The paint
+ * applies the same number as CSS `text-indent`, which is why it is read from the
+ * face rather than passed in, and the editor's textarea has to state it as well
+ * because a form control resets `text-indent` and would otherwise start line 1
+ * on the body edge.
  */
 export function firstLineIndentPx(
   face: ParagraphFace,
@@ -207,6 +209,22 @@ export function firstLineIndentPx(
   return bodyEdge ? 0 : paragraphTextIndentPx(face)
 }
 
+/**
+ * Display spans for a paragraph in the browser's visual line model: one row per
+ * hard-break segment plus soft wraps, and the empty row a trailing break opens.
+ * A row's `to` excludes the newline that terminates it, so a hard break leaves
+ * a one code unit gap before the next row while a soft wrap shares its
+ * boundary, which `lineIndex` in `paragraph-arrow.ts` relies on to decide caret
+ * ownership at a break.
+ */
+/**
+ * Display spans for a paragraph in the browser's visual line model: one row per
+ * hard-break segment plus soft wraps, and the empty row a trailing break opens.
+ * A row's `to` excludes the newline that terminates it, so a hard break leaves
+ * a one code unit gap before the next row while a soft wrap shares its
+ * boundary, which `lineIndex` in `paragraph-arrow.ts` relies on to decide caret
+ * ownership at a break.
+ */
 export function wrapLines(
   text: string,
   fontSizePx: number,
