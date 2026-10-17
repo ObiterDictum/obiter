@@ -68,18 +68,20 @@ function rowInsertDocument(count: number) {
   return `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body><w:tbl>${rows}</w:tbl></w:body></w:document>`
 }
 
-/** A field per paragraph that another field encloses, so every one of them is a
- * candidate for range replacement and `storyFields` has to ask the nesting
- * question about all of them. */
-function nestedFieldDocument(count: number) {
-  const fields = Array.from(
+/** Range-replaceable fields: `begin`, instruction, `separate` and result in
+ * one paragraph, with the end marker leading the next, which is the shape
+ * `spanRangeReplaceable` accepts. Without `separate` the field is not a
+ * candidate at all, `storyFields` short-circuits before asking whether it is
+ * nested, and a fixture built that way measures nothing about the nesting
+ * question — which is what the first version of this test did. */
+function replaceableFieldDocument(count: number) {
+  const paragraphs = Array.from(
     { length: count },
     (_, index) =>
-      `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> REF b${index} </w:instrText></w:r>` +
-      `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGEREF p${index} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>` +
-      `<w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>text ${index}</w:t></w:r></w:p>`,
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> REF b${index} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>result ${index}</w:t></w:r></w:p>` +
+      `<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>tail ${index}</w:t></w:r></w:p>`,
   ).join('')
-  return `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body>${fields}</w:body></w:document>`
+  return `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body>${paragraphs}</w:body></w:document>`
 }
 
 /** The fixture the model pool's deadline note is calibrated against: 5091
@@ -214,24 +216,23 @@ describe('paragraph lookup cost', () => {
 })
 
 describe('field nesting through the parse', () => {
-  it('pairs nested fields without asking the nesting question per field', async () => {
+  it('asks the nesting question about range-replaceable fields, and asks it once', async () => {
     // The unit cost test asks `nestedFieldSpans` directly, so it cannot see the
     // call site going back to the per-span question. This goes through
-    // `parseDocx`, where every field is a range-replacement candidate.
-    //
-    // It is a catastrophe guard rather than a bite test, and says so: measured
-    // on this fixture, asking the per-span question costs about 350 ms of a
-    // 2.5 s parse at 16,000 fields, so a bound could not separate the call sites
-    // without being tighter than the noise. What it would catch is the scan
-    // moving inside the walk over spans, which is quadratic in a way that does
-    // dominate. The warm-up run keeps the smaller size from paying for the
-    // module's first call.
-    await timeParse(nestedFieldDocument, 1_000)
-    const small = await timeParse(nestedFieldDocument, 1_000)
-    const large = await timeParse(nestedFieldDocument, 8_000)
-    expect(small.document.model.stories[0]?.fields).toHaveLength(2_000)
-    expect(large.document.model.stories[0]?.fields).toHaveLength(16_000)
-    expect(large.elapsed).toBeLessThan(Math.max(400, small.elapsed * 20))
+    // `parseDocx` with fields the nesting question is actually asked about:
+    // 8,000 of them cost about 1.1 s here and 2.3 s with the per-span question
+    // restored, so the bound separates the two call sites at roughly 1.5x
+    // headroom on each side. The warm-up run keeps the smaller size from paying
+    // for the module's first call.
+    await timeParse(replaceableFieldDocument, 1_000)
+    const small = await timeParse(replaceableFieldDocument, 2_000)
+    const large = await timeParse(replaceableFieldDocument, 8_000)
+    const fields = large.document.model.stories[0]?.fields
+    expect(fields).toHaveLength(8_000)
+    // Every one of them is a candidate, or the question is never asked.
+    expect(fields?.every((field) => field.rangeReplaceable)).toBe(true)
+    expect(large.elapsed).toBeLessThan(1_700)
+    expect(large.elapsed).toBeLessThan(Math.max(400, small.elapsed * 12))
   })
 })
 
@@ -246,6 +247,12 @@ describe('the deadline note fixture', () => {
     expect(story?.paragraphs).toHaveLength(5_091)
     expect(story?.fields).toHaveLength(1_697)
     expect(document.model.changes.length).toBe(1_747)
+    // The moves the note quotes, and the container path they exercise.
+    expect(
+      document.model.changes.filter(
+        (change) => change.elementName === 'moveFrom',
+      ),
+    ).toHaveLength(728)
     // The note quotes this number; keep it honest.
     expect(elapsed).toBeLessThan(2_000)
   })
