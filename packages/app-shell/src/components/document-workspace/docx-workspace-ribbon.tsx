@@ -111,4 +111,5 @@ export type DocxRibbonToolbarProps = InsertRibbonProps & {
   onToggleNavPane: () => void
   spelling: boolean
   onToggleSpelling: () => void
+  onCompareVersions?: () => void
 }
