@@ -9,7 +9,7 @@ import {
 
 import {
   fieldSpans,
-  spanNestedInField,
+  nestedFieldSpans,
   spanRangeReplaceable,
 } from '../field-spans'
 import type {
@@ -276,6 +276,9 @@ function storyFields(
   const fields: DocumentFieldWire[] = []
   const unanchored = new Set<string>()
   const spans = fieldSpans(elements, source)
+  // Nested decides `rangeReplaceable` per field, so it is worked out for all of
+  // them once rather than re-asked of every field against every other field.
+  const nestedSpans = nestedFieldSpans(spans)
   for (const span of spans) {
     const boundaryIds = span.boundaryParagraphs.flatMap((element) => {
       const id = ids.get(element.start)
@@ -301,7 +304,7 @@ function storyFields(
       instruction: span.instruction,
       rangeReplaceable:
         spanRangeReplaceable(span) &&
-        !spanNestedInField(spans, span) &&
+        !nestedSpans.has(span) &&
         tailId !== undefined &&
         paragraphIds.length === span.rangeParagraphs.length,
       boundariesAnchored:
