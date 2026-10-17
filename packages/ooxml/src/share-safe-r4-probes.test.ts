@@ -168,6 +168,18 @@ describe('share-safe r4: field and bookmark channels', () => {
     expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
   })
 
+  it('keeps character data a run writes beside a range marker', async () => {
+    // The empty-text check is the only guard for this shape. Character data is
+    // not an element, so the carries set never sees it, and collapsing the run
+    // would delete `BARE` from the document.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:commentRangeStart w:id="1"/>BARE<w:commentRangeEnd w:id="1"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('BARE')
+    expect(story).not.toContain('commentRange')
+  })
+
   it('collapses a run left holding only its formatting', async () => {
     // The shell a collapse removes can carry the run's properties, so the run is
     // not always literally empty: a formatted marker run leaves
