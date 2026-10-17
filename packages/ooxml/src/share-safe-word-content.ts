@@ -24,19 +24,15 @@ import { refuseShareSafe } from './share-safe-refusal'
  * its decisions on the shared content plan the emitter and verifier replay.
  */
 /**
- * The comment surface markers that sit inside a run rather than between runs:
- * a reference to the comments part or to the annotation part. When one is all
- * the run carried, the run is a dead shell once the marker goes.
+ * A run whose only content is a comment surface marker collapses: the marker is
+ * gone, and a run holding only markers and formatting leaves a dead shell. The
+ * marker list is `SHARE_SAFE_COMMENT_MARKERS`, the same set the element pass
+ * removes, so a run empties exactly when every element it carried is gone.
  *
- * The range markers are not here: bracketing a comment's text is a different
- * job from referencing its part, and only the references collapse the run.
- */
-const RUN_COMMENT_MARKERS = new Set(['commentReference', 'annotationRef'])
-
-/**
- * A run whose only content is a reference to the comments part or the annotation
- * part collapses — the marker is gone, and a run holding only the marker and its
- * formatting leaves a dead shell.
+ * A run that still holds text is never collapsed, whether that text is code
+ * units between two range markers or a run's own content: the carries set rules
+ * it out before the collapse decision and the empty-text check rules it out
+ * again.
  */
 export function collapseCommentRuns(
   source: string,
@@ -78,7 +74,7 @@ export function collapseCommentRuns(
   for (const element of elements) {
     if (
       element.namespaceUri !== WORD_NAMESPACE ||
-      !RUN_COMMENT_MARKERS.has(element.localName)
+      !SHARE_SAFE_COMMENT_MARKERS.has(element.localName)
     ) {
       continue
     }
