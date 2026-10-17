@@ -61,8 +61,8 @@ export const BUDGETS = {
   // 90,525 B, re-recorded after the editor programme grew it from the recorded
   // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
   // entry above settled on for the same reason: the previous ceiling carried
-  // 0.5%, so the next ordinary stylesheet addition would have failed the build
-  // for a reason unrelated to its own change.
+  // 0.5%, 475 B, so any addition larger than that would have failed the build for
+  // a reason unrelated to its own change.
   rendererInitialCssBytes: 93_000,
   // 774,344 B (the PDF viewer chunk).
   lazyChunksBytes: 850_000,
