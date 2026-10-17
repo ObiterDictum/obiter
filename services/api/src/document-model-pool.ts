@@ -20,16 +20,26 @@ export const documentModelWorkerConcurrency = 2
  * milliseconds, measured), the caller settles once, and later work proceeds.
  *
  * Calibrated, not arbitrary: uploads are capped at 25 MiB and packages at
- * 72 MiB uncompressed (package-limits-defaults.ts), and the slowest
- * legitimate document measured on the reference host, a styled
- * 5091-paragraph fixture inside every package guard, parses in about 210 s
- * under Node and 105 s under Bun, so this is roughly three times the slowest
- * observed legitimate load under the slower runtime. Parsing is now linear
- * in paragraph and run count — the per-paragraph and per-field full-document
- * scans in `@obiter/ooxml` were removed — but documents far beyond the
- * measured envelope, or ones carrying very many fields, tracked changes or
- * moves, can still exceed this deadline and fail with the curated store
- * error; that is not a reason to let callers park forever.
+ * 72 MiB uncompressed (package-limits-defaults.ts), and the fixture this is
+ * sized against — 5091 styled paragraphs inside the guards, carrying 1697
+ * fields, 1747 tracked changes and 728 move ranges, so all three loads are
+ * present — parses in about 0.7 s under Bun on the reference host.
+ * `parse-change-cost.test.ts` builds exactly that fixture and asserts its
+ * paragraph, field, change and move counts, so the number can be re-measured
+ * rather than taken on trust.
+ *
+ * The figure this replaces — about 210 s under Node and 105 s under Bun for a
+ * 5091-paragraph fixture — was taken before the fixes for #303 and #313 removed
+ * the per-paragraph, per-field, per-change and per-container scans, so it
+ * measured the shape of that parse rather than the size of a legitimate
+ * document. Parsing is linear in paragraphs, runs and fields, and in tracked
+ * changes; move ranges are linear except for a wrapper that no container holds,
+ * which is tracked in #325.
+ *
+ * The deadline itself is unchanged, because it bounds liveness rather than
+ * performance: a document far beyond the measured envelope can still exceed
+ * it and fail with the curated store error, which is not a reason to let
+ * callers park forever.
  */
 export const documentModelTaskTimeoutMs = 600_000
 

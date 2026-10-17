@@ -9,7 +9,7 @@ import {
 
 import {
   fieldSpans,
-  spanNestedInField,
+  nestedFieldSpans,
   spanRangeReplaceable,
 } from '../field-spans'
 import type {
@@ -22,7 +22,11 @@ import { RELATIONSHIPS_NAMESPACE } from '../structure-xml'
 import { decodeXmlReferences } from '../xml-lexemes'
 import { resolveMoveRanges } from './move-ranges'
 import { elementFragment, parseXmlElements } from './overlay'
-import { isTrackedChange, trackedChange } from './tracked-change-nodes'
+import {
+  isTrackedChange,
+  trackedChange,
+  trackedChangeLookup,
+} from './tracked-change-nodes'
 import {
   attributeValue,
   childrenByParent,
@@ -211,6 +215,9 @@ export function parseStory(
   }
 
   const moveRanges = resolveMoveRanges(partName, elements)
+  // The lookup answers a question per change, so it is built once for the part
+  // rather than re-scanned inside every change.
+  const trackedLookup = trackedChangeLookup(elements, paragraphAnchors)
   const trackedChanges = elements
     .filter(isTrackedChange)
     .filter((element) => !index.inTrackedChange(element))
@@ -218,9 +225,8 @@ export function parseStory(
       trackedChange(
         partName,
         source,
-        elements,
         element,
-        paragraphAnchors,
+        trackedLookup,
         identity.nextChangeId(),
         moveRanges,
       ),
@@ -276,6 +282,9 @@ function storyFields(
   const fields: DocumentFieldWire[] = []
   const unanchored = new Set<string>()
   const spans = fieldSpans(elements, source)
+  // Nested decides `rangeReplaceable` per field, so it is worked out for all of
+  // them once rather than re-asked of every field against every other field.
+  const nestedSpans = nestedFieldSpans(spans)
   for (const span of spans) {
     const boundaryIds = span.boundaryParagraphs.flatMap((element) => {
       const id = ids.get(element.start)
@@ -301,7 +310,7 @@ function storyFields(
       instruction: span.instruction,
       rangeReplaceable:
         spanRangeReplaceable(span) &&
-        !spanNestedInField(spans, span) &&
+        !nestedSpans.has(span) &&
         tailId !== undefined &&
         paragraphIds.length === span.rangeParagraphs.length,
       boundariesAnchored:

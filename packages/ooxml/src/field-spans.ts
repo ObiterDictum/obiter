@@ -413,6 +413,61 @@ export function spanNestedInField(
 }
 
 /**
+ * The spans of one part that another span encloses, answered for all of them at
+ * once. Whether a field is nested decides its `rangeReplaceable`, so a caller
+ * that needs the answer for every field would otherwise ask that question of
+ * every field against every other field — quadratic in the field count, which a
+ * long form or a mail-merge template pays for and which the model pool's
+ * deadline was sized around.
+ *
+ * Sorting by where each `begin` starts and carrying the furthest `end` seen so
+ * far answers each query with one binary search over that prefix. An open field
+ * — one with no `end` — encloses every span that begins after it, and is never
+ * itself reported: the rule only fires for a span that has both markers.
+ *
+ * `spanNestedInField` answers the same question for a single span, which is
+ * cheaper when only one span is asked about; `field-span-nesting.test.ts` holds
+ * the two to the same answer.
+ */
+export function nestedFieldSpans(
+  spans: readonly StoredFieldSpan[],
+): ReadonlySet<StoredFieldSpan> {
+  const edges: { span: StoredFieldSpan; begin: number; end?: number }[] = []
+  for (const span of spans) {
+    if (span.begin === undefined) continue
+    edges.push({ span, begin: span.begin.start, end: span.end?.start })
+  }
+  edges.sort((left, right) => left.begin - right.begin)
+  // prefixEnd[index] is the furthest end among edges[0..index), an open field
+  // counted as endless so it encloses every begin after it.
+  const endless = Number.POSITIVE_INFINITY
+  const prefixEnd: number[] = [Number.NEGATIVE_INFINITY]
+  for (const edge of edges) {
+    const previous = prefixEnd[prefixEnd.length - 1] ?? Number.NEGATIVE_INFINITY
+    const end = edge.end ?? endless
+    prefixEnd.push(end > previous ? end : previous)
+  }
+  const nested = new Set<StoredFieldSpan>()
+  for (let index = 0; index < edges.length; index += 1) {
+    const edge = edges[index]
+    if (edge === undefined || edge.end === undefined) continue
+    // Enclosing needs a strictly earlier begin, so spans sharing one are not
+    // candidates for each other and the prefix stops where they start.
+    let low = 0
+    let high = index
+    while (low < high) {
+      const middle = (low + high) >> 1
+      const other = edges[middle]
+      if (other !== undefined && other.begin < edge.begin) low = middle + 1
+      else high = middle
+    }
+    const furthest = prefixEnd[low] ?? Number.NEGATIVE_INFINITY
+    if (furthest > edge.end) nested.add(edge.span)
+  }
+  return nested
+}
+
+/**
  * Whether removing `ranges` splits a stored field: some but not all of one
  * field's boundary markers fall inside a removed range. A field removed
  * whole — every marker covered — stays balanced and is allowed; a partial
