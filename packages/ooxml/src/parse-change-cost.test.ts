@@ -220,10 +220,15 @@ describe('field nesting through the parse', () => {
     // The unit cost test asks `nestedFieldSpans` directly, so it cannot see the
     // call site going back to the per-span question. This goes through
     // `parseDocx` with fields the nesting question is actually asked about:
-    // 8,000 of them cost about 1.1 s here and 2.3 s with the per-span question
-    // restored, so the bound separates the two call sites at roughly 1.5x
-    // headroom on each side. The warm-up run keeps the smaller size from paying
-    // for the module's first call.
+    // 8,000 of them cost about 1.2 s here and 2.4-2.5 s with the per-span
+    // question restored, so the fixed bound is what separates the two call
+    // sites, at roughly 1.4x headroom on each side.
+    //
+    // The ratio does not, and is not claimed to: the quadratic term is too small
+    // at these sizes for a multiple of the smaller run to reach it. It is kept
+    // because it still catches growth worse than quadratic, which is cheap and
+    // would be a real regression. The warm-up run keeps the smaller size from
+    // paying for the module's first call.
     await timeParse(replaceableFieldDocument, 1_000)
     const small = await timeParse(replaceableFieldDocument, 2_000)
     const large = await timeParse(replaceableFieldDocument, 8_000)
