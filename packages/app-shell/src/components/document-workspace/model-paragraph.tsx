@@ -185,6 +185,7 @@ export function ModelParagraph({
   // slice text is an equal string, so the measurement survives the keystroke
   // even though the paragraph object was rebuilt.
   const faceCss = paragraphCss(face)
+  const onBodyEdge = continuation || start > 0 || Boolean(listMarker)
   const lines = useMemo(
     () =>
       wrapLines(
@@ -192,9 +193,9 @@ export function ModelParagraph({
         face.run.fontSizePx ?? linePx,
         wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
         face.run.fontFamily,
-        firstLineIndentPx(face, Boolean(listMarker) || continuation),
+        firstLineIndentPx(face, onBodyEdge),
       ),
-    [sliceText, face, linePx, wrapWidthPx, listMarker, continuation],
+    [sliceText, face, linePx, wrapWidthPx, onBodyEdge],
   )
   const editorHeight = lines.length * linePx
   const holdsCaret =
@@ -389,8 +390,7 @@ export function ModelParagraph({
                   marginBottom: 0,
                   paddingLeft: 0,
                   paddingRight: 0,
-                  textIndent:
-                    listMarker || continuation ? 0 : faceCss.textIndent,
+                  textIndent: onBodyEdge ? 0 : faceCss.textIndent,
                   height: editorHeight,
                   lineHeight: `${linePx}px`,
                   whiteSpace: 'pre-wrap',
