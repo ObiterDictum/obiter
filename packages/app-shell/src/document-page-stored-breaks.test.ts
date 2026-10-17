@@ -101,6 +101,23 @@ describe('stored page breaks', () => {
     expect(pages[1]?.blocks[0]).toMatchObject({ from: 10, to: 20 })
   })
 
+  it('opens the post-break block on the body edge, whatever the continuation flag', () => {
+    // The block after a mid-paragraph break has from > 0 while the layout's
+    // continuation flag is false, so a first-line indent cannot be gated on
+    // that flag: the editor would narrow a row pagination wrapped at body width
+    // and draw a row the layout never reserved. The gate is the offset, and this
+    // pins the shape it has to read.
+    const indented: DocumentParagraphWire = {
+      ...storedBreakParagraph('p1', 'abcdefghij', 'klmnopqrst'),
+      preservedXmlFragments: ['<w:pPr><w:ind w:firstLine="720"/></w:pPr>'],
+    }
+    const pages = layoutDocument(modelOf([indented]))
+    const before = pages[0]?.blocks[0]
+    const after = pages[1]?.blocks[0]
+    expect(before).toMatchObject({ from: 0, continuation: false })
+    expect(after).toMatchObject({ from: 10, continuation: false })
+  })
+
   it('keeps a document without a break on one sheet', () => {
     const pages = layoutDocument(modelOf([paragraph('p1', 'Hello')]))
     expect(pages).toHaveLength(1)

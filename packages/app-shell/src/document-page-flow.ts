@@ -1,5 +1,9 @@
 import { lineInset, type PageFloat } from './document-page-floats'
 import type { ColumnFrame, ContentFrame } from './document-page-layout'
+import {
+  paragraphTextIndentPx,
+  type ParagraphFace,
+} from './document-page-style'
 
 export const MEASURE_FONT = 'Calibri, "Segoe UI", "Liberation Sans", sans-serif'
 
@@ -41,6 +45,12 @@ export function takeFragment(input: {
   fontSize: number
   fontFamily?: string
   indent: number
+  /**
+   * Line 1's extra offset: positive for `w:firstLine`, negative for `w:hanging`.
+   * It applies to the paragraph's first row only, which is the fragment's first
+   * row only when the fragment starts at the paragraph's first code unit.
+   */
+  textIndentPx?: number
   column: ColumnFrame
   frame: ContentFrame
   floats: PageFloat[]
@@ -100,9 +110,16 @@ export function takeFragment(input: {
     padRightPx = inset.padRightPx
     padsLocked = true
     if (offset < input.text.length) {
+      // The paragraph's first row carries the first-line indent, so it wraps
+      // against whatever width that leaves; every later row keeps the body edge.
+      const firstRow = input.offset === 0 && lines === 0
       const width = Math.max(
         1,
-        input.column.widthPx - input.indent - padLeftPx - padRightPx,
+        input.column.widthPx -
+          input.indent -
+          padLeftPx -
+          padRightPx -
+          (firstRow ? (input.textIndentPx ?? 0) : 0),
       )
       const taken = takeLine(
         input.text,
@@ -142,12 +159,21 @@ export function countLines(
   fontSizePx: number,
   widthPx: number,
   fontFamily?: string,
+  textIndentPx = 0,
 ): number {
   if (!text) return 1
   let offset = 0
   let lines = 0
   while (offset < text.length) {
-    const taken = takeLine(text, offset, fontSizePx, widthPx, fontFamily)
+    const taken = takeLine(
+      text,
+      offset,
+      fontSizePx,
+      // Line 1 is the one the first-line indent narrows, exactly as in
+      // `takeFragment`, so a keep or widow decision counts the rows that paint.
+      Math.max(1, widthPx - (offset === 0 ? textIndentPx : 0)),
+      fontFamily,
+    )
     if (taken === 0) break
     offset += taken
     lines += 1
@@ -155,6 +181,24 @@ export function countLines(
   // A trailing break opens a further empty row, so the paragraph is one row
   // taller than its break-terminated segments.
   return Math.max(1, lines) + (text.endsWith('\n') ? 1 : 0)
+}
+
+/**
+ * Line 1's indent for one paragraph block's wrap. `bodyEdge` is true when the
+ * block begins on the body edge rather than at the paragraph's first code unit:
+ * a list, whose marker carries the indent as its own marker column; a
+ * continuation; or the block a page break inside the paragraph opens, which the
+ * layout reports with `continuation` false and an offset above zero. The paint
+ * applies the same number as CSS `text-indent`, which is why it is read from the
+ * face rather than passed in, and the editor's textarea has to state it as well
+ * because a form control resets `text-indent` and would otherwise start line 1
+ * on the body edge.
+ */
+export function firstLineIndentPx(
+  face: ParagraphFace,
+  bodyEdge: boolean,
+): number {
+  return bodyEdge ? 0 : paragraphTextIndentPx(face)
 }
 
 /**
@@ -170,12 +214,21 @@ export function wrapLines(
   fontSizePx: number,
   widthPx: number,
   fontFamily?: string,
+  textIndentPx = 0,
 ): WrappedLine[] {
   if (!text) return [{ text: '', from: 0, to: 0 }]
   const lines: WrappedLine[] = []
   let offset = 0
   while (offset < text.length) {
-    const taken = takeLine(text, offset, fontSizePx, widthPx, fontFamily)
+    const taken = takeLine(
+      text,
+      offset,
+      fontSizePx,
+      // The paint shifts line 1 by the first-line indent, so the row the editor
+      // and the caret model believe in has to be the narrower one.
+      Math.max(1, widthPx - (offset === 0 ? textIndentPx : 0)),
+      fontFamily,
+    )
     if (taken === 0) break
     const raw = text.slice(offset, offset + taken)
     const display = raw.endsWith('\n') ? raw.slice(0, -1) : raw

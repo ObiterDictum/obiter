@@ -10,7 +10,7 @@ import { wrapLines } from '../../document-page-flow'
 import { paragraphPlainText } from '../../document-model-text'
 import { paragraphFace, paragraphLineHeightPx } from '../../document-page-style'
 import { paragraphClickCaret } from './model-click-caret'
-import type { ParagraphWordEdit } from './model-paragraph'
+import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
 import { DocumentModelPage } from './model-view'
 import {
   createVerticalCaretColumn,
@@ -247,6 +247,15 @@ describe('run formatting when the caret is elsewhere', () => {
     expect(text.style.fontWeight).toBe('700')
   })
 })
+
+/** A paragraph carrying a direct `w:firstLine`, in twips (720 = 48 CSS px). */
+function indentedParagraph(id: string, text: string): DocumentParagraphWire {
+  return {
+    id,
+    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
+    preservedXmlFragments: ['<w:pPr><w:ind w:firstLine="720"/></w:pPr>'],
+  }
+}
 
 describe('paragraph editor alignment', () => {
   it('does not repeat the paragraph indent on the textarea', () => {
@@ -1113,5 +1122,98 @@ describe('sticky desired column across consecutive vertical arrows', () => {
     down()
     expect(texts).toEqual([])
     expect(edits).toEqual([])
+  })
+})
+
+describe('first-line indent and the paragraph opening block', () => {
+  // A short first word, so the indent moves the break rather than only
+  // shortening a row that already fits: `takeLine` keeps an overflowing first
+  // word on its row, so a one-word row would break in the same place either way.
+  const TEXT = 'go alpha bravo charlie delta echo foxtrot'
+
+  function block(from: number, continuation: boolean) {
+    return render(
+      <ModelParagraph
+        paragraph={indentedParagraph('p1', TEXT)}
+        changes={[]}
+        selected
+        onSelectParagraph={() => undefined}
+        storyPartName="word/document.xml"
+        relationships={[]}
+        imageUrls={{}}
+        styles={[]}
+        editing
+        onRunTextChange={() => undefined}
+        restoreCaret={{ paragraphId: 'p1', offset: from }}
+        from={from}
+        wrapWidthPx={wrapWidthPx}
+        continuation={continuation}
+      />,
+    )
+  }
+
+  // The component wraps at the face's own size, which falls back to the line
+  // height rather than to a bare 16px, so the expectation is read from the same
+  // face instead of assumed.
+  const FACE_SIZE =
+    paragraphFace(indentedParagraph('p1', TEXT), []).run.fontSizePx ??
+    paragraphLineHeightPx(paragraphFace(indentedParagraph('p1', TEXT), []))
+
+  function firstRowEnd(): number {
+    const row = document.querySelector('[data-line-from]')
+    if (!(row instanceof HTMLElement)) throw new Error('expected a wrapped row')
+    return Number(row.dataset.lineTo)
+  }
+
+  /** The first painted row's own `text-indent`: the wrapper inherits the
+   * paragraph's, so each row states whether it keeps it. */
+  function rowIndent(): string {
+    const row = document.querySelector('[data-line-from]')
+    if (!(row instanceof HTMLElement)) throw new Error('expected a wrapped row')
+    return row.style.textIndent
+  }
+
+  function textIndent(): string {
+    return (screen.getByLabelText('Paragraph text') as HTMLTextAreaElement)
+      .style.textIndent
+  }
+
+  it('carries the indent on the paragraph opening block, in the wrap and the textarea', () => {
+    block(0, false)
+    // The textarea's CSS and the row the editor draws are the same rule.
+    expect(firstRowEnd()).toBeLessThan(
+      wrapLines(TEXT, FACE_SIZE, wrapWidthPx)[0].to,
+    )
+    expect(textIndent()).toBe('48px')
+    // The opening block keeps the wrapper's inherited indent.
+    expect(rowIndent()).toBe('')
+    cleanup()
+  })
+
+  it('leaves a block that starts mid-paragraph on the body edge', () => {
+    // A page break inside the paragraph opens a block with from > 0 and the
+    // layout's continuation flag false. It resumes on the body edge, so its
+    // first row is a body row: pagination already wrapped it that way, and a
+    // narrowed first row here would draw a row pagination never reserved.
+    block(10, false)
+    expect(textIndent()).toBe('0px')
+    expect(rowIndent()).toBe('0px')
+    expect(firstRowEnd()).toBe(
+      10 + wrapLines(TEXT.slice(10), FACE_SIZE, wrapWidthPx)[0].to,
+    )
+    cleanup()
+  })
+
+  it('agrees with the continuation block it is indistinguishable from', () => {
+    const text = TEXT.slice(10)
+    const expected = 10 + wrapLines(text, FACE_SIZE, wrapWidthPx)[0].to
+    block(10, false)
+    expect(firstRowEnd()).toBe(expected)
+    cleanup()
+    block(10, true)
+    expect(firstRowEnd()).toBe(expected)
+    expect(textIndent()).toBe('0px')
+    expect(rowIndent()).toBe('0px')
+    cleanup()
   })
 })
