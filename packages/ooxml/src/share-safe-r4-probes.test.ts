@@ -150,9 +150,35 @@ describe('share-safe r4: field and bookmark channels', () => {
     const story = parts.get('word/document.xml') ?? ''
     expect(story).toContain('PAGE')
     expect(story).not.toContain('annotationRef')
-    // Every run in this story holds a marker, so any run left empty is the
-    // shell that the emptied annotation run used to become.
+    // Every other run in this story carries content, so any run left empty is
+    // the shell that the emptied annotation run used to become.
     expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+  })
+
+  it('collapses a run left holding only a range marker', async () => {
+    // A range marker is the same kind of surface: the element pass removes it,
+    // and a run that held nothing else is then a dead shell. Conforming markup
+    // puts range markers between runs, but the parser accepts them inside one —
+    // this file's own comment-range case builds that — so the shell is real.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:t>a</w:t></w:r><w:r><w:commentRangeEnd w:id="1"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).not.toContain('commentRangeEnd')
+    expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+  })
+
+  it('collapses a run left holding only its formatting', async () => {
+    // The shell a collapse removes can carry the run's properties, so the run is
+    // not always literally empty: a formatted marker run leaves
+    // `<w:r><w:rPr>…</w:rPr></w:r>` unless the collapse takes it. The empty-run
+    // regex in the case above would not match that.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).not.toContain('annotationRef')
+    expect(story).not.toContain('CommentReference')
   })
 
   it('keeps a keep-class field whose result carries text beside a comment marker', async () => {
