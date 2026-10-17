@@ -12,8 +12,13 @@ import {
   paragraphPlainText,
 } from '../../document-model-text'
 import type { ExtraRuns } from '../../document-word-edits'
-import { wrapLines, type WrappedLine } from '../../document-page-flow'
+import {
+  firstLineIndentPx,
+  wrapLines,
+  type WrappedLine,
+} from '../../document-page-flow'
 import { paragraphFace } from '../../document-page-style'
+import { paragraphListIndent } from '../../document-page-lists'
 
 export type ArrowNeighbor = {
   id: string
@@ -287,6 +292,10 @@ function arrowNeighbor(
     ? paragraphFace(paragraph, ctx.model.styles)
     : undefined
   const fontSizePx = face?.run.fontSizePx ?? 16
+  const list = paragraph ? paragraphListIndent(paragraph, ctx.model) : undefined
+  // The caret model has to break rows where the paint does, so a paragraph's
+  // first block loses the same first-line indent that narrows the painted row.
+  const firstLinePx = face ? firstLineIndentPx(face, Boolean(list)) : 0
   // Without a column width the projection still owns the break structure: a
   // row per hard-break segment, and the empty row a trailing break opens.
   const lines = wrapLines(
@@ -294,6 +303,7 @@ function arrowNeighbor(
     fontSizePx,
     wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
     face?.run.fontFamily,
+    firstLinePx,
   )
   return { id, text, lines, ...(insert ? { insert: true } : {}) }
 }
