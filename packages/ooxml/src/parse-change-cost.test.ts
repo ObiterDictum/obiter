@@ -219,16 +219,17 @@ describe('field nesting through the parse', () => {
   it('asks the nesting question about range-replaceable fields, and asks it once', async () => {
     // The unit cost test asks `nestedFieldSpans` directly, so it cannot see the
     // call site going back to the per-span question. This goes through
-    // `parseDocx` with fields the nesting question is actually asked about:
-    // 8,000 of them cost about 1.2 s here and 2.4-2.5 s with the per-span
-    // question restored, so the fixed bound is what separates the two call
-    // sites, at roughly 1.4x headroom on each side.
+    // `parseDocx` with fields the nesting question is actually asked about (it
+    // asserts every field is a candidate, or the question is skipped).
     //
-    // The ratio does not, and is not claimed to: the quadratic term is too small
-    // at these sizes for a multiple of the smaller run to reach it. It is kept
-    // because it still catches growth worse than quadratic, which is cheap and
-    // would be a real regression. The warm-up run keeps the smaller size from
-    // paying for the module's first call.
+    // Neither assertion here separates the two call sites, and neither claims
+    // to. 8,000 fields cost about 1.2 s here and 2.4-2.5 s per-span, which looks
+    // separable, but a bound tight enough to separate them failed under load:
+    // 1,793 ms against a 1,700 ms bound while another suite ran. So this is a
+    // ceiling — it catches growth worse than quadratic, and the ratio below
+    // catches a multiple of that — while the unit case over `nestedFieldSpans`
+    // is what bites the shape, at 939 ms against 3 ms. The warm-up run keeps the
+    // smaller size from paying for the module's first call.
     await timeParse(replaceableFieldDocument, 1_000)
     const small = await timeParse(replaceableFieldDocument, 2_000)
     const large = await timeParse(replaceableFieldDocument, 8_000)
@@ -236,7 +237,7 @@ describe('field nesting through the parse', () => {
     expect(fields).toHaveLength(8_000)
     // Every one of them is a candidate, or the question is never asked.
     expect(fields?.every((field) => field.rangeReplaceable)).toBe(true)
-    expect(large.elapsed).toBeLessThan(1_700)
+    expect(large.elapsed).toBeLessThan(4_000)
     expect(large.elapsed).toBeLessThan(Math.max(400, small.elapsed * 12))
   })
 })

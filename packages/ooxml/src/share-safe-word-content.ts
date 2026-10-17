@@ -25,17 +25,18 @@ import { refuseShareSafe } from './share-safe-refusal'
  */
 /**
  * A run whose only content is a comment surface marker collapses: the marker is
- * gone, and a run holding only markers and formatting leaves a dead shell. The
- * marker list is `SHARE_SAFE_COMMENT_MARKERS`, the same set the element pass
- * removes, so a marker run collapses exactly when every element it carried is
- * gone.
+ * gone, and a run holding only markers leaves a dead shell. The marker list is
+ * `SHARE_SAFE_COMMENT_MARKERS`, the same set the element pass removes.
  *
- * Two checks keep a run that still carries something. The carries set rules out
- * a run holding any surviving element — text, a tab, a break, a symbol. The
- * empty-text check is the only guard for character data written directly inside
- * the run rather than in a child element, as in
- * `<w:r><w:commentRangeStart/>BARE<w:commentRangeEnd/></w:r>`: character data is
- * not an element, so the carries set never sees it.
+ * Two checks decide whether the run still carries something, and neither is
+ * sufficient alone. The carries set ignores a `w:rPr` and its descendants — a
+ * run's own formatting is not content a reader sees — and rules out a run
+ * holding any other surviving element: text, a tab, a break, a symbol. The
+ * empty-text check then rules out character data written directly inside the
+ * run rather than in a child element, as in
+ * `<w:r><w:commentRangeStart/>BARE<w:commentRangeEnd/></w:r>`. Character data is
+ * not an element, so the carries set never sees it: a run can have every element
+ * it carried removed and still survive on this check.
  */
 export function collapseCommentRuns(
   source: string,
