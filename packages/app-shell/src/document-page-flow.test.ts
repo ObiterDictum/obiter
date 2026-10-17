@@ -34,7 +34,7 @@ const BREAK_TEXTS = [
   'alpha\n\nbeta\n\n',
 ]
 
-function fragment(text: string, offset = 0) {
+function fragment(text: string, offset = 0, textIndentPx = 0) {
   return takeFragment({
     text,
     offset,
@@ -43,7 +43,39 @@ function fragment(text: string, offset = 0) {
     linePx: LINE_PX,
     fontSize: FONT,
     indent: 0,
+    textIndentPx,
     column: COLUMN,
+    frame: FRAME,
+    floats: [],
+  })
+}
+
+/** The column these tests wrap against: several words wide, so an indent moves
+ * the break rather than merely shortening a row that already fits. */
+const WRAP_WIDTH = 240
+const FIRST_LINE = 90
+const WRAP_TEXT = 'alpha bravo charlie delta echo foxtrot golf hotel india'
+
+/** A fragment of a paragraph wrapped against `WRAP_WIDTH` rather than `COLUMN`,
+ * which is deliberately too wide to wrap at all. */
+function fragmentAt(
+  text: string,
+  offset: number,
+  textIndentPx: number,
+  widthPx: number,
+  /** Rows of room. One row makes `shown` exactly the first row's end. */
+  maxY = FRAME.heightPx,
+) {
+  return takeFragment({
+    text,
+    offset,
+    startY: 0,
+    maxY,
+    linePx: LINE_PX,
+    fontSize: FONT,
+    indent: 0,
+    textIndentPx,
+    column: { left: 0, widthPx },
     frame: FRAME,
     floats: [],
   })
@@ -232,5 +264,93 @@ describe('takeFragment and the trailing row', () => {
   it('reserves a row for a break-only paragraph', () => {
     expect(fragment('\n').lines).toBe(2)
     expect(fragment('\n\n').lines).toBe(3)
+  })
+})
+
+describe('first-line indent', () => {
+  it('breaks line 1 where the indent leaves off, not where the full width ends', () => {
+    const bodyBreak = takeLine(WRAP_TEXT, 0, FONT, WRAP_WIDTH)
+    const firstBreak = takeLine(WRAP_TEXT, 0, FONT, WRAP_WIDTH - FIRST_LINE)
+    expect(firstBreak).toBeLessThan(bodyBreak)
+    const lines = wrapLines(WRAP_TEXT, FONT, WRAP_WIDTH, undefined, FIRST_LINE)
+    expect(lines[0].text).toBe(WRAP_TEXT.slice(0, firstBreak))
+    // The rows after the first are body rows: they wrap the remainder against
+    // the full width, exactly as an unindented wrap of that remainder would.
+    expect(lines.slice(1).map((line) => line.text)).toEqual(
+      wrapLines(WRAP_TEXT.slice(firstBreak), FONT, WRAP_WIDTH).map(
+        (line) => line.text,
+      ),
+    )
+  })
+
+  it('gives line 1 the width a hanging indent reaches back for', () => {
+    const lines = wrapLines(WRAP_TEXT, FONT, WRAP_WIDTH, undefined, -FIRST_LINE)
+    expect(lines[0].text).toBe(
+      WRAP_TEXT.slice(0, takeLine(WRAP_TEXT, 0, FONT, WRAP_WIDTH + FIRST_LINE)),
+    )
+    expect(lines[0].text.length).toBeGreaterThan(
+      wrapLines(WRAP_TEXT, FONT, WRAP_WIDTH)[0].text.length,
+    )
+  })
+
+  it('places the painted first row where the editor wraps it', () => {
+    const editor = wrapLines(WRAP_TEXT, FONT, WRAP_WIDTH, undefined, FIRST_LINE)
+    const painted = fragmentAt(WRAP_TEXT, 0, FIRST_LINE, WRAP_WIDTH, LINE_PX)
+    expect(painted.shown).toBe(editor[0].text.length)
+    expect(painted.consumed).toBe(editor[0].text.length)
+    // The agreement only means something if the indent moved the row: compare
+    // against the same paint with no first-line indent.
+    expect(painted.shown).toBeLessThan(
+      fragmentAt(WRAP_TEXT, 0, 0, WRAP_WIDTH, LINE_PX).shown,
+    )
+    expect(countLines(WRAP_TEXT, FONT, WRAP_WIDTH, undefined, FIRST_LINE)).toBe(
+      editor.length,
+    )
+  })
+
+  it('measures the painted first row against the width it is drawn in', () => {
+    // The overflow this fixes: the row was wrapped against the full column and
+    // then shifted right by the indent, so its glyphs ran past the frame. The
+    // row the paint places now fits the width the indent left.
+    const placed = fragmentAt(WRAP_TEXT, 0, FIRST_LINE, WRAP_WIDTH, LINE_PX)
+    const row = WRAP_TEXT.slice(0, placed.shown)
+    expect(takeLine(row, 0, FONT, WRAP_WIDTH - FIRST_LINE)).toBe(row.length)
+    expect(placed.shown).toBeLessThan(
+      fragmentAt(WRAP_TEXT, 0, 0, WRAP_WIDTH, LINE_PX).shown,
+    )
+  })
+
+  it('applies the indent to a paragraph first row, not to a later fragment', () => {
+    // A continuation starts mid-paragraph, so its opening row is a body row and
+    // both surfaces have to leave it the full width.
+    const body = fragmentAt(WRAP_TEXT, 10, 0, WRAP_WIDTH, LINE_PX)
+    const indented = fragmentAt(WRAP_TEXT, 10, FIRST_LINE, WRAP_WIDTH, LINE_PX)
+    expect(indented.shown).toBe(body.shown)
+    expect(indented.consumed).toBe(body.consumed)
+    // The same indent at offset 0 does move the row, or the equality above
+    // would hold for a reason that has nothing to do with the offset.
+    expect(
+      fragmentAt(WRAP_TEXT, 0, FIRST_LINE, WRAP_WIDTH, LINE_PX).shown,
+    ).toBeLessThan(fragmentAt(WRAP_TEXT, 0, 0, WRAP_WIDTH, LINE_PX).shown)
+  })
+
+  it('wraps an indented paragraph to the same rows the paint counts', () => {
+    const texts = ['alpha bravo', 'alpha', 'alpha\nbravo charlie delta echo']
+    const firstBreak = takeLine(WRAP_TEXT, 0, FONT, WRAP_WIDTH - FIRST_LINE)
+    // The indented row 1 ends where the narrowed width ends, and every other
+    // row is a body row, so the paragraph is that row plus the rows the
+    // remainder needs at the full width — in both the editor and the paint.
+    expect(
+      wrapLines(WRAP_TEXT, FONT, WRAP_WIDTH, undefined, FIRST_LINE).length,
+    ).toBe(1 + wrapLines(WRAP_TEXT.slice(firstBreak), FONT, WRAP_WIDTH).length)
+    for (const text of texts) {
+      expect(
+        countLines(text, FONT, WRAP_WIDTH, undefined, FIRST_LINE),
+        text,
+      ).toBe(wrapLines(text, FONT, WRAP_WIDTH, undefined, FIRST_LINE).length)
+    }
+    expect(countLines(WRAP_TEXT, FONT, WRAP_WIDTH, undefined, FIRST_LINE)).toBe(
+      1 + countLines(WRAP_TEXT.slice(firstBreak), FONT, WRAP_WIDTH),
+    )
   })
 })

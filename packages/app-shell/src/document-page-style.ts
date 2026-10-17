@@ -142,6 +142,19 @@ export function paragraphLineHeightPx(face: ParagraphFace): number {
   return Number.isFinite(ratio) ? size * ratio : size * 1.15
 }
 
+/**
+ * Line 1's offset from the body edge, in CSS `text-indent` terms: a positive
+ * `w:firstLine` holds line 1 back from the body edge by that much, a `w:hanging`
+ * starts it that far left of it, and neither leaves line 1 on the body edge. The
+ * paint applies this as `text-indent` and the wrap takes it off line 1's width,
+ * so both have to read the same number or they disagree about where line 1 ends.
+ */
+export function paragraphTextIndentPx(face: ParagraphFace): number {
+  if (face.indentFirstPx) return face.indentFirstPx
+  if (face.indentHangingPx) return -face.indentHangingPx
+  return 0
+}
+
 export function paragraphCss(face: ParagraphFace): CSSProperties {
   return omitUndefined({
     fontFamily: face.run.fontFamily,
@@ -152,11 +165,7 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
     textAlign: face.align,
     paddingLeft: face.indentLeftPx,
     paddingRight: face.indentRightPx,
-    textIndent: face.indentFirstPx
-      ? face.indentFirstPx
-      : face.indentHangingPx
-        ? -face.indentHangingPx
-        : undefined,
+    textIndent: paragraphTextIndentPx(face) || undefined,
     fontWeight:
       face.run.bold === undefined ? undefined : face.run.bold ? 700 : 400,
     fontStyle:

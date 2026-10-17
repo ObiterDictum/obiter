@@ -20,7 +20,7 @@ import {
   textDiff,
 } from '../../document-model-text'
 import { paragraphInlineXml } from '../../document-page-floats'
-import { wrapLines } from '../../document-page-flow'
+import { firstLineIndentPx, wrapLines } from '../../document-page-flow'
 import type { ListMarker } from '../../document-page-lists'
 import { imagePartNameForDrawing } from '../../document-page-media'
 import type { NoteKind } from '../../document-page-notes'
@@ -184,6 +184,8 @@ export function ModelParagraph({
   // Wrapping measures every line through the canvas. An unchanged paragraph's
   // slice text is an equal string, so the measurement survives the keystroke
   // even though the paragraph object was rebuilt.
+  const faceCss = paragraphCss(face)
+  const onBodyEdge = continuation || start > 0 || Boolean(listMarker)
   const lines = useMemo(
     () =>
       wrapLines(
@@ -191,8 +193,9 @@ export function ModelParagraph({
         face.run.fontSizePx ?? linePx,
         wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
         face.run.fontFamily,
+        firstLineIndentPx(face, onBodyEdge),
       ),
-    [sliceText, face, linePx, wrapWidthPx],
+    [sliceText, face, linePx, wrapWidthPx, onBodyEdge],
   )
   const editorHeight = lines.length * linePx
   const holdsCaret =
@@ -278,9 +281,6 @@ export function ModelParagraph({
     />
   )
 
-  const faceCss = paragraphCss(face)
-  // A form control resets `text-indent`; a list's or continuation's is 0.
-  const specialIndent = listMarker || continuation ? 0 : faceCss.textIndent
   return (
     <div
       data-paragraph-id={paragraph.id}
@@ -390,7 +390,7 @@ export function ModelParagraph({
                   marginBottom: 0,
                   paddingLeft: 0,
                   paddingRight: 0,
-                  textIndent: specialIndent,
+                  textIndent: onBodyEdge ? 0 : faceCss.textIndent,
                   height: editorHeight,
                   lineHeight: `${linePx}px`,
                   whiteSpace: 'pre-wrap',
