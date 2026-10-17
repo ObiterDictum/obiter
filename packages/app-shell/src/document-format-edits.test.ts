@@ -1579,6 +1579,7 @@ describe('document-format-edits module size', () => {
       './components/document-workspace/toolbar-paragraph-formatting.test.tsx',
       './components/document-workspace/model-page-blocks.tsx',
       './components/document-workspace/model-paragraph.tsx',
+      './components/document-workspace/model-paragraph-editor.tsx',
       './components/document-workspace/model-run.tsx',
       './components/document-workspace/paragraph-editor.tsx',
       './components/document-workspace/paragraph-arrow.ts',
