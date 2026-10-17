@@ -4,7 +4,7 @@ import type {
 } from '@obiter/contracts'
 import { effectiveParagraph, paragraphPlainText } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
-import { countLines } from './document-page-flow'
+import { countLines, firstLineIndentPx } from './document-page-flow'
 import type { ColumnFrame, ContentFrame } from './document-page-layout'
 import { paragraphListIndent } from './document-page-lists'
 import { paragraphFace, paragraphLineHeightPx } from './document-page-style'
@@ -73,6 +73,8 @@ export function widowMaxY(
   widthPx: number,
   orphanCheck: boolean,
   fontFamily?: string,
+  /** Line 1's first-line offset, applied only when the slice starts at it. */
+  textIndentPx = 0,
 ): number {
   if (!widowControl) return pageMaxY
   const remainingLines = countLines(
@@ -80,6 +82,7 @@ export function widowMaxY(
     fontSize,
     widthPx,
     fontFamily,
+    offset === 0 ? textIndentPx : 0,
   )
   const fit = Math.max(0, Math.floor((pageMaxY - startY) / linePx))
   if (orphanCheck && fit === 1 && remainingLines > 1) return startY
@@ -112,6 +115,9 @@ export function paragraphMetrics(
     fontSize,
     Math.max(1, columnWidthPx - indent),
     face.run.fontFamily,
+    // The metrics stand in for the paint's own row count, so they have to
+    // narrow line 1 exactly as the paint does.
+    firstLineIndentPx(face, Boolean(list)),
   )
   return {
     linePx,

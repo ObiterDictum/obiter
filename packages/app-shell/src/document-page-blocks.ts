@@ -8,7 +8,7 @@ import {
   effectiveParagraph,
   paragraphPlainText,
 } from './document-model-text'
-import { takeFragment } from './document-page-flow'
+import { firstLineIndentPx, takeFragment } from './document-page-flow'
 import { drawingScene } from './document-page-drawings'
 import { paragraphMetrics, widowMaxY } from './document-page-keep'
 import {
@@ -114,6 +114,9 @@ export function layoutParagraph(
   const list = paragraphListIndent(paragraph, model)
   const indent =
     (list?.leftPx ?? face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
+  // A list's marker carries its own hanging indent, so line 1 already aligns
+  // with the marker and a second first-line indent would move it twice.
+  const textIndentPx = firstLineIndentPx(face, Boolean(list))
   const imagePx = Math.max(
     0,
     ...paragraphInlineXml(paragraph).map((xml) => drawingScene(xml).heightPx),
@@ -180,10 +183,12 @@ export function layoutParagraph(
         Math.max(1, column().widthPx - indent),
         session.y > 0 && !continuation,
         face.run.fontFamily,
+        textIndentPx,
       ),
       linePx,
       fontSize,
       fontFamily: face.run.fontFamily,
+      textIndentPx,
       indent,
       column: column(),
       frame,

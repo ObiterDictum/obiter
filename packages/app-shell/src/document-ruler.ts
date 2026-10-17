@@ -4,7 +4,11 @@ import { editableParagraph } from './document-model-text'
 import type { LaidOutPage } from './document-page-engine'
 import type { ColumnFrame, ContentFrame, PageBox } from './document-page-layout'
 import { paragraphListIndent } from './document-page-lists'
-import { paragraphFace, type ParagraphFace } from './document-page-style'
+import {
+  paragraphFace,
+  paragraphTextIndentPx,
+  type ParagraphFace,
+} from './document-page-style'
 
 /** Pixels per centimetre at the renderer's 96 CSS px per inch. */
 export const RULER_CM_PX = 96 / 2.54
@@ -41,7 +45,7 @@ export function rulerMarkers(input: {
   columnWidthPx: number
 }): RulerMarkers {
   const { face, list, columnWidthPx } = input
-  const textIndent = face?.indentFirstPx ?? -(face?.indentHangingPx ?? 0)
+  const textIndent = face ? paragraphTextIndentPx(face) : 0
   const leftPx = list?.leftPx ?? face?.indentLeftPx ?? 0
   return {
     leftPx,
