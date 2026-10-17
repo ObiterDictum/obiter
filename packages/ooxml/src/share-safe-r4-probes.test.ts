@@ -139,6 +139,22 @@ describe('share-safe r4: field and bookmark channels', () => {
     expect(story).not.toContain('commentReference')
   })
 
+  it('collapses an annotation-reference run rather than shipping an empty shell', async () => {
+    // `annotationRef` is the other reference a run can hold alone. The marker is
+    // removed with the comments surface, and once it goes the run carries
+    // nothing: the field around it must keep its instruction without leaving a
+    // dead `<w:r/>` where its result was.
+    const { parts } = await outputParts({
+      body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:annotationRef/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+    })
+    const story = parts.get('word/document.xml') ?? ''
+    expect(story).toContain('PAGE')
+    expect(story).not.toContain('annotationRef')
+    // Every run in this story holds a marker, so any run left empty is the
+    // shell that the emptied annotation run used to become.
+    expect(story).not.toMatch(/<w:r\s*\/>|<w:r\s*><\/w:r>/)
+  })
+
   it('keeps a keep-class field whose result carries text beside a comment marker', async () => {
     const { parts } = await outputParts({
       body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>7</w:t></w:r><w:r><w:commentReference w:id="1"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
