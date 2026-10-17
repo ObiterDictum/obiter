@@ -115,12 +115,33 @@ export function resolveMoveRanges(
   // or a paragraph-mark move (the block-move shape) or a foreign change in
   // the range would survive a member-wise decision stranded, so the whole
   // group stays undecidable instead.
-  for (const container of containers) {
+  // Elements are in document order, so everything a container can carry is the
+  // run between its two markers. Asking that of the whole part once per
+  // container made a document with many moves quadratic in its size.
+  const firstAtOrAfter = (offset: number) => {
+    let low = 0
+    let high = elements.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      const element = elements[middle]
+      if (element !== undefined && element.start < offset) low = middle + 1
+      else high = middle
+    }
+    return low
+  }
+
+  function cleanContainer(container: MoveContainer) {
     const memberName = container.side === 'from' ? 'moveFrom' : 'moveTo'
     const inside = (element: XmlElement) =>
       element.start >= container.start.end && element.end <= container.end.start
-    container.clean = elements.every((element) => {
-      if (!inside(element)) return true
+    for (
+      let index = firstAtOrAfter(container.start.end);
+      index < elements.length;
+      index += 1
+    ) {
+      const element = elements[index]
+      if (element === undefined || element.start > container.end.start) break
+      if (!inside(element)) continue
       // A nested move container is never safe to decide: its markers belong
       // to a different named group, but the member-wise decision of this
       // group would still rewrite the range they sit in. Fail closed rather
@@ -138,7 +159,7 @@ export function resolveMoveRanges(
         !isWord(element, 'p') &&
         !isRangeMarker
       ) {
-        return true
+        continue
       }
       let covered = false
       let current: XmlElement | undefined = element
@@ -156,9 +177,11 @@ export function resolveMoveRanges(
         const mate = markerMates.get(element)
         if (mate && !inside(mate)) return false
       }
-      return true
-    })
+    }
+    return true
   }
+  for (const container of containers)
+    container.clean = cleanContainer(container)
 
   const blockedNames = new Set(
     containers.filter((container) => !container.clean).map(({ name }) => name),
@@ -179,46 +202,93 @@ export function resolveMoveRanges(
   // move-range marker it carries, or unformed marker markup bracketing it —
   // a same-side start before and end after that no container claimed —
   // would strand markup. Those wrappers stay undecidable instead of pairing.
+  // The bracketing question only needs the extremes: an unformed start before
+  // the wrapper at all is one whose end is the earliest of them, and an unformed
+  // end after it is one whose start is the latest. Reading those once keeps the
+  // walk off the whole part per wrapper.
+  const unformedEdges = {
+    from: {
+      earliestEnd: Number.POSITIVE_INFINITY,
+      latestStart: Number.NEGATIVE_INFINITY,
+    },
+    to: {
+      earliestEnd: Number.POSITIVE_INFINITY,
+      latestStart: Number.NEGATIVE_INFINITY,
+    },
+  }
+  for (const element of elements) {
+    if (formedMarkers.has(element)) continue
+    for (const side of ['from', 'to'] as const) {
+      if (isWord(element, MARKER_NAMES[side].start)) {
+        const edges = unformedEdges[side]
+        if (element.end < edges.earliestEnd) edges.earliestEnd = element.end
+      } else if (isWord(element, MARKER_NAMES[side].end)) {
+        const edges = unformedEdges[side]
+        if (element.start > edges.latestStart) edges.latestStart = element.start
+      }
+    }
+  }
+
   function uncontaineredSafe(wrapper: XmlElement) {
     const covered = (element: XmlElement) =>
       element.start >= wrapper.startTagEnd && element.end <= wrapper.endTagStart
-    for (const element of elements) {
+    for (
+      let index = firstAtOrAfter(wrapper.startTagEnd);
+      index < elements.length;
+      index += 1
+    ) {
+      const element = elements[index]
+      if (element === undefined || element.start > wrapper.endTagStart) break
       if (!covered(element)) continue
       if (MOVE_RANGE_MARKERS.has(element.localName)) return false
       if (!RANGE_MARKER_NAMES.has(element.localName)) continue
       const mate = markerMates.get(element)
       if (mate && !covered(mate)) return false
     }
-    return !(['from', 'to'] as const).some(
-      (side) =>
-        elements.some(
-          (element) =>
-            isWord(element, MARKER_NAMES[side].start) &&
-            !formedMarkers.has(element) &&
-            element.end <= wrapper.start,
-        ) &&
-        elements.some(
-          (element) =>
-            isWord(element, MARKER_NAMES[side].end) &&
-            !formedMarkers.has(element) &&
-            element.start >= wrapper.end,
-        ),
-    )
+    return !(['from', 'to'] as const).some((side) => {
+      const edges = unformedEdges[side]
+      return (
+        edges.earliestEnd <= wrapper.start && edges.latestStart >= wrapper.end
+      )
+    })
+  }
+
+  // The innermost container is asked for once per wrapper, so the containers are
+  // sorted once in the order that choice needs — latest start first, then
+  // earliest end — and a query walks back from the last start at or before the
+  // element. Sorting them per query made a document with many moves cost
+  // wrappers × containers log containers.
+  const innermostOrder = [...containers].sort(
+    (left, right) =>
+      right.start.start - left.start.start || left.end.end - right.end.end,
+  )
+  function innermost(element: XmlElement) {
+    let low = 0
+    let high = innermostOrder.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      const container = innermostOrder[middle]
+      if (container !== undefined && container.start.start > element.start)
+        low = middle + 1
+      else high = middle
+    }
+    for (let index = low; index < innermostOrder.length; index += 1) {
+      const container = innermostOrder[index]
+      if (container === undefined) break
+      if (
+        element.start >= container.start.end &&
+        element.end <= container.end.start
+      ) {
+        return container
+      }
+    }
+    return undefined
   }
 
   function member(element: XmlElement): MoveMembership {
     // Nested containers associate a wrapper with the innermost — the last
     // valid container start surrounding it in document order.
-    const inner = containers
-      .filter(
-        (container) =>
-          element.start >= container.start.end &&
-          element.end <= container.end.start,
-      )
-      .sort(
-        (left, right) =>
-          right.start.start - left.start.start || left.end.end - right.end.end,
-      )[0]
+    const inner = innermost(element)
     if (!inner) {
       return uncontaineredSafe(element)
         ? { kind: 'uncontainered' }

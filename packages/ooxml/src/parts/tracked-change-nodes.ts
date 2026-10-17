@@ -7,7 +7,6 @@ import { elementFragment } from './overlay'
 import {
   attributeValue,
   elementRange,
-  isDescendantOf,
   isWord,
   nearestWordAncestor,
   WORD_NAMESPACE,
@@ -54,6 +53,86 @@ export function nearestTrackedChangeAncestor(element: XmlElement) {
     parent = parent.parent
   }
   return undefined
+}
+
+const NO_ELEMENTS: readonly XmlElement[] = []
+
+/**
+ * What reading one part's tracked changes needs from the part, worked out once.
+ * Each change used to answer two questions by walking the whole part — which
+ * elements sit inside it, and which paragraph is the smallest one holding it —
+ * so a part with many changes cost changes × elements for both. `elements` is in
+ * document order, so one pass builds the element buckets and one sort of the
+ * paragraph ranges answers every containment question.
+ */
+export type TrackedChangeLookup = {
+  /** The elements whose nearest tracked-change ancestor is this change. A
+   * change nested in another belongs to the outer one, never to itself, which
+   * is what `nearestTrackedChangeAncestor` answers for its own parent. */
+  inside(element: XmlElement): readonly XmlElement[]
+  /** The direct children of this element, so a properties parent is a lookup
+   * rather than a scan of the part. */
+  childrenOf(element: XmlElement): readonly XmlElement[]
+  /** The innermost paragraph range containing this element, if any. */
+  paragraphAt(element: XmlElement): ParagraphAnchor | undefined
+}
+
+export function trackedChangeLookup(
+  elements: readonly XmlElement[],
+  paragraphs: readonly ParagraphAnchor[],
+): TrackedChangeLookup {
+  const inside = new Map<XmlElement, XmlElement[]>()
+  const children = new Map<XmlElement, XmlElement[]>()
+  for (const element of elements) {
+    const parent = element.parent
+    if (parent !== undefined) {
+      const siblings = children.get(parent)
+      if (siblings) siblings.push(element)
+      else children.set(parent, [element])
+    }
+    const nearest = nearestTrackedChangeAncestor(element)
+    if (nearest !== undefined) {
+      const contained = inside.get(nearest)
+      if (contained) contained.push(element)
+      else inside.set(nearest, [element])
+    }
+  }
+  // Paragraph ranges come from the part's tree, so any two are nested or
+  // disjoint. The innermost range holding an element is therefore the one with
+  // the last start that still holds it: walk back from there and stop at the
+  // first that does, which is at most the nesting depth.
+  const ordered = [...paragraphs].sort(
+    (left, right) => left.paragraphRange.start - right.paragraphRange.start,
+  )
+  return {
+    inside: (element) => inside.get(element) ?? NO_ELEMENTS,
+    childrenOf: (element) => children.get(element) ?? NO_ELEMENTS,
+    paragraphAt: (element) => {
+      let low = 0
+      let high = ordered.length
+      while (low < high) {
+        const middle = (low + high) >> 1
+        const anchor = ordered[middle]
+        if (
+          anchor !== undefined &&
+          anchor.paragraphRange.start <= element.start
+        )
+          low = middle + 1
+        else high = middle
+      }
+      for (let index = low - 1; index >= 0; index -= 1) {
+        const anchor = ordered[index]
+        if (anchor === undefined) break
+        if (
+          anchor.paragraphRange.start <= element.start &&
+          anchor.paragraphRange.end >= element.end
+        ) {
+          return anchor
+        }
+      }
+      return undefined
+    },
+  }
 }
 
 function isParagraphMarkDeletion(element: XmlElement) {
@@ -115,9 +194,8 @@ function changeWire(
 export function trackedChange(
   partName: string,
   source: string,
-  elements: XmlElement[],
   element: XmlElement,
-  paragraphs: ParagraphAnchor[],
+  lookup: TrackedChangeLookup,
   id: string,
   moveRanges: MoveRangeIndex,
 ): TrackedChangeNode {
@@ -126,7 +204,7 @@ export function trackedChange(
   const author = attributeValue(element, WORD_NAMESPACE, 'author')
   const date = attributeValue(element, WORD_NAMESPACE, 'date')
   const ooxmlId = attributeValue(element, WORD_NAMESPACE, 'id')
-  const paragraph = smallestContainingParagraph(paragraphs, element)
+  const paragraph = lookup.paragraphAt(element)
   const paragraphMark = isParagraphMarkDeletion(element)
     ? nearestWordAncestor(element, 'p')
     : undefined
@@ -136,12 +214,9 @@ export function trackedChange(
   )
   const textName =
     elementName === 'del' || elementName === 'moveFrom' ? 'delText' : 't'
-  const textElements = elements.filter(
-    (candidate) =>
-      isWord(candidate, textName) &&
-      isDescendantOf(candidate, element) &&
-      nearestTrackedChangeAncestor(candidate) === element,
-  )
+  const textElements = lookup
+    .inside(element)
+    .filter((candidate) => isWord(candidate, textName))
   const wire = changeWire(elementName, {
     id,
     ...(ooxmlId !== undefined ? { ooxmlId } : {}),
@@ -172,11 +247,9 @@ export function trackedChange(
       ? element.parent
       : undefined
   const previousProperties = expectedPropertiesName
-    ? elements.find(
-        (candidate) =>
-          candidate.parent === element &&
-          isWord(candidate, expectedPropertiesName),
-      )
+    ? lookup
+        .childrenOf(element)
+        .find((candidate) => isWord(candidate, expectedPropertiesName))
     : undefined
   // Word pairs a move by the shared w:name on its range containers; a wrapper
   // outside any container is tolerated markup paired by a shared w:id.
@@ -223,22 +296,4 @@ export function trackedChange(
       ? { paragraphMarkRange: elementRange(paragraphMark) }
       : {}),
   }
-}
-
-function smallestContainingParagraph(
-  paragraphs: ParagraphAnchor[],
-  element: XmlElement,
-) {
-  return paragraphs
-    .filter(
-      ({ paragraphRange }) =>
-        paragraphRange.start <= element.start &&
-        paragraphRange.end >= element.end,
-    )
-    .sort(
-      (left, right) =>
-        left.paragraphRange.end -
-        left.paragraphRange.start -
-        (right.paragraphRange.end - right.paragraphRange.start),
-    )[0]
 }

@@ -22,7 +22,11 @@ import { RELATIONSHIPS_NAMESPACE } from '../structure-xml'
 import { decodeXmlReferences } from '../xml-lexemes'
 import { resolveMoveRanges } from './move-ranges'
 import { elementFragment, parseXmlElements } from './overlay'
-import { isTrackedChange, trackedChange } from './tracked-change-nodes'
+import {
+  isTrackedChange,
+  trackedChange,
+  trackedChangeLookup,
+} from './tracked-change-nodes'
 import {
   attributeValue,
   childrenByParent,
@@ -211,6 +215,9 @@ export function parseStory(
   }
 
   const moveRanges = resolveMoveRanges(partName, elements)
+  // The lookup answers a question per change, so it is built once for the part
+  // rather than re-scanned inside every change.
+  const trackedLookup = trackedChangeLookup(elements, paragraphAnchors)
   const trackedChanges = elements
     .filter(isTrackedChange)
     .filter((element) => !index.inTrackedChange(element))
@@ -218,9 +225,8 @@ export function parseStory(
       trackedChange(
         partName,
         source,
-        elements,
         element,
-        paragraphAnchors,
+        trackedLookup,
         identity.nextChangeId(),
         moveRanges,
       ),
