@@ -207,13 +207,24 @@ it('paginates a wholly tracked paragraph once and mounts only one editable caret
   const insertion = changes[1]
   if (!insertion) throw new Error('Expected insertion')
   const c = { ...insertion, inlinePosition: { beforeRunId: null }, text }
+  const previous: DocumentParagraphWire = {
+    ...paragraph,
+    id: 'previous',
+    runs: [
+      {
+        id: 'previous-r',
+        text: 'Previous paragraph',
+        preservedXmlFragments: [],
+      },
+    ],
+  }
   const model: DocumentModelWire = {
     version: 1,
     stories: [
       {
         kind: 'document',
         partName: 'word/document.xml',
-        paragraphs: [p],
+        paragraphs: [previous, p],
         preservedXmlFragments: [],
         fields: [],
         unanchoredFieldParagraphIds: [],
@@ -234,6 +245,7 @@ it('paginates a wholly tracked paragraph once and mounts only one editable caret
   }
   const pages = layoutDocument(model)
   expect(pages.length).toBeGreaterThan(1)
+  const moves: Array<{ paragraphId: string; offset: number }> = []
   const { container } = render(
     <>
       {pages.map((page, i) => (
@@ -242,6 +254,9 @@ it('paginates a wholly tracked paragraph once and mounts only one editable caret
           model={model}
           pageBlocks={page.blocks}
           pageLayout={page}
+          onMoveCaret={(paragraphId, offset) =>
+            moves.push({ paragraphId, offset })
+          }
           selectedParagraphId="p"
           restoreCaret={{ paragraphId: 'p', offset: 0 }}
           onSelectParagraph={() => undefined}
@@ -251,6 +266,10 @@ it('paginates a wholly tracked paragraph once and mounts only one editable caret
     </>,
   )
   expect(container.querySelectorAll('textarea').length).toBe(1)
+  const field = container.querySelector('textarea')
+  if (!field) throw new Error('Expected caret field')
+  fireEvent.keyDown(field, { key: 'ArrowUp' })
+  expect(moves).toEqual([{ paragraphId: 'previous', offset: 0 }])
   expect(
     [...container.querySelectorAll('[data-inline-change]')]
       .map((span) => span.textContent)
