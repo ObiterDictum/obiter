@@ -48,6 +48,7 @@ function indentedModel(indentAttr: string, continuation = false) {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

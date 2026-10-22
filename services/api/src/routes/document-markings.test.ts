@@ -192,6 +192,7 @@ describe('POST /api/documents/:id/markings', () => {
 
     expect(response.status).toBe(201)
     const body = (await response.json()) as {
+      trackRevisions: false
       markings: { documentKind: string | null }
     }
     expect(body.markings.documentKind).toBe('future-kind-from-newer-build')

@@ -309,6 +309,7 @@ describe('marginBandHeights', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,
@@ -360,6 +361,7 @@ describe('marginBandHeights', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,
@@ -411,6 +413,7 @@ describe('marginBandHeights', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,
@@ -464,6 +467,7 @@ describe('marginBandHeights', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,

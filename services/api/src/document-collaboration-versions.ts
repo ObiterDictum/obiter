@@ -15,6 +15,7 @@ import {
   remapMergeOperations,
   retargetLineageToBaseVersion,
   serialiseDocx,
+  writeTrackRevisions,
 } from '@obiter/ooxml'
 import { findExistingCollaborationMerge } from './document-collaboration-db'
 import { lockMatterForEdit } from './matter-lock'
@@ -168,6 +169,9 @@ export async function createCollaborationMergeVersion(
           : undefined,
         recorder,
       )
+      // Same settings write as the direct edit path: the saved version
+      // persists the toggle state the merge request carried.
+      writeTrackRevisions(currentDocument, input.trackChanges)
       const canonicalParagraphIds =
         canonicaliseParagraphIdentities(currentDocument)
       const currentLineage = buildVersionLineage({

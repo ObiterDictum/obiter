@@ -15,6 +15,7 @@ import {
   parseDocx,
   serialiseDocx,
   writeDocumentMarkings,
+  writeTrackRevisions,
 } from '@obiter/ooxml'
 import type { AuditRecordInput, DocumentVersionRecord } from './database'
 import { lockMatterForEdit } from './matter-lock'
@@ -133,6 +134,10 @@ async function prepareEditedSource(
         : undefined,
       recorder,
     )
+    // The edit batch is also the toggle's persistence point: saving with
+    // tracking on writes `w:trackRevisions`, saving without it removes it,
+    // matching what Word writes when the toggle changes.
+    writeTrackRevisions(document, input.trackChanges)
   } catch (error) {
     if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
     throw new DocumentEditStoreError()

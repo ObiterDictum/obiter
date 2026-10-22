@@ -45,6 +45,7 @@ function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,
@@ -420,6 +421,7 @@ function tabledDoc(): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

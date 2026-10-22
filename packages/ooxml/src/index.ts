@@ -110,6 +110,7 @@ export {
   readDocumentMarkings,
 } from './parts/custom-properties'
 export { writeDocumentMarkings } from './parts/custom-properties-write'
+export { writeTrackRevisions } from './parts/settings'
 export { buildShareSafeDocx, ShareSafeRefusal } from './share-safe-export'
 export type { ShareSafeRefusalReason } from './share-safe-refusal'
 export * from './model-json'

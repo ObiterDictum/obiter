@@ -518,6 +518,7 @@ describe('DocxWorkspace markings', () => {
         versionNumber: current,
         model: {
           ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: false,
           markings: {
             documentKind: null,
             draft: current === 2,
@@ -533,6 +534,7 @@ describe('DocxWorkspace markings', () => {
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
     expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
       baseVersionId: 'ver_1',
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: true,
@@ -557,6 +559,7 @@ describe('DocxWorkspace markings', () => {
       models: {
         doc_1: {
           ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: false,
           markings: {
             // A kind this build does not list is still offered and kept.
             documentKind: 'externally-authored-kind',
@@ -580,6 +583,7 @@ describe('DocxWorkspace markings', () => {
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
     expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
       baseVersionId: 'ver_1',
+      trackRevisions: false,
       markings: {
         documentKind: 'letter',
         draft: false,
