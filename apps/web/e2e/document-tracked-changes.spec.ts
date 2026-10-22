@@ -415,8 +415,8 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   const matter = `E9 tracking ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // Turn tracking on from the Review tab before the format runs.
-  await page.getByRole('tab', { name: 'Review' }).click()
+  // Wait for the model-backed ribbon before turning tracking on.
+  await openChangesPanel(page)
   const tracking = page.getByRole('button', { name: /Track changes/u }).first()
   await expect(tracking).toBeVisible({ timeout: 15_000 })
   if ((await tracking.getAttribute('aria-pressed')) !== 'true') {
