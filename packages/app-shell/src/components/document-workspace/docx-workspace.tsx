@@ -1,3 +1,4 @@
+import { InlineChangeReview } from './inline-change-review'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -388,104 +389,117 @@ export function DocxWorkspace({
   )
 
   return (
-    <WorkspaceShell
-      layout={layout}
-      onKeyDown={(event) =>
-        documentWorkspaceKeyDown(event, {
-          save: save.save,
-          undo,
-          redo,
-          print,
-          format,
-        })
-      }
+    <InlineChangeReview
+      value={{
+        activeChangeId: changeReview.activeChangeId,
+        selectChange: (id) => {
+          const index = changeReview.changes.findIndex(
+            (change) => change.id === id,
+          )
+          if (index >= 0) changeReview.goTo(index)
+          setChangesOpen(true)
+        },
+      }}
     >
-      {modelQuery.isLoading ? (
-        <LoadingBlock label="Loading document model" />
-      ) : modelQuery.isError && !model ? (
-        <QueryError
-          error={modelQuery.error}
-          fallback="The document model could not be loaded."
-        />
-      ) : model ? (
-        <>
-          <DocumentPrintStyle box={printBox} />
-          {ribbon}
-          <DocxDesk
-            model={model}
-            navOpen={navOpen}
-            outline={outline}
-            activeParagraphId={selectedParagraphId}
-            onSelectOutline={onSelectOutline}
-            columnRef={columnRef}
-            spelling={spelling}
-            rulerOn={rulerOn}
-            ruler={ruler}
-            zoom={zoom}
-            pages={
-              <DocxModelPages
-                view={view}
-                model={model}
-                painted={painted}
-                pages={pages}
-                zoom={zoom}
-                editingKind={editingKind}
-                selectedParagraphId={selectedParagraphId}
-                restoreCaret={restoreCaret}
-                verticalCaret={verticalCaret}
-                drafts={drafts}
-                presence={presence}
-                currentUserId={me?.user.id}
-                imageUrls={imageUrls}
-                selectionSegments={selectionSegments}
-                linkOverlays={linkOverlays}
-                selectionHandlers={selectionHandlers}
-                selectParagraph={selectParagraph}
-                setFormatRange={setFormatRange}
-                mirrorSelection={mirrorSelection}
-                focusParagraph={focusParagraph}
-                moveCaret={moveCaret}
-                reportJoinRefusal={reportJoinRefusal}
-                onExitMarginEditing={closeEditingStory}
-                onOpenNoteEditing={(paragraphId) =>
-                  openEditingStory('footnotes', paragraphId)
-                }
-              />
-            }
-            sidePanels={
-              <WorkspaceSidePanels
-                commentsOpen={commentsOpen}
-                changesOpen={changesOpen}
-                authoritiesOpen={authoritiesOpen}
-                legalChecksOpen={legalTools.legalChecksOpen}
-                legalChecks={legalChecks}
-                {...commentsPanel.props}
-                changeReview={changeReview}
-                authorities={authorities}
-                // An authority always names a body paragraph, so selecting
-                // one leaves margin editing the way a body click does before
-                // the caret lands — otherwise the caret parks on an inert
-                // body paragraph the format controls still target.
-                onSelectAuthority={(paragraphId) => {
-                  closeEditingStory()
-                  selectParagraph(paragraphId)
-                }}
-              />
-            }
+      <WorkspaceShell
+        layout={layout}
+        onKeyDown={(event) =>
+          documentWorkspaceKeyDown(event, {
+            save: save.save,
+            undo,
+            redo,
+            print,
+            format,
+          })
+        }
+      >
+        {modelQuery.isLoading ? (
+          <LoadingBlock label="Loading document model" />
+        ) : modelQuery.isError && !model ? (
+          <QueryError
+            error={modelQuery.error}
+            fallback="The document model could not be loaded."
           />
-          <InsertAuthorityDialog
-            open={insertAuthorityOpen}
-            onOpenChange={setInsertAuthorityOpen}
-            disabled={
-              !selectedParagraphId && !documentStory(model)?.paragraphs[0]
-            }
-            citationStyle={legalTools.citationStyle}
-            onInsert={(citation) =>
-              insertAuthority(citation, legalTools.citationStyle === 'house')
-            }
-          />
-        </>
-      ) : null}
-    </WorkspaceShell>
+        ) : model ? (
+          <>
+            <DocumentPrintStyle box={printBox} />
+            {ribbon}
+            <DocxDesk
+              model={model}
+              navOpen={navOpen}
+              outline={outline}
+              activeParagraphId={selectedParagraphId}
+              onSelectOutline={onSelectOutline}
+              columnRef={columnRef}
+              spelling={spelling}
+              rulerOn={rulerOn}
+              ruler={ruler}
+              zoom={zoom}
+              pages={
+                <DocxModelPages
+                  view={view}
+                  model={model}
+                  painted={painted}
+                  pages={pages}
+                  zoom={zoom}
+                  editingKind={editingKind}
+                  selectedParagraphId={selectedParagraphId}
+                  restoreCaret={restoreCaret}
+                  verticalCaret={verticalCaret}
+                  drafts={drafts}
+                  presence={presence}
+                  currentUserId={me?.user.id}
+                  imageUrls={imageUrls}
+                  selectionSegments={selectionSegments}
+                  linkOverlays={linkOverlays}
+                  selectionHandlers={selectionHandlers}
+                  selectParagraph={selectParagraph}
+                  setFormatRange={setFormatRange}
+                  mirrorSelection={mirrorSelection}
+                  focusParagraph={focusParagraph}
+                  moveCaret={moveCaret}
+                  reportJoinRefusal={reportJoinRefusal}
+                  onExitMarginEditing={closeEditingStory}
+                  onOpenNoteEditing={(paragraphId) =>
+                    openEditingStory('footnotes', paragraphId)
+                  }
+                />
+              }
+              sidePanels={
+                <WorkspaceSidePanels
+                  commentsOpen={commentsOpen}
+                  changesOpen={changesOpen}
+                  authoritiesOpen={authoritiesOpen}
+                  legalChecksOpen={legalTools.legalChecksOpen}
+                  legalChecks={legalChecks}
+                  {...commentsPanel.props}
+                  changeReview={changeReview}
+                  authorities={authorities}
+                  // An authority always names a body paragraph, so selecting
+                  // one leaves margin editing the way a body click does before
+                  // the caret lands — otherwise the caret parks on an inert
+                  // body paragraph the format controls still target.
+                  onSelectAuthority={(paragraphId) => {
+                    closeEditingStory()
+                    selectParagraph(paragraphId)
+                  }}
+                />
+              }
+            />
+            <InsertAuthorityDialog
+              open={insertAuthorityOpen}
+              onOpenChange={setInsertAuthorityOpen}
+              disabled={
+                !selectedParagraphId && !documentStory(model)?.paragraphs[0]
+              }
+              citationStyle={legalTools.citationStyle}
+              onInsert={(citation) =>
+                insertAuthority(citation, legalTools.citationStyle === 'house')
+              }
+            />
+          </>
+        ) : null}
+      </WorkspaceShell>
+    </InlineChangeReview>
   )
 }

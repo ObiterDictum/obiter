@@ -1,8 +1,9 @@
+import { inlineChanges } from './document-inline-changes'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { effectiveParagraph, paragraphPlainText } from './document-model-text'
+import { effectiveParagraph } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
 import { countLines, firstLineIndentPx } from './document-page-flow'
 import type { ColumnFrame, ContentFrame } from './document-page-layout'
@@ -103,7 +104,13 @@ export function paragraphMetrics(
     drafts,
     extraRuns[paragraph.id] ?? [],
   )
-  const text = paragraphPlainText(resolved)
+  const partName = model.changes.some(
+    (change) => change.paragraphId === paragraph.id,
+  )
+    ? model.stories.find((story) => story.paragraphs.includes(paragraph))
+        ?.partName
+    : undefined
+  const text = inlineChanges(resolved, model.changes, partName).text
   const face = paragraphFace(resolved, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx

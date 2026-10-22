@@ -31,6 +31,7 @@ function isDecoration(node: Node): boolean {
   // Note marks and empty-line placeholders are painted text that is not part of
   // the paragraph's run text, so they must not consume a character offset.
   return (
+    parent.closest('[data-inline-change]') !== null ||
     parent.closest('[data-note-mark]') !== null ||
     parent.closest('[data-empty-line]') !== null
   )
@@ -242,7 +243,10 @@ export function renderedRangeFor(
     return { kind: 'unavailable', reason: 'rendered_anchor_unavailable' }
   }
   if (result.kind === 'unavailable') return result
-  if (result.range.toString() === excerpt) {
+  const content = result.range.cloneContents()
+  for (const change of content.querySelectorAll('[data-inline-change]'))
+    change.remove()
+  if (content.textContent === excerpt) {
     return {
       kind: 'attached',
       range: result.range,

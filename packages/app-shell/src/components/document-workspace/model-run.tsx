@@ -1,3 +1,4 @@
+import { InlineChange } from './inline-change-review'
 import { useMemo, type ReactNode } from 'react'
 import type {
   DocumentChangeWire,
@@ -57,6 +58,7 @@ type LinkOverlay = ParagraphLinkOverlay
  */
 export function ParagraphRunPaint({
   paragraph,
+  toEditableOffset = (at) => at,
   drafts,
   changes,
   styles,
@@ -74,6 +76,7 @@ export function ParagraphRunPaint({
   pageReferences,
 }: {
   paragraph: DocumentParagraphWire
+  toEditableOffset?: (at: number) => number
   drafts?: Record<string, string>
   changes: DocumentChangeWire[]
   styles: DocumentStyleWire[]
@@ -108,22 +111,31 @@ export function ParagraphRunPaint({
         </span>
       )
     }
-    return slices.map(({ run, text, from }) => (
-      <ModelRun
-        key={`${run.id}-${from}`}
-        run={run}
-        text={text}
-        from={from}
-        selection={selection}
-        linkOverlay={linkOverlay}
-        paragraphEnd={paragraphEnd}
-        paragraphFace={face}
-        changes={changes}
-        styles={styles}
-        drafts={drafts}
-        caret={carets.find((item) => item.cursor?.runId === run.id)}
-      />
-    ))
+    return slices.map(({ run, text, from }) => {
+      const change = changes.find(
+        (change) => change.id === run.id && change.inlinePosition,
+      )
+      if (change)
+        return (
+          <InlineChange key={`${run.id}-${from}`} change={change} text={text} />
+        )
+      return (
+        <ModelRun
+          key={`${run.id}-${from}`}
+          run={run}
+          text={text}
+          from={from}
+          selection={selection}
+          linkOverlay={linkOverlay}
+          paragraphEnd={paragraphEnd}
+          paragraphFace={face}
+          changes={changes}
+          styles={styles}
+          drafts={drafts}
+          caret={carets.find((item) => item.cursor?.runId === run.id)}
+        />
+      )
+    })
   }
   if (wrapWidthPx && wrapWidthPx > 0) {
     return lines.map((line, index) => (
@@ -144,8 +156,8 @@ export function ParagraphRunPaint({
           textIndent:
             index === 0 && !continuation && start === 0 ? undefined : 0,
         }}
-        data-line-from={start + line.from}
-        data-line-to={start + line.to}
+        data-line-from={toEditableOffset(start + line.from)}
+        data-line-to={toEditableOffset(start + line.to)}
       >
         {paint(
           paintSlices(

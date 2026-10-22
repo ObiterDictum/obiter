@@ -172,10 +172,18 @@ export function useChangeReview({
       return
     }
     const paragraph = editableParagraph(model!, change.paragraphId)
+    const before = change.inlinePosition?.beforeRunId
     const offset =
-      change.runId && paragraph
-        ? paragraphRunStart(paragraph, change.runId, drafts.drafts)
-        : 0
+      change.inlinePosition && paragraph
+        ? before
+          ? paragraphRunStart(paragraph, before, drafts.drafts)
+          : paragraph.runs.reduce(
+              (n, run) => n + (drafts.drafts[run.id] ?? run.text).length,
+              0,
+            )
+        : change.runId && paragraph
+          ? paragraphRunStart(paragraph, change.runId, drafts.drafts)
+          : 0
     if (story.kind === 'document') {
       if (caret.editingKind !== 'document') caret.closeEditingStory()
       caret.selectParagraph(change.paragraphId, offset)

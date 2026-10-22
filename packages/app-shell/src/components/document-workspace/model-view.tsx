@@ -341,6 +341,7 @@ export function DocumentModelPage({
       {!chromeless && (
         <PageMarginBand
           stories={headers}
+          changes={model.changes}
           label="Document header"
           edge="top"
           className={
@@ -410,6 +411,7 @@ export function DocumentModelPage({
       {!chromeless && (
         <PageMarginBand
           stories={footers}
+          changes={model.changes}
           label="Document footer"
           edge="bottom"
           className={
