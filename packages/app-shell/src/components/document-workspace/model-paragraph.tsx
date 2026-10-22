@@ -424,14 +424,21 @@ export function ModelParagraph({
                 restoreCaret={restore}
                 lines={
                   mapped
-                    ? lines.map((line) => ({
-                        text: sliceText.slice(
-                          mapped.toEditable(line.from),
-                          mapped.toEditable(line.to),
-                        ),
-                        from: mapped.toEditable(line.from),
-                        to: mapped.toEditable(line.to),
-                      }))
+                    ? lines
+                        .map((line) => ({
+                          text: sliceText.slice(
+                            mapped.toEditable(line.from),
+                            mapped.toEditable(line.to),
+                          ),
+                          from: mapped.toEditable(line.from),
+                          to: mapped.toEditable(line.to),
+                        }))
+                        .filter(
+                          (line, index, all) =>
+                            line.to > line.from ||
+                            (index === all.length - 1 &&
+                              line.to === sliceText.length),
+                        )
                     : lines
                 }
                 previous={adjacent?.previous}
