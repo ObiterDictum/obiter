@@ -99,10 +99,13 @@ describe('E50 lineage obstacles (real parser/serializer)', () => {
         })),
       ),
     )
-    // Tracked runs are excluded from the paragraph model; the edit lives only
-    // in `changes`, which carry no run id. This is the identity gap the
-    // version lineage must bridge for tracked saves.
-    expect(shape(after)[0]?.runs).toEqual([])
+    // Tracked wrappers are excluded from the paragraph model; the granular
+    // writer keeps the unchanged head as a live run and only the inserted
+    // text lives in `changes`, which carry no run id. This is the identity
+    // gap the version lineage must bridge for tracked saves.
+    expect(shape(after)[0]?.runs).toEqual([
+      { id: 'text-000001', text: 'Hello' },
+    ])
     expect(after.model.changes.length).toBeGreaterThan(0)
   })
 })
