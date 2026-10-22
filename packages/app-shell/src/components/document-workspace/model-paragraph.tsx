@@ -283,7 +283,7 @@ export function ModelParagraph({
       selection={
         paintSelection
           ? {
-              from: projection.toDisplay(paintSelection.from),
+              from: projection.toDisplay(paintSelection.from, 'after'),
               to: projection.toDisplay(paintSelection.to, 'before'),
             }
           : undefined
@@ -293,11 +293,11 @@ export function ModelParagraph({
           ? {
               links: linkOverlay.links.map((link) => ({
                 ...link,
-                from: projection.toDisplay(link.from),
+                from: projection.toDisplay(link.from, 'after'),
                 to: projection.toDisplay(link.to, 'before'),
               })),
               marks: linkOverlay.marks.map((mark) => ({
-                from: projection.toDisplay(mark.from),
+                from: projection.toDisplay(mark.from, 'after'),
                 to: projection.toDisplay(mark.to, 'before'),
               })),
               fieldMarkers: linkOverlay.fieldMarkers.map((marker) => ({

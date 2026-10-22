@@ -1,3 +1,4 @@
+import { applyInsertText, emptyEditorState } from '../../document-word-edits'
 import { PageMarginBand } from './page-margin-band'
 import { layoutDocument } from '../../document-page-engine'
 import { DocumentModelPage } from './model-view'
@@ -11,7 +12,10 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { inlineChanges, inlineSlice } from '../../document-inline-changes'
-import { paragraphPlainText } from '../../document-model-text'
+import {
+  paragraphPlainText,
+  effectiveParagraph,
+} from '../../document-model-text'
 import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
 import { InlineChangeReview } from './inline-change-review'
 import { renderedRangeFor } from '../verification/verification-anchor'
@@ -45,6 +49,36 @@ const changes: DocumentChangeWire[] = [
   },
 ]
 afterEach(cleanup)
+function modelOf(
+  paragraphs: DocumentParagraphWire[],
+  changes: DocumentChangeWire[],
+): DocumentModelWire {
+  return {
+    version: 1,
+    stories: [
+      {
+        kind: 'document',
+        partName: 'word/document.xml',
+        paragraphs,
+        preservedXmlFragments: [],
+        fields: [],
+        unanchoredFieldParagraphIds: [],
+      },
+    ],
+    styles: [],
+    numbering: [],
+    relationships: [],
+    preservedXmlFragments: [],
+    changes,
+    comments: [],
+    markings: {
+      documentKind: null,
+      draft: false,
+      privileged: false,
+      withoutPrejudice: false,
+    },
+  }
+}
 function mount(
   editing = false,
   p = paragraph,
@@ -132,7 +166,7 @@ it('copies only editable characters and jumps across tracked content', () => {
   expect(field.selectionStart).toBe(19)
   field.setSelectionRange(6, 6)
   fireEvent.keyDown(field, { key: 'ArrowRight', shiftKey: true })
-  expect(field.selectionStart).toBe(18)
+  expect(field.selectionStart).toBe(6)
   expect(field.selectionEnd).toBe(19)
 })
 it('preserves plain text and paginated display slices without duplicating markup', () => {
@@ -218,31 +252,7 @@ it('paginates a wholly tracked paragraph once and mounts only one editable caret
       },
     ],
   }
-  const model: DocumentModelWire = {
-    version: 1,
-    stories: [
-      {
-        kind: 'document',
-        partName: 'word/document.xml',
-        paragraphs: [previous, p],
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [c],
-    comments: [],
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
-  }
+  const model = modelOf([previous, p], [c])
   const pages = layoutDocument(model)
   expect(pages.length).toBeGreaterThan(1)
   const moves: Array<{ paragraphId: string; offset: number }> = []
@@ -332,4 +342,38 @@ it('shows a wholly tracked imported header while the margin is closed', () => {
   expect(container.querySelector('[data-inline-change]')?.textContent).toBe(
     '50,000',
   )
+})
+
+it('places the caret at the same side of revisions that the existing writer edits', () => {
+  const edited = applyInsertText(
+    modelOf([paragraph], changes),
+    emptyEditorState(),
+    { paragraphId: 'p', offset: 6 },
+    'X',
+  )
+  if (!edited) throw new Error('Expected ordinary insertion')
+  const after = inlineChanges(
+    effectiveParagraph(paragraph, edited.state.drafts),
+    changes,
+  )
+  expect(after.text).toBe('Order X60,00050,000 units')
+  expect(after.toDisplay(edited.caret.offset)).toBe(7)
+  const projection = inlineChanges(paragraph, changes)
+  expect(projection.toDisplay(6)).toBe(6)
+  expect(projection.toDisplay(6, 'after')).toBe(18)
+  const endChanges = changes.map((change) => ({
+    ...change,
+    inlinePosition: { beforeRunId: null },
+  }))
+  expect(
+    inlineChanges(
+      { ...paragraph, runs: paragraph.runs.slice(0, 1) },
+      endChanges,
+    ).toDisplay(6),
+  ).toBe(6)
+  const leading = inlineChanges(
+    { ...paragraph, runs: paragraph.runs.slice(1) },
+    changes,
+  )
+  expect(leading.toDisplay(0)).toBe(12)
 })
