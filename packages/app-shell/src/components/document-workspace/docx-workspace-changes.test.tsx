@@ -16,6 +16,7 @@ import { ReviewRibbon } from './ribbon-review'
 const inserted: DocumentChangeWire = {
   id: 'chg_1',
   ooxmlId: '4',
+  inlinePosition: null,
   elementName: 'ins',
   kind: 'insert',
   storyPartName: 'word/document.xml',
@@ -27,6 +28,7 @@ const inserted: DocumentChangeWire = {
 const format: DocumentChangeWire = {
   id: 'chg_2',
   ooxmlId: '5',
+  inlinePosition: null,
   elementName: 'rPrChange',
   kind: 'property',
   scope: 'run',
@@ -39,6 +41,7 @@ const format: DocumentChangeWire = {
 const unsupportedMove: DocumentChangeWire = {
   id: 'chg_3',
   ooxmlId: '6',
+  inlinePosition: null,
   elementName: 'moveFrom',
   kind: 'move',
   direction: 'from',

@@ -38,6 +38,7 @@ const model: DocumentModelWire = {
     {
       id: 'c1',
       kind: 'insert',
+      inlinePosition: null,
       elementName: 'ins',
       text: 'Alice',
       storyPartName: 'word/document.xml',

@@ -191,7 +191,7 @@ export function isParagraphMarkMove(element: XmlElement) {
 
 type ChangeWireCommon = Pick<
   DocumentChangeWire,
-  'id' | 'storyPartName' | 'text'
+  'id' | 'storyPartName' | 'text' | 'inlinePosition'
 > &
   Partial<
     Pick<
@@ -243,13 +243,31 @@ export function trackedChange(
     ({ runRange }) =>
       runRange.start <= element.start && runRange.end >= element.end,
   )
-  const textName =
-    elementName === 'del' || elementName === 'moveFrom' ? 'delText' : 't'
   const textElements = lookup
     .inside(element)
-    .filter((candidate) => isWord(candidate, textName))
+    .filter(
+      (candidate) =>
+        isWord(candidate, 't') ||
+        isWord(candidate, 'delText') ||
+        isWord(candidate, 'tab') ||
+        isWord(candidate, 'br') ||
+        isWord(candidate, 'cr'),
+    )
   const wire = changeWire(elementName, {
     id,
+    inlinePosition:
+      paragraph &&
+      !nearestWordAncestor(element, 'pPr') &&
+      !nearestWordAncestor(element, 'rPr') &&
+      elementName !== 'pPrChange' &&
+      elementName !== 'rPrChange'
+        ? {
+            beforeRunId:
+              paragraph.runs.find(
+                ({ runRange }) => runRange.start >= element.end,
+              )?.wire.id ?? null,
+          }
+        : null,
     ...(ooxmlId !== undefined ? { ooxmlId } : {}),
     ...(author !== undefined ? { author } : {}),
     ...(date !== undefined ? { date } : {}),
@@ -257,11 +275,16 @@ export function trackedChange(
     ...(paragraph ? { paragraphId: paragraph.wire.id } : {}),
     ...(run ? { runId: run.wire.id } : {}),
     text: textElements
-      .filter((candidate) => !candidate.selfClosing)
       .map((candidate) =>
-        decodeXmlReferences(
-          source.slice(candidate.startTagEnd, candidate.endTagStart),
-        ),
+        isWord(candidate, 'tab')
+          ? '\t'
+          : isWord(candidate, 'br') || isWord(candidate, 'cr')
+            ? '\n'
+            : candidate.selfClosing
+              ? ''
+              : decodeXmlReferences(
+                  source.slice(candidate.startTagEnd, candidate.endTagStart),
+                ),
       )
       .join(''),
   })
@@ -319,10 +342,12 @@ export function trackedChange(
         }
       : {}),
     validMoveCounterpart: false,
-    deletedTextElements: textElements.map((candidate) => ({
-      range: elementRange(candidate),
-      qualifiedName: candidate.qualifiedName,
-    })),
+    deletedTextElements: textElements
+      .filter((candidate) => isWord(candidate, 'delText'))
+      .map((candidate) => ({
+        range: elementRange(candidate),
+        qualifiedName: candidate.qualifiedName,
+      })),
     ...(paragraphMark
       ? { paragraphMarkRange: elementRange(paragraphMark) }
       : {}),

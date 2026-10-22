@@ -197,6 +197,15 @@ const documentChangeWireBaseSchema = z.object({
   storyPartName: z.string().min(1),
   paragraphId: z.string().min(1).optional(),
   runId: z.string().min(1).optional(),
+  /**
+   * Read-only inline content sits before this editable run, or at paragraph
+   * end when beforeRunId is null. Null means a non-inline revision (for
+   * example a property or paragraph-mark change). Required so old cached
+   * models regenerate rather than silently hiding tracked text.
+   */
+  inlinePosition: z
+    .object({ beforeRunId: z.string().min(1).nullable() })
+    .nullable(),
   text: z.string(),
   /**
    * Why the decision engine can never decide this listed change, when it
