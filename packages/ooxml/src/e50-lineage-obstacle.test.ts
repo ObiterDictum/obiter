@@ -77,7 +77,7 @@ describe('E50 lineage obstacles (real parser/serializer)', () => {
     expect(shape(after)[0]?.runs.length).toBe(1)
   })
 
-  it('tracked-change wrappers change the parsed run list', async () => {
+  it('a tracked run insertion leaves the shared text as a live run', async () => {
     const doc = await load(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`)
     const run = paragraphs(doc)[0]?.runs[0]
     if (!run) throw new Error('run')

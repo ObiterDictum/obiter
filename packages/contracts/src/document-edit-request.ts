@@ -17,13 +17,33 @@ export const documentEditOperationsSchema = z
   .min(1)
   .max(DOCUMENT_EDIT_OPERATION_MAX_COUNT)
 
+/**
+ * `trackChanges` both asks for the batch to be recorded as tracked changes
+ * and is the persisted `w:trackRevisions` state of the version it creates.
+ * An omitted field leaves the stored toggle — and the tracking behaviour —
+ * as the base version carries it, so an older client can never clear the
+ * setting by accident. An empty `operations` with the field present is a
+ * settings-only save: a version whose only delta is the toggle.
+ */
 export const documentEditRequestSchema = z
   .object({
     baseVersionId: editIdSchema,
-    operations: documentEditOperationsSchema,
-    trackChanges: z.boolean().optional().default(false),
+    operations: z
+      .array(documentEditOperationSchema)
+      .max(DOCUMENT_EDIT_OPERATION_MAX_COUNT),
+    trackChanges: z.boolean().optional(),
   })
   .strict()
+  .superRefine((request, context) => {
+    if (request.operations.length === 0 && request.trackChanges === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['operations'],
+        message:
+          'An edit request must carry operations or a track-changes state.',
+      })
+    }
+  })
 export type DocumentEditRequest = z.infer<typeof documentEditRequestSchema>
 
 export const documentEditResponseSchema = z

@@ -24,6 +24,7 @@ import {
   createSyntheticDocx,
   parseDocx,
   serialiseDocx,
+  writeTrackRevisions,
 } from '@obiter/ooxml'
 import { ApiError } from '../../api'
 import { emptyDraftState } from '../../document-save-plan'
@@ -61,19 +62,25 @@ async function server(
 
   const apply = async (
     operations: readonly DocumentEditOperation[] = [],
-    trackChanges = false,
+    trackChanges?: boolean,
   ) => {
     const baseVersionId = `ver_${String(version)}`
     const document = await parseDocx(bytes)
     const recorder = createLineageRecorder(document.model)
-    applyDocumentEdits(
-      document,
-      operations,
-      trackChanges
-        ? { author: 'Lex', date: '2026-09-27T12:00:00.000Z' }
-        : undefined,
-      recorder,
-    )
+    // Mirrors the real edit route: an omitted toggle rides the base's own
+    // setting, and a settings-only request skips the edit batch entirely.
+    const tracking = trackChanges ?? document.model.trackRevisions
+    if (operations.length > 0) {
+      applyDocumentEdits(
+        document,
+        operations,
+        tracking
+          ? { author: 'Lex', date: '2026-09-27T12:00:00.000Z' }
+          : undefined,
+        recorder,
+      )
+    }
+    if (trackChanges !== undefined) writeTrackRevisions(document, trackChanges)
     const canonical = canonicaliseParagraphIdentities(document)
     const nextVersion = version + 1
     const lineage = buildVersionLineage({
@@ -82,7 +89,7 @@ async function server(
       canonicalParagraphIds: canonical,
       baseVersionId,
       versionId: `ver_${String(nextVersion)}`,
-      runAddressesReliable: !trackChanges,
+      runAddressesReliable: !tracking,
     })
     bytes = await serialiseDocx(document)
     version = nextVersion
@@ -101,7 +108,7 @@ async function server(
       operations?: DocumentEditOperation[]
       trackChanges?: boolean
     }) => {
-      const result = apply(input.operations ?? [], input.trackChanges ?? false)
+      const result = apply(input.operations ?? [], input.trackChanges)
       lastSave = result.then(() => undefined)
       return result
     },
@@ -114,6 +121,7 @@ async function server(
       action: 'accept' | 'reject'
       changeIds: string[]
       removeParagraphIds?: string[]
+      trackRevisions?: boolean
     }) => {
       // The real route refuses a stale base; enforce it so a sequential
       // multi-group save cannot pass a test that should catch the conflict.
@@ -133,6 +141,10 @@ async function server(
         input.action,
         input.removeParagraphIds ?? [],
       )
+      // The real route persists a carried toggle on the decision version.
+      if (input.trackRevisions !== undefined) {
+        writeTrackRevisions(document, input.trackRevisions)
+      }
       bytes = await serialiseDocx(document)
       version += 1
       parsed = await parseDocx(bytes)
@@ -752,17 +764,15 @@ describe('undo across a successful save', () => {
     fireEvent.change(field(), { target: { value: 'Hello world' } })
     await clickSaveAndSettle(document, 1)
 
-    // The tracked save succeeded and the run now lives in `w:del`/`w:ins`,
-    // absent from the paragraph model. The visible change is recorded.
+    // The tracked save succeeded: the granular writer wrapped only the
+    // inserted text in `w:ins`, absent from the paragraph model. The visible
+    // change is recorded.
     await waitFor(() => expect(saveState()).toBe('saved'))
     expect(
       document
         .modelFor()
         .model.changes.map((change) => [change.kind, change.text]),
-    ).toEqual([
-      ['delete', 'Hello'],
-      ['insert', 'Hello world'],
-    ])
+    ).toEqual([['insert', ' world']])
 
     // Undo reverses the saved tracked edit against the saved document as a
     // rejection, not as a text edit on a run the model does not have.
@@ -894,7 +904,9 @@ describe('undo across a successful save', () => {
     })
     enableTracking()
     selectBodyParagraph()
-    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    // A substitution (not a pure insertion) records both a `w:del` and a
+    // `w:ins`, so the rejection unit has both halves to name.
+    fireEvent.change(field(), { target: { value: 'Hullo' } })
     await clickSaveAndSettle(document, 1)
     await waitFor(() => expect(saveState()).toBe('saved'))
 

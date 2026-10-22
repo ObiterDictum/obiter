@@ -44,6 +44,13 @@ export const documentTrackedChangeDecisionRequestSchema = z
       .min(1)
       .max(TRACKED_DECISION_MAX_IDS)
       .optional(),
+    /**
+     * The track-changes toggle the decision version should persist. A
+     * decision commits a new immutable version, so an unsaved flip rides on
+     * it rather than being silently dropped; omitted leaves the stored
+     * `w:trackRevisions` state unchanged.
+     */
+    trackRevisions: z.boolean().optional(),
   })
   .strict()
   .superRefine((request, context) => {
