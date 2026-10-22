@@ -26,6 +26,8 @@ export function inlineChanges(
   )
   const runs: DocumentParagraphWire['runs'] = []
   const spans: InlineSpan[] = []
+  const editableRuns: Array<{ from: number; to: number; displayFrom: number }> =
+    []
   let offset = 0
   let displayOffset = 0
   function append(beforeRunId: string | null) {
@@ -43,6 +45,11 @@ export function inlineChanges(
   }
   for (const run of paragraph.runs) {
     append(run.id)
+    editableRuns.push({
+      from: offset,
+      to: offset + run.text.length,
+      displayFrom: displayOffset,
+    })
     runs.push(run)
     offset += run.text.length
     displayOffset += run.text.length
@@ -57,7 +64,13 @@ export function inlineChanges(
       removed += Math.max(0, Math.min(at, span.to) - span.from)
     return at - removed
   }
-  const toDisplay = (at: number, side: 'before' | 'after' = 'after') => {
+  const toDisplay = (at: number, side?: 'before' | 'after') => {
+    // replaceRunRange writes into the first run ending at the offset. Match
+    // that affinity so typing at an opaque gap paints where the caret sits.
+    if (side === undefined) {
+      const run = editableRuns.find((run) => run.to >= at)
+      return run ? run.displayFrom + at - run.from : text.length
+    }
     let added = 0
     for (const span of spans) {
       if (span.offset < at || (span.offset === at && side === 'after'))
