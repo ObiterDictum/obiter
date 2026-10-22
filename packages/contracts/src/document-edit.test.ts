@@ -22,6 +22,8 @@ describe('document edit contracts', () => {
   }
 
   it('accepts the typed operation surface and exact response', () => {
+    // An omitted trackChanges leaves the stored setting unchanged, so the
+    // parsed request must not invent a value for it.
     expect(
       documentEditRequestSchema.parse({
         baseVersionId: 'ver_1',
@@ -59,7 +61,7 @@ describe('document edit contracts', () => {
           { type: 'delete_paragraph', paragraphId: 'para_2' },
         ],
       }),
-    ).toMatchObject({ trackChanges: false })
+    ).not.toHaveProperty('trackChanges')
     expect(
       documentEditRequestSchema.parse({
         baseVersionId: 'ver_1',
