@@ -34,6 +34,7 @@ import {
   extractInsertedRunRpr,
   foldRprIntoInsertedRun,
   foldRprIntoRun,
+  granularRunEdit,
   mergeTrackedProperties,
   paragraphMarkDeletionReplacement,
   patchStyleChild,
@@ -88,6 +89,45 @@ export function createTrackedEditWriter(
       const part = requireEditablePart(document, anchor.partName)
       const source = part.overlay.source
       const prefix = wordPrefix(source, anchor.runRange, 'r')
+      const trackedProperties = part.overlay.replacements.get(
+        `${anchor.wire.id}:tracked-properties`,
+      )
+      const edit = granularRunEdit(
+        source,
+        anchor,
+        text,
+        prefix,
+        trackedProperties?.value,
+      )
+      if (edit.kind === 'noop') {
+        anchor.wire.text = text
+        return
+      }
+      if (edit.kind === 'pieces') {
+        if (trackedProperties) {
+          part.overlay.replacements.delete(
+            `${anchor.wire.id}:tracked-properties`,
+          )
+        }
+        let value = edit.prefixRun ?? ''
+        // A substitution records its removed side before its inserted side,
+        // the order Word writes and the pair a reversal drains as one unit.
+        if (edit.deletedRun) {
+          value += `<${prefix}:del ${attributes(prefix, 'del')}>${edit.deletedRun}</${prefix}:del>`
+        }
+        if (edit.insertedRun) {
+          value += `<${prefix}:ins ${attributes(prefix, 'ins')}>${edit.insertedRun}</${prefix}:ins>`
+        }
+        value += edit.suffixRun ?? ''
+        setOverlayReplacement(part.overlay, `${anchor.wire.id}:tracked-text`, {
+          start: anchor.runRange.start,
+          end: anchor.runRange.end,
+          value,
+        })
+        anchor.wire.text = text
+        part.dirty = true
+        return
+      }
       // Both tracked branches retain the complete run, so unique-identity
       // children such as bookmark and comment range markers are duplicated.
       // Hoisting those children needs a separate identity-preservation design.
@@ -97,9 +137,6 @@ export function createTrackedEditWriter(
         'delText',
       )
       let newRun = replaceRunText(source, anchor, text)
-      const trackedProperties = part.overlay.replacements.get(
-        `${anchor.wire.id}:tracked-properties`,
-      )
       if (trackedProperties) {
         part.overlay.replacements.delete(`${anchor.wire.id}:tracked-properties`)
         newRun = foldRprIntoRun(newRun, trackedProperties.value, prefix, 'rPr')
