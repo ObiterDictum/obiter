@@ -56,6 +56,7 @@ function insertedChange(
     id,
     kind: 'insert',
     elementName: 'ins',
+    inlinePosition: null,
     storyPartName: 'word/document.xml',
     paragraphId,
     ...(runId ? { runId } : {}),

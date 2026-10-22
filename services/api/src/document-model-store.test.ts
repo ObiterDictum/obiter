@@ -66,6 +66,31 @@ describe('getDocumentModel through the worker pool', () => {
     ])
   }, 20_000)
 
+  it('regenerates cached revisions that predate inline positions', async () => {
+    const storage = storageWithSource()
+    storage.text.set(
+      modelObjectKey,
+      JSON.stringify({
+        ...oracleModel,
+        changes: [
+          {
+            id: 'old-change',
+            kind: 'insert',
+            elementName: 'ins',
+            storyPartName: 'word/document.xml',
+            text: 'Old cached text',
+          },
+        ],
+      }),
+    )
+    const model = await getDocumentModel(storage, source)
+    expect(model).toEqual(oracleModel)
+    expect(storage.binaryReads).toEqual([sourceObjectKey])
+    expect(storage.textWrites).toEqual([
+      { key: modelObjectKey, text: oracleJson },
+    ])
+  }, 20_000)
+
   it('reports the curated store error when the source cannot be read', async () => {
     const storage = new MemoryStorage({ binary: [] })
 

@@ -71,7 +71,7 @@ S1 preserves these subtrees intact and in place:
 - `w:pPrChange`
 - `w:rPrChange`
 
-They are opaque overlay subtrees in S1. Parsing does not descend into them as ordinary typed content. Their complete lexical form, child markup, position, unknown attributes, `w:author`, `w:date` and any other attributes survive round trips. Slice 5 may add typed editing semantics, but an unedited change must continue to replay its preserved subtree.
+They are opaque overlay subtrees in S1. Parsing does not descend into them as ordinary typed content. Their complete lexical form, child markup, position, unknown attributes, `w:author`, `w:date` and any other attributes survive round trips. The wire also records `inlinePosition` for content wrappers: the next editable run id, or paragraph end. This display-only anchor and decoded text let the canvas show All Markup without putting revisions into editable runs. Property and paragraph-mark changes carry a null position. The field is required so older cached revision models regenerate. Slice 5 may add typed editing semantics, but an unedited change must continue to replay its preserved subtree.
 
 ## Model identity
 
