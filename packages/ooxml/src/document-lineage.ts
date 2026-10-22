@@ -414,18 +414,23 @@ export function buildVersionLineage(input: {
 
   // A tracked operation's reversal is a rejection of the persisted `w:id`s it
   // created, grouped by the accepted operation so a replacement's `del`/`ins`
-  // pair is handled as one unit. An insertion that created only an `ins` and
-  // no paragraph is a run insertion into an existing paragraph; removing the
-  // paragraph is not part of its reversal. A tracked paragraph insertion is
-  // carried on its paragraph entry (`trackedInsertChangeIds`), so its shell can
-  // be removed in the same decision.
+  // pair is handled as one unit. An ins-only group is a tracked paragraph
+  // insertion — whose reversal is carried on its paragraph entry
+  // (`trackedInsertChangeIds`) so the shell is removed in the same decision —
+  // only when it names no base run; a run insertion into an existing paragraph
+  // is ins-only too, and its reversal is the plain rejection below.
   const reversals: DocumentLineageReversal[] = []
   for (const [operation, group] of [...byOperation.entries()].sort(
     (left, right) => left[0] - right[0],
   )) {
-    if (group.every((change) => change.elementName === 'ins')) continue
     const first = group[0]
     if (!first) continue
+    if (
+      group.every((change) => change.elementName === 'ins') &&
+      first.fromRunId === null
+    ) {
+      continue
+    }
     reversals.push({
       operation,
       fromRunId: first.fromRunId,

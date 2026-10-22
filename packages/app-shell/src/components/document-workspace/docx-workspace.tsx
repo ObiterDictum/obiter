@@ -84,15 +84,18 @@ export function DocxWorkspace({
   const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
-  // The toggle follows the version's `w:trackRevisions`; an unsaved flip is
-  // keyed to the version it was made against so a committed save — or a
-  // reload to a different version — re-derives the persisted state.
+  // The toggle follows the version's `w:trackRevisions`. An unsaved flip is
+  // the user's intent until a version persists it: every version write —
+  // save, merge, decision or markings — carries the current toggle, so a
+  // flip keeps applying across a model refetch until then. A reload
+  // discards it like any other unsaved state.
   const [trackChangesFlip, setTrackChangesFlip] = useState<{
-    baseVersionId: string
+    documentId: string
     value: boolean
   } | null>(null)
   const trackChanges =
-    trackChangesFlip?.baseVersionId === baseVersionId
+    trackChangesFlip?.documentId === documentId &&
+    trackChangesFlip.value !== (model?.trackRevisions ?? false)
       ? trackChangesFlip.value
       : (model?.trackRevisions ?? false)
   const [banner, setBanner] = useState<string | null>(null)
@@ -113,6 +116,12 @@ export function DocxWorkspace({
 
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
+  const handleSaved = (version: string | null) => {
+    setSavedVersion(version ? { documentId, versionId: version } : null)
+    // A reload reports null: it discards unsaved state, so the pending flip
+    // goes with the drafts it stood beside.
+    if (version === null) setTrackChangesFlip(null)
+  }
   const save = useDocumentSave({
     documentId,
     matterId,
@@ -123,8 +132,7 @@ export function DocxWorkspace({
     presence,
     currentUserId: me?.user.id,
     remoteChange,
-    onSaved: (version) =>
-      setSavedVersion(version ? { documentId, versionId: version } : null),
+    onSaved: handleSaved,
   })
 
   // Verification reads the stored version, so it must stay disabled while any
@@ -182,6 +190,7 @@ export function DocxWorkspace({
     model,
     changes: changesQuery.data?.changes ?? [],
     baseVersionId,
+    trackChanges,
     decision: decideChange,
     drafts,
     save,
@@ -204,6 +213,7 @@ export function DocxWorkspace({
     matterId,
     model,
     baseVersionId,
+    trackChanges,
     save,
     onSaved: (version) => setSavedVersion({ documentId, versionId: version }),
     onNotice: setBanner,
@@ -331,7 +341,7 @@ export function DocxWorkspace({
         onCitationStyle: legalTools.onCitationStyle,
         legalChecks: legalTools.legalChecks,
         onToggleTrackChanges: () =>
-          setTrackChangesFlip({ baseVersionId, value: !trackChanges }),
+          setTrackChangesFlip({ documentId, value: !trackChanges }),
         onZoom: setZoom,
         onExportText: exports.onExportText,
         onExportShareSafe: exports.onExportShareSafe,

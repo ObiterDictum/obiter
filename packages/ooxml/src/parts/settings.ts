@@ -95,7 +95,7 @@ function settingsPart(
   return part && part.kind === 'xml' ? part : undefined
 }
 
-function trackRevisionElements(part: SourcePart, xml: string) {
+function trackRevisionElements(xml: string) {
   const elements = parseXmlElements(xml)
   const roots = elements.filter(({ depth }) => depth === 0)
   const root = roots[0]
@@ -107,11 +107,12 @@ function trackRevisionElements(part: SourcePart, xml: string) {
   ) {
     return undefined
   }
+  const children = elements.filter((element) => element.parent === root)
   return {
     root,
-    toggles: elements.filter(
+    children,
+    toggles: children.filter(
       (element) =>
-        element.parent === root &&
         element.namespaceUri === WORD_NAMESPACE &&
         element.localName === 'trackRevisions',
     ),
@@ -139,10 +140,7 @@ export function readTrackRevisions(source: {
   const part = settingsPart(source.model.relationships, source.sourceParts)
   if (!part) return false
   try {
-    const found = trackRevisionElements(
-      part,
-      decoder.decode(part.originalPayload),
-    )
+    const found = trackRevisionElements(decoder.decode(part.originalPayload))
     const toggle = found?.toggles[0]
     return toggle ? onOff(toggle) : false
   } catch {
@@ -154,8 +152,10 @@ export function readTrackRevisions(source: {
  * Persists the Track Changes toggle: `on` writes a bare `w:trackRevisions`
  * into `word/settings.xml` — creating the part, its `word/document.xml`
  * relationship and its content-type override when absent — and `off` strips
- * every copy. The part, relationship and content-type all go through the
- * overlay machinery, so the rest of the package stays byte-identical.
+ * every copy a reader could see. A part, relationship or content-type
+ * declaration is only touched when a write actually follows, and an
+ * unreadable or undeclared part blocks only the `on` path, so a package the
+ * toggle does not change stays byte-identical.
  */
 export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   const declared = document.model.relationships.filter(settingsRelationship)
@@ -164,33 +164,33 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   const target = relationship
     ? resolveRelationshipTarget(relationship)
     : undefined
-  if (relationship && !target) throw settingsError()
-  let part = target
+  // The off path writes nothing it cannot locate: a missing, undeclared or
+  // unreadable part holds no visible toggle, so the package — declarations
+  // included — stays byte-identical. Only a requested `on` fails closed on
+  // the shapes it cannot honestly write.
+  if (relationship && !target) {
+    if (on) throw settingsError()
+    return
+  }
+  const part = target
     ? document.sourceParts.get(target)
     : document.sourceParts.get(SETTINGS_PART)
-  if (target && (!part || part.kind !== 'xml')) throw settingsError()
-
   if (!part) {
     if (!on) return
-    part = createSettingsPart(document)
-  } else {
-    if (!part.overlay) {
-      try {
-        part.overlay = createXmlOverlay(decoder.decode(part.originalPayload))
-      } catch {
-        throw settingsError()
-      }
-    }
-    // A part carried undeclared is invisible to Word: a write it holds lands
-    // only once the relationship and the content type name it.
-    if (!target) {
-      const partName = part.name
-      guardSettings(() =>
-        ensureDocumentRelationship(document, partName, SETTINGS_RELATIONSHIP),
-      )
-      guardSettings(() =>
-        ensureContentTypeOverride(document, partName, SETTINGS_CONTENT_TYPE),
-      )
+    if (relationship) throw settingsError()
+    createSettingsPart(document)
+    return
+  }
+  if (part.kind !== 'xml') {
+    if (on) throw settingsError()
+    return
+  }
+  if (!part.overlay) {
+    try {
+      part.overlay = createXmlOverlay(decoder.decode(part.originalPayload))
+    } catch {
+      if (on) throw settingsError()
+      return
     }
   }
   let overlay = part.overlay
@@ -203,16 +203,28 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
     overlay = createXmlOverlay(serialiseOverlay(overlay))
     part.overlay = overlay
   }
-  const found = trackRevisionElements(part, overlay.source)
-  if (!found) throw settingsError()
-  const { root, toggles } = found
+  let found: ReturnType<typeof trackRevisionElements>
+  try {
+    found = trackRevisionElements(overlay.source)
+  } catch {
+    found = undefined
+  }
+  // A part that is not a single w:settings root holds no readable toggle;
+  // stripping one would guess at malformed markup, so only `on` fails closed.
+  if (!found) {
+    if (on) throw settingsError()
+    return
+  }
+  const { root, children, toggles } = found
+  // An unprefixed root declares the Word namespace as its default: the
+  // element must land unprefixed too — a `w:` written there binds to nothing.
   const prefix = root.qualifiedName.includes(':')
-    ? root.qualifiedName.slice(0, root.qualifiedName.indexOf(':'))
-    : 'w'
-  const element = `<${prefix}:trackRevisions/>`
+    ? `${root.qualifiedName.slice(0, root.qualifiedName.indexOf(':'))}:`
+    : ''
+  const element = `<${prefix}trackRevisions/>`
 
-  if (toggles.length === 1 && on === onOff(toggles[0]!)) return
   if (!on) {
+    if (toggles.length === 0) return
     for (const [index, toggle] of toggles.entries()) {
       setOverlayReplacement(overlay, `settings:trackRevisions:${index}`, {
         start: toggle.start,
@@ -220,9 +232,22 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
         value: '',
       })
     }
-    part.dirty = toggles.length > 0
+    part.dirty = true
     return
   }
+
+  // A part carried undeclared is invisible to Word: a write it holds lands
+  // only once the relationship and the content type name it.
+  if (!target) {
+    const partName = part.name
+    guardSettings(() =>
+      ensureDocumentRelationship(document, partName, SETTINGS_RELATIONSHIP),
+    )
+    guardSettings(() =>
+      ensureContentTypeOverride(document, partName, SETTINGS_CONTENT_TYPE),
+    )
+  }
+  if (toggles.length === 1 && onOff(toggles[0]!)) return
   // Normalise to exactly one bare toggle: extras are duplicates a malformed
   // part could carry, and an explicit `w:val="false"` is rewritten rather
   // than patched attribute-wise so the persisted form stays canonical.
@@ -243,9 +268,6 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
     part.dirty = true
     return
   }
-  const children = parseXmlElements(overlay.source).filter(
-    (candidate) => candidate.parent === root,
-  )
   const before = children.find(
     (child) =>
       child.namespaceUri !== WORD_NAMESPACE ||

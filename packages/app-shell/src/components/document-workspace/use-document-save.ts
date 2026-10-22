@@ -104,7 +104,22 @@ export function useDocumentSave({
   const inFlight = useRef(false)
 
   const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
-  const dirty = plan.operations.length > 0 || plan.rejections.length > 0
+  // An unsaved toggle flip is real unsaved state: `w:trackRevisions` persists
+  // with the next committed version — a save, a decision or a markings write —
+  // never by claiming "saved" meanwhile.
+  const togglePending = model ? trackChanges !== model.trackRevisions : false
+  const dirty =
+    plan.operations.length > 0 || plan.rejections.length > 0 || togglePending
+  /** Unsaved work a decision or markings commit would not carry: edits,
+   *  rejections and everything else the version boundary could strand. */
+  const editsPending =
+    plan.operations.length > 0 ||
+    plan.rejections.length > 0 ||
+    plan.pending > 0 ||
+    plan.blocked.length > 0 ||
+    drafts.held.length > 0 ||
+    drafts.recoverable.length > 0 ||
+    Boolean(drafts.staleDraft)
   // The boundary window is part of "a save is still landing": `save()` refuses
   // a second request while it lasts, so an enabled button would be inert.
   const saving =
@@ -330,6 +345,9 @@ export function useDocumentSave({
           action: 'reject',
           changeIds,
           ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
+          // The decision commits a version, so a pending toggle flip rides on
+          // it rather than being silently dropped.
+          trackRevisions: trackChanges,
         })
         // A decision version carries no lineage, and the rejected change id is
         // consumed, so the pre-edit snapshots cannot be replayed safely. The
@@ -361,7 +379,7 @@ export function useDocumentSave({
       }
       return
     }
-    if (current.operations.length === 0) return
+    if (current.operations.length === 0 && !togglePending) return
     startFlight()
     try {
       const result = await sendBatch(current.operations)
@@ -409,12 +427,7 @@ export function useDocumentSave({
           ? { status: 'saving' }
           : failure
             ? { status: 'failed' }
-            : dirty ||
-                plan.pending > 0 ||
-                blocked.length > 0 ||
-                held.length > 0 ||
-                drafts.recoverable.length > 0 ||
-                Boolean(drafts.staleDraft)
+            : dirty || editsPending
               ? { status: 'unsaved' }
               : { status: 'saved' }
 
@@ -423,6 +436,7 @@ export function useDocumentSave({
     held,
     refused: refused?.slots ?? NO_REFUSED,
     dirty,
+    editsPending,
     saving,
     persistence: drafts.persistence,
     stale,

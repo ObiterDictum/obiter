@@ -117,6 +117,7 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_1'],
+        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
@@ -133,6 +134,7 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_1', 'chg_2'],
+        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
@@ -260,6 +262,7 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_2'],
+        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
@@ -309,6 +312,7 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'reject',
         changeIds: ['chg_1'],
+        trackRevisions: false,
         removeParagraphIds: ['p1'],
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
@@ -398,6 +402,7 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_1', 'chg_2'],
+        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )

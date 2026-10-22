@@ -528,7 +528,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
       /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
       incoming.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Save' }).first().click()
+  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
   const saved = await saveResponse
   expect(saved.status(), await saved.text()).toBe(201)
 

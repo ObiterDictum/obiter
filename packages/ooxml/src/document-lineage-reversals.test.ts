@@ -169,6 +169,67 @@ describe('tracked reversal lineage', () => {
     expect(reverted.model.changes).toHaveLength(0)
   })
 
+  it('reverses an ins-only run insertion by rejecting its change', async () => {
+    const document = await load(`<w:p><w:r><w:t>Hello</w:t></w:r></w:p>`)
+    const run = paragraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('run')
+    const { lineage } = applyTracked(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'Hello world' },
+    ])
+    // The granular writer emits only `w:ins` for a pure insertion — the same
+    // shape a paragraph insertion takes — but a base run names this a run
+    // reversal, so the covered slot can be rejected like any other.
+    expect(lineage.reversals).toEqual([
+      {
+        operation: 0,
+        fromRunId: run.id,
+        fromParagraphId: paragraphs(document)[0]?.id,
+        rejectOoxmlIds: ['0'],
+      },
+    ])
+    const saved = await reload(document)
+    expect(saved.model.changes.map(({ elementName }) => elementName)).toEqual([
+      'ins',
+    ])
+    applyTrackedChangeDecisions(
+      saved,
+      saved.model.changes.map((change) => change.id),
+      'reject',
+    )
+    const reverted = await reload(saved)
+    expect(shape(reverted).map((item) => item.text)).toEqual(['Hello'])
+    expect(reverted.model.changes).toHaveLength(0)
+  })
+
+  it('reverses a del-only run deletion by rejecting its change', async () => {
+    const document = await load(`<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>`)
+    const run = paragraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('run')
+    const { lineage } = applyTracked(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'Hello' },
+    ])
+    expect(lineage.reversals).toEqual([
+      {
+        operation: 0,
+        fromRunId: run.id,
+        fromParagraphId: paragraphs(document)[0]?.id,
+        rejectOoxmlIds: ['0'],
+      },
+    ])
+    const saved = await reload(document)
+    expect(saved.model.changes.map(({ elementName }) => elementName)).toEqual([
+      'del',
+    ])
+    applyTrackedChangeDecisions(
+      saved,
+      saved.model.changes.map((change) => change.id),
+      'reject',
+    )
+    const reverted = await reload(saved)
+    expect(shape(reverted).map((item) => item.text)).toEqual(['Hello world'])
+    expect(reverted.model.changes).toHaveLength(0)
+  })
+
   it('refuses to remove a paragraph the rejected change does not live in', async () => {
     const document = await load(
       `<w:p><w:r><w:t>Alpha</w:t></w:r></w:p><w:p><w:r><w:t>Beta</w:t></w:r></w:p>`,

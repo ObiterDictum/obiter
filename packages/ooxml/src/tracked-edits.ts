@@ -29,12 +29,12 @@ import {
   recordDeletedParagraph,
   type LineageRecorder,
 } from './document-lineage'
+import { granularRunEdit } from './tracked-edit-granular'
 import {
   appendPropertyChange,
   extractInsertedRunRpr,
   foldRprIntoInsertedRun,
   foldRprIntoRun,
-  granularRunEdit,
   mergeTrackedProperties,
   paragraphMarkDeletionReplacement,
   patchStyleChild,
@@ -92,23 +92,21 @@ export function createTrackedEditWriter(
       const trackedProperties = part.overlay.replacements.get(
         `${anchor.wire.id}:tracked-properties`,
       )
-      const edit = granularRunEdit(
-        source,
-        anchor,
-        text,
-        prefix,
-        trackedProperties?.value,
-      )
+      // A pending property change rewrites the whole run's rPr: the whole-run
+      // path folds it into the inserted run, where a granular split would put
+      // the new properties on the ins piece alone and leave the untouched
+      // pieces carrying the old ones.
+      const edit =
+        anchor.wire.text === text
+          ? ({ kind: 'noop' } as const)
+          : trackedProperties
+            ? ({ kind: 'fallback' } as const)
+            : granularRunEdit(source, anchor, text, prefix)
       if (edit.kind === 'noop') {
         anchor.wire.text = text
         return
       }
       if (edit.kind === 'pieces') {
-        if (trackedProperties) {
-          part.overlay.replacements.delete(
-            `${anchor.wire.id}:tracked-properties`,
-          )
-        }
         let value = edit.prefixRun ?? ''
         // A substitution records its removed side before its inserted side,
         // the order Word writes and the pair a reversal drains as one unit.

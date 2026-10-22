@@ -58,6 +58,7 @@ export function createDocumentMarkingsRoutes(
         baseVersionId: request.data.baseVersionId,
         baseVersion: resolved.version,
         markings: request.data.markings,
+        trackRevisions: request.data.trackRevisions,
         userId: resolved.user.id,
         requestId: c.get('requestId'),
       })

@@ -141,7 +141,7 @@ export function createDocumentCollaborationRoutes(
         baseVersionId: request.data.baseVersionId,
         syncId: request.data.syncId,
         operations: request.data.operations,
-        trackChanges: request.data.trackChanges ?? false,
+        trackChanges: request.data.trackChanges,
         userId: resolved.user.id,
         userName: resolved.user.name,
         requestId: c.get('requestId'),

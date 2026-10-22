@@ -98,7 +98,7 @@ Story discovery follows namespace-resolved relationships, not filename assumptio
 
 ### Opaque whole parts
 
-Opaque XML includes theme, font table, web settings, core/custom/application properties, glossary and building-block data, custom XML, comments extensions, signature parts and any unrecognised XML. Package metadata and relationships are source-preserved even when a typed relationship view is available. Binary media, embedded packages, OLE objects, fonts, signatures and unknown binary entries are byte-preserved.
+Opaque XML includes theme, font table, web settings, core/custom/application properties, glossary and building-block data, custom XML, comments extensions, signature parts and any unrecognised XML. `word/settings.xml` is source-preserved with one carve-out: a version write carrying the track-changes toggle may add, normalise or remove `w:trackRevisions` (and create the part with its declarations when absent), which is the only canonical change permitted there. Package metadata and relationships are source-preserved even when a typed relationship view is available. Binary media, embedded packages, OLE objects, fonts, signatures and unknown binary entries are byte-preserved.
 
 ## Conformance corpus manifest
 

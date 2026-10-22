@@ -633,3 +633,44 @@ describe('DocxWorkspace markings', () => {
     expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
   })
 })
+
+describe('DocxWorkspace track changes toggle', () => {
+  it('opens with tracking on when the version persists w:trackRevisions', () => {
+    mountWorkspace({
+      models: {
+        doc_1: {
+          ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: true,
+        },
+      },
+    })
+    openRibbonTab('Review')
+    const toggle = screen.getByRole('button', { name: 'Track changes on' })
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('saves a lone toggle flip as a settings-only version', async () => {
+    const editAsync = vi.fn(async (_input: unknown) => ({
+      documentId: 'doc_1',
+      versionId: 'ver_2',
+      versionNumber: 2,
+    }))
+    mountWorkspace({ editAsync })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+
+    // A flip with no edits is still unsaved state, and Save persists it.
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-save-state]')
+          ?.getAttribute('data-save-state'),
+      ).toBe('unsaved'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+    expect(editAsync.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ operations: [], trackChanges: true }),
+    )
+  })
+})

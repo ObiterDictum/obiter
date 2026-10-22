@@ -42,7 +42,13 @@ type VersionMutationInput = {
 
 type EditedVersionInput = VersionMutationInput & {
   operations: readonly DocumentEditOperation[]
-  trackChanges: boolean
+  /**
+   * The `w:trackRevisions` state the version persists — also whether the
+   * batch is recorded as tracked changes. Omitted leaves the base version's
+   * stored setting in place and tracks the batch by it, so an older client
+   * cannot clear the toggle by accident.
+   */
+  trackChanges?: boolean
   userName?: string
   now?: () => Date
 }
@@ -51,10 +57,14 @@ type TrackedChangeDecisionVersionInput = VersionMutationInput & {
   action: DocumentTrackedChangeDecisionRequest['action']
   changeIds: readonly string[]
   removeParagraphIds?: readonly string[]
+  /** The toggle state the decision version persists; omitted leaves it. */
+  trackRevisions?: boolean
 }
 
 type MarkingsVersionInput = VersionMutationInput & {
   markings: DocumentMarkingsWire
+  /** The toggle state the markings version persists; omitted leaves it. */
+  trackRevisions?: boolean
 }
 
 type MutationAudit = {
@@ -122,22 +132,31 @@ async function prepareEditedSource(
   validateBaseVersion(input)
   const document = await readSourceDocument(storage, input.baseVersion)
   const recorder = createLineageRecorder(document.model)
+  // An omitted toggle rides the base version's own setting: the batch tracks
+  // the way the document says it should, and the persisted state is left as
+  // it was rather than cleared by a client that never sent the field.
+  const trackChanges = input.trackChanges ?? document.model.trackRevisions
   try {
-    applyDocumentEdits(
-      document,
-      input.operations,
-      input.trackChanges
-        ? {
-            author: input.userName?.trim() || input.userId,
-            date: (input.now?.() ?? new Date()).toISOString(),
-          }
-        : undefined,
-      recorder,
-    )
+    if (input.operations.length > 0) {
+      applyDocumentEdits(
+        document,
+        input.operations,
+        trackChanges
+          ? {
+              author: input.userName?.trim() || input.userId,
+              date: (input.now?.() ?? new Date()).toISOString(),
+            }
+          : undefined,
+        recorder,
+      )
+    }
     // The edit batch is also the toggle's persistence point: saving with
     // tracking on writes `w:trackRevisions`, saving without it removes it,
-    // matching what Word writes when the toggle changes.
-    writeTrackRevisions(document, input.trackChanges)
+    // matching what Word writes when the toggle changes. A request that
+    // omits the field writes nothing.
+    if (input.trackChanges !== undefined) {
+      writeTrackRevisions(document, input.trackChanges)
+    }
   } catch (error) {
     if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
     throw new DocumentEditStoreError()
@@ -157,7 +176,7 @@ async function prepareEditedSource(
     versionId: '',
     // Tracked wrappers reparse to a different run list, so no run address in a
     // tracked version is trustworthy. The client blocks a run-keyed reversal.
-    runAddressesReliable: !input.trackChanges,
+    runAddressesReliable: !trackChanges,
   })
   const { versionId: _versionId, ...lineage } = built
   return { editedBytes, lineage }
@@ -176,6 +195,11 @@ export async function createTrackedChangeDecisionVersion(
       input.action,
       input.removeParagraphIds ?? [],
     )
+    // A decision commits a version, so an unsaved toggle flip rides on it
+    // rather than being dropped; an omitted field writes nothing.
+    if (input.trackRevisions !== undefined) {
+      writeTrackRevisions(document, input.trackRevisions)
+    }
   })
   return createPreparedVersion(pool, storage, input, editedBytes, {
     action:
@@ -210,6 +234,11 @@ export async function createMarkingsVersion(
   let lineage: Omit<DocumentVersionLineage, 'versionId'> | undefined
   const editedBytes = await prepareSource(storage, input, (document) => {
     writeDocumentMarkings(document, input.markings)
+    // Same carry-through as a decision: the committed version persists the
+    // toggle the client asked for, so a pending flip is not lost.
+    if (input.trackRevisions !== undefined) {
+      writeTrackRevisions(document, input.trackRevisions)
+    }
     const recorder = createLineageRecorder(document.model)
     const canonicalParagraphIds = canonicaliseParagraphIdentities(document)
     const { versionId: _versionId, ...built } = buildVersionLineage({

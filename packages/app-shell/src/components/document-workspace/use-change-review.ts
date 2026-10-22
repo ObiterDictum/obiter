@@ -57,6 +57,7 @@ export function useChangeReview({
   model,
   changes,
   baseVersionId,
+  trackChanges,
   decision,
   drafts,
   save,
@@ -68,6 +69,8 @@ export function useChangeReview({
   model: DocumentModelWire | undefined
   changes: readonly DocumentChangeWire[]
   baseVersionId: string
+  /** The current track-changes toggle, including an unsaved flip. */
+  trackChanges: boolean
   decision: DecisionMutation
   drafts: WorkspaceDrafts
   /** The save state machine; a decision shares its unsaved-work barriers. */
@@ -131,7 +134,7 @@ export function useChangeReview({
           ? 'The document changed on the server; reload before deciding changes.'
           : status === 'failed'
             ? 'The last save failed; resolve it before deciding changes.'
-            : status === 'unsaved'
+            : save.editsPending
               ? 'Save or discard unsaved edits before deciding changes.'
               : null
   // Changes the server has marked undecidable stay listed and preserved, but
@@ -225,6 +228,9 @@ export function useChangeReview({
         action,
         changeIds,
         ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
+        // The decision commits a version, so a pending toggle flip rides on
+        // it rather than being silently dropped.
+        trackRevisions: trackChanges,
       },
       {
         onSuccess: (data) => {

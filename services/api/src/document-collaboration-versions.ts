@@ -39,7 +39,12 @@ type CollaborationMergeInput = {
   baseVersionId: string
   syncId: string
   operations: readonly DocumentEditOperation[]
-  trackChanges: boolean
+  /**
+   * Same contract as the direct edit: the `w:trackRevisions` state the merged
+   * version persists, and whether the batch is tracked. Omitted leaves the
+   * current version's stored setting in place and tracks by it.
+   */
+  trackChanges?: boolean
   userId: string
   userName?: string
   requestId: string
@@ -152,26 +157,35 @@ export async function createCollaborationMergeVersion(
 
     try {
       const recorder = createLineageRecorder(currentDocument.model)
-      applyDocumentEdits(
-        currentDocument,
-        // The client addresses its base version; the current version has
-        // reallocated positional ids, so the batch is rewritten to current
-        // addresses before it is applied. Applying base ids directly could
-        // write a run a collaborator inserted there.
-        alignment
-          ? remapMergeOperations(input.operations, alignment)
-          : input.operations,
-        input.trackChanges
-          ? {
-              author: input.userName?.trim() || input.userId,
-              date: (input.now?.() ?? new Date()).toISOString(),
-            }
-          : undefined,
-        recorder,
-      )
+      // An omitted toggle rides the current version's own setting, the same
+      // rule the direct edit applies to its base.
+      const trackChanges =
+        input.trackChanges ?? currentDocument.model.trackRevisions
+      if (input.operations.length > 0) {
+        applyDocumentEdits(
+          currentDocument,
+          // The client addresses its base version; the current version has
+          // reallocated positional ids, so the batch is rewritten to current
+          // addresses before it is applied. Applying base ids directly could
+          // write a run a collaborator inserted there.
+          alignment
+            ? remapMergeOperations(input.operations, alignment)
+            : input.operations,
+          trackChanges
+            ? {
+                author: input.userName?.trim() || input.userId,
+                date: (input.now?.() ?? new Date()).toISOString(),
+              }
+            : undefined,
+          recorder,
+        )
+      }
       // Same settings write as the direct edit path: the saved version
-      // persists the toggle state the merge request carried.
-      writeTrackRevisions(currentDocument, input.trackChanges)
+      // persists the toggle state the merge request carried; an omitted
+      // field writes nothing.
+      if (input.trackChanges !== undefined) {
+        writeTrackRevisions(currentDocument, input.trackChanges)
+      }
       const canonicalParagraphIds =
         canonicaliseParagraphIdentities(currentDocument)
       const currentLineage = buildVersionLineage({
@@ -181,7 +195,7 @@ export async function createCollaborationMergeVersion(
         baseVersionId: input.baseVersionId,
         versionId: '',
         // Same tracked-run caveat as the direct edit path.
-        runAddressesReliable: !input.trackChanges,
+        runAddressesReliable: !trackChanges,
       })
       // A merge that reconciled the client's operations onto a newer current
       // version records its lineage against that current version. Re-express

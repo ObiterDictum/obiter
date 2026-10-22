@@ -19,6 +19,7 @@ export function useDocumentMarkings({
   matterId,
   model,
   baseVersionId,
+  trackChanges,
   save,
   onSaved,
   onNotice,
@@ -27,6 +28,8 @@ export function useDocumentMarkings({
   matterId: string
   model: DocumentModelWire | undefined
   baseVersionId: string
+  /** The current track-changes toggle, including an unsaved flip. */
+  trackChanges: boolean
   save: ReturnType<typeof useDocumentSave>
   onSaved: (versionId: string) => void
   onNotice: (message: string) => void
@@ -35,6 +38,9 @@ export function useDocumentMarkings({
   if (!model) return undefined
 
   const status = save.saveState.status
+  // A pending toggle flip is not a barrier: the committed version carries it
+  // on `trackRevisions`, so marking cannot strand it the way a base-version
+  // write would strand real unsaved edits.
   const unavailable =
     model.markings.unreadable === true
       ? 'The stored markings could not be read; marking this copy is disabled.'
@@ -46,7 +52,7 @@ export function useDocumentMarkings({
             ? 'The document changed on the server; reload before marking.'
             : status === 'failed'
               ? 'The last save failed; resolve it before marking.'
-              : status === 'unsaved'
+              : save.editsPending
                 ? 'Save or discard unsaved edits before marking.'
                 : null
 
@@ -56,7 +62,7 @@ export function useDocumentMarkings({
     // to the caret first so it cannot drop to document.body.
     refocusCaretBeforeFlight()
     update.mutate(
-      { baseVersionId, markings },
+      { baseVersionId, trackRevisions: trackChanges, markings },
       {
         onSuccess: (data) => onSaved(data.versionId),
         onError: (error) => {
