@@ -48,9 +48,15 @@ export function paragraphClickCaret(
   const range = document.createRange()
   range.selectNodeContents(textRoot)
   range.setEnd(point.node, point.offset)
+  const fragment = range.cloneContents()
+  for (const node of fragment.querySelectorAll('[data-inline-change]'))
+    node.remove()
   const sliceFrom = Number(paragraphEl.dataset.paragraphFrom ?? '0')
   const max = endOffset(paragraphId)
-  const offset = Math.min(Math.max(0, sliceFrom + range.toString().length), max)
+  const offset = Math.min(
+    Math.max(0, sliceFrom + (fragment.textContent ?? '').length),
+    max,
+  )
   return { paragraphId, offset }
 }
 

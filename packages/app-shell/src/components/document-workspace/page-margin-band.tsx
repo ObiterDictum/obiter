@@ -1,4 +1,7 @@
+import { inlineChanges } from '../../document-inline-changes'
+import { InlineChange } from './inline-change-review'
 import type {
+  DocumentChangeWire,
   DocumentParagraphWire,
   DocumentRelationshipWire,
   DocumentStoryWire,
@@ -6,7 +9,6 @@ import type {
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import type { LaidOutBlock } from '../../document-page-engine'
-import { paragraphPlainText } from '../../document-model-text'
 import {
   contrastFillText,
   drawingIsTextBox,
@@ -52,6 +54,7 @@ export type EditableMargin = {
 
 export function PageMarginBand({
   stories,
+  changes = [],
   label,
   edge,
   relationships = [],
@@ -64,6 +67,7 @@ export function PageMarginBand({
   editable,
 }: {
   stories: DocumentStoryWire[]
+  changes?: DocumentChangeWire[]
   label: string
   edge: 'top' | 'bottom'
   relationships?: DocumentRelationshipWire[]
@@ -79,7 +83,12 @@ export function PageMarginBand({
 }) {
   const visible = stories.filter(
     (story) =>
-      marginStoryVisible(story) || story.partName === editable?.partName,
+      marginStoryVisible(story) ||
+      story.partName === editable?.partName ||
+      changes.some(
+        (change) =>
+          change.storyPartName === story.partName && change.inlinePosition,
+      ),
   )
   const Tag = edge === 'top' ? 'header' : 'footer'
   if (visible.length === 0) {
@@ -111,6 +120,7 @@ export function PageMarginBand({
           <MarginStory
             key={story.partName}
             story={story}
+            changes={changes}
             imageLabel={imageLabel}
             relationships={relationships}
             imageUrls={imageUrls}
@@ -182,6 +192,7 @@ function EditableMarginStory({
 
 function MarginStory({
   story,
+  changes,
   imageLabel,
   relationships,
   imageUrls,
@@ -190,6 +201,7 @@ function MarginStory({
   pageNumber,
 }: {
   story: DocumentStoryWire
+  changes: DocumentChangeWire[]
   imageLabel: string
   relationships: DocumentRelationshipWire[]
   imageUrls: Record<string, string>
@@ -204,8 +216,12 @@ function MarginStory({
   const tables = blocks
     .filter((block) => block.type === 'table')
     .map((block) => block.table)
-  const letterhead = headerLetterhead(story, tables)
-  const footer = footerLetterhead(story, pageNumber)
+  const revised = changes.some(
+    (change) =>
+      change.storyPartName === story.partName && change.inlinePosition,
+  )
+  const letterhead = revised ? undefined : headerLetterhead(story, tables)
+  const footer = revised ? undefined : footerLetterhead(story, pageNumber)
   const bandFill = footer?.fill ?? footerBandFill(story, tables)
   const painted =
     Boolean(bandFill) ||
@@ -234,7 +250,8 @@ function MarginStory({
     }
     if (skip.has(block.paragraph.id)) return false
     return (
-      paragraphPlainText(block.paragraph).trim().length > 0 ||
+      inlineChanges(block.paragraph, changes, story.partName).text.trim()
+        .length > 0 ||
       paragraphImageXml(block.paragraph).length > 0 ||
       block.paragraph.runs.some((run) => runDisplayText(run, pageNumber))
     )
@@ -266,6 +283,7 @@ function MarginStory({
                   <MarginParagraph
                     key={id}
                     paragraph={paragraph}
+                    changes={changes}
                     imageLabel={imageLabel}
                     storyPartName={story.partName}
                     relationships={relationships}
@@ -293,6 +311,7 @@ function MarginStory({
           >
             <MarginParagraph
               paragraph={block.paragraph}
+              changes={changes}
               imageLabel={imageLabel}
               storyPartName={story.partName}
               relationships={relationships}
@@ -310,6 +329,7 @@ function MarginStory({
 
 function MarginParagraph({
   paragraph,
+  changes,
   imageLabel,
   storyPartName,
   relationships,
@@ -319,6 +339,7 @@ function MarginParagraph({
   pageNumber,
 }: {
   paragraph: DocumentParagraphWire
+  changes: DocumentChangeWire[]
   imageLabel: string
   storyPartName: string
   relationships: DocumentRelationshipWire[]
@@ -333,13 +354,19 @@ function MarginParagraph({
       !drawingIsTextBox(xml) &&
       (!background || !paragraphIsShapeOnly(paragraph)),
   )
-  const columns = tabColumns(paragraph)
+  const projected = inlineChanges(paragraph, changes, storyPartName).paragraph
+  const columns = tabColumns(projected)
   const stops = paragraphTabStops(paragraph)
   const fill = background ?? paragraphFill(paragraph)
   const runs = (items: typeof paragraph.runs) =>
     items.map((run) => {
       const text = runDisplayText(run, pageNumber)
       if (!text) return null
+      const change = changes.find(
+        (change) => change.id === run.id && change.inlinePosition,
+      )
+      if (change)
+        return <InlineChange key={run.id} change={change} text={text} />
       const faceRun = runFace(run, face, styles)
       const color =
         readableRunColor(faceRun.color, fill) ?? contrastFillText(fill)
@@ -382,8 +409,8 @@ function MarginParagraph({
       })}
       {columns && columns.length > 1 ? (
         <TabLine columns={columns} stops={stops} render={runs} />
-      ) : paragraph.runs.some((run) => runDisplayText(run, pageNumber)) ? (
-        <p>{runs(paragraph.runs)}</p>
+      ) : projected.runs.some((run) => runDisplayText(run, pageNumber)) ? (
+        <p>{runs(projected.runs)}</p>
       ) : null}
     </div>
   )

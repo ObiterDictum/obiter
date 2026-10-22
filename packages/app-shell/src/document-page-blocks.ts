@@ -1,13 +1,10 @@
+import { inlineChanges } from './document-inline-changes'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import type { ExtraRuns } from './document-word-edits'
-import {
-  documentStory,
-  effectiveParagraph,
-  paragraphPlainText,
-} from './document-model-text'
+import { documentStory, effectiveParagraph } from './document-model-text'
 import { firstLineIndentPx, takeFragment } from './document-page-flow'
 import { drawingScene } from './document-page-drawings'
 import { paragraphMetrics, widowMaxY } from './document-page-keep'
@@ -101,12 +98,23 @@ export function layoutParagraph(
     drafts,
     extraRuns[item.paragraph.id] ?? [],
   )
-  const text = paragraphPlainText(paragraph)
+  const partName = model.changes.some(
+    (change) => change.paragraphId === item.paragraph.id,
+  )
+    ? model.stories.find((story) => story.paragraphs.includes(item.paragraph))
+        ?.partName
+    : undefined
+  const projection = inlineChanges(paragraph, model.changes, partName)
+  const text = projection.text
   // A stored break is addressed by text offset exactly like a pending one, so
   // both merge into one ordered set. Only the pending path used to split, which
   // left a reloaded break rendering as a single sheet.
   const breaks = [
-    ...new Set([...pageBreaks, ...storedPageBreakOffsets(paragraph)]),
+    ...new Set(
+      [...pageBreaks, ...storedPageBreakOffsets(paragraph)].map((at) =>
+        projection.toDisplay(at),
+      ),
+    ),
   ].sort((left, right) => left - right)
   const face = paragraphFace(paragraph, model.styles)
   const linePx = paragraphLineHeightPx(face)

@@ -1,4 +1,6 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
+import { inlineChanges, inlineSlice } from '../../document-inline-changes'
+import { InlineChangeReview } from './inline-change-review'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
@@ -155,11 +157,19 @@ export function ModelParagraph({
     [paragraph.preservedXmlFragments, paragraph.styleId, styles],
   )
   const effective = effectiveParagraph(paragraph, drafts)
-  const display = projectRangeEmphasis(effective, emphasis)
+  const formatted = projectRangeEmphasis(effective, emphasis)
+  const projection = inlineChanges(formatted, changes, storyPartName)
+  const review = useContext(InlineChangeReview)
   const fullText = paragraphPlainText(effective)
-  const start = from ?? 0
-  const end = to ?? fullText.length
+  const displayStart = from ?? 0
+  const displayEnd = to ?? projection.text.length
+  const start = projection.toEditable(displayStart)
+  const end = projection.toEditable(displayEnd)
   const sliceText = fullText.slice(start, end)
+  const displayText = projection.text.slice(displayStart, displayEnd)
+  const mapped = projection.spans.length
+    ? inlineSlice(projection, displayStart, displayEnd)
+    : undefined
   const linePx = paragraphLineHeightPx(face)
   const images = continuation ? [] : paragraphInlineXml(paragraph)
   // A block that places the paragraph's final row reaches the end of the text;
@@ -169,7 +179,12 @@ export function ModelParagraph({
   const ownsBreak = end < fullText.length && fullText[end] === '\n'
   const restore =
     restoreCaret?.paragraphId === paragraph.id &&
-    (sliceContainsOffset(restoreCaret.offset, start, end, fullText.length) ||
+    (sliceContainsOffset(
+      projection.toDisplay(restoreCaret.offset),
+      displayStart,
+      displayEnd,
+      projection.text.length,
+    ) ||
       (ownsBreak && restoreCaret.offset === end))
       ? restoreCaret.offset - start
       : undefined
@@ -181,13 +196,13 @@ export function ModelParagraph({
   const lines = useMemo(
     () =>
       wrapLines(
-        sliceText,
+        displayText,
         face.run.fontSizePx ?? linePx,
         wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
         face.run.fontFamily,
         firstLineIndentPx(face, onBodyEdge),
       ),
-    [sliceText, face, linePx, wrapWidthPx, onBodyEdge],
+    [displayText, face, linePx, wrapWidthPx, onBodyEdge],
   )
   const editorHeight = lines.length * linePx
   const holdsCaret =
@@ -254,18 +269,44 @@ export function ModelParagraph({
       : undefined
   const runPaint = (
     <ParagraphRunPaint
-      paragraph={display}
+      paragraph={projection.paragraph}
+      toEditableOffset={projection.toEditable}
       drafts={drafts}
       changes={changes}
       styles={styles}
       face={face}
-      start={start}
-      end={end}
+      start={displayStart}
+      end={displayEnd}
       lines={lines}
       linePx={linePx}
       wrapWidthPx={wrapWidthPx}
-      selection={paintSelection}
-      linkOverlay={linkOverlay}
+      selection={
+        paintSelection
+          ? {
+              from: projection.toDisplay(paintSelection.from),
+              to: projection.toDisplay(paintSelection.to, 'before'),
+            }
+          : undefined
+      }
+      linkOverlay={
+        linkOverlay
+          ? {
+              links: linkOverlay.links.map((link) => ({
+                ...link,
+                from: projection.toDisplay(link.from),
+                to: projection.toDisplay(link.to, 'before'),
+              })),
+              marks: linkOverlay.marks.map((mark) => ({
+                from: projection.toDisplay(mark.from),
+                to: projection.toDisplay(mark.to, 'before'),
+              })),
+              fieldMarkers: linkOverlay.fieldMarkers.map((marker) => ({
+                ...marker,
+                offset: projection.toDisplay(marker.offset),
+              })),
+            }
+          : undefined
+      }
       carets={carets}
       continuation={continuation}
       pageNumber={pageNumber}
@@ -276,10 +317,20 @@ export function ModelParagraph({
   return (
     <div
       data-paragraph-id={paragraph.id}
-      data-paragraph-from={from ?? 0}
+      data-paragraph-from={start}
       data-paragraph-to={end}
       data-paragraph-story={story?.kind}
       data-paragraph-part={story?.partName}
+      onClickCapture={(event) => {
+        if (!review || !(event.target instanceof HTMLTextAreaElement)) return
+        const at = displayStart + event.target.selectionStart
+        const span = projection.spans.find(
+          (item) => at >= item.from && at < item.to,
+        )
+        if (!span) return
+        event.stopPropagation()
+        review.selectChange(span.change.id)
+      }}
       aria-current={selected ? 'true' : undefined}
       aria-label={`Paragraph ${paragraph.id}`}
       className={cn(
@@ -358,6 +409,7 @@ export function ModelParagraph({
               </div>
               <ModelParagraphEditor
                 paragraph={paragraph}
+                projection={mapped}
                 effective={effective}
                 fullText={fullText}
                 start={start}
@@ -370,7 +422,18 @@ export function ModelParagraph({
                 linePx={linePx}
                 selected={holdsCaret}
                 restoreCaret={restore}
-                lines={lines}
+                lines={
+                  mapped
+                    ? lines.map((line) => ({
+                        text: sliceText.slice(
+                          mapped.toEditable(line.from),
+                          mapped.toEditable(line.to),
+                        ),
+                        from: mapped.toEditable(line.from),
+                        to: mapped.toEditable(line.to),
+                      }))
+                    : lines
+                }
                 previous={adjacent?.previous}
                 next={adjacent?.next}
                 verticalCaret={verticalCaret}

@@ -16,6 +16,7 @@ export type ParagraphWordEdit = {
 
 export function ModelParagraphEditor({
   paragraph,
+  projection,
   effective,
   fullText,
   start,
@@ -44,6 +45,7 @@ export function ModelParagraphEditor({
   onInsertParagraph,
 }: Pick<
   ComponentProps<typeof ParagraphEditor>,
+  | 'projection'
   | 'selected'
   | 'restoreCaret'
   | 'lines'
@@ -80,6 +82,7 @@ export function ModelParagraphEditor({
     <ParagraphEditor
       paragraphId={paragraph.id}
       text={sliceText}
+      projection={projection}
       selected={selected}
       restoreCaret={restoreCaret}
       lines={lines}
