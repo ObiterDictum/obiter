@@ -180,6 +180,7 @@ describe('section pagination', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,
@@ -445,6 +446,7 @@ function model(paragraphIds: string[]): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

@@ -84,7 +84,17 @@ export function DocxWorkspace({
   const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
-  const [trackChanges, setTrackChanges] = useState(false)
+  // The toggle follows the version's `w:trackRevisions`; an unsaved flip is
+  // keyed to the version it was made against so a committed save — or a
+  // reload to a different version — re-derives the persisted state.
+  const [trackChangesFlip, setTrackChangesFlip] = useState<{
+    baseVersionId: string
+    value: boolean
+  } | null>(null)
+  const trackChanges =
+    trackChangesFlip?.baseVersionId === baseVersionId
+      ? trackChangesFlip.value
+      : (model?.trackRevisions ?? false)
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
   const {
@@ -320,7 +330,8 @@ export function DocxWorkspace({
         citationStyle: legalTools.citationStyle,
         onCitationStyle: legalTools.onCitationStyle,
         legalChecks: legalTools.legalChecks,
-        onToggleTrackChanges: () => setTrackChanges((value) => !value),
+        onToggleTrackChanges: () =>
+          setTrackChangesFlip({ baseVersionId, value: !trackChanges }),
         onZoom: setZoom,
         onExportText: exports.onExportText,
         onExportShareSafe: exports.onExportShareSafe,

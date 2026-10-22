@@ -154,6 +154,7 @@ function model(text = 'Hello', styleId?: string): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,
