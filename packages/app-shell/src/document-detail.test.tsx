@@ -235,6 +235,14 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
     await waitFor(() => {
       expect(screen.getByText('Document details')).toBeTruthy()
     })
+    // The metadata starts collapsed so the document opens first, while the
+    // immutable version id stays readable in the header without expanding.
+    expect(screen.getByText('Document details').closest('details')?.open).toBe(
+      false,
+    )
+    expect(
+      screen.getByRole('heading', { level: 1 }).nextSibling?.textContent,
+    ).toContain('ver_1')
   })
 
   it('renders a mismatch notice instead of the metadata when the document belongs to a different matter', async () => {

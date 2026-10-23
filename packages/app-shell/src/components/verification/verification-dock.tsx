@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { ListChecks } from '@phosphor-icons/react'
-import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
+import { Badge, Button, Skeleton } from '@obiter/ui'
 import { ApiError } from '../../api'
 import {
   verificationFailureLabel,
@@ -116,8 +116,8 @@ export function VerificationDock() {
 
   return (
     <VerificationStrip>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <h2 className="text-xs font-semibold tracking-wide text-ink uppercase">
             Verify
           </h2>
@@ -148,6 +148,24 @@ export function VerificationDock() {
               ) : null}
             </span>
           ) : null}
+          {nextFinding ? (
+            <span className="text-xs text-subtle">
+              · Next actionable: {nextFinding.authorityLabel} -{' '}
+              {verificationStateLabel(nextFinding.state)}
+            </span>
+          ) : null}
+          {/* A one-line hint, not an empty-state card: the dock sits above
+              the ribbon and must not push the document below the fold. */}
+          {!run ? (
+            <span className="text-xs text-muted">
+              <span className="font-medium text-ink">
+                No verification runs yet.
+              </span>{' '}
+              {verification.ready
+                ? 'Start a run to check citations, held authorities, and quotations against stored sources.'
+                : 'This document must finish processing before it can be verified.'}
+            </span>
+          ) : null}
         </div>
         <p
           ref={statusRef}
@@ -172,12 +190,6 @@ export function VerificationDock() {
           <p className="text-xs text-warning" role="note">
             Save before verification: the check reads the stored version, so
             unsaved edits are not covered by this evidence.
-          </p>
-        ) : null}
-        {nextFinding ? (
-          <p className="text-xs text-subtle">
-            Next actionable: {nextFinding.authorityLabel} -{' '}
-            {verificationStateLabel(nextFinding.state)}
           </p>
         ) : null}
         {verification.findingsError ? (
@@ -260,18 +272,6 @@ export function VerificationDock() {
           of legal correctness.
         </p>
       ) : null}
-      {!run ? (
-        <div className="w-full">
-          <EmptyState
-            title="No verification runs yet"
-            body={
-              verification.ready
-                ? 'Start a run to check citations, held authorities, and quotations against stored sources.'
-                : 'This document must finish processing before it can be verified.'
-            }
-          />
-        </div>
-      ) : null}
       <VerificationFindingsIndex
         open={verification.indexOpen}
         onOpenChange={(open) =>
@@ -288,7 +288,7 @@ function VerificationStrip({ children }: { children: ReactNode }) {
       id={verificationDockId}
       tabIndex={-1}
       aria-label="Verification"
-      className="flex flex-wrap items-start gap-3 border-b border-line bg-surface px-3 py-2.5 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
+      className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-3 py-2 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
     >
       {children}
     </section>

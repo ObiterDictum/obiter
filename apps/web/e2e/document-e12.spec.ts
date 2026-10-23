@@ -358,6 +358,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
   // version list and the run no longer offers a second return.
   await page.getByRole('button', { name: 'Open document' }).click()
   await expect(page).toHaveURL(/\/documents\/doc_/, { timeout: 20_000 })
+  await page.locator('summary', { hasText: 'Details' }).click()
   await expect(
     page.getByRole('heading', { name: 'Versions', exact: true }),
   ).toBeVisible()
