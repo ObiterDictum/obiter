@@ -1,4 +1,5 @@
 import {
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQueries,
@@ -33,8 +34,8 @@ function pageQuery(cursor: string | null) {
   return cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
 }
 
-export function useDocumentVerificationRuns(documentId: string) {
-  return useQuery({
+function documentVerificationRunsQueryOptions(documentId: string) {
+  return queryOptions({
     queryKey: documentVerificationRunsQueryKey(documentId),
     queryFn: () =>
       apiFetch<VerificationRunListResponse>(
@@ -47,6 +48,40 @@ export function useDocumentVerificationRuns(documentId: string) {
         ? 1500
         : false,
   })
+}
+
+export function useDocumentVerificationRuns(documentId: string) {
+  return useQuery(documentVerificationRunsQueryOptions(documentId))
+}
+
+export type DocumentVerificationState =
+  | { status: 'pending' }
+  | { status: 'unavailable' }
+  | { status: 'loaded'; run: VerificationRun | null }
+
+/**
+ * The latest Verify run per document, read through the same per-document
+ * boundary and cache entry the document page uses, so a matter overview and
+ * an open document never disagree about a run.
+ */
+export function useLatestVerificationRuns(
+  documentIds: string[],
+): Map<string, DocumentVerificationState> {
+  const queries = useQueries({
+    queries: documentIds.map(documentVerificationRunsQueryOptions),
+  })
+  const states = new Map<string, DocumentVerificationState>()
+  documentIds.forEach((documentId, index) => {
+    const query = queries[index]
+    if (!query || query.isPending) states.set(documentId, { status: 'pending' })
+    else if (query.isError) states.set(documentId, { status: 'unavailable' })
+    else
+      states.set(documentId, {
+        status: 'loaded',
+        run: latestVerificationRun(query.data.runs),
+      })
+  })
+  return states
 }
 
 /**
