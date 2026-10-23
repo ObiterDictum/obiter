@@ -416,10 +416,17 @@ it('refuses local edits and joins whose save would erase tracked subtrees, not j
       joined.state.deletedParagraphIds,
       joined.state.extraRuns,
     ),
-  ).toContainEqual({ type: 'replace_run_text', runId: 'b', text: ' unitsFirst' })
+  ).toContainEqual({
+    type: 'replace_run_text',
+    runId: 'b',
+    text: ' unitsFirst',
+  })
   // A revision-only head has no run to fold the tail into.
   const bare = await modelOf(
-    [{ ...paragraph, runs: [] }, { ...previous, id: 'next' }],
+    [
+      { ...paragraph, runs: [] },
+      { ...previous, id: 'next' },
+    ],
     [trailing],
   )
   expect(joinIntoPrevious(bare, emptyEditorState(), 'next')).toBeUndefined()
