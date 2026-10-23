@@ -49,6 +49,57 @@ describe('redaction detection', () => {
     )
   })
 
+  it('does not propose a court claim number or court name as personal data', async () => {
+    // The heading and the address sentence of the Shah witness statement, with
+    // the labels the model actually emits: DRIVERS_LICENSE on the claim number
+    // and CITY on the court's location. The genuine address in the next
+    // paragraph still has to be detected in full, including its Leicester.
+    const text =
+      'Claim No. LS26C00418  |  In the County Court at Leicester\n\n' +
+      'I, Priya Shah, of 14 Elmfield Avenue, Leicester LE2 1RB, will say as follows.'
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async (masked) => {
+        const span = (
+          needle: string,
+          label: RampartSpan['label'],
+          from = 0,
+        ): RampartSpan => {
+          const start = masked.indexOf(needle, from)
+          return {
+            start,
+            end: start + needle.length,
+            label,
+            score: 0.7,
+            source: 'ner',
+            text: needle,
+          }
+        }
+        const court = masked.indexOf('Leicester')
+        return [
+          span('LS26C00418', 'DRIVERS_LICENSE'),
+          span('Leicester', 'CITY', court),
+          span('Leicester', 'CITY', court + 1),
+          span('14', 'BUILDING_NUMBER'),
+          span('Elmfield Avenue', 'STREET_NAME'),
+        ]
+      },
+      log: () => undefined,
+    })
+
+    const { spans } = await detect(text)
+
+    expect(spans.map((span) => span.text)).not.toContain('LS26C00418')
+    expect(
+      spans
+        .filter((span) => span.category === 'address')
+        .map((span) => span.text),
+    ).toEqual(['14', 'Elmfield Avenue', 'Leicester', 'LE2 1RB'])
+    expect(spans.find((span) => span.text === 'Leicester')?.start).toBe(
+      text.lastIndexOf('Leicester'),
+    )
+  })
+
   it('returns a successful zero-span result when text contains no detectable PII', async () => {
     const detect = createRedactionDetector({
       loadClassifier: async () => classifier,

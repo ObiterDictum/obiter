@@ -15,6 +15,7 @@ import {
   normalizePersonDetections,
   reconcileRampartSpans,
   supplementSpans,
+  suppressCourtContextSpans,
 } from '@obiter/redaction-policy'
 import type { DetectionMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
@@ -61,15 +62,16 @@ export function detectionMode(degraded: boolean): DetectionMode {
 
 /**
  * Detection provenance. `reconcile@1` names the product-owned overlap
- * reconciliation introduced for P0.31: the same model over the same text can
- * now produce a different span set than a run recorded before it, so old and
+ * reconciliation introduced for P0.31 and `court-context@1` the court-detail
+ * suppression that follows it: the same model over the same text can now
+ * produce a different span set than a run recorded before either, so old and
  * new runs must not share a version. Stored `detector_version` values are
  * historical records and are never rewritten; re-detecting a stored document
- * creates a new run whose version carries this component (see
+ * creates a new run whose version carries these components (see
  * `redaction-redetect.ts`).
  */
 function version(model: string, revision: string, mode: DetectionMode) {
-  return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;reconcile@1;mode=${mode}`
+  return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;reconcile@1;court-context@1;mode=${mode}`
 }
 
 function provenance(model: string, revision: string, degraded: boolean) {
@@ -158,7 +160,10 @@ export function createRedactionDetector(
         text,
         normalizePersonDetections(text, [...heuristic, ...projected]),
       )
-      const spans = mergeSpans(rampart, supplement)
+      const spans = suppressCourtContextSpans(
+        text,
+        mergeSpans(rampart, supplement),
+      )
       log('redaction_detection_completed', {
         textLength: text.length,
         inferenceMs: Math.round(performance.now() - started),
@@ -185,7 +190,7 @@ export function createRedactionDetector(
         normalizePersonDetections(text, heuristic),
       )
       return {
-        spans: mergeSpans(rampart, supplement),
+        spans: suppressCourtContextSpans(text, mergeSpans(rampart, supplement)),
         ...provenance(configuration.model, configuration.revision, true),
       }
     }
