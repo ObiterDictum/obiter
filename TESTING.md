@@ -74,16 +74,44 @@ same-root stale API commit or a lane running with another worktree's `.env`
 also fails. Production and older API servers omit those fields, so API
 provenance remains not determinable and does not fail the check by itself.
 
-## Preferred Test Strategy
+## What Earns a Test
 
-- add focused tests near the changed behavior
-- prefer deterministic tests over broad fragile ones
-- test contracts, parsing, state transitions, and critical UI flows
-- test behavior through public boundaries, not internals — a pure refactor must not break tests
-- do not add shallow tests that only exercise implementation trivia
-- do not add tests that cannot fail meaningfully: no tautologies, no asserting constants, no snapshot dumps that mirror implementation
-- do not mock the behavior being tested; mock only external boundaries (network, storage, email, clocks, filesystem)
-- one test that would have caught a real bug beats ten that would not; bug fixes add or update the test that would have caught the bug
+A test earns its place when it breaks because behaviour a user or lawyer relies
+on broke, and survives a refactor that keeps that behaviour. Volume is a cost:
+every test is code to read, run and keep green.
+
+Three layers, each owning different risks:
+
+- **End-to-end (Playwright):** one journey per core workflow — search, matter
+  and document, editing with tracked changes, Verify, Redact. Proves the pieces
+  connect. Not the place for edge cases.
+- **API tests against real Postgres:** permissions, organisation and matter
+  isolation, share revocation, audit records, version immutability. These are
+  the confidentiality guarantees and are never thinned.
+- **Unit tests:** only for pure, high-risk logic — OOXML writing and byte
+  preservation, quote and citation matching, redaction rendering, parsing. One
+  test per behaviour, not per function or per branch.
+
+Rules:
+
+- one layer per rule: assert a behaviour at the cheapest layer that can catch
+  it, not again at every layer above it
+- test behaviour through public boundaries, not internals — a pure refactor
+  must not break tests; do not pin call counts, operation order or payload
+  shape unless that is the contract
+- no tests that cannot fail meaningfully: no tautologies, no asserting
+  constants, no snapshot dumps that mirror implementation, no component tests
+  that restate markup
+- do not mock the behavior being tested; mock only external boundaries
+  (network, storage, email, clocks, filesystem)
+- bug fixes add or update the one test that would have caught the bug; one
+  test that would have caught a real bug beats ten that would not
+- a change that adds many tests and removes none should say why in the PR
+
+Deleting tests is normal maintenance. Before removing a group, prove what
+remains still guards the behaviour: reintroduce a known regression, confirm a
+remaining test fails, then restore the fix. Record the regression used in the
+PR.
 
 ## High-Risk Areas
 
