@@ -1,7 +1,9 @@
+import type { ParagraphLinkOverlay } from './document-structure-overlays'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
+import { paragraphChanges } from './document-inline-index'
 import { paragraphPlainText, textDiff } from './document-model-text'
 
 export type InlineSpan = {
@@ -9,21 +11,39 @@ export type InlineSpan = {
   to: number
   offset: number
   change: DocumentChangeWire
+  runId: string
+  tabStop: boolean
+  deleted: boolean
+  author?: string
+  hyperlinkTarget?: string
 }
 
+/**
+ * Tracked page and column breaks paint as labelled marks rather than line
+ * breaks. Each is one code unit, like the control character it replaces, so
+ * the textarea, the paint and wrap measurement agree on every offset.
+ */
+export const BREAK_MARKS = { '\f': '\u21df', '\v': '\u21e5' } as const
+const breakMark = /[\f\v]/gu
+
 /** Display-only projection. Neither virtual runs nor tracked text enter drafts. */
-export function inlineChanges(
+function projectInlineChanges(
   paragraph: DocumentParagraphWire,
   changes: readonly DocumentChangeWire[],
   partName?: string,
 ) {
-  const relevant = changes.filter(
-    (change) =>
-      change.paragraphId === paragraph.id &&
-      (!partName || change.storyPartName === partName) &&
-      change.inlinePosition &&
-      change.kind !== 'property',
+  const relevant = paragraphChanges(paragraph, changes, partName).filter(
+    (change) => change.inlinePosition && change.kind !== 'property',
   )
+  const runIds = new Set(paragraph.runs.map((run) => run.id))
+  const byRun = new Map<string | null, DocumentChangeWire[]>()
+  for (const change of relevant) {
+    const anchor = change.inlinePosition?.beforeRunId
+    const before = anchor && runIds.has(anchor) ? anchor : null
+    const bucket = byRun.get(before) ?? []
+    bucket.push(change)
+    byRun.set(before, bucket)
+  }
   const runs: DocumentParagraphWire['runs'] = []
   const spans: InlineSpan[] = []
   const editableRuns: Array<{ from: number; to: number; displayFrom: number }> =
@@ -31,18 +51,37 @@ export function inlineChanges(
   let offset = 0
   let displayOffset = 0
   function append(beforeRunId: string | null) {
-    for (const change of relevant) {
-      if (change.inlinePosition?.beforeRunId !== beforeRunId) continue
-      runs.push({ id: change.id, text: change.text, preservedXmlFragments: [] })
-      spans.push({
-        from: displayOffset,
-        to: displayOffset + change.text.length,
-        offset,
-        change,
-      })
-      displayOffset += change.text.length
+    for (const change of byRun.get(beforeRunId) ?? []) {
+      const segments = change.inlinePosition?.segments ?? [
+        {
+          text: change.text,
+          deleted:
+            change.kind === 'delete' ||
+            (change.kind === 'move' && change.direction === 'from'),
+          author: change.author,
+        },
+      ]
+      for (const [index, segment] of segments.entries()) {
+        const runId = `${change.id}:inline:${index}`
+        const text = segment.text.replace(
+          breakMark,
+          (mark) => BREAK_MARKS[mark === '\f' ? '\f' : '\v'],
+        )
+        runs.push({ id: runId, text, preservedXmlFragments: [] })
+        spans.push({
+          ...segment,
+          from: displayOffset,
+          to: displayOffset + text.length,
+          offset,
+          runId,
+          tabStop: index === 0,
+          change,
+        })
+        displayOffset += text.length
+      }
     }
   }
+
   for (const run of paragraph.runs) {
     append(run.id)
     editableRuns.push({
@@ -87,7 +126,46 @@ export function inlineChanges(
     toDisplay,
   }
 }
-export type InlineProjection = ReturnType<typeof inlineChanges>
+export type InlineProjection = ReturnType<typeof projectInlineChanges>
+const projections = new WeakMap<
+  readonly DocumentChangeWire[],
+  WeakMap<DocumentParagraphWire, Map<string, InlineProjection>>
+>()
+
+export function inlineChanges(
+  paragraph: DocumentParagraphWire,
+  changes: readonly DocumentChangeWire[],
+  partName?: string,
+): InlineProjection {
+  let paragraphs = projections.get(changes)
+  if (!paragraphs) {
+    paragraphs = new WeakMap()
+    projections.set(changes, paragraphs)
+  }
+  let parts = paragraphs.get(paragraph)
+  if (!parts) {
+    parts = new Map()
+    paragraphs.set(paragraph, parts)
+  }
+  const key = partName ?? ''
+  let projection = parts.get(key)
+  if (!projection) {
+    projection = projectInlineChanges(paragraph, changes, partName)
+    parts.set(key, projection)
+  }
+  return projection
+}
+
+/** The editing textarea hides the paint, so it carries the revisions as its
+ * description; screen readers would otherwise lose them while editing. */
+export function inlineDescription(projection: InlineProjection) {
+  return projection.spans
+    .map(
+      (span) =>
+        `${span.deleted ? 'Deletion' : 'Insertion'} by ${span.author ?? 'Unknown author'}: ${projection.text.slice(span.from, span.to)}`,
+    )
+    .join('. ')
+}
 
 export function inlineSlice(
   projection: InlineProjection,
@@ -117,3 +195,25 @@ export function inlineSlice(
   }
 }
 export type InlineSlice = ReturnType<typeof inlineSlice>
+
+export function inlineLinkOverlay(
+  projection: InlineProjection,
+  overlay?: ParagraphLinkOverlay,
+) {
+  if (!overlay) return undefined
+  return {
+    links: overlay.links.map((link) => ({
+      ...link,
+      from: projection.toDisplay(link.from, 'after'),
+      to: projection.toDisplay(link.to, 'before'),
+    })),
+    marks: overlay.marks.map((mark) => ({
+      from: projection.toDisplay(mark.from, 'after'),
+      to: projection.toDisplay(mark.to, 'before'),
+    })),
+    fieldMarkers: overlay.fieldMarkers.map((marker) => ({
+      ...marker,
+      offset: projection.toDisplay(marker.offset),
+    })),
+  }
+}

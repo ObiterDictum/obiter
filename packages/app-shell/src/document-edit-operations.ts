@@ -1,3 +1,4 @@
+import { revisionOnlyParagraph } from './document-inline-index'
 import {
   type DocumentEditOperation,
   type DocumentModelWire,
@@ -101,10 +102,12 @@ export function replacedEmptyParagraphIds(
   paragraphs: readonly DocumentParagraphWire[],
   extraRuns: Record<string, DocumentTextRunWire[]>,
   drafts: Record<string, string>,
+  model: DocumentModelWire,
 ): Set<string> {
   const replaced = new Set<string>()
   for (const paragraph of paragraphs) {
-    if (paragraph.runs.length !== 0) continue
+    if (paragraph.runs.length !== 0 || revisionOnlyParagraph(model, paragraph))
+      continue
     if (
       (extraRuns[paragraph.id] ?? []).some(
         (run) => (drafts[run.id] ?? run.text).length > 0,
@@ -135,6 +138,7 @@ export function collectEditOperations(
     paragraphs,
     extraRuns,
     drafts,
+    model,
   )
   for (const paragraphId of deleted) emptyReplacements.delete(paragraphId)
 

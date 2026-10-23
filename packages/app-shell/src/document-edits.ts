@@ -313,6 +313,7 @@ export function batchParagraphDeletions(
     editableStories(model).flatMap((story) => story.paragraphs),
     extraRuns,
     drafts,
+    model,
   )
   const split = fieldBoundaryRefusals(model, new Set([...marked, ...implicit]))
   const applied = new Set([...marked].filter((id) => !split.has(id)))

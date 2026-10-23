@@ -173,9 +173,11 @@ export function useChangeReview({
     }
     const paragraph = editableParagraph(model!, change.paragraphId)
     const before = change.inlinePosition?.beforeRunId
+    // An anchor run the model no longer holds falls back to the paragraph
+    // end, where an unanchored revision paints, rather than its start.
     const offset =
       change.inlinePosition && paragraph
-        ? before
+        ? before && paragraph.runs.some((run) => run.id === before)
           ? paragraphRunStart(paragraph, before, drafts.drafts)
           : paragraph.runs.reduce(
               (n, run) => n + (drafts.drafts[run.id] ?? run.text).length,
@@ -266,6 +268,12 @@ export function useChangeReview({
     changes,
     /** The review target's own id, when one is marked active. */
     activeChangeId: activeChange?.id,
+    /** The one canvas revision in the tab order: the active one when it is
+     * painted inline, else the first painted one, so Tab never loses it. */
+    inlineTabChangeId: (activeChange && paintedInline(activeChange)
+      ? activeChange
+      : changes.find(paintedInline)
+    )?.id,
     activeIndex,
     pending: decision.isPending,
     error: mutationError(decision.error),
@@ -282,6 +290,18 @@ export function useChangeReview({
     canPrevious: activeIndex > 0,
     canNext: changes.length > 0 && activeIndex < changes.length - 1,
     goTo,
+    /** Arrow keys rove between painted revisions, skipping panel-only ones. */
+    goToAdjacentInline: (fromId: string, direction: -1 | 1) => {
+      for (
+        let index =
+          changes.findIndex((change) => change.id === fromId) + direction;
+        index >= 0 && index < changes.length;
+        index += direction
+      ) {
+        const change = changes[index]
+        if (change && paintedInline(change)) return goTo(index)
+      }
+    },
     goToPrevious: () => goTo(activeIndex - 1),
     goToNext: () => goTo(activeIndex + 1),
     decideChange: (action: 'accept' | 'reject', change: DocumentChangeWire) => {
@@ -304,4 +324,13 @@ export function useChangeReview({
         supported.map((change) => change.id),
       ),
   }
+}
+
+function paintedInline(change: DocumentChangeWire) {
+  return Boolean(
+    change.inlinePosition &&
+    (change.inlinePosition.segments ?? [change]).some(
+      (segment) => segment.text.length > 0,
+    ),
+  )
 }

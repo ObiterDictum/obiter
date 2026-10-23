@@ -8,6 +8,8 @@ import {
 } from '@obiter/contracts'
 import {
   mountWorkspace,
+  multiParagraphModel,
+  paragraph,
   openRibbonTab,
   selectBodyParagraph,
 } from './docx-workspace-harness'
@@ -106,6 +108,57 @@ describe('DocxWorkspace change review', () => {
     expect(
       screen.getByRole('button', { name: 'Previous change' }),
     ).toHaveProperty('disabled', false)
+  })
+
+  it('reveals a missing inline anchor at the paragraph end', () => {
+    mountWorkspace({
+      changes: [{ ...inserted, inlinePosition: { beforeRunId: 'missing' } }],
+    })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
+    const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
+    expect(field.selectionStart).toBe(field.value.length)
+    expect(field.selectionStart).toBeGreaterThan(0)
+  })
+
+  it('roves the canvas tab stop across painted revisions only', () => {
+    const first = {
+      ...inserted,
+      id: 'ins_a',
+      text: 'first',
+      inlinePosition: { beforeRunId: 'p1-r' },
+    }
+    const second = {
+      ...inserted,
+      id: 'ins_b',
+      text: 'second',
+      inlinePosition: { beforeRunId: null },
+    }
+    const changes = [first, format, second]
+    const { container } = mountWorkspace({
+      changes,
+      models: {
+        doc_1: {
+          ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          changes,
+        },
+      },
+    })
+    const stops = () =>
+      [...container.querySelectorAll('[data-inline-change][tabindex="0"]')].map(
+        (node) => node.getAttribute('data-inline-change'),
+      )
+    // Nothing active yet: the first painted revision holds the only stop.
+    expect(stops()).toEqual(['ins_a'])
+    const span = container.querySelector('[data-inline-change="ins_a"]')
+    if (!span) throw new Error('Expected inline revision')
+    fireEvent.keyDown(span, { key: 'ArrowRight' })
+    // The property change between them has no canvas text, so it is skipped.
+    expect(
+      container
+        .querySelector('[data-inline-change="ins_b"]')
+        ?.getAttribute('aria-current'),
+    ).toBe('true')
   })
 
   it('dispatches a single accept against the current change', () => {

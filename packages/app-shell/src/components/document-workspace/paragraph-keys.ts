@@ -30,6 +30,32 @@ export function arrowKey(
     : null
 }
 
+const words = new Intl.Segmenter(undefined, { granularity: 'word' })
+
+/** Word and line moves in editable text, so a tracked span is never a stop. */
+function modifiedOffset(
+  text: string,
+  lines: WrappedLine[],
+  offset: number,
+  right: boolean,
+  alt: boolean,
+  meta: boolean,
+) {
+  if (meta) {
+    const line = lines.find((item) => offset >= item.from && offset <= item.to)
+    return right ? (line?.to ?? text.length) : (line?.from ?? 0)
+  }
+  const parts = [...words.segment(text)].filter((part) => part.isWordLike)
+  return right
+    ? (parts
+        .map((part) => (alt ? part.index + part.segment.length : part.index))
+        .find((at) => at > offset) ?? text.length)
+    : (parts
+        .map((part) => part.index)
+        .reverse()
+        .find((at) => at < offset) ?? 0)
+}
+
 /** Native textareas cannot skip read-only display spans on horizontal arrows. */
 export function moveInlineSelection(
   event: KeyboardEvent<HTMLTextAreaElement>,
@@ -38,7 +64,7 @@ export function moveInlineSelection(
     text: string
     paragraphId: string
     lines: WrappedLine[]
-    active?: boolean
+    selection?: { active: boolean }
     onSelect: (offset?: number) => void
     onTextSelection?: (
       from: number,
@@ -48,12 +74,11 @@ export function moveInlineSelection(
   },
 ): boolean {
   const { projection } = input
+  // A document selection owns its own anchor across paragraphs; leave its
+  // keys to the existing handlers rather than re-anchor it in this paragraph.
   if (
     !projection ||
-    input.active ||
-    event.ctrlKey ||
-    event.altKey ||
-    event.metaKey ||
+    input.selection?.active ||
     (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
   )
     return false
@@ -71,13 +96,23 @@ export function moveInlineSelection(
     lines: input.lines,
     column: 0,
   })
-  const at =
-    !event.shiftKey && start !== end
+  const modified = event.ctrlKey || event.altKey || event.metaKey
+  const at = modified
+    ? modifiedOffset(
+        input.text,
+        input.lines,
+        focus,
+        event.key === 'ArrowRight',
+        event.altKey,
+        event.metaKey,
+      )
+    : !event.shiftKey && start !== end
       ? event.key === 'ArrowLeft'
         ? start
         : end
       : step?.offset
-  if (at === undefined) return false
+  if (at === undefined || (modified && at === focus && start === end))
+    return false
   event.preventDefault()
   const from = event.shiftKey ? Math.min(anchor, at) : at
   const to = event.shiftKey ? Math.max(anchor, at) : at

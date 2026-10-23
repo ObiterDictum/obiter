@@ -1,5 +1,11 @@
 import { useContext, useMemo } from 'react'
-import { inlineChanges, inlineSlice } from '../../document-inline-changes'
+import { paragraphChanges } from '../../document-inline-index'
+import {
+  inlineChanges,
+  inlineDescription,
+  inlineSlice,
+  inlineLinkOverlay,
+} from '../../document-inline-changes'
 import { InlineChangeReview } from './inline-change-review'
 import type {
   DocumentChangeWire,
@@ -156,9 +162,25 @@ export function ModelParagraph({
     () => paragraphFace(paragraph, styles),
     [paragraph.preservedXmlFragments, paragraph.styleId, styles],
   )
-  const effective = effectiveParagraph(paragraph, drafts)
-  const formatted = projectRangeEmphasis(effective, emphasis)
-  const projection = inlineChanges(formatted, changes, storyPartName)
+  // Index the measured paragraphs × changes hot path once per change list.
+  const bucket = useMemo(
+    () =>
+      paragraphChanges(paragraph, changes, story?.partName ?? storyPartName),
+    [paragraph, changes, story?.partName, storyPartName],
+  )
+  const effective = useMemo(
+    () => effectiveParagraph(paragraph, drafts),
+    [paragraph, drafts],
+  )
+  const projection = useMemo(
+    () =>
+      inlineChanges(
+        projectRangeEmphasis(effective, emphasis),
+        bucket,
+        story?.partName ?? storyPartName,
+      ),
+    [effective, emphasis, bucket, story?.partName, storyPartName],
+  )
   const review = useContext(InlineChangeReview)
   const fullText = paragraphPlainText(effective)
   const displayStart = from ?? 0
@@ -272,7 +294,9 @@ export function ModelParagraph({
       paragraph={projection.paragraph}
       toEditableOffset={projection.toEditable}
       drafts={drafts}
-      changes={changes}
+      changes={bucket}
+      inlineSpans={projection.spans}
+      reviewable={!(editing && holdsCaret && paragraph.runs.length > 0)}
       styles={styles}
       face={face}
       start={displayStart}
@@ -288,25 +312,7 @@ export function ModelParagraph({
             }
           : undefined
       }
-      linkOverlay={
-        linkOverlay
-          ? {
-              links: linkOverlay.links.map((link) => ({
-                ...link,
-                from: projection.toDisplay(link.from, 'after'),
-                to: projection.toDisplay(link.to, 'before'),
-              })),
-              marks: linkOverlay.marks.map((mark) => ({
-                from: projection.toDisplay(mark.from, 'after'),
-                to: projection.toDisplay(mark.to, 'before'),
-              })),
-              fieldMarkers: linkOverlay.fieldMarkers.map((marker) => ({
-                ...marker,
-                offset: projection.toDisplay(marker.offset),
-              })),
-            }
-          : undefined
-      }
+      linkOverlay={inlineLinkOverlay(projection, linkOverlay)}
       carets={carets}
       continuation={continuation}
       pageNumber={pageNumber}
@@ -398,7 +404,10 @@ export function ModelParagraph({
           className="relative min-h-[1em] min-w-0 flex-1"
           data-paragraph-text
         >
-          {editing && holdsCaret ? (
+          {editing &&
+          holdsCaret &&
+          // Same rule as revisionOnlyParagraph, on this story's own bucket.
+          !(paragraph.runs.length === 0 && bucket.length > 0) ? (
             <>
               <div
                 data-caret-run-overlay
@@ -410,6 +419,7 @@ export function ModelParagraph({
               <ModelParagraphEditor
                 paragraph={paragraph}
                 projection={mapped}
+                trackedDescription={inlineDescription(projection)}
                 effective={effective}
                 fullText={fullText}
                 start={start}
