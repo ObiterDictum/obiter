@@ -50,19 +50,22 @@ const DOCUMENT_PAYLOAD = {
     court: 'uksc',
     dateDecided: '2024-01-31',
     sourceUrl: 'https://example.org/uksc/2024/3',
+    // Stored as LegalDocML parses it: the court's `<num>` in paragraphNumber,
+    // not in the text, and not equal to the paragraph's position.
     paragraphs: [
       {
         id: 'p1',
-        paragraphNumber: 1,
-        text: '1. The appellant appeals the decision below.',
+        paragraphNumber: 10,
+        text: 'The appellant appeals the decision below.',
       },
       {
         id: 'p2',
-        paragraphNumber: 2,
-        text: '2. The central issue is jurisdiction.',
+        paragraphNumber: 11,
+        text: 'The central issue is jurisdiction.',
       },
     ],
   },
+  courtParagraphNumbers: true,
 }
 
 function jsonResponse(body: unknown): Response {
@@ -138,14 +141,14 @@ describe('CaseLawDocumentView', () => {
     )
   })
 
-  it('renders paragraphs with their accessible paragraph labels', async () => {
+  it('renders each paragraph with its stored court number and anchor', async () => {
     mockFetch()
     renderView()
 
-    await screen.findByRole('document')
-
-    expect((await screen.findAllByLabelText('Paragraph 1')).length).toBe(1)
-    expect((await screen.findAllByLabelText('Paragraph 2')).length).toBe(1)
+    const label = await screen.findByLabelText('Paragraph 11')
+    expect(label.textContent).toBe('11')
+    expect(label.closest('p')?.id).toBe('para-11')
+    expect(screen.queryByLabelText('Paragraph 2')).toBeNull()
   })
 
   it('fetches the document from the stored-case documents endpoint', async () => {

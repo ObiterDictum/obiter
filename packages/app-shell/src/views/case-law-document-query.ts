@@ -34,6 +34,8 @@ export interface CaseLawWithdrawnNotice {
 
 export interface CaseLawDocumentResponse {
   document: CaseLawDocument
+  /** True only when each `paragraphNumber` is the court's own, never a count. */
+  courtParagraphNumbers?: boolean
   withdrawn?: CaseLawWithdrawnNotice
 }
 
