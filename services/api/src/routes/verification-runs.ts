@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
+import { getVerificationEvidence } from '../verification-evidence'
 import { verificationRunCreateRequestSchema } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
 import { ensureOrgUser } from '../authz'
@@ -44,6 +45,28 @@ export function createVerificationRunRoutes(
   corpusPool: Pick<Pool, 'query'> = pool,
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
+
+  routes.get(
+    '/api/verification-runs/:runId/findings/:findingId/evidence',
+    async (c) => {
+      const user = await ensureOrgUser(c, pool)
+      if (user instanceof Response) return user
+      const evidence = await getVerificationEvidence(
+        pool,
+        user,
+        c.req.param('runId'),
+        c.req.param('findingId'),
+      )
+      if (!evidence)
+        return errorResponse(
+          c,
+          'verification_run_not_found',
+          'Verification finding not found.',
+          404,
+        )
+      return c.json(evidence)
+    },
+  )
 
   routes.post('/api/documents/:documentId/verification-runs', async (c) => {
     const user = await ensureOrgUser(c, pool)

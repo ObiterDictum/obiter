@@ -29,8 +29,8 @@ import type { VerificationSubject } from './subject'
 
 /**
  * One addressable stored source fragment, already read by the store boundary.
- * It carries the source text only in memory for the comparison; the evidence it
- * becomes holds ids and positions, never the text.
+ * Evidence references hold ids and positions. The API also preserves the checked
+ * fragment text with the finding so later corpus changes cannot replace it.
  */
 export type QuoteFragment =
   | {
