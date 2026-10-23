@@ -134,6 +134,7 @@ export function DocumentWorkspaceToolbar({
   onToggleNavPane,
   spelling,
   onToggleSpelling,
+  onCompareVersions,
 }: {
   dirty: boolean
   saving: boolean
@@ -201,6 +202,7 @@ export function DocumentWorkspaceToolbar({
   /** Browser-dictionary spell-checking; absent where not offered. */
   spelling?: boolean
   onToggleSpelling?: () => void
+  onCompareVersions?: () => void
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
 
@@ -292,6 +294,7 @@ export function DocumentWorkspaceToolbar({
             onPrint={onPrint}
             spelling={spelling}
             onToggleSpelling={onToggleSpelling}
+            onCompareVersions={onCompareVersions}
           />
         </TabsContent>
         <TabsContent value="view" className="min-w-0 flex-1 pt-0">

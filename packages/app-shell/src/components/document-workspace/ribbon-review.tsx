@@ -41,6 +41,7 @@ export function ReviewRibbon({
   onPrint,
   spelling,
   onToggleSpelling,
+  onCompareVersions,
 }: {
   canEdit: boolean
   trackChanges: boolean
@@ -62,6 +63,7 @@ export function ReviewRibbon({
   /** Absent where proofing is not offered; the control then keeps its
    * honest unavailable state instead of a no-op toggle. */
   onToggleSpelling?: () => void
+  onCompareVersions?: () => void
 }) {
   // Boundary reasons would be false when this ribbon has no review at all;
   // the absent surface is the truer reason there.
@@ -169,7 +171,8 @@ export function ReviewRibbon({
       <ToolbarGroup label="Versions">
         <IconButton
           label="Compare versions"
-          soon
+          soon={onCompareVersions === undefined}
+          onClick={onCompareVersions}
           icon={<Files size={16} aria-hidden />}
         />
       </ToolbarGroup>

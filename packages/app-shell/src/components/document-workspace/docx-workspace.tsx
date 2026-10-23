@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
+import { useVersionCompare } from './use-version-compare'
 import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import {
   useDocumentComments,
@@ -54,6 +55,8 @@ export function DocxWorkspace({
   layout?: DocumentWorkspaceLayout
 }) {
   const { data: me } = useCurrentUser()
+  const { onCompareVersions, versionCompareDialog } =
+    useVersionCompare(documentId)
   const modelQuery = useDocumentModel(documentId)
   const commentsQuery = useDocumentComments(documentId)
   const changesQuery = useDocumentTrackedChanges(documentId)
@@ -313,6 +316,7 @@ export function DocxWorkspace({
       }
       onReload={reload}
       toolbar={{
+        onCompareVersions,
         trackChanges,
         zoom,
         commentsOpen,
@@ -473,6 +477,7 @@ export function DocxWorkspace({
               />
             }
           />
+          {versionCompareDialog}
           <InsertAuthorityDialog
             open={insertAuthorityOpen}
             onOpenChange={setInsertAuthorityOpen}
