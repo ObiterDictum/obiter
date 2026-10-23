@@ -1,7 +1,10 @@
+import {
+  trackedDisplaySegments,
+  trackedElementText,
+} from './tracked-change-display'
 import type { DocumentChangeWire } from '@obiter/contracts'
 
 import type { ParagraphAnchor, TrackedChangeNode } from '../model'
-import { decodeXmlReferences } from '../xml-lexemes'
 import type { MoveRangeIndex } from './move-ranges'
 import { elementFragment } from './overlay'
 import {
@@ -229,6 +232,7 @@ export function trackedChange(
   lookup: TrackedChangeLookup,
   id: string,
   moveRanges: MoveRangeIndex,
+  hyperlinkTargets?: ReadonlyMap<string, string>,
 ): TrackedChangeNode {
   const elementName = trackedChangeName(element.localName)
   if (!elementName) throw new Error('Unknown tracked-change element')
@@ -262,6 +266,12 @@ export function trackedChange(
       elementName !== 'pPrChange' &&
       elementName !== 'rPrChange'
         ? {
+            segments: trackedDisplaySegments(
+              source,
+              element,
+              lookup.childrenOf,
+              hyperlinkTargets,
+            ),
             beforeRunId:
               paragraph.runs.find(
                 ({ runRange }) => runRange.start >= element.end,
@@ -275,17 +285,7 @@ export function trackedChange(
     ...(paragraph ? { paragraphId: paragraph.wire.id } : {}),
     ...(run ? { runId: run.wire.id } : {}),
     text: textElements
-      .map((candidate) =>
-        isWord(candidate, 'tab')
-          ? '\t'
-          : isWord(candidate, 'br') || isWord(candidate, 'cr')
-            ? '\n'
-            : candidate.selfClosing
-              ? ''
-              : decodeXmlReferences(
-                  source.slice(candidate.startTagEnd, candidate.endTagStart),
-                ),
-      )
+      .map((candidate) => trackedElementText(source, candidate))
       .join(''),
   })
   const expectedPropertiesName =

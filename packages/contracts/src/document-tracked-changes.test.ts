@@ -149,3 +149,20 @@ it('requires inline-position metadata so cached revisions regenerate', async () 
     }).success,
   ).toBe(false)
 })
+
+it('bounds display segments with the hyperlink scheme allowlist', async () => {
+  const { documentChangeWireSchema } = await import('./document-model')
+  const segments = (hyperlinkTarget: string) => ({
+    ...change,
+    inlinePosition: {
+      beforeRunId: null,
+      segments: [{ text: 'linked', deleted: true, hyperlinkTarget }],
+    },
+  })
+  expect(
+    documentChangeWireSchema.safeParse(segments('https://example.com')).success,
+  ).toBe(true)
+  expect(
+    documentChangeWireSchema.safeParse(segments('javascript:alert(1)')).success,
+  ).toBe(false)
+})

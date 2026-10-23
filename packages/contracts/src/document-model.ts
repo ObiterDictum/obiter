@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { documentImportedCommentSchema } from './document-comments'
+import { documentEditHyperlinkTargetSchema } from './document-edit-structural'
 import { documentMarkingsStateSchema } from './document-markings'
 
 export const documentStoryKindSchema = z.enum([
@@ -204,7 +205,20 @@ const documentChangeWireBaseSchema = z.object({
    * models regenerate rather than silently hiding tracked text.
    */
   inlinePosition: z
-    .object({ beforeRunId: z.string().min(1).nullable() })
+    .object({
+      beforeRunId: z.string().min(1).nullable(),
+      /** Source-ordered display only; nested wrappers keep their outer review decision. */
+      segments: z
+        .array(
+          z.object({
+            text: z.string(),
+            deleted: z.boolean(),
+            author: z.string().optional(),
+            hyperlinkTarget: documentEditHyperlinkTargetSchema.optional(),
+          }),
+        )
+        .optional(),
+    })
     .nullable(),
   text: z.string(),
   /**

@@ -32,7 +32,12 @@ describe('inline revision positions', () => {
       (change) => change.storyPartName === 'word/document.xml',
     )
     expect(
-      changes.map((change) => [change.text, change.inlinePosition]),
+      changes.map((change) => [
+        change.text,
+        change.inlinePosition && {
+          beforeRunId: change.inlinePosition.beforeRunId,
+        },
+      ]),
     ).toEqual([
       ['60,000', { beforeRunId: tail.id }],
       ['50,000', { beforeRunId: tail.id }],
