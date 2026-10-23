@@ -162,7 +162,9 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   await page.keyboard.press('End')
   await page.keyboard.type(' DRAFTX')
 
-  // The Versions section now lists v2 as current and v1 as history.
+  // The Versions section, collapsed under Details so the document opens
+  // first, now lists v2 as current and v1 as history.
+  await page.locator('summary', { hasText: 'Details' }).click()
   const historicalRow = page.locator('li', { hasText: 'v1 ·' }).first()
   await expect(historicalRow).toBeVisible({ timeout: 15_000 })
 
