@@ -1,5 +1,6 @@
 import { createContext, useContext, useLayoutEffect, useRef } from 'react'
 import { markBreaks, type InlineSpan } from '../../document-inline-changes'
+import type { ChangeReview } from './use-change-review'
 
 export const InlineChangeReview = createContext<{
   activeChangeId?: string
@@ -8,6 +9,20 @@ export const InlineChangeReview = createContext<{
   moveChange?: (fromId: string, direction: -1 | 1) => void
   selectChange: (id: string) => void
 } | null>(null)
+
+/** The canvas's view of the review panel: selecting a revision opens it there. */
+export function inlineReviewOf(review: ChangeReview, openPanel: () => void) {
+  return {
+    activeChangeId: review.activeChangeId,
+    tabChangeId: review.inlineTabChangeId,
+    moveChange: review.goToAdjacentInline,
+    selectChange: (id: string) => {
+      const index = review.changes.findIndex((change) => change.id === id)
+      if (index >= 0) review.goTo(index)
+      openPanel()
+    },
+  }
+}
 
 const BREAK_LABELS = new Map([
   ['\u21df', 'Page break'],
