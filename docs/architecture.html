@@ -3112,14 +3112,16 @@
                     <code>undecidable</code> with the reason, so review surfaces
                     can disable its controls honestly while the markup stays
                     byte-preserved. The model and list share required
-                    <code>inlinePosition</code> metadata: content revisions
-                    anchor before an editable run or at paragraph end; property
-                    and paragraph-mark revisions carry null. Missing metadata
-                    invalidates old cached models. The shared canvas projects
-                    All Markup for paint, pagination and native caret geometry;
-                    edit, selection, clipboard and verification offsets map back
-                    to ordinary runs. Preserved revision XML stays opaque to the
-                    writer and never enters editable text or save payloads.
+                    <code>inlinePosition</code> metadata and source-ordered
+                    nested display segments: content revisions anchor before an
+                    editable run or at paragraph end; property and
+                    paragraph-mark revisions carry null. Missing position or
+                    display-segment metadata invalidates old cached models. The
+                    shared canvas projects All Markup for paint, pagination and
+                    native caret geometry; edit, selection, clipboard and
+                    verification offsets map back to ordinary runs. Preserved
+                    revision XML stays opaque to the writer and never enters
+                    editable text or save payloads.
                   </td>
                 </tr>
                 <tr>
