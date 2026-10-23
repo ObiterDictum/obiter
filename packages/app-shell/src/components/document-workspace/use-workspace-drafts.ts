@@ -41,8 +41,17 @@ import { createWorkspaceDraftEdits } from './workspace-draft-edits'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
-/** Live drafts plus held changes restored from older snapshots. */
-type DraftBundle = { state: DraftState; held: HeldChange[] }
+/**
+ * Live drafts plus held changes restored from older snapshots, and the
+ * pending track-changes flip when one is set — an unsaved flip is unsaved
+ * work, so it persists and restores beside the drafts a save would carry it
+ * with instead of dying on a remount while they survive.
+ */
+type DraftBundle = {
+  state: DraftState
+  held: HeldChange[]
+  trackChangesFlip?: boolean
+}
 
 export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const [bundle, setBundle] = useState<DraftBundle>({
@@ -108,7 +117,13 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       setStaleDraft(result.baseVersionId)
       setRecoverable(extras)
     } else if (result.status === 'restored') {
-      setBundle({ state: result.state, held: result.held })
+      setBundle({
+        state: result.state,
+        held: result.held,
+        ...(result.trackChangesFlip !== undefined
+          ? { trackChangesFlip: result.trackChangesFlip }
+          : {}),
+      })
       setRestored(true)
       setRecoverable(extras)
       if (extras.some((item) => item.status === 'parked')) {
@@ -131,7 +146,16 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   useEffect(() => {
     if (!hydrated || !storage || !scope.baseVersionId) return
     const writer = storedScope()
-    if (!hasDraftState(bundle.state) && bundle.held.length === 0) {
+    // A flip recorded equal to the stored toggle is no longer pending — the
+    // persisted payload must not wake a remount with a flip already in place.
+    const flipPending =
+      bundle.trackChangesFlip !== undefined &&
+      bundle.trackChangesFlip !== scope.model?.trackRevisions
+    if (
+      !hasDraftState(bundle.state) &&
+      bundle.held.length === 0 &&
+      !flipPending
+    ) {
       clearDocumentDraft(storage, writer)
       return
     }
@@ -139,9 +163,16 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       baseVersionId: scope.baseVersionId,
       state: bundle.state,
       held: bundle.held,
+      ...(flipPending ? { trackChangesFlip: bundle.trackChangesFlip } : {}),
     })
     setPersistence(ok ? 'ok' : 'unavailable')
-  }, [bundle, scope.baseVersionId, storage, hydrated])
+  }, [
+    bundle,
+    scope.baseVersionId,
+    scope.model?.trackRevisions,
+    storage,
+    hydrated,
+  ])
   useDraftWriterClaim({
     storage,
     documentId: scope.documentId,
@@ -251,7 +282,13 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history.clear()
     baseline.clear()
     setBlockedReason(null)
-    setBundle({ state: result.state, held: result.held })
+    setBundle({
+      state: result.state,
+      held: result.held,
+      ...(result.trackChangesFlip !== undefined
+        ? { trackChangesFlip: result.trackChangesFlip }
+        : {}),
+    })
     setRestored(true)
     setRecoverable((current) =>
       current.filter((item) => item.draftId !== draftId),
@@ -301,7 +338,22 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     update: (current: StructuralDraft[]) => StructuralDraft[],
   ) => setField('structures', update)
 
+  /**
+   * The pending track-changes flip the draft bundle carries. The workspace
+   * reads it as intent — a value equal to the stored toggle means no flip —
+   * and the write effect normalises it out of the persisted payload.
+   */
+  function setTrackChangesFlip(value: boolean | undefined) {
+    setBundle((current) =>
+      value === undefined
+        ? { state: current.state, held: current.held }
+        : { ...current, trackChangesFlip: value },
+    )
+  }
+
   return {
+    trackChangesFlip: bundle.trackChangesFlip,
+    setTrackChangesFlip,
     state: bundle.state,
     drafts: bundle.state.drafts,
     inserts: bundle.state.inserts,

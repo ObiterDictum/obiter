@@ -85,18 +85,14 @@ export function DocxWorkspace({
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
   // The toggle follows the version's `w:trackRevisions`. An unsaved flip is
-  // the user's intent until a version persists it: every version write —
-  // save, merge, decision or markings — carries the current toggle, so a
-  // flip keeps applying across a model refetch until then. A reload
-  // discards it like any other unsaved state.
-  const [trackChangesFlip, setTrackChangesFlip] = useState<{
-    documentId: string
-    value: boolean
-  } | null>(null)
+  // the user's intent until a version persists it: it lives in the draft
+  // bundle, so it survives a remount the way every other unsaved edit does,
+  // and a version write — save, merge, decision or markings — carries it. A
+  // reload discards it with the drafts it stood beside.
   const trackChanges =
-    trackChangesFlip?.documentId === documentId &&
-    trackChangesFlip.value !== (model?.trackRevisions ?? false)
-      ? trackChangesFlip.value
+    drafts.trackChangesFlip !== undefined &&
+    drafts.trackChangesFlip !== (model?.trackRevisions ?? false)
+      ? drafts.trackChangesFlip
       : (model?.trackRevisions ?? false)
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
@@ -118,9 +114,6 @@ export function DocxWorkspace({
   const remoteChange = syncQuery.data?.changed === true
   const handleSaved = (version: string | null) => {
     setSavedVersion(version ? { documentId, versionId: version } : null)
-    // A reload reports null: it discards unsaved state, so the pending flip
-    // goes with the drafts it stood beside.
-    if (version === null) setTrackChangesFlip(null)
   }
   const save = useDocumentSave({
     documentId,
@@ -340,8 +333,7 @@ export function DocxWorkspace({
         citationStyle: legalTools.citationStyle,
         onCitationStyle: legalTools.onCitationStyle,
         legalChecks: legalTools.legalChecks,
-        onToggleTrackChanges: () =>
-          setTrackChangesFlip({ documentId, value: !trackChanges }),
+        onToggleTrackChanges: () => drafts.setTrackChangesFlip(!trackChanges),
         onZoom: setZoom,
         onExportText: exports.onExportText,
         onExportShareSafe: exports.onExportShareSafe,

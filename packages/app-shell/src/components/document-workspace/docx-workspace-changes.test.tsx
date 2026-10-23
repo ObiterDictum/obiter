@@ -117,7 +117,6 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_1'],
-        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
@@ -134,7 +133,26 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_1', 'chg_2'],
-        trackRevisions: false,
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    )
+  })
+
+  it('carries a pending toggle flip on a decision', () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [inserted], decideAsync: decide })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }))
+
+    // A pending flip is unsaved state the decision commits with the version,
+    // so the request carries it; without one the field stays absent.
+    expect(decide).toHaveBeenCalledWith(
+      {
+        baseVersionId: 'ver_1',
+        action: 'accept',
+        changeIds: ['chg_1'],
+        trackRevisions: true,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
@@ -262,7 +280,6 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_2'],
-        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )
@@ -312,7 +329,6 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'reject',
         changeIds: ['chg_1'],
-        trackRevisions: false,
         removeParagraphIds: ['p1'],
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
@@ -402,7 +418,6 @@ describe('DocxWorkspace change review', () => {
         baseVersionId: 'ver_1',
         action: 'accept',
         changeIds: ['chg_1', 'chg_2'],
-        trackRevisions: false,
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     )

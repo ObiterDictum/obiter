@@ -229,8 +229,12 @@ export function useChangeReview({
         changeIds,
         ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
         // The decision commits a version, so a pending toggle flip rides on
-        // it rather than being silently dropped.
-        trackRevisions: trackChanges,
+        // it rather than being silently dropped. An unpended toggle sends
+        // nothing — an explicit value would re-assert the loaded setting and
+        // silently revert a collaborator's flip this tab never saw.
+        ...(trackChanges !== model.trackRevisions
+          ? { trackRevisions: trackChanges }
+          : {}),
       },
       {
         onSuccess: (data) => {
