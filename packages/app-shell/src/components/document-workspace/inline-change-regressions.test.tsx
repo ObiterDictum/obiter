@@ -160,8 +160,8 @@ it('preserves native tracked-word selection through a mapped-caret update', () =
   fireEvent.select(field)
   rerender(paint(changes, 6))
   expect([field.selectionStart, field.selectionEnd]).toEqual([6, 12])
-  expect(field.getAttribute('aria-description')).toContain(
-    'Deletion by Unknown author: 60,000',
+  expect(field.getAttribute('aria-description')).toBe(
+    'Tracked changes by Unknown author',
   )
 })
 it('exposes revision roles and limits review tab stops', () => {
