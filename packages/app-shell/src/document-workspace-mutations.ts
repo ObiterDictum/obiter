@@ -109,7 +109,11 @@ export function useReopenDocumentComment(documentId: string) {
   })
 }
 
-export function useEditDocument(documentId: string, matterId: string) {
+export function useEditDocument(
+  documentId: string,
+  matterId: string,
+  onCommitted?: (input: DocumentEditRequest) => void,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: DocumentEditRequest) =>
@@ -117,7 +121,11 @@ export function useEditDocument(documentId: string, matterId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
+    onSuccess: (_saved, input) => {
+      // Local recovery must acknowledge the commit before any refetch can delay it.
+      onCommitted?.(input)
+      return invalidateWorkspace(queryClient, documentId, matterId)
+    },
   })
 }
 
@@ -148,7 +156,11 @@ export function useTrackedChangeDecision(documentId: string, matterId: string) {
   })
 }
 
-export function useCollaborationMerge(documentId: string, matterId: string) {
+export function useCollaborationMerge(
+  documentId: string,
+  matterId: string,
+  onCommitted?: (input: DocumentCollaborationMergeRequest) => void,
+) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: DocumentCollaborationMergeRequest) =>
@@ -156,7 +168,11 @@ export function useCollaborationMerge(documentId: string, matterId: string) {
         `/api/documents/${documentId}/collaboration/merge`,
         { method: 'POST', body: JSON.stringify(input) },
       ),
-    onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
+    onSuccess: (_saved, input) => {
+      // Local recovery must acknowledge the commit before any refetch can delay it.
+      onCommitted?.(input)
+      return invalidateWorkspace(queryClient, documentId, matterId)
+    },
   })
 }
 

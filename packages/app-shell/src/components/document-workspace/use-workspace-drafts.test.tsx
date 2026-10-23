@@ -1,6 +1,10 @@
 import '@obiter/test-dom'
-import { useLayoutEffect } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { createElement, useLayoutEffect, type PropsWithChildren } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { vi } from '../../../../../scripts/test/vitest-compat'
+import { listDocumentDrafts } from '../../document-draft-store'
+import { useDocumentSave } from './use-document-save'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import type {
   DocumentModelWire,
@@ -314,4 +318,93 @@ describe('draft edits queued across the save boundary', () => {
     expect(result.current.boundaryPending).toBe(false)
     expect(result.current.lineageUnresolved).toBe(false)
   })
+})
+
+it('retires saved text and track-changes intent before query refresh finishes', async () => {
+  window.localStorage.clear()
+  window.sessionStorage.clear()
+  const scope = scopeFor(model('Hello'), 'ver_1', 1)
+  const client = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  })
+  let finishRefresh: () => void = () => undefined
+  const refresh = new Promise<void>((resolve) => {
+    finishRefresh = resolve
+  })
+  let draftsAtRefresh: ReturnType<typeof listDocumentDrafts> | undefined
+  const invalidate = vi
+    .spyOn(client, 'invalidateQueries')
+    .mockImplementation(() => {
+      draftsAtRefresh = listDocumentDrafts(window.localStorage, scope)
+      return refresh
+    })
+  const network = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    Response.json(
+      {
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+        lineage: SAVED_LINEAGE,
+      },
+      { status: 201 },
+    ),
+  )
+  function wrapper({ children }: PropsWithChildren) {
+    return createElement(QueryClientProvider, { client }, children)
+  }
+  const mounted = renderHook(
+    () => {
+      const drafts = useWorkspaceDrafts(scope)
+      const save = useDocumentSave({
+        documentId: 'doc_1',
+        matterId: 'mtr_1',
+        model: scope.model,
+        drafts,
+        baseVersionId: 'ver_1',
+        trackChanges: drafts.trackChangesFlip ?? false,
+        presence: [],
+        currentUserId: 'usr_1',
+        remoteChange: false,
+        onSaved: () => undefined,
+      })
+      return { drafts, save }
+    },
+    { wrapper },
+  )
+  try {
+    act(() => {
+      mounted.result.current.drafts.setDrafts(() => ({ r1: 'Hello saved' }))
+      mounted.result.current.drafts.setTrackChangesFlip(true)
+    })
+    expect(listDocumentDrafts(window.localStorage, scope)).toHaveLength(1)
+    act(() => mounted.result.current.save.save())
+    await waitFor(() => expect(invalidate).toHaveBeenCalled())
+    expect(JSON.parse(String(network.mock.calls[0]?.[1]?.body))).toMatchObject({
+      trackChanges: true,
+      operations: [
+        { type: 'replace_run_text', runId: 'r1', text: 'Hello saved' },
+      ],
+    })
+    // The POST succeeded, but every refreshed query is still pending.
+    expect(draftsAtRefresh).toEqual([])
+    expect(listDocumentDrafts(window.localStorage, scope)).toEqual([])
+    mounted.unmount()
+    const reopened = renderHook(() =>
+      useWorkspaceDrafts(
+        scopeFor({ ...model('Hello saved'), trackRevisions: true }, 'ver_2', 2),
+      ),
+    )
+    expect(reopened.result.current.staleDraft).toBeNull()
+    expect(reopened.result.current.drafts).toEqual({})
+    reopened.unmount()
+  } finally {
+    finishRefresh()
+    await act(async () => {
+      await refresh
+    })
+    mounted.unmount()
+    invalidate.mockRestore()
+    network.mockRestore()
+    client.clear()
+  }
 })
