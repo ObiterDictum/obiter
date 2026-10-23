@@ -2,7 +2,9 @@ import { describe, expect, it } from 'bun:test'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   applyDocumentEdits,
+  applyTrackedChangeDecisions,
   createBlankDocx,
+  createLineageRecorder,
   parseDocx,
   serialiseDocx,
 } from '@obiter/ooxml'
@@ -22,6 +24,9 @@ import {
   applySplitParagraph,
   emptyEditorState,
 } from './document-word-edits'
+import { emptyFormatDrafts } from './document-format-types'
+
+const TRACKING = { author: 'Lex', date: '2026-09-27T12:00:00.000Z' }
 
 const model: DocumentModelWire = {
   version: 1,
@@ -272,6 +277,59 @@ describe('collectEditOperations', () => {
         item.runs.map((run) => run.text).join(''),
       ),
     ).toEqual(['Hello', 'First', 'Second'])
+  })
+
+  it('keeps a tracked emphasis bold across a same-batch text replacement', async () => {
+    // The real product order emits the text replacement before the emphasis,
+    // so the tracked writer cannot rely on the property change landing first.
+    const document = await parseDocx(await createBlankDocx())
+    const paragraph = documentStory(document.model)?.paragraphs[0]
+    if (!paragraph) throw new Error('expected a body paragraph')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: paragraph.id,
+        intentId: 'seed',
+        text: 'one two three',
+      },
+    ])
+    const seeded = await parseDocx(await serialiseDocx(document))
+    const run = documentStory(seeded.model)
+      ?.paragraphs.map((item) => item.runs)
+      .flat()
+      .find((item) => item.text === 'one two three')
+    if (!run) throw new Error('expected the seeded run')
+    const operations = collectEditOperations(
+      seeded.model,
+      { [run.id]: 'one four three' },
+      [],
+      [],
+      {},
+      { ...emptyFormatDrafts, emphasis: [{ runId: run.id, bold: true }] },
+    )
+    expect(operations).toEqual([
+      { type: 'replace_run_text', runId: run.id, text: 'one four three' },
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const recorder = createLineageRecorder(seeded.model)
+    applyDocumentEdits(seeded, operations, TRACKING, recorder)
+    const saved = await parseDocx(await serialiseDocx(seeded))
+    // Accepting every listed change keeps the patch on all three pieces.
+    applyTrackedChangeDecisions(
+      saved,
+      saved.model.changes.map((change) => change.id),
+      'accept',
+    )
+    const accepted = await parseDocx(await serialiseDocx(saved))
+    const runs = documentStory(accepted.model)
+      ?.paragraphs.map((item) => item.runs)
+      .flat()
+      .filter((item) => item.text.length > 0)
+    expect(runs?.map((item) => item.text).join('')).toBe('one four three')
+    for (const item of runs ?? []) {
+      expect(item.preservedXmlFragments.join('')).toContain('<w:b')
+    }
+    expect(accepted.model.changes).toHaveLength(0)
   })
 
   it('keeps later inserts after a zero-run replacement, then deletes the blank', () => {

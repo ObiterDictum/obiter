@@ -418,7 +418,9 @@ describe('OOXML document edits', () => {
     const delRun = xml.slice(0, insStart)
     expect(insRun).toContain('<w:b/>')
     expect(insRun).toContain('<w:t>Typed</w:t>')
-    expect(insRun).toContain('<w:rPrChange ')
+    // the property revision is subsumed by the insertion — a marker nested
+    // inside w:ins is not a listed change and could never be decided
+    expect(insRun).not.toContain('<w:rPrChange ')
     expect(delRun).toContain('<w:delText>')
     // the deleted run keeps the original formatting
     const delRunRpr = delRun.slice(delRun.lastIndexOf('<w:rPr'))

@@ -175,6 +175,85 @@ export function extractInsertedRunRpr(
   return match?.[0] ?? `<${prefix}:${propertiesName}/>`
 }
 
+/**
+ * Distributes a patched properties fragment over every piece of a pending
+ * tracked text replacement that survives an accept: each shared run takes
+ * the new properties with its own change marker, while the inserted run
+ * takes the properties without one — a marker nested inside `w:ins` is not
+ * a listed change and could never be decided. A `w:del` piece keeps the
+ * properties the struck text was recorded with; when no piece survives — a
+ * deletion-only replacement — the deleted run takes the patched properties
+ * so a reject restores the state the user last saw. Returns undefined when
+ * the value is not the writer's flat sequence of `w:r`, `w:del` and `w:ins`
+ * pieces, leaving the caller to its fallback.
+ */
+export function foldRprIntoTrackedText(
+  value: string,
+  prefix: string,
+  propertiesName: 'rPr' | 'pPr',
+  patch: (current: string) => string,
+  attributes: () => string,
+) {
+  const pieces = [
+    ...value.matchAll(
+      new RegExp(
+        `<${prefix}:del\\b[^>]*>[\\s\\S]*?</${prefix}:del>|<${prefix}:ins\\b[^>]*>[\\s\\S]*?</${prefix}:ins>|<${prefix}:r\\b[^>]*>[\\s\\S]*?</${prefix}:r>`,
+        'gu',
+      ),
+    ),
+  ]
+  if (
+    pieces.length === 0 ||
+    pieces.map((piece) => piece[0]).join('') !== value
+  ) {
+    return undefined
+  }
+  const propertiesPattern = new RegExp(
+    `<${prefix}:${propertiesName}\\b[^>]*>[\\s\\S]*?</${prefix}:${propertiesName}>|<${prefix}:${propertiesName}\\b[^>]*/>`,
+    'u',
+  )
+  const patchRunXml = (runXml: string, marker: boolean) => {
+    const current =
+      runXml.match(propertiesPattern)?.[0] ?? `<${prefix}:${propertiesName}/>`
+    // A run already carrying a marker keeps it — its `previous` still names
+    // the pre-batch properties — and merges the new patch beside it. A piece
+    // nested inside `w:ins` or `w:del` takes the patch alone: a marker there
+    // is not a listed change and its id could never be decided.
+    const next = current.includes(`<${prefix}:${propertiesName}Change`)
+      ? mergeTrackedProperties(current, prefix, propertiesName, patch)
+      : marker
+        ? appendPropertyChange(
+            patch(current),
+            prefix,
+            propertiesName,
+            attributes(),
+            current,
+          )
+        : patch(current)
+    return foldRprIntoRun(runXml, next, prefix, propertiesName)
+  }
+  const survivors = pieces.filter(
+    (piece) => !piece[0].startsWith(`<${prefix}:del`),
+  )
+  if (survivors.length === 0) {
+    const run = insertedRunFragment(value, prefix)
+    if (!run) return undefined
+    return `${value.slice(0, run.runStart)}${patchRunXml(run.runXml, false)}${value.slice(run.runEnd)}`
+  }
+  return pieces
+    .map((piece) => {
+      const xml = piece[0]
+      if (xml.startsWith(`<${prefix}:del`)) return xml
+      if (xml.startsWith(`<${prefix}:ins`)) {
+        const run = insertedRunFragment(xml, prefix)
+        if (!run) return xml
+        return `${xml.slice(0, run.runStart)}${patchRunXml(run.runXml, false)}${xml.slice(run.runEnd)}`
+      }
+      return patchRunXml(xml, true)
+    })
+    .join('')
+}
+
 export function stripPropertyChange(
   properties: string,
   prefix: string,

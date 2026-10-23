@@ -235,12 +235,14 @@ describe('granular tracked text edits', () => {
       await serialiseDocx(document),
       'word/document.xml',
     )
-    // A same-batch emphasis + text edit takes the whole-run form: the ins run
-    // is the complete replacement text carrying the new properties and the
-    // recorded change, so accepting yields every piece bold — a granular
-    // split would have bolded only the changed token.
+    // A same-batch emphasis + text edit takes the whole-run form: the ins
+    // run is the complete replacement text carrying the patched properties —
+    // a marker inside `w:ins` would not be a listed change, so the property
+    // revision is subsumed by the insertion — and accepting yields every
+    // piece bold where a granular split would have bolded only the token.
     const insPiece = xml.match(/<w:ins [^>]*>[\s\S]*?<\/w:ins>/u)?.[0]
-    expect(insPiece).toContain('<w:rPrChange')
+    expect(insPiece).toContain('<w:b/>')
+    expect(insPiece).not.toContain('<w:rPrChange')
     expect(insPiece).toContain('<w:t>one four three</w:t>')
     const reparsed = await parseDocx(await serialiseDocx(document))
     applyTrackedChangeDecisions(
@@ -261,6 +263,95 @@ describe('granular tracked text edits', () => {
     for (const piece of pieces) {
       expect(piece).toContain('<w:b/>')
     }
+  })
+
+  it('distributes a property change over every surviving piece when the text op ran first', async () => {
+    const document = await parseDocx(
+      await runFixture('<w:r><w:t>one two three</w:t></w:r>'),
+    )
+    const run = document.model.stories[0]?.paragraphs[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+    // The product emits the replacement before the emphasis: the pending
+    // split must take the patch on every piece an accept keeps, not only the
+    // inserted run.
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'replace_run_text', runId: run.id, text: 'one four three' },
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+      ],
+      changeContext,
+    )
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+    const delPiece = xml.match(/<w:del [^>]*>[\s\S]*?<\/w:del>/u)?.[0]
+    const insPiece = xml.match(/<w:ins [^>]*>[\s\S]*?<\/w:ins>/u)?.[0]
+    expect(delPiece).toContain('<w:delText>two</w:delText>')
+    // The struck piece keeps the old properties. Each shared run carries the
+    // patch with its own recorded marker; the inserted run takes the patch
+    // alone — a marker nested inside `w:ins` is not a listed change.
+    expect(delPiece).not.toContain('<w:rPrChange')
+    expect(delPiece).not.toContain('<w:b/>')
+    expect(insPiece).toContain('<w:b/>')
+    expect(insPiece).not.toContain('<w:rPrChange')
+    const markers = [...xml.matchAll(/<w:rPrChange w:id="(\d+)"[^>]*>/gu)].map(
+      (match) => match[1],
+    )
+    expect(markers.length).toBe(2)
+    expect(new Set(markers).size).toBe(2)
+
+    const reparsed = await parseDocx(output)
+    applyTrackedChangeDecisions(
+      reparsed,
+      reparsed.model.changes
+        .filter(({ author }) => author === changeContext.author)
+        .map(({ id }) => id),
+      'accept',
+    )
+    const accepted = await zipText(
+      await serialiseDocx(reparsed),
+      'word/document.xml',
+    )
+    const pieces = [...accepted.matchAll(/<w:r>([\s\S]*?)<\/w:r>/gu)]
+      .map((match) => match[0])
+      .filter(
+        (piece) =>
+          piece.includes('one') ||
+          piece.includes('four') ||
+          piece.includes('three'),
+      )
+    expect(pieces.length).toBe(3)
+    for (const piece of pieces) {
+      expect(piece).toContain('<w:b/>')
+    }
+    expect(accepted).not.toContain('rPrChange')
+  })
+
+  it('folds a property change into the deleted run when no piece survives', async () => {
+    const document = await parseDocx(
+      await runFixture('<w:r><w:t>the cats sat</w:t></w:r>'),
+    )
+    const run = document.model.stories[0]?.paragraphs[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+    // Deleting the whole run leaves only a `w:del` piece. A marker nested in
+    // it could never be decided, so the deleted run takes the patched
+    // properties directly and a reject restores the last-seen state.
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'replace_run_text', runId: run.id, text: '' },
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+      ],
+      changeContext,
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const delPiece = xml.match(/<w:del [^>]*>[\s\S]*?<\/w:del>/u)?.[0]
+    expect(delPiece).toContain('<w:delText>the cats sat</w:delText>')
+    expect(delPiece).toContain('<w:b/>')
+    expect(delPiece).not.toContain('<w:rPrChange')
   })
 
   it('takes the whole-run form for a pure deletion with a pending property change', async () => {
@@ -284,7 +375,8 @@ describe('granular tracked text edits', () => {
     const delPiece = xml.match(/<w:del [^>]*>[\s\S]*?<\/w:del>/u)?.[0]
     expect(delPiece).toContain('<w:delText>the cats sat</w:delText>')
     const insPiece = xml.match(/<w:ins [^>]*>[\s\S]*?<\/w:ins>/u)?.[0]
-    expect(insPiece).toContain('<w:rPrChange')
+    expect(insPiece).toContain('<w:b/>')
+    expect(insPiece).not.toContain('<w:rPrChange')
     expect(insPiece).toContain('<w:t>the cat sat</w:t>')
   })
 

@@ -9,7 +9,6 @@ import {
   type OoxmlDocument,
   type ParagraphAnchor,
   type TextRunAnchor,
-  type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { insertParagraphAfter } from './model-paragraph-edits'
@@ -31,13 +30,12 @@ import {
 } from './document-lineage'
 import { granularRunEdit } from './tracked-edit-granular'
 import {
-  appendPropertyChange,
-  extractInsertedRunRpr,
-  foldRprIntoInsertedRun,
+  setTrackedProperties,
+  setTrackedStyleProperties,
+} from './tracked-edit-properties'
+import {
   foldRprIntoRun,
-  mergeTrackedProperties,
   paragraphMarkDeletionReplacement,
-  patchStyleChild,
   renameTextElements,
   replaceRunText,
   stripPropertyChange,
@@ -74,6 +72,11 @@ export function createTrackedEditWriter(
   }
   let nextChangeId = allocateFirstChangeId(document)
   let created: TrackedChangeCreated[] = []
+  // Change ids whose element ended up nested inside a `w:ins`/`w:del` piece —
+  // a property marker folded into a text replacement. The parser lists only
+  // top-level change elements, so a nested id names a change nobody can
+  // decide; the lineage withdraws it from the batch's reversal groups.
+  let consumed: string[] = []
   const attributes = (
     prefix: string,
     elementName: TrackedChangeCreated['elementName'],
@@ -137,7 +140,20 @@ export function createTrackedEditWriter(
       let newRun = replaceRunText(source, anchor, text)
       if (trackedProperties) {
         part.overlay.replacements.delete(`${anchor.wire.id}:tracked-properties`)
-        newRun = foldRprIntoRun(newRun, trackedProperties.value, prefix, 'rPr')
+        // The inserted run takes the patched properties without the pending
+        // marker — a marker inside `w:ins` is not a listed change — and the
+        // id it was allocated with is consumed rather than left dangling in
+        // a reversal group.
+        const markerId = trackedProperties.value.match(
+          new RegExp(`${prefix}:id="(\\d+)"`, 'u'),
+        )?.[1]
+        newRun = foldRprIntoRun(
+          newRun,
+          stripPropertyChange(trackedProperties.value, prefix, 'rPr'),
+          prefix,
+          'rPr',
+        )
+        if (markerId !== undefined) consumed.push(markerId)
       }
       setOverlayReplacement(part.overlay, `${anchor.wire.id}:tracked-text`, {
         start: anchor.runRange.start,
@@ -243,7 +259,7 @@ export function createTrackedEditWriter(
         styleName: 'rStyle',
         prefix,
         styleId,
-        attributes: attributes(prefix, 'rPrChange'),
+        attributes: () => attributes(prefix, 'rPrChange'),
         wire: anchor.wire,
       })
     },
@@ -260,7 +276,7 @@ export function createTrackedEditWriter(
         styleName: 'pStyle',
         prefix,
         styleId,
-        attributes: attributes(prefix, 'pPrChange'),
+        attributes: () => attributes(prefix, 'pPrChange'),
         wire: anchor.wire,
       })
     },
@@ -275,7 +291,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.runPropertiesRange,
         propertiesName: 'rPr',
         prefix,
-        attributes: attributes(prefix, 'rPrChange'),
+        attributes: () => attributes(prefix, 'rPrChange'),
         patch: (current) => patchRunEmphasisXml(current, emphasis),
       })
     },
@@ -297,7 +313,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.paragraphPropertiesRange,
         propertiesName: 'pPr',
         prefix,
-        attributes: attributes(prefix, 'pPrChange'),
+        attributes: () => attributes(prefix, 'pPrChange'),
         patch: (current) => patchParagraphNumberingXml(current, resolved),
       })
     },
@@ -312,7 +328,7 @@ export function createTrackedEditWriter(
         propertiesRange: anchor.paragraphPropertiesRange,
         propertiesName: 'pPr',
         prefix,
-        attributes: attributes(prefix, 'pPrChange'),
+        attributes: () => attributes(prefix, 'pPrChange'),
         patch: (current) => patchParagraphFormatXml(current, format),
       })
     },
@@ -336,128 +352,17 @@ export function createTrackedEditWriter(
       created = []
       return next
     },
+
+    /**
+     * Change ids allocated since the previous call whose element was consumed
+     * into nested markup, so a recorded reversal must drop them.
+     */
+    takeConsumedChanges() {
+      const next = consumed
+      consumed = []
+      return next
+    },
   }
-}
-
-function setTrackedProperties(
-  document: OoxmlDocument,
-  input: {
-    id: string
-    partName: string
-    nodeRange: XmlElementRange
-    propertiesRange?: XmlElementRange
-    propertiesName: 'rPr' | 'pPr'
-    prefix: string
-    attributes: string
-    patch: (current: string) => string
-  },
-) {
-  const part = requireEditablePart(document, input.partName)
-  const previous = input.propertiesRange
-    ? part.overlay.source.slice(
-        input.propertiesRange.start,
-        input.propertiesRange.end,
-      )
-    : `<${input.prefix}:${input.propertiesName}/>`
-
-  // A tracked text replacement on the same node covers the whole run,
-  // including the properties element. When both fire in one batch, fold the
-  // property change into the inserted run instead of writing an overlapping
-  // full-range replacement.
-  const trackedText = part.overlay.replacements.get(`${input.id}:tracked-text`)
-  if (trackedText) {
-    const currentRpr = extractInsertedRunRpr(
-      trackedText.value,
-      input.prefix,
-      input.propertiesName,
-    )
-    const patched = appendPropertyChange(
-      input.patch(
-        stripPropertyChange(currentRpr, input.prefix, input.propertiesName),
-      ),
-      input.prefix,
-      input.propertiesName,
-      input.attributes,
-      previous,
-    )
-    part.overlay.replacements.set(`${input.id}:tracked-text`, {
-      ...trackedText,
-      value: foldRprIntoInsertedRun(
-        trackedText.value,
-        patched,
-        input.prefix,
-        input.propertiesName,
-      ),
-    })
-    part.dirty = true
-    return
-  }
-
-  const key = `${input.id}:tracked-properties`
-  const existing = part.overlay.replacements.get(key)
-  if (existing) {
-    part.overlay.replacements.set(key, {
-      ...existing,
-      value: mergeTrackedProperties(
-        existing.value,
-        input.prefix,
-        input.propertiesName,
-        input.patch,
-      ),
-    })
-    part.dirty = true
-    return
-  }
-
-  const current = appendPropertyChange(
-    input.patch(previous),
-    input.prefix,
-    input.propertiesName,
-    input.attributes,
-    previous,
-  )
-  setOverlayReplacement(part.overlay, key, {
-    start: input.propertiesRange?.start ?? input.nodeRange.startTagEnd,
-    end: input.propertiesRange?.end ?? input.nodeRange.startTagEnd,
-    value: current,
-  })
-  part.dirty = true
-}
-
-function setTrackedStyleProperties(
-  document: OoxmlDocument,
-  input: {
-    id: string
-    partName: string
-    nodeRange: XmlElementRange
-    propertiesRange?: XmlElementRange
-    propertiesName: 'rPr' | 'pPr'
-    styleName: 'pStyle' | 'rStyle'
-    prefix: string
-    styleId: string | null
-    attributes: string
-    wire: { styleId?: string }
-  },
-) {
-  setTrackedProperties(document, {
-    id: input.id,
-    partName: input.partName,
-    nodeRange: input.nodeRange,
-    propertiesRange: input.propertiesRange,
-    propertiesName: input.propertiesName,
-    prefix: input.prefix,
-    attributes: input.attributes,
-    patch: (current) =>
-      patchStyleChild(
-        current,
-        input.prefix,
-        input.propertiesName,
-        input.styleName,
-        input.styleId,
-      ),
-  })
-  if (input.styleId === null) delete input.wire.styleId
-  else input.wire.styleId = input.styleId
 }
 
 function isCanonicalIsoTimestamp(value: string) {

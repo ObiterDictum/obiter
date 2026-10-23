@@ -618,10 +618,18 @@ function lineageIdentities(
   const runReversals = new Map<string, string[]>()
   const paragraphReversals = new Map<string, string[]>()
   for (const reversal of lineage.reversals ?? []) {
+    // Two operations in one batch can name the same node — a text edit and a
+    // property change on one run both record a reversal keyed by it — so ids
+    // merge into the node's group rather than the later op overwriting the
+    // earlier and leaving ids the undo group can never reject.
     if (reversal.fromRunId) {
-      runReversals.set(reversal.fromRunId, [...reversal.rejectOoxmlIds])
+      runReversals.set(reversal.fromRunId, [
+        ...(runReversals.get(reversal.fromRunId) ?? []),
+        ...reversal.rejectOoxmlIds,
+      ])
     } else if (reversal.fromParagraphId) {
       paragraphReversals.set(reversal.fromParagraphId, [
+        ...(paragraphReversals.get(reversal.fromParagraphId) ?? []),
         ...reversal.rejectOoxmlIds,
       ])
     }
