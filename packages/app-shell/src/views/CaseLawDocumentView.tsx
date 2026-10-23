@@ -26,6 +26,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   )
   const data = response.document
   const withdrawn = response.withdrawn
+  const showParagraphNumbers = response.courtParagraphNumbers === true
   const paragraphs = selectJudgmentParagraphs(data).filter((paragraph) =>
     isDisplayJudgmentParagraph(paragraph, data),
   )
@@ -35,6 +36,14 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
         paragraph.text.toLowerCase().includes(trimmedCaseQuery.toLowerCase()),
       )
     : paragraphs
+  // A heading the court numbered can repeat a paragraph's number. The first
+  // holder in the whole judgment keeps the anchor, so ids stay unique and a
+  // deep link lands on the same paragraph whether or not a search is active.
+  const anchorOwners = new Map<number, string>()
+  for (const paragraph of paragraphs) {
+    if (!anchorOwners.has(paragraph.paragraphNumber))
+      anchorOwners.set(paragraph.paragraphNumber, paragraph.id)
+  }
   const courtLabel = getReadableCourtLabel(data.court)
   const dateLabel = formatCaseDate(data.dateDecided)
 
@@ -143,12 +152,19 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
 
             <div className="flex flex-col gap-3">
               {visibleParagraphs.map((paragraph) => {
-                const label = paragraphLabel(paragraph)
-                const text = paragraphTextWithoutLabel(paragraph)
+                const label = showParagraphNumbers
+                  ? String(paragraph.paragraphNumber)
+                  : ''
+                const anchor =
+                  label &&
+                  anchorOwners.get(paragraph.paragraphNumber) === paragraph.id
+                    ? `para-${label}`
+                    : undefined
 
                 return (
                   <p
-                    className="grid grid-cols-[42px_minmax(0,1fr)] gap-4 leading-relaxed text-ink"
+                    className="grid scroll-mt-4 grid-cols-[42px_minmax(0,1fr)] gap-4 leading-relaxed text-ink"
+                    id={anchor}
                     key={paragraph.id}
                   >
                     <span
@@ -158,7 +174,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                       {label}
                     </span>
                     <span className="text-base">
-                      <HighlightedText text={text} query={trimmedCaseQuery} />
+                      <HighlightedText
+                        text={paragraph.text.trim()}
+                        query={trimmedCaseQuery}
+                      />
                     </span>
                   </p>
                 )
@@ -238,14 +257,6 @@ function isDisplayJudgmentParagraph(
   if (lower.length < 8) return false
 
   return true
-}
-
-function paragraphLabel(paragraph: CaseLawParagraph) {
-  return paragraph.text.trim().match(/^(\d+)\.\s+/)?.[1] ?? ''
-}
-
-function paragraphTextWithoutLabel(paragraph: CaseLawParagraph) {
-  return paragraph.text.trim().replace(/^\d+\.\s+/, '')
 }
 
 function HighlightedText({ text, query }: { text: string; query: string }) {
