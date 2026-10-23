@@ -1,7 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Plus, Trash } from '@phosphor-icons/react'
 import {
-  Badge,
   Button,
   Dialog,
   DialogClose,
@@ -21,6 +20,7 @@ import { useCurrentUser } from '../current-user'
 import { blankDocumentFile } from '../document-blank'
 import { useMatterDocuments, useUploadMatterDocument } from '../documents'
 import { useDeleteMatter, useMatter } from '../matters'
+import { MatterOverview } from './matter-overview'
 
 /** Matter detail — document list plus an in-place viewer/editor. */
 export function MatterRouteView({
@@ -287,24 +287,7 @@ export function MatterRouteView({
               layout="pane"
             />
           ) : (
-            <div className="flex h-full flex-col gap-4 p-5 sm:p-6">
-              {m.description ? (
-                <p className="max-w-prose text-sm leading-relaxed text-muted">
-                  {m.description}
-                </p>
-              ) : (
-                <p className="text-sm leading-relaxed text-muted">
-                  Select a document to open it here, or create a new one from
-                  the list.
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                <Badge tone={m.status === 'active' ? 'success' : 'neutral'}>
-                  {m.status}
-                </Badge>
-                <Badge tone="neutral">{m.primaryJurisdiction}</Badge>
-              </div>
-            </div>
+            <MatterOverview matter={m} documents={documents} />
           )}
         </section>
       </div>
