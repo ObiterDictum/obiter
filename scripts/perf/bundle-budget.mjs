@@ -54,9 +54,18 @@ import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 // largest chunk is still inside its own budget. 405 kB keeps roughly 1%
 // headroom over the measurement; the initial, per-chunk and PDF-worker budgets
 // are unchanged.
+//
+// Re-baselined to 410 kB on 2026-10-23. origin/dev at e287b47 measures lazy
+// 405.0 kB exactly, after inline tracked changes (#331), the document-first
+// page (#337) and paragraph numbers (#338). Two open features need more:
+// Verify source evidence (#333, about +1.2 kB: the stored passage and a
+// word diff, so a lawyer sees what a quote was checked against) and the
+// matter overview (#339, about +1.0 kB). Both were trimmed before this
+// change. Expected after both land is about 407.3 kB, leaving roughly 0.7%
+// headroom; initial, per-chunk and PDF-worker budgets are unchanged.
 export const BUDGETS = {
   initialGzipBytes: 212 * 1024,
-  lazyGzipBytes: 405 * 1024,
+  lazyGzipBytes: 410 * 1024,
   largestLazyChunkGzipBytes: 200 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,
 }
