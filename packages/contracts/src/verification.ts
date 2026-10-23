@@ -1,6 +1,22 @@
 import { z } from 'zod'
 import { documentStoryKindSchema } from './document-model'
 
+export const verificationPassageSchema = z
+  .object({
+    evidenceId: z.string().min(1),
+    text: z.string().min(1),
+  })
+  .strict()
+
+export const verificationEvidenceResponseSchema = z
+  .object({
+    passages: z.array(verificationPassageSchema),
+  })
+  .strict()
+export type VerificationEvidenceResponse = z.infer<
+  typeof verificationEvidenceResponseSchema
+>
+
 export const verificationRunStatusSchema = z.enum([
   'queued',
   'running',

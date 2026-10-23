@@ -3550,6 +3550,19 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    GET
+                    /api/verification-runs/:runId/findings/:findingId/evidence
+                  </td>
+                  <td class="id">verification-runs.ts</td>
+                  <td>
+                    Organisation- and matter-view-gated source passages
+                    preserved with the checked finding. Historical runs without
+                    snapshots return no passages; never substitute current
+                    corpus text.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">POST /api/auth/sign-out</td>
                   <td class="id">app.ts</td>
                   <td>

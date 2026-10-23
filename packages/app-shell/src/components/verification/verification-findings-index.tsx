@@ -90,6 +90,7 @@ export function VerificationFindingsIndex({
         ) : verification.findings.length > 0 || !verification.findingsError ? (
           <VerificationFindingsList
             findings={verification.findings}
+            runId={verification.run.id}
             notes={notes}
             onSelectFinding={(findingId) => {
               verification.openFinding(findingId)
