@@ -552,7 +552,52 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
     await expect(
       reloaded.getByRole('button', { name: 'Track changes on' }).first(),
     ).toBeVisible({ timeout: 15_000 })
+
+    // Flip the toggle off and save: a lone flip is a settings-only write —
+    // the request carries an empty operation list and the pending value.
+    await reloaded
+      .getByRole('button', { name: 'Track changes on' })
+      .first()
+      .click()
+    await expect(
+      reloaded.getByRole('button', { name: 'Track changes off' }).first(),
+    ).toBeVisible()
+    const settingsSave = reloaded.waitForResponse(
+      (incoming) =>
+        /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
+        incoming.request().method() === 'POST',
+    )
+    await reloaded
+      .getByRole('button', { name: 'Save', exact: true })
+      .first()
+      .click()
+    const flipped = await settingsSave
+    expect(flipped.status(), await flipped.text()).toBe(201)
+    expect(
+      flipped.request().postDataJSON() as {
+        operations: unknown[]
+        trackChanges?: boolean
+      },
+    ).toEqual({
+      baseVersionId: expect.any(String),
+      operations: [],
+      trackChanges: false,
+    })
   } finally {
     await fresh.close()
+  }
+
+  // A third context reads the persisted off state back: the toggle must not
+  // reopen on a default or on the stale value an earlier tab held.
+  const reread = await browser.newContext()
+  const rereadPage = await reread.newPage()
+  try {
+    await openFixtureDocument(rereadPage, email, password, matter)
+    await rereadPage.getByRole('tab', { name: 'Review' }).click()
+    await expect(
+      rereadPage.getByRole('button', { name: 'Track changes off' }).first(),
+    ).toBeVisible({ timeout: 15_000 })
+  } finally {
+    await reread.close()
   }
 })
