@@ -62,7 +62,16 @@ export function useDocumentMarkings({
     // to the caret first so it cannot drop to document.body.
     refocusCaretBeforeFlight()
     update.mutate(
-      { baseVersionId, trackRevisions: trackChanges, markings },
+      {
+        baseVersionId,
+        // Same omit rule as the save paths: only a pending flip is sent, so
+        // a markings write cannot revert a collaborator's toggle by echoing
+        // the value this tab loaded with.
+        ...(trackChanges !== model.trackRevisions
+          ? { trackRevisions: trackChanges }
+          : {}),
+        markings,
+      },
       {
         onSuccess: (data) => onSaved(data.versionId),
         onError: (error) => {
