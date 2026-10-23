@@ -270,7 +270,9 @@ export function joinIntoPrevious(
   }
 }
 
-export type JoinRefusal = 'structure' | 'join-formatting'
+/** `tracked-change` means a paragraph the join or range would remove holds
+ * stored revisions, whose element the writer refuses to delete. */
+export type JoinRefusal = 'structure' | 'join-formatting' | 'tracked-change'
 
 /** The outcome of a word edit: it applied (with the caret to place), or it
  * could not join a neighbour for a stated structural/formatting reason. */
@@ -312,13 +314,12 @@ export function paragraphJoinRefusal(
   // until reload. A revision-only head has no run to fold the tail into. A
   // plain tail joining a revised head folds into its last run, ahead of any
   // trailing revision, which is where the canvas already paints it.
-  const joined = editableParagraph(model, paragraphId)
   const into = editableParagraph(model, previousId)
   if (
-    (joined && storedParagraphChanges(model, joined).length > 0) ||
+    holdsTrackedChanges(model, paragraphId) ||
     (into && revisionOnlyParagraph(model, into))
   )
-    return 'structure'
+    return 'tracked-change'
   // A join erases the joined paragraph's element and every marker it
   // carries: the moved runs restate only text on save, so a stored field's
   // boundary inside it is lost while the rest survives. Removing the field
@@ -350,6 +351,15 @@ export function paragraphJoinRefusal(
   const moving = blockRuns(model, state, paragraphId)
   if (!canJoinParagraphRuns(head, moving)) return 'join-formatting'
   return null
+}
+
+/** Whether a stored paragraph carries revisions in its own story. */
+export function holdsTrackedChanges(
+  model: DocumentModelWire,
+  paragraphId: string,
+) {
+  const paragraph = editableParagraph(model, paragraphId)
+  return !!paragraph && storedParagraphChanges(model, paragraph).length > 0
 }
 
 /**

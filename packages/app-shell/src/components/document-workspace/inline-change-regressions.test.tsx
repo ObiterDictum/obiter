@@ -17,6 +17,7 @@ import {
   joinIntoPrevious,
   emptyEditorState,
   applyWordEdit,
+  paragraphJoinRefusal,
 } from '../../document-word-edits'
 import { inlineChanges } from '../../document-inline-changes'
 import { effectiveParagraph } from '../../document-model-text'
@@ -388,9 +389,9 @@ it('refuses local edits and joins whose save would erase tracked subtrees, not j
     runs: [{ id: 'first', text: 'First', preservedXmlFragments: [] }],
   }
   const model = await modelOf([previous, paragraph])
-  expect(
-    joinIntoPrevious(model, emptyEditorState(), paragraph.id),
-  ).toBeUndefined()
+  expect(paragraphJoinRefusal(model, emptyEditorState(), paragraph.id)).toBe(
+    'tracked-change',
+  )
   // A plain tail folds into a revised head's last run, ahead of its trailing
   // revision: the canvas and the saved bytes agree, so the join stays allowed.
   const trailing = { ...deletion, inlinePosition: { beforeRunId: null } }
@@ -429,7 +430,9 @@ it('refuses local edits and joins whose save would erase tracked subtrees, not j
     ],
     [trailing],
   )
-  expect(joinIntoPrevious(bare, emptyEditorState(), 'next')).toBeUndefined()
+  expect(paragraphJoinRefusal(bare, emptyEditorState(), 'next')).toBe(
+    'tracked-change',
+  )
   const plain = await modelOf([previous, { ...previous, id: 'next' }], [])
   expect(joinIntoPrevious(plain, emptyEditorState(), 'next')).toBeDefined()
   const whole = await modelOf(
