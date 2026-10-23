@@ -107,21 +107,33 @@ export async function createEditedVersion(
   storage: StorageService,
   input: EditedVersionInput,
 ): Promise<CreateEditedVersionResult> {
-  const { editedBytes, lineage } = await prepareEditedSource(storage, input)
+  const prepared = await prepareEditedSource(storage, input)
+  if (prepared.status === 'noop') {
+    // The request's only intent was a flip to the state the base version
+    // already stores: no version and no audit are written, and the base
+    // version is the state the client asked for.
+    return {
+      status: 'created',
+      versionId: input.baseVersion.id,
+      versionNumber: input.baseVersion.versionNumber,
+    }
+  }
   return createPreparedVersion(
     pool,
     storage,
     input,
-    editedBytes,
+    prepared.editedBytes,
     {
       action: 'document.edit',
       metadata: (versionId) => ({
         baseVersionId: input.baseVersionId,
         newVersionId: versionId,
         operationCount: input.operations.length,
+        trackRevisions: prepared.trackRevisions,
+        trackRevisionsChanged: prepared.trackRevisionsChanged,
       }),
     },
-    lineage,
+    prepared.lineage,
   )
 }
 
@@ -131,11 +143,20 @@ async function prepareEditedSource(
 ) {
   validateBaseVersion(input)
   const document = await readSourceDocument(storage, input.baseVersion)
-  const recorder = createLineageRecorder(document.model)
   // An omitted toggle rides the base version's own setting: the batch tracks
   // the way the document says it should, and the persisted state is left as
   // it was rather than cleared by a client that never sent the field.
   const trackChanges = input.trackChanges ?? document.model.trackRevisions
+  const trackRevisionsChanged =
+    input.trackChanges !== undefined &&
+    input.trackChanges !== document.model.trackRevisions
+  // A settings-only request that asks for the stored state has nothing to
+  // write; serialising it would mint a version whose only content is an
+  // identical settings part.
+  if (input.operations.length === 0 && !trackRevisionsChanged) {
+    return { status: 'noop' as const }
+  }
+  const recorder = createLineageRecorder(document.model)
   try {
     if (input.operations.length > 0) {
       applyDocumentEdits(
@@ -179,7 +200,13 @@ async function prepareEditedSource(
     runAddressesReliable: !trackChanges,
   })
   const { versionId: _versionId, ...lineage } = built
-  return { editedBytes, lineage }
+  return {
+    status: 'prepared' as const,
+    editedBytes,
+    lineage,
+    trackRevisions: trackChanges,
+    trackRevisionsChanged,
+  }
 }
 
 export async function createTrackedChangeDecisionVersion(

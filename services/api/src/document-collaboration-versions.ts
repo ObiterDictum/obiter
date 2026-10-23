@@ -139,12 +139,18 @@ export async function createCollaborationMergeVersion(
     const alignment = baseIsCurrent
       ? null
       : alignMergeDocuments(baseDocument, currentDocument)
-    const reconciliation = reconcileDocumentEdits(
-      baseDocument,
-      currentDocument,
-      input.operations,
-      baseIsCurrent,
-    )
+    // A settings-only merge carries no operations, so reconciliation has
+    // nothing to check: a changed current skeleton must not report an empty
+    // conflict list when the only intent is the toggle.
+    const reconciliation =
+      input.operations.length === 0
+        ? ({ mergeable: true } as const)
+        : reconcileDocumentEdits(
+            baseDocument,
+            currentDocument,
+            input.operations,
+            baseIsCurrent,
+          )
     if (!reconciliation.mergeable) {
       await client.query('rollback')
       return {
@@ -161,6 +167,22 @@ export async function createCollaborationMergeVersion(
       // rule the direct edit applies to its base.
       const trackChanges =
         input.trackChanges ?? currentDocument.model.trackRevisions
+      const trackRevisionsChanged =
+        input.trackChanges !== undefined &&
+        input.trackChanges !== currentDocument.model.trackRevisions
+      // A request whose only intent is a flip to the state the current
+      // version already stores writes nothing: no version, no settings
+      // rewrite. It reports the state the request asked for as already in
+      // place so a replayed sync id stays idempotent.
+      if (input.operations.length === 0 && !trackRevisionsChanged) {
+        await client.query('rollback')
+        return {
+          status: 'already_applied',
+          baseVersionId: input.baseVersionId,
+          versionId: current.id,
+          versionNumber: current.versionNumber,
+        }
+      }
       if (input.operations.length > 0) {
         applyDocumentEdits(
           currentDocument,
@@ -240,6 +262,8 @@ export async function createCollaborationMergeVersion(
             operationCount: input.operations.length,
             operationsSha256,
             outcome: 'merged',
+            trackRevisions: trackChanges,
+            trackRevisionsChanged,
           }),
         },
       })

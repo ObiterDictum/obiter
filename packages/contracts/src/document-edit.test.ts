@@ -78,6 +78,24 @@ describe('document edit contracts', () => {
     ).toEqual({ documentId: 'doc_1', versionId: 'ver_2', versionNumber: 2 })
   })
 
+  it('accepts a settings-only save and rejects an empty one', () => {
+    // `{ operations: [] }` alone carries nothing; with the toggle it is the
+    // request shape a lone flip sends.
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [],
+        trackChanges: true,
+      }),
+    ).toMatchObject({ operations: [], trackChanges: true })
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [],
+      }).success,
+    ).toBe(false)
+  })
+
   it.each([
     ['an empty operation list', { baseVersionId: 'ver_1', operations: [] }],
     [
