@@ -9,24 +9,25 @@ export const InlineChangeReview = createContext<{
   selectChange: (id: string) => void
 } | null>(null)
 
-const BREAK_LABELS: Record<string, string> = {
-  '\u21df': 'Page break',
-  '\u21e5': 'Column break',
-}
+const BREAK_LABELS = new Map([
+  ['\u21df', 'Page break'],
+  ['\u21e5', 'Column break'],
+])
 
 /** Tracked text with its break marks labelled for assistive technology. */
 export function labelledBreaks(text: string) {
   return markBreaks(text)
     .split(/([\u21df\u21e5])/u)
-    .map((part, index) =>
-      BREAK_LABELS[part] ? (
-        <span key={index} role="img" aria-label={BREAK_LABELS[part]}>
+    .map((part, index) => {
+      const label = BREAK_LABELS.get(part)
+      return label ? (
+        <span key={index} role="img" aria-label={label}>
           {part}
         </span>
       ) : (
         part
-      ),
-    )
+      )
+    })
 }
 
 /** Painted text without revision spans, in editable characters. */
