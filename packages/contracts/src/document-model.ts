@@ -52,6 +52,9 @@ export const documentTextRunWireSchema = z.object({
    * so every piece keeps the field.
    */
   hyperlinkTarget: z.string().min(1).optional(),
+  /** Parser proof that a tracked replacement can split this run safely.
+   * Optional for live-client compatibility; old stored projections regenerate. */
+  textRevisionEligible: z.boolean().optional(),
   text: z.string(),
   preservedXmlFragments: z.array(z.string()),
 })

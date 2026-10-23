@@ -30,5 +30,13 @@ export function parseModelJson(json: string) {
     )
   )
     throw new OoxmlError('invalid-model-json')
+  if (
+    parsed.data.stories.some((story) =>
+      story.paragraphs.some((paragraph) =>
+        paragraph.runs.some((run) => run.textRevisionEligible === undefined),
+      ),
+    )
+  )
+    throw new OoxmlError('invalid-model-json')
   return parsed.data
 }
