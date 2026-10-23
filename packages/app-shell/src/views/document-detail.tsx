@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, FileText, Trash } from '@phosphor-icons/react'
+import { ArrowLeft, CaretRight, FileText, Trash } from '@phosphor-icons/react'
 import {
   Badge,
   Button,
@@ -66,7 +66,7 @@ export function DocumentDetailLayoutView({
     loaded.document.matterId !== matterId
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Link
           to="/matters/$matterId"
@@ -97,6 +97,9 @@ export function DocumentDetailLayoutView({
             )}
             <p className="text-sm text-muted">
               Matter <span className="font-mono text-ink">{matterId}</span>
+              {loaded?.document.currentVersion ? (
+                <DocumentStatusLine version={loaded.document.currentVersion} />
+              ) : null}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -249,9 +252,24 @@ function DocumentMetadata({
   const current = document.currentVersion
   const sizeLabel = current ? formatBytes(Number(current.sizeBytes)) : '—'
 
+  // Collapsed by default so the document opens above the fold; the status
+  // line in the header keeps the version id and status visible meanwhile.
   return (
-    <>
-      <section className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5">
+    <details className="group rounded-lg border border-line bg-surface">
+      <summary className="flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+        <CaretRight
+          size={14}
+          aria-hidden="true"
+          className="text-muted transition-transform group-open:rotate-90"
+        />
+        <span className="font-semibold text-ink">Details</span>
+        <span className="text-muted">
+          File information · {versions.length}{' '}
+          {versions.length === 1 ? 'version' : 'versions'}
+          {versions.length > 1 ? ' · Compare versions' : ''}
+        </span>
+      </summary>
+      <section className="flex flex-col gap-4 border-t border-line p-5">
         <h2 className="text-base font-semibold text-ink">Document details</h2>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           <DetailRow
@@ -280,7 +298,7 @@ function DocumentMetadata({
       </section>
 
       {versions.length > 0 ? (
-        <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+        <section className="flex flex-col gap-3 border-t border-line p-5">
           <h2 className="text-base font-semibold text-ink">Versions</h2>
           <ul className="flex flex-col divide-y divide-line">
             {versions.map((version) => (
@@ -332,6 +350,21 @@ function DocumentMetadata({
           <DocumentVersionCompare documentId={documentId} versions={versions} />
         </section>
       ) : null}
+    </details>
+  )
+}
+
+function DocumentStatusLine({
+  version,
+}: {
+  version: import('../documents').DocumentVersionRecord
+}) {
+  return (
+    <>
+      {' '}
+      · v{version.versionNumber} · {version.documentStatus} · {version.fileType}{' '}
+      · {formatBytes(Number(version.sizeBytes))} · Version{' '}
+      <span className="font-mono text-ink">{version.id}</span>
     </>
   )
 }
