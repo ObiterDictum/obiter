@@ -159,7 +159,13 @@ export function readTrackRevisions(source: {
  */
 export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   const declared = document.model.relationships.filter(settingsRelationship)
-  if (declared.length > 1) throw settingsError()
+  // Duplicate settings relationships name an ambiguous part: `on` cannot
+  // guess which one a reader honours, while `off` cannot strip a toggle it
+  // cannot locate — and neither should rewrite declarations it cannot audit.
+  if (declared.length > 1) {
+    if (on) throw settingsError()
+    return
+  }
   const relationship = declared[0]
   const target = relationship
     ? resolveRelationshipTarget(relationship)
