@@ -36,8 +36,8 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       children: '<w:t>cat</w:t><w:tab/>',
       next: 'dog',
       eligible: false,
-      removed: 'cat',
-      inserted: 'dog',
+      removed: 'cat\t',
+      inserted: 'dog\t',
     },
     {
       children: '<w:t>cat</w:t><w:rPr><w:b/></w:rPr>',
@@ -72,6 +72,7 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       run.text,
       item.next,
       run.textRevisionEligible === true,
+      run.textRevisionTokens,
     )
     expect([plan.removed, plan.inserted]).toEqual([item.removed, item.inserted])
     const cached = structuredClone(document.model)

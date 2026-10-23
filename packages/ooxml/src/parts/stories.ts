@@ -1,3 +1,4 @@
+import { trackedElementText } from './tracked-change-display'
 import { PartIndex } from './story-index'
 import { splittableRunParts } from '../run-revision-eligibility'
 import { runHyperlinkTarget } from './hyperlink-target'
@@ -368,6 +369,27 @@ function parseRun(
   }
   wire.textRevisionEligible =
     textBreaks.length === 0 && !!splittableRunParts(source, anchor)
+  if (!wire.textRevisionEligible) {
+    const anchored = new Set(
+      anchoredTextElements.map((element) => element.start),
+    )
+    const consumed = new Set(textBreaks.map((element) => element.start))
+    wire.textRevisionTokens = index
+      .descendantsOfRun(runElement)
+      .filter((element) =>
+        ['t', 'delText', 'tab', 'br', 'cr'].some((name) =>
+          isWord(element, name),
+        ),
+      )
+      .map((element) => ({
+        kind: anchored.has(element.start)
+          ? 'text'
+          : consumed.has(element.start)
+            ? 'break'
+            : 'retained',
+        text: trackedElementText(source, element),
+      }))
+  }
   return { wire, anchor }
 }
 

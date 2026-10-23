@@ -33,7 +33,11 @@ export function parseModelJson(json: string) {
   if (
     parsed.data.stories.some((story) =>
       story.paragraphs.some((paragraph) =>
-        paragraph.runs.some((run) => run.textRevisionEligible === undefined),
+        paragraph.runs.some(
+          (run) =>
+            run.textRevisionEligible === undefined ||
+            (!run.textRevisionEligible && !run.textRevisionTokens),
+        ),
       ),
     )
   )

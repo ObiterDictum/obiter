@@ -55,6 +55,16 @@ export const documentTextRunWireSchema = z.object({
   /** Parser proof that a tracked replacement can split this run safely.
    * Optional for live-client compatibility; old stored projections regenerate. */
   textRevisionEligible: z.boolean().optional(),
+  /** Source-ordered display tokens for whole-run revisions. Retained controls
+   * survive the replacement; text-wrapping breaks are consumed. */
+  textRevisionTokens: z
+    .array(
+      z.object({
+        kind: z.enum(['text', 'retained', 'break']),
+        text: z.string(),
+      }),
+    )
+    .optional(),
   text: z.string(),
   preservedXmlFragments: z.array(z.string()),
 })

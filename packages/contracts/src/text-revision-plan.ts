@@ -1,16 +1,60 @@
 /** Shared revision boundaries for the live preview and OOXML writer. */
-export function planTextRevision(from: string, to: string, granular: boolean) {
+export type TextRevisionToken = {
+  kind: 'text' | 'retained' | 'break'
+  text: string
+}
+
+export function planTextRevision(
+  from: string,
+  to: string,
+  granular: boolean,
+  tokens?: readonly TextRevisionToken[],
+) {
   if (from === to)
     return {
       prefixLength: from.length,
       removed: '',
       inserted: '',
+      editableInserted: '',
       suffixLength: 0,
+      retained: [],
     }
   const middle = granular ? trackedTextMiddle(from, to) : undefined
-  return (
-    middle ?? { prefixLength: 0, removed: from, inserted: to, suffixLength: 0 }
-  )
+  if (middle)
+    return { ...middle, editableInserted: middle.inserted, retained: [] }
+  const retained: Array<{ offset: number; text: string }> = []
+  const lines = to.split(/\r\n|\r|\n/u)
+  const textCount = tokens?.filter((token) => token.kind === 'text').length ?? 1
+  const assigned = Math.min(lines.length, textCount)
+  let textIndex = 0
+  let cursor = 0
+  let inserted = ''
+  for (const token of tokens ?? [{ kind: 'text', text: from }]) {
+    if (token.kind === 'break') continue
+    if (token.kind === 'retained') {
+      retained.push({ offset: cursor, text: token.text })
+      inserted += token.text
+      continue
+    }
+    let piece = ''
+    if (textIndex < assigned) {
+      piece = lines[textIndex] ?? ''
+      if (textIndex === assigned - 1 && lines.length > textCount)
+        piece += '\n' + lines.slice(textCount).join('\n')
+      else if (textIndex < lines.length - 1) piece += '\n'
+    }
+    textIndex += 1
+    inserted += piece
+    cursor += piece.length
+  }
+  return {
+    prefixLength: 0,
+    removed: tokens?.map((token) => token.text).join('') ?? from,
+    inserted,
+    editableInserted: to,
+    suffixLength: 0,
+    retained,
+  }
 }
 
 export function trackedTextMiddle(from: string, to: string) {
