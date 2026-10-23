@@ -42,9 +42,11 @@ export function refusedSummary(refused: readonly DraftSlot[]) {
 /** One sentence naming what could not be sent and what to do about it. */
 export function blockedSummary(blocked: readonly BlockedDraft[]) {
   if (blocked.length === 0) return null
-  if (blocked.length === 1) {
-    const label = blocked[0]?.label ?? 'a change'
-    return `${capitalise(label)} could not be sent because it no longer matches the document. Discard it to keep saving.`
+  const [only] = blocked
+  if (blocked.length === 1 && only) {
+    // The partition's reason is specific (a missing run, a revision-only
+    // paragraph); a generic mismatch would misstate what to do.
+    return `${capitalise(only.label)} could not be sent. ${only.reason} Discard it to keep saving.`
   }
   return `${String(blocked.length)} changes could not be sent because they no longer match the document. Discard them to keep saving.`
 }

@@ -125,7 +125,7 @@ test('a draft naming a missing paragraph surfaces the blocked-change discard', a
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await expect(page.getByText(/no longer matches the document/i)).toBeVisible({
+  await expect(page.getByText(/no longer in the document/i)).toBeVisible({
     timeout: 30_000,
   })
 
@@ -137,7 +137,7 @@ test('a draft naming a missing paragraph surfaces the blocked-change discard', a
     .getByRole('button', { name: /Discard \d? ?changes?/, exact: false })
     .last()
     .click()
-  await expect(page.getByText(/no longer matches the document/i)).toHaveCount(0)
+  await expect(page.getByText(/no longer in the document/i)).toHaveCount(0)
 })
 
 test('a held change restored from an older draft surfaces its discard dialog', async ({
