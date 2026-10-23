@@ -392,6 +392,8 @@ export function DocxWorkspace({
     <InlineChangeReview
       value={{
         activeChangeId: changeReview.activeChangeId,
+        tabChangeId: changeReview.inlineTabChangeId,
+        moveChange: changeReview.goToAdjacentInline,
         selectChange: (id) => {
           const index = changeReview.changes.findIndex(
             (change) => change.id === id,

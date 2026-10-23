@@ -1,3 +1,4 @@
+import { paragraphPartName } from './document-inline-index'
 import { inlineChanges } from './document-inline-changes'
 import type {
   DocumentModelWire,
@@ -104,12 +105,7 @@ export function paragraphMetrics(
     drafts,
     extraRuns[paragraph.id] ?? [],
   )
-  const partName = model.changes.some(
-    (change) => change.paragraphId === paragraph.id,
-  )
-    ? model.stories.find((story) => story.paragraphs.includes(paragraph))
-        ?.partName
-    : undefined
+  const partName = paragraphPartName(model, paragraph)
   const text = inlineChanges(resolved, model.changes, partName).text
   const face = paragraphFace(resolved, model.styles)
   const linePx = paragraphLineHeightPx(face)

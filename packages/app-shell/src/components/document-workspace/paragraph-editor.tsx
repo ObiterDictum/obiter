@@ -33,6 +33,7 @@ export function ParagraphEditor({
   paragraphId,
   text,
   projection,
+  trackedDescription,
   selected,
   restoreCaret,
   style,
@@ -54,6 +55,7 @@ export function ParagraphEditor({
 }: {
   paragraphId: string
   text: string
+  trackedDescription?: string
   projection?: InlineSlice
   selected: boolean
   restoreCaret?: number
@@ -157,6 +159,7 @@ export function ParagraphEditor({
     <textarea
       ref={field}
       aria-label="Paragraph text"
+      aria-description={trackedDescription || undefined}
       value={projection?.text ?? text}
       rows={1}
       onChange={(event) => {
@@ -249,7 +252,7 @@ export function ParagraphEditor({
             text,
             paragraphId,
             lines,
-            active: selection?.active,
+            selection,
             onSelect,
             onTextSelection,
           })
@@ -461,15 +464,6 @@ export function ParagraphEditor({
       onSelect={(event) => {
         const from = editable(event.currentTarget.selectionStart)
         const to = editable(event.currentTarget.selectionEnd)
-        // Native Home/End, modified arrows and mouse selection may land in a
-        // display span. Collapse a zero-width model range to its editable edge.
-        if (
-          projection &&
-          from === to &&
-          event.currentTarget.selectionStart !== display(from)
-        ) {
-          event.currentTarget.setSelectionRange(display(from), display(to))
-        }
         const last = written.current
         if (last && last.from === from && last.to === to) return
         onTextSelection?.(

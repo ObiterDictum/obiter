@@ -202,7 +202,9 @@ it('shares review highlighting with the panel target and handles clicks', () => 
       .querySelector('[data-inline-change="ins"]')
       ?.getAttribute('aria-current'),
   ).toBe('true')
-  fireEvent.click(screen.getByRole('button', { name: /Deletion by/u }))
+  const deletion = container.querySelector('[role=deletion]')
+  if (!deletion) throw new Error('Expected deletion')
+  fireEvent.click(deletion)
   expect(selected).toEqual(['del'])
 })
 it('anchors verification to editable text beyond inline revisions', () => {
@@ -235,7 +237,7 @@ it('keeps story-local revisions separate when Word repeats a paragraph id', () =
   ).toBe('Order 60,00050,000 units')
 })
 
-it('paginates a wholly tracked paragraph once and mounts only one editable caret', () => {
+it('paginates a wholly tracked paragraph once without offering an editable caret', () => {
   const text = 'Tracked content '.repeat(600)
   const p = { ...paragraph, runs: [] }
   const insertion = changes[1]
@@ -275,11 +277,8 @@ it('paginates a wholly tracked paragraph once and mounts only one editable caret
       ))}
     </>,
   )
-  expect(container.querySelectorAll('textarea').length).toBe(1)
-  const field = container.querySelector('textarea')
-  if (!field) throw new Error('Expected caret field')
-  fireEvent.keyDown(field, { key: 'ArrowUp' })
-  expect(moves).toEqual([{ paragraphId: 'previous', offset: 0 }])
+  expect(container.querySelectorAll('textarea').length).toBe(0)
+  expect(moves).toEqual([])
   expect(
     [...container.querySelectorAll('[data-inline-change]')]
       .map((span) => span.textContent)
@@ -376,4 +375,18 @@ it('places the caret at the same side of revisions that the existing writer edit
     changes,
   )
   expect(leading.toDisplay(0)).toBe(12)
+})
+
+it('offers no editable surface for a wholly tracked paragraph', () => {
+  const edits: ParagraphWordEdit[] = []
+  const whole = changes.map((change) => ({
+    ...change,
+    inlinePosition: { beforeRunId: null },
+  }))
+  const { container } = mount(true, { ...paragraph, runs: [] }, whole, (edit) =>
+    edits.push(edit),
+  )
+  expect(container.querySelector('textarea')).toBeNull()
+  expect(container.querySelector('[data-inline-change]')).not.toBeNull()
+  expect(edits).toEqual([])
 })

@@ -24,6 +24,7 @@ import {
   footerBandFill,
   footerLetterhead,
   headerLetterhead,
+  marginStoryRevised,
   paragraphIsDrawingOnly,
   paragraphIsShapeOnly,
   paragraphTabStops,
@@ -85,10 +86,7 @@ export function PageMarginBand({
     (story) =>
       marginStoryVisible(story) ||
       story.partName === editable?.partName ||
-      changes.some(
-        (change) =>
-          change.storyPartName === story.partName && change.inlinePosition,
-      ),
+      marginStoryRevised(story, changes),
   )
   const Tag = edge === 'top' ? 'header' : 'footer'
   if (visible.length === 0) {
@@ -216,10 +214,7 @@ function MarginStory({
   const tables = blocks
     .filter((block) => block.type === 'table')
     .map((block) => block.table)
-  const revised = changes.some(
-    (change) =>
-      change.storyPartName === story.partName && change.inlinePosition,
-  )
+  const revised = marginStoryRevised(story, changes)
   const letterhead = revised ? undefined : headerLetterhead(story, tables)
   const footer = revised ? undefined : footerLetterhead(story, pageNumber)
   const bandFill = footer?.fill ?? footerBandFill(story, tables)
@@ -354,7 +349,9 @@ function MarginParagraph({
       !drawingIsTextBox(xml) &&
       (!background || !paragraphIsShapeOnly(paragraph)),
   )
-  const projected = inlineChanges(paragraph, changes, storyPartName).paragraph
+  const projection = inlineChanges(paragraph, changes, storyPartName)
+  const projected = projection.paragraph
+  const spans = new Map(projection.spans.map((span) => [span.runId, span]))
   const columns = tabColumns(projected)
   const stops = paragraphTabStops(paragraph)
   const fill = background ?? paragraphFill(paragraph)
@@ -362,11 +359,19 @@ function MarginParagraph({
     items.map((run) => {
       const text = runDisplayText(run, pageNumber)
       if (!text) return null
-      const change = changes.find(
-        (change) => change.id === run.id && change.inlinePosition,
-      )
-      if (change)
-        return <InlineChange key={run.id} change={change} text={text} />
+      const span = spans.get(run.id)
+      if (span)
+        return (
+          <InlineChange
+            key={run.id}
+            change={span.change}
+            text={text}
+            deleted={span.deleted}
+            author={span.author}
+            hyperlinkTarget={span.hyperlinkTarget}
+            tabStop={span.tabStop}
+          />
+        )
       const faceRun = runFace(run, face, styles)
       const color =
         readableRunColor(faceRun.color, fill) ?? contrastFillText(fill)

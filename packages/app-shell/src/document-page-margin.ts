@@ -1,4 +1,7 @@
+import { tableHeight } from './document-page-blocks'
+import { paragraphMetrics } from './document-page-keep'
 import type {
+  DocumentChangeWire,
   DocumentModelWire,
   DocumentParagraphWire,
   DocumentStoryWire,
@@ -116,21 +119,74 @@ export function marginBandHeights(model: DocumentModelWire): MarginBandHeights {
   let headerPx = 0
   let footerPx = 0
   for (const story of marginStories(model, 'header')) {
-    headerPx = Math.max(headerPx, storyBandHeight(story, box))
+    headerPx = Math.max(headerPx, storyBandHeight(story, box, model))
   }
   for (const story of marginStories(model, 'footer')) {
-    footerPx = Math.max(footerPx, storyBandHeight(story, box))
+    footerPx = Math.max(footerPx, storyBandHeight(story, box, model))
   }
   return { headerPx, footerPx }
 }
 
-function storyBandHeight(story: DocumentStoryWire, box: PageBox): number {
-  const tables = storyBlocks(story)
+/**
+ * A margin story carrying inline revisions paints its paragraphs in full
+ * instead of the condensed letterhead, which would drop the revision text.
+ * Paint and band sizing must agree, so both read this one predicate.
+ */
+export function marginStoryRevised(
+  story: DocumentStoryWire,
+  changes: readonly DocumentChangeWire[],
+) {
+  return changes.some(
+    (change) =>
+      change.storyPartName === story.partName && change.inlinePosition,
+  )
+}
+
+function storyBandHeight(
+  story: DocumentStoryWire,
+  box: PageBox,
+  model: DocumentModelWire,
+): number {
+  const blocks = storyBlocks(story)
+  const tables = blocks
     .filter((block) => block.type === 'table')
     .map((block) => block.table)
   const edgePx = story.kind === 'header' ? box.headerPx : 0
+  // Revised margins use ordinary paint instead of the condensed letterhead.
+  // Reserve that same stacked text/image flow or the fixed band clips it.
+  const revised = marginStoryRevised(story, model.changes)
+  const widthPx = Math.max(1, box.widthPx - box.margin.left - box.margin.right)
+  const paintedHeight = revised
+    ? edgePx +
+      blocks.reduce((height, block) => {
+        if (block.type === 'table')
+          return (
+            height +
+            tableHeight(
+              block.table,
+              model,
+              undefined,
+              {},
+              widthPx,
+              story.paragraphs,
+            )
+          )
+        const text = paragraphMetrics(
+          block.paragraph,
+          model,
+          undefined,
+          {},
+          widthPx,
+        ).heightPx
+        const images = paragraphImageXml(block.paragraph).reduce(
+          (sum, xml) => sum + drawingScene(xml).heightPx,
+          0,
+        )
+        return height + text + images
+      }, 0)
+    : 0
   return Math.max(
-    0,
+    paintedHeight,
     headerLetterhead(story, tables)?.heightPx ?? 0,
     footerLetterhead(story)?.heightPx ?? 0,
     ...tables.map(tablePaintHeight),

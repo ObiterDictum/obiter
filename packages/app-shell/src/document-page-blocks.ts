@@ -1,3 +1,4 @@
+import { paragraphPartName } from './document-inline-index'
 import { inlineChanges } from './document-inline-changes'
 import type {
   DocumentModelWire,
@@ -98,12 +99,7 @@ export function layoutParagraph(
     drafts,
     extraRuns[item.paragraph.id] ?? [],
   )
-  const partName = model.changes.some(
-    (change) => change.paragraphId === item.paragraph.id,
-  )
-    ? model.stories.find((story) => story.paragraphs.includes(item.paragraph))
-        ?.partName
-    : undefined
+  const partName = paragraphPartName(model, item.paragraph)
   const projection = inlineChanges(paragraph, model.changes, partName)
   const text = projection.text
   // A stored break is addressed by text offset exactly like a pending one, so
@@ -325,12 +321,11 @@ export function tableHeight(
   drafts: Record<string, string> | undefined,
   extraRuns: ExtraRuns,
   widthPx: number,
+  paragraphs: readonly DocumentParagraphWire[] = documentStory(model)
+    ?.paragraphs ?? [],
 ): number {
   const paras = new Map(
-    (documentStory(model)?.paragraphs ?? []).map((paragraph) => [
-      paragraph.id,
-      paragraph,
-    ]),
+    paragraphs.map((paragraph) => [paragraph.id, paragraph]),
   )
   return table.rows.reduce((sum, row) => {
     const cellWidth = Math.max(1, widthPx / Math.max(1, row.cells.length))

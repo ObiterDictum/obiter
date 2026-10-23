@@ -34,18 +34,24 @@ export function useParagraphFocus(input: {
     if (!node) return
     const display = (at: number) => projection?.toDisplay(at) ?? at
     node.focus({ preventScroll: true })
+    const differs = (from: number, to: number) =>
+      (projection?.toEditable(node.selectionStart) ?? node.selectionStart) !==
+        from ||
+      (projection?.toEditable(node.selectionEnd) ?? node.selectionEnd) !== to
     if (from != null && to != null) {
       const start = Math.min(from, text.length)
       const end = Math.min(to, text.length)
-      node.setSelectionRange(
-        display(start),
-        display(end),
-        direction === 'none' ? undefined : direction,
-      )
+      if (differs(start, end))
+        node.setSelectionRange(
+          display(start),
+          display(end),
+          direction === 'none' ? undefined : direction,
+        )
       written.current = { from: start, to: end }
     } else if (restoreCaret != null) {
       const offset = Math.min(restoreCaret, text.length)
-      node.setSelectionRange(display(offset), display(offset))
+      if (differs(offset, offset))
+        node.setSelectionRange(display(offset), display(offset))
       written.current = { from: offset, to: offset }
     }
     revealTypingLine(node)

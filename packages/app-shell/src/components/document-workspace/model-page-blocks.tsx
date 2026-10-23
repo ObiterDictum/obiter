@@ -138,7 +138,7 @@ export function renderBlock(
                 editing={ctx.editing}
                 presence={ctx.presence}
                 currentUserId={ctx.currentUserId}
-                storyPartName={ctx.storyPartName}
+                storyPartName={ctx.storyOf(paragraph.id).partName}
                 relationships={ctx.model.relationships}
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
@@ -216,7 +216,7 @@ export function renderBlock(
       }
       presence={ctx.presence}
       currentUserId={ctx.currentUserId}
-      storyPartName={ctx.storyPartName}
+      storyPartName={ctx.storyOf(paragraph.id).partName}
       relationships={ctx.model.relationships}
       imageUrls={ctx.imageUrls}
       styles={ctx.model.styles}
