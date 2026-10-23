@@ -8,6 +8,7 @@ import {
   PopoverPortal,
   PopoverPositioner,
 } from '@obiter/ui'
+import { VerificationSourceEvidence } from './verification-source-evidence'
 import type { VerificationFindingView } from '@obiter/contracts'
 import {
   useVerificationWorkspace,
@@ -29,8 +30,8 @@ import {
  * non-modal popover: no focus trap, no scroll lock, no backdrop, so the page
  * behind it stays readable and scrollable while a reviewer reads the evidence.
  *
- * It never renders stored source text or HTML: a source is shown by identity,
- * and the checked stored version is always named.
+ * Source passages are loaded on demand from the checked finding, and the
+ * checked stored version is always named.
  */
 export function VerificationEvidencePanel() {
   const verification = useVerificationWorkspace()
@@ -95,6 +96,7 @@ export function VerificationEvidencePanel() {
     <PanelBody
       key={finding.id}
       finding={finding}
+      runId={verification.run?.id ?? null}
       titleId={titleId}
       position={`${verification.activeIndex + 1} of ${total}`}
       storedVersionNote={verificationStoredVersionNote(
@@ -184,6 +186,7 @@ function unmappedReasonFor(
 }
 
 function PanelBody({
+  runId,
   finding,
   titleId,
   position,
@@ -196,6 +199,7 @@ function PanelBody({
   onClose,
   onEscape,
 }: {
+  runId: string | null
   finding: VerificationFindingView
   titleId: string
   position: string
@@ -297,19 +301,12 @@ function PanelBody({
 
       {evidenceOpen ? (
         <div className="flex flex-col gap-2 border-t border-line pt-3">
-          {finding.evidence.length > 0 ? (
-            <ul className="flex flex-col gap-1">
-              {finding.evidence.map((item) => (
-                <li key={item.id} className="text-xs text-muted">
-                  {item.label}
-                  <span className="mt-0.5 block font-mono text-[11px] break-all text-subtle">
-                    {item.id}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {runId ? (
+            <VerificationSourceEvidence runId={runId} finding={finding} />
           ) : (
-            <p className="text-xs text-muted">No source evidence attached.</p>
+            <p className="text-xs text-muted">
+              The checked source passage could not be loaded.
+            </p>
           )}
           <p className="text-xs text-subtle">{storedVersionNote}</p>
         </div>

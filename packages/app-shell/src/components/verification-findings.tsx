@@ -1,3 +1,4 @@
+import { VerificationEvidenceToggle } from './verification/verification-source-evidence'
 import { Badge } from '@obiter/ui'
 import type { VerificationFindingView } from '@obiter/contracts'
 import {
@@ -17,9 +18,11 @@ import {
  */
 export function VerificationFindingsList({
   findings,
+  runId,
   notes,
   onSelectFinding,
 }: {
+  runId?: string
   findings: VerificationFindingView[]
   /** Finding id to the reason it is not shown beside the document text. */
   notes?: Map<string, string>
@@ -94,7 +97,9 @@ export function VerificationFindingsList({
                 {verificationReasonLabel(finding.reviewReason)}
               </p>
             ) : null}
-            {finding.evidence.length > 0 ? (
+            {runId ? (
+              <VerificationEvidenceToggle runId={runId} finding={finding} />
+            ) : finding.evidence.length > 0 ? (
               <ul className="flex flex-col gap-1">
                 {finding.evidence.map((item) => (
                   <li key={item.id} className="text-xs text-muted">
