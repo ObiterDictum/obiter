@@ -364,11 +364,8 @@ function MarginParagraph({
         return (
           <InlineChange
             key={run.id}
-            change={span.change}
+            span={span}
             text={text}
-            deleted={span.deleted}
-            author={span.author}
-            hyperlinkTarget={span.hyperlinkTarget}
             tabStop={span.tabStop}
           />
         )

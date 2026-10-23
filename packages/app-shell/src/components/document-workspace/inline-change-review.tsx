@@ -1,6 +1,5 @@
 import { createContext, useContext, useLayoutEffect, useRef } from 'react'
-import type { DocumentChangeWire } from '@obiter/contracts'
-import { BREAK_MARKS } from '../../document-inline-changes'
+import { markBreaks, type InlineSpan } from '../../document-inline-changes'
 
 export const InlineChangeReview = createContext<{
   activeChangeId?: string
@@ -10,21 +9,42 @@ export const InlineChangeReview = createContext<{
   selectChange: (id: string) => void
 } | null>(null)
 
+const BREAK_LABELS: Record<string, string> = {
+  '\u21df': 'Page break',
+  '\u21e5': 'Column break',
+}
+
+/** Tracked text with its break marks labelled for assistive technology. */
+export function labelledBreaks(text: string) {
+  return markBreaks(text)
+    .split(/([\u21df\u21e5])/u)
+    .map((part, index) =>
+      BREAK_LABELS[part] ? (
+        <span key={index} role="img" aria-label={BREAK_LABELS[part]}>
+          {part}
+        </span>
+      ) : (
+        part
+      ),
+    )
+}
+
+/** Painted text without revision spans, in editable characters. */
+export function editableRangeText(range: Range) {
+  const fragment = range.cloneContents()
+  for (const node of fragment.querySelectorAll('[data-inline-change]'))
+    node.remove()
+  return fragment.textContent ?? ''
+}
+
 export function InlineChange({
-  change,
+  span: { change, deleted, author = 'Unknown author', hyperlinkTarget },
   text,
-  deleted = change.kind === 'delete' ||
-    (change.kind === 'move' && change.direction === 'from'),
-  author = change.author,
-  hyperlinkTarget,
-  tabStop = true,
+  tabStop,
 }: {
-  change: DocumentChangeWire
+  span: InlineSpan
   text: string
-  deleted?: boolean
-  author?: string
-  hyperlinkTarget?: string
-  tabStop?: boolean
+  tabStop: boolean
 }) {
   const review = useContext(InlineChangeReview)
   const node = useRef<HTMLSpanElement>(null)
@@ -37,25 +57,13 @@ export function InlineChange({
         node.current?.focus({ preventScroll: true })
     }
   }, [active, tabStop])
-  const content = text.split(/([\u21df\u21e5])/u).map((part, index) =>
-    part === BREAK_MARKS['\f'] || part === BREAK_MARKS['\v'] ? (
-      <span
-        key={index}
-        role="img"
-        aria-label={part === BREAK_MARKS['\f'] ? 'Page break' : 'Column break'}
-      >
-        {part}
-      </span>
-    ) : (
-      part
-    ),
-  )
+  const content = labelledBreaks(text)
   return (
     <span
       ref={node}
       data-inline-change={change.id}
       data-change-kind={deleted ? 'delete' : 'insert'}
-      aria-current={review?.activeChangeId === change.id ? 'true' : undefined}
+      aria-current={active ? 'true' : undefined}
       role={deleted ? 'deletion' : 'insertion'}
       tabIndex={
         review && tabStop
@@ -64,8 +72,8 @@ export function InlineChange({
             : -1
           : undefined
       }
-      aria-description={`${deleted ? 'Deletion' : 'Insertion'} by ${author ?? 'Unknown author'}: ${text}`}
-      title={`${author ?? 'Unknown author'}${change.date ? ` · ${change.date}` : ''}`}
+      aria-description={`${deleted ? 'Deletion' : 'Insertion'} by ${author}`}
+      title={`${author}${change.date ? ` · ${change.date}` : ''}`}
       onClick={(event) => {
         event.stopPropagation()
         review?.selectChange(change.id)

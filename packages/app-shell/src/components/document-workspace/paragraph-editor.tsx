@@ -159,7 +159,7 @@ export function ParagraphEditor({
     <textarea
       ref={field}
       aria-label="Paragraph text"
-      aria-description={trackedDescription || undefined}
+      aria-description={trackedDescription}
       value={projection?.text ?? text}
       rows={1}
       onChange={(event) => {

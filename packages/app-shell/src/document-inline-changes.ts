@@ -23,8 +23,8 @@ export type InlineSpan = {
  * breaks. Each is one code unit, like the control character it replaces, so
  * the textarea, the paint and wrap measurement agree on every offset.
  */
-export const BREAK_MARKS = { '\f': '\u21df', '\v': '\u21e5' } as const
-const breakMark = /[\f\v]/gu
+export const markBreaks = (text: string) =>
+  text.replace(/[\f\v]/gu, (mark) => (mark === '\f' ? '\u21df' : '\u21e5'))
 
 /** Display-only projection. Neither virtual runs nor tracked text enter drafts. */
 function projectInlineChanges(
@@ -63,10 +63,7 @@ function projectInlineChanges(
       ]
       for (const [index, segment] of segments.entries()) {
         const runId = `${change.id}:inline:${index}`
-        const text = segment.text.replace(
-          breakMark,
-          (mark) => BREAK_MARKS[mark === '\f' ? '\f' : '\v'],
-        )
+        const text = markBreaks(segment.text)
         runs.push({ id: runId, text, preservedXmlFragments: [] })
         spans.push({
           ...segment,
@@ -156,15 +153,13 @@ export function inlineChanges(
   return projection
 }
 
-/** The editing textarea hides the paint, so it carries the revisions as its
- * description; screen readers would otherwise lose them while editing. */
-export function inlineDescription(projection: InlineProjection) {
-  return projection.spans
-    .map(
-      (span) =>
-        `${span.deleted ? 'Deletion' : 'Insertion'} by ${span.author ?? 'Unknown author'}: ${projection.text.slice(span.from, span.to)}`,
-    )
-    .join('. ')
+/** The editing textarea hides the paint, so it names who revised the
+ * paragraph; Escape leaves the textarea for the revisions themselves. */
+export function inlineDescription({ spans }: InlineProjection) {
+  const authors = new Set(spans.map((span) => span.author ?? 'Unknown author'))
+  return spans.length
+    ? `Tracked changes by ${[...authors].join(', ')}`
+    : undefined
 }
 
 export function inlineSlice(

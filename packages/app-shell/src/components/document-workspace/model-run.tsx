@@ -123,11 +123,8 @@ export function ParagraphRunPaint({
         return (
           <InlineChange
             key={`${run.id}-${from}`}
-            change={span.change}
+            span={span}
             text={text}
-            deleted={span.deleted}
-            author={span.author}
-            hyperlinkTarget={span.hyperlinkTarget}
             tabStop={reviewable && span.tabStop && from === span.from}
           />
         )

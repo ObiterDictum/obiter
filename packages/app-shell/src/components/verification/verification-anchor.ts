@@ -1,4 +1,5 @@
 import type { FindingTarget, UnmappedReason } from './verification-mapping'
+import { editableRangeText } from '../document-workspace/inline-change-review'
 
 /**
  * DOM anchoring for verification findings.
@@ -243,10 +244,7 @@ export function renderedRangeFor(
     return { kind: 'unavailable', reason: 'rendered_anchor_unavailable' }
   }
   if (result.kind === 'unavailable') return result
-  const content = result.range.cloneContents()
-  for (const change of content.querySelectorAll('[data-inline-change]'))
-    change.remove()
-  if (content.textContent === excerpt) {
+  if (editableRangeText(result.range) === excerpt) {
     return {
       kind: 'attached',
       range: result.range,
