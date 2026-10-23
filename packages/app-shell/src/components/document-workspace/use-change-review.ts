@@ -270,9 +270,9 @@ export function useChangeReview({
     activeChangeId: activeChange?.id,
     /** The one canvas revision in the tab order: the active one when it is
      * painted inline, else the first painted one, so Tab never loses it. */
-    inlineTabChangeId: (activeChange && paintedInline(activeChange)
+    inlineTabChangeId: (activeChange && paintedInline(activeChange, model)
       ? activeChange
-      : changes.find(paintedInline)
+      : changes.find((change) => paintedInline(change, model))
     )?.id,
     activeIndex,
     pending: decision.isPending,
@@ -299,7 +299,7 @@ export function useChangeReview({
         index += direction
       ) {
         const change = changes[index]
-        if (change && paintedInline(change)) {
+        if (change && paintedInline(change, model)) {
           // Roving browses the read-only paint. Revealing would place the
           // caret, and the caret's paragraph paints its revisions under the
           // textarea, unfocusable and hidden from assistive technology, so
@@ -335,8 +335,15 @@ export function useChangeReview({
   }
 }
 
-function paintedInline(change: DocumentChangeWire) {
+/** Mirrors the projection: a property change or a comment story's revision
+ * never paints, so it must not hold the canvas's only review tab stop. */
+function paintedInline(change: DocumentChangeWire, model?: DocumentModelWire) {
   return Boolean(
+    change.kind !== 'property' &&
+    model?.stories.some(
+      (story) =>
+        story.partName === change.storyPartName && story.kind !== 'comments',
+    ) &&
     change.inlinePosition &&
     (change.inlinePosition.segments ?? [change]).some(
       (segment) => segment.text.length > 0,
