@@ -110,6 +110,22 @@ export function recordTrackedChanges(
   }
 }
 
+/**
+ * Withdraws recorded changes whose elements ended up nested inside `w:ins` or
+ * `w:del` — a property marker folded into a text replacement is not a listed
+ * change, so a reversal group that named its id could never be decided.
+ */
+export function dropTrackedChanges(
+  recorder: LineageRecorder,
+  ooxmlIds: readonly string[],
+) {
+  if (ooxmlIds.length === 0) return
+  const consumed = new Set(ooxmlIds)
+  recorder.trackedChanges = recorder.trackedChanges.filter(
+    (change) => !consumed.has(change.ooxmlId),
+  )
+}
+
 /** The segments a freshly parsed run carries before any edit. */
 export function seedRunOrigins(
   recorder: LineageRecorder,

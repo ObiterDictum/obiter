@@ -355,6 +355,89 @@ describe('tracked reversal lineage', () => {
     expect(() => applyTrackedChangeDecisions(accepted, ids, 'reject')).toThrow()
   })
 
+  it('names every decidable change of a text-then-property batch on one run', async () => {
+    const document = await load(
+      `<w:p><w:r><w:t>one two three</w:t></w:r></w:p>`,
+    )
+    const run = paragraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('run')
+    // The product emits the replacement first, so the property op distributes
+    // markers onto the surviving shared pieces.
+    const { lineage } = applyTracked(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'one four three' },
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    expect(lineage.reversals).toEqual([
+      {
+        operation: 0,
+        fromRunId: run.id,
+        fromParagraphId: paragraphs(document)[0]?.id,
+        rejectOoxmlIds: ['0', '1'],
+      },
+      {
+        operation: 1,
+        fromRunId: run.id,
+        fromParagraphId: paragraphs(document)[0]?.id,
+        rejectOoxmlIds: ['2', '3'],
+      },
+    ])
+    const saved = await reload(document)
+    // Every id the run's merged reversal names is a listed, decidable change.
+    const ooxmlIds = new Set(saved.model.changes.map((c) => c.ooxmlId))
+    for (const reversal of lineage.reversals ?? []) {
+      for (const id of reversal.rejectOoxmlIds) {
+        expect(ooxmlIds.has(id)).toBe(true)
+      }
+    }
+    applyTrackedChangeDecisions(
+      saved,
+      saved.model.changes.map((change) => change.id),
+      'reject',
+    )
+    const reverted = await reload(saved)
+    const xml = await documentXml(reverted)
+    expect(xml).not.toContain('<w:b/>')
+    expect(reverted.model.changes).toHaveLength(0)
+  })
+
+  it('subsumes a marker folded into the replacement instead of naming it', async () => {
+    const document = await load(
+      `<w:p><w:r><w:t>one two three</w:t></w:r></w:p>`,
+    )
+    const run = paragraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('run')
+    const { lineage } = applyTracked(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+      { type: 'replace_run_text', runId: run.id, text: 'one four three' },
+    ])
+    // The pending marker was folded inside the `w:ins` — not a listed change —
+    // so the property op records no reversal and the id is withdrawn rather
+    // than left dangling in the run's undo group.
+    expect(lineage.reversals).toEqual([
+      {
+        operation: 1,
+        fromRunId: run.id,
+        fromParagraphId: paragraphs(document)[0]?.id,
+        rejectOoxmlIds: ['1', '2'],
+      },
+    ])
+    const saved = await reload(document)
+    expect(saved.model.changes.map(({ elementName }) => elementName)).toEqual([
+      'del',
+      'ins',
+    ])
+    applyTrackedChangeDecisions(
+      saved,
+      saved.model.changes.map((change) => change.id),
+      'reject',
+    )
+    const reverted = await reload(saved)
+    expect(shape(reverted).map((item) => item.text)).toEqual(['one two three'])
+    const xml = await documentXml(reverted)
+    expect(xml).not.toContain('<w:b/>')
+    expect(reverted.model.changes).toHaveLength(0)
+  })
+
   it('records the change ids with their run in a mixed paragraph', async () => {
     const document = await load(
       `<w:p><w:r><w:t>One</w:t></w:r><w:r><w:t>Two</w:t></w:r></w:p>`,
