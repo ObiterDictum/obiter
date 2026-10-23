@@ -103,7 +103,7 @@ export function verificationReasonLabel(reason: VerificationReviewReason) {
     case 'citation_ambiguous':
       return 'This text could be associated with more than one authority, so no single one was chosen.'
     case 'citation_unresolved':
-      return 'The citation did not resolve to a stored authority.'
+      return 'The citation could not be matched to a stored source.'
     case 'authority_not_held':
       return 'The stored sources do not hold this authority.'
     case 'evidence_unavailable':
