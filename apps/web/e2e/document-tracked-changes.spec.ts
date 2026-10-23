@@ -184,6 +184,21 @@ async function openChangesPanel(page: Page) {
   throw new Error('could not open the Changes panel')
 }
 
+async function reviewToggle(page: Page, name: string) {
+  // Same ribbon remount race as openChangesPanel: a Review click that lands
+  // before the document model arrives reverts to Home, so retry it.
+  const toggle = page.getByRole('button', { name }).first()
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.getByRole('tab', { name: 'Review' }).click()
+    const shown = await expect(toggle)
+      .toBeVisible({ timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (shown) return toggle
+  }
+  throw new Error(`could not find the ${name} toggle on the Review tab`)
+}
+
 function zipPart(docxPath: string, partName: string) {
   return execFileSync(
     'python3',
@@ -505,11 +520,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
 
   // The fixture's settings.xml carries w:trackRevisions, so the Review toggle
   // must open ON without a click — the persisted state, not a default.
-  await page.getByRole('tab', { name: 'Review' }).click()
-  const tracking = page
-    .getByRole('button', { name: 'Track changes on' })
-    .first()
-  await expect(tracking).toBeVisible({ timeout: 15_000 })
+  await reviewToggle(page, 'Track changes on')
 
   // Substitute the quantity inside the first paragraph's single run.
   await focusParagraph(page, PLAIN)
@@ -550,17 +561,11 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter)
-    await reloaded.getByRole('tab', { name: 'Review' }).click()
-    await expect(
-      reloaded.getByRole('button', { name: 'Track changes on' }).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    const tracking = await reviewToggle(reloaded, 'Track changes on')
 
     // Flip the toggle off and save: a lone flip is a settings-only write —
     // the request carries an empty operation list and the pending value.
-    await reloaded
-      .getByRole('button', { name: 'Track changes on' })
-      .first()
-      .click()
+    await tracking.click()
     await expect(
       reloaded.getByRole('button', { name: 'Track changes off' }).first(),
     ).toBeVisible()
@@ -595,10 +600,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const rereadPage = await reread.newPage()
   try {
     await openFixtureDocument(rereadPage, email, password, matter)
-    await rereadPage.getByRole('tab', { name: 'Review' }).click()
-    await expect(
-      rereadPage.getByRole('button', { name: 'Track changes off' }).first(),
-    ).toBeVisible({ timeout: 15_000 })
+    await reviewToggle(rereadPage, 'Track changes off')
   } finally {
     await reread.close()
   }
