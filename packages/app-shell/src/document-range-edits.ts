@@ -6,6 +6,8 @@ import {
   storyFlowOrder,
 } from './document-story-flow'
 import { canJoinParagraphRuns } from './document-run-fidelity'
+import { revisionOnlyParagraph } from './document-inline-index'
+import { editableParagraph } from './document-model-text'
 import {
   applyReplaceRange,
   applySplitParagraph,
@@ -67,6 +69,16 @@ export function documentRangeRefusal(
     const removed = order
       .slice(startIndex + 1, endIndex + 1)
       .filter((id) => body.has(id))
+    // The writer refuses to delete a paragraph holding tracked markup, and a
+    // revision-only head has no run to join into; refuse before the canvas
+    // paints a removal the save cannot make.
+    const first = editableParagraph(model, from.paragraphId)
+    if (
+      removed.some((id) => holdsTrackedChanges(model, id)) ||
+      (first && revisionOnlyParagraph(model, first))
+    ) {
+      return 'tracked-change'
+    }
     if (
       fieldBoundarySplitIds(
         model,
