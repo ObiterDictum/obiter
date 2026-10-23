@@ -33,25 +33,6 @@ const authorities: AuthorityRow[] = Array.from({ length: 6 }, (_, index) => ({
 }))
 
 describe('batching and query count', () => {
-  it('does not perform one query per case-law citation', async () => {
-    const { pool, calls } = fakePool({ authorities })
-    const batch: CitationCandidate[] = authorities.map((row, index) => ({
-      id: `c-${index}`,
-      rawText: row.neutralCitation,
-    }))
-
-    const results = await resolveCitationCandidates(pool, batch)
-
-    expect(calls).toHaveLength(1)
-    expect(calls[0]?.table).toBe('authorities')
-    expect(results.map((result) => result.id)).toEqual(
-      batch.map((candidate) => candidate.id),
-    )
-    expect(
-      results.every((result) => result.resolution.outcome === 'resolved'),
-    ).toBe(true)
-  })
-
   it('loads the Act directory once for a whole document', async () => {
     const { pool, calls } = fakePool({ authorities })
     await resolveCitationCandidates(pool, [

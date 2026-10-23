@@ -129,8 +129,6 @@ export function fakePool(options: FakePoolOptions = {}) {
 export const candidates = (...rawTexts: string[]): CitationCandidate[] =>
   rawTexts.map((rawText) => ({ id: rawText, rawText }))
 
-/** Resolve one candidate's text through the batch boundary and return the V1
- * citation state it maps to, so a test reads as the one call it is. */
 export async function resolveOne(
   rawText: string,
   options: FakePoolOptions = {},
