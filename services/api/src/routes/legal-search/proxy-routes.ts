@@ -550,12 +550,17 @@ export function createLegalSearchProxyRoutes(
       parsed.data,
     )
 
+    const courtParagraphNumbers = hasCourtParagraphNumbers(storedSourceRecord)
+
     if (document) {
-      return c.json({ document })
+      return c.json({ document, courtParagraphNumbers })
     }
 
     if (storedSourceRecord?.document) {
-      return c.json({ document: storedSourceRecord.document })
+      return c.json({
+        document: storedSourceRecord.document,
+        courtParagraphNumbers,
+      })
     }
 
     // Corpus-only: there is no provider fallback. A stored summary with no
@@ -1287,6 +1292,17 @@ async function getDocumentRouteSourceRecord(
   } catch {
     return { status: 'unavailable' }
   }
+}
+
+/**
+ * Only LegalDocML carries the court's own `<num>`. The HTML fallback numbers
+ * paragraphs by position, cover sheet included, and is the only path that
+ * keeps `rawDocumentHtml`; showing its numbers would invite a pinpoint
+ * citation to a paragraph the court never numbered. With no stored row the
+ * provenance is unknown, so the numbers are not vouched for either.
+ */
+function hasCourtParagraphNumbers(record: StoredLegalAuthorityRecord | null) {
+  return record !== null && record.provider.rawDocumentHtml === undefined
 }
 
 function withTimeout<T>(
