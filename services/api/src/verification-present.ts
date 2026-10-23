@@ -96,7 +96,7 @@ function authorityLabel(citation: NormalizedCitation) {
         ? `${citation.documentIdentity} ${citation.labelPath}`
         : citation.documentIdentity
     case 'unresolved':
-      return 'Unresolved citation'
+      return 'Unmatched citation'
     case 'not_checked':
       return 'Citation not checked'
     default: {

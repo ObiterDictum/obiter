@@ -193,7 +193,7 @@ function decide(input: CitationResolutionDecisionInput): DecidedResolution {
       confidence: 'low',
       evidence: [],
       explanation:
-        'No canonical public source identity matched the citation, so no identity was available to check. This is not a result about whether the authority exists.',
+        'No stored source in Obiter matches this citation, so there is nothing to check it against. That says what Obiter holds, not whether the authority exists.',
     }
   }
   return {
@@ -203,8 +203,8 @@ function decide(input: CitationResolutionDecisionInput): DecidedResolution {
     evidence: [],
     explanation:
       resolution.outcome === 'unsupported'
-        ? 'The citation names a source family this check does not resolve, so no canonical identity was produced.'
-        : 'The citation is not a recognised citation form, so no canonical identity was produced.',
+        ? 'Obiter does not check citations to this court or source type, so nothing was checked.'
+        : 'Obiter does not recognise this as a citation format it can check, so nothing was checked. Check the citation before relying on it.',
   }
 }
 
