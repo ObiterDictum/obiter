@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 import {
   decideQuoteFidelity,
+  createEvidenceReferenceId,
   prepareQuoteSource,
   quoteSpanViolation,
   QuoteSourceMismatchError,
@@ -198,14 +199,42 @@ export async function checkQuoteFidelities(
       if (reason !== null) return { outcome: 'rejected', reason }
       const source = await sourceFor(request.normalizedCitation)
       try {
+        const finding = decideQuoteFidelity({
+          subject: request.subject,
+          quote: request.quote,
+          normalizedCitation: request.normalizedCitation,
+          source,
+        })
+        // Preserve the very fragments compared, before corpus updates can
+        // change an ordinal's text. Historical runs must never read today's text.
+        const passages =
+          source.outcome === 'ready'
+            ? finding.evidence.flatMap((reference) => {
+                const fragment = source.fragments.find(
+                  (item) =>
+                    item.sourceType === reference.sourceType &&
+                    item.sourceId === reference.sourceId &&
+                    reference.granularity === 'fragment' &&
+                    (item.sourceType === 'judgment' &&
+                    reference.sourceType === 'judgment'
+                      ? item.ordinal === reference.ordinal
+                      : item.sourceType === 'legislation_provision' &&
+                        reference.sourceType === 'legislation_provision' &&
+                        item.labelPath === reference.labelPath),
+                )
+                return fragment
+                  ? [
+                      {
+                        evidenceId: createEvidenceReferenceId(reference),
+                        text: fragment.text,
+                      },
+                    ]
+                  : []
+              })
+            : []
         return {
           outcome: 'finding',
-          finding: decideQuoteFidelity({
-            subject: request.subject,
-            quote: request.quote,
-            normalizedCitation: request.normalizedCitation,
-            source,
-          }),
+          finding: { ...finding, passages },
         }
       } catch (error) {
         if (error instanceof QuoteSourceMismatchError) {

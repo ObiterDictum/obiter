@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { verificationPassageSchema } from '@obiter/contracts'
 import {
   citationInputSchema,
   normalizedCitationSchema,
@@ -333,6 +334,8 @@ const findingShape = z
     severity: findingSeveritySchema.nullable(),
     confidence: findingConfidenceSchema.nullable(),
     evidence: z.array(evidenceReferenceSchema),
+    // Optional for historical runs, whose checked corpus text was not retained.
+    passages: z.array(verificationPassageSchema).optional(),
     /** Authored by Verify from the finding's own facts. It may quote matter, so
      * it is a payload field rather than an identifier. */
     explanation: z.string().trim().min(1),
