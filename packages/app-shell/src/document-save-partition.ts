@@ -1,3 +1,4 @@
+import { revisionOnlyParagraph } from './document-inline-index'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   emptyDraftState,
@@ -62,6 +63,11 @@ export function partitionDraftState(
   state: DraftState,
 ): SavePartition {
   const editable = editableStories(model)
+  const paragraphs = new Map(
+    editable.flatMap((story) =>
+      story.paragraphs.map((p) => [p.id, p] as const),
+    ),
+  )
   const paragraphIds = new Set(
     editable.flatMap((story) => story.paragraphs.map((item) => item.id)),
   )
@@ -126,6 +132,16 @@ export function partitionDraftState(
           paragraphId,
         },
         reason: 'This paragraph is no longer in the document.',
+        label: 'added text',
+      })
+      continue
+    }
+    const paragraph = paragraphs.get(paragraphId)
+    if (paragraph && revisionOnlyParagraph(model, paragraph)) {
+      blocked.push({
+        slot: { kind: 'extra-runs', key: `extra:${paragraphId}`, paragraphId },
+        reason:
+          'Decide the tracked changes before adding text to this paragraph.',
         label: 'added text',
       })
       continue

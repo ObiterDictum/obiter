@@ -1,3 +1,7 @@
+import {
+  revisionOnlyParagraph,
+  storedParagraphChanges,
+} from './document-inline-index'
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 import {
   fieldBoundarySplitIds,
@@ -266,7 +270,9 @@ export function joinIntoPrevious(
   }
 }
 
-export type JoinRefusal = 'structure' | 'join-formatting'
+/** `tracked-change` means a paragraph the join or range would remove holds
+ * stored revisions, whose element the writer refuses to delete. */
+export type JoinRefusal = 'structure' | 'join-formatting' | 'tracked-change'
 
 /** The outcome of a word edit: it applied (with the caret to place), or it
  * could not join a neighbour for a stated structural/formatting reason. */
@@ -303,6 +309,17 @@ export function paragraphJoinRefusal(
   const inserts = new Set(state.inserts.map((item) => item.clientId))
   const joinable = (id: string) => body.has(id) || inserts.has(id)
   if (!joinable(paragraphId) || !joinable(previousId)) return 'structure'
+  // The save deletes the joined paragraph's element, which the writer refuses
+  // while it holds tracked markup, and its revisions would leave the canvas
+  // until reload. A revision-only head has no run to fold the tail into. A
+  // plain tail joining a revised head folds into its last run, ahead of any
+  // trailing revision, which is where the canvas already paints it.
+  const into = editableParagraph(model, previousId)
+  if (
+    holdsTrackedChanges(model, paragraphId) ||
+    (into && revisionOnlyParagraph(model, into))
+  )
+    return 'tracked-change'
   // A join erases the joined paragraph's element and every marker it
   // carries: the moved runs restate only text on save, so a stored field's
   // boundary inside it is lost while the rest survives. Removing the field
@@ -334,6 +351,15 @@ export function paragraphJoinRefusal(
   const moving = blockRuns(model, state, paragraphId)
   if (!canJoinParagraphRuns(head, moving)) return 'join-formatting'
   return null
+}
+
+/** Whether a stored paragraph carries revisions in its own story. */
+export function holdsTrackedChanges(
+  model: DocumentModelWire,
+  paragraphId: string,
+) {
+  const paragraph = editableParagraph(model, paragraphId)
+  return !!paragraph && storedParagraphChanges(model, paragraph).length > 0
 }
 
 /**
@@ -376,6 +402,8 @@ export function applyWordEdit(
   edit: WordEdit,
   newParagraphId: string,
 ): EditorResult | undefined {
+  const paragraph = editableParagraph(model, edit.paragraphId)
+  if (paragraph && revisionOnlyParagraph(model, paragraph)) return undefined
   const caret = { paragraphId: edit.paragraphId, offset: edit.offset }
   if (edit.type === 'replace') {
     return applyReplaceRange(

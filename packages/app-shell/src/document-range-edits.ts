@@ -6,12 +6,16 @@ import {
   storyFlowOrder,
 } from './document-story-flow'
 import { canJoinParagraphRuns } from './document-run-fidelity'
+import { revisionOnlyParagraph } from './document-inline-index'
+import { editableParagraph } from './document-model-text'
 import {
   applyReplaceRange,
   applySplitParagraph,
   blockRuns,
   blockText,
+  holdsTrackedChanges,
   joinIntoPrevious,
+  type JoinRefusal,
   type EditorCaret,
   type EditorResult,
   type EditorState,
@@ -22,8 +26,9 @@ import { writeRange } from './document-write-runs'
  * cross a paragraph that is not ordinary body text (a table cell, say), which
  * the editor cannot paint and a join would corrupt. `join-formatting` means the
  * surviving tail cannot be restated on save, so the join is refused rather than
- * painting formatting persistence would discard. */
-export type DocumentRangeRefusal = 'structure' | 'join-formatting'
+ * painting formatting persistence would discard. `tracked-change` means a
+ * paragraph the range removes holds revisions the writer will not delete. */
+export type DocumentRangeRefusal = JoinRefusal
 
 /**
  * The reason `applyReplaceDocumentRange` would refuse this range, or null when
@@ -64,6 +69,16 @@ export function documentRangeRefusal(
     const removed = order
       .slice(startIndex + 1, endIndex + 1)
       .filter((id) => body.has(id))
+    // The writer refuses to delete a paragraph holding tracked markup, and a
+    // revision-only head has no run to join into; refuse before the canvas
+    // paints a removal the save cannot make.
+    const first = editableParagraph(model, from.paragraphId)
+    if (
+      removed.some((id) => holdsTrackedChanges(model, id)) ||
+      (first && revisionOnlyParagraph(model, first))
+    ) {
+      return 'tracked-change'
+    }
     if (
       fieldBoundarySplitIds(
         model,

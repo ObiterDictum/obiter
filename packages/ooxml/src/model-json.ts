@@ -22,5 +22,13 @@ export function parseModelJson(json: string) {
 
   const parsed = documentModelWireSchema.safeParse(value)
   if (!parsed.success) throw new OoxmlError('invalid-model-json')
+  // Live clients tolerate older API wires; stored projections must regenerate
+  // source-ordered segments rather than keep losing nested revision text.
+  if (
+    parsed.data.changes.some(
+      (change) => change.inlinePosition && !change.inlinePosition.segments,
+    )
+  )
+    throw new OoxmlError('invalid-model-json')
   return parsed.data
 }

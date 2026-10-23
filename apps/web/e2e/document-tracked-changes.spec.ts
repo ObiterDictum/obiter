@@ -1,3 +1,4 @@
+import { documentEditRequestSchema } from '@obiter/contracts'
 import {
   expect,
   test,
@@ -31,6 +32,7 @@ const REPO_ROOT = path.resolve(
 const FIXTURE_PATH = '/tmp/e9-tracked-changes-fixture.docx'
 /** The same fixture plus a one-sided move container the engine cannot decide. */
 const MIXED_PATH = '/tmp/e9-tracked-changes-mixed-fixture.docx'
+const INLINE_PATH = '/tmp/e9-inline-tracked-changes-fixture.docx'
 const MIXED_MARKUP =
   '<w:p><w:moveFromRangeStart w:id="40" w:name="orphanMove" w:author="Jane Example" w:date="2026-08-10T10:06:00Z"/><w:moveFrom w:id="30" w:author="Jane Example" w:date="2026-08-10T10:06:00Z"><w:r><w:delText>Stranded move</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="40"/></w:p>'
 const MIXED_ANCHOR =
@@ -413,8 +415,8 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   const matter = `E9 tracking ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // Turn tracking on from the Review tab before the format runs.
-  await page.getByRole('tab', { name: 'Review' }).click()
+  // Wait for the model-backed ribbon before turning tracking on.
+  await openChangesPanel(page)
   const tracking = page.getByRole('button', { name: /Track changes/u }).first()
   await expect(tracking).toBeVisible({ timeout: 15_000 })
   if ((await tracking.getAttribute('aria-pressed')) !== 'true') {
@@ -600,4 +602,93 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   } finally {
     await reread.close()
   }
+})
+
+test('saved tracked text stays visible inline after reload and ordinary typing excludes it', async ({
+  page,
+  request,
+}) => {
+  buildFixture()
+  const { email, password } = await createAccount(request)
+  execFileSync(
+    'bun',
+    [
+      '-e',
+      `const { default: JSZip } = await import('jszip'); const zip = await JSZip.loadAsync(await Bun.file('${FIXTURE_PATH}').arrayBuffer()); const xml = await zip.file('word/document.xml').async('string'); zip.file('word/document.xml', xml.replace('<w:t>Alice Example overview</w:t></w:r>', '<w:t>Alice Example overview</w:t></w:r><w:r><w:t xml:space="preserve"> adjacent</w:t></w:r>')); await Bun.write('${INLINE_PATH}', await zip.generateAsync({ type: 'uint8array' }));`,
+    ],
+    { cwd: `${REPO_ROOT}/packages/ooxml`, stdio: 'pipe' },
+  )
+  await openFixtureDocument(
+    page,
+    email,
+    password,
+    `Inline markup ${String(Date.now())}`,
+    INLINE_PATH,
+  )
+  await openChangesPanel(page)
+  const tracking = page.getByRole('button', { name: /Track changes/u }).first()
+  if ((await tracking.getAttribute('aria-pressed')) !== 'true')
+    await tracking.click()
+  await selectFirst(page, PLAIN, PLAIN.length)
+  await page.keyboard.insertText('Alice Example revised summary')
+  const saving = page.waitForResponse(
+    (response) =>
+      /\/api\/documents\/[^/]+\/edit$/u.test(response.url()) &&
+      response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  expect((await saving).status()).toBe(201)
+  await page.reload()
+  const deletion = page
+    .locator('[data-inline-change][data-change-kind="delete"]', {
+      hasText: 'overview',
+    })
+    .first()
+  const insertion = page
+    .locator('[data-inline-change][data-change-kind="insert"]', {
+      hasText: 'revised',
+    })
+    .first()
+  await expect(deletion).toBeVisible()
+  await expect(insertion).toBeVisible()
+  await expect(deletion).toHaveCSS('text-decoration-line', 'line-through')
+  await expect(insertion).toHaveCSS('text-decoration-line', 'underline')
+  const target = insertion.locator('xpath=ancestor::*[@data-paragraph-id][1]')
+  const id = await target.getAttribute('data-paragraph-id')
+  await insertion.click()
+  await expect(insertion).toHaveAttribute('aria-current', 'true')
+  const selectedRow = panel(page).locator('li[aria-current="true"]')
+  await expect(selectedRow).toContainText('revised')
+  // Append at the unchanged editable paragraph end. Tracking is an independent
+  // session toggle; explicitly switch it off for this ordinary follow-up edit.
+  await page.getByRole('tab', { name: 'Review' }).click()
+  const toggle = page.getByRole('button', { name: /Track changes/u }).first()
+  if ((await toggle.getAttribute('aria-pressed')) === 'true')
+    await toggle.click()
+  await target.click()
+  await editor(page).press('Control+End')
+  await editor(page).pressSequentially(' tail')
+  const savingTail = page.waitForResponse(
+    (response) =>
+      /\/api\/documents\/[^/]+\/edit$/u.test(response.url()) &&
+      response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  const tail = await savingTail
+  expect(tail.status(), await tail.text()).toBe(201)
+  const payload = documentEditRequestSchema.parse(tail.request().postDataJSON())
+  expect(payload.operations.length).toBeGreaterThan(0)
+  expect(
+    payload.operations
+      .filter((op) => op.type === 'replace_run_text')
+      .map((op) => op.text)
+      .join(''),
+  ).toContain('tail')
+  expect(JSON.stringify(payload.operations)).not.toContain('revised')
+  await page.reload()
+  await expect(
+    page.locator(`[data-paragraph-id="${id}"]`).first(),
+  ).toContainText('tail')
+  await expect(insertion).toBeVisible()
+  await expect(deletion).toBeVisible()
 })

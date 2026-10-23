@@ -1,8 +1,15 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useParagraphFocus } from './paragraph-focus'
+import { arrowKey, printableKey, moveInlineSelection } from './paragraph-keys'
+import { useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { cn } from '@obiter/ui'
 import { stepSelectionFocus } from '../../document-selection'
 import { textDiff } from '../../document-model-text'
+import {
+  copyEditableSelection,
+  cutEditableSelection,
+} from './paragraph-clipboard'
+import type { InlineSlice } from '../../document-inline-changes'
 import {
   armVerticalDelivery,
   clearVerticalColumn,
@@ -25,6 +32,8 @@ export type { ParagraphSelectionBinding, ParagraphSelectionHandlers }
 export function ParagraphEditor({
   paragraphId,
   text,
+  projection,
+  trackedDescription,
   selected,
   restoreCaret,
   style,
@@ -46,6 +55,8 @@ export function ParagraphEditor({
 }: {
   paragraphId: string
   text: string
+  trackedDescription?: string
+  projection?: InlineSlice
   selected: boolean
   restoreCaret?: number
   style?: CSSProperties
@@ -69,52 +80,39 @@ export function ParagraphEditor({
   onEnter: (offset: number) => void
   onLineBreak: (offset: number) => void
 }) {
+  const editable = (at: number) => projection?.toEditable(at) ?? at
+  const display = (at: number) => projection?.toDisplay(at) ?? at
+  const inputText = (value: string) => projection?.edit(value) ?? value
   const field = useRef<HTMLTextAreaElement>(null)
   // IME composition owns key events until it ends; intercepting them loses text.
   const composing = useRef(false)
-  // The DOM range this editor last wrote itself. A select event that still
-  // reports that range is our own write arriving late, after the model may
-  // already have moved on (Escape clearing the selection, say); mirroring it
-  // back would resurrect a selection the user did not make. A user-made
-  // selection always differs from the range we last wrote.
+  // Ignore late select events from our own DOM writes, which could otherwise
+  // resurrect a model selection already cleared by Escape.
   const written = useRef<{ from: number; to: number } | null>(null)
   const clearColumn = () => clearVerticalColumn(verticalCaret)
   const selectionFrom = selection?.range?.from
   const selectionTo = selection?.range?.to
   const selectionDirection = selection?.direction
   const selectionFocus = selection?.focus
-  // Browser selection and focus are the one external boundary here: the model
-  // owns the selection and the DOM has to be told — a layout effect so the
-  // save swap's remount refocuses inside the commit and keeps the caret.
-  useLayoutEffect(() => {
-    if (!selected) return
-    const node = field.current
-    if (!node) return
-    node.focus({ preventScroll: true })
-    if (selectionFrom != null && selectionTo != null) {
-      const from = Math.min(selectionFrom, node.value.length)
-      const to = Math.min(selectionTo, node.value.length)
-      node.setSelectionRange(
-        from,
-        to,
-        selectionDirection === 'none' ? undefined : selectionDirection,
-      )
-      written.current = { from, to }
-    } else if (restoreCaret != null) {
-      const offset = Math.min(restoreCaret, node.value.length)
-      node.setSelectionRange(offset, offset)
-      written.current = { from: offset, to: offset }
-    }
-    revealTypingLine(node)
-  }, [selected, restoreCaret, selectionFrom, selectionTo, selectionDirection])
+  useParagraphFocus({
+    field,
+    written,
+    selected,
+    restoreCaret,
+    text,
+    projection,
+    from: selectionFrom,
+    to: selectionTo,
+    direction: selectionDirection,
+  })
 
   /** Sends a paste or drop payload through the same path, reporting whether the
    * event was ours: a live document selection always is (an empty payload is a
    * refused replacement), a caret paste only when there is text and a handler,
    * so the native insert stays untouched otherwise. */
   function applyPayload(node: HTMLTextAreaElement, data: string): boolean {
-    const from = node.selectionStart
-    const to = node.selectionEnd
+    const from = editable(node.selectionStart)
+    const to = editable(node.selectionEnd)
     if (selection?.active) {
       if (data.length > 0) selection.onPasteText?.(data, from, to)
       else selection.onRejectInput()
@@ -133,17 +131,19 @@ export function ParagraphEditor({
     // the textarea tracks that in selectionDirection.
     const backward = node.selectionDirection === 'backward'
     return backward
-      ? { anchor: node.selectionEnd, focus: node.selectionStart }
-      : { anchor: node.selectionStart, focus: node.selectionEnd }
+      ? {
+          anchor: editable(node.selectionEnd),
+          focus: editable(node.selectionStart),
+        }
+      : {
+          anchor: editable(node.selectionStart),
+          focus: editable(node.selectionEnd),
+        }
   }
 
   /**
-   * Apply a DOM value the key handler did not intercept - a paste, a drop, an
-   * IME commit, any beforeinput-only edit - as a replacement of the document
-   * selection. The insertion the DOM gained becomes the text that replaces the
-   * whole range, so a cross-paragraph selection is replaced coherently rather
-   * than silently reverted. A change that only removed text cannot be expressed
-   * that way and is refused with a notice.
+   * Apply non-keyboard input as a document-range replacement. A DOM change
+   * that only removed text cannot express that intent and is refused.
    */
   function applyDomInput(next: string) {
     if (!selection?.active) return
@@ -159,7 +159,8 @@ export function ParagraphEditor({
     <textarea
       ref={field}
       aria-label="Paragraph text"
-      value={text}
+      aria-description={trackedDescription}
+      value={projection?.text ?? text}
       rows={1}
       onChange={(event) => {
         // Any text input, including a paste or an IME commit, ends the run.
@@ -170,10 +171,10 @@ export function ParagraphEditor({
         // With a document selection the change is a replacement of the whole
         // range, not an edit of one paragraph of it.
         if (selection?.active) {
-          applyDomInput(event.target.value)
+          applyDomInput(inputText(event.target.value))
           return
         }
-        onChangeText(event.target.value)
+        onChangeText(inputText(event.target.value))
       }}
       onBeforeInput={(event) => {
         if (!selection?.active) return
@@ -209,7 +210,8 @@ export function ParagraphEditor({
         clearColumn()
         // The composition commits once, here. A document selection is replaced
         // by the committed text; without one the normal change path applies it.
-        if (selection?.active) applyDomInput(event.currentTarget.value)
+        if (selection?.active)
+          applyDomInput(inputText(event.currentTarget.value))
       }}
       onDrop={(event) => {
         const data = event.dataTransfer?.getData('text/plain') ?? ''
@@ -233,8 +235,8 @@ export function ParagraphEditor({
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing || composing.current) return
         const node = event.currentTarget
-        const start = node.selectionStart
-        const end = node.selectionEnd
+        const start = editable(node.selectionStart)
+        const end = editable(node.selectionEnd)
         const arrow = arrowKey(event.key)
         const lineJump = event.key === 'Home' || event.key === 'End'
         const verticalKey =
@@ -244,6 +246,18 @@ export function ParagraphEditor({
         // Every key that is not a plain vertical arrow ends the column run.
         // Shift/Ctrl/Alt/Meta arrows keep their own rules below.
         if (!verticalKey) clearColumn()
+        if (
+          moveInlineSelection(event, {
+            projection,
+            text,
+            paragraphId,
+            lines,
+            selection,
+            onSelect,
+            onTextSelection,
+          })
+        )
+          return
         if (event.key === 'Escape') {
           if (selection?.active) {
             event.preventDefault()
@@ -268,10 +282,8 @@ export function ParagraphEditor({
           selection.onSelectAll()
           return
         }
-        // A modified arrow or a line jump would otherwise collapse the DOM
-        // caret natively while the model still reported the range. Collapse
-        // the model first, so the shortcut then runs from a caret the two
-        // agree on; the platform shortcut is unchanged from that point.
+        // Collapse the model before a native shortcut can move the DOM caret,
+        // keeping both selection owners at the same endpoint.
         if (
           selection?.active &&
           (arrow != null || lineJump) &&
@@ -408,7 +420,7 @@ export function ParagraphEditor({
         if (!verticalKey && step.paragraphId === paragraphId) return
         event.preventDefault()
         if (step.paragraphId === paragraphId) {
-          node.setSelectionRange(step.offset, step.offset)
+          node.setSelectionRange(display(step.offset), display(step.offset))
           written.current = { from: step.offset, to: step.offset }
           revealTypingLine(node)
           return
@@ -426,11 +438,19 @@ export function ParagraphEditor({
         event.preventDefault()
       }}
       onCopy={(event) => {
+        if (projection && !selection?.active) {
+          copyEditableSelection(event, text, projection)
+          return
+        }
         if (!selection?.active) return
         event.preventDefault()
         selection.onCopyRange(event.clipboardData)
       }}
       onCut={(event) => {
+        if (projection && !selection?.active) {
+          onChangeText(cutEditableSelection(event, text, projection))
+          return
+        }
         if (!selection?.active) return
         event.preventDefault()
         selection.onCutRange(event.clipboardData)
@@ -438,13 +458,12 @@ export function ParagraphEditor({
       onClick={(event) => {
         event.stopPropagation()
         clearColumn()
-        // A mouse press moves the native caret; carry that offset so a break
-        // or format targets the visible caret, not the paragraph start.
-        onSelect(event.currentTarget.selectionStart)
+        // Breaks and formatting must target the clicked caret.
+        onSelect(editable(event.currentTarget.selectionStart))
       }}
       onSelect={(event) => {
-        const from = event.currentTarget.selectionStart
-        const to = event.currentTarget.selectionEnd
+        const from = editable(event.currentTarget.selectionStart)
+        const to = editable(event.currentTarget.selectionEnd)
         const last = written.current
         if (last && last.from === from && last.to === to) return
         onTextSelection?.(
@@ -468,31 +487,4 @@ export function ParagraphEditor({
       style={style}
     />
   )
-}
-
-/**
- * Whether a key press inserts text. A single-character key with no command
- * modifier is one; the Enter and Backspace families are handled above.
- */
-function printableKey(event: {
-  key: string
-  ctrlKey: boolean
-  altKey: boolean
-  metaKey: boolean
-}): boolean {
-  if (event.ctrlKey || event.altKey || event.metaKey) return false
-  // A single code point, not a single UTF-16 code unit: an astral character
-  // such as an emoji is one printable key even though `length` is two.
-  return [...event.key].length === 1
-}
-
-function arrowKey(
-  key: string,
-): 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | null {
-  return key === 'ArrowLeft' ||
-    key === 'ArrowRight' ||
-    key === 'ArrowUp' ||
-    key === 'ArrowDown'
-    ? key
-    : null
 }

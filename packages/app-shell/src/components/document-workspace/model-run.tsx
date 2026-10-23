@@ -1,3 +1,5 @@
+import type { InlineSpan } from '../../document-inline-changes'
+import { InlineChange } from './inline-change-review'
 import { useMemo, type ReactNode } from 'react'
 import type {
   DocumentChangeWire,
@@ -57,6 +59,9 @@ type LinkOverlay = ParagraphLinkOverlay
  */
 export function ParagraphRunPaint({
   paragraph,
+  toEditableOffset = (at) => at,
+  inlineSpans = [],
+  reviewable = true,
   drafts,
   changes,
   styles,
@@ -74,6 +79,9 @@ export function ParagraphRunPaint({
   pageReferences,
 }: {
   paragraph: DocumentParagraphWire
+  toEditableOffset?: (at: number) => number
+  inlineSpans?: InlineSpan[]
+  reviewable?: boolean
   drafts?: Record<string, string>
   changes: DocumentChangeWire[]
   styles: DocumentStyleWire[]
@@ -97,6 +105,7 @@ export function ParagraphRunPaint({
   // the paragraph's own end, where nothing follows. The block end alone
   // cannot tell the two apart, so the paragraph's full length is the rule.
   const paragraphEnd = paragraphPlainText(paragraph).length
+  const inlineByRun = new Map(inlineSpans.map((span) => [span.runId, span]))
   const paint = (slices: RunSlice[]) => {
     if (slices.length === 0) {
       return (
@@ -108,22 +117,34 @@ export function ParagraphRunPaint({
         </span>
       )
     }
-    return slices.map(({ run, text, from }) => (
-      <ModelRun
-        key={`${run.id}-${from}`}
-        run={run}
-        text={text}
-        from={from}
-        selection={selection}
-        linkOverlay={linkOverlay}
-        paragraphEnd={paragraphEnd}
-        paragraphFace={face}
-        changes={changes}
-        styles={styles}
-        drafts={drafts}
-        caret={carets.find((item) => item.cursor?.runId === run.id)}
-      />
-    ))
+    return slices.map(({ run, text, from }) => {
+      const span = inlineByRun.get(run.id)
+      if (span)
+        return (
+          <InlineChange
+            key={`${run.id}-${from}`}
+            span={span}
+            text={text}
+            tabStop={reviewable && span.tabStop && from === span.from}
+          />
+        )
+      return (
+        <ModelRun
+          key={`${run.id}-${from}`}
+          run={run}
+          text={text}
+          from={from}
+          selection={selection}
+          linkOverlay={linkOverlay}
+          paragraphEnd={paragraphEnd}
+          paragraphFace={face}
+          changes={changes}
+          styles={styles}
+          drafts={drafts}
+          caret={carets.find((item) => item.cursor?.runId === run.id)}
+        />
+      )
+    })
   }
   if (wrapWidthPx && wrapWidthPx > 0) {
     return lines.map((line, index) => (
@@ -144,8 +165,8 @@ export function ParagraphRunPaint({
           textIndent:
             index === 0 && !continuation && start === 0 ? undefined : 0,
         }}
-        data-line-from={start + line.from}
-        data-line-to={start + line.to}
+        data-line-from={toEditableOffset(start + line.from)}
+        data-line-to={toEditableOffset(start + line.to)}
       >
         {paint(
           paintSlices(

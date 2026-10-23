@@ -3111,7 +3111,21 @@
                     engine can never decide carries
                     <code>undecidable</code> with the reason, so review surfaces
                     can disable its controls honestly while the markup stays
-                    byte-preserved.
+                    byte-preserved. The model and list share required
+                    <code>inlinePosition</code> metadata and source-ordered
+                    nested display segments: content revisions anchor before an
+                    editable run or at paragraph end; property and
+                    paragraph-mark revisions carry null. Missing position or
+                    display-segment metadata invalidates old cached models.
+                    <code>segments</code> stays optional in the wire schema so
+                    an older API response still parses (the client then paints
+                    the change text as one segment); <code>parseModelJson</code>
+                    is what requires it of stored models. The shared canvas
+                    projects All Markup for paint, pagination and native caret
+                    geometry; edit, selection, clipboard and verification
+                    offsets map back to ordinary runs. Preserved revision XML
+                    stays opaque to the writer and never enters editable text or
+                    save payloads.
                   </td>
                 </tr>
                 <tr>
