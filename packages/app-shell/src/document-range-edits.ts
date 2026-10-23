@@ -11,7 +11,9 @@ import {
   applySplitParagraph,
   blockRuns,
   blockText,
+  holdsTrackedChanges,
   joinIntoPrevious,
+  type JoinRefusal,
   type EditorCaret,
   type EditorResult,
   type EditorState,
@@ -22,8 +24,9 @@ import { writeRange } from './document-write-runs'
  * cross a paragraph that is not ordinary body text (a table cell, say), which
  * the editor cannot paint and a join would corrupt. `join-formatting` means the
  * surviving tail cannot be restated on save, so the join is refused rather than
- * painting formatting persistence would discard. */
-export type DocumentRangeRefusal = 'structure' | 'join-formatting'
+ * painting formatting persistence would discard. `tracked-change` means a
+ * paragraph the range removes holds revisions the writer will not delete. */
+export type DocumentRangeRefusal = JoinRefusal
 
 /**
  * The reason `applyReplaceDocumentRange` would refuse this range, or null when
