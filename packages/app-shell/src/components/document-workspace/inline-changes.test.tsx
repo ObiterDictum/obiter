@@ -19,6 +19,14 @@ import {
 import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
 import { InlineChangeReview } from './inline-change-review'
 import { renderedRangeFor } from '../verification/verification-anchor'
+import {
+  applyReplaceDocumentRange,
+  documentRangeRefusal,
+} from '../../document-range-edits'
+import {
+  refusalMessage,
+  TRACKED_CHANGE_BLOCKS_JOIN,
+} from './document-selection-notices'
 
 const paragraph: DocumentParagraphWire = {
   id: 'p',
@@ -389,4 +397,27 @@ it('offers no editable surface for a wholly tracked paragraph', () => {
   expect(container.querySelector('textarea')).toBeNull()
   expect(container.querySelector('[data-inline-change]')).not.toBeNull()
   expect(edits).toEqual([])
+})
+
+it('refuses a range that would remove a revised paragraph, not one inside it', () => {
+  const plain = (id: string) => ({ ...paragraph, id })
+  const model = modelOf([plain('first'), paragraph, plain('last')], changes)
+  const at = (paragraphId: string, offset = 1) => ({ paragraphId, offset })
+  const range = (from: string, to: string) =>
+    documentRangeRefusal(model, emptyEditorState(), at(from), at(to, 3))
+  // The writer cannot delete a revised middle paragraph or join a revised
+  // tail away, so nothing may change before the save refuses.
+  expect(
+    applyReplaceDocumentRange(
+      model,
+      emptyEditorState(),
+      at('first'),
+      at('last'),
+      '',
+    ),
+  ).toBeUndefined()
+  expect(refusalMessage(range('first', 'p'), false, false)).toBe(
+    TRACKED_CHANGE_BLOCKS_JOIN,
+  )
+  expect(range('p', 'p')).toBeNull()
 })
