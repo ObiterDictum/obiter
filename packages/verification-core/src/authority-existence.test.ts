@@ -341,6 +341,29 @@ describe('authority existence decision', () => {
     expect(finding.evidence).toEqual([])
   })
 
+  it('says a citation matched no stored source, distinctly from one Obiter cannot parse', () => {
+    const noMatch = decide({
+      normalizedCitation: { kind: 'unresolved', reason: 'no_canonical_match' },
+      outcome: { outcome: 'skipped' },
+    })
+    const unreadable = decide({
+      normalizedCitation: { kind: 'unresolved', reason: 'not_a_citation' },
+      outcome: { outcome: 'skipped' },
+    })
+
+    expect(noMatch.explanation).toContain(
+      'No stored source in Obiter matches this citation',
+    )
+    expect(noMatch.explanation).toContain(
+      'Check the citation before relying on it.',
+    )
+    expect(unreadable.explanation).toContain(
+      'does not recognise this as a citation format',
+    )
+    expect(noMatch.explanation).not.toBe(unreadable.explanation)
+    expect(noMatch.explanation.toLowerCase()).not.toContain('does not exist')
+  })
+
   it('maps an ambiguous citation to citation_ambiguous, not unclear', () => {
     const finding = decide({
       normalizedCitation: { kind: 'unresolved', reason: 'ambiguous' },

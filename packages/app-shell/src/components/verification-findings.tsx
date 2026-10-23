@@ -77,7 +77,7 @@ export function VerificationFindingsList({
               <span className="text-xs font-medium tracking-wider text-subtle uppercase">
                 Draft excerpt
               </span>
-              <span className="mt-0.5 block font-mono text-xs">
+              <span className="mt-0.5 block font-mono text-xs wrap-anywhere">
                 {finding.excerpt}
               </span>
             </p>

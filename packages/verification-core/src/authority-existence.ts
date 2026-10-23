@@ -1,4 +1,8 @@
-import type { CitationInput, NormalizedCitation } from './citation'
+import type {
+  CitationInput,
+  CitationUnresolvedReason,
+  NormalizedCitation,
+} from './citation'
 import type { EvidenceReference } from './evidence'
 import {
   createVerificationFindingId,
@@ -65,6 +69,32 @@ interface DecidedOutcome {
   explanation: string
 }
 
+/**
+ * Why the check could not act on the citation, in a reviewer's terms. A
+ * citation-shaped candidate that matched no stored source reads differently
+ * from one this check cannot parse, so the reasons do not share one message.
+ * Every wording is a statement about the sources Obiter holds, never about
+ * whether the authority exists.
+ */
+function unresolvedExplanation(
+  reason: Exclude<CitationUnresolvedReason, 'ambiguous'>,
+) {
+  switch (reason) {
+    case 'not_a_citation':
+      return 'Obiter does not recognise this as a citation format it can check, so no authority check ran. Check the citation before relying on it.'
+    case 'unsupported_source_type':
+      return 'Obiter does not check citations to this court or source type, so no authority check ran.'
+    case 'no_canonical_match':
+      return 'No stored source in Obiter matches this citation, so no authority check ran. Check the citation before relying on it.'
+    case 'resolution_unavailable':
+      return 'Obiter could not read the stored records needed to check this citation, so no authority check ran. Try again before relying on it.'
+    default: {
+      const unhandled: never = reason
+      return unhandled
+    }
+  }
+}
+
 function isResolved(
   citation: NormalizedCitation,
 ): citation is Extract<
@@ -120,8 +150,7 @@ function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
       severity: 'medium',
       confidence: 'low',
       evidence: [],
-      explanation:
-        'The citation could not be normalised to a public source identity, so no existence check ran.',
+      explanation: unresolvedExplanation(citation.reason),
     }
   }
 
