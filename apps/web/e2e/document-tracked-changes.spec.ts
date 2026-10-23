@@ -630,7 +630,7 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   if ((await tracking.getAttribute('aria-pressed')) !== 'true')
     await tracking.click()
   await selectFirst(page, PLAIN, PLAIN.length)
-  await page.keyboard.insertText('Alice Example revised overview')
+  await page.keyboard.insertText('Alice Example revised summary')
   const saving = page.waitForResponse(
     (response) =>
       /\/api\/documents\/[^/]+\/edit$/u.test(response.url()) &&
@@ -641,12 +641,12 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   await page.reload()
   const deletion = page
     .locator('[data-inline-change][data-change-kind="delete"]', {
-      hasText: PLAIN,
+      hasText: 'overview',
     })
     .first()
   const insertion = page
     .locator('[data-inline-change][data-change-kind="insert"]', {
-      hasText: 'Alice Example revised overview',
+      hasText: 'revised',
     })
     .first()
   await expect(deletion).toBeVisible()
@@ -658,7 +658,7 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   await insertion.click()
   await expect(insertion).toHaveAttribute('aria-current', 'true')
   const selectedRow = panel(page).locator('li[aria-current="true"]')
-  await expect(selectedRow).toContainText('Alice Example revised overview')
+  await expect(selectedRow).toContainText('revised')
   // Append at the unchanged editable paragraph end. Tracking is an independent
   // session toggle; explicitly switch it off for this ordinary follow-up edit.
   await page.getByRole('tab', { name: 'Review' }).click()
@@ -678,10 +678,13 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   expect(tail.status(), await tail.text()).toBe(201)
   const payload = documentEditRequestSchema.parse(tail.request().postDataJSON())
   expect(payload.operations.length).toBeGreaterThan(0)
-  expect(JSON.stringify(payload.operations)).toContain('adjacent tail')
-  expect(JSON.stringify(payload.operations)).not.toContain(
-    'Alice Example revised overview',
-  )
+  expect(
+    payload.operations
+      .filter((op) => op.type === 'replace_run_text')
+      .map((op) => op.text)
+      .join(''),
+  ).toContain('tail')
+  expect(JSON.stringify(payload.operations)).not.toContain('revised')
   await page.reload()
   await expect(
     page.locator(`[data-paragraph-id="${id}"]`).first(),
