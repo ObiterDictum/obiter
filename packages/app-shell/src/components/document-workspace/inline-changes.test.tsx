@@ -63,6 +63,7 @@ function modelOf(
 ): DocumentModelWire {
   return {
     version: 1,
+    trackRevisions: false,
     stories: [
       {
         kind: 'document',

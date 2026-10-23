@@ -1,4 +1,4 @@
-import { InlineChangeReview } from './inline-change-review'
+import { InlineChangeReview, inlineReviewOf } from './inline-change-review'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -390,18 +390,7 @@ export function DocxWorkspace({
 
   return (
     <InlineChangeReview
-      value={{
-        activeChangeId: changeReview.activeChangeId,
-        tabChangeId: changeReview.inlineTabChangeId,
-        moveChange: changeReview.goToAdjacentInline,
-        selectChange: (id) => {
-          const index = changeReview.changes.findIndex(
-            (change) => change.id === id,
-          )
-          if (index >= 0) changeReview.goTo(index)
-          setChangesOpen(true)
-        },
-      }}
+      value={inlineReviewOf(changeReview, () => setChangesOpen(true))}
     >
       <WorkspaceShell
         layout={layout}
