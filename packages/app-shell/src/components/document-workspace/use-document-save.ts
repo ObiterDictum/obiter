@@ -86,8 +86,21 @@ export function useDocumentSave({
   onSaved: (versionId: string | null) => void
 }) {
   const queryClient = useQueryClient()
-  const editDocument = useEditDocument(documentId, matterId)
-  const mergeDocument = useCollaborationMerge(documentId, matterId)
+  const pendingBatch = useRef<{
+    covered: readonly DraftSlot[]
+    sent: DraftState
+  } | null>(null)
+  function acknowledgeCommit(input: { trackChanges?: boolean }) {
+    const batch = pendingBatch.current
+    if (batch)
+      drafts.acknowledgeSave(batch.covered, batch.sent, input.trackChanges)
+  }
+  const editDocument = useEditDocument(documentId, matterId, acknowledgeCommit)
+  const mergeDocument = useCollaborationMerge(
+    documentId,
+    matterId,
+    acknowledgeCommit,
+  )
   const decideChange = useTrackedChangeDecision(documentId, matterId)
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -146,7 +159,12 @@ export function useDocumentSave({
   }
 
   /** One request. Returns the version the server committed. */
-  async function sendBatch(operations: SavePlan['operations']) {
+  async function sendBatch(
+    operations: SavePlan['operations'],
+    covered: readonly DraftSlot[],
+    sent: DraftState,
+  ) {
+    pendingBatch.current = { covered, sent }
     // The toggle field is sent only while a flip is pending: an explicit
     // value persists it, an omitted one leaves the stored setting — so a
     // stale tab cannot silently revert a collaborator's toggle by echoing
@@ -254,7 +272,11 @@ export function useDocumentSave({
       const attempt = planDocumentSave(source, without)
       if (attempt.operations.length === 0) continue
       try {
-        const result = await sendBatch(attempt.operations)
+        const result = await sendBatch(
+          attempt.operations,
+          attempt.covered,
+          without,
+        )
         // The candidate is left out of `without` only for this request; it
         // was never cleared from the draft state, so it stays pending while
         // the rest of the batch commits.
@@ -388,7 +410,7 @@ export function useDocumentSave({
     if (current.operations.length === 0 && !togglePending) return
     startFlight()
     try {
-      const result = await sendBatch(current.operations)
+      const result = await sendBatch(current.operations, current.covered, sent)
       commit(
         current.covered,
         sent,
