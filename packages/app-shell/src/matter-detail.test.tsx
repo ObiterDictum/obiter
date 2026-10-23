@@ -8,6 +8,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -283,7 +284,11 @@ function buildRouter(matterId: string) {
   const matterRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/matters/$matterId',
-    component: () => <MatterRouteView matterId={matterId} platform="web" />,
+    component: () => (
+      <QueryClientProvider client={new QueryClient()}>
+        <MatterRouteView matterId={matterId} platform="web" />
+      </QueryClientProvider>
+    ),
   })
   return createRouter({
     routeTree: rootRoute.addChildren([matterRoute]),
@@ -295,6 +300,12 @@ function buildRouter(matterId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The overview reads Verify and redaction runs; these tests cover the page
+  // chrome, so every run list is empty.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ runs: [] })),
+  )
   mocks.useMatterDocuments.mockReturnValue(noDocuments())
   mocks.useUploadMatterDocument.mockReturnValue(uploadMutationSpy())
   mocks.blankDocumentFile.mockResolvedValue(
@@ -308,6 +319,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
 })
 
 describe('MatterRouteView delete affordance', () => {
@@ -405,7 +417,7 @@ describe('MatterRouteView document pane', () => {
     render(<RouterProvider router={buildRouter('mtr_1')} />)
 
     await waitFor(() => {
-      expect(screen.getByText('brief.pdf')).toBeTruthy()
+      expect(screen.getByRole('button', { name: /brief\.pdf/ })).toBeTruthy()
     })
     expect(screen.queryByRole('button', { name: 'Open document' })).toBeNull()
     expect(screen.queryByText('Workspace for doc_1')).toBeNull()
