@@ -71,6 +71,11 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       ? crypto.randomUUID()
       : `${String(Date.now())}-${String(Math.random())}`,
   )
+  const committedToggle = useRef<boolean | undefined>(undefined)
+  const acknowledgedSlots = useRef<{
+    covered: readonly DraftSlot[]
+    sent: DraftState
+  } | null>(null)
   const bundleRef = useRef(bundle)
   bundleRef.current = bundle
   const baseline = useSaveBaseline({
@@ -84,6 +89,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       setBundle((current) => ({ ...current, state: update(current.state) })),
     onBlocked: setBlockedReason,
   })
+  if (scope.model?.trackRevisions === committedToggle.current) {
+    committedToggle.current = undefined
+  }
   const storage = draftStorage()
   const session = sessionDraftStorage()
   const storedScope = () =>
@@ -143,29 +151,42 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     // underneath the effects.
   }, [scope.baseVersionId, storage, hydrated])
 
-  useEffect(() => {
+  function persistBundle(next: DraftBundle) {
     if (!hydrated || !storage || !scope.baseVersionId) return
     const writer = storedScope()
-    // A flip recorded equal to the stored toggle is no longer pending — the
-    // persisted payload must not wake a remount with a flip already in place.
+    // Keep the painted drafts until the saved model arrives, but never write
+    // acknowledged slots back while other edits or query refreshes are pending.
+    const acknowledged = acknowledgedSlots.current
+    if (acknowledged) {
+      const slots = clearableSlots(
+        acknowledged.covered,
+        acknowledged.sent,
+        next.state,
+      )
+      next = { ...next, state: removeDraftSlots(next.state, slots) }
+      if (slots.length === 0) acknowledgedSlots.current = null
+    }
     const flipPending =
-      bundle.trackChangesFlip !== undefined &&
-      bundle.trackChangesFlip !== scope.model?.trackRevisions
-    if (
-      !hasDraftState(bundle.state) &&
-      bundle.held.length === 0 &&
-      !flipPending
-    ) {
+      next.trackChangesFlip !== undefined &&
+      next.trackChangesFlip !==
+        (committedToggle.current ?? scope.model?.trackRevisions)
+    if (!hasDraftState(next.state) && next.held.length === 0 && !flipPending) {
       clearDocumentDraft(storage, writer)
       return
     }
     const ok = writeDocumentDraft(storage, writer, {
       baseVersionId: scope.baseVersionId,
-      state: bundle.state,
-      held: bundle.held,
-      ...(flipPending ? { trackChangesFlip: bundle.trackChangesFlip } : {}),
+      state: next.state,
+      held: next.held,
+      ...(flipPending ? { trackChangesFlip: next.trackChangesFlip } : {}),
     })
     setPersistence(ok ? 'ok' : 'unavailable')
+  }
+
+  // Browser persistence follows edits; successful requests also flush it in
+  // their acknowledgement, before model refetches or React effects can run.
+  useEffect(() => {
+    persistBundle(bundle)
   }, [
     bundle,
     scope.baseVersionId,
@@ -173,6 +194,16 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     storage,
     hydrated,
   ])
+
+  function acknowledgeSave(
+    covered: readonly DraftSlot[],
+    sent: DraftState,
+    trackChanges?: boolean,
+  ) {
+    if (trackChanges !== undefined) committedToggle.current = trackChanges
+    acknowledgedSlots.current = { covered, sent }
+    persistBundle(bundleRef.current)
+  }
   useDraftWriterClaim({
     storage,
     documentId: scope.documentId,
@@ -218,6 +249,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     if (id) baseline.markDecisionCommitted(id, version)
   }
   function resetDrafts() {
+    committedToggle.current = undefined
+    acknowledgedSlots.current = null
     setBundle({ state: emptyDraftState(), held: [] })
     history.clear()
     baseline.clear()
@@ -375,6 +408,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     resetDrafts,
     clearSlots,
     commitSaveBoundary,
+    acknowledgeSave,
     resetHistoryAfterDecision,
     held: bundle.held,
     discardHeld,
