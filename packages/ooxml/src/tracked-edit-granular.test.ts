@@ -551,6 +551,34 @@ describe('trackRevisions settings persistence', () => {
     expect(() => writeTrackRevisions(document, true)).toThrow()
   })
 
+  it('leaves duplicate settings relationships untouched on the off path', async () => {
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const original = await zip.file('word/settings.xml')!.async('string')
+    const rels = await zip.file('word/_rels/document.xml.rels')!.async('string')
+    zip.file(
+      'word/_rels/document.xml.rels',
+      rels.replace(
+        '</Relationships>',
+        '<Relationship Id="rIdDup" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings-dup.xml"/></Relationships>',
+      ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    // Two relationships name an ambiguous part: `off` writes nothing it
+    // cannot locate, while `on` fails closed rather than guessing which one
+    // a reader honours.
+    writeTrackRevisions(document, false)
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/settings.xml',
+    )
+    expect(xml).toBe(original)
+    expect(() => writeTrackRevisions(document, true)).toThrow()
+  })
+
   it('leaves an untracked package byte-identical on an untracked save', async () => {
     const zip = await JSZip.loadAsync(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
