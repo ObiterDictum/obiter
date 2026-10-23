@@ -151,14 +151,17 @@ describe('DocxWorkspace change review', () => {
     // Nothing active yet: the first painted revision holds the only stop.
     expect(stops()).toEqual(['ins_a'])
     const span = container.querySelector('[data-inline-change="ins_a"]')
-    if (!span) throw new Error('Expected inline revision')
-    fireEvent.keyDown(span, { key: 'ArrowRight' })
-    // The property change between them has no canvas text, so it is skipped.
-    expect(
-      container
-        .querySelector('[data-inline-change="ins_b"]')
-        ?.getAttribute('aria-current'),
-    ).toBe('true')
+    if (!(span instanceof HTMLElement)) throw new Error('Expected revision')
+    span.focus()
+    const rove = (key: string) => {
+      fireEvent.keyDown(document.activeElement ?? span, { key })
+      return document.activeElement?.getAttribute('data-inline-change')
+    }
+    // The property change between them has no canvas text, so it is skipped,
+    // and focus follows the stop rather than landing in the caret's textarea.
+    expect(rove('ArrowRight')).toBe('ins_b')
+    expect(rove('ArrowLeft')).toBe('ins_a')
+    expect(stops()).toEqual(['ins_a'])
   })
 
   it('dispatches a single accept against the current change', () => {

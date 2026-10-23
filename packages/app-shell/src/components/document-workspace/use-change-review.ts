@@ -299,7 +299,16 @@ export function useChangeReview({
         index += direction
       ) {
         const change = changes[index]
-        if (change && paintedInline(change)) return goTo(index)
+        if (change && paintedInline(change)) {
+          // Roving browses the read-only paint. Revealing would place the
+          // caret, and the caret's paragraph paints its revisions under the
+          // textarea, unfocusable and hidden from assistive technology, so
+          // focus would fall into the textarea. Drop the caret as Escape
+          // does; Enter on the revision places it.
+          setActive({ id: change.id, index })
+          caret.closeEditingStory()
+          return
+        }
       }
     },
     goToPrevious: () => goTo(activeIndex - 1),
