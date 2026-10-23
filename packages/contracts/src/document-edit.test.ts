@@ -22,6 +22,8 @@ describe('document edit contracts', () => {
   }
 
   it('accepts the typed operation surface and exact response', () => {
+    // An omitted trackChanges leaves the stored setting unchanged, so the
+    // parsed request must not invent a value for it.
     expect(
       documentEditRequestSchema.parse({
         baseVersionId: 'ver_1',
@@ -59,7 +61,7 @@ describe('document edit contracts', () => {
           { type: 'delete_paragraph', paragraphId: 'para_2' },
         ],
       }),
-    ).toMatchObject({ trackChanges: false })
+    ).not.toHaveProperty('trackChanges')
     expect(
       documentEditRequestSchema.parse({
         baseVersionId: 'ver_1',
@@ -74,6 +76,24 @@ describe('document edit contracts', () => {
         versionNumber: 2,
       }),
     ).toEqual({ documentId: 'doc_1', versionId: 'ver_2', versionNumber: 2 })
+  })
+
+  it('accepts a settings-only save and rejects an empty one', () => {
+    // `{ operations: [] }` alone carries nothing; with the toggle it is the
+    // request shape a lone flip sends.
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [],
+        trackChanges: true,
+      }),
+    ).toMatchObject({ operations: [], trackChanges: true })
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [],
+      }).success,
+    ).toBe(false)
   })
 
   it.each([

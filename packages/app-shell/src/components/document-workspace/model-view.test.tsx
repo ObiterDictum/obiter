@@ -46,6 +46,7 @@ const model: DocumentModelWire = {
     },
   ],
   comments: [],
+  trackRevisions: false,
   markings: {
     documentKind: null,
     draft: false,

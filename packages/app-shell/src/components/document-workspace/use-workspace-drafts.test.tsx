@@ -43,6 +43,7 @@ function model(text: string): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

@@ -44,6 +44,7 @@ function model(
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,
@@ -1150,6 +1151,59 @@ describe('lineage-driven identity', () => {
     expect(
       hasUnresolvedBaselineIdentities(translated ?? emptyDraftState()),
     ).toBe(false)
+  })
+
+  it('merges reversals two operations record against one run', () => {
+    // A text edit and a property change on the same run each record a
+    // reversal keyed by it; undoing the batch means rejecting every id, not
+    // only the later op's.
+    const mergedLineage: DocumentVersionLineage = {
+      version: 1,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      acceptedOperations: [0, 1],
+      paragraphs: [
+        {
+          fromParagraphId: 'para-000001',
+          toParagraphId: 'para-w14-00000001',
+          runs: [],
+        },
+      ],
+      reversals: [
+        {
+          operation: 0,
+          fromRunId: 'text-000001',
+          fromParagraphId: 'para-000001',
+          rejectOoxmlIds: ['0', '1'],
+        },
+        {
+          operation: 1,
+          fromRunId: 'text-000001',
+          fromParagraphId: 'para-000001',
+          rejectOoxmlIds: ['2', '3'],
+        },
+      ],
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000001': 'Alpha changed' },
+    }
+    const snapshot: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000001': 'Alpha' },
+    }
+    const boundary: SaveBaseline = {
+      covered: [runTextSlot('text-000001')],
+      sent,
+      fromModel: baseModel,
+      lineage: mergedLineage,
+      versionId: 'ver_2',
+      toModel: resultModel,
+    }
+    const translated = translateSnapshot(snapshot, boundary)
+    expect(translated?.trackedRejections).toEqual([
+      { key: 'reject:0,1,2,3', ooxmlIds: ['0', '1', '2', '3'] },
+    ])
   })
 
   it('remaps a live break draft to the canonical paragraph id', () => {

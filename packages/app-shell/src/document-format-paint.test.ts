@@ -38,6 +38,7 @@ describe('painted list restart without an abstract numbering', () => {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

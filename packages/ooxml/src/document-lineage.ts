@@ -1,5 +1,5 @@
+import { buildTrackedReversals } from './document-lineage-reversals'
 import type {
-  DocumentLineageReversal,
   DocumentLineageSegment,
   DocumentLineageRun,
   DocumentModelWire,
@@ -108,6 +108,22 @@ export function recordTrackedChanges(
       fromRunId: context.fromRunId,
     })
   }
+}
+
+/**
+ * Withdraws recorded changes whose elements ended up nested inside `w:ins` or
+ * `w:del` — a property marker folded into a text replacement is not a listed
+ * change, so a reversal group that named its id could never be decided.
+ */
+export function dropTrackedChanges(
+  recorder: LineageRecorder,
+  ooxmlIds: readonly string[],
+) {
+  if (ooxmlIds.length === 0) return
+  const consumed = new Set(ooxmlIds)
+  recorder.trackedChanges = recorder.trackedChanges.filter(
+    (change) => !consumed.has(change.ooxmlId),
+  )
 }
 
 /** The segments a freshly parsed run carries before any edit. */
@@ -337,30 +353,10 @@ export function buildVersionLineage(input: {
   const { recorder, canonicalParagraphIds } = input
   const runAddressesReliable = input.runAddressesReliable ?? true
   const paragraphs: DocumentParagraphLineage[] = []
-
-  // Group the tracked-change elements the batch created by the accepted
-  // operation that created them. An ins-only group is a tracked paragraph
-  // insertion: its content lives inside `w:ins`, so rejecting the group empties
-  // the paragraph and the same decision must remove the shell.
-  const byOperation = new Map<number, RecordedTrackedChange[]>()
-  for (const change of recorder.trackedChanges) {
-    const group = byOperation.get(change.operationIndex) ?? []
-    group.push(change)
-    byOperation.set(change.operationIndex, group)
-  }
-  const insertionChangeIds = new Map<string, string[]>()
-  for (const [operation, group] of byOperation) {
-    if (!group.every((change) => change.elementName === 'ins')) continue
-    const inserted = [...recorder.paragraphOrigin.entries()].find(
-      ([, origin]) =>
-        origin.fromParagraphId === null &&
-        origin.insertedByOperation === operation,
-    )
-    if (!inserted) continue
-    insertionChangeIds.set(inserted[0].id, [
-      ...new Set(group.map((change) => change.ooxmlId)),
-    ])
-  }
+  // Tracked-change elements group by the accepted operation that created
+  // them: ins-only groups that are paragraph insertions name their shell's
+  // paragraph id here, and every other group becomes a reversal below.
+  const { insertionChangeIds, reversals } = buildTrackedReversals(recorder)
 
   for (const story of input.model.stories) {
     // The main story is the editable one. Its paragraphs are all part of the
@@ -409,28 +405,6 @@ export function buildVersionLineage(input: {
       fromParagraphId,
       toParagraphId: null,
       runs: [],
-    })
-  }
-
-  // A tracked operation's reversal is a rejection of the persisted `w:id`s it
-  // created, grouped by the accepted operation so a replacement's `del`/`ins`
-  // pair is handled as one unit. An insertion that created only an `ins` and
-  // no paragraph is a run insertion into an existing paragraph; removing the
-  // paragraph is not part of its reversal. A tracked paragraph insertion is
-  // carried on its paragraph entry (`trackedInsertChangeIds`), so its shell can
-  // be removed in the same decision.
-  const reversals: DocumentLineageReversal[] = []
-  for (const [operation, group] of [...byOperation.entries()].sort(
-    (left, right) => left[0] - right[0],
-  )) {
-    if (group.every((change) => change.elementName === 'ins')) continue
-    const first = group[0]
-    if (!first) continue
-    reversals.push({
-      operation,
-      fromRunId: first.fromRunId,
-      fromParagraphId: first.fromParagraphId,
-      rejectOoxmlIds: [...new Set(group.map((change) => change.ooxmlId))],
     })
   }
 

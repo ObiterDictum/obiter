@@ -490,3 +490,114 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   expect(decidedXml).toContain(`>${SELECTED}</w:t>`)
   expect(decidedXml).toContain(' Example overview')
 })
+
+test('a tracked mid-sentence edit records only the changed token and the toggle persists', async ({
+  page,
+  browser,
+  request,
+}) => {
+  buildFixture()
+  const { email, password } = await createAccount(request)
+  const matter = `E9 granular ${String(Date.now())}`
+  await openFixtureDocument(page, email, password, matter)
+
+  // The fixture's settings.xml carries w:trackRevisions, so the Review toggle
+  // must open ON without a click — the persisted state, not a default.
+  await page.getByRole('tab', { name: 'Review' }).click()
+  const tracking = page
+    .getByRole('button', { name: 'Track changes on' })
+    .first()
+  await expect(tracking).toBeVisible({ timeout: 15_000 })
+
+  // Substitute the quantity inside the first paragraph's single run.
+  await focusParagraph(page, PLAIN)
+  await page.keyboard.press('Home')
+  await page.keyboard.press('End')
+  const original = await editor(page)
+    .inputValue()
+    .catch(() => '')
+  expect(original).toContain(PLAIN)
+  await page.keyboard.press('Home')
+  for (let step = 0; step < PLAIN.length; step += 1) {
+    await page.keyboard.press('Shift+ArrowRight')
+  }
+  await page.keyboard.type('Alicia Example overview')
+
+  const saveResponse = page.waitForResponse(
+    (incoming) =>
+      /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
+      incoming.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  const saved = await saveResponse
+  expect(saved.status(), await saved.text()).toBe(201)
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  const docxPath = await (await downloadPromise).path()
+  const documentXml = zipPart(docxPath, 'word/document.xml')
+  const settingsXml = zipPart(docxPath, 'word/settings.xml')
+  // Only the changed token is wrapped; the sentence around it stays live runs.
+  expect(documentXml).toContain('<w:delText>Alice</w:delText>')
+  expect(documentXml).toContain('>Alicia</w:t>')
+  expect(documentXml).not.toContain(`<w:delText>${PLAIN}`)
+  expect(settingsXml).toContain('trackRevisions')
+
+  // A fresh context reopens with tracking still on — the flag persisted.
+  const fresh = await browser.newContext()
+  const reloaded = await fresh.newPage()
+  try {
+    await openFixtureDocument(reloaded, email, password, matter)
+    await reloaded.getByRole('tab', { name: 'Review' }).click()
+    await expect(
+      reloaded.getByRole('button', { name: 'Track changes on' }).first(),
+    ).toBeVisible({ timeout: 15_000 })
+
+    // Flip the toggle off and save: a lone flip is a settings-only write —
+    // the request carries an empty operation list and the pending value.
+    await reloaded
+      .getByRole('button', { name: 'Track changes on' })
+      .first()
+      .click()
+    await expect(
+      reloaded.getByRole('button', { name: 'Track changes off' }).first(),
+    ).toBeVisible()
+    const settingsSave = reloaded.waitForResponse(
+      (incoming) =>
+        /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
+        incoming.request().method() === 'POST',
+    )
+    await reloaded
+      .getByRole('button', { name: 'Save', exact: true })
+      .first()
+      .click()
+    const flipped = await settingsSave
+    expect(flipped.status(), await flipped.text()).toBe(201)
+    expect(
+      flipped.request().postDataJSON() as {
+        operations: unknown[]
+        trackChanges?: boolean
+      },
+    ).toEqual({
+      baseVersionId: expect.any(String),
+      operations: [],
+      trackChanges: false,
+    })
+  } finally {
+    await fresh.close()
+  }
+
+  // A third context reads the persisted off state back: the toggle must not
+  // reopen on a default or on the stale value an earlier tab held.
+  const reread = await browser.newContext()
+  const rereadPage = await reread.newPage()
+  try {
+    await openFixtureDocument(rereadPage, email, password, matter)
+    await rereadPage.getByRole('tab', { name: 'Review' }).click()
+    await expect(
+      rereadPage.getByRole('button', { name: 'Track changes off' }).first(),
+    ).toBeVisible({ timeout: 15_000 })
+  } finally {
+    await reread.close()
+  }
+})

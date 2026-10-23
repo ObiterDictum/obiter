@@ -81,6 +81,13 @@ export const documentMarkingsRequestSchema = z
   .object({
     baseVersionId: editIdSchema,
     markings: documentMarkingsWireSchema,
+    /**
+     * The track-changes toggle the markings version should persist. A
+     * markings commit is a new immutable version, so an unsaved flip rides
+     * on it rather than being silently dropped; omitted leaves the stored
+     * `w:trackRevisions` state unchanged.
+     */
+    trackRevisions: z.boolean().optional(),
   })
   .strict()
 export type DocumentMarkingsRequest = z.infer<

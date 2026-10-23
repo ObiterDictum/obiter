@@ -5,12 +5,10 @@ import { documentVersionLineageSchema } from './document-lineage'
 import {
   DOCUMENT_EDIT_OPERATION_MAX_COUNT,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
+  documentEditOperationSchema,
   editIdSchema,
 } from './document-edit'
-import {
-  documentEditOperationsSchema,
-  documentEditResponseSchema,
-} from './document-edit-request'
+import { documentEditResponseSchema } from './document-edit-request'
 
 export const DOCUMENT_COLLABORATION_PARTICIPANT_MAX_COUNT = 50
 
@@ -69,10 +67,28 @@ export const documentCollaborationMergeRequestSchema = z
   .object({
     baseVersionId: editIdSchema,
     syncId: editIdSchema,
-    operations: documentEditOperationsSchema,
+    operations: z
+      .array(documentEditOperationSchema)
+      .max(DOCUMENT_EDIT_OPERATION_MAX_COUNT),
+    /**
+     * Same contract as the direct edit: the persisted toggle the merged
+     * version carries. Omitted leaves the current version's setting — and
+     * the tracking behaviour — unchanged; with it, an empty `operations` is
+     * a settings-only merge.
+     */
     trackChanges: z.boolean().optional(),
   })
   .strict()
+  .superRefine((request, context) => {
+    if (request.operations.length === 0 && request.trackChanges === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['operations'],
+        message:
+          'A merge request must carry operations or a track-changes state.',
+      })
+    }
+  })
 export type DocumentCollaborationMergeRequest = z.infer<
   typeof documentCollaborationMergeRequestSchema
 >

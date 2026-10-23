@@ -58,6 +58,7 @@ function modelWith(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

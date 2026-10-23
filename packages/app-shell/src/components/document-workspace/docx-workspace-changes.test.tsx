@@ -138,6 +138,26 @@ describe('DocxWorkspace change review', () => {
     )
   })
 
+  it('carries a pending toggle flip on a decision', () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [inserted], decideAsync: decide })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }))
+
+    // A pending flip is unsaved state the decision commits with the version,
+    // so the request carries it; without one the field stays absent.
+    expect(decide).toHaveBeenCalledWith(
+      {
+        baseVersionId: 'ver_1',
+        action: 'accept',
+        changeIds: ['chg_1'],
+        trackRevisions: true,
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    )
+  })
+
   it('refuses a decision while unsaved edits exist', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted], decideAsync: decide })
@@ -289,6 +309,7 @@ describe('DocxWorkspace change review', () => {
           preservedXmlFragments: [],
           changes: [],
           comments: [],
+          trackRevisions: false,
           markings: {
             documentKind: null,
             draft: false,

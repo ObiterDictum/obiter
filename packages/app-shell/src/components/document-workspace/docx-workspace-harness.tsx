@@ -152,6 +152,7 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  trackRevisions: false,
   markings: {
     documentKind: null,
     draft: false,
@@ -218,6 +219,7 @@ export function multiParagraphModel(
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,
