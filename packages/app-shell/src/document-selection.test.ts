@@ -525,6 +525,7 @@ describe('vertical movement across astral characters', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,

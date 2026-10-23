@@ -84,7 +84,16 @@ export function DocxWorkspace({
   const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
-  const [trackChanges, setTrackChanges] = useState(false)
+  // The toggle follows the version's `w:trackRevisions`. An unsaved flip is
+  // the user's intent until a version persists it: it lives in the draft
+  // bundle, so it survives a remount the way every other unsaved edit does,
+  // and a version write — save, merge, decision or markings — carries it. A
+  // reload discards it with the drafts it stood beside.
+  const trackChanges =
+    drafts.trackChangesFlip !== undefined &&
+    drafts.trackChangesFlip !== (model?.trackRevisions ?? false)
+      ? drafts.trackChangesFlip
+      : (model?.trackRevisions ?? false)
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
   const {
@@ -103,6 +112,9 @@ export function DocxWorkspace({
 
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
+  const handleSaved = (version: string | null) => {
+    setSavedVersion(version ? { documentId, versionId: version } : null)
+  }
   const save = useDocumentSave({
     documentId,
     matterId,
@@ -113,8 +125,7 @@ export function DocxWorkspace({
     presence,
     currentUserId: me?.user.id,
     remoteChange,
-    onSaved: (version) =>
-      setSavedVersion(version ? { documentId, versionId: version } : null),
+    onSaved: handleSaved,
   })
 
   // Verification reads the stored version, so it must stay disabled while any
@@ -172,6 +183,7 @@ export function DocxWorkspace({
     model,
     changes: changesQuery.data?.changes ?? [],
     baseVersionId,
+    trackChanges,
     decision: decideChange,
     drafts,
     save,
@@ -194,6 +206,7 @@ export function DocxWorkspace({
     matterId,
     model,
     baseVersionId,
+    trackChanges,
     save,
     onSaved: (version) => setSavedVersion({ documentId, versionId: version }),
     onNotice: setBanner,
@@ -320,7 +333,7 @@ export function DocxWorkspace({
         citationStyle: legalTools.citationStyle,
         onCitationStyle: legalTools.onCitationStyle,
         legalChecks: legalTools.legalChecks,
-        onToggleTrackChanges: () => setTrackChanges((value) => !value),
+        onToggleTrackChanges: () => drafts.setTrackChangesFlip(!trackChanges),
         onZoom: setZoom,
         onExportText: exports.onExportText,
         onExportShareSafe: exports.onExportShareSafe,

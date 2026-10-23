@@ -10,6 +10,7 @@ import {
 } from './document-edit.test-support'
 import {
   collaborationApp,
+  firstParagraph,
   firstRun,
   mergeRequest,
   secondRun,
@@ -75,6 +76,8 @@ describe('collaboration merges', () => {
       operationCount: 1,
       operationsSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
       outcome: 'merged',
+      trackRevisions: false,
+      trackRevisionsChanged: false,
     })
     expect(database.transactionCommands).toEqual([
       'begin',
@@ -209,6 +212,103 @@ describe('collaboration merges', () => {
       'Second revision',
     )
     expect(route.storage.binary.get(sourceKey)).toEqual(sourceBytes)
+  })
+
+  it('commits a settings-only merge against a skeleton-changed current version', async () => {
+    const database = new EditDatabase()
+    const route = collaborationApp(database)
+    // A collaborator's insert changes the current skeleton against the
+    // client's base, which the empty batch cannot reconcile — it has no
+    // operations to conflict. The merge must still commit the toggle.
+    const inserted = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          baseVersionId: 'ver_1',
+          syncId: 'sync_insert',
+          operations: [
+            {
+              type: 'insert_paragraph_after',
+              paragraphId: firstParagraph.id,
+              intentId: 'i1',
+              text: 'Inserted',
+            },
+          ],
+        }),
+      },
+    )
+    expect(inserted.status).toBe(201)
+    const settingsOnly = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          baseVersionId: 'ver_1',
+          syncId: 'sync_settings',
+          operations: [],
+          trackChanges: true,
+        }),
+      },
+    )
+    const body = documentCollaborationMergeResponseSchema.parse(
+      await settingsOnly.json(),
+    )
+
+    expect(settingsOnly.status).toBe(201)
+    expect(body).toMatchObject({ versionNumber: 3, outcome: 'merged' })
+    expect(database.versions.size).toBe(3)
+    const version = database.versions.get(body.versionId)
+    const bytes = route.storage.binary.get(version?.object_key ?? '')
+    if (!bytes) throw new Error('Merged source is missing.')
+    expect((await parseDocx(bytes)).model.trackRevisions).toBe(true)
+    expect(database.audits.map(({ action }) => action)).toEqual([
+      'document.version_create',
+      'document.collaboration_merge',
+      'document.version_create',
+      'document.collaboration_merge',
+    ])
+    expect(database.audits[3]?.metadata).toMatchObject({
+      operationCount: 0,
+      outcome: 'merged',
+      trackRevisions: true,
+      trackRevisionsChanged: true,
+    })
+  })
+
+  it('reports a settings-only merge for the stored state as already applied', async () => {
+    const database = new EditDatabase()
+    const route = collaborationApp(database)
+    const settingsOnly = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          baseVersionId: 'ver_1',
+          syncId: 'sync_noop',
+          operations: [],
+          trackChanges: false,
+        }),
+      },
+    )
+    const body = documentCollaborationMergeResponseSchema.parse(
+      await settingsOnly.json(),
+    )
+
+    // The stored setting is already off, so the merge commits nothing and a
+    // replayed sync id stays idempotent.
+    expect(settingsOnly.status).toBe(200)
+    expect(body).toMatchObject({
+      versionId: 'ver_1',
+      versionNumber: 1,
+      outcome: 'already_applied',
+    })
+    expect(database.versions.size).toBe(1)
+    expect(database.audits).toEqual([])
+    expect(route.storage.writes).toEqual([])
   })
 
   it('returns 409 for an overlapping stale edit without another version or audit', async () => {

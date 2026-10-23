@@ -84,6 +84,7 @@ export function createTrackedChangeRoutes(pool: Pool, storage: StorageService) {
         action: request.data.action,
         changeIds: request.data.changeIds,
         removeParagraphIds: request.data.removeParagraphIds,
+        trackRevisions: request.data.trackRevisions,
         userId: resolved.user.id,
         requestId: c.get('requestId'),
       })

@@ -141,7 +141,7 @@ export function createDocumentCollaborationRoutes(
         baseVersionId: request.data.baseVersionId,
         syncId: request.data.syncId,
         operations: request.data.operations,
-        trackChanges: request.data.trackChanges ?? false,
+        trackChanges: request.data.trackChanges,
         userId: resolved.user.id,
         userName: resolved.user.name,
         requestId: c.get('requestId'),
@@ -174,6 +174,19 @@ export function createDocumentCollaborationRoutes(
         )
       ) {
         throw new Error('Invalid collaboration conflict response.')
+      }
+      // A conflict that names no operation — a settings-only merge that lost
+      // a commit race — has no index list for the schema'd response, so it
+      // reports the plain conflict the client reloads on the same way.
+      if (result.operationIndexes.length === 0) {
+        const body: ApiErrorResponse = {
+          error: {
+            code: 'conflict_detected',
+            message: 'The document has changed since editing began.',
+            requestId: c.get('requestId'),
+          },
+        }
+        return c.json(body, 409)
       }
       const response = documentCollaborationConflictResponseSchema.parse({
         error: {

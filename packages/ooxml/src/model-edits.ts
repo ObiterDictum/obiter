@@ -1,6 +1,10 @@
 import { documentEditOperationsSchema } from '@obiter/contracts'
 import { OoxmlError } from './model'
-import { recordTrackedChanges, type LineageRecorder } from './document-lineage'
+import {
+  dropTrackedChanges,
+  recordTrackedChanges,
+  type LineageRecorder,
+} from './document-lineage'
 import { planOperation, trackedRunIdOf } from './model-edit-plan'
 import {
   validatePlannedOperations,
@@ -81,6 +85,9 @@ export function applyDocumentEdits(
           fromRunId: trackedRunIdOf(operation),
         })
       }
+      // An earlier marker this operation folded inside `w:ins`/`w:del` is not
+      // a listed change, so its recorded reversal entry is withdrawn.
+      dropTrackedChanges(lineage, trackedWriter.takeConsumedChanges())
     }
   }
 
@@ -105,6 +112,7 @@ export function applyDocumentEdits(
             fromRunId: null,
           })
         }
+        dropTrackedChanges(lineage, trackedWriter.takeConsumedChanges())
       }
     }
   }

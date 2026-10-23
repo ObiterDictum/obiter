@@ -97,6 +97,7 @@ describe('out-of-contract emphasis reversal', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,

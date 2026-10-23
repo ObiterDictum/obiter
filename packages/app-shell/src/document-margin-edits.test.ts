@@ -82,6 +82,7 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  trackRevisions: false,
   markings: {
     documentKind: null,
     draft: false,

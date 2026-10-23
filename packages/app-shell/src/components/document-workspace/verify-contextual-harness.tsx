@@ -235,6 +235,7 @@ function model(): DocumentModelWire {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: EMPTY_DOCUMENT_MARKINGS,
   }
 }

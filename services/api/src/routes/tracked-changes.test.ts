@@ -419,6 +419,22 @@ describe('tracked change routes', () => {
     }
   })
 
+  it('persists a pending toggle flip carried on a decision', async () => {
+    const database = new EditDatabase()
+    const route = trackedRouteApp(database)
+    const response = await route.app.request(
+      '/api/documents/doc_1/tracked-changes/decision',
+      decisionRequest('accept', insertion.id, undefined, 'ver_1', true),
+    )
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as { versionId: string }
+    const version = database.versions.get(body.versionId)
+    const source = route.storage.binary.get(version?.object_key ?? '')
+    if (!source) throw new Error('Decision source was not stored.')
+    expect((await parseDocx(source)).model.trackRevisions).toBe(true)
+  })
+
   it('denies a view grantee before decision validation or storage access', async () => {
     const route = trackedRouteApp(new EditDatabase({ access: 'view' }))
     const response = await route.app.request(
@@ -617,6 +633,7 @@ function decisionRequest(
   changeId: string,
   changeIds?: string[],
   baseVersionId = 'ver_1',
+  trackRevisions?: boolean,
 ) {
   return {
     method: 'POST',
@@ -625,6 +642,7 @@ function decisionRequest(
       baseVersionId,
       action,
       changeIds: changeIds ?? [changeId],
+      ...(trackRevisions !== undefined ? { trackRevisions } : {}),
     }),
   }
 }

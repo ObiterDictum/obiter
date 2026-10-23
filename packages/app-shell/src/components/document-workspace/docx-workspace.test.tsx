@@ -518,6 +518,7 @@ describe('DocxWorkspace markings', () => {
         versionNumber: current,
         model: {
           ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: false,
           markings: {
             documentKind: null,
             draft: current === 2,
@@ -531,6 +532,8 @@ describe('DocxWorkspace markings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Draft' }))
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
+    // No flip is pending, so the request leaves the stored setting alone
+    // rather than echoing the value this mount loaded with.
     expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
       baseVersionId: 'ver_1',
       markings: {
@@ -557,6 +560,7 @@ describe('DocxWorkspace markings', () => {
       models: {
         doc_1: {
           ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: false,
           markings: {
             // A kind this build does not list is still offered and kept.
             documentKind: 'externally-authored-kind',
@@ -627,5 +631,72 @@ describe('DocxWorkspace markings', () => {
       ).toBeTruthy(),
     )
     expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
+  })
+})
+
+describe('DocxWorkspace track changes toggle', () => {
+  it('opens with tracking on when the version persists w:trackRevisions', () => {
+    mountWorkspace({
+      models: {
+        doc_1: {
+          ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: true,
+        },
+      },
+    })
+    openRibbonTab('Review')
+    const toggle = screen.getByRole('button', { name: 'Track changes on' })
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('saves a lone toggle flip as a settings-only version', async () => {
+    const editAsync = vi.fn(async (_input: unknown) => ({
+      documentId: 'doc_1',
+      versionId: 'ver_2',
+      versionNumber: 2,
+    }))
+    mountWorkspace({ editAsync })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+
+    // A flip with no edits is still unsaved state, and Save persists it.
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-save-state]')
+          ?.getAttribute('data-save-state'),
+      ).toBe('unsaved'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+    expect(editAsync.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ operations: [], trackChanges: true }),
+    )
+  })
+
+  it('restores a pending toggle flip across a remount', async () => {
+    const tracked = {
+      ...multiParagraphModel([paragraph('p1', 'Hello')]),
+      trackRevisions: true,
+    }
+    const view = mountWorkspace({ models: { doc_1: tracked } })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes on' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Track changes off' }),
+      ).toBeTruthy(),
+    )
+
+    // Unsaved work survives a remount through the draft store — a pending
+    // flip is unsaved work, so the reopened toggle is still off.
+    view.unmount()
+    mountWorkspace({ models: { doc_1: tracked } })
+    openRibbonTab('Review')
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Track changes off' }),
+      ).toBeTruthy(),
+    )
   })
 })

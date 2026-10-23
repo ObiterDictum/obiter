@@ -258,6 +258,13 @@ export const documentModelWireSchema = z.object({
   preservedXmlFragments: z.array(preservedDocumentXmlFragmentSchema),
   changes: z.array(documentChangeWireSchema).default([]),
   /**
+   * The package's `w:trackRevisions` toggle from `word/settings.xml`.
+   * Required for the same reason as `comments`: a cached model written
+   * before this field existed fails validation and regenerates rather than
+   * reporting tracking off.
+   */
+  trackRevisions: z.boolean(),
+  /**
    * Comments carried by the package's own `word/comments.xml`. Required rather
    * than defaulted so a cached model written before this field existed fails
    * validation and regenerates instead of reporting no imported comments.

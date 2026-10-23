@@ -284,6 +284,64 @@ describe('POST /api/documents/:id/edit', () => {
     expect(JSON.stringify(database.audits)).not.toContain('<w:')
   })
 
+  it('persists a settings-only flip as a version with a settings audit', async () => {
+    const database = new EditDatabase()
+    const { app, storage } = routeApp(database)
+    const response = await app.request('/api/documents/doc_1/edit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        baseVersionId: 'ver_1',
+        operations: [],
+        trackChanges: true,
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as { versionId: string }
+    expect(database.currentVersionId).toBe(body.versionId)
+    expect(database.versions.size).toBe(2)
+    const version = database.versions.get(body.versionId)
+    const saved = storage.binary.get(version?.object_key ?? '')
+    if (!saved) throw new Error('Settings-only source was not stored.')
+    expect((await parseDocx(saved)).model.trackRevisions).toBe(true)
+    expect(database.audits.map(({ action }) => action)).toEqual([
+      'document.version_create',
+      'document.edit',
+    ])
+    expect(database.audits[1]?.metadata).toMatchObject({
+      operationCount: 0,
+      trackRevisions: true,
+      trackRevisionsChanged: true,
+    })
+  })
+
+  it('returns the base version for a flip that repeats the stored setting', async () => {
+    const database = new EditDatabase()
+    const { app, storage } = routeApp(database)
+    // The stored setting is off, so asking for off writes nothing: no
+    // version, no audit, no object — a repeated toggle stays idempotent.
+    const response = await app.request('/api/documents/doc_1/edit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        baseVersionId: 'ver_1',
+        operations: [],
+        trackChanges: false,
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toMatchObject({
+      versionId: 'ver_1',
+      versionNumber: 1,
+    })
+    expect(database.versions.size).toBe(1)
+    expect(database.currentVersionId).toBe('ver_1')
+    expect(database.audits).toEqual([])
+    expect(storage.writes).toEqual([])
+  })
+
   it('rechecks document existence under the transaction lock', async () => {
     const database = new EditDatabase({ transactionDocumentMissing: true })
     const { app, storage } = routeApp(database)

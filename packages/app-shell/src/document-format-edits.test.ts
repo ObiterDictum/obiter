@@ -62,6 +62,7 @@ const model: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  trackRevisions: false,
   markings: {
     documentKind: null,
     draft: false,
@@ -354,6 +355,7 @@ function modelWithRuns(
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,
@@ -1197,6 +1199,7 @@ describe('list and style hardening', () => {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,

@@ -89,6 +89,7 @@ function wireModel(
     preservedXmlFragments: [],
     changes: extras.changes ?? [],
     comments: [],
+    trackRevisions: false,
     markings: EMPTY_DOCUMENT_MARKINGS,
   }
 }

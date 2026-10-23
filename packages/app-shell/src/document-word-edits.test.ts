@@ -37,6 +37,7 @@ const twoParagraphs: DocumentModelWire = {
   preservedXmlFragments: [],
   changes: [],
   comments: [],
+  trackRevisions: false,
   markings: {
     documentKind: null,
     draft: false,
@@ -130,6 +131,7 @@ describe('applyDeleteBackward', () => {
       preservedXmlFragments: [],
       changes: [],
       comments: [],
+      trackRevisions: false,
       markings: {
         documentKind: null,
         draft: false,
@@ -203,6 +205,7 @@ describe('field-boundary joins', () => {
     preservedXmlFragments: [],
     changes: [],
     comments: [],
+    trackRevisions: false,
     markings: {
       documentKind: null,
       draft: false,
