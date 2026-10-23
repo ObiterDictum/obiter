@@ -20,6 +20,12 @@ export const STRUCTURE_BLOCKS_SELECTION =
 export const JOIN_FORMATTING_BLOCKS_EDIT =
   'This edit would drop formatting the document cannot save. Change the text on each side instead.'
 
+/** The message shown when a join or range edit would remove a paragraph that
+ * holds tracked changes: the writer refuses to delete revision markup, so the
+ * edit is refused before the canvas and the save disagree. */
+export const TRACKED_CHANGE_BLOCKS_JOIN =
+  'This paragraph holds tracked changes. Accept or reject them before joining paragraphs.'
+
 /** The message shown when input that must replace a document selection cannot
  * be expressed as such, instead of the input silently disappearing. */
 export const INPUT_BLOCKS_EDIT =
@@ -66,6 +72,7 @@ export type SelectionRefusal =
 
 const REFUSAL_MESSAGES = {
   'join-formatting': JOIN_FORMATTING_BLOCKS_EDIT,
+  'tracked-change': TRACKED_CHANGE_BLOCKS_JOIN,
   'find-structure': FIND_REPLACE_BLOCKS_STRUCTURE,
   'find-empty': FIND_REPLACE_EMPTY,
   input: INPUT_BLOCKS_EDIT,

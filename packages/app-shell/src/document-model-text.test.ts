@@ -147,6 +147,7 @@ describe('runChangeKinds', () => {
         {
           id: 'c1',
           kind: 'insert',
+          inlinePosition: null,
           elementName: 'ins',
           text: 'Alice',
           storyPartName: 'word/document.xml',
@@ -156,6 +157,7 @@ describe('runChangeKinds', () => {
         {
           id: 'c2',
           kind: 'delete',
+          inlinePosition: null,
           elementName: 'del',
           text: 'old',
           storyPartName: 'word/document.xml',

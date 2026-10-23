@@ -5,6 +5,7 @@ import {
   paragraphPlainText,
 } from '../../document-model-text'
 import type { ExtraRuns } from '../../document-word-edits'
+import { editableRangeText } from './inline-change-review'
 
 export function caretFromPoint(
   clientX: number,
@@ -50,7 +51,10 @@ export function paragraphClickCaret(
   range.setEnd(point.node, point.offset)
   const sliceFrom = Number(paragraphEl.dataset.paragraphFrom ?? '0')
   const max = endOffset(paragraphId)
-  const offset = Math.min(Math.max(0, sliceFrom + range.toString().length), max)
+  const offset = Math.min(
+    Math.max(0, sliceFrom + editableRangeText(range).length),
+    max,
+  )
   return { paragraphId, offset }
 }
 

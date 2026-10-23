@@ -442,6 +442,7 @@ describe('table of contents save partitioning', () => {
       {
         id: 'c1',
         kind: 'insert',
+        inlinePosition: null,
         elementName: 'ins',
         storyPartName: 'word/document.xml',
         paragraphId: 't1',
@@ -587,6 +588,7 @@ describe('table of contents ribbon availability', () => {
       {
         id: 'c1',
         kind: 'insert',
+        inlinePosition: null,
         elementName: 'ins',
         storyPartName: 'word/document.xml',
         paragraphId: 'p1',

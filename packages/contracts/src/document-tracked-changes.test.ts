@@ -9,6 +9,7 @@ import {
 const change = {
   id: 'change-000001',
   kind: 'move' as const,
+  inlinePosition: null,
   elementName: 'moveFrom' as const,
   direction: 'from' as const,
   ooxmlId: '001',
@@ -127,4 +128,41 @@ describe('tracked change contracts', () => {
       }).success,
     ).toBe(false)
   })
+})
+
+it('requires inline-position metadata so cached revisions regenerate', async () => {
+  const { documentChangeWireSchema } = await import('./document-model')
+  expect(
+    documentChangeWireSchema.safeParse({ ...change, inlinePosition: undefined })
+      .success,
+  ).toBe(false)
+  expect(
+    documentChangeWireSchema.safeParse({
+      ...change,
+      inlinePosition: { beforeRunId: null },
+    }).success,
+  ).toBe(true)
+  expect(
+    documentChangeWireSchema.safeParse({
+      ...change,
+      inlinePosition: { beforeRunId: '' },
+    }).success,
+  ).toBe(false)
+})
+
+it('bounds display segments with the hyperlink scheme allowlist', async () => {
+  const { documentChangeWireSchema } = await import('./document-model')
+  const segments = (hyperlinkTarget: string) => ({
+    ...change,
+    inlinePosition: {
+      beforeRunId: null,
+      segments: [{ text: 'linked', deleted: true, hyperlinkTarget }],
+    },
+  })
+  expect(
+    documentChangeWireSchema.safeParse(segments('https://example.com')).success,
+  ).toBe(true)
+  expect(
+    documentChangeWireSchema.safeParse(segments('javascript:alert(1)')).success,
+  ).toBe(false)
 })

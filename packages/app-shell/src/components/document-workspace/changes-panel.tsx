@@ -1,5 +1,6 @@
 import { Button, EmptyState, cn } from '@obiter/ui'
 import type { ChangeReview } from './use-change-review'
+import { labelledBreaks } from './inline-change-review'
 
 export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
   const { changes } = review
@@ -141,7 +142,9 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
                     {change.elementName ? ` · ${change.elementName}` : ''}
                   </p>
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                    {change.text || 'Property change'}
+                    {change.text
+                      ? labelledBreaks(change.text)
+                      : 'Property change'}
                   </p>
                 </button>
                 {undecidableReason ? (

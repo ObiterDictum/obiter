@@ -5,6 +5,7 @@ import { rejectedShellParagraphIds } from './document-review'
 
 const inserted = (id: string, paragraphId: string): DocumentChangeWire => ({
   id,
+  inlinePosition: null,
   elementName: 'ins',
   kind: 'insert',
   storyPartName: 'word/document.xml',
@@ -68,6 +69,7 @@ describe('rejectedShellParagraphIds', () => {
       inserted('c1', 'p1'),
       {
         id: 'c2',
+        inlinePosition: null,
         elementName: 'rPrChange',
         kind: 'property',
         scope: 'run',

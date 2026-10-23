@@ -31,6 +31,7 @@ import { emptyDraftState } from '../../document-save-plan'
 import { writeDocumentDraft } from '../../document-draft-store'
 import {
   mountWorkspace,
+  rerenderWorkspace,
   openRibbonTab,
   selectBodyParagraph,
 } from './docx-workspace-harness'
@@ -963,7 +964,11 @@ describe('undo across a successful save', () => {
     })
     // The decision commits but the result model lags, as a real refetch does.
     const decideAsync = vi.fn((input: never) => document.decideAsync(input))
-    mountWorkspace({ editAsync, decideAsync, modelFor: () => served })
+    const view = mountWorkspace({
+      editAsync,
+      decideAsync,
+      modelFor: () => served,
+    })
     enableTracking()
     selectBodyParagraph()
     fireEvent.change(field(), { target: { value: 'Hello world' } })
@@ -985,8 +990,11 @@ describe('undo across a successful save', () => {
     expect(document.editAsync).toHaveBeenCalledTimes(1)
 
     // Once the decision model is served, the gate clears and the next edit
-    // saves against the new base. The field change forces the render.
+    // saves against the new base. Deliver the refetch before editing: the
+    // old wholly tracked paragraph deliberately has no editable field.
     served = document.modelFor()
+    rerenderWorkspace(view, 'doc_1')
+    await waitFor(() => expect(saveState()).toBe('saved'))
     fireEvent.change(field(), { target: { value: 'Hello there' } })
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     await clickSaveAndSettle(

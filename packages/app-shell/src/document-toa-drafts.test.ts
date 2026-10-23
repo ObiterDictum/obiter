@@ -397,6 +397,7 @@ describe('table of authorities save partitioning', () => {
       {
         id: 'ch1',
         kind: 'insert',
+        inlinePosition: null,
         elementName: 'ins',
         storyPartName: 'word/document.xml',
         paragraphId: 'c1',

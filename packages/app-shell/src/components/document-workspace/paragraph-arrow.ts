@@ -12,6 +12,7 @@ import {
   paragraphPlainText,
 } from '../../document-model-text'
 import type { ExtraRuns } from '../../document-word-edits'
+import { revisionOnlyParagraph } from '../../document-inline-index'
 import {
   firstLineIndentPx,
   wrapLines,
@@ -257,9 +258,17 @@ type NeighborSource = {
 export function paragraphNeighborResolver(
   ctx: NeighborSource & { deletedParagraphIds: string[] },
 ): ParagraphNeighborResolver {
-  const order =
+  // A revision-only paragraph mounts no editor, so stepping into it would
+  // drop keyboard focus; arrows pass over it as they pass revision-only rows.
+  const readOnly = new Set(
+    ctx.paragraphs
+      .filter((paragraph) => revisionOnlyParagraph(ctx.model, paragraph))
+      .map((paragraph) => paragraph.id),
+  )
+  const order = (
     ctx.order ??
     flowParagraphIds(ctx.model, ctx.inserts, ctx.deletedParagraphIds)
+  ).filter((id) => !readOnly.has(id))
   const index = new Map(order.map((id, at) => [id, at]))
   return (paragraphId, wrapWidthPx, drafts) => {
     const at = index.get(paragraphId)
