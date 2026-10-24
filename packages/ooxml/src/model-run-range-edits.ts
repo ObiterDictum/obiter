@@ -1,3 +1,4 @@
+import { sliceRunRevisionMetadata } from './run-revision-slice'
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
 import {
@@ -299,7 +300,7 @@ function splitReplacedRun(
   const properties = run.runProperties.join('')
   const closeRun = source.slice(run.runRange.endTagStart, run.runRange.end)
   const fragments = [...run.wire.preservedXmlFragments]
-  const parts: Array<{ xml: string; text: string }> = []
+  const parts: Array<{ xml: string; text: string; replaced?: true }> = []
   for (let index = 0; index < ordered.length - 1; index += 1) {
     const start = ordered[index]!
     const end = ordered[index + 1]!
@@ -313,6 +314,7 @@ function splitReplacedRun(
       parts.push({
         xml: `${openRun}${propertiesXml}${wordRunInnerTextXml(prefix, hit.text)}${closeRun}`,
         text: hit.text,
+        replaced: true,
       })
     } else {
       const startCut = start === 0 ? undefined : cuts.get(start)
@@ -331,6 +333,16 @@ function splitReplacedRun(
     ...(run.wire.hyperlinkTarget
       ? { hyperlinkTarget: run.wire.hyperlinkTarget }
       : {}),
+    ...(part.replaced
+      ? {
+          textRevisionEligible: false,
+          textRevisionTokens: [{ kind: 'text' as const, text: part.text }],
+        }
+      : sliceRunRevisionMetadata(
+          run.wire,
+          ordered[index] ?? 0,
+          ordered[index + 1] ?? run.wire.text.length,
+        )),
     text: part.text,
     preservedXmlFragments: [...fragments],
   }))

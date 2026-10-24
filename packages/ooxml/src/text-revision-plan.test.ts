@@ -119,3 +119,37 @@ it('does not advertise granular edits for runs with stored property revisions', 
     ),
   ).toThrow()
 })
+
+it('keeps split run revision text local after inserting a footnote', async () => {
+  const zip = await JSZip.loadAsync(
+    await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+  )
+  zip.file(
+    'word/document.xml',
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>cat</w:t><w:tab/><w:t>dog</w:t></w:r></w:p></w:body></w:document>',
+  )
+  const document = await parseDocx(
+    await zip.generateAsync({ type: 'uint8array' }),
+  )
+  const paragraph = document.model.stories[0]?.paragraphs[0]
+  if (!paragraph) throw new Error('Missing fixture paragraph')
+  applyDocumentEdits(document, [
+    {
+      type: 'insert_footnote',
+      paragraphId: paragraph.id,
+      offset: 4,
+      text: 'Synthetic note',
+    },
+  ])
+  const plans = paragraph.runs
+    .filter((run) => run.text)
+    .map((run) =>
+      planTextRevision(
+        run.text,
+        'x',
+        run.textRevisionEligible === true,
+        run.textRevisionTokens,
+      ),
+    )
+  expect(plans.map((plan) => plan.removed)).toEqual(['cat\td', 'og'])
+})

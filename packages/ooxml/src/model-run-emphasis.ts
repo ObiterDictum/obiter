@@ -1,3 +1,4 @@
+import { sliceRunRevisionMetadata } from './run-revision-slice'
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
 import { locateOffset } from './text-offsets'
@@ -332,6 +333,11 @@ function splitRun(
     ...(run.wire.hyperlinkTarget
       ? { hyperlinkTarget: run.wire.hyperlinkTarget }
       : {}),
+    ...sliceRunRevisionMetadata(
+      run.wire,
+      ordered[index] ?? 0,
+      ordered[index + 1] ?? run.wire.text.length,
+    ),
     text: part.text,
     preservedXmlFragments: part.fragments,
   }))
