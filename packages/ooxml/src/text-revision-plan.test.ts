@@ -240,7 +240,7 @@ it('preserves the unchanged space after a CRLF source when saving a tracked subs
   const saved = await parseDocx(await serialiseDocx(document))
   expect(
     saved.model.stories[0]?.paragraphs[0]?.runs.map((run) => run.text).join(''),
-  ).toBe('a\nb ')
+  ).toBe('a\r\nb ')
   expect(
     saved.model.changes.map((change) => [change.kind, change.text]),
   ).toEqual([
@@ -271,7 +271,7 @@ it('keeps retained tabs after their source text when CRLF is normalised', async 
   expect(
     saved.model.changes.map((change) => [change.kind, change.text]),
   ).toEqual([
-    ['delete', plan.removed],
+    ['delete', 'a\r\nb\tc'],
     ['insert', plan.inserted],
   ])
 })
@@ -486,5 +486,43 @@ for (const control of ['<w:tab/>', '<w:fldChar w:fldCharType="begin"/>']) {
     expect(paragraph.runs[0]?.textRevisionTokens).toEqual(
       saved.model.stories[0]?.paragraphs[0]?.runs[0]?.textRevisionTokens,
     )
+  })
+}
+
+for (const encoded of ['&#13;', '&#13;&#10;']) {
+  it(`preserves source ${encoded} in tracked prefixes, suffixes and deletions`, async () => {
+    for (const [children, next, expected] of [
+      [
+        `<w:t>a${encoded}b c</w:t>`,
+        'a\nb d',
+        `<w:t xml:space="preserve">a${encoded}b </w:t>`,
+      ],
+      [
+        `<w:t>c a${encoded}b</w:t>`,
+        'd a\nb',
+        `<w:t xml:space="preserve"> a${encoded}b</w:t>`,
+      ],
+      [
+        `<w:t>a${encoded}b c</w:t>`,
+        ' c',
+        `<w:delText>a${encoded}b</w:delText>`,
+      ],
+      [
+        `<w:t>a${encoded}b</w:t><w:tab/>`,
+        'x',
+        `<w:delText>a${encoded}b</w:delText>`,
+      ],
+    ]) {
+      const { document, run } = await revisionFixture(children)
+      applyDocumentEdits(
+        document,
+        [{ type: 'replace_run_text', runId: run.id, text: next }],
+        { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
+      )
+      const zip = await JSZip.loadAsync(await serialiseDocx(document))
+      expect(await zip.file('word/document.xml')?.async('string')).toContain(
+        expected,
+      )
+    }
   })
 }

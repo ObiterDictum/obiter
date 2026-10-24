@@ -1,5 +1,3 @@
-import { normaliseEditText } from '@obiter/contracts'
-import { decodeXmlReferences } from './xml-lexemes'
 import {
   OoxmlError,
   type ParagraphAnchor,
@@ -9,6 +7,7 @@ import {
 import { expandSelfClosingProperties } from './model-properties'
 import {
   applyFragmentReplacements,
+  renameFragmentElements,
   escapeXmlAttribute,
   escapeXmlText,
 } from './parts/overlay'
@@ -85,29 +84,11 @@ export function renameTextElements(
   localName: 'delText',
 ) {
   const origin = anchor.runRange.start
-  const renamed = applyFragmentReplacements(
+  const renamed = renameFragmentElements(
     fragment,
-    anchor.textElements.map((range) => {
-      const opening = fragment.slice(
-        range.start - origin,
-        range.startTagEnd - origin,
-      )
-      const name = opening.match(/^<([^\s/>]+)/u)?.[1]
-      if (!name) throw new OoxmlError('model-node-not-editable')
-      const prefix = name.includes(':')
-        ? name.slice(0, name.indexOf(':') + 1)
-        : ''
-      const raw = fragment.slice(
-        range.startTagEnd - origin,
-        range.endTagStart - origin,
-      )
-      const decoded = decodeXmlReferences(raw)
-      return {
-        start: range.start - origin,
-        end: range.end - origin,
-        value: `${opening.replace(name, prefix + localName)}${decoded.includes('\r') ? escapeXmlText(normaliseEditText(decoded)) : raw}</${prefix}${localName}>`,
-      }
-    }),
+    origin,
+    anchor.textElements.map((range) => ({ range })),
+    localName,
   )
   if (renamed === undefined) throw new OoxmlError('model-node-not-editable')
   return renamed

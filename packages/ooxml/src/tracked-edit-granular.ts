@@ -1,10 +1,8 @@
-import { planTextRevision } from '@obiter/contracts'
+import { normaliseEditText, planTextRevision } from '@obiter/contracts'
 import type { TextRunAnchor } from './model'
-import {
-  textElementXmlSpaceAttribute,
-  wordRunInnerTextXml,
-} from './text-run-edit'
-import { escapeXmlText } from './parts/overlay'
+import { wordRunInnerTextXml } from './text-run-edit'
+import { decodeXmlReferences } from './xml-lexemes'
+import { rawOffsetAtDecodedBoundary } from './text-offsets'
 
 /**
  * The granular tracked text replacement. The tracked-change writer in
@@ -56,31 +54,57 @@ export function granularRunEdit(
   )
   if (middle.kind === 'noop') return { kind: 'noop' }
   if (middle.kind === 'whole-run') return { kind: 'fallback' }
-  const { removed, inserted } = middle
-  const original = anchor.wire.text.replace(/\r\n|\r/gu, '\n')
-
+  const { inserted } = middle
+  const original = anchor.wire.text
+  const start = sourceBoundary(original, middle.prefixLength)
+  const end = sourceBoundary(
+    original,
+    normaliseEditText(original).length - middle.suffixLength,
+  )
   const runClose = `</${prefix}:r>`
   const open = source.slice(anchor.runRange.start, anchor.runRange.startTagEnd)
   const properties = anchor.runPropertiesRange
   const rpr = properties ? source.slice(properties.start, properties.end) : ''
-  const unchangedRun = (piece: string) =>
-    `${open}${rpr}<${prefix}:t${textElementXmlSpaceAttribute(piece)}>${escapeXmlText(piece)}</${prefix}:t>${runClose}`
+  const sourceRun = (from: number, to: number, name = 't') => {
+    let cursor = 0
+    let raw = ''
+    for (const element of anchor.textElements) {
+      const content = source.slice(element.startTagEnd, element.endTagStart)
+      const length = decodeXmlReferences(content).length
+      const left = Math.max(0, from - cursor)
+      const right = Math.min(length, to - cursor)
+      if (left < right)
+        raw += content.slice(
+          rawOffsetAtDecodedBoundary(content, left),
+          rawOffsetAtDecodedBoundary(content, right),
+        )
+      cursor += length
+    }
+    // Keep source lexemes, including CR references, even inside a deletion:
+    // rejecting the revision must restore the exact original characters.
+    const space = /^\s|\s$/u.test(decodeXmlReferences(raw))
+      ? ' xml:space="preserve"'
+      : ''
+    return `${open}${rpr}<${prefix}:${name}${space}>${raw}</${prefix}:${name}>${runClose}`
+  }
   const pieces: Extract<GranularRunEdit, { kind: 'pieces' }> = {
     kind: 'pieces',
   }
-  if (middle.prefixLength > 0) {
-    pieces.prefixRun = unchangedRun(original.slice(0, middle.prefixLength))
-  }
-  if (middle.suffixLength > 0) {
-    pieces.suffixRun = unchangedRun(
-      original.slice(original.length - middle.suffixLength),
-    )
-  }
-  if (removed !== '') {
-    pieces.deletedRun = `${open}${rpr}<${prefix}:delText${textElementXmlSpaceAttribute(removed)}>${escapeXmlText(removed)}</${prefix}:delText>${runClose}`
-  }
+  if (start > 0) pieces.prefixRun = sourceRun(0, start)
+  if (end < original.length) pieces.suffixRun = sourceRun(end, original.length)
+  if (start < end) pieces.deletedRun = sourceRun(start, end, 'delText')
   if (inserted !== '') {
     pieces.insertedRun = `${open}${rpr}${wordRunInnerTextXml(prefix, inserted)}${runClose}`
   }
   return pieces
+}
+
+/** Map a comparison offset back across CRLF pairs in the source text. */
+function sourceBoundary(source: string, offset: number) {
+  let raw = 0
+  for (let normalised = 0; normalised < offset; normalised += 1) {
+    if (source[raw] === '\r' && source[raw + 1] === '\n') raw += 1
+    raw += 1
+  }
+  return raw
 }
