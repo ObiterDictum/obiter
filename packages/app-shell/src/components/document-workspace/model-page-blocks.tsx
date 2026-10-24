@@ -2,7 +2,6 @@ import {
   pendingParagraphDeletion,
   pendingParagraphChanges,
 } from '../../document-pending-redlines'
-import type { PendingInlineChange } from '../../document-pending-redlines'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -185,10 +184,7 @@ export function renderBlock(
       <PendingInsert
         key={insert.clientId}
         insert={insert}
-        tracked={pendingParagraphChanges(ctx.model, paragraph.id).some(
-          (change: PendingInlineChange) =>
-            change.paragraphId === insert.clientId && change.pending,
-        )}
+        tracked={pendingParagraphChanges(ctx.model, paragraph.id).length > 0}
         selected={ctx.selectedParagraphId === insert.clientId}
         verticalCaret={ctx.verticalCaret}
         onSelect={(offset) => ctx.onSelectParagraph(insert.clientId, offset)}
