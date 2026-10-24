@@ -304,9 +304,12 @@ function parseRun(
       : identity.allocator.nextTextRunId(),
     identity,
   )
-  const content = index.descendantsOfRun(runElement).filter(
-    (element) => !index.inTrackedChange(element) && !index.isInsideFallback(element),
-  )
+  const content = index
+    .descendantsOfRun(runElement)
+    .filter(
+      (element) =>
+        !index.inTrackedChange(element) && !index.isInsideFallback(element),
+    )
   const textElements = content.filter((element) => isWord(element, 't'))
   const propertiesElements = index
     .childrenOf(runElement)
@@ -323,9 +326,7 @@ function parseRun(
   const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
     .map(elementRange)
-  const textBreaks = content
-    .filter(isTextWrappingBreak)
-    .map(elementRange)
+  const textBreaks = content.filter(isTextWrappingBreak).map(elementRange)
   const textRanges = anchoredTextElements.map((element) => ({
     start: element.startTagEnd,
     end: element.endTagStart,
