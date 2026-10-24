@@ -316,6 +316,7 @@ export function ModelParagraph({
       drafts={drafts}
       changes={bucket}
       inlineSpans={projection.spans}
+      runSources={projection.runSources}
       reviewable={!(editing && holdsCaret && paragraph.runs.length > 0)}
       styles={styles}
       face={face}
