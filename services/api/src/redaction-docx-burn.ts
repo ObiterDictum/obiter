@@ -99,7 +99,7 @@ export function burnParagraph(
           if (span.from >= offset) {
             // A separate marker run limits black styling to the harmless marker.
             const style = span.black
-              ? blackProperties(properties, textTag)
+              ? blackProperties(source, run.runRange, textTag)
               : properties
             value += `${close}${prefix}${style}${textXml(span.text)}${close}${prefix}${properties}`
           }
@@ -120,22 +120,29 @@ export function burnParagraph(
   return [...burned.values()]
 }
 
-function blackProperties(properties: string, prefix: string) {
-  const xml = properties || `<${prefix}:rPr/>`
-  const additions = `<${prefix}:highlight ${prefix}:val="black"/><${prefix}:color ${prefix}:val="000000"/>`
-  // Preserve source formatting, but replace colour/highlight so the marker is
-  // opaque even when the original run used a different colour or highlight.
-  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-  const stripped = xml.replace(
-    new RegExp(
-      `<${escaped}:(?:color|highlight)\\b[^>]*?\\/>|<${escaped}:(color|highlight)\\b[^>]*>[\\s\\S]*?<\\/${escaped}:\\1>`,
-      'gu',
-    ),
-    '',
-  )
-  return stripped.endsWith('/>')
-    ? stripped.slice(0, -2) + `>${additions}</${prefix}:rPr>`
-    : stripped.replace(`</${prefix}:rPr>`, `${additions}</${prefix}:rPr>`)
+function blackProperties(source: string, run: Range, prefix: string) {
+  const elements = parseXmlElements(source)
+  const own = elements.find((element) => isWord(element, 'rPr') && element.parent?.start === run.start)
+  const additions = [
+    { name: 'color', xml: `<${prefix}:color ${prefix}:val="000000"/>` },
+    { name: 'highlight', xml: `<${prefix}:highlight ${prefix}:val="black"/>` },
+  ]
+  if (!own || own.selfClosing)
+    return `<${prefix}:rPr>${additions.map((item) => item.xml).join('')}</${prefix}:rPr>`
+  // CT_RPr sequence. History remains last and is never treated as active style.
+  const order = 'rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange'.split(' ')
+  const children = elements.filter((element) => element.parent === own)
+  let inner = ''
+  let pending = [...additions]
+  for (const child of children) {
+    const rank = order.indexOf(child.localName)
+    const before = pending.filter((item) => order.indexOf(item.name) <= rank)
+    inner += before.map((item) => item.xml).join('')
+    pending = pending.filter((item) => !before.includes(item))
+    if (!isWord(child, 'color') && !isWord(child, 'highlight'))
+      inner += source.slice(child.start, child.end)
+  }
+  return source.slice(own.start, own.startTagEnd) + inner + pending.map((item) => item.xml).join('') + source.slice(own.endTagStart, own.end)
 }
 
 function splitsSurrogate(text: string, offset: number) {

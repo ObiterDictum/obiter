@@ -21,6 +21,7 @@ async function burn(
   text = 'Jane Doe',
   names = [text],
   extraParts: Record<string, string> = {},
+  outputMode: 'redacted' | 'pseudonymised' = 'pseudonymised',
 ) {
   const zip = new JSZip()
   zip.file(
@@ -65,7 +66,7 @@ async function burn(
         },
       ]),
     ),
-    outputMode: 'pseudonymised',
+    outputMode,
     tokenMap: Object.fromEntries(
       names.map((name, i) => [`PERSON_NAME_${i + 1}`, name]),
     ),
@@ -162,6 +163,13 @@ describe('Redact-owned DOCX bytes', () => {
     if (!rels) throw new Error('missing test relationship')
     delete rels.overlay
     expect(() => scrubBurnedFields(document, new Map([['word/document.xml', [{ start: 0, end: 100000 }]]]))).toThrow(RedactionDocxBurnError)
+  })
+
+  it('styles the marker in its own rPr in schema order before rPrChange', async () => {
+    const output = await burn('<w:p>' + run('<w:rPr><w:b/><w:lang w:val="en-GB"/><w:rPrChange w:id="1" w:author="Synthetic"><w:rPr><w:i/></w:rPr></w:rPrChange></w:rPr><w:t>Jane Doe</w:t>') + '</w:p>', 'Jane Doe', ['Jane Doe'], {}, 'redacted')
+    expect(output.xml).toContain('<w:b/><w:color w:val="000000"/><w:highlight w:val="black"/><w:lang')
+    expect(output.xml).not.toContain('<w:i/><w:highlight')
+    expect(output.text).toBe('[REDACTED]')
   })
 
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {
