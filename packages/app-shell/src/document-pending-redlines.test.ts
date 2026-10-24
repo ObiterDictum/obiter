@@ -1,3 +1,4 @@
+import { runDisplayText } from './document-page-media'
 import { paragraphNeighborResolver } from './components/document-workspace/paragraph-arrow'
 import { expect, it } from 'bun:test'
 import {
@@ -230,4 +231,18 @@ it('keeps stored revisions anchored before later runs when a paragraph is pendin
   expect(projection.spans.map(span => span.change.id)).toEqual(['stored', 'pending-delete'])
   expect(projection.text).toBe('earlier one two')
   expect(projection.editableText).toBe('')
+})
+
+it('paints pending deleted text with its source run instead of a preceding PAGE field', async () => {
+  const { model } = await parseDocx(await createBlankDocx())
+  const paragraph = model.stories[0]?.paragraphs[0]
+  if (!paragraph) throw new Error('Missing paragraph')
+  paragraph.runs = [
+    { id: 'field', text: '', preservedXmlFragments: ['<w:instrText> PAGE </w:instrText>'] },
+    { id: 'text', text: 'new', preservedXmlFragments: [] },
+  ]
+  const projection = inlineChanges(paragraph, [], 'word/document.xml', [{ id: 'pending', kind: 'delete', elementName: 'del', text: 'old', runId: 'text', paragraphId: paragraph.id, storyPartName: 'word/document.xml', inlinePosition: { beforeRunId: null }, pending: { from: 0, to: 0 } }])
+  const deleted = projection.paragraph.runs.find(run => run.id === 'pending:inline')
+  if (!deleted) throw new Error('Missing deletion')
+  expect(runDisplayText(deleted, 5)).toBe('old')
 })
