@@ -1,4 +1,10 @@
-import { createContext, useContext, useLayoutEffect, useRef } from 'react'
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from 'react'
 import { markBreaks, type InlineSpan } from '../../document-inline-changes'
 import type { ChangeReview } from './use-change-review'
 
@@ -66,10 +72,12 @@ export function InlineChange({
   },
   text,
   tabStop,
+  children,
 }: {
   span: InlineSpan
   text: string
   tabStop: boolean
+  children?: ReactNode
 }) {
   const context = useContext(InlineChangeReview)
   const review = pending ? null : context
@@ -83,7 +91,7 @@ export function InlineChange({
         node.current?.focus({ preventScroll: true })
     }
   }, [active, tabStop])
-  const content = labelledBreaks(text)
+  const content = children ?? labelledBreaks(text)
   return (
     <span
       ref={node}

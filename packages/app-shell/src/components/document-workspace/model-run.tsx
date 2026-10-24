@@ -126,35 +126,44 @@ export function ParagraphRunPaint({
       const span = inlineByRun.get(run.id)
       const source = runSources?.get(run.id)
       const original = source?.run ?? run
-      if (span)
-        return (
-          <InlineChange
-            key={`${run.id}-${from}`}
-            span={span}
-            text={text}
-            tabStop={reviewable && span.tabStop && from === span.from}
-          />
-        )
-      return (
+      const content = (
         <ModelRun
           key={`${run.id}-${from}`}
           run={original}
-          notesVisible={!source || from + text.length === source.to}
+          revision={
+            span?.pending ? (span.deleted ? 'delete' : 'insert') : undefined
+          }
           text={text}
           from={from}
-          selection={selection}
-          linkOverlay={linkOverlay}
+          notesVisible={
+            (!span || span.editable) &&
+            (!source || from + text.length === source.to)
+          }
+          selection={span && !span.editable ? undefined : selection}
+          linkOverlay={span && !span.editable ? undefined : linkOverlay}
           paragraphEnd={paragraphEnd}
           paragraphFace={face}
           changes={changes}
           styles={styles}
           drafts={drafts}
           caret={
-            !source || from === source.from
+            (!span || span.editable) && (!source || from === source.from)
               ? carets.find((item) => item.cursor?.runId === original.id)
               : undefined
           }
         />
+      )
+      return span ? (
+        <InlineChange
+          key={`${run.id}-${from}`}
+          span={span}
+          text={text}
+          tabStop={reviewable && span.tabStop && from === span.from}
+        >
+          {span.pending ? content : undefined}
+        </InlineChange>
+      ) : (
+        content
       )
     })
   }
@@ -253,6 +262,7 @@ function ModelRun({
   drafts,
   caret,
   notesVisible = true,
+  revision,
 }: {
   run: DocumentTextRunWire
   text: string
@@ -266,6 +276,7 @@ function ModelRun({
   drafts?: Record<string, string>
   caret?: DocumentPresence
   notesVisible?: boolean
+  revision?: 'insert' | 'delete'
 }) {
   // The run's own formatting and note refs depend on the run XML, not its
   // text, so they survive a keystroke elsewhere in the document.
@@ -281,7 +292,12 @@ function ModelRun({
     () => runEndNotes(run, text, drafts),
     [run.preservedXmlFragments, run.id, run.text, text, drafts?.[run.id]],
   )
-  const color = readableRunColor(face.color)
+  const color =
+    revision === 'delete'
+      ? '#9a3c32'
+      : revision === 'insert'
+        ? '#21613e'
+        : readableRunColor(face.color)
   return (
     <span
       className={cn(

@@ -1,3 +1,4 @@
+import { inlineChanges } from '../../document-inline-changes'
 import '@obiter/test-dom'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'bun:test'
@@ -129,4 +130,80 @@ describe('ParagraphRunPaint field ownership', () => {
     )
     expect(whole.container.textContent).toBe('01234567893')
   })
+})
+
+it('keeps pending text formatting, selection and source run decorations', () => {
+  const paragraph: DocumentParagraphWire = {
+    id: 'p',
+    preservedXmlFragments: [],
+    runs: [
+      {
+        id: 'r',
+        text: 'Order 45,000 units',
+        preservedXmlFragments: [
+          '<w:rPr><w:b/><w:i/><w:sz w:val="32"/><w:rFonts w:ascii="Arial"/></w:rPr>',
+          '<w:footnoteReference w:id="2"/>',
+        ],
+      },
+    ],
+  }
+  const changes = [
+    {
+      id: 'style',
+      kind: 'property' as const,
+      elementName: 'rPrChange' as const,
+      runId: 'r',
+      paragraphId: 'p',
+      text: '',
+      storyPartName: 'word/document.xml',
+    },
+  ]
+  const projection = inlineChanges(paragraph, changes, undefined, [
+    {
+      id: 'old',
+      kind: 'delete',
+      elementName: 'del',
+      paragraphId: 'p',
+      storyPartName: 'word/document.xml',
+      text: '60,000',
+      inlinePosition: { beforeRunId: null },
+      pending: { from: 6, to: 6 },
+    },
+    {
+      id: 'new',
+      kind: 'insert',
+      elementName: 'ins',
+      paragraphId: 'p',
+      storyPartName: 'word/document.xml',
+      text: '45,000',
+      inlinePosition: { beforeRunId: null },
+      pending: { from: 6, to: 12 },
+    },
+  ])
+  const { container } = render(
+    <ParagraphRunPaint
+      paragraph={projection.paragraph}
+      inlineSpans={projection.spans}
+      runSources={projection.runSources}
+      changes={changes}
+      styles={[]}
+      face={paragraphFace(paragraph, [])}
+      start={0}
+      end={projection.text.length}
+      lines={[]}
+      linePx={24}
+      selection={{ from: 12, to: 18 }}
+    />,
+  )
+  const insertion = container.querySelector('[data-inline-editable]')
+  const formatted = insertion?.querySelector<HTMLElement>('[style]')
+  expect(formatted?.style.fontWeight).toBe('700')
+  expect(formatted?.style.fontStyle).toBe('italic')
+  expect(formatted?.style.fontSize).toBe('21.333333333333332px')
+  expect(formatted?.style.fontFamily).toContain('Arial')
+  expect(insertion?.querySelector('[data-selected-text]')?.textContent).toBe(
+    '45,000',
+  )
+  expect(container.querySelectorAll('[data-note-mark]')).toHaveLength(1)
+  expect(formatted?.className).toContain('decoration-dotted')
 })
