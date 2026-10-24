@@ -295,7 +295,15 @@ function splitReplacedRun(
   const cuts = new Map<number, InsertionPoint>()
   for (const bound of ordered) {
     if (bound === 0 || bound === run.wire.text.length) continue
-    cuts.set(bound, locateOffset(source, paragraph, runStart + bound))
+    cuts.set(
+      bound,
+      locateOffset(
+        source,
+        paragraph,
+        runStart + bound,
+        hits.some((hit) => hit.localFrom === bound),
+      ),
+    )
   }
   const openRun = source.slice(run.runRange.start, run.runRange.startTagEnd)
   const prefix = /^<([^:>\s]+):/u.exec(openRun)?.[1] ?? 'w'
@@ -342,7 +350,7 @@ function splitReplacedRun(
           ordered[index] ?? 0,
           ordered[index + 1] ?? run.wire.text.length,
           run.wire.preservedXmlFragments,
-          'tail',
+          'both',
         )),
     text: part.text,
     preservedXmlFragments: [...fragments],

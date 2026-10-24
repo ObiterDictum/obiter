@@ -463,3 +463,28 @@ it('keeps retained controls beside an untouched range-edit piece at the cut', as
     ),
   ).toEqual(['fox', '\tdog'])
 })
+
+for (const control of ['<w:tab/>', '<w:fldChar w:fldCharType="begin"/>']) {
+  it(`preserves ${control} at the start of redacted text`, async () => {
+    const { document, paragraph } = await revisionFixture(
+      `<w:t>cat</w:t>${control}<w:t>dog</w:t>`,
+    )
+    const anchor = document.paragraphAnchors.get(paragraph.id)
+    if (!anchor) throw new Error('Missing anchor')
+    applyRunTextReplacementRange(document, anchor, [
+      { from: 3, to: 6, text: 'XXX' },
+    ])
+    const bytes = await serialiseDocx(document)
+    const zip = await JSZip.loadAsync(bytes)
+    const xml = await zip.file('word/document.xml')?.async('string')
+    expect(xml).toContain(`<w:t>cat</w:t>${control}</w:r>`)
+    expect(xml?.split(control)).toHaveLength(2)
+    const saved = await parseDocx(bytes)
+    expect(
+      saved.model.stories[0]?.paragraphs[0]?.runs.map((run) => run.text),
+    ).toEqual(['cat', 'XXX'])
+    expect(paragraph.runs[0]?.textRevisionTokens).toEqual(
+      saved.model.stories[0]?.paragraphs[0]?.runs[0]?.textRevisionTokens,
+    )
+  })
+}
