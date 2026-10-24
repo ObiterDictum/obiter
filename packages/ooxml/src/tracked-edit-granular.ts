@@ -57,6 +57,7 @@ export function granularRunEdit(
   if (middle.kind === 'noop') return { kind: 'noop' }
   if (middle.kind === 'whole-run') return { kind: 'fallback' }
   const { removed, inserted } = middle
+  const original = anchor.wire.text.replace(/\r\n|\r/gu, '\n')
 
   const runClose = `</${prefix}:r>`
   const open = source.slice(anchor.runRange.start, anchor.runRange.startTagEnd)
@@ -69,12 +70,12 @@ export function granularRunEdit(
   }
   if (middle.prefixLength > 0) {
     pieces.prefixRun = unchangedRun(
-      anchor.wire.text.slice(0, middle.prefixLength),
+      original.slice(0, middle.prefixLength),
     )
   }
   if (middle.suffixLength > 0) {
     pieces.suffixRun = unchangedRun(
-      anchor.wire.text.slice(anchor.wire.text.length - middle.suffixLength),
+      original.slice(original.length - middle.suffixLength),
     )
   }
   if (removed !== '') {

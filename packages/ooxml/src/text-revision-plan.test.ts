@@ -210,3 +210,21 @@ it('keeps split run revision text local after inserting a footnote', async () =>
     )
   expect(plans.map((plan) => plan.removed)).toEqual(['cat\td', 'og'])
 })
+
+async function revisionFixture(children: string) {
+  const zip = await JSZip.loadAsync(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
+  zip.file('word/document.xml', `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r>${children}</w:r></w:p></w:body></w:document>`)
+  const document = await parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+  const paragraph = document.model.stories[0]?.paragraphs[0]
+  const run = paragraph?.runs[0]
+  if (!paragraph || !run) throw new Error('Missing fixture')
+  return { document, paragraph, run }
+}
+
+it('preserves the unchanged space after a CRLF source when saving a tracked substitution', async () => {
+  const { document, run } = await revisionFixture('<w:t>a&#13;&#10;b c</w:t>')
+  applyDocumentEdits(document, [{ type: 'replace_run_text', runId: run.id, text: 'a\r\nb d' }], { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' })
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => run.text).join('')).toBe('a\nb ')
+  expect(saved.model.changes.map(change => [change.kind, change.text])).toEqual([['delete', 'c'], ['insert', 'd']])
+})
