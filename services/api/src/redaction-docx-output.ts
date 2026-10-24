@@ -59,6 +59,16 @@ function replacementForSpan(
 export async function buildRedactedDocx(
   input: RedactedDocxInput,
 ): Promise<Uint8Array> {
+  try {
+    return await burnRedactedDocx(input)
+  } catch (error) {
+    if (error instanceof RedactionDocxBurnError || error instanceof RedactionSpanIntegrityError) throw error
+    // Never return uncertain bytes or expose parser/provider internals to callers.
+    throw new RedactionDocxBurnError('The document could not be redacted safely.')
+  }
+}
+
+async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   const affected = input.spans.filter((span) =>
     affectsOutput(input.decisions[span.id]),
   )

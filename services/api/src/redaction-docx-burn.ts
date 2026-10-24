@@ -28,7 +28,7 @@ function patch(
   value: string,
 ) {
   const part = document.sourceParts.get(partName)
-  if (!part?.overlay) throw new Error('Redaction source XML is unavailable.')
+  if (!part?.overlay) throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
   part.dirty = true
   part.overlay.replacements.set(`${range.start}:${range.end}`, {
     ...range,
@@ -39,7 +39,7 @@ function patch(
 /** Match extraction: tabs and every break consume one character. */
 export function paragraphBurnText(document: OoxmlDocument, paragraph: ParagraphAnchor) {
   const source = document.sourceParts.get(paragraph.partName)?.overlay?.source
-  if (source === undefined) throw new Error('Redaction source XML is unavailable.')
+  if (source === undefined) throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
   return paragraph.runs.flatMap((run) => burnNodes(source, run.runRange)).map(({ text }) => text).join('')
 }
 
@@ -58,7 +58,7 @@ export function burnParagraph(
 ): Range[] {
   const source = document.sourceParts.get(paragraph.partName)?.overlay?.source
   if (source === undefined)
-    throw new Error('Redaction source XML is unavailable.')
+    throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
   const spans: BurnRange[] = []
   for (const span of [...replacements].sort(
     (a, b) => a.from - b.from || b.to - a.to,
@@ -94,7 +94,7 @@ export function burnParagraph(
           const from = Math.max(0, span.from - offset)
           const to = Math.min(text.length, span.to - offset)
           if (splitsSurrogate(text, from) || splitsSurrogate(text, to))
-            throw new Error('Redaction splits a Unicode character.')
+            throw new RedactionDocxBurnError('Redaction splits a Unicode character.')
           value += textXml(text.slice(cursor, from))
           if (span.from >= offset) {
             // A separate marker run limits black styling to the harmless marker.
@@ -168,7 +168,7 @@ export function scrubBurnedFields(
   for (const [partName, ranges] of burned) {
     const source = document.sourceParts.get(partName)?.overlay?.source
     if (source === undefined)
-      throw new Error('Redaction source XML is unavailable.')
+      throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
     const elements = parseXmlElements(source)
     const touches = (range: Range) =>
       ranges.some((hit) => hit.start < range.end && hit.end > range.start)
