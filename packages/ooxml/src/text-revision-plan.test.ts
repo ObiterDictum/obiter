@@ -1,4 +1,5 @@
 import { expect, it } from 'bun:test'
+import { createTrackedEditWriter } from './tracked-edits'
 import JSZip from 'jszip'
 import { planTextRevision } from '@obiter/contracts'
 import { buildOoxmlFixture } from '../fixtures/builder'
@@ -242,4 +243,14 @@ it('assigns a tab at an emphasis cut to the piece containing its XML', async () 
   expect(removed).toEqual(['cat', '\tdog'])
   const saved = await parseDocx(await serialiseDocx(document))
   expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed)).toEqual(removed)
+})
+
+it('keeps source coordinates after a line-ending-only tracked no-op before a footnote', async () => {
+  const { document, paragraph, run } = await revisionFixture('<w:t>a&#10;b</w:t>')
+  const anchor = document.textRunAnchors.get(run.id)
+  if (!anchor) throw new Error('Missing anchor')
+  createTrackedEditWriter(document, { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' }).replaceRunText(anchor, 'a\r\nb')
+  applyDocumentEdits(document, [{ type: 'insert_footnote', paragraphId: paragraph.id, offset: 2, text: 'Synthetic note' }])
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => run.text).join('')).toBe('a\nb')
 })
