@@ -4,6 +4,8 @@ Priority: `P4`
 
 Redact is the privacy layer. It must be conservative, reviewable, and safe by export design.
 
+Redact stays outside Matters except in a redaction matter. See [redaction-matters.md](redaction-matters.md).
+
 ## Design records (2026-07-29)
 
 | Record                                                                                                                                     | Scheduled as                                       |

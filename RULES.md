@@ -10,6 +10,7 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 - Security is a first-order requirement, not a later pass. Offline desktop is real scope.
 - Legal work uses immutable versions, never silent overwrites. Verify is conservative: surface uncertainty.
 - Never silently learn from client matter data.
+- Redact never crosses into Matters except in a redaction matter (e.g. an FOI request), where it may only add a new redacted document version. Redact owns the code that decides what redacted bytes contain. See [redaction-matters.md](docs/specs/redact/redaction-matters.md).
 
 ## React
 

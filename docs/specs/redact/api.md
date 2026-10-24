@@ -2,6 +2,9 @@
 
 `POST /api/documents/:documentId/redaction-runs`
 
+Refused with `matter_not_redaction_matter` unless the document's matter is a redaction
+matter ([redaction-matters.md](redaction-matters.md)).
+
 `GET /api/redaction-runs/:runId`
 
 `GET /api/redaction-runs/:runId/spans`
