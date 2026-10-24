@@ -1,8 +1,9 @@
+import type { DocumentTextRunWire } from './document-model'
+
 /** Shared revision boundaries for the live preview and OOXML writer. */
-export type TextRevisionToken = {
-  kind: 'text' | 'retained' | 'break'
-  text: string
-}
+type TextRevisionToken = NonNullable<
+  DocumentTextRunWire['textRevisionTokens']
+>[number]
 
 export function planTextRevision(
   from: string,
@@ -57,7 +58,7 @@ export function planTextRevision(
   }
 }
 
-export function trackedTextMiddle(from: string, to: string) {
+function trackedTextMiddle(from: string, to: string) {
   const max = Math.min(from.length, to.length)
   let prefixLength = 0
   while (prefixLength < max && from[prefixLength] === to[prefixLength]) {
