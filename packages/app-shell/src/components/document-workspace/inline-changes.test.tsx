@@ -443,7 +443,7 @@ it('paints closed header revisions against the current draft text', () => {
         },
       ]}
       drafts={{ hr: 'Final v2' }}
-      pendingChanges={[
+      pendingRedlines={{ pendingChanges: [
         {
           id: 'old',
           kind: 'delete',
@@ -464,7 +464,7 @@ it('paints closed header revisions against the current draft text', () => {
           inlinePosition: { beforeRunId: null },
           pending: { from: 0, to: 8 },
         },
-      ]}
+      ] }}
       label="Document header"
       edge="top"
       padding={{ left: 0, right: 0, edge: 0 }}
