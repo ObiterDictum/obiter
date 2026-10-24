@@ -1,3 +1,4 @@
+import { buildRedactedDocx } from '../../api/src/redaction-docx-output'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { chmod, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,10 +13,7 @@ import {
 } from 'unpdf'
 import JSZip from 'jszip'
 import {
-  applyRunTextReplacementRange,
   createSyntheticDocx,
-  parseDocx,
-  serialiseDocx,
 } from '@obiter/ooxml'
 import { loadRendererAssets } from './assets'
 import type { RedactionRendererErrorCode } from './contract'
@@ -57,20 +55,15 @@ async function demoFixtureBytes(): Promise<Uint8Array> {
 
 /** A synthetic sanitised document: one paragraph that is only a black bar. */
 async function blackBarDocx(): Promise<Uint8Array> {
-  const document = await parseDocx(await createSyntheticDocx(['[REDACTED]']))
-  const story = document.model.stories.find((item) => item.kind === 'document')
-  const paragraph = story?.paragraphs[0]
-  const anchor = paragraph && document.paragraphAnchors.get(paragraph.id)
-  if (!anchor) throw new Error('synthetic document has no paragraph anchor')
-  applyRunTextReplacementRange(document, anchor, [
-    {
-      from: 0,
-      to: '[REDACTED]'.length,
-      text: '[REDACTED]',
-      emphasis: { highlight: 'black', colour: '000000' },
-    },
-  ])
-  return serialiseDocx(document)
+  const text = 'Synthetic private name'
+  return buildRedactedDocx({
+    docxBytes: Buffer.from(await createSyntheticDocx([text])),
+    text,
+    spans: [{ id: 'name', start: 0, end: text.length, text, category: 'person_name', source: 'rampart_model', confidence: 'high', suggestion: 'redact' }],
+    decisions: { name: { decision: 'accept', decidedBy: 'test', decidedAt: '2026-01-01T00:00:00.000Z' } },
+    outputMode: 'redacted',
+    tokenMap: {},
+  })
 }
 
 async function manyParagraphDocx(count: number): Promise<Uint8Array> {

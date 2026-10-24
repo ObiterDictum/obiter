@@ -6,9 +6,11 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
   const directory = new URL('./', import.meta.url)
   const files = (await readdir(directory)).filter(
     (file) =>
-      /^redaction-.*(?:output|burn).*\.ts$/u.test(file) &&
+      /^redaction-.*\.ts$/u.test(file) &&
       !file.includes('.test.'),
   )
+  expect(files).toContain('redaction-docx-output.ts')
+  expect(files).toContain('redaction-docx-burn.ts')
   const allowed = new Set([
     'loadOoxmlZipEntries',
     'parseDocx',
@@ -28,28 +30,25 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
       ts.ScriptTarget.Latest,
       true,
     )
-    for (const node of source.statements) {
-      if (
-        !ts.isImportDeclaration(node) ||
-        !ts.isStringLiteral(node.moduleSpecifier) ||
-        !node.moduleSpecifier.text.includes('ooxml')
-      )
-        continue
-      const clause = node.importClause
-      if (clause?.isTypeOnly) continue
-      const bindings = clause?.namedBindings
-      if (!bindings || !ts.isNamedImports(bindings) || clause?.name) {
-        violations.push(file)
-        continue
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const specifier = node.arguments[0]
+        if (specifier && ts.isStringLiteral(specifier) && specifier.text.includes('ooxml')) violations.push(`${file}: dynamic OOXML import`)
       }
-      for (const item of bindings.elements) {
-        if (
-          !item.isTypeOnly &&
-          !allowed.has((item.propertyName ?? item.name).text)
-        )
-          violations.push(`${file}: ${item.name.text}`)
+      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text.includes('ooxml')) {
+        if (ts.isImportDeclaration(node) ? node.importClause?.isTypeOnly : node.isTypeOnly) return
+        const bindings = ts.isImportDeclaration(node) ? node.importClause?.namedBindings : node.exportClause
+        if (node.moduleSpecifier.text !== '@obiter/ooxml' || !bindings || ts.isNamespaceImport(bindings) || ts.isNamespaceExport(bindings) || (ts.isImportDeclaration(node) && node.importClause?.name)) {
+          violations.push(file)
+        } else {
+          for (const item of bindings.elements) {
+            if (!item.isTypeOnly && !allowed.has((item.propertyName ?? item.name).text)) violations.push(`${file}: ${item.name.text}`)
+          }
+        }
       }
+      ts.forEachChild(node, visit)
     }
+    visit(source)
   }
   expect(violations).toEqual([])
 })
