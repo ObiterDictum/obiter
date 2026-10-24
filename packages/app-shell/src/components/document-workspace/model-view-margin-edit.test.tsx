@@ -247,6 +247,8 @@ it('paints runless header drafts and joined header tails after editing closes', 
     const { unmount } = render(
       <DocumentModelPage
         model={{ ...model, stories: [body, margin] }}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
         drafts={{ tail: 'Typed tail' }}
         extraRuns={{
           h1: [{ id: 'tail', text: 'tail', preservedXmlFragments: [] }],
