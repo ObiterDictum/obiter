@@ -106,10 +106,7 @@ export function createTrackedEditWriter(
         prefix,
         trackedProperties !== undefined,
       )
-      if (edit.kind === 'noop') {
-        anchor.wire.text = text
-        return
-      }
+      if (edit.kind === 'noop') return
       if (edit.kind === 'pieces') {
         let value = edit.prefixRun ?? ''
         // A substitution records its removed side before its inserted side,
