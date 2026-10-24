@@ -304,14 +304,10 @@ function parseRun(
       : identity.allocator.nextTextRunId(),
     identity,
   )
-  const textElements = index
-    .descendantsOfRun(runElement)
-    .filter(
-      (element) =>
-        isWord(element, 't') &&
-        !index.inTrackedChange(element) &&
-        !index.isInsideFallback(element),
-    )
+  const content = index.descendantsOfRun(runElement).filter(
+    (element) => !index.inTrackedChange(element) && !index.isInsideFallback(element),
+  )
+  const textElements = content.filter((element) => isWord(element, 't'))
   const propertiesElements = index
     .childrenOf(runElement)
     .filter((element) => isWord(element, 'rPr'))
@@ -327,8 +323,7 @@ function parseRun(
   const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
     .map(elementRange)
-  const textBreaks = index
-    .childrenOf(runElement)
+  const textBreaks = content
     .filter(isTextWrappingBreak)
     .map(elementRange)
   const textRanges = anchoredTextElements.map((element) => ({
@@ -341,7 +336,7 @@ function parseRun(
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
     ...(hyperlinkTarget ? { hyperlinkTarget } : {}),
-    text: runPlainText(source, index, runElement, textElements),
+    text: runPlainText(source, content, textElements),
     preservedXmlFragments: index
       .childrenOf(runElement)
       .filter(
@@ -380,7 +375,7 @@ function parseRun(
     let textIndex = 0
     wire.textRevisionTokens = []
     wire.textRevisionTextRanges = []
-    for (const element of index.descendantsOfRun(runElement)) {
+    for (const element of content) {
       if (
         !['t', 'delText', 'tab', 'br', 'cr'].some((name) =>
           isWord(element, name),
@@ -413,18 +408,14 @@ function parseRun(
 
 function runPlainText(
   source: string,
-  index: PartIndex,
-  runElement: XmlElement,
+  content: readonly XmlElement[],
   textElements: readonly XmlElement[],
 ) {
   const textNodes = new Set(
     textElements.filter((element) => !element.selfClosing),
   )
   const parts: string[] = []
-  for (const element of index.descendantsOfRun(runElement)) {
-    if (index.inTrackedChange(element) || index.isInsideFallback(element)) {
-      continue
-    }
+  for (const element of content) {
     if (textNodes.has(element)) {
       parts.push(
         decodeXmlReferences(
