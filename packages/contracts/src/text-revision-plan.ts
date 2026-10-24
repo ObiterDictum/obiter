@@ -12,6 +12,8 @@ export function planTextRevision(
   tokens?: readonly TextRevisionToken[],
   pendingProperties = false,
 ) {
+  from = from.replace(/\r\n|\r/gu, '\n')
+  to = to.replace(/\r\n|\r/gu, '\n')
   if (from === to)
     return {
       kind: 'noop' as const,
