@@ -71,7 +71,8 @@ it('shows an empty inserted paragraph mark without adding editable characters', 
   const inserted = screen.getByLabelText('Pending tracked insertion')
   expect(screen.getByLabelText('Inserted paragraph mark').textContent).toBe('¶')
   const range = document.createRange()
-  range.selectNodeContents(inserted)
+  expect(inserted.getAttribute('role')).toBe('insertion')
+  range.selectNode(screen.getByLabelText('Inserted paragraph mark'))
   expect(editableRangeText(range)).toBe('')
   expect(
     screen.getByLabelText<HTMLTextAreaElement>('Pending paragraph text').value,
