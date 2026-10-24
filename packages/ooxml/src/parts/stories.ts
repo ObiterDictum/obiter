@@ -1,6 +1,6 @@
 import { trackedElementText } from './tracked-change-display'
 import { PartIndex } from './story-index'
-import { splittableRunParts } from '../run-revision-eligibility'
+import { isSplittableRun } from '../run-revision-eligibility'
 import { runHyperlinkTarget } from './hyperlink-target'
 import {
   type DocumentFieldWire,
@@ -370,9 +370,7 @@ function parseRun(
   wire.textRevisionEligible =
     !propertiesElements.some((element) =>
       index.containsTrackedChange(element),
-    ) &&
-    textBreaks.length === 0 &&
-    !!splittableRunParts(source, anchor)
+    ) && isSplittableRun(source, anchor)
   if (!wire.textRevisionEligible) {
     const anchored = new Set(
       anchoredTextElements.map((element) => element.start),
