@@ -56,47 +56,19 @@ mock.module('../organisation-membership', () =>
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('../current-user')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const currentUserModuleKeys = Object.fromEntries(
-  Object.keys(await import('../current-user')).map((key) => [key, undefined]),
-)
-mock.module('../current-user', () =>
-  Object.assign(
-    { ...currentUserModuleKeys },
-    (() => {
-      const actual = currentUserModule
-      return {
-        ...actual,
-        useCurrentUser: mocks.useCurrentUser,
-        useCreateOrganisation: mocks.useCreateOrganisation,
-        useRenameOrganisation: mocks.useRenameOrganisation,
-        useUpdateProfile: mocks.useUpdateProfile,
-      }
-    })(),
-  ),
-)
+mock.module('../current-user', () => ({
+  ...currentUserModule,
+  useCurrentUser: mocks.useCurrentUser,
+  useCreateOrganisation: mocks.useCreateOrganisation,
+  useRenameOrganisation: mocks.useRenameOrganisation,
+  useUpdateProfile: mocks.useUpdateProfile,
+}))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const authModuleKeys = Object.fromEntries(
-  Object.keys(await import('../auth')).map((key) => [key, undefined]),
-)
-mock.module('../auth', () =>
-  Object.assign(
-    { ...authModuleKeys },
-    (() => {
-      const actual = authModule
-      return { ...actual, useAuth: mocks.useAuth }
-    })(),
-  ),
-)
+mock.module('../auth', () => ({ ...authModule, useAuth: mocks.useAuth }))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
@@ -104,27 +76,10 @@ mock.module('../auth', () =>
 const tanstackReactRouterModule = {
   ...(await import('@tanstack/react-router')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const tanstackReactRouterModuleKeys = Object.fromEntries(
-  Object.keys(await import('@tanstack/react-router')).map((key) => [
-    key,
-    undefined,
-  ]),
-)
-mock.module('@tanstack/react-router', () =>
-  Object.assign(
-    { ...tanstackReactRouterModuleKeys },
-    (() => {
-      const actual = tanstackReactRouterModule
-      return {
-        ...actual,
-        useNavigate: () => mocks.navigate,
-      }
-    })(),
-  ),
-)
+mock.module('@tanstack/react-router', () => ({
+  ...tanstackReactRouterModule,
+  useNavigate: () => mocks.navigate,
+}))
 
 // Loaded after the registrations above: bun does not hoist mock.module the
 // way vi.mock was hoisted, and these modules capture mocked imports at
