@@ -1,7 +1,7 @@
 import { scrubBurnedFields } from './redaction-docx-burn'
 import { describe, expect, it } from 'bun:test'
 import JSZip from 'jszip'
-import { createSyntheticDocx, parseDocx } from '@obiter/ooxml'
+import { createSyntheticDocx, parseDocx, parseXmlElements, attributeValue } from '@obiter/ooxml'
 import {
   buildRedactedDocx,
   RedactionDocxBurnError,
@@ -78,6 +78,12 @@ async function burn(
   const rels =
     (await packageZip.file('word/_rels/document.xml.rels')?.async('string')) ??
     ''
+  const ids = new Set(rels ? parseXmlElements(rels).filter((element) => element.localName === 'Relationship').map((element) => attributeValue(element, '', 'Id')) : [])
+  for (const element of parseXmlElements(xml)) {
+    for (const attribute of element.attributes) {
+      if (attribute.namespaceUri === R) expect(ids.has(attribute.value), `unresolved ${attribute.qualifiedName}`).toBe(true)
+    }
+  }
   return {
     xml,
     rels,
@@ -180,6 +186,12 @@ describe('Redact-owned DOCX bytes', () => {
 
   it('maps a Unicode burn failure to the structured refusal', async () => {
     await expect(burn('<w:p>' + run('<w:t>😀</w:t>') + '</w:p>', '😀', ['\ud83d'])).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
+  it('neutralises a drawing hyperlink sharing a redacted hyperlink relationship', async () => {
+    const output = await burn('<w:p><w:hyperlink r:id="link">' + run('<w:t>Jane Doe</w:t>') + '</w:hyperlink>' + run('<w:drawing><a:hlinkClick xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" r:id="link"/></w:drawing>') + '</w:p>')
+    expect(output.xml).not.toContain('r:id="link"')
+    expect(output.rels).not.toContain(target)
   })
 
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {

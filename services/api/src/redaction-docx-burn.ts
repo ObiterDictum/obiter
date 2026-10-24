@@ -240,17 +240,14 @@ export function scrubBurnedFields(
     // Remove both the target and references to it, including shared references:
     // a hidden external target behind a redacted name is still a disclosure.
     for (const element of elements) {
-      if (!isWord(element, 'hyperlink')) continue
-      const attr = element.attributes.find(
-        (a) => a.namespaceUri === REL_NS && a.localName === 'id',
-      )
-      if (attr && linkIds.has(attr.value))
-        patch(
-          document,
-          partName,
-          { start: element.start, end: element.startTagEnd },
-          removeAttribute(document.sourceParts.get(partName)?.overlay?.replacements.get(`${element.start}:${element.startTagEnd}`)?.value ?? source.slice(element.start, element.startTagEnd), { ...element, start: 0, startTagEnd: (document.sourceParts.get(partName)?.overlay?.replacements.get(`${element.start}:${element.startTagEnd}`)?.value ?? source.slice(element.start, element.startTagEnd)).length }, attr.qualifiedName),
-        )
+      const attrs = element.attributes.filter((attr) => attr.namespaceUri === REL_NS && linkIds.has(attr.value))
+      if (!attrs.length) continue
+      const range = { start: element.start, end: element.startTagEnd }
+      const overlay = document.sourceParts.get(partName)?.overlay
+      let opening = overlay?.replacements.get(`${range.start}:${range.end}`)?.value ?? source.slice(range.start, range.end)
+      for (const attr of attrs)
+        opening = removeAttribute(opening, { ...element, start: 0, startTagEnd: opening.length }, attr.qualifiedName)
+      patch(document, partName, range, opening)
     }
     const slash = partName.lastIndexOf('/')
     const relsName = `${partName.slice(0, slash + 1)}_rels/${partName.slice(slash + 1)}.rels`
