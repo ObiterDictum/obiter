@@ -377,11 +377,7 @@ function parseRun(
     wire.textRevisionTokens = []
     wire.textRevisionTextRanges = []
     for (const element of content) {
-      if (
-        !['t', 'delText', 'tab', 'br', 'cr'].some((name) =>
-          isWord(element, name),
-        )
-      )
+      if (!['t', 'tab', 'br', 'cr'].some((name) => isWord(element, name)))
         continue
       const text = trackedElementText(source, element)
       if (anchored.has(element.start)) {
