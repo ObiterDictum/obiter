@@ -125,6 +125,21 @@ describe('Redact-owned DOCX bytes', () => {
     expect(output.text).toBe('[PERSON_NAME_1]')
   })
 
+  it.each([
+    '<root><p><t>Jane </t><t>Doe</t></p></root>',
+    '<root><p>Smith &amp; Co</p></root>',
+  ])('refuses decoded residual XML %s', async (xml) => {
+    const name = xml.includes('Smith') ? 'Smith & Co' : 'Jane Doe'
+    await expect(burn('<w:p>' + run('<w:t>' + name.replace('&', '&amp;') + '</w:t>') + '</w:p>', name, [name], { 'customXml/private.xml': xml })).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
+  it('removes a split-run fallback text-box copy', async () => {
+    const output = await burn('<w:p>' + run('<w:t>Jane Doe</w:t>') + '</w:p><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="w"><w:p>' + run('<w:t>Public</w:t>') + '</w:p></mc:Choice><mc:Fallback><w:pict><w:txbxContent><w:p>' + run('<w:t>Jane </w:t>') + run('<w:t>Doe</w:t>') + '</w:p></w:txbxContent></w:pict></mc:Fallback></mc:AlternateContent>')
+    expect(output.xml).not.toContain('Jane')
+    expect(output.xml).not.toContain('Doe')
+    expect(output.xml).not.toContain('mc:Fallback')
+  })
+
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {
     const output = await burn(
       `<w:p>${run(begin + '<w:t>Jane</w:t>' + instruction + separate + '<w:t> Doe</w:t>' + end)}</w:p>`,

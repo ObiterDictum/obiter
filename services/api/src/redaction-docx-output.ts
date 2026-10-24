@@ -1,3 +1,4 @@
+import { decodedXmlText, removeFallbackTextBoxes } from './redaction-docx-xml'
 import JSZip from 'jszip'
 import { loadOoxmlZipEntries, parseDocx, serialiseDocx } from '@obiter/ooxml'
 import {
@@ -84,7 +85,7 @@ export async function buildRedactedDocx(
 
   let document
   try {
-    document = await parseDocx(Uint8Array.from(input.docxBytes))
+    document = await parseDocx(await removeFallbackTextBoxes(input.docxBytes))
   } catch {
     throw new RedactionDocxBurnError('The source document could not be read.')
   }
@@ -256,7 +257,8 @@ async function assertNoSpanTextSurvives(
     if (!span.text) continue
     const needle = Buffer.from(span.text, 'utf8')
     for (const [name, payload] of entries) {
-      if (Buffer.from(payload).includes(needle)) {
+      const decoded = /\.(?:xml|rels)$/iu.test(name) ? decodedXmlText(Buffer.from(payload).toString('utf8')) : []
+      if (Buffer.from(payload).includes(needle) || decoded.some((text) => text.includes(span.text))) {
         throw new RedactionDocxBurnError(
           `Redacted text survives in ${name}; refusing .docx output.`,
         )
