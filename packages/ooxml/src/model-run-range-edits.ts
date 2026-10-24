@@ -343,6 +343,8 @@ function splitReplacedRun(
           run.wire,
           ordered[index] ?? 0,
           ordered[index + 1] ?? run.wire.text.length,
+          run.wire.preservedXmlFragments,
+          'tail',
         )),
     text: part.text,
     preservedXmlFragments: [...fragments],
