@@ -99,8 +99,9 @@ function projectInlineChanges(
   }
 
   const emitted = new Set<string>()
-  for (const run of paragraphDeleted ? [] : paragraph.runs) {
+  for (const run of paragraph.runs) {
     append(run.id)
+    if (paragraphDeleted) continue
     if (run.text.length === 0) {
       runs.push(run)
       editableRuns.push({
