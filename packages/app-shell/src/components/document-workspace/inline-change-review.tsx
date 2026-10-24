@@ -135,7 +135,7 @@ export function InlineChange({
         event.stopPropagation()
         review?.selectChange(change.id)
       }}
-      className={`${pending ? 'pointer-events-none' : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-[#345e90] ${deleted ? 'text-[#9a3c32]' : 'text-[#21613e]'} ${active ? 'bg-[#f9e0a2]' : ''}`}
+      className={`${pending ? (editable ? 'pointer-events-auto' : 'pointer-events-none') : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-[#345e90] ${deleted ? 'text-[#9a3c32]' : 'text-[#21613e]'} ${active ? 'bg-[#f9e0a2]' : ''}`}
       style={{
         textDecoration: deleted ? 'line-through' : 'underline',
       }}
