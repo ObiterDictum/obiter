@@ -1,6 +1,6 @@
 import { readPackageImageParts, requestedImagePartName } from '@obiter/ooxml'
 import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
-import { DocumentArtifactStoreError } from './document-artifact-store'
+import { DocumentDerivedStoreError } from './document-derived-store'
 import type { StorageService } from './storage'
 
 type DocumentMediaSource = Pick<
@@ -47,7 +47,7 @@ export function retainedImagePartBytes(parts: ImagePartMap): number {
   return total
 }
 
-export class DocumentMediaStoreError extends DocumentArtifactStoreError {
+export class DocumentMediaStoreError extends DocumentDerivedStoreError {
   constructor() {
     super('The document image could not be read.')
   }

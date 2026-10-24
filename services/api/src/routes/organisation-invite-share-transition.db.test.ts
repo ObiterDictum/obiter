@@ -10,7 +10,7 @@ import { createOrganisationsRoutes } from './organisations'
 /**
  * The invite-accept path moves a user between organisations with the composite
  * grantee key from 0027 in place. A user whose current organisation still holds
- * work (a matter, another member, an invite, a run or an artifact) cannot move,
+ * work (a matter, another member, an invite, a run or an output) cannot move,
  * so an existing share survives untouched; a user with no work and no shares
  * moves and the vacated organisation is removed.
  */

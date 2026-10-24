@@ -47,7 +47,7 @@ function runRow(overrides: Partial<RedactionRunRow> = {}): RedactionRunRow {
       },
     ],
     decisions_json: {},
-    output_artifact_id: null,
+    output_id: null,
     summary_json: {},
     detector_version: 'detector-1',
     detection_mode: 'model+supplement',
@@ -540,7 +540,7 @@ describe('redaction run write guards', () => {
     )
   })
 
-  it('treats a soft-deleted run as not found before finalization creates an artifact', async () => {
+  it('treats a soft-deleted run as not found before finalization creates an output', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
       if (
@@ -558,7 +558,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
@@ -572,7 +572,7 @@ describe('redaction run write guards', () => {
       ),
     ).toBe(true)
     expect(calls.some(([sql]) => sql.includes('for update of run'))).toBe(false)
-    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+    expect(calls.some(([sql]) => sql.includes('insert into outputs'))).toBe(
       false,
     )
   })
@@ -596,7 +596,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
@@ -604,7 +604,7 @@ describe('redaction run write guards', () => {
       }),
     ).resolves.toEqual({ kind: 'replaced', replacementRunId: 'red_2' })
 
-    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+    expect(calls.some(([sql]) => sql.includes('insert into outputs'))).toBe(
       false,
     )
   })
@@ -630,7 +630,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
@@ -638,7 +638,7 @@ describe('redaction run write guards', () => {
       }),
     ).resolves.toEqual({ kind: 'acknowledgement_required' })
 
-    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+    expect(calls.some(([sql]) => sql.includes('insert into outputs'))).toBe(
       false,
     )
   })
@@ -662,7 +662,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
@@ -670,7 +670,7 @@ describe('redaction run write guards', () => {
       }),
     ).resolves.toEqual({ kind: 'acknowledgement_required' })
 
-    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+    expect(calls.some(([sql]) => sql.includes('insert into outputs'))).toBe(
       false,
     )
   })
@@ -679,15 +679,15 @@ describe('redaction run write guards', () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
       if (sql.includes('for update of run')) return { rows: [runRow()] }
-      if (sql.includes('insert into artifacts')) {
+      if (sql.includes('insert into outputs')) {
         return {
-          rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+          rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
         }
       }
       if (sql.includes('update redaction_runs')) return { rows: [] }
       if (sql.includes('from redaction_runs')) {
         return {
-          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
+          rows: [runRow({ status: 'finalized', output_id: 'out_1' })],
         }
       }
       if (sql.includes('insert into audit_logs')) {
@@ -703,7 +703,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
@@ -764,9 +764,9 @@ describe('redaction run write guards', () => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
       if (sql.includes('for update of run'))
         return { rows: [runRow({ spans_json: unreviewedSpans })] }
-      if (sql.includes('insert into artifacts')) {
+      if (sql.includes('insert into outputs')) {
         return {
-          rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+          rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
         }
       }
       if (sql.includes('update redaction_runs')) return { rows: [] }
@@ -775,7 +775,7 @@ describe('redaction run write guards', () => {
           rows: [
             runRow({
               status: 'finalized',
-              output_artifact_id: 'art_1',
+              output_id: 'out_1',
               spans_json: unreviewedSpans,
             }),
           ],
@@ -797,7 +797,7 @@ describe('redaction run write guards', () => {
       runId: 'red_1',
       outputMode: 'redacted',
       tokenMap: {},
-      artifactId: 'art_1',
+      outputId: 'out_1',
       userId: 'usr_1',
       requestId: 'req_1',
       degradedDetectionAcknowledged: false,
@@ -864,7 +864,7 @@ describe('redaction run write guards', () => {
     ).toBe(false)
   })
 
-  it('refuses a retry on an already-finalized run without inserting another artifact', async () => {
+  it('refuses a retry on an already-finalized run without inserting another output', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
       if (
@@ -872,7 +872,7 @@ describe('redaction run write guards', () => {
         sql.includes('select matter_id, document_id, replaces_run_id')
       )
         return {
-          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_0' })],
+          rows: [runRow({ status: 'finalized', output_id: 'out_0' })],
         }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
@@ -884,7 +884,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
@@ -892,7 +892,7 @@ describe('redaction run write guards', () => {
       }),
     ).resolves.toEqual({ kind: 'already_finalized' })
 
-    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+    expect(calls.some(([sql]) => sql.includes('insert into outputs'))).toBe(
       false,
     )
     expect(calls.some(([sql]) => sql.includes('update redaction_runs'))).toBe(
@@ -906,9 +906,9 @@ describe('redaction run write guards', () => {
     const { pool } = createTransactionalPool(async (sql, params) => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
       if (sql.includes('for update of run')) return { rows: [runRow()] }
-      if (sql.includes('insert into artifacts')) {
+      if (sql.includes('insert into outputs')) {
         return {
-          rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+          rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
         }
       }
       if (sql.includes('update redaction_runs')) {
@@ -917,7 +917,7 @@ describe('redaction run write guards', () => {
       }
       if (sql.includes('from redaction_runs')) {
         return {
-          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
+          rows: [runRow({ status: 'finalized', output_id: 'out_1' })],
         }
       }
       if (sql.includes('insert into audit_logs')) {
@@ -934,7 +934,7 @@ describe('redaction run write guards', () => {
         runId: 'red_1',
         outputMode: 'redacted',
         tokenMap: {},
-        artifactId: 'art_1',
+        outputId: 'out_1',
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,

@@ -2693,7 +2693,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>32 migrations, 0001 to 0033, 0008 withdrawn</dd>
+                <dd>33 migrations, 0001 to 0034, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3466,7 +3466,7 @@
                   <td class="id">redact-review.ts</td>
                   <td>
                     Apply decisions; write text or rasterized redacted PDF
-                    artifact
+                    output
                   </td>
                 </tr>
                 <tr>
@@ -3481,7 +3481,7 @@
                   <td class="id">GET /api/redaction-runs/:runId/output/file</td>
                   <td class="id">redact-review.ts</td>
                   <td>
-                    Finalized artifact bytes (redacted PDF or text download)
+                    Finalized output bytes (redacted PDF or text download)
                   </td>
                 </tr>
                 <tr>
@@ -3494,10 +3494,10 @@
                     DOCX output back to its source document as a new immutable
                     version (migration 0033 records
                     <code>returned_document_version_id</code>). Verified against
-                    the stored artifact's SHA-256 and DOCX parse; a moved
-                    document head answers <code>conflict_detected</code>, a
-                    completed return answers idempotently with the version it
-                    already created.
+                    the stored output's SHA-256 and DOCX parse; a moved document
+                    head answers <code>conflict_detected</code>, a completed
+                    return answers idempotently with the version it already
+                    created.
                   </td>
                 </tr>
                 <tr>
@@ -4171,17 +4171,17 @@
                   <rect
                     x="420"
                     y="190"
-                    width="106.8"
+                    width="101.5"
                     height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--line-strong)"
                   />
-                  <text x="473.4" y="207" text-anchor="middle" class="n">
-                    artifacts
+                  <text x="470.75" y="207" text-anchor="middle" class="n">
+                    outputs
                   </text>
-                  <text x="473.4" y="218" text-anchor="middle" class="s">
-                    generated output
+                  <text x="470.75" y="218" text-anchor="middle" class="s">
+                    generated files
                   </text>
                 </g>
                 <g>
@@ -4302,23 +4302,23 @@
                   4-part composite
                 </text>
                 <path
-                  d="M473.4,280 L473.4,231"
+                  d="M473.4,280 L470.75,231"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-entity-relationships)"
                 />
-                <text x="505.4" y="255.5" text-anchor="middle" class="e">
+                <text x="504.075" y="255.5" text-anchor="middle" class="e">
                   output
                 </text>
                 <path
-                  d="M473.4,190 L350.6,112.5"
+                  d="M470.75,190 L350.6,112.5"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-entity-relationships)"
                 />
-                <text x="438.0" y="147.25" text-anchor="middle" class="e">
+                <text x="436.675" y="147.25" text-anchor="middle" class="e">
                   organisation_id
                 </text>
                 <path
@@ -4448,8 +4448,12 @@
                   <td class="id">0030, 0031</td>
                 </tr>
                 <tr>
-                  <td class="id">artifacts</td>
-                  <td>Generated outputs, including finalized redactions</td>
+                  <td class="id">outputs</td>
+                  <td>
+                    Generated outputs, including finalized redactions. Renamed
+                    from <code>artifacts</code> in 0034; "artefact" now means a
+                    matter source
+                  </td>
                   <td class="id">0002</td>
                 </tr>
                 <tr>
@@ -4519,8 +4523,8 @@
                   <td class="id">redaction_runs</td>
                   <td>
                     Spans, decisions, summary, detector version and mode,
-                    replacement lineage, output artifact. Standalone since 0007.
-                    Since 0012, standalone runs also carry
+                    replacement lineage, output. Standalone since 0007. Since
+                    0012, standalone runs also carry
                     <code>source_file_object_key</code>,
                     <code>source_layout_object_key</code> and
                     <code>source_mime_type</code>, each constrained to the
@@ -4653,7 +4657,7 @@
                 </tr>
                 <tr>
                   <td class="id">
-                    org/&lt;id&gt;/matters/&lt;id&gt;/artifacts/&lt;id&gt;
+                    org/&lt;id&gt;/matters/&lt;id&gt;/outputs/&lt;id&gt;
                   </td>
                   <td>Generated outputs</td>
                 </tr>
@@ -4682,8 +4686,11 @@
                   <td>Matter document PDF layout geometry</td>
                 </tr>
                 <tr>
-                  <td class="id">org/&lt;id&gt;/artifacts/&lt;id&gt;</td>
-                  <td>Organisation-level artifacts</td>
+                  <td class="id">org/&lt;id&gt;/outputs/&lt;id&gt;</td>
+                  <td>
+                    Organisation-level outputs. Rows from before 0034 keep
+                    <code>/artifacts/</code>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -5010,7 +5017,7 @@
             <code>@napi-rs/canvas</code> / <code>pdf-lib</code> machinery used
             for PDF sources. Every failure mode — non-2xx, timeout, unreachable
             host, or a body that is not a PDF — fails the run; the API never
-            falls back to a text artifact or finalizes a run without its secure
+            falls back to a text output or finalizes a run without its secure
             PDF.
           </div>
           <div class="callout note">
@@ -5601,7 +5608,7 @@
                     stroke="var(--success)"
                   />
                   <text x="348.1" y="247" text-anchor="middle" class="n">
-                    artifact
+                    output
                   </text>
                   <text x="348.1" y="258" text-anchor="middle" class="s">
                     + audit report
@@ -5778,8 +5785,8 @@
             <li>
               <span
                 ><b>Finalize.</b> Span integrity is re-checked against the
-                source text, decisions apply, and the output artifact and audit
-                report are written. A PDF source with a stored layout produces a
+                source text, decisions apply, and the output and audit report
+                are written. A PDF source with a stored layout produces a
                 <b>rasterized</b> PDF: each page is rendered to a canvas at 2×
                 scale, cover rects are painted opaque black over the pixels, and
                 the page is re-embedded as an image. The output has no text
@@ -5787,7 +5794,7 @@
                 text extraction or copy. Stored layouts are parsed with the
                 shared finite-number schema before preview or burn; invalid
                 geometry is treated as absent, which triggers the fail-closed
-                cover error and a plain-text artifact instead of emitting an
+                cover error and a plain-text output instead of emitting an
                 unburned PDF. Anything else also produces plain text.</span
               >
             </li>
@@ -5799,9 +5806,9 @@
             the finalize audit entry, and <code>GET /output</code> /
             <code>GET /output/file</code> serve from them. The PDF burn is
             best-effort: if rendering fails, finalize falls back to writing the
-            text artifact and records <code>text/plain</code> rather than
-            failing the run. The recorded mime type is therefore the only
-            reliable signal of what a caller actually got.
+            text output and records <code>text/plain</code> rather than failing
+            the run. The recorded mime type is therefore the only reliable
+            signal of what a caller actually got.
           </div>
           <div class="callout risk">
             <b>Detection limitations stay actionable and visible.</b> If the

@@ -46,14 +46,14 @@ This document defines the minimum implementation-grade Phase 0 schema. The exact
 - `conflict`
 - `failed`
 
-### artifact_status
+### output_status
 
 - `queued`
 - `generating`
 - `ready`
 - `failed`
 
-### artifact_type
+### output_type
 
 Initial values:
 
@@ -64,7 +64,7 @@ Initial values:
 - `verification_report`
 - `research_memo`
 
-Phase 0 mostly needs the first three. Phase 1 modules may add report artifacts without changing the artifact model.
+Phase 0 mostly needs the first three. Phase 1 modules may add report outputs without changing the output model.
 
 ## Tables
 
@@ -147,8 +147,8 @@ Initial audited actions:
 - `document.upload`
 - `document.version_create`
 - `document.delete`
-- `artifact.create`
-- `artifact.download`
+- `output.create`
+- `output.download`
 
 ### matters
 
@@ -247,7 +247,7 @@ Indexes:
 - `document_status`
 - `sync_state`
 
-### artifacts
+### outputs
 
 Required fields:
 
@@ -255,7 +255,7 @@ Required fields:
 - `matter_id`
 - `document_id`
 - `document_version_id`
-- `artifact_type`
+- `output_type`
 - `status`
 - `object_key`
 - `failure_reason`
@@ -266,9 +266,9 @@ Required fields:
 Constraints:
 
 - `matter_id` references `matters.id`.
-- `document_id` references `matter_documents.id` where the artifact belongs to a document.
-- `document_version_id` references `document_versions.id` where the artifact belongs to a version.
-- `object_key` is nullable until the artifact is ready.
+- `document_id` references `matter_documents.id` where the output belongs to a document.
+- `document_version_id` references `document_versions.id` where the output belongs to a version.
+- `object_key` is nullable until the output is ready.
 - `failure_reason` must be safe for UI display.
 
 Indexes:
@@ -287,8 +287,10 @@ Recommended shape:
 ```text
 org/{organisation_id}/matters/{matter_id}/documents/{document_id}/versions/{version_id}/source
 org/{organisation_id}/matters/{matter_id}/documents/{document_id}/versions/{version_id}/text
-org/{organisation_id}/matters/{matter_id}/artifacts/{artifact_id}
+org/{organisation_id}/matters/{matter_id}/outputs/{output_id}
 ```
+
+Outputs written before migration 0034 keep their `art_` id under `/artifacts/`; the key check accepts both shapes.
 
 Original filenames belong in metadata, not object keys.
 

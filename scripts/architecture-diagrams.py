@@ -233,7 +233,7 @@ d4.node("project", 570, 130, "project back", "to real offsets")
 d4.node("merge", 710, 130, "merge", "model wins")
 d4.node("review", 710, 230, "review", "reviewer decides")
 d4.node("final", 500, 230, "finalize", "integrity check")
-d4.node("out", 300, 230, "artifact", "+ audit report", accent="var(--success)")
+d4.node("out", 300, 230, "output", "+ audit report", accent="var(--success)")
 d4.node("degraded", 425, 30, "model unavailable", "heuristics only",
         accent="var(--danger)", kind="dashed")
 
@@ -271,7 +271,7 @@ d5.node("presence", 240, 365, "document_presence", "ephemeral TTL",
 d5.node("comments", 240, 300, "document_comments", "anchor + replies")
 d5.node("runs", 420, 280, "redaction_runs", "spans, decisions")
 d5.node("vruns", 420, 360, "verification_runs", "findings")
-d5.node("artifacts", 420, 190, "artifacts", "generated output")
+d5.node("outputs", 420, 190, "outputs", "generated files")
 d5.node("legal", 700, 300, "legal_source_documents", "public corpus",
         accent="var(--info)")
 
@@ -285,8 +285,8 @@ d5.edge("comments", "docs", sa="l", sb="r", label="doc + matter + org", ly=-8)
 d5.edge("comments", "versions", sa="b", sb="r", label="nullable provenance", lx=35, ly=6)
 d5.edge("runs", "versions", sa="l", sb="r", label="4-part composite", ly=-6)
 d5.edge("vruns", "versions", sa="l", sb="r", label="4-part composite", ly=10)
-d5.edge("runs", "artifacts", sa="t", sb="b", label="output", lx=32)
-d5.edge("artifacts", "orgs", sa="t", sb="r", label="organisation_id", lx=26, ly=-4)
+d5.edge("runs", "outputs", sa="t", sb="b", label="output", lx=32)
+d5.edge("outputs", "orgs", sa="t", sb="r", label="organisation_id", lx=26, ly=-4)
 d5.edge("users", "orgs", sa="r", sb="l")
 
 d5.parts.append(

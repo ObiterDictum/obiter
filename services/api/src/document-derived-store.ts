@@ -1,13 +1,13 @@
 import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
 
-type DocumentArtifactSource = Pick<
+type DocumentDerivedSource = Pick<
   DocumentVersionRecord,
   'id' | 'organisationId' | 'matterId' | 'matterDocumentId' | 'objectKey'
 >
 
-type DocumentArtifactName = 'text' | 'layout.json' | 'model.json'
+type DocumentDerivedName = 'text' | 'layout.json' | 'model.json'
 
-export class DocumentArtifactStoreError extends Error {
+export class DocumentDerivedStoreError extends Error {
   constructor(message: string) {
     super(message)
     this.name = new.target.name
@@ -16,15 +16,15 @@ export class DocumentArtifactStoreError extends Error {
 
 export function deriveDocumentSiblingObjectKey(
   sourceObjectKey: string,
-  artifact: DocumentArtifactName,
+  file: DocumentDerivedName,
 ) {
-  return sourceObjectKey.replace(/\/source$/u, `/${artifact}`)
+  return sourceObjectKey.replace(/\/source$/u, `/${file}`)
 }
 
 export function validateAndDeriveDocumentObjectKey(
-  source: DocumentArtifactSource,
-  artifact: DocumentArtifactName,
-  createError: () => DocumentArtifactStoreError,
+  source: DocumentDerivedSource,
+  file: DocumentDerivedName,
+  createError: () => DocumentDerivedStoreError,
 ) {
   const segments = [
     source.organisationId,
@@ -43,5 +43,5 @@ export function validateAndDeriveDocumentObjectKey(
   })
   if (source.objectKey !== expectedSourceKey) throw createError()
 
-  return deriveDocumentSiblingObjectKey(expectedSourceKey, artifact)
+  return deriveDocumentSiblingObjectKey(expectedSourceKey, file)
 }

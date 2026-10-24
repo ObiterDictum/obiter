@@ -94,7 +94,7 @@ function runRow(spans: RedactionSpan[], decisions: Decisions): RedactionRunRow {
     policy_mode: 'internal_ai_minimisation',
     spans_json: spans,
     decisions_json: decisions,
-    output_artifact_id: null,
+    output_id: null,
     summary_json: { totalSpans: spans.length },
     detector_version: null,
     detection_mode: 'model+supplement',
@@ -150,9 +150,9 @@ function finalizeApp(
           statement.includes('select matter_id, document_id, replaces_run_id')
         )
           return { rows: [readyRun] }
-        if (statement.includes('insert into artifacts'))
+        if (statement.includes('insert into outputs'))
           return {
-            rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+            rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
           }
         if (statement.includes('update redaction_runs')) return { rows: [] }
         if (statement.includes('from redaction_runs'))
@@ -370,7 +370,7 @@ describe('overlap disposition (P0.31)', () => {
     const decisions = fromSuggestions(spans)
     // The union's disposition is a policy decision; assert it directly. The
     // route then publishes the redacted text as a secure, image-only PDF, so
-    // the accepted bytes cannot appear in the artifact.
+    // the accepted bytes cannot appear in the output.
     expect(applyRedacted(source, spans, decisions)).toBe(
       'alpha [REDACTED] delta',
     )

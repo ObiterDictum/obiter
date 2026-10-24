@@ -1278,7 +1278,7 @@ describe('createApiApp', () => {
                 policy_mode: 'internal_ai_minimisation',
                 spans_json: [],
                 decisions_json: {},
-                output_artifact_id: null,
+                output_id: null,
                 summary_json: {
                   totalSpans: 0,
                   byCategory: {},
@@ -1433,7 +1433,7 @@ describe('createApiApp', () => {
       policy_mode: 'internal_ai_minimisation',
       spans_json: [],
       decisions_json: {},
-      output_artifact_id: null,
+      output_id: null,
       summary_json: {},
       detector_version:
         'rampart-inference@0.1.3-vendored;mode=heuristics+supplement',
@@ -1537,7 +1537,7 @@ describe('createApiApp', () => {
                 finalizedRunRow({
                   id: values[0] as string,
                   status: 'ready_for_review',
-                  output_artifact_id: null,
+                  output_id: null,
                   source_text_object_key: values[6] as string,
                   detector_version: values[13] as string | null,
                   detection_mode: values[14],
@@ -1801,7 +1801,7 @@ function finalizedRunRow(
     policy_mode: 'internal_ai_minimisation',
     spans_json: [],
     decisions_json: {},
-    output_artifact_id: 'art_1',
+    output_id: 'out_1',
     summary_json: { totalSpans: 0 },
     detector_version: null,
     detection_mode: 'model+supplement',
@@ -1840,13 +1840,13 @@ function fakeDocxRenderer(onDocx?: (bytes: Buffer) => void): RedactionRenderer {
 describe('createApiApp redaction review reads', () => {
   function createRedactionReadApp({
     run,
-    artifactKey = null,
+    outputKey = null,
     documentTextKey = null,
     storedText = 'Stored redaction text.',
     auth = authWithRole('member'),
   }: {
     run: ReturnType<typeof finalizedRunRow> | null
-    artifactKey?: string | null
+    outputKey?: string | null
     documentTextKey?: string | null
     storedText?: string
     auth?: Auth
@@ -1876,9 +1876,9 @@ describe('createApiApp redaction review reads', () => {
                 : [],
             }
           }
-          if (text.includes('from artifacts')) {
+          if (text.includes('from outputs')) {
             return {
-              rows: artifactKey ? [{ object_key: artifactKey }] : [],
+              rows: outputKey ? [{ object_key: outputKey }] : [],
             }
           }
           if (text.includes('insert into audit_logs')) {
@@ -2098,9 +2098,9 @@ describe('createApiApp redaction review reads', () => {
     )
   })
 
-  it('returns 400 when a redaction run has no output artifact', async () => {
+  it('returns 400 when a redaction run has no output', async () => {
     const { app } = createRedactionReadApp({
-      run: finalizedRunRow({ output_artifact_id: null }),
+      run: finalizedRunRow({ output_id: null }),
     })
 
     const response = await app.request('/api/redaction-runs/red_1/output')
@@ -2120,14 +2120,14 @@ describe('createApiApp redaction review reads', () => {
 
     expect(response.status).toBe(404)
     expect(((await response.json()) as ErrorBody).error.code).toBe(
-      'artifact_not_found',
+      'output_not_found',
     )
   })
 
   it('hides output metadata and bytes for a soft-deleted run', async () => {
     const { app } = createRedactionReadApp({
       run: finalizedRunRow({ deleted_at: '2026-02-01T00:00:00.000Z' }),
-      artifactKey: 'org/org_1/artifacts/art_1',
+      outputKey: 'org/org_1/outputs/out_1',
     })
 
     const meta = await app.request('/api/redaction-runs/red_1/output')
@@ -2139,7 +2139,7 @@ describe('createApiApp redaction review reads', () => {
   it('hides output metadata and bytes for a run owned by another organisation', async () => {
     const { app } = createRedactionReadApp({
       run: finalizedRunRow({ organisation_id: 'org_other' }),
-      artifactKey: 'org/org_other/artifacts/art_1',
+      outputKey: 'org/org_other/outputs/out_1',
     })
 
     const meta = await app.request('/api/redaction-runs/red_1/output')
@@ -2151,7 +2151,7 @@ describe('createApiApp redaction review reads', () => {
   it('returns stored redaction output text', async () => {
     const { app, readText } = createRedactionReadApp({
       run: finalizedRunRow(),
-      artifactKey: 'org/org_1/artifacts/art_1',
+      outputKey: 'org/org_1/outputs/out_1',
     })
 
     const response = await app.request('/api/redaction-runs/red_1/output')
@@ -2161,11 +2161,11 @@ describe('createApiApp redaction review reads', () => {
       mimeType: 'text/plain',
       filename: 'source-redacted.txt',
       text: 'Stored redaction text.',
-      artifactId: 'art_1',
+      outputId: 'out_1',
       sha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
       securePdf: false,
     })
-    expect(readText).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+    expect(readText).toHaveBeenCalledWith('org/org_1/outputs/out_1')
   })
 
   it('returns redacted PDF metadata and binary download bytes', async () => {
@@ -2191,8 +2191,8 @@ describe('createApiApp redaction review reads', () => {
               values[0] === run.id && values[1] === run.organisation_id
             return { rows: visible ? [run] : [] }
           }
-          if (text.includes('from artifacts')) {
-            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          if (text.includes('from outputs')) {
+            return { rows: [{ object_key: 'org/org_1/outputs/out_1' }] }
           }
           return { rows: [] }
         },
@@ -2217,7 +2217,7 @@ describe('createApiApp redaction review reads', () => {
       mimeType: 'application/pdf',
       filename: 'brief-redacted.pdf',
       text: null,
-      artifactId: 'art_1',
+      outputId: 'out_1',
       sha256: null,
       securePdf: true,
     })
@@ -2230,7 +2230,7 @@ describe('createApiApp redaction review reads', () => {
     )
     expect(file.headers.get('x-content-type-options')).toBe('nosniff')
     expect(Buffer.from(await file.arrayBuffer())).toEqual(pdfBytes)
-    expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+    expect(readBinary).toHaveBeenCalledWith('org/org_1/outputs/out_1')
   })
 
   it('strips path separators from a hostile source filename in the download header', async () => {
@@ -2255,8 +2255,8 @@ describe('createApiApp redaction review reads', () => {
               values[0] === run.id && values[1] === run.organisation_id
             return { rows: visible ? [run] : [] }
           }
-          if (text.includes('from artifacts')) {
-            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          if (text.includes('from outputs')) {
+            return { rows: [{ object_key: 'org/org_1/outputs/out_1' }] }
           }
           return { rows: [] }
         },
@@ -2418,7 +2418,7 @@ describe('createApiApp redaction review reads', () => {
   it('returns text output/file with nosniff', async () => {
     const { app } = createRedactionReadApp({
       run: finalizedRunRow(),
-      artifactKey: 'org/org_1/artifacts/art_1',
+      outputKey: 'org/org_1/outputs/out_1',
     })
 
     const file = await app.request('/api/redaction-runs/red_1/output/file')
@@ -2508,7 +2508,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     let finalizeAuditMetadata: Record<string, unknown> | null = null
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       detection_mode: detectionMode,
     })
     const app = createApiApp(
@@ -2529,12 +2529,12 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             text.includes('select matter_id, document_id, replaces_run_id')
           )
             return { rows: [readyRun] }
-          if (text.includes('insert into artifacts')) {
+          if (text.includes('insert into outputs')) {
             return {
               rows: [
                 {
-                  id: 'art_1',
-                  object_key: 'org/org_1/artifacts/art_1',
+                  id: 'out_1',
+                  object_key: 'org/org_1/outputs/out_1',
                 },
               ],
             }
@@ -2671,10 +2671,10 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
   })
 
-  it('fails visibly with no artifact when stored PDF geometry is invalid', async () => {
+  it('fails visibly with no output when stored PDF geometry is invalid', async () => {
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       source_filename: 'source.pdf',
       source_mime_type: 'application/pdf',
       source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
@@ -2719,12 +2719,12 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             text.includes('select matter_id, document_id, replaces_run_id')
           )
             return { rows: [readyRun] }
-          if (text.includes('insert into artifacts')) {
+          if (text.includes('insert into outputs')) {
             return {
               rows: [
                 {
-                  id: 'art_1',
-                  object_key: 'org/org_1/artifacts/art_1',
+                  id: 'out_1',
+                  object_key: 'org/org_1/outputs/out_1',
                 },
               ],
             }
@@ -2782,7 +2782,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(((await response.json()) as ErrorBody).error).toMatchObject({
       code: 'redaction_secure_pdf_failed',
     })
-    // No silent downgrade: neither an artifact nor a text fallback is written,
+    // No silent downgrade: neither an output nor a text fallback is written,
     // so the run stays unfinalized and cannot be shared.
     expect(textOutputWrites).toBe(0)
     expect(binaryOutputWrites).toBe(0)
@@ -2800,7 +2800,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       )
       const readyRun = finalizedRunRow({
         status: 'ready_for_review',
-        output_artifact_id: null,
+        output_id: null,
         source_filename: fixtureName,
         source_mime_type:
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -2824,11 +2824,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
               text.includes('select matter_id, document_id, replaces_run_id')
             )
               return { rows: [readyRun] }
-            if (text.includes('insert into artifacts')) {
+            if (text.includes('insert into outputs')) {
               return {
-                rows: [
-                  { id: 'art_1', object_key: 'org/org_1/artifacts/art_1' },
-                ],
+                rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
               }
             }
             if (text.includes('update redaction_runs')) return { rows: [] }
@@ -2913,7 +2911,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const start = text.indexOf(target)
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       source_filename: 'letter-footnotes-numbering.docx',
       source_mime_type:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -2941,7 +2939,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const finalizedRow = () =>
       finalizedRunRow({
         status: 'finalized',
-        output_artifact_id: 'art_1',
+        output_id: 'out_1',
         source_filename: 'letter-footnotes-numbering.docx',
         source_mime_type:
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -2969,8 +2967,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
           if (String(sql).includes('from redaction_runs')) {
             return { rows: [finalized ? finalizedRow() : readyRun] }
           }
-          if (String(sql).includes('from artifacts')) {
-            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          if (String(sql).includes('from outputs')) {
+            return { rows: [{ object_key: 'org/org_1/outputs/out_1' }] }
           }
           return { rows: [] }
         },
@@ -2983,9 +2981,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             statement.includes('select matter_id, document_id, replaces_run_id')
           )
             return { rows: [readyRun] }
-          if (statement.includes('insert into artifacts')) {
+          if (statement.includes('insert into outputs')) {
             return {
-              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+              rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
             }
           }
           if (statement.includes('update redaction_runs')) {
@@ -2994,8 +2992,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             ) as Record<string, unknown>
             return { rows: [] }
           }
-          if (statement.includes('from artifacts')) {
-            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          if (statement.includes('from outputs')) {
+            return { rows: [{ object_key: 'org/org_1/outputs/out_1' }] }
           }
           if (statement.includes('from redaction_runs')) {
             return { rows: [finalizedRow()] }
@@ -3034,7 +3032,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(1)
     // The burn happens before the render hop: the sanitized .docx the renderer
-    // receives no longer carries the accepted name, and the published artifact
+    // receives no longer carries the accepted name, and the published output
     // is the rasterized image-only PDF, not the .docx.
     expect(renderedDocx).not.toBeNull()
     const zip = await JSZip.loadAsync(renderedDocx ?? Buffer.alloc(0))
@@ -3062,7 +3060,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     ).toBe('%PDF-')
     // The object key carries stable ids only: no client, matter or source
     // filename can leak through storage layout.
-    expect(writtenKey).toMatch(/^org\/org_1\/artifacts\/art_[0-9a-f-]{36}$/u)
+    expect(writtenKey).toMatch(/^org\/org_1\/outputs\/out_[0-9a-f-]{36}$/u)
     expect(writtenKey).not.toContain('letter-footnotes-numbering')
     expect(persistedSummary).toMatchObject({
       outputMimeType: 'application/pdf',
@@ -3092,7 +3090,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const sourceBytes = Buffer.from(await sourcePdf.save())
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       source_filename: 'source.pdf',
       source_mime_type: 'application/pdf',
       source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
@@ -3119,7 +3117,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
     const finalizedRow = finalizedRunRow({
       status: 'finalized',
-      output_artifact_id: 'art_1',
+      output_id: 'out_1',
       source_filename: 'source.pdf',
       source_mime_type: 'application/pdf',
       spans_json: readyRun.spans_json,
@@ -3153,9 +3151,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             statement.includes('select matter_id, document_id, replaces_run_id')
           )
             return { rows: [readyRun] }
-          if (statement.includes('insert into artifacts')) {
+          if (statement.includes('insert into outputs')) {
             return {
-              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+              rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
             }
           }
           if (statement.includes('update redaction_runs')) {
@@ -3220,7 +3218,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
   })
 
-  it('fails visibly with no artifact when .docx burn refuses tracked-change text', async () => {
+  it('fails visibly with no output when .docx burn refuses tracked-change text', async () => {
     const { default: JSZip } = await import('jszip')
     // The deletion duplicates live text exactly, so coverage passes it as
     // examined — but the burn still refuses the residual tracked copy of
@@ -3256,7 +3254,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const start = text.indexOf(target)
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       source_filename: 'letter-tracked-changes.docx',
       source_mime_type:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -3311,9 +3309,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             statement.includes('select matter_id, document_id, replaces_run_id')
           )
             return { rows: [readyRun] }
-          if (statement.includes('insert into artifacts')) {
+          if (statement.includes('insert into outputs')) {
             return {
-              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+              rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
             }
           }
           if (statement.includes('update redaction_runs')) {
@@ -3354,7 +3352,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(((await response.json()) as ErrorBody).error).toMatchObject({
       code: 'redaction_secure_pdf_failed',
     })
-    // No silent downgrade: no text fallback, no artifact, no finalized run.
+    // No silent downgrade: no text fallback, no output, no finalized run.
     expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(0)
     expect(persistedSummary).toBeNull()
@@ -3372,7 +3370,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   it('finalizes runs with no stored source as coverage-unchecked (warning + audit)', async () => {
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
     })
     const auditActions: unknown[] = []
     const captureAudit = (sql: unknown, params: unknown) => {
@@ -3399,9 +3397,9 @@ describe('createApiApp degraded finalization acknowledgement', () => {
             text.includes('select matter_id, document_id, replaces_run_id')
           )
             return { rows: [readyRun] }
-          if (text.includes('insert into artifacts')) {
+          if (text.includes('insert into outputs')) {
             return {
-              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+              rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
             }
           }
           if (text.includes('update redaction_runs')) return { rows: [] }
@@ -3443,7 +3441,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   it('refuses to finalize when the stored source cannot be read', async () => {
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       source_filename: 'letter-plain.docx',
       source_mime_type:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -3496,7 +3494,7 @@ describe('createApiApp replaced redaction run guards', () => {
     let updated = false
     const replacedRun = finalizedRunRow({
       status: 'ready_for_review',
-      output_artifact_id: null,
+      output_id: null,
       replacement_run_id: 'red_2',
       returned_document_version_id: null,
       spans_json: [
@@ -3629,7 +3627,7 @@ describe('createApiApp soft-delete write races', () => {
               rows: [
                 finalizedRunRow({
                   status: 'ready_for_review',
-                  output_artifact_id: null,
+                  output_id: null,
                 }),
               ],
             }

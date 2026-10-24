@@ -46,7 +46,7 @@ export interface RedactionRunRecord {
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]
   decisions: Decisions
-  outputArtifactId: string | null
+  outputId: string | null
   summary: RunSummary & {
     tokenMap?: TokenMap
     outputMode?: OutputMode
@@ -86,7 +86,7 @@ export interface RedactionRunRow {
   policy_mode: RedactionPolicyMode
   spans_json: unknown
   decisions_json: unknown
-  output_artifact_id: string | null
+  output_id: string | null
   summary_json: unknown
   detector_version: string | null
   detection_mode: unknown
@@ -100,16 +100,16 @@ export interface RedactionRunRow {
   deleted_by: string | null
 }
 
-interface ArtifactRecord {
+interface OutputRecord {
   id: string
   objectKey: string
-  artifactType: 'redaction_output'
+  outputType: 'redaction_output'
 }
 
 export const redactionRunColumns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
   run.document_version_id, run.source_filename, run.source_text_object_key, run.source_file_object_key,
   run.source_layout_object_key, run.source_mime_type, run.status, run.policy_mode,
-  run.spans_json, run.decisions_json, run.output_artifact_id, run.summary_json, run.detector_version,
+  run.spans_json, run.decisions_json, run.output_id, run.summary_json, run.detector_version,
   run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.returned_document_version_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
 export const redactionRunsFrom = `from redaction_runs run
   left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id
@@ -225,7 +225,7 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     policyMode: row.policy_mode,
     spans: parseSpans(row.spans_json),
     decisions: parseDecisions(row.decisions_json),
-    outputArtifactId: row.output_artifact_id,
+    outputId: row.output_id,
     summary,
     detectorVersion: row.detector_version,
     detectionMode: detectionModeSchema.parse(row.detection_mode),
@@ -695,7 +695,7 @@ export async function finalizeRedactionRun(input: {
   runId: string
   outputMode: OutputMode
   tokenMap: TokenMap
-  artifactId: string
+  outputId: string
   userId: string
   requestId: string
   degradedDetectionAcknowledged: boolean
@@ -743,12 +743,12 @@ export async function finalizeRedactionRun(input: {
       return { kind: 'acknowledgement_required' as const }
     }
     const objectKey = run.matterId
-      ? `org/${run.organisationId}/matters/${run.matterId}/artifacts/${input.artifactId}`
-      : `org/${run.organisationId}/artifacts/${input.artifactId}`
-    const artifact = await client.query<{ id: string; object_key: string }>(
-      `insert into artifacts (id, organisation_id, matter_id, document_id, document_version_id, artifact_type, status, object_key, created_by, created_at, updated_at) values ($1, $2, $3, $4, $5, 'redaction_output', 'ready', $6, $7, now(), now()) returning id, object_key`,
+      ? `org/${run.organisationId}/matters/${run.matterId}/outputs/${input.outputId}`
+      : `org/${run.organisationId}/outputs/${input.outputId}`
+    const outputRow = await client.query<{ id: string; object_key: string }>(
+      `insert into outputs (id, organisation_id, matter_id, document_id, document_version_id, output_type, status, object_key, created_by, created_at, updated_at) values ($1, $2, $3, $4, $5, 'redaction_output', 'ready', $6, $7, now(), now()) returning id, object_key`,
       [
-        input.artifactId,
+        input.outputId,
         run.organisationId,
         run.matterId,
         run.documentId,
@@ -768,12 +768,12 @@ export async function finalizeRedactionRun(input: {
       outputDowngrade: input.outputDowngrade ?? null,
       ...(input.outputSha256 ? { outputSha256: input.outputSha256 } : {}),
       // True only for the new secure rasterized hard-redaction PDF; absent on
-      // legacy DOCX/TXT artifacts and pseudonymised output.
+      // legacy DOCX/TXT outputs and pseudonymised output.
       securePdf: input.securePdf === true,
     }
     await client.query(
-      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
-      [run.id, run.organisationId, input.artifactId, JSON.stringify(summary)],
+      `update redaction_runs set status = 'finalized', output_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
+      [run.id, run.organisationId, input.outputId, JSON.stringify(summary)],
     )
     const finalizedRun = await selectRedactionRun(
       client,
@@ -808,7 +808,7 @@ export async function finalizeRedactionRun(input: {
         unknownDetectionAcknowledged:
           finalizedRun.detectionMode === 'unknown' &&
           input.unknownDetectionAcknowledged === true,
-        artifactId: artifact.rows[0].id,
+        outputId: outputRow.rows[0].id,
         spanCount: finalizedRun.summary.totalSpans,
         reviewedCount: finalizedRun.summary.reviewedCount,
         unreviewedCount: finalizedRun.summary.unreviewedCount,
@@ -825,11 +825,11 @@ export async function finalizeRedactionRun(input: {
     return {
       kind: 'finalized' as const,
       run: finalizedRun,
-      artifact: {
-        id: artifact.rows[0].id,
-        objectKey: artifact.rows[0].object_key,
-        artifactType: 'redaction_output' as const,
-      } satisfies ArtifactRecord,
+      output: {
+        id: outputRow.rows[0].id,
+        objectKey: outputRow.rows[0].object_key,
+        outputType: 'redaction_output' as const,
+      } satisfies OutputRecord,
     }
   } catch (error) {
     await client.query('rollback')
@@ -876,10 +876,10 @@ export async function getRedactionOutputKey(
   pool: Pool,
   run: RedactionRunRecord,
 ) {
-  if (!run.outputArtifactId) return null
+  if (!run.outputId) return null
   const result = await pool.query<{ object_key: string }>(
-    "select object_key from artifacts where id = $1 and organisation_id = $2 and matter_id is not distinct from $3 and artifact_type = 'redaction_output' and status = 'ready'",
-    [run.outputArtifactId, run.organisationId, run.matterId],
+    "select object_key from outputs where id = $1 and organisation_id = $2 and matter_id is not distinct from $3 and output_type = 'redaction_output' and status = 'ready'",
+    [run.outputId, run.organisationId, run.matterId],
   )
   return result.rows[0]?.object_key ?? null
 }

@@ -16,7 +16,7 @@ import {
 
 /**
  * E12 handoff, exercised end to end: a finalized document-bound run returns
- * its burned DOCX artifact to the source document as a new immutable
+ * its burned DOCX output to the source document as a new immutable
  * version. Every case below runs the real route against a real database so
  * the locking, ACL and provenance ordering is the production path, not a
  * mock of it.
@@ -38,8 +38,8 @@ type ReturnBody = {
 
 interface ReturnSeed extends Seed {
   runId: string
-  artifactId: string
-  artifactKey: string
+  outputId: string
+  outputKey: string
 }
 
 async function seedFinalizedRun(
@@ -48,21 +48,21 @@ async function seedFinalizedRun(
 ): Promise<ReturnSeed> {
   const seed = await seedMatter(pool, access)
   const runId = `red_return_${seed.documentId}`
-  const artifactId = `art_return_${seed.documentId}`
-  const artifactKey = `org/${seed.orgId}/matters/${seed.matterId}/artifacts/${artifactId}`
+  const outputId = `out_return_${seed.documentId}`
+  const outputKey = `org/${seed.orgId}/matters/${seed.matterId}/outputs/${outputId}`
   await pool.query(
-    `insert into artifacts (
+    `insert into outputs (
        id, organisation_id, matter_id, document_id, document_version_id,
-       artifact_type, status, object_key, created_by, created_at, updated_at
+       output_type, status, object_key, created_by, created_at, updated_at
      ) values ($1, $2, $3, $4, $5, 'redaction_output', 'ready', $6, $7,
        now(), now())`,
     [
-      artifactId,
+      outputId,
       seed.orgId,
       seed.matterId,
       seed.documentId,
       seed.versionId,
-      artifactKey,
+      outputKey,
       seed.ownerId,
     ],
   )
@@ -70,7 +70,7 @@ async function seedFinalizedRun(
     `insert into redaction_runs (
        id, organisation_id, matter_id, document_id, document_version_id,
        source_filename, status, policy_mode, spans_json, decisions_json,
-       output_artifact_id, summary_json, detection_mode, created_by,
+       output_id, summary_json, detection_mode, created_by,
        created_at, updated_at
      ) values ($1, $2, $3, $4, $5, 'synthetic.docx', $6,
        'internal_ai_minimisation', '[]'::jsonb, '{}'::jsonb, $7, $8::jsonb,
@@ -82,7 +82,7 @@ async function seedFinalizedRun(
       seed.documentId,
       seed.versionId,
       overrides.status ?? 'finalized',
-      artifactId,
+      outputId,
       JSON.stringify({
         outputMimeType: DOCX_MIME,
         outputSha256: overrides.sha256 ?? outputSha256,
@@ -90,7 +90,7 @@ async function seedFinalizedRun(
       seed.ownerId,
     ],
   )
-  return { ...seed, runId, artifactId, artifactKey }
+  return { ...seed, runId, outputId, outputKey }
 }
 
 /** Move the document head forward, leaving the run's source historical. */
@@ -172,7 +172,7 @@ async function cleanupRun(seed: ReturnSeed) {
   await pool.query(`delete from redaction_runs where organisation_id = $1`, [
     seed.orgId,
   ])
-  await pool.query(`delete from artifacts where organisation_id = $1`, [
+  await pool.query(`delete from outputs where organisation_id = $1`, [
     seed.orgId,
   ])
   await cleanupMatter(pool, seed)
@@ -183,7 +183,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     const seed = await seedFinalizedRun('edit')
     try {
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -197,7 +197,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
       expect(body.versionNumber).toBe(2)
 
       // The document head moved to the returned version, which carries the
-      // artifact bytes byte-for-byte.
+      // output bytes byte-for-byte.
       const head = await pool.query<{ current_version_id: string }>(
         `select current_version_id from matter_documents where id = $1`,
         [seed.documentId],
@@ -225,7 +225,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
       expect(audit.rows).toHaveLength(1)
       expect(audit.rows[0]?.metadata_json).toMatchObject({
         runId: seed.runId,
-        artifactId: seed.artifactId,
+        outputId: seed.outputId,
         sourceVersionId: seed.versionId,
         returnedVersionId: body.versionId,
       })
@@ -238,7 +238,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     const seed = await seedFinalizedRun('edit')
     try {
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const first = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -269,7 +269,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     try {
       await supersedeSource(seed)
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -298,7 +298,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
         [seed.versionId, seed.documentId],
       )
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -317,7 +317,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     const seed = await seedFinalizedRun('edit', { status: 'ready_for_review' })
     try {
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -333,13 +333,13 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     }
   })
 
-  it('refuses an artifact whose bytes no longer match the recorded sha', async () => {
+  it('refuses an output whose bytes no longer match the recorded sha', async () => {
     const seed = await seedFinalizedRun('edit', {
       sha256: 'f'.repeat(64),
     })
     try {
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -357,7 +357,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     const seed = await seedFinalizedRun('view')
     try {
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
 
       const viewer = returnApp(storage, editorUser(seed))
       const denied = await viewer.request(
@@ -402,7 +402,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
         [seed.runId, seed.ownerId],
       )
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, ownerUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,
@@ -419,7 +419,7 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     const seed = await seedFinalizedRun('edit')
     try {
       const storage = storageFor(seed)
-      storage.binary.set(seed.artifactKey, outputBytes)
+      storage.binary.set(seed.outputKey, outputBytes)
       const app = returnApp(storage, editorUser(seed))
       const response = await app.request(
         `/api/redaction-runs/${seed.runId}/return-to-document`,

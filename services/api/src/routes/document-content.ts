@@ -7,9 +7,9 @@ import {
   type DocumentVersionRecord,
 } from '../database'
 import {
-  DocumentArtifactStoreError,
+  DocumentDerivedStoreError,
   validateAndDeriveDocumentObjectKey,
-} from '../document-artifact-store'
+} from '../document-derived-store'
 import { createDocumentMediaResponse } from '../document-media-response'
 import type { StorageService } from '../storage'
 import {
@@ -17,13 +17,13 @@ import {
   resolveReadyDocumentVersion,
 } from './document-route-shared'
 
-export class DocumentDownloadError extends DocumentArtifactStoreError {
+export class DocumentDownloadError extends DocumentDerivedStoreError {
   constructor() {
     super('The document could not be downloaded.')
   }
 }
 
-export class DocumentTextError extends DocumentArtifactStoreError {
+export class DocumentTextError extends DocumentDerivedStoreError {
   constructor() {
     super('The document text could not be read.')
   }
