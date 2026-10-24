@@ -161,14 +161,9 @@ export function ModelParagraph({
       item.cursor?.paragraphId === paragraph.id,
   )
   const face = useMemo(
-    // `paragraphFace` reads only the paragraph's style id and its own XML, and
-    // both keep their identity when only the paragraph's text changes. Keying
-    // on those rather than the rebuilt paragraph object means an untouched
-    // paragraph does not re-parse its formatting on every keystroke.
     () => paragraphFace(paragraph, styles),
     [paragraph.preservedXmlFragments, paragraph.styleId, styles],
   )
-  // Index the measured paragraphs × changes hot path once per change list.
   const bucket = useMemo(
     () =>
       paragraphChanges(paragraph, changes, story?.partName ?? storyPartName),
@@ -195,11 +190,7 @@ export function ModelParagraph({
       pendingChanges,
     ],
   )
-  if (
-    pendingChanges.some(
-      (change: PendingInlineChange) => change.pending?.paragraphDelete,
-    )
-  )
+  if (pendingChanges.some((change) => change.pending?.paragraphDelete))
     editing = false
   const review = useContext(InlineChangeReview)
   const fullText = paragraphPlainText(effective)
