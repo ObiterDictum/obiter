@@ -87,6 +87,8 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       item.next,
       run.textRevisionEligible === true,
       run.textRevisionTokens,
+      false,
+      run.textRevisionTextRanges?.length,
     )
     expect([plan.removed, plan.inserted]).toEqual([item.removed, item.inserted])
     const cached = structuredClone(document.model)
@@ -163,6 +165,8 @@ it('keeps split run revision text local after inserting a footnote', async () =>
         'x',
         run.textRevisionEligible === true,
         run.textRevisionTokens,
+        false,
+        run.textRevisionTextRanges?.length,
       ),
     )
   expect(plans.map((plan) => plan.removed)).toEqual(['cat\td', 'og'])

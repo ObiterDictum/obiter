@@ -378,21 +378,35 @@ function parseRun(
       anchoredTextElements.map((element) => element.start),
     )
     const consumed = new Set(textBreaks.map((element) => element.start))
-    wire.textRevisionTokens = index
-      .descendantsOfRun(runElement)
-      .filter((element) =>
+    let offset = 0
+    let textIndex = 0
+    wire.textRevisionTokens = []
+    wire.textRevisionTextRanges = []
+    for (const element of index.descendantsOfRun(runElement)) {
+      const text = trackedElementText(source, element)
+      if (anchored.has(element.start)) {
+        wire.textRevisionTextRanges.push({
+          from: offset,
+          to: offset + text.length,
+        })
+        offset += text.length
+        textIndex += 1
+      } else if (consumed.has(element.start)) {
+        wire.textRevisionTokens.push({ kind: 'break', offset, textIndex, text })
+        offset += text.length
+      } else if (
         ['t', 'delText', 'tab', 'br', 'cr'].some((name) =>
           isWord(element, name),
-        ),
-      )
-      .map((element) => ({
-        kind: anchored.has(element.start)
-          ? 'text'
-          : consumed.has(element.start)
-            ? 'break'
-            : 'retained',
-        text: trackedElementText(source, element),
-      }))
+        )
+      ) {
+        wire.textRevisionTokens.push({
+          kind: 'retained',
+          offset,
+          textIndex,
+          text,
+        })
+      }
+    }
   }
   return { wire, anchor }
 }

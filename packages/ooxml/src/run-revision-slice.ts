@@ -7,20 +7,27 @@ export function sliceRunRevisionMetadata(
   to: number,
 ) {
   if (run.textRevisionEligible) return { textRevisionEligible: true }
-  let cursor = 0
-  const tokens: NonNullable<DocumentTextRunWire['textRevisionTokens']> = []
-  for (const token of run.textRevisionTokens ?? []) {
-    if (token.kind === 'retained') {
-      if ((cursor > from || from === 0) && cursor <= to) tokens.push(token)
-      continue
-    }
-    const end = cursor + token.text.length
-    if (end > from && cursor < to)
-      tokens.push({
-        ...token,
-        text: token.text.slice(Math.max(0, from - cursor), to - cursor),
-      })
-    cursor = end
+  const tokens = (run.textRevisionTokens ?? [])
+    .filter(
+      (token) => (token.offset > from || from === 0) && token.offset <= to,
+    )
+    .map((token) => ({ ...token, offset: token.offset - from }))
+  const ranges = run.textRevisionTextRanges ?? [
+    { from: 0, to: run.text.length },
+  ]
+  const kept = ranges.filter((range) => range.to > from && range.from < to)
+  const firstIndex = kept.length
+    ? ranges.findIndex((range) => range === kept[0])
+    : 0
+  return {
+    textRevisionEligible: false,
+    textRevisionTokens: tokens.map((token) => ({
+      ...token,
+      textIndex: Math.max(0, token.textIndex - firstIndex),
+    })),
+    textRevisionTextRanges: kept.map((range) => ({
+      from: Math.max(0, range.from - from),
+      to: Math.min(to, range.to) - from,
+    })),
   }
-  return { textRevisionEligible: false, textRevisionTokens: tokens }
 }
