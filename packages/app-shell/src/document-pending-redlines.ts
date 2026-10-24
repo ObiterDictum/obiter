@@ -202,10 +202,8 @@ export function withPendingRedlines(
     }
     let offset = 0
     for (const run of paragraph.runs) {
-      const next = (replacements.get(run.id) ?? run.text).replace(
-        /\r\n|\r/gu,
-        '\n',
-      )
+      const next =
+        replacements.get(run.id)?.replace(/\r\n|\r/gu, '\n') ?? run.text
       if (replacements.has(run.id)) {
         const plan = planTextRevision(
           run.text,

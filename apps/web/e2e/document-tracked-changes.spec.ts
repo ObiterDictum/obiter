@@ -724,8 +724,18 @@ test('native clicks place the caret inside an unsaved tracked insertion', async 
     range.setStart(text, 2)
     range.setEnd(text, 3)
     const rect = range.getBoundingClientRect()
-    return { x: rect.left + 0.5, y: rect.top + rect.height / 2 }
+    const x = rect.left + 0.5
+    const y = rect.top + rect.height / 2
+    const caret = document.caretPositionFromPoint(x, y)
+    return {
+      x,
+      y,
+      hitInside: element.contains(caret?.offsetNode ?? null),
+      offset: caret?.offset,
+    }
   })
+  expect(point.hitInside).toBe(true)
+  expect(point.offset).toBe(2)
   await page.mouse.click(point.x, point.y)
   await page.keyboard.type('X')
   await expect(
