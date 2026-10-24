@@ -214,6 +214,16 @@ export function scrubBurnedFields(
         const id = attributeValue(element, REL_NS, 'id')
         if (id) linkIds.add(id)
       }
+      const names = isWord(element, 'hyperlink') && touches(element)
+        ? ['tooltip', 'docLocation']
+        : element.namespaceUri === 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing' && element.localName === 'docPr' && touches(element)
+          ? ['descr', 'title'] : []
+      if (names.length) {
+        let opening = source.slice(element.start, element.startTagEnd)
+        for (const attr of element.attributes.filter((attr) => names.includes(attr.localName)))
+          opening = removeAttribute(opening, { ...element, start: 0, startTagEnd: opening.length }, attr.qualifiedName)
+        patch(document, partName, { start: element.start, end: element.startTagEnd }, opening)
+      }
     }
     for (const field of fields) {
       if (touches({ start: field.start, end: source.length }))
@@ -231,7 +241,7 @@ export function scrubBurnedFields(
           document,
           partName,
           { start: element.start, end: element.startTagEnd },
-          removeAttribute(source, element, attr.qualifiedName),
+          removeAttribute(document.sourceParts.get(partName)?.overlay?.replacements.get(`${element.start}:${element.startTagEnd}`)?.value ?? source.slice(element.start, element.startTagEnd), { ...element, start: 0, startTagEnd: (document.sourceParts.get(partName)?.overlay?.replacements.get(`${element.start}:${element.startTagEnd}`)?.value ?? source.slice(element.start, element.startTagEnd)).length }, attr.qualifiedName),
         )
     }
     const slash = partName.lastIndexOf('/')

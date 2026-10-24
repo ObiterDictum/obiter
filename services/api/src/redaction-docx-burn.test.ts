@@ -140,6 +140,18 @@ describe('Redact-owned DOCX bytes', () => {
     expect(output.xml).not.toContain('mc:Fallback')
   })
 
+  it('clears redacted hyperlink tooltip and document location', async () => {
+    const output = await burn('<w:p><w:hyperlink r:id="link" w:tooltip="private hint" w:docLocation="private location">' + run('<w:t>Jane Doe</w:t>') + '</w:hyperlink></w:p>')
+    expect(output.xml).not.toContain('private hint')
+    expect(output.xml).not.toContain('private location')
+  })
+
+  it('clears image alt text and title within a redacted range', async () => {
+    const output = await burn('<w:p>' + run('<w:t>Jane </w:t><w:drawing><wp:docPr xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" id="1" name="Picture" descr="private description" title="private title"/></w:drawing><w:t>Doe</w:t>') + '</w:p>')
+    expect(output.xml).not.toContain('private description')
+    expect(output.xml).not.toContain('private title')
+  })
+
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {
     const output = await burn(
       `<w:p>${run(begin + '<w:t>Jane</w:t>' + instruction + separate + '<w:t> Doe</w:t>' + end)}</w:p>`,
