@@ -57,10 +57,21 @@ export const documentTextRunWireSchema = z.object({
   textRevisionEligible: z.boolean().optional(),
   /** Source-ordered display tokens for whole-run revisions. Retained controls
    * survive the replacement; text-wrapping breaks are consumed. */
+  /** Source text-element boundaries, without duplicating their text. */
+  textRevisionTextRanges: z
+    .array(
+      z.object({
+        from: z.number().int().nonnegative(),
+        to: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
   textRevisionTokens: z
     .array(
       z.object({
-        kind: z.enum(['text', 'retained', 'break']),
+        kind: z.enum(['retained', 'break']),
+        offset: z.number().int().nonnegative(),
+        textIndex: z.number().int().nonnegative(),
         text: z.string(),
       }),
     )

@@ -53,6 +53,7 @@ export function granularRunEdit(
     anchor.wire.textRevisionEligible === true,
     anchor.wire.textRevisionTokens,
     pendingProperties,
+    anchor.wire.textRevisionTextRanges?.length,
   )
   if (middle.kind === 'noop') return { kind: 'noop' }
   if (middle.kind === 'whole-run') return { kind: 'fallback' }

@@ -11,6 +11,7 @@ export function planTextRevision(
   granular: boolean,
   tokens?: readonly TextRevisionToken[],
   pendingProperties = false,
+  textCount = 1,
 ) {
   from = from.replace(/\r\n|\r/gu, '\n')
   to = to.replace(/\r\n|\r/gu, '\n')
@@ -35,26 +36,28 @@ export function planTextRevision(
     }
   const retained: Array<{ offset: number; text: string }> = []
   const lines = to.split(/\r\n|\r|\n/u)
-  const textCount = tokens?.filter((token) => token.kind === 'text').length ?? 1
   const assigned = Math.min(lines.length, textCount)
-  let textIndex = 0
   let cursor = 0
   let inserted = ''
-  for (const token of tokens ?? [{ kind: 'text', text: from }]) {
-    if (token.kind === 'break') continue
-    if (token.kind === 'retained') {
+  let removed = ''
+  let oldCursor = 0
+  for (const token of tokens ?? []) {
+    if (token.kind !== 'retained') continue
+    removed += from.slice(oldCursor, token.offset) + token.text
+    oldCursor = token.offset
+  }
+  removed += from.slice(oldCursor)
+  for (let textIndex = 0; textIndex <= textCount; textIndex += 1) {
+    for (const token of tokens ?? []) {
+      if (token.textIndex !== textIndex || token.kind !== 'retained') continue
       retained.push({ offset: cursor, text: token.text })
       inserted += token.text
-      continue
     }
-    let piece = ''
-    if (textIndex < assigned) {
-      piece = lines[textIndex] ?? ''
-      if (textIndex === assigned - 1 && lines.length > textCount)
-        piece += '\n' + lines.slice(textCount).join('\n')
-      else if (textIndex < lines.length - 1) piece += '\n'
-    }
-    textIndex += 1
+    if (textIndex >= assigned) continue
+    let piece = lines[textIndex] ?? ''
+    if (textIndex === assigned - 1 && lines.length > textCount)
+      piece += '\n' + lines.slice(textCount).join('\n')
+    else if (textIndex < lines.length - 1) piece += '\n'
     inserted += piece
     cursor += piece.length
   }
@@ -66,7 +69,7 @@ export function planTextRevision(
         ? ('boundary-mismatch' as const)
         : ('ineligible' as const),
     prefixLength: 0,
-    removed: tokens?.map((token) => token.text).join('') ?? from,
+    removed,
     inserted,
     editableInserted: to,
     suffixLength: 0,

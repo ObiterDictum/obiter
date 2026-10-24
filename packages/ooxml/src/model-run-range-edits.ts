@@ -336,7 +336,8 @@ function splitReplacedRun(
     ...(part.replaced
       ? {
           textRevisionEligible: false,
-          textRevisionTokens: [{ kind: 'text' as const, text: part.text }],
+          textRevisionTokens: [],
+          textRevisionTextRanges: [{ from: 0, to: part.text.length }],
         }
       : sliceRunRevisionMetadata(
           run.wire,

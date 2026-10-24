@@ -36,7 +36,9 @@ export function parseModelJson(json: string) {
         paragraph.runs.some(
           (run) =>
             run.textRevisionEligible === undefined ||
-            (!run.textRevisionEligible && !run.textRevisionTokens),
+            (!run.textRevisionEligible &&
+              (!run.textRevisionTokens ||
+                run.textRevisionTextRanges === undefined)),
         ),
       ),
     )
