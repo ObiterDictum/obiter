@@ -145,7 +145,11 @@ export function withPendingRedlines(
   const propertyRuns = new Set<string>()
   const styledRuns = new Set<string>()
   for (const op of operations) {
-    if (op.type === 'set_run_style') styledRuns.add(op.runId)
+    if (
+      (op.type === 'set_run_style' || op.type === 'set_run_emphasis') &&
+      op.runId !== undefined
+    )
+      styledRuns.add(op.runId)
     if (op.type === 'replace_run_text') {
       if (styledRuns.has(op.runId)) propertyRuns.add(op.runId)
       const source = index.runs.get(op.runId)
