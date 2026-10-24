@@ -6,6 +6,7 @@ import type { ParagraphLinkOverlay } from './document-structure-overlays'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
+  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { paragraphChanges } from './document-inline-index'
 import { paragraphPlainText, textDiff } from './document-model-text'
@@ -59,6 +60,10 @@ function projectInlineChanges(
   }
   const runs: DocumentParagraphWire['runs'] = []
   const spans: InlineSpan[] = []
+  const runSources = new Map<
+    string,
+    { run: DocumentTextRunWire; from: number; to: number }
+  >()
   const editableRuns: Array<{ from: number; to: number; displayFrom: number }> =
     []
   let offset = 0
@@ -131,6 +136,11 @@ function projectInlineChanges(
         emitted.add(change.id)
         const text = markBreaks(change.text)
         const runId = `${change.id}:inline`
+        runSources.set(runId, {
+          run,
+          from: displayOffset - (at - runStart),
+          to: displayOffset + (runEnd - at),
+        })
         runs.push({ ...run, id: runId, text })
         spans.push({
           from: displayOffset,
@@ -159,6 +169,11 @@ function projectInlineChanges(
         from: offset,
         to: offset + text.length,
         displayFrom: displayOffset,
+      })
+      runSources.set(runId, {
+        run,
+        from: displayOffset - (at - runStart),
+        to: displayOffset + (runEnd - at),
       })
       runs.push({ ...run, id: runId, text })
       if (change)
@@ -209,6 +224,7 @@ function projectInlineChanges(
   }
   return {
     paragraph: projected,
+    runSources,
     text,
     editableText,
     spans,
