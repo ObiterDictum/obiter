@@ -711,8 +711,9 @@ test('native clicks place the caret inside an unsaved tracked insertion', async 
   ).toBeVisible()
   await selectFirst(page, PLAIN, SELECTED.length)
   await page.keyboard.type('45,000')
+  await page.keyboard.press('Escape')
   const insertion = page
-    .locator('[data-caret-run-overlay] [data-inline-editable="true"]')
+    .locator('[data-paragraph-id] [data-inline-editable="true"]')
     .filter({ hasText: '45,000' })
   await expect(insertion).toHaveText('45,000')
   const point = await insertion.evaluate((element) => {
@@ -728,7 +729,7 @@ test('native clicks place the caret inside an unsaved tracked insertion', async 
   await page.mouse.click(point.x, point.y)
   await page.keyboard.type('X')
   await expect(
-    page.locator('[data-caret-run-overlay] [data-inline-editable="true"]'),
+    page.locator('[data-paragraph-id] [data-inline-editable="true"]'),
   ).toHaveText('45X,000')
   await page.screenshot({ path: '/tmp/obiter-r2-caret-after.png' })
 })
