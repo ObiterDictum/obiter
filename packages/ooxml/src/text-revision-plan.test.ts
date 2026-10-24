@@ -154,6 +154,15 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
   }
 })
 
+it('regenerates cached models carrying the retired break token kind', async () => {
+  const { document } = await revisionFixture('<w:t>a</w:t><w:tab/>')
+  const cached = JSON.stringify(document.model)
+  expect(() => parseModelJson(cached)).not.toThrow()
+  expect(() =>
+    parseModelJson(cached.replace('"kind":"retained"', '"kind":"break"')),
+  ).toThrow()
+})
+
 it('does not advertise granular edits for runs with stored property revisions', async () => {
   const zip = await JSZip.loadAsync(
     await buildOoxmlFixture('full-fidelity-with-w14-ids'),

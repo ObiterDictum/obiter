@@ -13,14 +13,12 @@ export function sliceRunRevisionMetadata(
     return { textRevisionEligible: true }
   const tokens = (run.textRevisionTokens ?? [])
     .filter((token) =>
-      token.kind === 'break'
-        ? token.offset >= from && token.offset < to
-        : boundaryControls === 'both'
-          ? token.offset >= from && token.offset <= to
-          : boundaryControls === 'tail'
-            ? token.offset >= from &&
-              (token.offset < to || to === run.text.length)
-            : (token.offset > from || from === 0) && token.offset <= to,
+      boundaryControls === 'both'
+        ? token.offset >= from && token.offset <= to
+        : boundaryControls === 'tail'
+          ? token.offset >= from &&
+            (token.offset < to || to === run.text.length)
+          : (token.offset > from || from === 0) && token.offset <= to,
     )
     .map((token) => ({ ...token, offset: token.offset - from }))
   const ranges = run.textRevisionTextRanges ?? [
