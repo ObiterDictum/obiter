@@ -705,7 +705,7 @@ test('native clicks place the caret inside an unsaved tracked insertion', async 
     password,
     `E9 pending caret ${Date.now()}`,
   )
-  await page.getByRole('tab', { name: 'Review' }).click()
+  await openChangesPanel(page)
   await expect(
     page.getByRole('button', { name: 'Track changes on' }),
   ).toBeVisible()
