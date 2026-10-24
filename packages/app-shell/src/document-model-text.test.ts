@@ -190,4 +190,6 @@ it('normalises inserted draft text at the range-write boundary', () => {
     'one\r\ntwo\r',
   )
   expect(runs.map((run) => run.text).join('')).toBe('before one\ntwo\nafter')
+  const source = [{ id: 'r', text: 'a\r\nb', preservedXmlFragments: [] }]
+  expect(replaceRunRange(source, 4, 4, '!')[0]?.text).toBe('a\nb!')
 })
