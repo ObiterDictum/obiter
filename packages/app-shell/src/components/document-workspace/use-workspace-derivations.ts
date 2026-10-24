@@ -1,3 +1,4 @@
+import type { SavePlan } from '../../document-save-plan'
 import { withPendingRedlines } from '../../document-pending-redlines'
 import { useEffect, useMemo } from 'react'
 import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
@@ -154,7 +155,9 @@ export function useWorkspaceDerivations({
   insert,
   legalChecksOpen,
   flow,
+  saveOperations,
 }: {
+  saveOperations?: SavePlan['operations']
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
@@ -241,16 +244,16 @@ export function useWorkspaceDerivations({
   const painted = useMemo(
     () =>
       structured && model && insert.trackChanges
-        ? withPendingRedlines(model, drafts.state, structured)
+        ? withPendingRedlines(model, drafts.state, structured, saveOperations)
         : structured,
-    [structured, model, insert.trackChanges, drafts.state],
+    [structured, model, insert.trackChanges, drafts.state, saveOperations],
   )
   // The story's block partition is a pure function of the painted model, so it
   // is scanned once per model rather than once per pagination pass.
   const blocks = useMemo(() => {
-    const story = painted ? documentStory(painted) : undefined
+    const story = structured ? documentStory(structured) : undefined
     return story ? storyBlocks(story) : []
-  }, [painted])
+  }, [structured])
   // Pending breaks are structure, not text: they are folded into a copy of the
   // painted model so pagination sees the same page and section breaks the save
   // will write, without changing what the page renders.
