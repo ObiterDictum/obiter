@@ -137,13 +137,13 @@ function projectInlineChanges(
         emitted.add(change.id)
         const text = markBreaks(change.text)
         const runId = `${change.id}:inline`
+        const sourceRun = paragraph.runs.find((source) => source.id === change.runId) ?? run
         runSources.set(runId, {
-          run:
-            paragraph.runs.find((source) => source.id === change.runId) ?? run,
+          run: sourceRun,
           from: displayOffset - (at - runStart),
           to: displayOffset + (runEnd - at),
         })
-        runs.push({ ...run, id: runId, text })
+        runs.push({ ...sourceRun, id: runId, text })
         spans.push({
           from: displayOffset,
           to: displayOffset + text.length,
