@@ -1,4 +1,7 @@
-import type { InlineSpan } from '../../document-inline-changes'
+import type {
+  InlineSpan,
+  InlineProjection,
+} from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
 import { useMemo, type ReactNode } from 'react'
 import type {
@@ -61,6 +64,7 @@ export function ParagraphRunPaint({
   paragraph,
   toEditableOffset = (at) => at,
   inlineSpans = [],
+  runSources,
   reviewable = true,
   drafts,
   changes,
@@ -81,6 +85,7 @@ export function ParagraphRunPaint({
   paragraph: DocumentParagraphWire
   toEditableOffset?: (at: number) => number
   inlineSpans?: InlineSpan[]
+  runSources?: InlineProjection['runSources']
   reviewable?: boolean
   drafts?: Record<string, string>
   changes: DocumentChangeWire[]
@@ -119,6 +124,8 @@ export function ParagraphRunPaint({
     }
     return slices.map(({ run, text, from }) => {
       const span = inlineByRun.get(run.id)
+      const source = runSources?.get(run.id)
+      const original = source?.run ?? run
       if (span)
         return (
           <InlineChange
@@ -131,7 +138,8 @@ export function ParagraphRunPaint({
       return (
         <ModelRun
           key={`${run.id}-${from}`}
-          run={run}
+          run={original}
+          notesVisible={!source || from + text.length === source.to}
           text={text}
           from={from}
           selection={selection}
@@ -141,7 +149,11 @@ export function ParagraphRunPaint({
           changes={changes}
           styles={styles}
           drafts={drafts}
-          caret={carets.find((item) => item.cursor?.runId === run.id)}
+          caret={
+            !source || from === source.from
+              ? carets.find((item) => item.cursor?.runId === original.id)
+              : undefined
+          }
         />
       )
     })
@@ -240,6 +252,7 @@ function ModelRun({
   styles,
   drafts,
   caret,
+  notesVisible = true,
 }: {
   run: DocumentTextRunWire
   text: string
@@ -252,6 +265,7 @@ function ModelRun({
   styles: DocumentStyleWire[]
   drafts?: Record<string, string>
   caret?: DocumentPresence
+  notesVisible?: boolean
 }) {
   // The run's own formatting and note refs depend on the run XML, not its
   // text, so they survive a keystroke elsewhere in the document.
@@ -291,7 +305,7 @@ function ModelRun({
         linkOverlay,
         run.hyperlinkTarget,
       )}
-      {notes.map((note) => (
+      {(notesVisible ? notes : []).map((note) => (
         <sup
           key={`${note.kind}-${note.noteId}-${note.runId}`}
           data-note-mark
