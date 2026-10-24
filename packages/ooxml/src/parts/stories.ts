@@ -368,7 +368,11 @@ function parseRun(
     ...(styleElement ? { runStyleRange: elementRange(styleElement) } : {}),
   }
   wire.textRevisionEligible =
-    textBreaks.length === 0 && !!splittableRunParts(source, anchor)
+    !propertiesElements.some((element) =>
+      index.containsTrackedChange(element),
+    ) &&
+    textBreaks.length === 0 &&
+    !!splittableRunParts(source, anchor)
   if (!wire.textRevisionEligible) {
     const anchored = new Set(
       anchoredTextElements.map((element) => element.start),

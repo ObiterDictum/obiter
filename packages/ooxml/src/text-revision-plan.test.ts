@@ -96,3 +96,26 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
     ])
   }
 })
+
+it('does not advertise granular edits for runs with stored property revisions', async () => {
+  const zip = await JSZip.loadAsync(
+    await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+  )
+  zip.file(
+    'word/document.xml',
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:rPrChange w:id="7" w:author="Synthetic Reviewer"><w:rPr/></w:rPrChange></w:rPr><w:t>Order 60,000 units</w:t></w:r></w:p></w:body></w:document>',
+  )
+  const document = await parseDocx(
+    await zip.generateAsync({ type: 'uint8array' }),
+  )
+  const run = document.model.stories[0]?.paragraphs[0]?.runs[0]
+  if (!run) throw new Error('Missing fixture run')
+  expect(run.textRevisionEligible).toBe(false)
+  expect(() =>
+    applyDocumentEdits(
+      document,
+      [{ type: 'replace_run_text', runId: run.id, text: 'Order 45,000 units' }],
+      { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
+    ),
+  ).toThrow()
+})
