@@ -2,6 +2,7 @@ import JSZip from 'jszip'
 import { loadOoxmlZipEntries, parseDocx, serialiseDocx } from '@obiter/ooxml'
 import {
   burnParagraph,
+  paragraphBurnText,
   scrubBurnedFields,
   type BurnRange,
 } from './redaction-docx-burn'
@@ -130,55 +131,43 @@ export async function buildRedactedDocx(
   }
 
   const burned = new Map<string, Array<{ start: number; end: number }>>()
+  const covered = new Set<string>()
   for (const story of document.model.stories) {
     if (!REDACTABLE_STORY_KINDS.has(story.kind)) continue
-    for (const paragraph of story.paragraphs) {
+    const paragraphs = story.paragraphs.map((paragraph) => {
       const anchor = document.paragraphAnchors.get(paragraph.id)
-      if (!anchor) continue
-      const paragraphText = anchor.runs.map((run) => run.wire.text).join('')
-      if (!paragraphText) continue
-      const occurrences: Array<RedactionRange & { replacement: string }> = []
-      for (const span of affected) {
-        if (!span.text) continue
-        const replacement = replacements.get(span.id) ?? '[REDACTED]'
-        let cursor = 0
-        for (;;) {
-          const index = paragraphText.indexOf(span.text, cursor)
-          if (index === -1) break
-          occurrences.push({
-            start: index,
-            end: index + span.text.length,
-            spanId: span.id,
-            replacement,
-          })
-          cursor = index + span.text.length
-        }
-      }
-      // Redacted output coalesces adjacent occurrences into one bar per
-      // paragraph. Pseudonymised output keeps one token per span so distinct
-      // tokens are never absorbed into a shared bar.
-      const hits: BurnRange[] =
-        input.outputMode === 'redacted'
-          ? coalesceRanges(paragraphText, occurrences).map((region) => ({
-              from: region.start,
-              to: region.end,
-              text: '[REDACTED]',
-              black: true,
-            }))
-          : occurrences.map((occurrence) => ({
-              from: occurrence.start,
-              to: occurrence.end,
-              text: occurrence.replacement,
-            }))
-      if (hits.length > 0) {
-        const ranges = burnParagraph(document, anchor, hits)
-        burned.set(anchor.partName, [
-          ...(burned.get(anchor.partName) ?? []),
-          ...ranges,
-        ])
+      if (!anchor) throw new RedactionDocxBurnError('Redaction paragraph anchor is unavailable.')
+      return { anchor, text: paragraphBurnText(document, anchor) }
+    })
+    const storyText = paragraphs.map((paragraph) => paragraph.text).join('\n')
+    const occurrences: Array<RedactionRange & { replacement: string }> = []
+    for (const span of affected) {
+      if (!span.text) throw new RedactionDocxBurnError('Empty accepted redaction.')
+      let cursor = 0
+      for (;;) {
+        const index = storyText.indexOf(span.text, cursor)
+        if (index === -1) break
+        occurrences.push({ start: index, end: index + span.text.length, spanId: span.id, replacement: replacements.get(span.id) ?? '[REDACTED]' })
+        cursor = index + 1
       }
     }
+    let offset = 0
+    for (const { anchor, text } of paragraphs) {
+      const pieces = occurrences.filter((hit) => hit.start < offset + text.length && hit.end > offset).map((hit) => ({ ...hit, start: Math.max(0, hit.start - offset), end: Math.min(text.length, hit.end - offset) }))
+      const hits: BurnRange[] = input.outputMode === 'redacted'
+        ? coalesceRanges(text, pieces).map((region) => ({ from: region.start, to: region.end, text: '[REDACTED]', black: true }))
+        : pieces.map((piece) => ({ from: piece.start, to: piece.end, text: piece.replacement }))
+      if (hits.length) {
+        const ranges = burnParagraph(document, anchor, hits)
+        if (!ranges.length) throw new RedactionDocxBurnError('Accepted redaction could not be burned.')
+        for (const piece of pieces) covered.add(piece.spanId)
+        burned.set(anchor.partName, [...(burned.get(anchor.partName) ?? []), ...ranges])
+      }
+      offset += text.length + 1
+    }
   }
+  if (affected.some((span) => !covered.has(span.id)))
+    throw new RedactionDocxBurnError('An accepted redaction has no burnable occurrence.')
 
   scrubBurnedFields(document, burned)
   const serialised = await serialiseDocx(document)

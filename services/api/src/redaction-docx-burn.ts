@@ -35,6 +35,20 @@ function patch(
   })
 }
 
+/** Match extraction: tabs and every break consume one character. */
+export function paragraphBurnText(document: OoxmlDocument, paragraph: ParagraphAnchor) {
+  const source = document.sourceParts.get(paragraph.partName)?.overlay?.source
+  if (source === undefined) throw new Error('Redaction source XML is unavailable.')
+  return paragraph.runs.flatMap((run) => burnNodes(source, run.runRange)).map(({ text }) => text).join('')
+}
+
+function burnNodes(source: string, run: Range) {
+  return parseXmlElements(source).filter((element) =>
+    element.start > run.start && element.end < run.end &&
+    (isWord(element, 't') || isWord(element, 'tab') || isWord(element, 'br'))
+  ).map((range) => ({ range, text: isWord(range, 'tab') ? '\t' : isWord(range, 'br') ? '\n' : decodeXmlReferences(source.slice(range.startTagEnd, range.endTagStart)) }))
+}
+
 /** Only text-bearing nodes are consumed; zero-width structure stays in place. */
 export function burnParagraph(
   document: OoxmlDocument,
@@ -58,21 +72,8 @@ export function burnParagraph(
     const close = source.slice(run.runRange.endTagStart, run.runRange.end)
     const properties = run.runProperties.join('')
     const textTag = prefix.match(/^<([^\s:>]+):/u)?.[1] ?? 'w'
-    const nodes = [
-      ...run.textElements.map((range) => ({ range, br: false })),
-      ...run.textBreaks.map((range) => ({ range, br: true })),
-    ].sort((a, b) => a.range.start - b.range.start)
-    const decoded = nodes.map(({ range, br }) =>
-      br
-        ? '\n'
-        : decodeXmlReferences(
-            source.slice(range.startTagEnd, range.endTagStart),
-          ),
-    )
-    if (decoded.join('') !== run.wire.text)
-      throw new Error('Redaction text anchors disagree.')
-    nodes.forEach(({ range }, index) => {
-      const text = decoded[index] ?? ''
+    const nodes = burnNodes(source, run.runRange)
+    nodes.forEach(({ range, text }) => {
       const end = offset + text.length
       const hits = spans.filter((span) => span.from < end && span.to > offset)
       if (hits.length) {

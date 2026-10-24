@@ -99,6 +99,27 @@ describe('Redact-owned DOCX bytes', () => {
     ).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
+  it.each([
+    ['Jane\tDoe', '<w:t>Jane</w:t><w:tab/><w:t>Doe</w:t>'],
+    ['Jane\nDoe', '<w:t>Jane</w:t><w:br w:type="page"/><w:t>Doe</w:t>'],
+  ])('burns extraction characters in %j', async (text, nodes) => {
+    const output = await burn(`<w:p>${run(nodes)}</w:p>`, text)
+    expect(output.text).toBe('[PERSON_NAME_1]')
+    expect(output.xml).not.toContain('Jane')
+    expect(output.xml).not.toContain('Doe')
+  })
+
+  it('burns every paragraph piece of an accepted address', async () => {
+    const output = await burn('<w:p>' + run('<w:t>1 High St</w:t>') + '</w:p><w:p>' + run('<w:t>London</w:t>') + '</w:p>', '1 High St\nLondon')
+    expect(output.xml).not.toContain('High St')
+    expect(output.xml).not.toContain('London')
+    expect(output.text).toContain('[PERSON_NAME_1]')
+  })
+
+  it('refuses an accepted span absent from all burnable text', async () => {
+    await expect(burn('<w:p>' + run('<w:t>Public</w:t>') + '</w:p>', 'Jane\tDoe')).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {
     const output = await burn(
       `<w:p>${run(begin + '<w:t>Jane</w:t>' + instruction + separate + '<w:t> Doe</w:t>' + end)}</w:p>`,
