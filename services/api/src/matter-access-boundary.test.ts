@@ -2,7 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'bun:test'
 
 const protectedTables =
-  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs|artifacts|audit_logs)\b/i
+  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs|outputs|audit_logs)\b/i
 
 const organisationInviteTable =
   /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?organisation_invites\b/i

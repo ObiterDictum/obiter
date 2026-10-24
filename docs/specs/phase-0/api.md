@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the Phase 0 API surface for auth, matters, documents, jobs, artifacts, and audit-backed activity.
+This document defines the Phase 0 API surface for auth, matters, documents, jobs, outputs, and audit-backed activity.
 
 The API should be implemented once and used by both web and Electron. Electron may add native helpers for file picking, cache, and local queueing, but it must not fork the product API model.
 
@@ -40,7 +40,7 @@ Minimum Phase 0 codes:
 - `matter_not_found`
 - `document_not_found`
 - `document_version_not_found`
-- `artifact_not_found`
+- `output_not_found`
 - `upload_failed`
 - `storage_unavailable`
 - `job_unavailable`
@@ -117,7 +117,7 @@ Query parameters:
 
 `GET /api/matters/:matterId`
 
-Returns matter detail, recent documents, artifacts, and activity needed for the matter overview.
+Returns matter detail, recent documents, outputs, and activity needed for the matter overview.
 
 `PATCH /api/matters/:matterId`
 
@@ -175,7 +175,7 @@ Returns non-deleted logical documents and their current versions.
 
 `GET /api/documents/:documentId`
 
-Returns the logical document, version history, processing status, and available artifacts.
+Returns the logical document, version history, processing status, and available outputs.
 
 `DELETE /api/documents/:documentId`
 
@@ -214,23 +214,23 @@ Minimum statuses:
 
 Failed responses must include a non-sensitive failure reason safe for UI display.
 
-## Artifacts
+## Outputs
 
-Use `artifacts` as the canonical product and schema term. A report is an artifact with a report-like `artifactType`.
+Use `outputs` as the canonical product and schema term. A report is an output with a report-like `outputType`. "Artefact" is a different thing: a source attached to a matter ([Matter Artefacts](../matter-artefacts.md)).
 
-`GET /api/matters/:matterId/artifacts`
+`GET /api/matters/:matterId/outputs`
 
-Returns artifacts for the matter.
+Returns outputs for the matter.
 
-`GET /api/artifacts/:artifactId`
+`GET /api/outputs/:outputId`
 
-Returns artifact metadata.
+Returns output metadata.
 
-`GET /api/artifacts/:artifactId/download`
+`GET /api/outputs/:outputId/download`
 
-Returns a short-lived download URL or streams the artifact. Every successful download must create an audit log entry.
+Returns a short-lived download URL or streams the output. Every successful download must create an audit log entry.
 
-Artifact statuses:
+Output statuses:
 
 - `queued`
 - `generating`
@@ -243,7 +243,7 @@ Artifact statuses:
 
 Returns user-facing activity derived from audit logs.
 
-Direct audit-log export endpoints are not required for M0.1-M0.3, but audit records must be created as soon as mutating matter/document/artifact behavior exists.
+Direct audit-log export endpoints are not required for M0.1-M0.3, but audit records must be created as soon as mutating matter/document/output behavior exists.
 
 ## Permission Rules
 

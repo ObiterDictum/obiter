@@ -253,7 +253,7 @@ describe('collaboration sync and presence', () => {
     expect(database.transactionCommands).toEqual([])
     expect(database.versions.size).toBe(1)
     expect(route.storage.binary.get(sourceKey)).toEqual(original)
-    // Cursor validation runs against the cached model artifact — the only
+    // Cursor validation runs against the cached model output — the only
     // text write is the derived model.json, never source bytes.
     expect(route.storage.textWrites.map(({ key }) => key)).toEqual([
       expect.stringContaining('/model.json'),

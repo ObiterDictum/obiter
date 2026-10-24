@@ -17,11 +17,11 @@ By the end of Phase 0, Obiter should have:
 - organisation, user, and matter models
 - document upload and storage
 - background jobs and processing status
-- artifact storage and retrieval plumbing
+- output storage and retrieval plumbing
 - shared design system, routing, and API contracts
 - audit logging
 - offline-capable desktop workflows
-- local encryption for desktop cache and sensitive local artifacts
+- local encryption for desktop cache and sensitive local outputs
 
 ## Product Goal
 
@@ -32,7 +32,7 @@ The user should be able to:
 3. create a matter
 4. upload a document into that matter
 5. see processing status
-6. access generated outputs and downloadable artifacts
+6. access and download generated outputs
 
 ## Product Positioning
 
@@ -177,19 +177,19 @@ Phase 0 should use immutable document versions.
 - document upload
 - document version history
 - document status tracking
-- artifact listing
+- output listing
 
 ### Audit And Activity
 
 - sign-in and session activity logging
 - matter creation and update logging
 - document upload, download, and delete logging
-- artifact generation and access logging
+- output generation and access logging
 
 ### Storage
 
 - uploaded file storage
-- artifact storage
+- output storage
 - document metadata persistence
 - object-key strategy
 - encryption-aware storage rules
@@ -223,7 +223,7 @@ Phase 0 is complete when:
 - a user can upload a document into that matter
 - document uploads produce immutable versions
 - the UI shows processing state correctly
-- artifacts can be stored, downloaded, and audited
+- outputs can be stored, downloaded, and audited
 - desktop can open and work with cached data offline
 - local desktop cache is encrypted
 - sync reconnect queues work without silent overwrite

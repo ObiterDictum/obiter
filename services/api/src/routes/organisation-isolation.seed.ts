@@ -21,8 +21,8 @@ export type OrganisationIsolationSeed = {
   runB: string
   auditA: string
   auditB: string
-  artifactA: string
-  artifactB: string
+  outputA: string
+  outputB: string
   inviteA: string
   inviteB: string
   commentA: string
@@ -38,7 +38,7 @@ type TenantIds = {
   shareId: string
   runId: string
   auditId: string
-  artifactId: string
+  outputId: string
   inviteId: string
   commentId: string
 }
@@ -53,7 +53,7 @@ function tenantIds(suffix: string, label: 'a' | 'b'): TenantIds {
     shareId: `shr_iso_${suffix}_${label}`,
     runId: `red_iso_${suffix}_${label}`,
     auditId: `aud_iso_${suffix}_${label}`,
-    artifactId: `art_iso_${suffix}_${label}`,
+    outputId: `out_iso_${suffix}_${label}`,
     inviteId: `inv_iso_${suffix}_${label}`,
     commentId: `cmt_iso_${suffix}_${label}`,
   }
@@ -77,12 +77,8 @@ function versionTextObjectKey(
   return `org/${orgId}/matters/${matterId}/documents/${documentId}/versions/${versionId}/text`
 }
 
-function artifactObjectKey(
-  orgId: string,
-  matterId: string,
-  artifactId: string,
-) {
-  return `org/${orgId}/matters/${matterId}/artifacts/${artifactId}`
+function outputObjectKey(orgId: string, matterId: string, outputId: string) {
+  return `org/${orgId}/matters/${matterId}/outputs/${outputId}`
 }
 
 async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
@@ -169,18 +165,18 @@ async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
   )
 
   await pool.query(
-    `insert into artifacts (
+    `insert into outputs (
        id, organisation_id, matter_id, document_id, document_version_id,
-       artifact_type, status, object_key, created_by, created_at, updated_at
+       output_type, status, object_key, created_by, created_at, updated_at
      )
      values ($1, $2, $3, $4, $5, 'redaction_output', 'ready', $6, $7, now(), now())`,
     [
-      ids.artifactId,
+      ids.outputId,
       ids.orgId,
       ids.matterId,
       ids.documentId,
       ids.versionId,
-      artifactObjectKey(ids.orgId, ids.matterId, ids.artifactId),
+      outputObjectKey(ids.orgId, ids.matterId, ids.outputId),
       ids.userId,
     ],
   )
@@ -190,7 +186,7 @@ async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
        id, organisation_id, matter_id, document_id, document_version_id,
        source_filename, source_text_object_key, source_file_object_key,
        source_layout_object_key, source_mime_type, status, policy_mode,
-       spans_json, decisions_json, output_artifact_id, summary_json,
+       spans_json, decisions_json, output_id, summary_json,
        detector_version, detection_mode, replaces_run_id,
        created_by, created_at, updated_at
      )
@@ -206,7 +202,7 @@ async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
       ids.documentId,
       ids.versionId,
       `${ids.documentId}.docx`,
-      ids.artifactId,
+      ids.outputId,
       ids.userId,
     ],
   )
@@ -295,8 +291,8 @@ export async function seedOrganisationIsolation(
     runB: tenantB.runId,
     auditA: tenantA.auditId,
     auditB: tenantB.auditId,
-    artifactA: tenantA.artifactId,
-    artifactB: tenantB.artifactId,
+    outputA: tenantA.outputId,
+    outputB: tenantB.outputId,
     inviteA: tenantA.inviteId,
     inviteB: tenantB.inviteId,
     commentA: tenantA.commentId,
@@ -313,7 +309,7 @@ export async function cleanupOrganisationIsolation(
   const commentIds = [seed.commentA, seed.commentB]
   const shareIds = [seed.shareA, seed.shareB]
   const runIds = [seed.runA, seed.runB]
-  const artifactIds = [seed.artifactA, seed.artifactB]
+  const outputIds = [seed.outputA, seed.outputB]
   const versionIds = [seed.versionA, seed.versionB]
   const documentIds = [seed.documentA, seed.documentB]
   const matterIds = [seed.matterA, seed.matterB]
@@ -344,8 +340,8 @@ export async function cleanupOrganisationIsolation(
   await pool.query(`delete from redaction_runs where id = any($1::text[])`, [
     runIds,
   ])
-  await pool.query(`delete from artifacts where id = any($1::text[])`, [
-    artifactIds,
+  await pool.query(`delete from outputs where id = any($1::text[])`, [
+    outputIds,
   ])
   await pool.query(
     `update matter_documents

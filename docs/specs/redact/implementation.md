@@ -40,4 +40,4 @@ rasterized with bars burned in. A text source is paginated into page images. The
 result passes a validation gate (valid PDF, no selectable text layer, no fonts,
 annotations, forms, attachments or source strings, page and size limits) before it is
 stored, and the run is only marked `finalized` after persistence. A failure leaves
-the run unfinalized, keeps no artifact and reports `redaction_secure_pdf_failed`.
+the run unfinalized, keeps no output and reports `redaction_secure_pdf_failed`.
