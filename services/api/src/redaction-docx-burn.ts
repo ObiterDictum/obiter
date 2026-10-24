@@ -1,3 +1,4 @@
+import { RedactionDocxBurnError } from './redaction-docx-error'
 import {
   attributeValue,
   decodeXmlReferences,
@@ -247,7 +248,9 @@ export function scrubBurnedFields(
     const slash = partName.lastIndexOf('/')
     const relsName = `${partName.slice(0, slash + 1)}_rels/${partName.slice(slash + 1)}.rels`
     const rels = document.sourceParts.get(relsName)?.overlay?.source
-    if (rels && linkIds.size) {
+    if (linkIds.size && rels === undefined)
+      throw new RedactionDocxBurnError('Redaction relationship XML is unavailable.')
+    if (rels !== undefined && linkIds.size) {
       for (const element of parseXmlElements(rels)) {
         if (
           element.localName === 'Relationship' &&

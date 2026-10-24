@@ -1,6 +1,7 @@
+import { scrubBurnedFields } from './redaction-docx-burn'
 import { describe, expect, it } from 'bun:test'
 import JSZip from 'jszip'
-import { parseDocx } from '@obiter/ooxml'
+import { createSyntheticDocx, parseDocx } from '@obiter/ooxml'
 import {
   buildRedactedDocx,
   RedactionDocxBurnError,
@@ -150,6 +151,17 @@ describe('Redact-owned DOCX bytes', () => {
     const output = await burn('<w:p>' + run('<w:t>Jane </w:t><w:drawing><wp:docPr xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" id="1" name="Picture" descr="private description" title="private title"/></w:drawing><w:t>Doe</w:t>') + '</w:p>')
     expect(output.xml).not.toContain('private description')
     expect(output.xml).not.toContain('private title')
+  })
+
+  it('refuses a redacted hyperlink when its relationship XML has no overlay', async () => {
+    const zip = await JSZip.loadAsync(await createSyntheticDocx(['Jane Doe']))
+    zip.file('word/document.xml', `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body><w:p><w:hyperlink r:id="link">${run('<w:t>Jane Doe</w:t>')}</w:hyperlink></w:p></w:body></w:document>`)
+    zip.file('word/_rels/document.xml.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="link" Type="' + R + '/hyperlink" Target="' + target + '" TargetMode="External"/></Relationships>')
+    const document = await parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+    const rels = document.sourceParts.get('word/_rels/document.xml.rels')
+    if (!rels) throw new Error('missing test relationship')
+    delete rels.overlay
+    expect(() => scrubBurnedFields(document, new Map([['word/document.xml', [{ start: 0, end: 100000 }]]]))).toThrow(RedactionDocxBurnError)
   })
 
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {

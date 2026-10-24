@@ -1,3 +1,4 @@
+import { RedactionDocxBurnError } from './redaction-docx-error'
 import { decodedXmlText, removeFallbackTextBoxes } from './redaction-docx-xml'
 import JSZip from 'jszip'
 import { loadOoxmlZipEntries, parseDocx, serialiseDocx } from '@obiter/ooxml'
@@ -26,17 +27,7 @@ export interface RedactedDocxInput {
   tokenMap: TokenMap
 }
 
-/**
- * Thrown when a .docx cannot be burned safely. Finalize catches this and
- * falls back to text output (which carries no OOXML container, so delText,
- * metadata, comments, and embedded parts cannot leak through it).
- */
-export class RedactionDocxBurnError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'RedactionDocxBurnError'
-  }
-}
+export { RedactionDocxBurnError } from './redaction-docx-error'
 
 const REDACTABLE_STORY_KINDS = new Set([
   'document',
