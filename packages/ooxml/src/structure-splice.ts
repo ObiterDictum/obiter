@@ -131,6 +131,9 @@ export function spliceIntoPendingRun(
     end: run.runRange.end,
     value: serialised,
   })
+  // The split wires must carry the properties actually folded from the
+  // overlay, including a pending rPrChange, rather than the source snapshot.
+  run.wire.preservedXmlFragments = [...view.fragments]
 }
 
 /**
