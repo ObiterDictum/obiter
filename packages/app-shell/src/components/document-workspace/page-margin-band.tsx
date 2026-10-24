@@ -12,6 +12,7 @@ import type {
   DocumentRelationshipWire,
   DocumentStoryWire,
   DocumentStyleWire,
+  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import type { LaidOutBlock } from '../../document-page-engine'
@@ -63,6 +64,7 @@ export function PageMarginBand({
   stories,
   changes = [],
   drafts,
+  extraRuns,
   pendingChanges = NO_PENDING_CHANGES,
   label,
   edge,
@@ -77,6 +79,7 @@ export function PageMarginBand({
 }: {
   stories: DocumentStoryWire[]
   drafts?: Record<string, string>
+  extraRuns?: Record<string, DocumentTextRunWire[]>
   pendingChanges?: PendingInlineChange[]
   changes?: DocumentChangeWire[]
   label: string
@@ -92,11 +95,11 @@ export function PageMarginBand({
    * it holds no visible content, so an empty header still takes the caret. */
   editable?: EditableMargin
 }) {
-  const effective = drafts
+  const effective = drafts || extraRuns
     ? stories.map((story) => ({
         ...story,
         paragraphs: story.paragraphs.map((paragraph) =>
-          effectiveParagraph(paragraph, drafts),
+          effectiveParagraph(paragraph, drafts, extraRuns?.[paragraph.id]),
         ),
       }))
     : stories
