@@ -250,7 +250,7 @@ it('preserves the unchanged space after a CRLF source when saving a tracked subs
 })
 
 it('keeps retained tabs after their source text when CRLF is normalised', async () => {
-  const { run } = await revisionFixture(
+  const { document, run } = await revisionFixture(
     '<w:t>a&#13;&#10;b</w:t><w:tab/><w:t>c</w:t>',
   )
   const plan = planTextRevision(
@@ -262,6 +262,18 @@ it('keeps retained tabs after their source text when CRLF is normalised', async 
     run.textRevisionTextRanges?.length,
   )
   expect(plan.removed).toBe('a\nb\tc')
+  applyDocumentEdits(
+    document,
+    [{ type: 'replace_run_text', runId: run.id, text: 'x' }],
+    { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
+  )
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(
+    saved.model.changes.map((change) => [change.kind, change.text]),
+  ).toEqual([
+    ['delete', plan.removed],
+    ['insert', plan.inserted],
+  ])
 })
 
 it('assigns a tab at an emphasis cut to the piece containing its XML', async () => {
