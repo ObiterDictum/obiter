@@ -120,6 +120,11 @@ describe('Redact-owned DOCX bytes', () => {
     await expect(burn('<w:p>' + run('<w:t>Public</w:t>') + '</w:p>', 'Jane\tDoe')).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
+  it('covers the union of overlapping pseudonyms with the first token', async () => {
+    const output = await burn('<w:p>' + run('<w:t>Jane Doe Smith</w:t>') + '</w:p>', 'Jane Doe Smith', ['Jane Doe', 'Doe Smith'])
+    expect(output.text).toBe('[PERSON_NAME_1]')
+  })
+
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {
     const output = await burn(
       `<w:p>${run(begin + '<w:t>Jane</w:t>' + instruction + separate + '<w:t> Doe</w:t>' + end)}</w:p>`,

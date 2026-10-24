@@ -62,8 +62,14 @@ export function burnParagraph(
   for (const span of [...replacements].sort(
     (a, b) => a.from - b.from || b.to - a.to,
   )) {
-    if ((spans.at(-1)?.to ?? -1) > span.from) continue
-    spans.push(span)
+    const previous = spans.at(-1)
+    // Overlapping occurrences form one union, labelled by the earliest start
+    // (longest first on ties). Adjacent occurrences retain their own token.
+    if (previous && previous.to > span.from) {
+      previous.to = Math.max(previous.to, span.to)
+      continue
+    }
+    spans.push({ ...span })
   }
   const burned = new Map<BurnRange, Range>()
   let offset = 0
