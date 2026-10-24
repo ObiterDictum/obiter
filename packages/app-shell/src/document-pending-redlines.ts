@@ -34,7 +34,7 @@ export function pendingParagraphChanges(
   model: PendingRedlineModel,
   id: string,
   partName?: string,
-) {
+): PendingInlineChange[] {
   const bucket = model.pendingBuckets?.get(id)
   if (model.pendingBuckets)
     return !partName ||
@@ -99,9 +99,17 @@ export function withPendingRedlines(
     text: string,
     deleted: boolean,
     from: number,
-    paragraphDelete = false,
-    displayOnly = false,
-    paragraphInsert = false,
+    {
+      paragraphDelete = false,
+      displayOnly = false,
+      paragraphInsert = false,
+      runId,
+    }: {
+      paragraphDelete?: boolean
+      displayOnly?: boolean
+      paragraphInsert?: boolean
+      runId?: string
+    } = {},
   ) {
     if (!text && !paragraphDelete && !paragraphInsert) return
     const number = counts.get(paragraphId) ?? 0
@@ -109,6 +117,7 @@ export function withPendingRedlines(
     const base = {
       id: `pending:${paragraphId}:${number}`,
       storyPartName: part,
+      ...(runId ? { runId } : {}),
       paragraphId,
       text: text || '¶',
       inlinePosition: { beforeRunId: null },
@@ -134,9 +143,11 @@ export function withPendingRedlines(
   const affected = new Set<ParagraphSource>()
   const replacingEmpty = new Set<string>()
   const propertyRuns = new Set<string>()
+  const styledRuns = new Set<string>()
   for (const op of operations) {
-    if (op.type === 'set_run_style') propertyRuns.add(op.runId)
+    if (op.type === 'set_run_style') styledRuns.add(op.runId)
     if (op.type === 'replace_run_text') {
+      if (styledRuns.has(op.runId)) propertyRuns.add(op.runId)
       const source = index.runs.get(op.runId)
       if (source) affected.add(source)
     } else if (op.type === 'delete_paragraph') {
@@ -155,9 +166,7 @@ export function withPendingRedlines(
         text,
         false,
         0,
-        false,
-        false,
-        true,
+        { paragraphInsert: true },
       )
       if (!op.intentId) replacingEmpty.add(op.paragraphId)
     }
@@ -182,13 +191,16 @@ export function withPendingRedlines(
           .join(''),
         true,
         0,
-        true,
+        { paragraphDelete: true },
       )
       continue
     }
     let offset = 0
     for (const run of paragraph.runs) {
-      const next = replacements.get(run.id) ?? run.text
+      const next = (replacements.get(run.id) ?? run.text).replace(
+        /\r\n|\r/gu,
+        '\n',
+      )
       if (replacements.has(run.id)) {
         const plan = planTextRevision(
           run.text,
@@ -199,8 +211,12 @@ export function withPendingRedlines(
           run.textRevisionTextRanges?.length,
         )
         const at = offset + plan.prefixLength
-        add(story.partName, paragraph.id, plan.removed, true, at)
-        add(story.partName, paragraph.id, plan.editableInserted, false, at)
+        add(story.partName, paragraph.id, plan.removed, true, at, {
+          runId: run.id,
+        })
+        add(story.partName, paragraph.id, plan.editableInserted, false, at, {
+          runId: run.id,
+        })
         for (const retained of plan.retained)
           add(
             story.partName,
@@ -208,8 +224,7 @@ export function withPendingRedlines(
             retained.text,
             false,
             offset + retained.offset,
-            false,
-            true,
+            { displayOnly: true, runId: run.id },
           )
       }
       offset += next.length

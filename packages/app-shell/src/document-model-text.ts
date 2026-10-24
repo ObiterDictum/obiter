@@ -77,7 +77,7 @@ export function effectiveParagraph(
     extraRuns.length === 0 ? paragraph.runs : [...paragraph.runs, ...extraRuns]
   let changed = extraRuns.length > 0
   const next = runs.map((run) => {
-    const text = drafts?.[run.id] ?? run.text
+    const text = (drafts?.[run.id] ?? run.text).replace(/\r\n|\r/gu, '\n')
     if (text === run.text) return run
     changed = true
     return { ...run, text }
