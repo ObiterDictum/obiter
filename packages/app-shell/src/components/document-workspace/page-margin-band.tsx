@@ -1,8 +1,8 @@
 import { effectiveParagraph } from '../../document-model-text'
-import { paragraphChanges } from '../../document-inline-index'
+import { useMemo } from 'react'
 import {
-  NO_PENDING_CHANGES,
-  type PendingInlineChange,
+  pendingParagraphChanges,
+  type PendingRedlineModel,
 } from '../../document-pending-redlines'
 import { inlineChanges } from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
@@ -65,7 +65,7 @@ export function PageMarginBand({
   changes = [],
   drafts,
   extraRuns,
-  pendingChanges = NO_PENDING_CHANGES,
+  pendingRedlines = {},
   label,
   edge,
   relationships = [],
@@ -80,7 +80,7 @@ export function PageMarginBand({
   stories: DocumentStoryWire[]
   drafts?: Record<string, string>
   extraRuns?: Record<string, DocumentTextRunWire[]>
-  pendingChanges?: PendingInlineChange[]
+  pendingRedlines?: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>
   changes?: DocumentChangeWire[]
   label: string
   edge: 'top' | 'bottom'
@@ -95,14 +95,14 @@ export function PageMarginBand({
    * it holds no visible content, so an empty header still takes the caret. */
   editable?: EditableMargin
 }) {
-  const effective = drafts || extraRuns
+  const effective = useMemo(() => drafts || extraRuns
     ? stories.map((story) => ({
         ...story,
         paragraphs: story.paragraphs.map((paragraph) =>
           effectiveParagraph(paragraph, drafts, extraRuns?.[paragraph.id]),
         ),
       }))
-    : stories
+    : stories, [stories, drafts, extraRuns])
   const visible = effective.filter(
     (story) =>
       marginStoryVisible(story) ||
@@ -140,7 +140,7 @@ export function PageMarginBand({
             key={story.partName}
             story={story}
             changes={changes}
-            pendingChanges={pendingChanges}
+            pendingRedlines={pendingRedlines}
             imageLabel={imageLabel}
             relationships={relationships}
             imageUrls={imageUrls}
@@ -213,7 +213,7 @@ function EditableMarginStory({
 function MarginStory({
   story,
   changes,
-  pendingChanges,
+  pendingRedlines,
   imageLabel,
   relationships,
   imageUrls,
@@ -222,7 +222,7 @@ function MarginStory({
   pageNumber,
 }: {
   story: DocumentStoryWire
-  pendingChanges: PendingInlineChange[]
+  pendingRedlines: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>
   changes: DocumentChangeWire[]
   imageLabel: string
   relationships: DocumentRelationshipWire[]
@@ -273,7 +273,7 @@ function MarginStory({
         block.paragraph,
         changes,
         story.partName,
-        paragraphChanges(block.paragraph, pendingChanges, story.partName),
+        pendingParagraphChanges(pendingRedlines, block.paragraph.id, story.partName),
       ).text.trim().length > 0 ||
       paragraphImageXml(block.paragraph).length > 0 ||
       block.paragraph.runs.some((run) => runDisplayText(run, pageNumber))
@@ -307,7 +307,7 @@ function MarginStory({
                     key={id}
                     paragraph={paragraph}
                     changes={changes}
-                    pendingChanges={pendingChanges}
+                    pendingRedlines={pendingRedlines}
                     imageLabel={imageLabel}
                     storyPartName={story.partName}
                     relationships={relationships}
@@ -336,7 +336,7 @@ function MarginStory({
             <MarginParagraph
               paragraph={block.paragraph}
               changes={changes}
-              pendingChanges={pendingChanges}
+              pendingRedlines={pendingRedlines}
               imageLabel={imageLabel}
               storyPartName={story.partName}
               relationships={relationships}
@@ -355,7 +355,7 @@ function MarginStory({
 function MarginParagraph({
   paragraph,
   changes,
-  pendingChanges,
+  pendingRedlines,
   imageLabel,
   storyPartName,
   relationships,
@@ -365,7 +365,7 @@ function MarginParagraph({
   pageNumber,
 }: {
   paragraph: DocumentParagraphWire
-  pendingChanges: PendingInlineChange[]
+  pendingRedlines: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>
   changes: DocumentChangeWire[]
   imageLabel: string
   storyPartName: string
@@ -385,7 +385,7 @@ function MarginParagraph({
     paragraph,
     changes,
     storyPartName,
-    paragraphChanges(paragraph, pendingChanges, storyPartName),
+    pendingParagraphChanges(pendingRedlines, paragraph.id, storyPartName),
   )
   const projected = projection.paragraph
   const spans = new Map(projection.spans.map((span) => [span.runId, span]))

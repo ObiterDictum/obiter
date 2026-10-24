@@ -1,4 +1,3 @@
-import { allPendingChanges } from '../../document-pending-redlines'
 import { useMemo } from 'react'
 import type {
   DocumentModelWire,
@@ -345,7 +344,7 @@ export function DocumentModelPage({
           changes={model.changes}
           drafts={drafts}
           extraRuns={extraRuns}
-          pendingChanges={allPendingChanges(model)}
+          pendingRedlines={model}
           label="Document header"
           edge="top"
           className={
@@ -418,7 +417,7 @@ export function DocumentModelPage({
           changes={model.changes}
           drafts={drafts}
           extraRuns={extraRuns}
-          pendingChanges={allPendingChanges(model)}
+          pendingRedlines={model}
           label="Document footer"
           edge="bottom"
           className={
