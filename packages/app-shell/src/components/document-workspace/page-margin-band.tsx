@@ -1,3 +1,9 @@
+import { effectiveParagraph } from '../../document-model-text'
+import { paragraphChanges } from '../../document-inline-index'
+import {
+  NO_PENDING_CHANGES,
+  type PendingInlineChange,
+} from '../../document-pending-redlines'
 import { inlineChanges } from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
 import type {
@@ -56,6 +62,8 @@ export type EditableMargin = {
 export function PageMarginBand({
   stories,
   changes = [],
+  drafts,
+  pendingChanges = NO_PENDING_CHANGES,
   label,
   edge,
   relationships = [],
@@ -68,6 +76,8 @@ export function PageMarginBand({
   editable,
 }: {
   stories: DocumentStoryWire[]
+  drafts?: Record<string, string>
+  pendingChanges?: PendingInlineChange[]
   changes?: DocumentChangeWire[]
   label: string
   edge: 'top' | 'bottom'
@@ -82,7 +92,15 @@ export function PageMarginBand({
    * it holds no visible content, so an empty header still takes the caret. */
   editable?: EditableMargin
 }) {
-  const visible = stories.filter(
+  const effective = drafts
+    ? stories.map((story) => ({
+        ...story,
+        paragraphs: story.paragraphs.map((paragraph) =>
+          effectiveParagraph(paragraph, drafts),
+        ),
+      }))
+    : stories
+  const visible = effective.filter(
     (story) =>
       marginStoryVisible(story) ||
       story.partName === editable?.partName ||
@@ -119,6 +137,7 @@ export function PageMarginBand({
             key={story.partName}
             story={story}
             changes={changes}
+            pendingChanges={pendingChanges}
             imageLabel={imageLabel}
             relationships={relationships}
             imageUrls={imageUrls}
@@ -191,6 +210,7 @@ function EditableMarginStory({
 function MarginStory({
   story,
   changes,
+  pendingChanges,
   imageLabel,
   relationships,
   imageUrls,
@@ -199,6 +219,7 @@ function MarginStory({
   pageNumber,
 }: {
   story: DocumentStoryWire
+  pendingChanges: PendingInlineChange[]
   changes: DocumentChangeWire[]
   imageLabel: string
   relationships: DocumentRelationshipWire[]
@@ -245,8 +266,12 @@ function MarginStory({
     }
     if (skip.has(block.paragraph.id)) return false
     return (
-      inlineChanges(block.paragraph, changes, story.partName).text.trim()
-        .length > 0 ||
+      inlineChanges(
+        block.paragraph,
+        changes,
+        story.partName,
+        paragraphChanges(block.paragraph, pendingChanges, story.partName),
+      ).text.trim().length > 0 ||
       paragraphImageXml(block.paragraph).length > 0 ||
       block.paragraph.runs.some((run) => runDisplayText(run, pageNumber))
     )
@@ -279,6 +304,7 @@ function MarginStory({
                     key={id}
                     paragraph={paragraph}
                     changes={changes}
+                    pendingChanges={pendingChanges}
                     imageLabel={imageLabel}
                     storyPartName={story.partName}
                     relationships={relationships}
@@ -307,6 +333,7 @@ function MarginStory({
             <MarginParagraph
               paragraph={block.paragraph}
               changes={changes}
+              pendingChanges={pendingChanges}
               imageLabel={imageLabel}
               storyPartName={story.partName}
               relationships={relationships}
@@ -325,6 +352,7 @@ function MarginStory({
 function MarginParagraph({
   paragraph,
   changes,
+  pendingChanges,
   imageLabel,
   storyPartName,
   relationships,
@@ -334,6 +362,7 @@ function MarginParagraph({
   pageNumber,
 }: {
   paragraph: DocumentParagraphWire
+  pendingChanges: PendingInlineChange[]
   changes: DocumentChangeWire[]
   imageLabel: string
   storyPartName: string
@@ -349,7 +378,12 @@ function MarginParagraph({
       !drawingIsTextBox(xml) &&
       (!background || !paragraphIsShapeOnly(paragraph)),
   )
-  const projection = inlineChanges(paragraph, changes, storyPartName)
+  const projection = inlineChanges(
+    paragraph,
+    changes,
+    storyPartName,
+    paragraphChanges(paragraph, pendingChanges, storyPartName),
+  )
   const projected = projection.paragraph
   const spans = new Map(projection.spans.map((span) => [span.runId, span]))
   const columns = tabColumns(projected)
