@@ -2,7 +2,7 @@ import { hasSplittableProperties } from './run-revision-eligibility'
 import { isWord } from './parts/xml-elements'
 import { trackedElementText } from './parts/tracked-change-display'
 import { sliceRunRevisionMetadata } from './run-revision-slice'
-import type { DocumentTextRunWire } from '@obiter/contracts'
+import { normaliseEditText, type DocumentTextRunWire } from '@obiter/contracts'
 
 import {
   editableTextNodes,
@@ -362,7 +362,7 @@ function splitReplacedRun(
     )
     const leading = kept.filter((control) => control.end <= textStart)
     const trailing = kept.slice(leading.length)
-    const lines = hit.text.split(/\r\n|\r|\n/u)
+    const lines = normaliseEditText(hit.text).split('\n')
     // The parser's retained tokens for what this piece writes: controls
     // before the replacement text, then the rest after its last line.
     const tokensOf = (items: typeof kept, offset: number, textIndex: number) =>

@@ -1,4 +1,5 @@
 import type { DocumentTextRunWire } from './document-model'
+import { normaliseEditText } from './document-edit-shared'
 
 /** Shared revision boundaries for the live preview and OOXML writer. */
 type TextRevisionToken = NonNullable<
@@ -14,8 +15,8 @@ export function planTextRevision(
   textCount = 1,
 ) {
   const source = from
-  from = from.replace(/\r\n|\r/gu, '\n')
-  to = to.replace(/\r\n|\r/gu, '\n')
+  from = normaliseEditText(from)
+  to = normaliseEditText(to)
   if (from === to)
     return {
       kind: 'noop' as const,
@@ -36,7 +37,7 @@ export function planTextRevision(
       retained: [],
     }
   const retained: Array<{ offset: number; text: string }> = []
-  const lines = to.split(/\r\n|\r|\n/u)
+  const lines = to.split('\n')
   const assigned = Math.min(lines.length, textCount)
   let cursor = 0
   let inserted = ''
@@ -47,7 +48,7 @@ export function planTextRevision(
     oldCursor = token.offset
   }
   removed += source.slice(oldCursor)
-  removed = removed.replace(/\r\n|\r/gu, '\n')
+  removed = normaliseEditText(removed)
   for (let textIndex = 0; textIndex <= textCount; textIndex += 1) {
     for (const token of tokens ?? []) {
       if (token.textIndex !== textIndex) continue
