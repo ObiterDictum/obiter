@@ -214,9 +214,16 @@ it('keeps split run revision text local after inserting a footnote', async () =>
 })
 
 async function revisionFixture(children: string) {
-  const zip = await JSZip.loadAsync(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
-  zip.file('word/document.xml', `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r>${children}</w:r></w:p></w:body></w:document>`)
-  const document = await parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+  const zip = await JSZip.loadAsync(
+    await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+  )
+  zip.file(
+    'word/document.xml',
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r>${children}</w:r></w:p></w:body></w:document>`,
+  )
+  const document = await parseDocx(
+    await zip.generateAsync({ type: 'uint8array' }),
+  )
   const paragraph = document.model.stories[0]?.paragraphs[0]
   const run = paragraph?.runs[0]
   if (!paragraph || !run) throw new Error('Missing fixture')
@@ -225,62 +232,222 @@ async function revisionFixture(children: string) {
 
 it('preserves the unchanged space after a CRLF source when saving a tracked substitution', async () => {
   const { document, run } = await revisionFixture('<w:t>a&#13;&#10;b c</w:t>')
-  applyDocumentEdits(document, [{ type: 'replace_run_text', runId: run.id, text: 'a\r\nb d' }], { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' })
+  applyDocumentEdits(
+    document,
+    [{ type: 'replace_run_text', runId: run.id, text: 'a\r\nb d' }],
+    { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
+  )
   const saved = await parseDocx(await serialiseDocx(document))
-  expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => run.text).join('')).toBe('a\nb ')
-  expect(saved.model.changes.map(change => [change.kind, change.text])).toEqual([['delete', 'c'], ['insert', 'd']])
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs.map((run) => run.text).join(''),
+  ).toBe('a\nb ')
+  expect(
+    saved.model.changes.map((change) => [change.kind, change.text]),
+  ).toEqual([
+    ['delete', 'c'],
+    ['insert', 'd'],
+  ])
 })
 
 it('keeps retained tabs after their source text when CRLF is normalised', async () => {
-  const { run } = await revisionFixture('<w:t>a&#13;&#10;b</w:t><w:tab/><w:t>c</w:t>')
-  const plan = planTextRevision(run.text, 'x', false, run.textRevisionTokens, false, run.textRevisionTextRanges?.length)
+  const { run } = await revisionFixture(
+    '<w:t>a&#13;&#10;b</w:t><w:tab/><w:t>c</w:t>',
+  )
+  const plan = planTextRevision(
+    run.text,
+    'x',
+    false,
+    run.textRevisionTokens,
+    false,
+    run.textRevisionTextRanges?.length,
+  )
   expect(plan.removed).toBe('a\nb\tc')
 })
 
 it('assigns a tab at an emphasis cut to the piece containing its XML', async () => {
-  const { document, paragraph } = await revisionFixture('<w:t>cat</w:t><w:tab/><w:t>dog</w:t>')
-  applyDocumentEdits(document, [{ type: 'set_run_emphasis', paragraphId: paragraph.id, from: 3, to: 6, bold: true }], { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' })
-  const removed = paragraph.runs.map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed)
+  const { document, paragraph } = await revisionFixture(
+    '<w:t>cat</w:t><w:tab/><w:t>dog</w:t>',
+  )
+  applyDocumentEdits(
+    document,
+    [
+      {
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: 3,
+        to: 6,
+        bold: true,
+      },
+    ],
+    { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
+  )
+  const removed = paragraph.runs.map(
+    (run) =>
+      planTextRevision(
+        run.text,
+        'x',
+        run.textRevisionEligible === true,
+        run.textRevisionTokens,
+        false,
+        run.textRevisionTextRanges?.length,
+      ).removed,
+  )
   expect(removed).toEqual(['cat', '\tdog'])
   const saved = await parseDocx(await serialiseDocx(document))
-  expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed)).toEqual(removed)
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs.map(
+      (run) =>
+        planTextRevision(
+          run.text,
+          'x',
+          run.textRevisionEligible === true,
+          run.textRevisionTokens,
+          false,
+          run.textRevisionTextRanges?.length,
+        ).removed,
+    ),
+  ).toEqual(removed)
 })
 
 it('keeps source coordinates after a line-ending-only tracked no-op before a footnote', async () => {
-  const { document, paragraph, run } = await revisionFixture('<w:t>a&#10;b</w:t>')
+  const { document, paragraph, run } =
+    await revisionFixture('<w:t>a&#10;b</w:t>')
   const anchor = document.textRunAnchors.get(run.id)
   if (!anchor) throw new Error('Missing anchor')
-  createTrackedEditWriter(document, { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' }).replaceRunText(anchor, 'a\r\nb')
-  applyDocumentEdits(document, [{ type: 'insert_footnote', paragraphId: paragraph.id, offset: 2, text: 'Synthetic note' }])
+  createTrackedEditWriter(document, {
+    author: 'Synthetic Reviewer',
+    date: '2026-10-24T12:00:00.000Z',
+  }).replaceRunText(anchor, 'a\r\nb')
+  applyDocumentEdits(document, [
+    {
+      type: 'insert_footnote',
+      paragraphId: paragraph.id,
+      offset: 2,
+      text: 'Synthetic note',
+    },
+  ])
   const saved = await parseDocx(await serialiseDocx(document))
-  expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => run.text).join('')).toBe('a\nb')
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs.map((run) => run.text).join(''),
+  ).toBe('a\nb')
 })
 
 it('uses the same source walk for editable text, breaks and retained controls', async () => {
-  const { run } = await revisionFixture('<w:t>a</w:t><w:smartTag><w:br/></w:smartTag><w:del w:id="9" w:author="Synthetic"><w:r><w:delText>hidden</w:delText><w:tab/></w:r></w:del><w:t>b</w:t><w:tab/>')
+  const { run } = await revisionFixture(
+    '<w:t>a</w:t><w:smartTag><w:br/></w:smartTag><w:del w:id="9" w:author="Synthetic"><w:r><w:delText>hidden</w:delText><w:tab/></w:r></w:del><w:t>b</w:t><w:tab/>',
+  )
   expect(run.text).toBe('a\nb')
-  expect(planTextRevision(run.text, 'x', false, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed).toBe('a\nb\t')
+  expect(
+    planTextRevision(
+      run.text,
+      'x',
+      false,
+      run.textRevisionTokens,
+      false,
+      run.textRevisionTextRanges?.length,
+    ).removed,
+  ).toBe('a\nb\t')
 })
 
 it('keeps whole-run property revisions ineligible across a subsequent split', async () => {
-  const { document, paragraph, run } = await revisionFixture('<w:t>cat dog</w:t>')
+  const { document, paragraph, run } =
+    await revisionFixture('<w:t>cat dog</w:t>')
   const anchor = document.textRunAnchors.get(run.id)
   if (!anchor) throw new Error('Missing anchor')
-  createTrackedEditWriter(document, { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' }).setRunStyle(anchor, null)
-  applyDocumentEdits(document, [{ type: 'insert_footnote', paragraphId: paragraph.id, offset: 4, text: 'Synthetic note' }])
-  expect(paragraph.runs.filter(run => run.text).map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens).removed)).toEqual(['cat ', 'dog'])
-  expect(paragraph.runs.filter(run => run.text).map(run => planTextRevision(run.text, 'cats ', run.textRevisionEligible === true, run.textRevisionTokens).kind)).toEqual(['whole-run', 'whole-run'])
+  createTrackedEditWriter(document, {
+    author: 'Synthetic Reviewer',
+    date: '2026-10-24T12:00:00.000Z',
+  }).setRunStyle(anchor, null)
+  applyDocumentEdits(document, [
+    {
+      type: 'insert_footnote',
+      paragraphId: paragraph.id,
+      offset: 4,
+      text: 'Synthetic note',
+    },
+  ])
+  expect(
+    paragraph.runs
+      .filter((run) => run.text)
+      .map(
+        (run) =>
+          planTextRevision(
+            run.text,
+            'x',
+            run.textRevisionEligible === true,
+            run.textRevisionTokens,
+          ).removed,
+      ),
+  ).toEqual(['cat ', 'dog'])
+  expect(
+    paragraph.runs
+      .filter((run) => run.text)
+      .map(
+        (run) =>
+          planTextRevision(
+            run.text,
+            'cats ',
+            run.textRevisionEligible === true,
+            run.textRevisionTokens,
+          ).kind,
+      ),
+  ).toEqual(['whole-run', 'whole-run'])
 })
 
 it('plans multiline range replacement pieces from their emitted text elements', async () => {
   const { document, paragraph } = await revisionFixture('<w:t>axz</w:t>')
   const anchor = document.paragraphAnchors.get(paragraph.id)
   if (!anchor) throw new Error('Missing anchor')
-  applyRunTextReplacementRange(document, anchor, [{ from: 1, to: 2, text: 'one\ntwo' }])
+  applyRunTextReplacementRange(document, anchor, [
+    { from: 1, to: 2, text: 'one\ntwo' },
+  ])
   const piece = paragraph.runs[1]
   if (!piece) throw new Error('Missing replacement')
-  const plan = planTextRevision(piece.text, 'red\nblue', piece.textRevisionEligible === true, piece.textRevisionTokens, false, piece.textRevisionTextRanges?.length)
+  const plan = planTextRevision(
+    piece.text,
+    'red\nblue',
+    piece.textRevisionEligible === true,
+    piece.textRevisionTokens,
+    false,
+    piece.textRevisionTextRanges?.length,
+  )
   expect(plan.inserted).toBe('red\nblue')
   const saved = await parseDocx(await serialiseDocx(document))
-  expect(saved.model.stories[0]?.paragraphs[0]?.runs[1]?.textRevisionTextRanges).toEqual(piece.textRevisionTextRanges)
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs[1]?.textRevisionTextRanges,
+  ).toEqual(piece.textRevisionTextRanges)
+})
+
+it('keeps retained controls beside an untouched range-edit piece at the cut', async () => {
+  const { document, paragraph } = await revisionFixture(
+    '<w:t>cat</w:t><w:tab/><w:t>dog</w:t>',
+  )
+  const anchor = document.paragraphAnchors.get(paragraph.id)
+  if (!anchor) throw new Error('Missing anchor')
+  applyRunTextReplacementRange(document, anchor, [
+    { from: 0, to: 3, text: 'fox' },
+  ])
+  expect(
+    paragraph.runs.map(
+      (run) =>
+        planTextRevision(
+          run.text,
+          '?',
+          run.textRevisionEligible === true,
+          run.textRevisionTokens,
+        ).removed,
+    ),
+  ).toEqual(['fox', '\tdog'])
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs.map(
+      (run) =>
+        planTextRevision(
+          run.text,
+          '?',
+          run.textRevisionEligible === true,
+          run.textRevisionTokens,
+        ).removed,
+    ),
+  ).toEqual(['fox', '\tdog'])
 })

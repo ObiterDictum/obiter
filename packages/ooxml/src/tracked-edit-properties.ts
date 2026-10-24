@@ -35,7 +35,8 @@ export function setTrackedProperties(
     patch: (current: string) => string
   },
 ) {
-  if (input.propertiesName === 'rPr' && input.wire) input.wire.textRevisionEligible = false
+  if (input.propertiesName === 'rPr' && input.wire)
+    input.wire.textRevisionEligible = false
   const part = requireEditablePart(document, input.partName)
   const previous = input.propertiesRange
     ? part.overlay.source.slice(

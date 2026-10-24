@@ -367,13 +367,17 @@ function replacementRevisionMetadata(source: string, xml: string) {
   const ranges: Array<{ from: number; to: number }> = []
   for (const element of elements) {
     if (isWord(element, 't') && !element.selfClosing) {
-      const text = decodeXmlReferences(xml.slice(element.startTagEnd, element.endTagStart))
+      const text = decodeXmlReferences(
+        xml.slice(element.startTagEnd, element.endTagStart),
+      )
       ranges.push({ from: offset, to: offset + text.length })
       offset += text.length
     } else if (isTextWrappingBreak(element)) offset += 1
   }
   return {
-    textRevisionEligible: !elements.some(element => isTextWrappingBreak(element) || isWord(element, 'rPrChange')),
+    textRevisionEligible: !elements.some(
+      (element) => isTextWrappingBreak(element) || isWord(element, 'rPrChange'),
+    ),
     textRevisionTokens: [],
     textRevisionTextRanges: ranges,
   }

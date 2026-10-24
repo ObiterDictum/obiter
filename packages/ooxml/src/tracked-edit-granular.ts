@@ -69,9 +69,7 @@ export function granularRunEdit(
     kind: 'pieces',
   }
   if (middle.prefixLength > 0) {
-    pieces.prefixRun = unchangedRun(
-      original.slice(0, middle.prefixLength),
-    )
+    pieces.prefixRun = unchangedRun(original.slice(0, middle.prefixLength))
   }
   if (middle.suffixLength > 0) {
     pieces.suffixRun = unchangedRun(
