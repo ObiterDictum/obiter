@@ -254,3 +254,9 @@ it('keeps source coordinates after a line-ending-only tracked no-op before a foo
   const saved = await parseDocx(await serialiseDocx(document))
   expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => run.text).join('')).toBe('a\nb')
 })
+
+it('uses the same source walk for editable text, breaks and retained controls', async () => {
+  const { run } = await revisionFixture('<w:t>a</w:t><w:smartTag><w:br/></w:smartTag><w:del w:id="9" w:author="Synthetic"><w:r><w:delText>hidden</w:delText><w:tab/></w:r></w:del><w:t>b</w:t><w:tab/>')
+  expect(run.text).toBe('a\nb')
+  expect(planTextRevision(run.text, 'x', false, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed).toBe('a\nb\t')
+})
