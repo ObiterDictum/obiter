@@ -1,3 +1,4 @@
+import type { PendingInlineChange } from '../../document-pending-redlines'
 import { useContext, useMemo } from 'react'
 import { paragraphChanges } from '../../document-inline-index'
 import {
@@ -181,6 +182,12 @@ export function ModelParagraph({
       ),
     [effective, emphasis, bucket, story?.partName, storyPartName],
   )
+  if (
+    bucket.some(
+      (change: PendingInlineChange) => change.pending?.paragraphDelete,
+    )
+  )
+    editing = false
   const review = useContext(InlineChangeReview)
   const fullText = paragraphPlainText(effective)
   const displayStart = from ?? 0
@@ -333,7 +340,7 @@ export function ModelParagraph({
         const span = projection.spans.find(
           (item) => at >= item.from && at < item.to,
         )
-        if (!span) return
+        if (!span || span.pending) return
         event.stopPropagation()
         review.selectChange(span.change.id)
       }}

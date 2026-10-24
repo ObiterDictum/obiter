@@ -6832,6 +6832,17 @@
             </li>
             <li>
               <span
+                ><b>Live redlines are a projection of the covered Save plan.</b>
+                <code>document-pending-redlines.ts</code> consumes
+                parser-derived eligibility and retained-control tokens through
+                the shared <code>planTextRevision</code> contract. Pending
+                insertions remain editable; deletions and saved revisions are
+                opaque. Paint-only descriptors never enter draft storage or
+                saved-change decisions.
+              </span>
+            </li>
+            <li>
+              <span
                 ><b
                   >Unsaved document drafts are browser state with a boundary.</b
                 >
