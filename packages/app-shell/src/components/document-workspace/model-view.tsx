@@ -344,6 +344,7 @@ export function DocumentModelPage({
           stories={headers}
           changes={model.changes}
           drafts={drafts}
+          extraRuns={extraRuns}
           pendingChanges={allPendingChanges(model)}
           label="Document header"
           edge="top"
@@ -416,6 +417,7 @@ export function DocumentModelPage({
           stories={footers}
           changes={model.changes}
           drafts={drafts}
+          extraRuns={extraRuns}
           pendingChanges={allPendingChanges(model)}
           label="Document footer"
           edge="bottom"
