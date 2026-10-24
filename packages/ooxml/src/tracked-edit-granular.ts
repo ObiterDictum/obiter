@@ -47,13 +47,18 @@ export function granularRunEdit(
   prefix: string,
   pendingProperties = false,
 ): GranularRunEdit {
-  if (!anchor.wire.textRevisionEligible || pendingProperties)
-    return { kind: 'fallback' }
+  const middle = planTextRevision(
+    anchor.wire.text,
+    text,
+    anchor.wire.textRevisionEligible === true,
+    anchor.wire.textRevisionTokens,
+    pendingProperties,
+  )
+  if (middle.kind === 'noop') return { kind: 'noop' }
+  if (middle.kind === 'whole-run') return { kind: 'fallback' }
   const run = splittableRunParts(source, anchor)
   if (!run) return { kind: 'fallback' }
-  const middle = planTextRevision(anchor.wire.text, text, true)
   const { removed, inserted } = middle
-  if (removed === '' && inserted === '') return { kind: 'noop' }
 
   const runClose = `</${prefix}:r>`
   const rpr = run.rpr ?? ''

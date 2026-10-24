@@ -14,6 +14,7 @@ export function planTextRevision(
 ) {
   if (from === to)
     return {
+      kind: 'noop' as const,
       prefixLength: from.length,
       removed: '',
       inserted: '',
@@ -24,7 +25,12 @@ export function planTextRevision(
   const middle =
     granular && !pendingProperties ? trackedTextMiddle(from, to) : undefined
   if (middle)
-    return { ...middle, editableInserted: middle.inserted, retained: [] }
+    return {
+      kind: 'granular' as const,
+      ...middle,
+      editableInserted: middle.inserted,
+      retained: [],
+    }
   const retained: Array<{ offset: number; text: string }> = []
   const lines = to.split(/\r\n|\r|\n/u)
   const textCount = tokens?.filter((token) => token.kind === 'text').length ?? 1
@@ -51,6 +57,12 @@ export function planTextRevision(
     cursor += piece.length
   }
   return {
+    kind: 'whole-run' as const,
+    reason: pendingProperties
+      ? ('pending-properties' as const)
+      : granular
+        ? ('boundary-mismatch' as const)
+        : ('ineligible' as const),
     prefixLength: 0,
     removed: tokens?.map((token) => token.text).join('') ?? from,
     inserted,
