@@ -69,7 +69,7 @@ export const documentTextRunWireSchema = z.object({
   textRevisionTokens: z
     .array(
       z.object({
-        kind: z.enum(['retained', 'break']),
+        kind: z.literal('retained'),
         offset: z.number().int().nonnegative(),
         textIndex: z.number().int().nonnegative(),
         text: z.string(),

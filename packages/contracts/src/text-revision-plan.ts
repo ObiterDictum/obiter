@@ -43,7 +43,6 @@ export function planTextRevision(
   let removed = ''
   let oldCursor = 0
   for (const token of tokens ?? []) {
-    if (token.kind !== 'retained') continue
     removed += source.slice(oldCursor, token.offset) + token.text
     oldCursor = token.offset
   }
@@ -51,7 +50,7 @@ export function planTextRevision(
   removed = removed.replace(/\r\n|\r/gu, '\n')
   for (let textIndex = 0; textIndex <= textCount; textIndex += 1) {
     for (const token of tokens ?? []) {
-      if (token.textIndex !== textIndex || token.kind !== 'retained') continue
+      if (token.textIndex !== textIndex) continue
       retained.push({ offset: cursor, text: token.text })
       inserted += token.text
     }
