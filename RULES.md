@@ -64,6 +64,7 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 
 - PR summaries: what changed, why, implementation notes, exact tests run, risks and follow-ups. Engineer-to-engineer tone, no filler. Details in [PR.md](PR.md).
 - Verify proportionate to risk; legal-critical paths need happy path plus failure path. Do not claim done without the appropriate verification. Details in [TESTING.md](TESTING.md).
+- A test must break when relied-on behaviour breaks and survive a refactor; one layer per rule, no duplicates across layers. Prefer deleting a redundant test to adding another. What earns a test is in [TESTING.md](TESTING.md).
 
 ## Quality bar
 
