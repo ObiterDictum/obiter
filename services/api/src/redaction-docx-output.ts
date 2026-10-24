@@ -1,12 +1,10 @@
 import JSZip from 'jszip'
+import { loadOoxmlZipEntries, parseDocx, serialiseDocx } from '@obiter/ooxml'
 import {
-  applyRunTextReplacementRange,
-  loadOoxmlZipEntries,
-  parseDocx,
-  serialiseDocx,
-  type RunEmphasis,
-  type RunTextReplacement,
-} from '@obiter/ooxml'
+  burnParagraph,
+  scrubBurnedFields,
+  type BurnRange,
+} from './redaction-docx-burn'
 import {
   affectsOutput,
   coalesceRanges,
@@ -46,13 +44,6 @@ const REDACTABLE_STORY_KINDS = new Set([
   'endnotes',
 ])
 
-/**
- * The harmless marker is written first, then styled as a solid black bar at
- * run level. Because the source text is already gone, removing this styling
- * (or copying the content) can only ever reveal `[REDACTED]`.
- */
-const BLACK_BAR_EMPHASIS: RunEmphasis = { highlight: 'black', colour: '000000' }
-
 function replacementForSpan(
   span: RedactionSpan,
   outputMode: RedactedDocxInput['outputMode'],
@@ -71,15 +62,7 @@ function replacementForSpan(
   return `[${token}]`
 }
 
-/**
- * Burn accepted redaction spans into a .docx, keeping styles and structure
- * intact: covered w:t content is replaced with [REDACTED] / [TOKEN] inside
- * the existing runs (split at span boundaries via the editor's
- * applyRunTextReplacementRange, which shares the locateOffset / runPieceXml
- * split machinery of range formatting), while document metadata authorship
- * fields are emptied. Fails closed (throws RedactionDocxBurnError) when any
- * accepted span text survives anywhere in the package.
- */
+/** Burn with Redact-owned XML replacements, then refuse any residual span text. */
 export async function buildRedactedDocx(
   input: RedactedDocxInput,
 ): Promise<Uint8Array> {
@@ -146,6 +129,7 @@ export async function buildRedactedDocx(
     }
   }
 
+  const burned = new Map<string, Array<{ start: number; end: number }>>()
   for (const story of document.model.stories) {
     if (!REDACTABLE_STORY_KINDS.has(story.kind)) continue
     for (const paragraph of story.paragraphs) {
@@ -173,13 +157,13 @@ export async function buildRedactedDocx(
       // Redacted output coalesces adjacent occurrences into one bar per
       // paragraph. Pseudonymised output keeps one token per span so distinct
       // tokens are never absorbed into a shared bar.
-      const hits: RunTextReplacement[] =
+      const hits: BurnRange[] =
         input.outputMode === 'redacted'
           ? coalesceRanges(paragraphText, occurrences).map((region) => ({
               from: region.start,
               to: region.end,
               text: '[REDACTED]',
-              emphasis: BLACK_BAR_EMPHASIS,
+              black: true,
             }))
           : occurrences.map((occurrence) => ({
               from: occurrence.start,
@@ -187,14 +171,19 @@ export async function buildRedactedDocx(
               text: occurrence.replacement,
             }))
       if (hits.length > 0) {
-        applyRunTextReplacementRange(document, anchor, hits)
+        const ranges = burnParagraph(document, anchor, hits)
+        burned.set(anchor.partName, [
+          ...(burned.get(anchor.partName) ?? []),
+          ...ranges,
+        ])
       }
     }
   }
 
+  scrubBurnedFields(document, burned)
   const serialised = await serialiseDocx(document)
   const stripped = await stripDocumentAuthorship(serialised)
-  assertNoSpanTextSurvives(stripped, affected)
+  await assertNoSpanTextSurvives(stripped, affected)
   return stripped
 }
 

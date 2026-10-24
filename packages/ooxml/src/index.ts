@@ -117,3 +117,11 @@ export * from './model-json'
 export * from './parse'
 export * from './serialise'
 export * from './tracked-change-decisions'
+
+export { parseXmlElements, escapeXmlText } from './parts/overlay'
+export {
+  attributeValue,
+  isWord,
+  WORD_NAMESPACE,
+  type XmlElement,
+} from './parts/xml-elements'
