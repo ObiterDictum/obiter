@@ -239,8 +239,7 @@ export function pendingParagraphDeletion(
   model: PendingRedlineModel,
   id: string,
 ) {
-  return (model.pendingChanges ?? []).some(
-    (change: PendingInlineChange) =>
-      change.paragraphId === id && change.pending?.paragraphDelete,
+  return pendingParagraphChanges(model, id).some(
+    (change) => change.pending?.paragraphDelete,
   )
 }
