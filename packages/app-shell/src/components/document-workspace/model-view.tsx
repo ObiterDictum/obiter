@@ -342,6 +342,9 @@ export function DocumentModelPage({
         <PageMarginBand
           stories={headers}
           changes={model.changes}
+          drafts={drafts}
+          extraRuns={extraRuns}
+          pendingRedlines={model}
           label="Document header"
           edge="top"
           className={
@@ -412,6 +415,9 @@ export function DocumentModelPage({
         <PageMarginBand
           stories={footers}
           changes={model.changes}
+          drafts={drafts}
+          extraRuns={extraRuns}
+          pendingRedlines={model}
           label="Document footer"
           edge="bottom"
           className={

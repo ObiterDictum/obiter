@@ -1,4 +1,10 @@
-import { createContext, useContext, useLayoutEffect, useRef } from 'react'
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from 'react'
 import { markBreaks, type InlineSpan } from '../../document-inline-changes'
 import type { ChangeReview } from './use-change-review'
 
@@ -48,21 +54,33 @@ export function labelledBreaks(text: string) {
 /** Painted text without revision spans, in editable characters. */
 export function editableRangeText(range: Range) {
   const fragment = range.cloneContents()
-  for (const node of fragment.querySelectorAll('[data-inline-change]'))
+  for (const node of fragment.querySelectorAll(
+    '[data-inline-change]:not([data-inline-editable])',
+  ))
     node.remove()
   return fragment.textContent ?? ''
 }
 
 export function InlineChange({
-  span: { change, deleted, author = 'Unknown author', hyperlinkTarget },
+  span: {
+    change,
+    deleted,
+    author = 'Unknown author',
+    hyperlinkTarget,
+    pending,
+    editable,
+  },
   text,
   tabStop,
+  children,
 }: {
   span: InlineSpan
   text: string
   tabStop: boolean
+  children?: ReactNode
 }) {
-  const review = useContext(InlineChangeReview)
+  const context = useContext(InlineChangeReview)
+  const review = pending ? null : context
   const node = useRef<HTMLSpanElement>(null)
   const active = review?.activeChangeId === change.id
   // Review navigation is a browser scroll boundary, independent of edit offsets.
@@ -73,11 +91,13 @@ export function InlineChange({
         node.current?.focus({ preventScroll: true })
     }
   }, [active, tabStop])
-  const content = labelledBreaks(text)
+  const content = children ?? labelledBreaks(text)
   return (
     <span
       ref={node}
       data-inline-change={change.id}
+      data-inline-editable={editable || undefined}
+      data-pending-revision={pending || undefined}
       data-change-kind={deleted ? 'delete' : 'insert'}
       aria-current={active ? 'true' : undefined}
       role={deleted ? 'deletion' : 'insertion'}
@@ -88,9 +108,18 @@ export function InlineChange({
             : -1
           : undefined
       }
-      aria-description={`${deleted ? 'Deletion' : 'Insertion'} by ${author}`}
-      title={`${author}${change.date ? ` · ${change.date}` : ''}`}
+      aria-description={
+        pending
+          ? `Unsaved ${deleted ? 'deletion' : 'insertion'}`
+          : `${deleted ? 'Deletion' : 'Insertion'} by ${author}`
+      }
+      title={
+        pending
+          ? 'Unsaved tracked change'
+          : `${author}${change.date ? ` · ${change.date}` : ''}`
+      }
       onClick={(event) => {
+        if (pending) return
         event.stopPropagation()
         review?.selectChange(change.id)
       }}
@@ -106,7 +135,7 @@ export function InlineChange({
         event.stopPropagation()
         review?.selectChange(change.id)
       }}
-      className={`pointer-events-auto relative z-10 cursor-pointer rounded-[1px] focus-visible:outline-2 focus-visible:outline-[#345e90] ${deleted ? 'text-[#9a3c32]' : 'text-[#21613e]'} ${active ? 'bg-[#f9e0a2]' : ''}`}
+      className={`${pending ? (editable ? 'pointer-events-auto' : 'pointer-events-none') : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-[#345e90] ${deleted ? 'text-[#9a3c32]' : 'text-[#21613e]'} ${active ? 'bg-[#f9e0a2]' : ''}`}
       style={{
         textDecoration: deleted ? 'line-through' : 'underline',
       }}

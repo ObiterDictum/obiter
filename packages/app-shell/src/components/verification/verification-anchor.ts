@@ -32,7 +32,8 @@ function isDecoration(node: Node): boolean {
   // Note marks and empty-line placeholders are painted text that is not part of
   // the paragraph's run text, so they must not consume a character offset.
   return (
-    parent.closest('[data-inline-change]') !== null ||
+    parent.closest('[data-inline-change]:not([data-inline-editable])') !==
+      null ||
     parent.closest('[data-note-mark]') !== null ||
     parent.closest('[data-empty-line]') !== null
   )

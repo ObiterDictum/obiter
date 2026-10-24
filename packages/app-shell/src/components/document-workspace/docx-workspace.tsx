@@ -233,6 +233,7 @@ export function DocxWorkspace({
     linkOverlays,
     legalChecks,
   } = useWorkspaceDerivations({
+    saveOperations: save.operations,
     documentId,
     model,
     drafts,

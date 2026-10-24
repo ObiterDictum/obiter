@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   TRACKED_DECISION_MAX_IDS,
   type DocumentModelWire,
@@ -116,7 +116,10 @@ export function useDocumentSave({
   } | null>(null)
   const inFlight = useRef(false)
 
-  const plan = model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN
+  const plan = useMemo(
+    () => (model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN),
+    [model, drafts.state],
+  )
   // An unsaved toggle flip is real unsaved state: `w:trackRevisions` persists
   // with the next committed version — a save, a decision or a markings write —
   // never by claiming "saved" meanwhile.
@@ -460,6 +463,7 @@ export function useDocumentSave({
               : { status: 'saved' }
 
   return {
+    operations: plan.operations,
     blocked,
     held,
     refused: refused?.slots ?? NO_REFUSED,

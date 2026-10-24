@@ -1,3 +1,5 @@
+import type { SavePlan } from '../../document-save-plan'
+import { withPendingRedlines } from '../../document-pending-redlines'
 import { useEffect, useMemo } from 'react'
 import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
 import {
@@ -53,6 +55,7 @@ const NO_DELETIONS = {
 
 type DraftState = Pick<
   ReturnType<typeof useWorkspaceDrafts>,
+  | 'state'
   | 'drafts'
   | 'inserts'
   | 'extraRuns'
@@ -152,7 +155,9 @@ export function useWorkspaceDerivations({
   insert,
   legalChecksOpen,
   flow,
+  saveOperations,
 }: {
+  saveOperations?: SavePlan['operations']
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
@@ -224,7 +229,7 @@ export function useWorkspaceDerivations({
   // them through the code a reloaded document uses. With no pending
   // structures the fold returns `formatted` unchanged, so a keystroke keeps
   // the block partition memoised below.
-  const painted = useMemo(
+  const structured = useMemo(
     () =>
       formatted
         ? withStructuralDrafts(
@@ -236,12 +241,19 @@ export function useWorkspaceDerivations({
         : undefined,
     [formatted, drafts.structures, drafts.drafts, deletions],
   )
+  const painted = useMemo(
+    () =>
+      structured && model && insert.trackChanges
+        ? withPendingRedlines(model, drafts.state, structured, saveOperations)
+        : structured,
+    [structured, model, insert.trackChanges, drafts.state, saveOperations],
+  )
   // The story's block partition is a pure function of the painted model, so it
   // is scanned once per model rather than once per pagination pass.
   const blocks = useMemo(() => {
-    const story = painted ? documentStory(painted) : undefined
+    const story = structured ? documentStory(structured) : undefined
     return story ? storyBlocks(story) : []
-  }, [painted])
+  }, [structured])
   // Pending breaks are structure, not text: they are folded into a copy of the
   // painted model so pagination sees the same page and section breaks the save
   // will write, without changing what the page renders.

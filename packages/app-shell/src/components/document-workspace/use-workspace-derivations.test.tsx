@@ -81,6 +81,13 @@ function derivations(
   },
   caretParagraphId = 'p3',
 ) {
+  const state = {
+    ...emptyDraftState(),
+    extraRuns: drafts.extraRuns ?? {},
+    format: emptyFormatDrafts,
+    deletedParagraphIds: drafts.deletedParagraphIds ?? [],
+    structures: drafts.structures ?? [],
+  }
   const client = new QueryClient()
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -92,13 +99,8 @@ function derivations(
         model: base,
         legalChecksOpen: false,
         drafts: {
-          drafts: {},
-          inserts: [],
-          extraRuns: drafts.extraRuns ?? {},
-          format: emptyFormatDrafts,
-          deletedParagraphIds: drafts.deletedParagraphIds ?? [],
-          breaks: [],
-          structures: drafts.structures ?? [],
+          ...state,
+          state,
           setBreaks: (_update: (current: BreakDraft[]) => BreakDraft[]) =>
             undefined,
           setStructures: (
