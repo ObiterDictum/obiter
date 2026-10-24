@@ -13,6 +13,7 @@ export function planTextRevision(
   pendingProperties = false,
   textCount = 1,
 ) {
+  const source = from
   from = from.replace(/\r\n|\r/gu, '\n')
   to = to.replace(/\r\n|\r/gu, '\n')
   if (from === to)
@@ -43,10 +44,11 @@ export function planTextRevision(
   let oldCursor = 0
   for (const token of tokens ?? []) {
     if (token.kind !== 'retained') continue
-    removed += from.slice(oldCursor, token.offset) + token.text
+    removed += source.slice(oldCursor, token.offset) + token.text
     oldCursor = token.offset
   }
-  removed += from.slice(oldCursor)
+  removed += source.slice(oldCursor)
+  removed = removed.replace(/\r\n|\r/gu, '\n')
   for (let textIndex = 0; textIndex <= textCount; textIndex += 1) {
     for (const token of tokens ?? []) {
       if (token.textIndex !== textIndex || token.kind !== 'retained') continue
