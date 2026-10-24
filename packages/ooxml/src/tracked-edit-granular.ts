@@ -1,5 +1,4 @@
 import { planTextRevision } from '@obiter/contracts'
-import { splittableRunParts } from './run-revision-eligibility'
 import type { TextRunAnchor } from './model'
 import {
   textElementXmlSpaceAttribute,
@@ -57,14 +56,14 @@ export function granularRunEdit(
   )
   if (middle.kind === 'noop') return { kind: 'noop' }
   if (middle.kind === 'whole-run') return { kind: 'fallback' }
-  const run = splittableRunParts(source, anchor)
-  if (!run) return { kind: 'fallback' }
   const { removed, inserted } = middle
 
   const runClose = `</${prefix}:r>`
-  const rpr = run.rpr ?? ''
+  const open = source.slice(anchor.runRange.start, anchor.runRange.startTagEnd)
+  const properties = anchor.runPropertiesRange
+  const rpr = properties ? source.slice(properties.start, properties.end) : ''
   const unchangedRun = (piece: string) =>
-    `${run.open}${rpr}<${prefix}:t${textElementXmlSpaceAttribute(piece)}>${escapeXmlText(piece)}</${prefix}:t>${runClose}`
+    `${open}${rpr}<${prefix}:t${textElementXmlSpaceAttribute(piece)}>${escapeXmlText(piece)}</${prefix}:t>${runClose}`
   const pieces: Extract<GranularRunEdit, { kind: 'pieces' }> = {
     kind: 'pieces',
   }
@@ -79,10 +78,10 @@ export function granularRunEdit(
     )
   }
   if (removed !== '') {
-    pieces.deletedRun = `${run.open}${rpr}<${prefix}:delText${textElementXmlSpaceAttribute(removed)}>${escapeXmlText(removed)}</${prefix}:delText>${runClose}`
+    pieces.deletedRun = `${open}${rpr}<${prefix}:delText${textElementXmlSpaceAttribute(removed)}>${escapeXmlText(removed)}</${prefix}:delText>${runClose}`
   }
   if (inserted !== '') {
-    pieces.insertedRun = `${run.open}${rpr}${wordRunInnerTextXml(prefix, inserted)}${runClose}`
+    pieces.insertedRun = `${open}${rpr}${wordRunInnerTextXml(prefix, inserted)}${runClose}`
   }
   return pieces
 }

@@ -9,8 +9,8 @@ import type { TextRunAnchor } from './model'
  * without re-parsing: every `w:t` the parser anchored is a direct child of a
  * splittable run by construction.
  */
-export function splittableRunParts(source: string, anchor: TextRunAnchor) {
-  if (anchor.runProperties.length > 1) return undefined
+export function isSplittableRun(source: string, anchor: TextRunAnchor) {
+  if (anchor.runProperties.length > 1) return false
   const children = [
     ...(anchor.runPropertiesRange ? [anchor.runPropertiesRange] : []),
     ...anchor.textElements,
@@ -21,19 +21,14 @@ export function splittableRunParts(source: string, anchor: TextRunAnchor) {
   }
   let cursor = inner.start
   for (const child of children) {
-    if (child.start < cursor || child.end > inner.end) return undefined
-    if (!/^\s*$/u.test(source.slice(cursor, child.start))) return undefined
+    if (child.start < cursor || child.end > inner.end) return false
+    if (!/^\s*$/u.test(source.slice(cursor, child.start))) return false
     cursor = child.end
   }
-  if (!/^\s*$/u.test(source.slice(cursor, inner.end))) return undefined
+  if (!/^\s*$/u.test(source.slice(cursor, inner.end))) return false
   const properties = anchor.runPropertiesRange
   // The properties element leads the run; anything else is malformed markup
   // the split does not pretend to understand.
-  if (properties && children[0]?.start !== properties.start) return undefined
-  return {
-    open: source.slice(anchor.runRange.start, anchor.runRange.startTagEnd),
-    rpr: properties
-      ? source.slice(properties.start, properties.end)
-      : undefined,
-  }
+  if (properties && children[0]?.start !== properties.start) return false
+  return true
 }
