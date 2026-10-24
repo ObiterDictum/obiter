@@ -1,5 +1,9 @@
 import { useMemo } from 'react'
-import { normaliseEditText, type DocumentModelWire, type DocumentPresence } from '@obiter/contracts'
+import {
+  normaliseEditText,
+  type DocumentModelWire,
+  type DocumentPresence,
+} from '@obiter/contracts'
 import { batchParagraphDeletions } from '../../document-edits'
 import { editingStoryFor } from '../../document-page-layout'
 import { pageReferenceMap } from '../../document-page-references'
@@ -170,7 +174,9 @@ export function DocxModelPages({
             onInsertTextChange={(clientId, text) =>
               drafts.setInserts((current) =>
                 current.map((item) =>
-                  item.clientId === clientId ? { ...item, text: normaliseEditText(text) } : item,
+                  item.clientId === clientId
+                    ? { ...item, text: normaliseEditText(text) }
+                    : item,
                 ),
               )
             }
