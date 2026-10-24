@@ -63,7 +63,7 @@ const baseRun: RedactionRun = {
     reviewedCount: 0,
     unreviewedCount: 0,
   },
-  outputArtifactId: null,
+  outputId: null,
   detectorVersion: null,
   detectionMode: 'model+supplement',
   replacesRunId: null,
@@ -92,15 +92,15 @@ describe('useFinalizeRun cache updates', () => {
     const finalized: RedactionRun = {
       ...baseRun,
       status: 'finalized',
-      outputArtifactId: 'art_1',
+      outputId: 'out_1',
       updatedAt: '2026-07-09T00:01:00.000Z',
     }
     const response: FinalizeResponse = {
       run: finalized,
-      artifact: {
-        id: 'art_1',
-        objectKey: 'org/x/artifacts/art_1',
-        artifactType: 'redaction_output',
+      output: {
+        id: 'out_1',
+        objectKey: 'org/x/outputs/out_1',
+        outputType: 'redaction_output',
       },
       warnings: { unreviewedSpanIds: [] },
     }

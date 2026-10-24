@@ -69,8 +69,8 @@ export function PdfDocumentPreview({
       loadedDocument.current = null
       if (document) void document.destroy()
     }
-    // The preview is keyed to one immutable artifact Blob; a new Blob means a
-    // different artifact and must reload.
+    // The preview is keyed to one immutable output Blob; a new Blob means a
+    // different output and must reload.
   }, [file])
 
   if (error) {

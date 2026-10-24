@@ -58,7 +58,7 @@ Outcome:
 - implement audit logs
 - implement encrypted local desktop cache
 - implement offline queue and reconnect sync
-- implement artifact retrieval plumbing
+- implement output retrieval plumbing
 
 Outcome:
 
@@ -96,7 +96,7 @@ Outcome:
 - implement citation resolution checks
 - implement quote mismatch detection
 - build findings UI
-- export verification artifacts
+- export verification reports as outputs
 
 Outcome:
 

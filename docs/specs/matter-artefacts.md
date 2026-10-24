@@ -129,7 +129,7 @@ strategy. Artefacts are therefore client matter data:
 
 ## Rename: `artifacts` to `outputs`
 
-Done as its own PR before artefact work starts.
+Done in migration 0034, as its own PR before artefact work starts.
 
 - Table `artifacts` becomes `outputs`. Columns `artifact_type` and `output_artifact_id`
   become `output_type` and `output_id`. Constraints and indexes are renamed to match.
@@ -137,7 +137,13 @@ Done as its own PR before artefact work starts.
 - New storage keys use `/outputs/`. The object-key check accepts the legacy
   `/artifacts/` path for existing rows, so no stored objects move.
 - Code identifiers, contracts and docs (`phase-0/schema.md`, `phase-0/api.md`,
-  `architecture.html`, `RULES.md`) follow the rename. Nothing user-visible changes.
+  `architecture.html`, `RULES.md`) follow the rename: `outputId`, `outputType`,
+  `output_not_found`, and `output` on the finalize response. The redaction audit export
+  becomes `obiter.redaction-audit/v2` because its keys changed.
+- The derived files of a document version (`text`, `layout.json`, `model.json`) were
+  also called artifacts in code; they become "derived" files (`document-derived-store.ts`).
+- "Artifact" stays where it is the standard engineering term and not a product concept:
+  CI and build artifacts, and synthetic-corpus and benchmark run artifacts.
 
 ## Done when
 
@@ -148,4 +154,4 @@ Done as its own PR before artefact work starts.
 - A user in another organisation, or without access to the matter, gets `404` on every
   artefact route.
 - Deleting the matter removes its artefacts from every list.
-- No code or doc uses "artifact" for anything.
+- No product concept, code identifier or matter-facing doc uses "artifact".

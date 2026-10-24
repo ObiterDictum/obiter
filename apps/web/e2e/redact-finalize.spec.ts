@@ -11,7 +11,7 @@ const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
  * The journey this guards: a DOCX source is destructively sanitized, rendered to
  * an intermediate PDF by the sandboxed renderer (faked at the HTTP boundary),
  * rasterized into an image-only secure PDF, previewed, and downloaded through
- * the same fetched artifact bytes. The API tests assert the stored summary and
+ * the same fetched output bytes. The API tests assert the stored summary and
  * the rasterized bytes; this proves the rendered screen, the preview gate and
  * the real download agree with them.
  */
