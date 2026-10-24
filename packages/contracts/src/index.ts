@@ -104,15 +104,15 @@ export const syncStateSchema = z.enum([
 ])
 export type SyncState = z.infer<typeof syncStateSchema>
 
-export const artifactStatusSchema = z.enum([
+export const outputStatusSchema = z.enum([
   'queued',
   'generating',
   'ready',
   'failed',
 ])
-export type ArtifactStatus = z.infer<typeof artifactStatusSchema>
+export type OutputStatus = z.infer<typeof outputStatusSchema>
 
-export const artifactTypeSchema = z.enum([
+export const outputTypeSchema = z.enum([
   'document_text',
   'upload_receipt',
   'processing_log',
@@ -121,7 +121,7 @@ export const artifactTypeSchema = z.enum([
   'verification_report',
   'research_memo',
 ])
-export type ArtifactType = z.infer<typeof artifactTypeSchema>
+export type OutputType = z.infer<typeof outputTypeSchema>
 
 export const spanCategorySchema = z.enum([
   'person_name',
@@ -353,17 +353,17 @@ export type RedactionFinalizeInput = z.infer<
 >
 
 /**
- * Metadata for a finalized redaction artifact. The bytes are served separately
+ * Metadata for a finalized redaction output. The bytes are served separately
  * by `/output/file` so preview and download read the same stored object; this
  * response only describes it. `securePdf` marks a hard-redaction PDF produced
- * by the current rasterized path; a legacy hard-redaction DOCX/TXT artifact
+ * by the current rasterized path; a legacy hard-redaction DOCX/TXT output
  * reports `securePdf: false` and keeps its true MIME type and filename.
  */
 export const redactionOutputResponseSchema = z.object({
   mimeType: z.string().min(1),
   filename: z.string().min(1),
   text: z.string().nullable(),
-  artifactId: z.string().min(1).nullable(),
+  outputId: z.string().min(1).nullable(),
   sha256: z
     .string()
     .regex(/^[0-9a-f]{64}$/u)
@@ -377,7 +377,7 @@ export type RedactionOutputResponse = z.infer<
 /**
  * E12 redaction handoff: `baseVersionId` is the document head the caller
  * believes it is returning onto. The server requires it to equal both the
- * current version and the version the run redacted — the output artifact is a
+ * current version and the version the run redacted — the output is a
  * complete content replacement, so a moved head is a stale-source conflict,
  * not something to paper over.
  */

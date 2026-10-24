@@ -100,7 +100,7 @@ describe('Redact 3 delivered acceptance criteria', () => {
       policyMode: 'internal_ai_minimisation',
       spans: detection.spans,
       decisions,
-      outputArtifactId: 'art_demo',
+      outputId: 'out_demo',
       summary,
       detectorVersion: detection.detectorVersion,
       detectionMode: 'model+supplement',

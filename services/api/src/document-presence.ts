@@ -153,7 +153,7 @@ export class DocumentPresenceRegistry implements DocumentPresenceBackend {
 
 /**
  * Validates a heartbeat cursor against the version it claims to point into.
- * The check runs on the stored, cached model — the same artifact /model
+ * The check runs on the stored, cached model — the same derived file /model
  * serves — so heartbeat validation never re-parses source bytes on the
  * serving loop.
  */

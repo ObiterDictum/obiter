@@ -21,7 +21,7 @@ import {
   createDocumentObjectKey,
   type DocumentVersionRecord,
 } from './database'
-import { DocumentArtifactStoreError } from './document-artifact-store'
+import { DocumentDerivedStoreError } from './document-derived-store'
 import {
   DOWNLOAD_FILENAME_MAX_LENGTH,
   downloadContentDisposition,
@@ -42,7 +42,7 @@ type ExportVersion = Pick<
   | 'filename'
 >
 
-export class DocumentExportError extends DocumentArtifactStoreError {
+export class DocumentExportError extends DocumentDerivedStoreError {
   constructor() {
     super('The document could not be exported.')
   }

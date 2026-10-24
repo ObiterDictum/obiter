@@ -23,7 +23,7 @@ const run: RedactionRunRecord = {
   policyMode: 'internal_ai_minimisation',
   spans: [],
   decisions: {},
-  outputArtifactId: 'art_1',
+  outputId: 'out_1',
   detectorVersion: 'rampart-0.1.3',
   detectionMode: 'heuristics+supplement',
   replacesRunId: null,
@@ -71,10 +71,10 @@ describe('buildAuditReport', () => {
         action: 'redaction.finalize',
         userId: 'usr_1',
         timestamp: '2026-01-01T00:02:00.000Z',
-        details: { artifactId: 'art_1' },
+        details: { outputId: 'out_1' },
       },
     ])
-    expect(AUDIT_REPORT_VERSION).toBe('obiter.redaction-audit/v1')
+    expect(AUDIT_REPORT_VERSION).toBe('obiter.redaction-audit/v2')
     expect(report.reportVersion).toBe(AUDIT_REPORT_VERSION)
     expect(report.detectionMode).toBe('heuristics+supplement')
     expect(report.auditLog).toHaveLength(3)

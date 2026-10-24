@@ -129,7 +129,7 @@ describe('POST /api/documents/:id/edit', () => {
     expect(storage.writes).toEqual([])
   })
 
-  it('refuses deleting every paragraph without writing a version or artifact', async () => {
+  it('refuses deleting every paragraph without writing a version or output', async () => {
     const database = new EditDatabase()
     const original = Buffer.from(sourceBytes)
     const { app, storage } = routeApp(database)
@@ -210,7 +210,7 @@ describe('POST /api/documents/:id/edit', () => {
     },
   )
 
-  it('creates immutable version N+1 with a model-ready null text artifact and same-transaction audits', async () => {
+  it('creates immutable version N+1 with a model-ready null text output and same-transaction audits', async () => {
     const database = new EditDatabase()
     const original = Buffer.from(sourceBytes)
     const { app, storage } = routeApp(database)

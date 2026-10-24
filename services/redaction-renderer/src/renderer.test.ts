@@ -241,7 +241,7 @@ describe('redaction renderer', () => {
     expect(images?.keys().length ?? 0).toBeGreaterThan(0)
   })
 
-  it('refuses malformed input with a typed error and no artifact', async () => {
+  it('refuses malformed input with a typed error and no output', async () => {
     const code = await failureCode(() =>
       renderer.render(new Uint8Array([1, 2, 3, 4])),
     )
@@ -249,7 +249,7 @@ describe('redaction renderer', () => {
     expect(await renderDirCount(baseDir)).toBe(0)
   })
 
-  it('refuses an already-aborted render immediately without an artifact', async () => {
+  it('refuses an already-aborted render immediately without an output', async () => {
     const controller = new AbortController()
     controller.abort()
     const docx = await demoFixtureBytes()

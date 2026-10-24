@@ -75,7 +75,7 @@ function foreignNeedles(seed: OrganisationIsolationSeed) {
     seed.shareB,
     seed.runB,
     seed.auditB,
-    seed.artifactB,
+    seed.outputB,
     seed.inviteB,
     seed.commentB,
   ]

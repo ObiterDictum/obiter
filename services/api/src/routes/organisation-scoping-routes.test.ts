@@ -105,7 +105,7 @@ function runRow(
     policy_mode: 'internal_ai_minimisation',
     spans_json: [],
     decisions_json: {},
-    output_artifact_id: null,
+    output_id: null,
     summary_json: {},
     detector_version: 'detector-1',
     detection_mode: 'model+supplement',

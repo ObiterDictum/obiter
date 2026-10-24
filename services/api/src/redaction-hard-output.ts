@@ -34,7 +34,7 @@ import type { StorageService } from './storage'
  * Produce the secure PDF for a hard redaction, or refuse. This is a domain
  * function behind the finalize handler so the route stays a boundary: it owns
  * source-kind dispatch, the DOCX render hop, rasterization and the safety gate
- * that must pass before any artifact is stored or the run is finalized.
+ * that must pass before any output is stored or the run is finalized.
  *
  * There is no text fallback here by design. A failure is surfaced so the run
  * stays unfinalized and no share-safe claim is made about a substitute file.

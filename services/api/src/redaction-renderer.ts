@@ -13,7 +13,7 @@
  *                 -> non-2xx typed JSON { error: { code, message } }
  *
  * Any non-2xx, network failure, timeout, or invalid PDF is a hard failure: the
- * caller must not finalize the run or present a substitute artifact.
+ * caller must not finalize the run or present a substitute output.
  */
 
 export const DOCX_CONTENT_TYPE =
@@ -79,7 +79,7 @@ const RENDER_TIMEOUT_MS = 240_000
 
 /**
  * Ceiling on the intermediate PDF before it is buffered whole. The 200 MB
- * final-artifact limit is checked after rasterization; this bound stops an
+ * final-output limit is checked after rasterization; this bound stops an
  * oversized or runaway response from being read into API memory first.
  */
 const MAX_INTERMEDIATE_PDF_BYTES = 200 * 1024 * 1024
