@@ -422,3 +422,58 @@ it('refuses a range that would remove a revised paragraph, not one inside it', (
   )
   expect(range('p', 'p')).toBeNull()
 })
+
+it('paints closed header revisions against the current draft text', () => {
+  const { container } = render(
+    <PageMarginBand
+      stories={[
+        {
+          partName: 'word/header1.xml',
+          kind: 'header',
+          paragraphs: [
+            {
+              id: 'h',
+              runs: [{ id: 'hr', text: 'Draft v1', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
+        },
+      ]}
+      drafts={{ hr: 'Final v2' }}
+      pendingChanges={[
+        {
+          id: 'old',
+          kind: 'delete',
+          elementName: 'del',
+          paragraphId: 'h',
+          storyPartName: 'word/header1.xml',
+          text: 'Draft v1',
+          inlinePosition: { beforeRunId: null },
+          pending: { from: 0, to: 0 },
+        },
+        {
+          id: 'new',
+          kind: 'insert',
+          elementName: 'ins',
+          paragraphId: 'h',
+          storyPartName: 'word/header1.xml',
+          text: 'Final v2',
+          inlinePosition: { beforeRunId: null },
+          pending: { from: 0, to: 8 },
+        },
+      ]}
+      label="Document header"
+      edge="top"
+      padding={{ left: 0, right: 0, edge: 0 }}
+    />,
+  )
+  expect(container.querySelector('[role="deletion"]')?.textContent).toBe(
+    'Draft v1',
+  )
+  expect(container.querySelector('[role="insertion"]')?.textContent).toBe(
+    'Final v2',
+  )
+})
