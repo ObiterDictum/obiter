@@ -31,7 +31,7 @@ export interface RedactionRun {
   spans: RedactionSpan[]
   decisions: Decisions
   summary: RunSummary
-  outputArtifactId: string | null
+  outputId: string | null
   detectorVersion: string | null
   detectionMode: DetectionMode
   replacesRunId: string | null
@@ -54,7 +54,7 @@ export interface RedetectResponse {
 
 export interface FinalizeResponse {
   run: RedactionRun
-  artifact: { id: string; objectKey: string; artifactType: 'redaction_output' }
+  output: { id: string; objectKey: string; outputType: 'redaction_output' }
   warnings: {
     unreviewedSpanIds: string[]
     coverageUnchecked?: boolean
@@ -63,7 +63,7 @@ export interface FinalizeResponse {
 }
 
 /**
- * Metadata for a finalized redaction artifact. Bytes are fetched once from
+ * Metadata for a finalized redaction output. Bytes are fetched once from
  * `/output/file` and used for preview, download and share alike. Shared with
  * the API response contract rather than duplicated here.
  */

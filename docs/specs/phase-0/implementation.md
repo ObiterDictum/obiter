@@ -8,7 +8,7 @@
 - matter creation and matter views
 - document upload and storage
 - immutable document versioning
-- processing state and artifact retrieval
+- processing state and output retrieval
 - encrypted local desktop cache
 - offline queue and reconnect sync behavior
 - audit logging
@@ -22,7 +22,7 @@
 5. implement upload flow and Hetzner Object Storage integration
 6. implement background job orchestration, audit logging, and status tracking
 7. implement desktop encrypted cache and offline queue behavior
-8. implement artifact model and retrieval screens
+8. implement output model and retrieval screens
 
 ## Implementation Decisions
 
@@ -35,7 +35,7 @@ These decisions are binding for Phase 0 unless replaced by a documented architec
 - PostgreSQL is the source of truth for hosted application data.
 - Redis and BullMQ are used for hosted background job orchestration.
 - Hetzner Object Storage is the hosted object store.
-- `artifacts` is the canonical implementation term. User-facing copy may call specific artifacts reports.
+- `outputs` is the canonical implementation term. User-facing copy may call specific outputs reports.
 
 ## Shared Package Boundaries
 
@@ -83,15 +83,15 @@ Use BullMQ for hosted background work.
 Minimum job categories:
 
 - document text extraction
-- artifact generation
+- output generation
 - cleanup or retry tasks where needed
 
 Job behavior:
 
-- jobs must be idempotent by document version or artifact id
+- jobs must be idempotent by document version or output id
 - failed jobs must update status to `failed`
 - failure reasons must be safe for UI display
-- retries must not create duplicate versions or artifacts
+- retries must not create duplicate versions or outputs
 
 ## Audit Logging
 
@@ -100,7 +100,7 @@ Audit logging starts with Phase 0 mutating flows.
 Rules:
 
 - audit records are append-only
-- every document upload, version creation, soft delete, and artifact download is audited
+- every document upload, version creation, soft delete, and output download is audited
 - audit metadata stores identifiers and safe operational context, not raw document contents
 - audit failures in legal-critical flows should fail loudly unless explicitly documented otherwise
 
@@ -141,7 +141,7 @@ The Phase 0 shell must show:
 - matter detail
 - document list
 - document status
-- artifact list
+- output list
 - clear offline/local/sync state in desktop where applicable
 
 Loading states must say what is happening. Failure states must give a concrete next step where one exists.

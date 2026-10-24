@@ -97,7 +97,7 @@ The private workspace layer needs first-class support for:
 - document versions
 - redaction runs
 - verification outputs
-- artifact exports
+- output exports
 - audit logs
 
 ## Jurisdiction And Domain Model
