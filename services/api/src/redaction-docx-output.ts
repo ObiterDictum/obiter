@@ -1,5 +1,5 @@
 import { RedactionDocxBurnError } from './redaction-docx-error'
-import { decodedXmlText, removeFallbackTextBoxes } from './redaction-docx-xml'
+import { decodedXmlText, prepareDocxForBurn } from './redaction-docx-xml'
 import JSZip from 'jszip'
 import { loadOoxmlZipEntries, parseDocx, serialiseDocx } from '@obiter/ooxml'
 import {
@@ -76,7 +76,7 @@ export async function buildRedactedDocx(
 
   let document
   try {
-    document = await parseDocx(await removeFallbackTextBoxes(input.docxBytes))
+    document = await parseDocx(await prepareDocxForBurn(input.docxBytes))
   } catch {
     throw new RedactionDocxBurnError('The source document could not be read.')
   }
@@ -163,6 +163,15 @@ export async function buildRedactedDocx(
 
   scrubBurnedFields(document, burned)
   const serialised = await serialiseDocx(document)
+  // The writer must prove that its run splitting produced well-formed XML.
+  const writtenParts = await loadOoxmlZipEntries(Buffer.from(serialised))
+  for (const part of document.sourceParts.values()) {
+    if (!part.dirty) continue
+    const payload = writtenParts.get(part.name)
+    if (!payload) throw new RedactionDocxBurnError('A modified part is missing.')
+    decodedXmlText(Buffer.from(payload).toString('utf8'))
+  }
+  await parseDocx(serialised)
   const stripped = await stripDocumentAuthorship(serialised)
   await assertNoSpanTextSurvives(stripped, affected)
   return stripped

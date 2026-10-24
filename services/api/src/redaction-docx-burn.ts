@@ -45,7 +45,7 @@ export function paragraphBurnText(document: OoxmlDocument, paragraph: ParagraphA
 
 function burnNodes(source: string, run: Range) {
   return parseXmlElements(source).filter((element) =>
-    element.start > run.start && element.end < run.end &&
+    element.parent?.start === run.start &&
     (isWord(element, 't') || isWord(element, 'tab') || isWord(element, 'br'))
   ).map((range) => ({ range, text: isWord(range, 'tab') ? '\t' : isWord(range, 'br') ? '\n' : decodeXmlReferences(source.slice(range.startTagEnd, range.endTagStart)) }))
 }

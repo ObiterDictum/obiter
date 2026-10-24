@@ -172,6 +172,12 @@ describe('Redact-owned DOCX bytes', () => {
     expect(output.text).toBe('[REDACTED]')
   })
 
+  it('burns AlternateContent inside a run without unbalancing its XML', async () => {
+    const output = await burn('<w:p>' + run('<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="w"><w:t>Jane Doe</w:t></mc:Choice><mc:Fallback><w:t>Jane Doe</w:t></mc:Fallback></mc:AlternateContent>') + '</w:p>')
+    expect(output.text).toBe('[PERSON_NAME_1]')
+    expect(output.xml).not.toContain('Jane')
+  })
+
   it('empties hidden hyperlink instructions inside the redacted range and keeps fields balanced', async () => {
     const output = await burn(
       `<w:p>${run(begin + '<w:t>Jane</w:t>' + instruction + separate + '<w:t> Doe</w:t>' + end)}</w:p>`,
