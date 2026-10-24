@@ -1,3 +1,4 @@
+import { paragraphNeighborResolver } from './components/document-workspace/paragraph-arrow'
 import { expect, it } from 'bun:test'
 import {
   createBlankDocx,
@@ -87,6 +88,18 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
     if (item.deleteAnchor) state.deletedParagraphIds = [paragraph.id]
     const painted = withPendingRedlines(document.model, state)
     expect(painted.changes).toBe(document.model.changes)
+    if (item.runless) {
+      const neighbors = paragraphNeighborResolver({
+        model: painted,
+        paragraphs: painted.stories[0]?.paragraphs ?? [],
+        drafts: state.drafts,
+        extraRuns: state.extraRuns,
+        inserts: [],
+        deletedParagraphIds: [],
+      })
+      expect(neighbors(tail.id).previous?.id).toBe(paragraph.id)
+      expect(neighbors(paragraph.id).next?.id).toBe(tail.id)
+    }
     const effective = effectiveParagraph(
       item.insert
         ? {
