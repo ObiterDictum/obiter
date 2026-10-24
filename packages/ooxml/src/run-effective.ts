@@ -1,6 +1,6 @@
 import type { ParagraphAnchor, TextRunAnchor, XmlElementRange } from './model'
 import { OoxmlError } from './model'
-import { mergeSiblingRuns, parseWrappedRun } from './model-run-range-edits'
+import { parseWrappedRun } from './model-run-range-edits'
 import { elementFragment, type XmlOverlay } from './parts/overlay'
 import { elementRange, isTextWrappingBreak } from './parts/xml-elements'
 import { decodeXmlReferences } from './xml-lexemes'
@@ -167,4 +167,46 @@ function insideRunRange(
     return false
   }
   return replacement.start >= start && replacement.end <= end
+}
+
+/**
+ * Coalesces the sibling `<w:r>` elements a folded page-break splice produced
+ * back into one run. The splice duplicates the original run's properties onto
+ * its reopened tail, so keeping every sibling's `w:rPr` would put two into one
+ * run; the first sibling owns the effective properties (a property overlay
+ * writes into the original run's property range, or wire fragments already
+ * carry the patch), and the tail's copy is the stale snapshot. Structural
+ * children (a break, a tab) are emitted in order between the chosen properties
+ * and the run close.
+ */
+export function mergeSiblingRuns(partSource: string, runXml: string) {
+  const elements = parseWrappedRun(partSource, runXml)
+  const runs = elements.filter((element) => element.depth === 0)
+  // A fold can legitimately hold non-run siblings — a pending hyperlink wrap
+  // emits `<w:hyperlink>` around the pieces — and merging those as if they
+  // were runs would produce malformed XML. Returning the fold unchanged lets
+  // the caller's one-run check refuse the edit with a typed error instead.
+  if (runs.some((element) => element.localName !== 'r')) return runXml
+  const first = runs[0]
+  const last = runs.at(-1)
+  if (!first || !last || runs.length <= 1) return runXml
+  const childrenByRun = runs.map((run) =>
+    elements.filter(
+      (element) =>
+        element.depth === 1 &&
+        element.start >= run.start &&
+        element.end <= run.end,
+    ),
+  )
+  const properties = childrenByRun
+    .flat()
+    .find((element) => element.localName === 'rPr')
+  let inner = properties ? runXml.slice(properties.start, properties.end) : ''
+  for (const children of childrenByRun) {
+    for (const child of children) {
+      if (child.localName === 'rPr') continue
+      inner += runXml.slice(child.start, child.end)
+    }
+  }
+  return `${runXml.slice(first.start, first.startTagEnd)}${inner}${runXml.slice(last.endTagStart, last.end)}`
 }

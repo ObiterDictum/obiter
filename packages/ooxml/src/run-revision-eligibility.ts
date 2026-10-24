@@ -9,6 +9,18 @@ import type { TextRunAnchor } from './model'
  * without re-parsing: every `w:t` the parser anchored is a direct child of a
  * splittable run by construction.
  */
+export function hasPropertyRevision(fragments: readonly string[]) {
+  return fragments.some((fragment) =>
+    /<(?:[^:<>\s]+:)?rPrChange[\s/>]/u.test(fragment),
+  )
+}
+
+/** Every split piece copies the properties, so they must be one element
+ * carrying no property revision. */
+export function hasSplittableProperties(runProperties: readonly string[]) {
+  return runProperties.length <= 1 && !hasPropertyRevision(runProperties)
+}
+
 export function isSplittableRun(
   source: string,
   anchor: Pick<
@@ -16,7 +28,7 @@ export function isSplittableRun(
     'runRange' | 'runProperties' | 'runPropertiesRange' | 'textElements'
   >,
 ) {
-  if (anchor.runProperties.length > 1) return false
+  if (!hasSplittableProperties(anchor.runProperties)) return false
   const children = [
     ...(anchor.runPropertiesRange ? [anchor.runPropertiesRange] : []),
     ...anchor.textElements,
