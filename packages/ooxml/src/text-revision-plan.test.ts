@@ -370,6 +370,7 @@ it('keeps whole-run property revisions ineligible across a subsequent split', as
     author: 'Synthetic Reviewer',
     date: '2026-10-24T12:00:00.000Z',
   }).setRunStyle(anchor, null)
+  expect(() => parseModelJson(JSON.stringify(document.model))).not.toThrow()
   applyDocumentEdits(document, [
     {
       type: 'insert_footnote',

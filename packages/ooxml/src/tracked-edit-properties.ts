@@ -23,7 +23,6 @@ export function setTrackedProperties(
   document: OoxmlDocument,
   input: {
     id: string
-    wire?: { textRevisionEligible?: boolean }
     partName: string
     nodeRange: XmlElementRange
     propertiesRange?: XmlElementRange
@@ -35,8 +34,6 @@ export function setTrackedProperties(
     patch: (current: string) => string
   },
 ) {
-  if (input.propertiesName === 'rPr' && input.wire)
-    input.wire.textRevisionEligible = false
   const part = requireEditablePart(document, input.partName)
   const previous = input.propertiesRange
     ? part.overlay.source.slice(
@@ -140,12 +137,11 @@ export function setTrackedStyleProperties(
     prefix: string
     styleId: string | null
     attributes: () => string
-    wire: { styleId?: string; textRevisionEligible?: boolean }
+    wire: { styleId?: string }
   },
 ) {
   setTrackedProperties(document, {
     id: input.id,
-    wire: input.wire,
     partName: input.partName,
     nodeRange: input.nodeRange,
     propertiesRange: input.propertiesRange,
