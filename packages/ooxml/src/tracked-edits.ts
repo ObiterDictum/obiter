@@ -99,12 +99,13 @@ export function createTrackedEditWriter(
       // path folds it into the inserted run, where a granular split would put
       // the new properties on the ins piece alone and leave the untouched
       // pieces carrying the old ones.
-      const edit =
-        anchor.wire.text === text
-          ? ({ kind: 'noop' } as const)
-          : trackedProperties
-            ? ({ kind: 'fallback' } as const)
-            : granularRunEdit(source, anchor, text, prefix)
+      const edit = granularRunEdit(
+        source,
+        anchor,
+        text,
+        prefix,
+        trackedProperties !== undefined,
+      )
       if (edit.kind === 'noop') {
         anchor.wire.text = text
         return
