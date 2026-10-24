@@ -80,7 +80,7 @@ export function PageMarginBand({
   stories: DocumentStoryWire[]
   drafts?: Record<string, string>
   extraRuns?: Record<string, DocumentTextRunWire[]>
-  pendingRedlines?: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>
+  pendingRedlines?: Partial<PendingRedlineModel>
   changes?: DocumentChangeWire[]
   label: string
   edge: 'top' | 'bottom'
@@ -95,14 +95,18 @@ export function PageMarginBand({
    * it holds no visible content, so an empty header still takes the caret. */
   editable?: EditableMargin
 }) {
-  const effective = useMemo(() => drafts || extraRuns
-    ? stories.map((story) => ({
-        ...story,
-        paragraphs: story.paragraphs.map((paragraph) =>
-          effectiveParagraph(paragraph, drafts, extraRuns?.[paragraph.id]),
-        ),
-      }))
-    : stories, [stories, drafts, extraRuns])
+  const effective = useMemo(
+    () =>
+      drafts || extraRuns
+        ? stories.map((story) => ({
+            ...story,
+            paragraphs: story.paragraphs.map((paragraph) =>
+              effectiveParagraph(paragraph, drafts, extraRuns?.[paragraph.id]),
+            ),
+          }))
+        : stories,
+    [stories, drafts, extraRuns],
+  )
   const visible = effective.filter(
     (story) =>
       marginStoryVisible(story) ||
@@ -222,7 +226,7 @@ function MarginStory({
   pageNumber,
 }: {
   story: DocumentStoryWire
-  pendingRedlines: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>
+  pendingRedlines: Partial<PendingRedlineModel>
   changes: DocumentChangeWire[]
   imageLabel: string
   relationships: DocumentRelationshipWire[]
@@ -273,7 +277,11 @@ function MarginStory({
         block.paragraph,
         changes,
         story.partName,
-        pendingParagraphChanges(pendingRedlines, block.paragraph.id, story.partName),
+        pendingParagraphChanges(
+          pendingRedlines,
+          block.paragraph.id,
+          story.partName,
+        ),
       ).text.trim().length > 0 ||
       paragraphImageXml(block.paragraph).length > 0 ||
       block.paragraph.runs.some((run) => runDisplayText(run, pageNumber))
@@ -365,7 +373,7 @@ function MarginParagraph({
   pageNumber,
 }: {
   paragraph: DocumentParagraphWire
-  pendingRedlines: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>
+  pendingRedlines: Partial<PendingRedlineModel>
   changes: DocumentChangeWire[]
   imageLabel: string
   storyPartName: string
