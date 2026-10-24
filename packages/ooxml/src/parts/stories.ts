@@ -391,7 +391,6 @@ function parseRun(
         offset += text.length
         textIndex += 1
       } else if (consumed.has(element.start)) {
-        wire.textRevisionTokens.push({ kind: 'break', offset, textIndex, text })
         offset += text.length
       } else {
         wire.textRevisionTokens.push({
