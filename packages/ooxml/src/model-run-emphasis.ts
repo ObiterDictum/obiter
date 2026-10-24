@@ -338,6 +338,7 @@ function splitRun(
       ordered[index] ?? 0,
       ordered[index + 1] ?? run.wire.text.length,
       part.fragments,
+      'tail',
     ),
     text: part.text,
     preservedXmlFragments: part.fragments,

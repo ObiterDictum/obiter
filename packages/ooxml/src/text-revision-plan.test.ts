@@ -234,3 +234,12 @@ it('keeps retained tabs after their source text when CRLF is normalised', async 
   const plan = planTextRevision(run.text, 'x', false, run.textRevisionTokens, false, run.textRevisionTextRanges?.length)
   expect(plan.removed).toBe('a\nb\tc')
 })
+
+it('assigns a tab at an emphasis cut to the piece containing its XML', async () => {
+  const { document, paragraph } = await revisionFixture('<w:t>cat</w:t><w:tab/><w:t>dog</w:t>')
+  applyDocumentEdits(document, [{ type: 'set_run_emphasis', paragraphId: paragraph.id, from: 3, to: 6, bold: true }], { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' })
+  const removed = paragraph.runs.map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed)
+  expect(removed).toEqual(['cat', '\tdog'])
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed)).toEqual(removed)
+})
