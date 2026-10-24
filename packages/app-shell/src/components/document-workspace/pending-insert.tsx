@@ -83,6 +83,7 @@ export function PendingInsert({
       {tracked && !text ? (
         <span
           data-paragraph-mark
+          data-inline-change={`pending:${insert.clientId}:mark`}
           aria-label="Inserted paragraph mark"
           className="pointer-events-none absolute text-[#21613e] underline"
         >

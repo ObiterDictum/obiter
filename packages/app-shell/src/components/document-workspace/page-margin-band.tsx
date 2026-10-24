@@ -394,6 +394,11 @@ function MarginParagraph({
       const text = runDisplayText(run, pageNumber)
       if (!text) return null
       const span = spans.get(run.id)
+      const faceRun = runFace(
+        projection.runSources.get(run.id)?.run ?? run,
+        face,
+        styles,
+      )
       if (span)
         return (
           <InlineChange
@@ -401,9 +406,19 @@ function MarginParagraph({
             span={span}
             text={text}
             tabStop={span.tabStop}
-          />
+          >
+            {span.pending ? (
+              <span
+                style={runCss({
+                  ...faceRun,
+                  color: span.deleted ? '#9a3c32' : '#21613e',
+                })}
+              >
+                {text}
+              </span>
+            ) : undefined}
+          </InlineChange>
         )
-      const faceRun = runFace(run, face, styles)
       const color =
         readableRunColor(faceRun.color, fill) ?? contrastFillText(fill)
       return (
