@@ -1,4 +1,4 @@
-import type { DocumentTextRunWire } from '@obiter/contracts'
+import { normaliseEditText, type DocumentTextRunWire } from '@obiter/contracts'
 
 /**
  * The pure run-list range primitives the paragraph edit operations compose:
@@ -14,6 +14,7 @@ export function replaceRunRange(
   to: number,
   insert: string,
 ): DocumentTextRunWire[] {
+  insert = normaliseEditText(insert)
   if (runs.length === 0) {
     return [{ id: 'empty', text: insert, preservedXmlFragments: [] }]
   }
