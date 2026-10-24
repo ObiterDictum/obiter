@@ -210,3 +210,11 @@ it('marks a covered empty paragraph insertion before it has editable text', asyn
     true,
   )
 })
+
+it('reuses the unchanged paragraph projection with tracking off', async () => {
+  const { model } = await parseDocx(await createBlankDocx())
+  const paragraph = model.stories[0]?.paragraphs[0]
+  if (!paragraph) throw new Error('Missing paragraph')
+  const project = () => inlineChanges(paragraph, model.changes, 'word/document.xml', pendingParagraphChanges(model, paragraph.id, 'word/document.xml'))
+  expect(project()).toBe(project())
+})

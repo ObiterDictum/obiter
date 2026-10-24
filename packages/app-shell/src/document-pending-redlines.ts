@@ -42,6 +42,7 @@ export function pendingParagraphChanges(
       ? (bucket ?? NO_PENDING_CHANGES)
       : (bucket?.filter((change) => change.storyPartName === partName) ??
           NO_PENDING_CHANGES)
+  if (!model.pendingChanges?.length) return NO_PENDING_CHANGES
   return paragraphChanges(
     { id, runs: [], preservedXmlFragments: [] },
     model.pendingChanges ?? NO_PENDING_CHANGES,
