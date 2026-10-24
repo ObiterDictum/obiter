@@ -5834,6 +5834,18 @@
             output with a silently skipped redaction.
           </div>
 
+          <div class="callout">
+            <b>Redact owns DOCX output.</b>
+            <code>redaction-docx-burn.ts</code> replaces text directly from
+            read-only OOXML anchors; editor edit operations and range splitting
+            are forbidden at this boundary. Redacting any part of a field clears
+            its instructions, including instructions outside the accepted span.
+            Redacted hyperlink display text also removes its relationship target
+            and link references. Field markers and surrounding structure remain.
+            The whole-package residual-text gate is awaited before returning
+            bytes.
+          </div>
+
           <h3>Span categories</h3>
           <p class="lede">
             Fifteen categories, each with a default suggestion the reviewer can

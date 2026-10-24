@@ -41,3 +41,15 @@ result passes a validation gate (valid PDF, no selectable text layer, no fonts,
 annotations, forms, attachments or source strings, page and size limits) before it is
 stored, and the run is only marked `finalized` after persistence. A failure leaves
 the run unfinalized, keeps no output and reports `redaction_secure_pdf_failed`.
+
+## DOCX output ownership
+
+`services/api/src/redaction-docx-burn.ts` owns the bytes consumed by pseudonymised
+DOCX output and the hard-redaction renderer. It uses read-only OOXML anchors and
+XML utilities, never editor edit operations or range-edit splitting. Any redaction
+inside a field clears its instructions, even instructions outside the text span,
+so a hidden target cannot disclose the redacted identity or regenerate the result.
+Field markers and surrounding tabs, breaks and footnote references remain intact.
+A redacted hyperlink loses its target relationship and every reference to that
+relationship in the story, including shared references; other display text stays.
+The whole-package residual-span gate is awaited as the last step before returning.
