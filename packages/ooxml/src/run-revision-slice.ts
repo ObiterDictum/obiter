@@ -1,3 +1,4 @@
+import { hasPropertyRevision } from './run-revision-eligibility'
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
 /** Splices cut after controls; range edits cut before controls at the boundary. */
@@ -8,12 +9,7 @@ export function sliceRunRevisionMetadata(
   fragments: readonly string[] = run.preservedXmlFragments,
   boundaryControls: 'head' | 'tail' | 'both' = 'head',
 ) {
-  if (
-    run.textRevisionEligible &&
-    !fragments.some((fragment) =>
-      /<(?:[^:<>\s]+:)?rPrChange[\s/>]/u.test(fragment),
-    )
-  )
+  if (run.textRevisionEligible && !hasPropertyRevision(fragments))
     return { textRevisionEligible: true }
   const tokens = (run.textRevisionTokens ?? [])
     .filter((token) =>
