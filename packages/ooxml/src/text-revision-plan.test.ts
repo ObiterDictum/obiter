@@ -260,3 +260,13 @@ it('uses the same source walk for editable text, breaks and retained controls', 
   expect(run.text).toBe('a\nb')
   expect(planTextRevision(run.text, 'x', false, run.textRevisionTokens, false, run.textRevisionTextRanges?.length).removed).toBe('a\nb\t')
 })
+
+it('keeps whole-run property revisions ineligible across a subsequent split', async () => {
+  const { document, paragraph, run } = await revisionFixture('<w:t>cat dog</w:t>')
+  const anchor = document.textRunAnchors.get(run.id)
+  if (!anchor) throw new Error('Missing anchor')
+  createTrackedEditWriter(document, { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' }).setRunStyle(anchor, null)
+  applyDocumentEdits(document, [{ type: 'insert_footnote', paragraphId: paragraph.id, offset: 4, text: 'Synthetic note' }])
+  expect(paragraph.runs.filter(run => run.text).map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens).removed)).toEqual(['cat ', 'dog'])
+  expect(paragraph.runs.filter(run => run.text).map(run => planTextRevision(run.text, 'cats ', run.textRevisionEligible === true, run.textRevisionTokens).kind)).toEqual(['whole-run', 'whole-run'])
+})

@@ -284,6 +284,7 @@ export function createTrackedEditWriter(
       const prefix = wordPrefix(part.overlay.source, anchor.runRange, 'r')
       setTrackedProperties(document, {
         id: anchor.wire.id,
+        wire: anchor.wire,
         partName: anchor.partName,
         nodeRange: anchor.runRange,
         propertiesRange: anchor.runPropertiesRange,
