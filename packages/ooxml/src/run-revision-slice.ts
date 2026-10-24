@@ -5,11 +5,20 @@ export function sliceRunRevisionMetadata(
   run: DocumentTextRunWire,
   from: number,
   to: number,
+  fragments: readonly string[] = run.preservedXmlFragments,
 ) {
-  if (run.textRevisionEligible) return { textRevisionEligible: true }
+  if (
+    run.textRevisionEligible &&
+    !fragments.some((fragment) =>
+      /<(?:[^:<>\s]+:)?rPrChange[\s/>]/u.test(fragment),
+    )
+  )
+    return { textRevisionEligible: true }
   const tokens = (run.textRevisionTokens ?? [])
-    .filter(
-      (token) => (token.offset > from || from === 0) && token.offset <= to,
+    .filter((token) =>
+      token.kind === 'break'
+        ? token.offset >= from && token.offset < to
+        : (token.offset > from || from === 0) && token.offset <= to,
     )
     .map((token) => ({ ...token, offset: token.offset - from }))
   const ranges = run.textRevisionTextRanges ?? [

@@ -381,6 +381,12 @@ function parseRun(
     wire.textRevisionTokens = []
     wire.textRevisionTextRanges = []
     for (const element of index.descendantsOfRun(runElement)) {
+      if (
+        !['t', 'delText', 'tab', 'br', 'cr'].some((name) =>
+          isWord(element, name),
+        )
+      )
+        continue
       const text = trackedElementText(source, element)
       if (anchored.has(element.start)) {
         wire.textRevisionTextRanges.push({
@@ -392,11 +398,7 @@ function parseRun(
       } else if (consumed.has(element.start)) {
         wire.textRevisionTokens.push({ kind: 'break', offset, textIndex, text })
         offset += text.length
-      } else if (
-        ['t', 'delText', 'tab', 'br', 'cr'].some((name) =>
-          isWord(element, name),
-        )
-      ) {
+      } else {
         wire.textRevisionTokens.push({
           kind: 'retained',
           offset,
