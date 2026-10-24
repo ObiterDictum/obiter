@@ -1,3 +1,4 @@
+import { paragraphChanges } from './document-inline-index'
 import {
   planTextRevision,
   type DocumentChangeWire,
@@ -16,11 +17,28 @@ export type PendingInlineChange = DocumentChangeWire & {
   }
 }
 
+export type PendingRedlineModel = DocumentModelWire & {
+  pendingChanges?: PendingInlineChange[]
+}
+export const NO_PENDING_CHANGES: PendingInlineChange[] = []
+
+export function pendingParagraphChanges(
+  model: PendingRedlineModel,
+  id: string,
+  partName?: string,
+) {
+  return paragraphChanges(
+    { id, runs: [], preservedXmlFragments: [] },
+    model.pendingChanges ?? NO_PENDING_CHANGES,
+    partName,
+  )
+}
+
 export function withPendingRedlines(
   model: DocumentModelWire,
   state: DraftState,
   painted: DocumentModelWire = model,
-): DocumentModelWire {
+): PendingRedlineModel {
   const { operations } = planDocumentSave(model, state)
   const replacements = new Map(
     operations.flatMap((op) =>
@@ -89,8 +107,14 @@ export function withPendingRedlines(
           paragraph.runs
             .map(
               (run) =>
-                run.textRevisionTokens?.map((token) => token.text).join('') ??
-                run.text,
+                planTextRevision(
+                  run.text,
+                  '',
+                  false,
+                  run.textRevisionTokens,
+                  false,
+                  run.textRevisionTextRanges?.length,
+                ).removed,
             )
             .join(''),
           true,
@@ -108,6 +132,10 @@ export function withPendingRedlines(
             next,
             run.textRevisionEligible === true,
             run.textRevisionTokens,
+            operations.some(
+              (op) => op.type === 'set_run_style' && op.runId === run.id,
+            ),
+            run.textRevisionTextRanges?.length,
           )
           const at = offset + plan.prefixLength
           add(story.partName, paragraph.id, plan.removed, true, at)
@@ -127,13 +155,14 @@ export function withPendingRedlines(
       }
     }
   }
-  return pending.length
-    ? { ...painted, changes: [...painted.changes, ...pending] }
-    : painted
+  return pending.length ? { ...painted, pendingChanges: pending } : painted
 }
 
-export function pendingParagraphDeletion(model: DocumentModelWire, id: string) {
-  return model.changes.some(
+export function pendingParagraphDeletion(
+  model: PendingRedlineModel,
+  id: string,
+) {
+  return (model.pendingChanges ?? []).some(
     (change: PendingInlineChange) =>
       change.paragraphId === id && change.pending?.paragraphDelete,
   )
