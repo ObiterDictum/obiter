@@ -57,3 +57,23 @@ it('paints unsaved tracked replacements while keeping inserted text editable and
     }),
   )
 })
+
+it('shows an empty inserted paragraph mark without adding editable characters', () => {
+  mountWorkspace({
+    models: { doc_1: multiParagraphModel([paragraph('p1', 'Anchor')]) },
+  })
+  openRibbonTab('Review')
+  fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+  clickParagraph('p1')
+  const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
+  field.setSelectionRange(field.value.length, field.value.length)
+  fireEvent.keyDown(field, { key: 'Enter' })
+  const inserted = screen.getByLabelText('Pending tracked insertion')
+  expect(screen.getByLabelText('Inserted paragraph mark').textContent).toBe('¶')
+  const range = document.createRange()
+  range.selectNodeContents(inserted)
+  expect(editableRangeText(range)).toBe('')
+  expect(
+    screen.getByLabelText<HTMLTextAreaElement>('Pending paragraph text').value,
+  ).toBe('')
+})
