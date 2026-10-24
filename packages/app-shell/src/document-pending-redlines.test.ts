@@ -8,7 +8,10 @@ import {
 import { emptyDraftState, planDocumentSave } from './document-save-plan'
 import { effectiveParagraph } from './document-model-text'
 import { inlineChanges, inlineSlice } from './document-inline-changes'
-import { withPendingRedlines } from './document-pending-redlines'
+import {
+  withPendingRedlines,
+  pendingParagraphChanges,
+} from './document-pending-redlines'
 
 it('keeps covered draft redlines, editable mappings and saved revisions equal for whole runs and joins', async () => {
   for (const item of [
@@ -83,6 +86,7 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
     } else if (run) state.drafts[run.id] = item.next
     if (item.deleteAnchor) state.deletedParagraphIds = [paragraph.id]
     const painted = withPendingRedlines(document.model, state)
+    expect(painted.changes).toBe(document.model.changes)
     const effective = effectiveParagraph(
       item.insert
         ? {
@@ -96,7 +100,12 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
       state.drafts,
       state.extraRuns[paragraph.id],
     )
-    const projection = inlineChanges(effective, painted.changes)
+    const projection = inlineChanges(
+      effective,
+      painted.changes,
+      undefined,
+      pendingParagraphChanges(painted, effective.id),
+    )
     const removed = projection.spans
       .filter((span) => span.deleted)
       .map((span) => projection.text.slice(span.from, span.to))
@@ -146,7 +155,12 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
       ['insert', item.inserted],
     ])
     if (item.join) {
-      const deleted = inlineChanges(tail, painted.changes)
+      const deleted = inlineChanges(
+        tail,
+        painted.changes,
+        undefined,
+        pendingParagraphChanges(painted, tail.id),
+      )
       expect(deleted.editableText).toBe('')
       expect(
         deleted.spans.map((span) => [span.deleted, span.change.text]),
