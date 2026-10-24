@@ -9,7 +9,13 @@ import type { TextRunAnchor } from './model'
  * without re-parsing: every `w:t` the parser anchored is a direct child of a
  * splittable run by construction.
  */
-export function isSplittableRun(source: string, anchor: TextRunAnchor) {
+export function isSplittableRun(
+  source: string,
+  anchor: Pick<
+    TextRunAnchor,
+    'runRange' | 'runProperties' | 'runPropertiesRange' | 'textElements'
+  >,
+) {
   if (anchor.runProperties.length > 1) return false
   const children = [
     ...(anchor.runPropertiesRange ? [anchor.runPropertiesRange] : []),

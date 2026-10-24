@@ -526,3 +526,19 @@ for (const encoded of ['&#13;', '&#13;&#10;']) {
     }
   })
 }
+
+it('keeps a range replacement with duplicate run properties ineligible', async () => {
+  const { document, paragraph } = await revisionFixture(
+    '<w:rPr/><w:rPr/><w:t>cat dog</w:t>',
+  )
+  const anchor = document.paragraphAnchors.get(paragraph.id)
+  if (!anchor) throw new Error('Missing anchor')
+  applyRunTextReplacementRange(document, anchor, [
+    { from: 0, to: 3, text: 'fox' },
+  ])
+  expect(paragraph.runs[0]?.textRevisionEligible).toBe(false)
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs[0]?.textRevisionEligible,
+  ).toBe(false)
+})

@@ -1,3 +1,4 @@
+import { isSplittableRun } from './run-revision-eligibility'
 import { decodeXmlReferences } from './xml-lexemes'
 import { isWord, isTextWrappingBreak } from './parts/xml-elements'
 import { sliceRunRevisionMetadata } from './run-revision-slice'
@@ -371,6 +372,8 @@ function splitReplacedRun(
 
 function replacementRevisionMetadata(source: string, xml: string) {
   const elements = parseWrappedRun(source, xml)
+  const runRange = elements.find((element) => element.depth === 0)
+  if (!runRange) throw new OoxmlError('model-node-not-editable')
   let offset = 0
   const ranges: Array<{ from: number; to: number }> = []
   for (const element of elements) {
@@ -383,9 +386,20 @@ function replacementRevisionMetadata(source: string, xml: string) {
     } else if (isTextWrappingBreak(element)) offset += 1
   }
   return {
-    textRevisionEligible: !elements.some(
-      (element) => isTextWrappingBreak(element) || isWord(element, 'rPrChange'),
-    ),
+    textRevisionEligible:
+      !elements.some((element) => isWord(element, 'rPrChange')) &&
+      isSplittableRun(xml, {
+        runRange,
+        runProperties: elements
+          .filter((element) => element.depth === 1 && isWord(element, 'rPr'))
+          .map((element) => xml.slice(element.start, element.end)),
+        runPropertiesRange: elements.find(
+          (element) => element.depth === 1 && isWord(element, 'rPr'),
+        ),
+        textElements: elements.filter(
+          (element) => element.depth === 1 && isWord(element, 't'),
+        ),
+      }),
     textRevisionTokens: [],
     textRevisionTextRanges: ranges,
   }
