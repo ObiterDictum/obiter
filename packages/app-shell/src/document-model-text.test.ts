@@ -174,11 +174,20 @@ describe('runChangeKinds', () => {
 })
 
 it('keeps untouched source text and paragraph identity while applying unrelated drafts', () => {
-  const paragraph = { id: 'p', runs: [{ id: 'r', text: 'a\r\nb', preservedXmlFragments: [] }], preservedXmlFragments: [] }
+  const paragraph = {
+    id: 'p',
+    runs: [{ id: 'r', text: 'a\r\nb', preservedXmlFragments: [] }],
+    preservedXmlFragments: [],
+  }
   expect(effectiveParagraph(paragraph, { other: 'edited' })).toBe(paragraph)
 })
 
 it('normalises inserted draft text at the range-write boundary', () => {
-  const runs = replaceRunRange([{ id: 'r', text: 'before after', preservedXmlFragments: [] }], 7, 7, 'one\r\ntwo\r')
-  expect(runs.map(run => run.text).join('')).toBe('before one\ntwo\nafter')
+  const runs = replaceRunRange(
+    [{ id: 'r', text: 'before after', preservedXmlFragments: [] }],
+    7,
+    7,
+    'one\r\ntwo\r',
+  )
+  expect(runs.map((run) => run.text).join('')).toBe('before one\ntwo\nafter')
 })

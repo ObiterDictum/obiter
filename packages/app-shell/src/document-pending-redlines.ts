@@ -31,7 +31,7 @@ export function allPendingChanges(model: PendingRedlineModel) {
 }
 
 export function pendingParagraphChanges(
-  model: Pick<PendingRedlineModel, 'pendingChanges' | 'pendingBuckets'>,
+  model: Partial<PendingRedlineModel>,
   id: string,
   partName?: string,
 ): PendingInlineChange[] {

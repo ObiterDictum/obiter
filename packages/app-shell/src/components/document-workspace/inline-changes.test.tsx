@@ -443,28 +443,30 @@ it('paints closed header revisions against the current draft text', () => {
         },
       ]}
       drafts={{ hr: 'Final v2' }}
-      pendingRedlines={{ pendingChanges: [
-        {
-          id: 'old',
-          kind: 'delete',
-          elementName: 'del',
-          paragraphId: 'h',
-          storyPartName: 'word/header1.xml',
-          text: 'Draft v1',
-          inlinePosition: { beforeRunId: null },
-          pending: { from: 0, to: 0 },
-        },
-        {
-          id: 'new',
-          kind: 'insert',
-          elementName: 'ins',
-          paragraphId: 'h',
-          storyPartName: 'word/header1.xml',
-          text: 'Final v2',
-          inlinePosition: { beforeRunId: null },
-          pending: { from: 0, to: 8 },
-        },
-      ] }}
+      pendingRedlines={{
+        pendingChanges: [
+          {
+            id: 'old',
+            kind: 'delete',
+            elementName: 'del',
+            paragraphId: 'h',
+            storyPartName: 'word/header1.xml',
+            text: 'Draft v1',
+            inlinePosition: { beforeRunId: null },
+            pending: { from: 0, to: 0 },
+          },
+          {
+            id: 'new',
+            kind: 'insert',
+            elementName: 'ins',
+            paragraphId: 'h',
+            storyPartName: 'word/header1.xml',
+            text: 'Final v2',
+            inlinePosition: { beforeRunId: null },
+            pending: { from: 0, to: 8 },
+          },
+        ],
+      }}
       label="Document header"
       edge="top"
       padding={{ left: 0, right: 0, edge: 0 }}

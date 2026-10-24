@@ -216,7 +216,13 @@ it('reuses the unchanged paragraph projection with tracking off', async () => {
   const { model } = await parseDocx(await createBlankDocx())
   const paragraph = model.stories[0]?.paragraphs[0]
   if (!paragraph) throw new Error('Missing paragraph')
-  const project = () => inlineChanges(paragraph, model.changes, 'word/document.xml', pendingParagraphChanges(model, paragraph.id, 'word/document.xml'))
+  const project = () =>
+    inlineChanges(
+      paragraph,
+      model.changes,
+      'word/document.xml',
+      pendingParagraphChanges(model, paragraph.id, 'word/document.xml'),
+    )
   expect(project()).toBe(project())
 })
 
@@ -224,11 +230,43 @@ it('keeps stored revisions anchored before later runs when a paragraph is pendin
   const { model } = await parseDocx(await createBlankDocx())
   const paragraph = model.stories[0]?.paragraphs[0]
   if (!paragraph) throw new Error('Missing paragraph')
-  paragraph.runs = [{ id: 'r1', text: 'one ', preservedXmlFragments: [] }, { id: 'r2', text: 'two', preservedXmlFragments: [] }]
-  model.changes = [{ id: 'stored', kind: 'delete', elementName: 'del', text: 'earlier ', paragraphId: paragraph.id, storyPartName: 'word/document.xml', inlinePosition: { beforeRunId: 'r2' } }]
-  const pending = [{ id: 'pending-delete', kind: 'delete' as const, elementName: 'del' as const, text: 'one two', paragraphId: paragraph.id, storyPartName: 'word/document.xml', inlinePosition: { beforeRunId: null }, pending: { from: 0, to: 0, paragraphDelete: true } }]
-  const projection = inlineChanges(paragraph, model.changes, 'word/document.xml', pending)
-  expect(projection.spans.map(span => span.change.id)).toEqual(['stored', 'pending-delete'])
+  paragraph.runs = [
+    { id: 'r1', text: 'one ', preservedXmlFragments: [] },
+    { id: 'r2', text: 'two', preservedXmlFragments: [] },
+  ]
+  model.changes = [
+    {
+      id: 'stored',
+      kind: 'delete',
+      elementName: 'del',
+      text: 'earlier ',
+      paragraphId: paragraph.id,
+      storyPartName: 'word/document.xml',
+      inlinePosition: { beforeRunId: 'r2' },
+    },
+  ]
+  const pending = [
+    {
+      id: 'pending-delete',
+      kind: 'delete' as const,
+      elementName: 'del' as const,
+      text: 'one two',
+      paragraphId: paragraph.id,
+      storyPartName: 'word/document.xml',
+      inlinePosition: { beforeRunId: null },
+      pending: { from: 0, to: 0, paragraphDelete: true },
+    },
+  ]
+  const projection = inlineChanges(
+    paragraph,
+    model.changes,
+    'word/document.xml',
+    pending,
+  )
+  expect(projection.spans.map((span) => span.change.id)).toEqual([
+    'stored',
+    'pending-delete',
+  ])
   expect(projection.text).toBe('earlier one two')
   expect(projection.editableText).toBe('')
 })
@@ -238,11 +276,29 @@ it('paints pending deleted text with its source run instead of a preceding PAGE 
   const paragraph = model.stories[0]?.paragraphs[0]
   if (!paragraph) throw new Error('Missing paragraph')
   paragraph.runs = [
-    { id: 'field', text: '', preservedXmlFragments: ['<w:instrText> PAGE </w:instrText>'] },
+    {
+      id: 'field',
+      text: '',
+      preservedXmlFragments: ['<w:instrText> PAGE </w:instrText>'],
+    },
     { id: 'text', text: 'new', preservedXmlFragments: [] },
   ]
-  const projection = inlineChanges(paragraph, [], 'word/document.xml', [{ id: 'pending', kind: 'delete', elementName: 'del', text: 'old', runId: 'text', paragraphId: paragraph.id, storyPartName: 'word/document.xml', inlinePosition: { beforeRunId: null }, pending: { from: 0, to: 0 } }])
-  const deleted = projection.paragraph.runs.find(run => run.id === 'pending:inline')
+  const projection = inlineChanges(paragraph, [], 'word/document.xml', [
+    {
+      id: 'pending',
+      kind: 'delete',
+      elementName: 'del',
+      text: 'old',
+      runId: 'text',
+      paragraphId: paragraph.id,
+      storyPartName: 'word/document.xml',
+      inlinePosition: { beforeRunId: null },
+      pending: { from: 0, to: 0 },
+    },
+  ])
+  const deleted = projection.paragraph.runs.find(
+    (run) => run.id === 'pending:inline',
+  )
   if (!deleted) throw new Error('Missing deletion')
   expect(runDisplayText(deleted, 5)).toBe('old')
 })
