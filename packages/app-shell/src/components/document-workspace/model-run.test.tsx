@@ -152,6 +152,8 @@ it('keeps pending text formatting, selection and source run decorations', () => 
       id: 'style',
       kind: 'property' as const,
       elementName: 'rPrChange' as const,
+      inlinePosition: null,
+      scope: 'run' as const,
       runId: 'r',
       paragraphId: 'p',
       text: '',
