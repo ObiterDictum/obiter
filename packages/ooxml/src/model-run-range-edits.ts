@@ -1,3 +1,5 @@
+import { decodeXmlReferences } from './xml-lexemes'
+import { isWord, isTextWrappingBreak } from './parts/xml-elements'
 import { sliceRunRevisionMetadata } from './run-revision-slice'
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
@@ -334,11 +336,7 @@ function splitReplacedRun(
       ? { hyperlinkTarget: run.wire.hyperlinkTarget }
       : {}),
     ...(part.replaced
-      ? {
-          textRevisionEligible: false,
-          textRevisionTokens: [],
-          textRevisionTextRanges: [{ from: 0, to: part.text.length }],
-        }
+      ? replacementRevisionMetadata(source, part.xml)
       : sliceRunRevisionMetadata(
           run.wire,
           ordered[index] ?? 0,
@@ -360,6 +358,24 @@ function splitReplacedRun(
       from: ordered[index] as number,
       to: ordered[index + 1] as number,
     })),
+  }
+}
+
+function replacementRevisionMetadata(source: string, xml: string) {
+  const elements = parseWrappedRun(source, xml)
+  let offset = 0
+  const ranges: Array<{ from: number; to: number }> = []
+  for (const element of elements) {
+    if (isWord(element, 't') && !element.selfClosing) {
+      const text = decodeXmlReferences(xml.slice(element.startTagEnd, element.endTagStart))
+      ranges.push({ from: offset, to: offset + text.length })
+      offset += text.length
+    } else if (isTextWrappingBreak(element)) offset += 1
+  }
+  return {
+    textRevisionEligible: !elements.some(element => isTextWrappingBreak(element) || isWord(element, 'rPrChange')),
+    textRevisionTokens: [],
+    textRevisionTextRanges: ranges,
   }
 }
 
