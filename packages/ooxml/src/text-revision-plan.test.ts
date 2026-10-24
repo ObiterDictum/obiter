@@ -1,3 +1,4 @@
+import { applyRunTextReplacementRange } from './model-run-range-edits'
 import { expect, it } from 'bun:test'
 import { createTrackedEditWriter } from './tracked-edits'
 import JSZip from 'jszip'
@@ -269,4 +270,17 @@ it('keeps whole-run property revisions ineligible across a subsequent split', as
   applyDocumentEdits(document, [{ type: 'insert_footnote', paragraphId: paragraph.id, offset: 4, text: 'Synthetic note' }])
   expect(paragraph.runs.filter(run => run.text).map(run => planTextRevision(run.text, 'x', run.textRevisionEligible === true, run.textRevisionTokens).removed)).toEqual(['cat ', 'dog'])
   expect(paragraph.runs.filter(run => run.text).map(run => planTextRevision(run.text, 'cats ', run.textRevisionEligible === true, run.textRevisionTokens).kind)).toEqual(['whole-run', 'whole-run'])
+})
+
+it('plans multiline range replacement pieces from their emitted text elements', async () => {
+  const { document, paragraph } = await revisionFixture('<w:t>axz</w:t>')
+  const anchor = document.paragraphAnchors.get(paragraph.id)
+  if (!anchor) throw new Error('Missing anchor')
+  applyRunTextReplacementRange(document, anchor, [{ from: 1, to: 2, text: 'one\ntwo' }])
+  const piece = paragraph.runs[1]
+  if (!piece) throw new Error('Missing replacement')
+  const plan = planTextRevision(piece.text, 'red\nblue', piece.textRevisionEligible === true, piece.textRevisionTokens, false, piece.textRevisionTextRanges?.length)
+  expect(plan.inserted).toBe('red\nblue')
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(saved.model.stories[0]?.paragraphs[0]?.runs[1]?.textRevisionTextRanges).toEqual(piece.textRevisionTextRanges)
 })
