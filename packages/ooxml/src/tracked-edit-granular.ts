@@ -45,8 +45,10 @@ export function granularRunEdit(
   anchor: TextRunAnchor,
   text: string,
   prefix: string,
+  pendingProperties = false,
 ): GranularRunEdit {
-  if (!anchor.wire.textRevisionEligible) return { kind: 'fallback' }
+  if (!anchor.wire.textRevisionEligible || pendingProperties)
+    return { kind: 'fallback' }
   const run = splittableRunParts(source, anchor)
   if (!run) return { kind: 'fallback' }
   const middle = planTextRevision(anchor.wire.text, text, true)

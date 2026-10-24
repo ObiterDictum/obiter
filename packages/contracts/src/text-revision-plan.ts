@@ -10,6 +10,7 @@ export function planTextRevision(
   to: string,
   granular: boolean,
   tokens?: readonly TextRevisionToken[],
+  pendingProperties = false,
 ) {
   if (from === to)
     return {
@@ -20,7 +21,8 @@ export function planTextRevision(
       suffixLength: 0,
       retained: [],
     }
-  const middle = granular ? trackedTextMiddle(from, to) : undefined
+  const middle =
+    granular && !pendingProperties ? trackedTextMiddle(from, to) : undefined
   if (middle)
     return { ...middle, editableInserted: middle.inserted, retained: [] }
   const retained: Array<{ offset: number; text: string }> = []
