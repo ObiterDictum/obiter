@@ -1,3 +1,4 @@
+import { pendingParagraphChanges } from './document-pending-redlines'
 import { paragraphPartName } from './document-inline-index'
 import { inlineChanges } from './document-inline-changes'
 import type {
@@ -106,7 +107,12 @@ export function paragraphMetrics(
     extraRuns[paragraph.id] ?? [],
   )
   const partName = paragraphPartName(model, paragraph)
-  const text = inlineChanges(resolved, model.changes, partName).text
+  const text = inlineChanges(
+    resolved,
+    model.changes,
+    partName,
+    pendingParagraphChanges(model, paragraph.id, partName),
+  ).text
   const face = paragraphFace(resolved, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx

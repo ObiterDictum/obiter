@@ -1,4 +1,7 @@
-import type { PendingInlineChange } from './document-pending-redlines'
+import {
+  NO_PENDING_CHANGES,
+  type PendingInlineChange,
+} from './document-pending-redlines'
 import type { ParagraphLinkOverlay } from './document-structure-overlays'
 import type {
   DocumentChangeWire,
@@ -34,12 +37,12 @@ function projectInlineChanges(
   paragraph: DocumentParagraphWire,
   changes: readonly DocumentChangeWire[],
   partName?: string,
+  pendingChanges: readonly PendingInlineChange[] = NO_PENDING_CHANGES,
 ) {
-  const relevant: PendingInlineChange[] = paragraphChanges(
-    paragraph,
-    changes,
-    partName,
-  ).filter((change) => change.inlinePosition && change.kind !== 'property')
+  const relevant: PendingInlineChange[] = [
+    ...paragraphChanges(paragraph, changes, partName),
+    ...pendingChanges,
+  ].filter((change) => change.inlinePosition && change.kind !== 'property')
   const pending = relevant.filter((change) => change.pending)
   const paragraphDeleted = pending.some(
     (change) => change.pending?.paragraphDelete,
@@ -214,20 +217,30 @@ function projectInlineChanges(
   }
 }
 export type InlineProjection = ReturnType<typeof projectInlineChanges>
-const projections = new WeakMap<
+type ProjectionCache = WeakMap<
   readonly DocumentChangeWire[],
   WeakMap<DocumentParagraphWire, Map<string, InlineProjection>>
+>
+const projections = new WeakMap<
+  readonly PendingInlineChange[],
+  ProjectionCache
 >()
 
 export function inlineChanges(
   paragraph: DocumentParagraphWire,
   changes: readonly DocumentChangeWire[],
   partName?: string,
+  pendingChanges: readonly PendingInlineChange[] = NO_PENDING_CHANGES,
 ): InlineProjection {
-  let paragraphs = projections.get(changes)
+  let cache = projections.get(pendingChanges)
+  if (!cache) {
+    cache = new WeakMap()
+    projections.set(pendingChanges, cache)
+  }
+  let paragraphs = cache.get(changes)
   if (!paragraphs) {
     paragraphs = new WeakMap()
-    projections.set(changes, paragraphs)
+    cache.set(changes, paragraphs)
   }
   let parts = paragraphs.get(paragraph)
   if (!parts) {
@@ -237,7 +250,12 @@ export function inlineChanges(
   const key = partName ?? ''
   let projection = parts.get(key)
   if (!projection) {
-    projection = projectInlineChanges(paragraph, changes, partName)
+    projection = projectInlineChanges(
+      paragraph,
+      changes,
+      partName,
+      pendingChanges,
+    )
     parts.set(key, projection)
   }
   return projection

@@ -1,4 +1,7 @@
-import { pendingParagraphDeletion } from '../../document-pending-redlines'
+import {
+  pendingParagraphDeletion,
+  pendingParagraphChanges,
+} from '../../document-pending-redlines'
 import type { PendingInlineChange } from '../../document-pending-redlines'
 import type {
   DocumentModelWire,
@@ -127,6 +130,11 @@ export function renderBlock(
                 key={paragraph.id}
                 paragraph={paragraph}
                 changes={ctx.model.changes}
+                pendingChanges={pendingParagraphChanges(
+                  ctx.model,
+                  paragraph.id,
+                  ctx.storyOf(paragraph.id).partName,
+                )}
                 selected={ctx.selectedParagraphId === paragraph.id}
                 onSelectParagraph={ctx.onSelectParagraph}
                 drafts={ctx.drafts}
@@ -177,7 +185,7 @@ export function renderBlock(
       <PendingInsert
         key={insert.clientId}
         insert={insert}
-        tracked={ctx.model.changes.some(
+        tracked={pendingParagraphChanges(ctx.model, paragraph.id).some(
           (change: PendingInlineChange) =>
             change.paragraphId === insert.clientId && change.pending,
         )}
@@ -199,6 +207,11 @@ export function renderBlock(
       key={`${paragraph.id}-${block.from ?? 0}`}
       paragraph={paragraph}
       changes={ctx.model.changes}
+      pendingChanges={pendingParagraphChanges(
+        ctx.model,
+        paragraph.id,
+        ctx.storyOf(paragraph.id).partName,
+      )}
       selected={ctx.selectedParagraphId === paragraph.id}
       onSelectParagraph={ctx.onSelectParagraph}
       drafts={ctx.drafts}

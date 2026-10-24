@@ -1,4 +1,7 @@
-import type { PendingInlineChange } from '../../document-pending-redlines'
+import {
+  NO_PENDING_CHANGES,
+  type PendingInlineChange,
+} from '../../document-pending-redlines'
 import { useContext, useMemo } from 'react'
 import { paragraphChanges } from '../../document-inline-index'
 import {
@@ -56,6 +59,7 @@ import type { ParagraphWordEdit } from './model-paragraph-editor'
 export function ModelParagraph({
   paragraph,
   changes,
+  pendingChanges = NO_PENDING_CHANGES,
   selected,
   onSelectParagraph,
   drafts,
@@ -96,6 +100,7 @@ export function ModelParagraph({
   linkOverlay,
 }: {
   paragraph: DocumentParagraphWire
+  pendingChanges?: PendingInlineChange[]
   changes: DocumentChangeWire[]
   selected: boolean
   onSelectParagraph: (paragraphId: string, offset?: number) => void
@@ -179,11 +184,19 @@ export function ModelParagraph({
         projectRangeEmphasis(effective, emphasis),
         bucket,
         story?.partName ?? storyPartName,
+        pendingChanges,
       ),
-    [effective, emphasis, bucket, story?.partName, storyPartName],
+    [
+      effective,
+      emphasis,
+      bucket,
+      story?.partName,
+      storyPartName,
+      pendingChanges,
+    ],
   )
   if (
-    bucket.some(
+    pendingChanges.some(
       (change: PendingInlineChange) => change.pending?.paragraphDelete,
     )
   )
