@@ -1,3 +1,4 @@
+import { sliceRunRevisionMetadata } from './run-revision-slice'
 import type {
   DocumentParagraphWire,
   DocumentTextRunWire,
@@ -294,11 +295,13 @@ export function spliceRunWires(
     if (offset < end) {
       const head: DocumentTextRunWire = {
         ...run,
+        ...sliceRunRevisionMetadata(run, 0, offset - cursor),
         text: run.text.slice(0, offset - cursor),
       }
       const tail: DocumentTextRunWire = {
         ...run,
         id: nextId(),
+        ...sliceRunRevisionMetadata(run, offset - cursor, run.text.length),
         text: run.text.slice(offset - cursor),
         preservedXmlFragments: run.preservedXmlFragments.filter((fragment) =>
           /^<w:rPr\b/u.test(fragment),

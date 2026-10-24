@@ -99,16 +99,14 @@ export function createTrackedEditWriter(
       // path folds it into the inserted run, where a granular split would put
       // the new properties on the ins piece alone and leave the untouched
       // pieces carrying the old ones.
-      const edit =
-        anchor.wire.text === text
-          ? ({ kind: 'noop' } as const)
-          : trackedProperties
-            ? ({ kind: 'fallback' } as const)
-            : granularRunEdit(source, anchor, text, prefix)
-      if (edit.kind === 'noop') {
-        anchor.wire.text = text
-        return
-      }
+      const edit = granularRunEdit(
+        source,
+        anchor,
+        text,
+        prefix,
+        trackedProperties !== undefined,
+      )
+      if (edit.kind === 'noop') return
       if (edit.kind === 'pieces') {
         let value = edit.prefixRun ?? ''
         // A substitution records its removed side before its inserted side,
@@ -286,6 +284,7 @@ export function createTrackedEditWriter(
       const prefix = wordPrefix(part.overlay.source, anchor.runRange, 'r')
       setTrackedProperties(document, {
         id: anchor.wire.id,
+        wire: anchor.wire,
         partName: anchor.partName,
         nodeRange: anchor.runRange,
         propertiesRange: anchor.runPropertiesRange,
