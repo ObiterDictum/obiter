@@ -181,3 +181,32 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
     }
   }
 })
+
+it('marks a covered empty paragraph insertion before it has editable text', async () => {
+  const document = await parseDocx(await createBlankDocx())
+  const anchor = document.model.stories[0]?.paragraphs[0]
+  if (!anchor) throw new Error('Missing fixture paragraph')
+  const state = emptyDraftState()
+  state.inserts.push({
+    clientId: 'new-empty',
+    afterParagraphId: anchor.id,
+    text: '',
+  })
+  const painted = withPendingRedlines(document.model, state)
+  expect(pendingParagraphChanges(painted, 'new-empty')).toMatchObject([
+    {
+      kind: 'insert',
+      text: '¶',
+      pending: { from: 0, to: 0, displayOnly: true },
+    },
+  ])
+  applyDocumentEdits(
+    document,
+    planDocumentSave(document.model, state).operations,
+    { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
+  )
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(saved.model.changes.some((change) => change.kind === 'insert')).toBe(
+    true,
+  )
+})

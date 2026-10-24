@@ -101,8 +101,9 @@ export function withPendingRedlines(
     from: number,
     paragraphDelete = false,
     displayOnly = false,
+    paragraphInsert = false,
   ) {
-    if (!text && !paragraphDelete) return
+    if (!text && !paragraphDelete && !paragraphInsert) return
     const number = counts.get(paragraphId) ?? 0
     counts.set(paragraphId, number + 1)
     const base = {
@@ -114,7 +115,7 @@ export function withPendingRedlines(
       pending: {
         from,
         to: deleted || displayOnly ? from : from + text.length,
-        displayOnly,
+        displayOnly: displayOnly || (paragraphInsert && !text),
         paragraphDelete,
       },
     }
@@ -148,7 +149,16 @@ export function withPendingRedlines(
       const source = index.paragraphs.get(op.paragraphId)
       if (!source) continue
       const text = op.runs?.map((run) => run.text).join('') ?? op.text ?? ''
-      add(source.story.partName, op.intentId ?? op.paragraphId, text, false, 0)
+      add(
+        source.story.partName,
+        op.intentId ?? op.paragraphId,
+        text,
+        false,
+        0,
+        false,
+        false,
+        true,
+      )
       if (!op.intentId) replacingEmpty.add(op.paragraphId)
     }
   }

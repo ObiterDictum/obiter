@@ -80,6 +80,15 @@ export function PendingInsert({
       onClick={() => onSelect(field.current?.selectionStart ?? undefined)}
       className="relative min-h-[1.15em]"
     >
+      {tracked && !text ? (
+        <span
+          data-paragraph-mark
+          aria-label="Inserted paragraph mark"
+          className="pointer-events-none absolute text-[#21613e] underline"
+        >
+          ¶
+        </span>
+      ) : null}
       <textarea
         ref={field}
         aria-label="Pending paragraph text"
