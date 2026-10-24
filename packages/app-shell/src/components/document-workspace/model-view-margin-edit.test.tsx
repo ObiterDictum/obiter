@@ -230,3 +230,14 @@ describe('an open margin story', () => {
     expect(selected.at(-1)).toBe('p1')
   })
 })
+
+it('paints runless header drafts and joined header tails after editing closes', () => {
+  const body = model.stories[0]
+  if (!body) throw new Error('Missing body')
+  for (const original of ['', 'Head ']) {
+    const margin = { ...header, paragraphs: [{ ...paragraph('h1', original), runs: original ? paragraph('h1', original).runs : [] }] }
+    const { unmount } = render(<DocumentModelPage model={{ ...model, stories: [body, margin] }} drafts={{ tail: 'Typed tail' }} extraRuns={{ h1: [{ id: 'tail', text: 'tail', preservedXmlFragments: [] }] }} />)
+    expect(screen.getByLabelText('Document header').textContent).toContain(original + 'Typed tail')
+    unmount()
+  }
+})
