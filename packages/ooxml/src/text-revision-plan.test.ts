@@ -12,6 +12,20 @@ import {
 it('exposes source eligibility and plans exactly the text the tracked writer persists', async () => {
   const cases = [
     {
+      children: '<w:t>cat</w:t>',
+      next: 'cat\r\ndog',
+      eligible: true,
+      removed: '',
+      inserted: '\ndog',
+    },
+    {
+      children: '<w:t>cat</w:t><w:tab/>',
+      next: 'dog\rearth',
+      eligible: false,
+      removed: 'cat\t',
+      inserted: 'dog\nearth\t',
+    },
+    {
       children: '<w:t>Order 60,000 units</w:t>',
       next: 'Order 45,000 units',
       eligible: true,
