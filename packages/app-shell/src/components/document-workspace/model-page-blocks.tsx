@@ -1,3 +1,5 @@
+import { pendingParagraphDeletion } from '../../document-pending-redlines'
+import type { PendingInlineChange } from '../../document-pending-redlines'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -108,7 +110,11 @@ export function renderBlock(
         renderCell={(cell) =>
           cell.paragraphIds.flatMap((id) => {
             const paragraph = ctx.paragraphs.find((item) => item.id === id)
-            if (!paragraph || ctx.deletedParagraphIds.includes(paragraph.id)) {
+            if (
+              !paragraph ||
+              (ctx.deletedParagraphIds.includes(paragraph.id) &&
+                !pendingParagraphDeletion(ctx.model, paragraph.id))
+            ) {
               return []
             }
             const wrapWidthPx = cellWrapWidthPx(
@@ -160,13 +166,21 @@ export function renderBlock(
   }
 
   const paragraph = block.paragraph
-  if (ctx.deletedParagraphIds.includes(paragraph.id)) return []
+  if (
+    ctx.deletedParagraphIds.includes(paragraph.id) &&
+    !pendingParagraphDeletion(ctx.model, paragraph.id)
+  )
+    return []
   const insert = ctx.inserts.find((item) => item.clientId === paragraph.id)
   if (insert) {
     return [
       <PendingInsert
         key={insert.clientId}
         insert={insert}
+        tracked={ctx.model.changes.some(
+          (change: PendingInlineChange) =>
+            change.paragraphId === insert.clientId && change.pending,
+        )}
         selected={ctx.selectedParagraphId === insert.clientId}
         verticalCaret={ctx.verticalCaret}
         onSelect={(offset) => ctx.onSelectParagraph(insert.clientId, offset)}

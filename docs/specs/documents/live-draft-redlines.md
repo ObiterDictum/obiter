@@ -11,6 +11,8 @@ The OOXML parser records whether each text run is safely splittable: one optiona
 leading run-properties element and anchored plain text elements only, with no
 text-wrapping breaks or unmodelled children. This fact must be derived while
 source ranges and ordering exist, not reconstructed from preserved fragments.
+Ineligible runs also carry source-ordered text and retained-control tokens,
+so whole-run revisions preserve tabs and structural breaks in the preview.
 Old cached models without this required metadata must regenerate.
 
 A pure text-revision planner in `@obiter/contracts` consumes the original text,
