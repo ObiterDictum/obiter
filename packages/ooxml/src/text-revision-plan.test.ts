@@ -228,3 +228,9 @@ it('preserves the unchanged space after a CRLF source when saving a tracked subs
   expect(saved.model.stories[0]?.paragraphs[0]?.runs.map(run => run.text).join('')).toBe('a\nb ')
   expect(saved.model.changes.map(change => [change.kind, change.text])).toEqual([['delete', 'c'], ['insert', 'd']])
 })
+
+it('keeps retained tabs after their source text when CRLF is normalised', async () => {
+  const { run } = await revisionFixture('<w:t>a&#13;&#10;b</w:t><w:tab/><w:t>c</w:t>')
+  const plan = planTextRevision(run.text, 'x', false, run.textRevisionTokens, false, run.textRevisionTextRanges?.length)
+  expect(plan.removed).toBe('a\nb\tc')
+})
