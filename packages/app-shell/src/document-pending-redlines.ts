@@ -26,10 +26,6 @@ export type PendingRedlineModel = DocumentModelWire & {
 }
 export const NO_PENDING_CHANGES: PendingInlineChange[] = []
 
-export function allPendingChanges(model: PendingRedlineModel) {
-  return model.pendingChanges ?? NO_PENDING_CHANGES
-}
-
 export function pendingParagraphChanges(
   model: Partial<PendingRedlineModel>,
   id: string,
