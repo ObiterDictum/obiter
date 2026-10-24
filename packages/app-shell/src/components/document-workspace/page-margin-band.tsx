@@ -411,7 +411,7 @@ function MarginParagraph({
               <span
                 style={runCss({
                   ...faceRun,
-                  color: span.deleted ? '#9a3c32' : '#21613e',
+                  color: 'inherit',
                 })}
               >
                 {text}

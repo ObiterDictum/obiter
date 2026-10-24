@@ -292,12 +292,7 @@ function ModelRun({
     () => runEndNotes(run, text, drafts),
     [run.preservedXmlFragments, run.id, run.text, text, drafts?.[run.id]],
   )
-  const color =
-    revision === 'delete'
-      ? '#9a3c32'
-      : revision === 'insert'
-        ? '#21613e'
-        : readableRunColor(face.color)
+  const color = revision ? 'inherit' : readableRunColor(face.color)
   return (
     <span
       className={cn(
