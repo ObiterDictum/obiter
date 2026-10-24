@@ -12,6 +12,22 @@ import {
 it('exposes source eligibility and plans exactly the text the tracked writer persists', async () => {
   const cases = [
     {
+      children: '<w:t>a</w:t><w:tab/><w:t>b</w:t>',
+      next: 'x',
+      eligible: false,
+      removed: 'a\tb',
+      inserted: 'x\t',
+      pendingProperties: false,
+    },
+    {
+      children: '<w:t>Order 60,000 units</w:t>',
+      next: 'Order 45,000 units',
+      eligible: true,
+      removed: 'Order 60,000 units',
+      inserted: 'Order 45,000 units',
+      pendingProperties: true,
+    },
+    {
       children: '<w:t>cat</w:t>',
       next: 'cat\r\ndog',
       eligible: true,
@@ -68,7 +84,19 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       inserted: '😃',
     },
   ]
-  for (const item of cases) {
+  const mappings = [
+    [0, 0, 'x', [{ offset: 1, text: '\t' }]],
+    [0, 0, 'Order 45,000 units', []],
+    [3, 0, '\ndog', []],
+    [0, 0, 'dog\nearth', [{ offset: 9, text: '\t' }]],
+    [6, 6, '45,000', []],
+    [7, 4, 's', []],
+    [0, 0, 'hello\nearth', []],
+    [0, 0, 'dog', [{ offset: 3, text: '\t' }]],
+    [0, 0, 'dog', []],
+    [0, 0, '😃', []],
+  ]
+  for (const [index, item] of cases.entries()) {
     const zip = await JSZip.loadAsync(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
     )
@@ -87,10 +115,16 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       item.next,
       run.textRevisionEligible === true,
       run.textRevisionTokens,
-      false,
+      item.pendingProperties ?? false,
       run.textRevisionTextRanges?.length,
     )
     expect([plan.removed, plan.inserted]).toEqual([item.removed, item.inserted])
+    expect([
+      plan.prefixLength,
+      plan.suffixLength,
+      plan.editableInserted,
+      plan.retained,
+    ]).toEqual(mappings[index])
     const cached = structuredClone(document.model)
     const cachedRun = cached.stories[0]?.paragraphs[0]?.runs[0]
     if (!cachedRun) throw new Error('Missing cached run')
@@ -98,7 +132,12 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
     expect(() => parseModelJson(JSON.stringify(cached))).toThrow()
     applyDocumentEdits(
       document,
-      [{ type: 'replace_run_text', runId: run.id, text: item.next }],
+      [
+        ...(item.pendingProperties
+          ? [{ type: 'set_run_style' as const, runId: run.id, styleId: null }]
+          : []),
+        { type: 'replace_run_text' as const, runId: run.id, text: item.next },
+      ],
       { author: 'Synthetic Reviewer', date: '2026-10-24T12:00:00.000Z' },
     )
     const saved = await parseDocx(await serialiseDocx(document))
