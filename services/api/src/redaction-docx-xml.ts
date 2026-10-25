@@ -79,17 +79,44 @@ export async function prepareDocxForBurn(bytes: Buffer) {
 /** Decode both attributes and text; joining leaves catches split-run copies. */
 export function decodedXmlText(source: string) {
   const elements = parseXmlElements(source)
-  const parents = new Set(elements.map((element) => element.parent))
-  const leaves = elements.filter((element) => !parents.has(element))
-  const text = leaves
-    .map((element) =>
-      decodeXmlReferences(
-        source.slice(element.startTagEnd, element.endTagStart),
-      ),
+  const tags = elements
+    .flatMap((element) => [
+      {
+        start: element.start,
+        end: element.startTagEnd,
+        separator: isWord(element, 'tab')
+          ? '\t'
+          : isWord(element, 'br')
+            ? '\n'
+            : '',
+      },
+      ...(!element.selfClosing
+        ? [
+            {
+              start: element.endTagStart,
+              end: element.end,
+              separator: element.localName === 'p' ? '\n' : '',
+            },
+          ]
+        : []),
+    ])
+    .sort((a, b) => a.start - b.start)
+  let cursor = 0
+  let text = ''
+  let layoutText = ''
+  for (const tag of tags) {
+    const content = decodeXmlReferences(
+      source
+        .slice(cursor, tag.start)
+        .replace(/<!--[^]*?-->|<\?[^]*?\?>/gu, '')
+        .replace(/<!\[CDATA\[([^]*?)\]\]>/gu, '$1'),
     )
-    .join('')
+    text += content
+    layoutText += content + tag.separator
+    cursor = tag.end
+  }
   const attributes = elements.flatMap((element) =>
     element.attributes.map((attribute) => attribute.value),
   )
-  return [text, ...attributes]
+  return [text, layoutText, ...attributes]
 }
