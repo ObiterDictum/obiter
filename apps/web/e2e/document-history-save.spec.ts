@@ -1,13 +1,9 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
-import { execFileSync } from 'node:child_process'
+import { createAccount, openFixtureDocument } from './document-journey'
+import { focusParagraph } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveJourneyTargets } from '../journey-target.mjs'
 
 /*
  * E50 browser journey: undo across a successful save must persist the reversal
@@ -22,7 +18,6 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
  * database, never the shared one. The fixture is the repo's synthetic DOCX.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
 /** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
@@ -40,101 +35,6 @@ function fixturePath() {
   return path.resolve(here, FIXTURE_REL)
 }
 
-function verifyEmailInDb(email: string) {
-  const safe = email.replace(/'/g, "''")
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
-      'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      `update users set "emailVerified"=true where email='${safe}'`,
-    ],
-    { stdio: 'pipe' },
-  )
-}
-
-async function createAccount(request: APIRequestContext) {
-  // A UUID keeps the synthetic account id unique without an insecure PRNG,
-  // which CodeQL flags even in test fixtures.
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e50-${runId}@obiter.test`
-  const password = `E50-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E50 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
-
-/** Opens the synthetic fixture through the product's own navigation. */
-async function openFixtureDocument(
-  page: Page,
-  email: string,
-  password: string,
-  matterName: string,
-) {
-  await signIn(page, email, password)
-
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page.getByRole('button', { name: 'Create matter' }).first().click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    // The dialog stays mounted after a successful create; dismiss it so the
-    // matter row underneath is clickable. Escape is not reliable here.
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
-
-  const fixtureName = path.basename(fixturePath())
-  if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
-    await expect(fileInput).toBeAttached({ timeout: 20_000 })
-    await fileInput.setInputFiles(fixturePath())
-  }
-  const documentRow = page.getByText(fixtureName).first()
-  await expect(documentRow).toBeVisible({ timeout: 30_000 })
-  await documentRow.click()
-
-  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
-    timeout: 30_000,
-  })
-}
-
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
@@ -142,21 +42,6 @@ const undo = (page: Page) =>
   page.getByRole('button', { name: 'Undo', exact: true })
 const saveState = (page: Page) =>
   page.locator('[data-save-state]').getAttribute('data-save-state')
-const paragraph = (page: Page, text: string) =>
-  page.locator('[data-paragraph-id]', { hasText: text }).first()
-
-async function focusParagraph(page: Page, text: string) {
-  const target = paragraph(page, text)
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused()
-      .then(() => true)
-      .catch(() => false)
-    if (focused) return
-  }
-  throw new Error(`could not focus the paragraph containing "${text}"`)
-}
 
 async function caretAtEnd(page: Page, text: string) {
   await focusParagraph(page, text)
@@ -212,9 +97,9 @@ test('undo after a save persists the reverted text once', async ({
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E50')
   const matter = `E50 text ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   await caretAtEnd(page, HEADING)
   await page.keyboard.type(' E50TEXT')
@@ -239,7 +124,7 @@ test('undo after a save persists the reverted text once', async ({
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await focusParagraph(reloaded, HEADING)
     await expect(editor(reloaded)).not.toHaveValue(/E50TEXT/)
     await shot(reloaded, '04-text-reopened-no-marker')
@@ -253,9 +138,9 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E50')
   const matter = `E50 insert ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   await focusParagraph(page, HEADING)
   const before = await settledParagraphCount(page)
@@ -282,7 +167,7 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     // Exactly one paragraph was removed, and the saved insert was not replayed:
     // the count is the original, never before + 1 or before + 2.
     await expect
@@ -300,9 +185,9 @@ test('undo of a saved tracked edit rejects the change and persists the reversal'
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E50')
   const matter = `E50 tracked ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   await enableTracking(page)
   await caretAtEnd(page, HEADING)
@@ -332,7 +217,7 @@ test('undo of a saved tracked edit rejects the change and persists the reversal'
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await focusParagraph(reloaded, HEADING)
     await expect(editor(reloaded)).not.toHaveValue(/TRACKED/)
     await shot(reloaded, '11-tracked-reopened-no-marker')
@@ -346,9 +231,9 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E50')
   const matter = `E50 tracked insert ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   await enableTracking(page)
   await focusParagraph(page, HEADING)
@@ -390,7 +275,7 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     // The shell paragraph is gone and no empty paragraph remains.
     await expect.poll(() => uniqueParagraphCount(reloaded)).toBe(before)
     await shot(reloaded, '14-tracked-insert-reopened')
@@ -404,16 +289,16 @@ test('undo after a reconciled merge save keeps the history usable', async ({
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E50')
   const matter = `E50 merge ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   // A colleague commits a newer version first, so this page's save must be
   // reconciled onto it instead of overwriting it.
   const colleagueContext = await browser.newContext()
   const colleague = await colleagueContext.newPage()
   try {
-    await openFixtureDocument(colleague, email, password, matter)
+    await openFixtureDocument(colleague, email, password, matter, fixturePath())
     await caretAtEnd(colleague, "KING'S BENCH DIVISION")
     await colleague.keyboard.type('Q')
     await saveAndWait(colleague)
@@ -443,7 +328,7 @@ test('undo after a reconciled merge save keeps the history usable', async ({
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await focusParagraph(reloaded, "KING'S BENCH DIVISION")
     await expect(editor(reloaded)).toHaveValue(/Q/)
     await focusParagraph(reloaded, HEADING)

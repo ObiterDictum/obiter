@@ -1,12 +1,8 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
+import { createAccount, openFixtureDocument } from './document-journey'
+import { focusParagraph, saveAndWait } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
-import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath } from './support'
 
 /*
  * E2 browser journey: Font family, Font size, Font colour and Clear formatting
@@ -20,7 +16,6 @@ import { fixturePath, verifyEmailInDb } from './support'
  * never the shared one. The fixture is the repo's synthetic DOCX.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 /** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
 /** Six code units, so the selection never cuts a surrogate pair. */
@@ -34,105 +29,11 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-async function createAccount(request: APIRequestContext) {
-  // A UUID keeps the synthetic account id unique without an insecure PRNG,
-  // which CodeQL flags even in test fixtures.
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e2-${runId}@obiter.test`
-  const password = `E2-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E2 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
-
-/** Opens the synthetic fixture through the product's own navigation. */
-async function openFixtureDocument(
-  page: Page,
-  email: string,
-  password: string,
-  matterName: string,
-) {
-  await signIn(page, email, password)
-
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page.getByRole('button', { name: 'Create matter' }).first().click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
-
-  const fixtureName = path.basename(fixturePath())
-  if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
-    await expect(fileInput).toBeAttached({ timeout: 20_000 })
-    await fileInput.setInputFiles(fixturePath())
-  }
-  const documentRow = page.getByText(fixtureName).first()
-  await expect(documentRow).toBeVisible({ timeout: 30_000 })
-  await documentRow.click()
-
-  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
-    timeout: 30_000,
-  })
-}
-
-const editor = (page: Page) =>
-  page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-const paragraph = (page: Page, text: string) =>
-  page.locator('[data-paragraph-id]', { hasText: text }).first()
-
 /** The Font family / size / colour selects, exact at rest. */
 const fontFamily = (page: Page) => page.getByLabel('Font', { exact: true })
 const fontSize = (page: Page) => page.getByLabel('Font size', { exact: true })
 const fontColour = (page: Page) =>
   page.getByLabel('Font colour', { exact: true })
-
-async function focusParagraph(page: Page, text: string) {
-  const target = paragraph(page, text)
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused()
-      .then(() => true)
-      .catch(() => false)
-    if (focused) return
-  }
-  throw new Error(`could not focus the paragraph containing "${text}"`)
-}
 
 /** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, text: string, units: number) {
@@ -161,11 +62,6 @@ async function paintedStyle(page: Page, text: string) {
   }, text)
 }
 
-async function saveAndWait(page: Page) {
-  await save(page).click()
-  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
-}
-
 async function enableTracking(page: Page) {
   await page.getByRole('tab', { name: 'Review' }).click()
   await page.getByRole('button', { name: 'Track changes off' }).click()
@@ -188,9 +84,9 @@ test('font family, size and colour paint, save, and reload from a fresh context'
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E2')
   const matter = `E2 font ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   const editBodies: EditBody[] = []
   page.on('request', (outgoing) => {
@@ -235,7 +131,7 @@ test('font family, size and colour paint, save, and reload from a fresh context'
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await selectFirst(reloaded, HEADING, SELECTED.length)
     await expect(fontFamily(reloaded)).toHaveValue('Georgia')
     await expect(fontSize(reloaded)).toHaveValue('24')
@@ -254,9 +150,9 @@ test('clear formatting removes direct character formatting and saves nulls', asy
   page,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E2')
   const matter = `E2 clear ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   const editBodies: EditBody[] = []
   page.on('request', (outgoing) => {
@@ -317,9 +213,9 @@ test('queues font formatting and clear formatting on a tracked partial selection
   page,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E2')
   const matter = `E2 tracked ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   const editBodies: EditBody[] = []
   page.on('request', (outgoing) => {
