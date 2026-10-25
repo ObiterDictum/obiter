@@ -27,6 +27,7 @@
     "@obiter/search-client": "workspace:*",
     "@obiter/verification-core": "workspace:*",
     "better-auth": "^1.6.8",
+    "dingbat-to-unicode": "1.0.1",
     "hono": "^4.12.14",
     "jszip": "^3.10.1",
     "mammoth": "^1.12.2",
@@ -35,8 +36,7 @@
     "resend": "^4.0.1",
     "tsx": "^4.23.0",
     "unpdf": "1.6.2",
-    "zod": "^4.3.6",
-    "dingbat-to-unicode": "1.0.1"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
