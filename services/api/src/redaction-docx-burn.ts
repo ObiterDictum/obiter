@@ -211,6 +211,7 @@ function removeAttribute(source: string, element: XmlElement, name: string) {
 export function scrubBurnedFields(
   document: OoxmlDocument,
   burned: ReadonlyMap<string, Range[]>,
+  accepted: readonly string[] = [],
 ) {
   for (const [partName, ranges] of burned) {
     const source = document.sourceParts.get(partName)?.overlay?.source
@@ -231,6 +232,7 @@ export function scrubBurnedFields(
       start: number
       instructions: XmlElement[]
       redacted: boolean
+      result: boolean
     }> = []
     const clearInstructions = (instructions: XmlElement[]) => {
       for (const instruction of instructions) {
@@ -243,6 +245,12 @@ export function scrubBurnedFields(
           )
       }
     }
+    const clearField = (field: typeof fields[number]) => {
+      const instruction = field.instructions.map(node => decodeTarget(source.slice(node.startTagEnd, node.endTagStart))).join('')
+      // TOC is a container of independently refreshable entry fields. Its
+      // command is harmless unless the command itself contains accepted text.
+      if (field.redacted && (!/^\s*TOC(?:\s|$)/iu.test(instruction) || accepted.some(text => containsText(instruction, text)))) clearInstructions(field.instructions)
+    }
     const linkIds = new Set<string>()
     for (const element of elements) {
       if (isWord(element, 'fldChar')) {
@@ -252,12 +260,15 @@ export function scrubBurnedFields(
             start: element.start,
             instructions: [],
             redacted: false,
+            result: false,
           })
+        if (type === 'separate') {
+          const field = fields.at(-1)
+          if (field) field.result = true
+        }
         if (type === 'end') {
           const field = fields.pop()
-          // Only the innermost result owns this instruction. In particular a
-          // TOC must not inherit every nested entry's instructions.
-          if (field?.redacted) clearInstructions(field.instructions)
+          if (field) clearField(field)
         }
       }
       if (
@@ -267,8 +278,9 @@ export function scrubBurnedFields(
           isWord(element, 'tab') ||
           isWord(element, 'br'))
       ) {
-        const field = fields.at(-1)
-        if (field) field.redacted = true
+        for (const field of fields) {
+          if (field.result) field.redacted = true
+        }
       }
       if (isWord(element, 'instrText')) {
         fields.at(-1)?.instructions.push(element)
@@ -316,7 +328,7 @@ export function scrubBurnedFields(
       }
     }
     for (const field of fields) {
-      if (field.redacted) clearInstructions(field.instructions)
+      clearField(field)
     }
     // Remove both the target and references to it, including shared references:
     // a hidden external target behind a redacted name is still a disclosure.

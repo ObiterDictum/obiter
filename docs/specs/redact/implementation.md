@@ -115,3 +115,8 @@ burns are counted in the persisted summary and finalize audit, and shown in the
 finalized output. The same expansion applies to the reviewed text fallback.
 Hidden copies outside mapped stories still refuse output when they cannot be
 safely burned.
+
+Burning a nested field result clears all enclosing result-field instructions.
+A TOC container is the exception: its instruction stays unless the instruction
+itself contains accepted text. Burned entry fields are cleared; sibling entry
+instructions stay, so updating unrelated entries cannot restore the burned text.

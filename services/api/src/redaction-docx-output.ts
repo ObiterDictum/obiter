@@ -146,7 +146,7 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
     else union.push({ ...hit })
   }
   const burned = burnMappedNodes(document, mapped.nodes, union)
-  scrubBurnedFields(document, burned)
+  scrubBurnedFields(document, burned, affected.map(span => span.text))
   scrubAcceptedMetadata(
     document,
     affected.map((span) => span.text),
