@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import JSZip from 'jszip'
-import { createSyntheticDocx, parseXmlElements, isWord } from '@obiter/ooxml'
+import {
+  createSyntheticDocx,
+  parseDocx,
+  parseXmlElements,
+  isWord,
+} from '@obiter/ooxml'
 import { extractDocumentText } from './document-extraction'
 import { buildRedactedDocx } from './redaction-docx-output'
 
@@ -61,6 +66,13 @@ async function burn(
   if (!documentPart) throw new Error('Missing output document')
   return {
     xml: await documentPart.async('string'),
+    renderText: (await parseDocx(bytes)).model.stories
+      .flatMap((story) =>
+        story.paragraphs.map((paragraph) =>
+          paragraph.runs.map((run) => run.text).join(''),
+        ),
+      )
+      .join('\n\n'),
     comments: (await zip.file('word/comments.xml')?.async('string')) ?? '',
     text: await extractDocumentText('docx', Buffer.from(bytes)),
   }
@@ -266,6 +278,21 @@ describe('accepted DOCX coordinates and container safety', () => {
       await expect(
         burn(p(t('Jane Doe')) + p(hidden), ['Jane Doe']),
       ).rejects.toThrow('survives in word/document.xml')
+    },
+  )
+  it.each([
+    ['‑', '<w:noBreakHyphen/>'],
+    ['\u00ad', '<w:softHyphen/>'],
+    ['α', '<w:sym w:font="Symbol" w:char="F061"/>'],
+    ['\t', '<w:tab/>'],
+  ])(
+    'preserves unselected %j in the hard-PDF renderer input',
+    async (character, carrier) => {
+      const output = await burn(
+        p(t('Jane Doe met Smith') + carrier + t('Jones')),
+        ['Jane Doe'],
+      )
+      expect(output.renderText).toBe(`[REDACTED] met Smith${character}Jones`)
     },
   )
   it('refuses legacy coordinates that cannot be mapped exactly', async () => {

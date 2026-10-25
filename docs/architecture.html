@@ -5849,9 +5849,10 @@
             targets are scrubbed. Emitted text must equal the expected offset
             edits. The awaited residual gate checks hidden XML, decoded targets,
             UTF-8/UTF-16LE binary text and nested packages with bounded
-            expansion. Hard mode refuses uncertain bytes before rendering;
-            pseudonymised mode records a visible text/plain downgrade when DOCX
-            cannot be safe.
+            expansion. Hard mode converts untouched hyphen, symbol and tab
+            carriers to equivalent Unicode for its private renderer input, then
+            refuses uncertain bytes before rendering; pseudonymised mode records
+            a visible text/plain downgrade when DOCX cannot be safe.
           </div>
 
           <h3>Span categories</h3>

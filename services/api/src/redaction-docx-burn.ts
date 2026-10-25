@@ -117,6 +117,38 @@ export function burnMappedNodes(
   return burned
 }
 
+/** The renderer's read-only model does not expose these OOXML carriers. Its
+ * private input gets equivalent Unicode text; editable output keeps the wire. */
+export function normaliseRenderCharacters(
+  document: OoxmlDocument,
+  nodes: readonly MappedDocxNode[],
+) {
+  for (const node of nodes) {
+    if (
+      !['tab', 'cr', 'noBreakHyphen', 'softHyphen', 'sym'].some((name) =>
+        isWord(node.range, name),
+      )
+    )
+      continue
+    const overlay = document.sourceParts.get(node.partName)?.overlay
+    if (
+      !overlay ||
+      overlay.replacements.has(`${node.range.start}:${node.range.end}`)
+    )
+      continue
+    const prefix = node.run.qualifiedName.slice(
+      0,
+      node.run.qualifiedName.lastIndexOf(':') + 1,
+    )
+    patch(
+      document,
+      node.partName,
+      node.range,
+      `<${prefix}t xml:space="preserve">${escapeXmlText(node.text)}</${prefix}t>`,
+    )
+  }
+}
+
 function blackProperties(
   document: OoxmlDocument,
   partName: string,

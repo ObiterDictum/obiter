@@ -81,7 +81,11 @@ formatting values are not prose occurrences. Hidden-text matching respects Unico
 word edges. Nested packages have a shared 72 MiB expansion budget and depth cap 4.
 A matching embedded object refuses with its part path; binaries are never edited.
 
-Hard redaction renders only this verified DOCX and refuses on burn failure. Embedded
+Hard redaction renders only this verified DOCX and refuses on burn failure.
+Its private render input converts untouched tab, carriage-return, hyphen and symbol
+carriers to equivalent Unicode text, because the renderer model omits those OOXML
+nodes. The emitted-text proof still requires identical characters. Editable
+pseudonymised output keeps the original carriers. Embedded
 objects are retained and checked before rendering: removing one could change
 unaccepted visible content. Pseudonymised output instead uses the documented visible
 `text/plain` fallback when DOCX burning fails, persisting and returning an

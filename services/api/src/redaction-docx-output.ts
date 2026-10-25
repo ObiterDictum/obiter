@@ -11,6 +11,7 @@ import {
 } from '@obiter/ooxml'
 import {
   burnMappedNodes,
+  normaliseRenderCharacters,
   scrubBurnedFields,
   scrubAcceptedMetadata,
   type BurnRange,
@@ -150,6 +151,8 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
     document,
     affected.map((span) => span.text),
   )
+  if (input.outputMode === 'redacted')
+    normaliseRenderCharacters(document, mapped.nodes)
   const serialised = await serialiseDocx(document)
   const writtenParts = await loadOoxmlZipEntries(Buffer.from(serialised))
   // Independent output proof: rebuild reviewed text from the emitted package
