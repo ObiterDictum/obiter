@@ -1,7 +1,12 @@
-import { decodeXmlReferences, isWord, loadOoxmlZipEntries } from '@obiter/ooxml'
+import {
+  decodeXmlReferences,
+  isWord,
+  loadOoxmlZipEntries,
+  WORD_NAMESPACE,
+} from '@obiter/ooxml'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { RedactionDocxBurnError } from './redaction-docx-error'
-import { mapDocxText } from './redaction-docx-map'
+import { hiddenXmlMarkup, mapDocxText } from './redaction-docx-map'
 import { decodedXmlText } from './redaction-docx-xml'
 
 /** Text carriers covered by the verified coordinate burn may deliberately keep
@@ -25,7 +30,14 @@ export async function assertNoSpanTextSurvives(
       throw new RedactionDocxBurnError(
         `Embedded package nesting exceeds safe limits in ${path}.`,
       )
-    const entries = await loadOoxmlZipEntries(input)
+    let entries: Map<string, Uint8Array>
+    try {
+      entries = await loadOoxmlZipEntries(input)
+    } catch {
+      throw new RedactionDocxBurnError(
+        `Package contents could not be verified in ${path || 'source DOCX'}.`,
+      )
+    }
     const mapped = depth === 0 ? mapDocxText(entries).nodes : []
     const ranges = new Map<string, typeof mapped>()
     for (const node of mapped) {
@@ -51,23 +63,35 @@ export async function assertNoSpanTextSurvives(
         let residual = ''
         let cursor = 0
         for (const node of ranges.get(name) ?? []) {
-          residual += source.slice(cursor, node.range.start)
-          cursor = node.range.end
+          if (node.range.selfClosing) continue
+          residual +=
+            source.slice(cursor, node.range.startTagEnd) +
+            hiddenXmlMarkup(
+              source.slice(node.range.startTagEnd, node.range.endTagStart),
+            )
+          cursor = node.range.endTagStart
         }
         residual += source.slice(cursor)
         const texts = decodedXmlText(
           residual,
-          (element) =>
-            ![
-              'sz',
-              'szCs',
-              'color',
-              'highlight',
-              'spacing',
-              'position',
-              'kern',
-              'lang',
-            ].some((local) => isWord(element, local)),
+          (element, attribute) =>
+            !(
+              attribute.namespaceUri === WORD_NAMESPACE &&
+              attribute.localName === 'val' &&
+              /^(?:-?\d+(?:\.\d+)?|[\da-f]{6}|auto|black|[a-z]{2,3}(?:-[a-z]{2,4})*)$/iu.test(
+                attribute.value,
+              ) &&
+              [
+                'sz',
+                'szCs',
+                'color',
+                'highlight',
+                'spacing',
+                'position',
+                'kern',
+                'lang',
+              ].some((local) => isWord(element, local))
+            ),
         )
         hit = needles.some((needle) =>
           texts.some((text) => containsText(decodeTarget(text), needle.text)),

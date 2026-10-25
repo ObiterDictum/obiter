@@ -255,6 +255,19 @@ describe('accepted DOCX coordinates and container safety', () => {
     ])
     expect(output.text).toBe('Dear [REDACTED],')
   })
+  it.each([
+    '<w:t xmlns:x="urn:private" x:hint="Jane Doe">Public</w:t>',
+    '<w:rPr><w:sz xmlns:x="urn:private" w:val="24" x:hint="Jane Doe"/></w:rPr><w:t>Public</w:t>',
+    '<!-- Jane Doe -->' + t('Public'),
+    '<w:t>Public<!-- Jane Doe --></w:t>',
+  ])(
+    'refuses hidden accepted text outside mapped character data: %s',
+    async (hidden) => {
+      await expect(
+        burn(p(t('Jane Doe')) + p(hidden), ['Jane Doe']),
+      ).rejects.toThrow('survives in word/document.xml')
+    },
+  )
   it('refuses legacy coordinates that cannot be mapped exactly', async () => {
     const docxBytes = await source(p(t('Jane') + '<w:br/>' + t('Doe')))
     await expect(

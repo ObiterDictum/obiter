@@ -1,6 +1,6 @@
 import { containsText, decodeTarget } from './redaction-docx-residual'
 import { readBurnPart } from './redaction-docx-text'
-import type { MappedDocxNode } from './redaction-docx-map'
+import { hiddenXmlMarkup, type MappedDocxNode } from './redaction-docx-map'
 import { RedactionDocxBurnError } from './redaction-docx-error'
 import {
   attributeValue,
@@ -76,7 +76,9 @@ export function burnMappedNodes(
         ? `<${textTag}:${carrier} xml:space="preserve">${escapeXmlText(value)}</${textTag}:${carrier}>`
         : ''
     let cursor = 0
-    let value = ''
+    let value = hiddenXmlMarkup(
+      source.slice(node.range.startTagEnd, node.range.endTagStart),
+    )
     for (const span of hits) {
       const from = Math.max(0, span.from - node.start)
       const to = Math.min(node.text.length, span.to - node.start)

@@ -5,6 +5,7 @@ import {
   isWord,
   loadOoxmlZipEntries,
   parseXmlElements,
+  type XmlElement,
 } from '@obiter/ooxml'
 
 /** Fallback text boxes duplicate the modern drawing but escape model anchors. */
@@ -108,8 +109,9 @@ export async function prepareDocxForBurn(bytes: Buffer) {
 /** Decode attributes and mixed text, both with and without layout separators. */
 export function decodedXmlText(
   source: string,
-  includeAttributes: (
-    element: ReturnType<typeof parseXmlElements>[number],
+  includeAttribute: (
+    element: XmlElement,
+    attribute: XmlElement['attributes'][number],
   ) => boolean = () => true,
 ) {
   const elements = parseXmlElements(source)
@@ -168,10 +170,13 @@ export function decodedXmlText(
     else if (!tag.element.selfClosing) stack.push(tag.element)
     cursor = tag.end
   }
-  const attributes = elements
-    .filter(includeAttributes)
-    .flatMap((element) =>
-      element.attributes.map((attribute) => attribute.value),
-    )
-  return [text, layoutText, bodyText, ...attributes]
+  const attributes = elements.flatMap((element) =>
+    element.attributes
+      .filter((attribute) => includeAttribute(element, attribute))
+      .map((attribute) => attribute.value),
+  )
+  const hiddenMarkup = [...source.matchAll(/<!--([^]*?)-->|<\?([^]*?)\?>/gu)]
+    .filter((match) => !/^xml(?:\s|$)/iu.test(match[2] ?? ''))
+    .map((match) => match[1] ?? match[2] ?? '')
+  return [text, layoutText, bodyText, ...attributes, ...hiddenMarkup]
 }
