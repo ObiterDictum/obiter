@@ -173,7 +173,7 @@ describe('Redact-owned DOCX bytes', () => {
     await expect(
       burn(
         '<w:p>' +
-          run('<w:t>' + name.replace('&', '&amp;') + '</w:t>') +
+          run('<w:t>' + name.replaceAll('&', '&amp;') + '</w:t>') +
           '</w:p>',
         name,
         [name],

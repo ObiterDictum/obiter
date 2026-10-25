@@ -119,12 +119,15 @@ export function decodedXmlText(source: string) {
   let text = ''
   let layoutText = ''
   for (const tag of tags) {
-    const content = decodeXmlReferences(
-      source
-        .slice(cursor, tag.start)
-        .replace(/<!--[^]*?-->|<\?[^]*?\?>/gu, '')
-        .replace(/<!\[CDATA\[([^]*?)\]\]>/gu, '$1'),
-    )
+    // The complete part has already passed XML validation. Read its text
+    // segments without treating markup removal as a string sanitiser. CDATA
+    // is literal; entity references are decoded only in ordinary XML text.
+    const segments = source
+      .slice(cursor, tag.start)
+      .matchAll(/<!--[^]*?-->|<\?[^]*?\?>|<!\[CDATA\[([^]*?)\]\]>|([^<]+)/gu)
+    const content = [...segments]
+      .map((segment) => segment[1] ?? decodeXmlReferences(segment[2] ?? ''))
+      .join('')
     // Indentation between elements is not rendered text. Preserve whitespace
     // inside text carriers, including a run containing only a space.
     const meaningful =
