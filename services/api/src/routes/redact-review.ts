@@ -97,7 +97,7 @@ function burnFallbackReason(error: unknown): OutputDowngradeReason {
 
 /**
  * A hard-redaction finalize that cannot produce a secure PDF is a visible
- * failure: the run stays unfinalized, no artifact is kept, and an audit event
+ * failure: the run stays unfinalized, no output is kept, and an audit event
  * records only the stable failure category.
  */
 async function reportSecurePdfFailure(
@@ -484,7 +484,7 @@ export function createRedactReviewRoutes(
     // Fail closed: finalising claims the output is complete, so refuse when
     // the source holds text extraction never examined (footnotes, endnotes,
     // comments, textboxes, fused PDF runs). Checked here — after the text
-    // read, before any artifact write — so refusal leaves no output behind.
+    // read, before any output write — so refusal leaves no output behind.
     // 409 matches the other finalize conflicts (already-finalized,
     // span-integrity); uncovered regions ride in the message because the
     // shared error envelope carries no extra fields, and the review UI
@@ -543,10 +543,10 @@ export function createRedactReviewRoutes(
         )
       throw error
     }
-    const artifactId = `art_${crypto.randomUUID()}`
+    const outputId = `out_${crypto.randomUUID()}`
     const objectKey = run.matterId
-      ? `org/${run.organisationId}/matters/${run.matterId}/artifacts/${artifactId}`
-      : `org/${run.organisationId}/artifacts/${artifactId}`
+      ? `org/${run.organisationId}/matters/${run.matterId}/outputs/${outputId}`
+      : `org/${run.organisationId}/outputs/${outputId}`
 
     let outputMimeType = 'text/plain'
     let outputFilename = redactedTextFilename(run.sourceFilename)
@@ -592,7 +592,7 @@ export function createRedactReviewRoutes(
             'The document text changed; create a new redaction run before finalizing.',
             409,
           )
-        // Never leave a partially staged artifact behind a refusal.
+        // Never leave a partially staged output behind a refusal.
         await storage.delete(objectKey)
         return await reportSecurePdfFailure(c, pool, {
           runId: run.id,
@@ -681,7 +681,7 @@ export function createRedactReviewRoutes(
         runId: run.id,
         outputMode: body.data.outputMode,
         tokenMap,
-        artifactId,
+        outputId,
         userId: user.id,
         requestId: c.get('requestId'),
         degradedDetectionAcknowledged:
@@ -764,7 +764,7 @@ export function createRedactReviewRoutes(
     }
     return c.json({
       run: publicRun(result.run),
-      artifact: result.artifact,
+      output: result.output,
       warnings: { unreviewedSpanIds, coverageUnchecked, outputDowngrade },
     })
   })
@@ -780,7 +780,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    if (!run.outputArtifactId)
+    if (!run.outputId)
       return errorResponse(
         c,
         'redaction_run_not_reviewable',
@@ -791,7 +791,7 @@ export function createRedactReviewRoutes(
     if (!objectKey)
       return errorResponse(
         c,
-        'artifact_not_found',
+        'output_not_found',
         'Redaction output is not available.',
         404,
       )
@@ -802,7 +802,7 @@ export function createRedactReviewRoutes(
         mimeType,
         filename,
         text: null,
-        artifactId: run.outputArtifactId,
+        outputId: run.outputId,
         sha256: run.summary.outputSha256 ?? null,
         securePdf: isSecurePdfOutput(run, mimeType),
       })
@@ -812,7 +812,7 @@ export function createRedactReviewRoutes(
       mimeType,
       filename,
       text,
-      artifactId: run.outputArtifactId,
+      outputId: run.outputId,
       sha256: run.summary.outputSha256 ?? sha256(Buffer.from(text, 'utf8')),
       securePdf: false,
     })
@@ -829,7 +829,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    if (!run.outputArtifactId)
+    if (!run.outputId)
       return errorResponse(
         c,
         'redaction_run_not_reviewable',
@@ -840,7 +840,7 @@ export function createRedactReviewRoutes(
     if (!objectKey)
       return errorResponse(
         c,
-        'artifact_not_found',
+        'output_not_found',
         'Redaction output is not available.',
         404,
       )
@@ -853,7 +853,7 @@ export function createRedactReviewRoutes(
       if (!storage.readBinary)
         return errorResponse(
           c,
-          'artifact_not_found',
+          'output_not_found',
           'Redaction output is not available.',
           404,
         )

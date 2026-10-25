@@ -1,13 +1,9 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
-import { execFileSync } from 'node:child_process'
+import { createAccount, openFixtureDocument } from './document-journey'
+import { focusParagraph } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveJourneyTargets } from '../journey-target.mjs'
 
 /*
  * E10 browser journey: a saved edit creates a second immutable version, the
@@ -19,7 +15,6 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
  * DOCX.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
 /** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
@@ -31,119 +26,16 @@ function fixturePath() {
   return path.resolve(here, FIXTURE_REL)
 }
 
-function verifyEmailInDb(email: string) {
-  const safe = email.replace(/'/g, "''")
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
-      'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      `update users set "emailVerified"=true where email='${safe}'`,
-    ],
-    { stdio: 'pipe' },
-  )
-}
-
-async function createAccount(request: APIRequestContext) {
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e10-${runId}@obiter.test`
-  const password = `E10-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E10 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
-
-async function openFixtureDocument(
-  page: Page,
-  email: string,
-  password: string,
-  matterName: string,
-) {
-  await signIn(page, email, password)
-
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page.getByRole('button', { name: 'Create matter' }).first().click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
-
-  const fixtureName = path.basename(fixturePath())
-  if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
-    await expect(fileInput).toBeAttached({ timeout: 20_000 })
-    await fileInput.setInputFiles(fixturePath())
-  }
-  const documentRow = page.getByText(fixtureName).first()
-  await expect(documentRow).toBeVisible({ timeout: 30_000 })
-  await documentRow.click()
-
-  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
-    timeout: 30_000,
-  })
-}
-
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-
-async function focusParagraph(page: Page, text: string) {
-  const target = page.locator('[data-paragraph-id]', { hasText: text }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused()
-      .then(() => true)
-      .catch(() => false)
-    if (focused) return
-  }
-  throw new Error(`could not focus the paragraph containing "${text}"`)
-}
 
 test('versions: edit saves v2, v1 opens read-only, compare shows the change', async ({
   page,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E10')
   const matterName = `E10 Matter ${crypto.randomUUID().slice(0, 6)}`
-  await openFixtureDocument(page, email, password, matterName)
+  await openFixtureDocument(page, email, password, matterName, fixturePath())
 
   // Edit the current version and save — this creates v2 and leaves the
   // uploaded v1 behind as history.

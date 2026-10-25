@@ -1,8 +1,8 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
-  DocumentArtifactStoreError,
+  DocumentDerivedStoreError,
   validateAndDeriveDocumentObjectKey,
-} from './document-artifact-store'
+} from './document-derived-store'
 import type { DocumentVersionRecord } from './database'
 import { runDocumentModelTask } from './document-model-pool'
 import type { DocumentModelTaskResult } from './document-model-pool'
@@ -15,7 +15,7 @@ type DocumentModelSource = Pick<
 
 const inFlightModels = new Map<string, Promise<DocumentModelWire>>()
 
-export class DocumentModelStoreError extends DocumentArtifactStoreError {
+export class DocumentModelStoreError extends DocumentDerivedStoreError {
   constructor() {
     super('The document model could not be read.')
   }

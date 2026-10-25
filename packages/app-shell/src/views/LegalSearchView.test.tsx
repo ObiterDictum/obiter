@@ -83,6 +83,15 @@ function createDeferredResponse(): DeferredResponse {
   return { promise, resolve }
 }
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  // Polling mocks reuse this response; a real Response body is single-use.
+  return {
+    ok: status < 400,
+    status,
+    json: async () => ({ indexedCount: 0, skippedCount: 0, ...body }),
+  } as Response
+}
+
 function createSearchResponse(
   hits: unknown[] = [],
   options: {
@@ -92,26 +101,21 @@ function createSearchResponse(
     liveProviderSearched?: boolean
   } = {},
 ) {
-  return {
-    ok: true,
-    json: async () => ({
-      hits,
-      cached: options.cached ?? false,
-      indexedCount: 0,
-      skippedCount: 0,
-      ...(options.outcome ? { outcome: options.outcome } : {}),
-      ...(options.hydrationQueued !== undefined
-        ? { hydrationQueued: options.hydrationQueued }
-        : {}),
-      ...(options.liveProviderSearched !== undefined
-        ? {
-            diagnostics: {
-              liveProviderSearched: options.liveProviderSearched,
-            },
-          }
-        : {}),
-    }),
-  } as Response
+  return jsonResponse({
+    hits,
+    cached: options.cached ?? false,
+    ...(options.outcome ? { outcome: options.outcome } : {}),
+    ...(options.hydrationQueued !== undefined
+      ? { hydrationQueued: options.hydrationQueued }
+      : {}),
+    ...(options.liveProviderSearched !== undefined
+      ? {
+          diagnostics: {
+            liveProviderSearched: options.liveProviderSearched,
+          },
+        }
+      : {}),
+  })
 }
 
 /**
@@ -188,17 +192,6 @@ async function changeSearchInput(input: HTMLInputElement, value: string) {
   })
 }
 
-async function changeInput(input: HTMLInputElement, value: string) {
-  await act(async () => {
-    const setValue = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      'value',
-    )?.set
-    setValue?.call(input, value)
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-}
-
 function findButton(container: HTMLElement, name: string) {
   const button = [...container.querySelectorAll('button')].find(
     (candidate) =>
@@ -242,6 +235,12 @@ describe('LegalSearchView debounce lifecycle', () => {
   let root: Root | null
   let container: HTMLElement | null
 
+  function mount() {
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    return rendered.container
+  }
+
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers()
@@ -263,9 +262,7 @@ describe('LegalSearchView debounce lifecycle', () => {
   it('does not run a debounced search after the view unmounts', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
 
@@ -286,9 +283,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       .mockReturnValueOnce(firstSearch.promise)
       .mockReturnValueOnce(secondSearch.promise)
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
     const input = getSearchInput(container)
 
     await changeSearchInput(input, 'Potanina')
@@ -336,9 +331,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     expect(container.textContent).toContain('Search judgments')
     // The idle discovery copy must not advertise a provider the corpus-only
@@ -370,48 +363,11 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Potanina v Potanin')
   })
 
-  it('renders the honest empty for a recognised citation no source holds', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        hits: [],
-        cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
-        outcome: 'recognised_not_held',
-        citation: { recognised: true, status: 'not_held' },
-        diagnostics: { liveProviderSearched: true },
-      }),
-    } as Response)
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-
-    await changeSearchInput(getSearchInput(container), '[2023] EWCA Civ 123')
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(container.textContent).toContain('Citation not held')
-    expect(container.textContent).toContain(
-      'No judgment held for this citation',
-    )
-    expect(container.textContent).toContain(
-      'No stored legal source holds "[2023] EWCA Civ 123" as a judgment.',
-    )
-  })
-
   it('names the unheld Act instead of claiming a judgment was sought', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'recognised_not_held',
         citation: { recognised: true, status: 'not_held' },
         diagnostics: {
@@ -420,11 +376,9 @@ describe('LegalSearchView debounce lifecycle', () => {
           legislationNotHeld: true,
         },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Children Act 1989')
     await act(async () => {
@@ -443,13 +397,10 @@ describe('LegalSearchView debounce lifecycle', () => {
     // Finding 2: the signed-in foreground branch answered no_match without
     // consulting the legislation half, so this verdict vanished. The flag
     // must drive the copy regardless of the generic outcome.
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'no_match',
         diagnostics: {
           liveProviderSearched: true,
@@ -458,11 +409,9 @@ describe('LegalSearchView debounce lifecycle', () => {
             'No exact legislation title match was found for "Children Act 1989".',
         },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Children Act 1989')
     await act(async () => {
@@ -477,13 +426,10 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('surfaces an ambiguous legislation title instead of a generic no-match', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'legislation_ambiguous',
         diagnostics: {
           liveProviderSearched: true,
@@ -492,11 +438,9 @@ describe('LegalSearchView debounce lifecycle', () => {
             '“Sample Act 2020” names more than one stored Act. Candidates: Sample Act 2020; Sample Act 2020',
         },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Sample Act 2020')
     await act(async () => {
@@ -510,53 +454,15 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('is not held')
   })
 
-  it('keeps the legislation verdict through hydration expiry', async () => {
-    // The bounded recheck path must not replace a legislation verdict with
-    // "Still no match after rechecks".
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        hits: [],
-        cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
-        outcome: 'legislation_title_unresolved',
-        hydrationQueued: false,
-        diagnostics: {
-          liveProviderSearched: false,
-          legislationTitleUnresolved: true,
-          legislationNote:
-            'No exact legislation title match was found for "Children Act 1989".',
-        },
-      }),
-    } as Response)
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-
-    await changeSearchInput(getSearchInput(container), 'Children Act 1989')
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-
-    expect(container.textContent).toContain('No exact legislation title match')
-    expect(container.textContent).not.toContain('Still no match after rechecks')
-  })
-
   it('polls a queued verdict query and keeps the verdict after the poll expires', async () => {
     // Finding 2: the API now returns hydration_queued with the verdict in
     // diagnostics while a job is pending. The client must keep polling, and
     // when the bounded recheck expires it must show the legislation verdict,
     // not the generic "Still no match after rechecks" copy.
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'hydration_queued',
         hydrationQueued: true,
         diagnostics: {
@@ -566,11 +472,9 @@ describe('LegalSearchView debounce lifecycle', () => {
             'No exact legislation title match was found for "Children Act 1989".',
         },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Children Act 1989')
     await act(async () => {
@@ -624,70 +528,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     }
   }
 
-  it('renders the underspecified-schedule corrective instead of a generic empty', async () => {
-    // Browser finding: the API returned parser-compatible guidance, but the
-    // signed-in UI showed the generic "No sources found" panel because the
-    // structured diagnostic was dropped on the floor.
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => scheduleGuidanceResponse(),
-    } as Response)
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-
-    await changeSearchInput(
-      getSearchInput(container),
-      'Sch. para. 2 Equality Act 2010',
-    )
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-
-    // The exact suggestion is visible as text, with the Act context needed
-    // to resubmit it.
-    expect(container.textContent).toContain('Schedule 1 paragraph 2')
-    expect(container.textContent).toContain('Equality Act 2010')
-    expect(container.textContent).not.toContain('No sources found')
-    expect(container.textContent).not.toContain('is not held')
-  })
-
-  it('resubmits the displayed schedule example with its Act context', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => scheduleGuidanceResponse(),
-      } as Response)
-      .mockResolvedValueOnce(createSearchResponse([], { outcome: 'no_match' }))
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-
-    await changeSearchInput(
-      getSearchInput(container),
-      'Sch. para. 2 Equality Act 2010',
-    )
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-
-    await clickButton(container, 'Use this citation')
-    await flushMicrotasks()
-
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    const request = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined
-    // The client must compose the query from the structured diagnostic, not
-    // by parsing the human-readable note.
-    expect(JSON.parse(String(request?.body))).toMatchObject({
-      query: 'Schedule 1 paragraph 2 Equality Act 2010',
-    })
-  })
-
   it('keeps the schedule corrective while a hydration poll runs and after it expires', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
@@ -698,9 +538,7 @@ describe('LegalSearchView debounce lifecycle', () => {
         }),
     } as Response)
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(
       getSearchInput(container),
@@ -749,9 +587,7 @@ describe('LegalSearchView debounce lifecycle', () => {
         createSearchResponse(createTwoResultHits(), { outcome: 'results' }),
       )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(
       getSearchInput(container),
@@ -770,58 +606,20 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Potanina v Potanin')
   })
 
-  it('tells signed-out users providers were not consulted on no_match', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        hits: [],
-        cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
-        outcome: 'no_match',
-        diagnostics: { liveProviderSearched: false },
-      }),
-    } as Response)
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-
-    await changeSearchInput(getSearchInput(container), 'zxqwv neverseen')
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-
-    expect(container.textContent).toContain('No sources found')
-    expect(container.textContent).toContain(
-      'Stored legal sources did not match "zxqwv neverseen"',
-    )
-    expect(container.textContent).toContain(
-      'Providers were not consulted for this search.',
-    )
-    expect(container.textContent).not.toContain('Find Case Law did not match')
-  })
-
   it('never advertises Find Case Law discovery for a stored-only miss', async () => {
     // The corpus-only API cannot consult a provider, so a stale or hostile
     // diagnostics.liveProviderSearched must not make the page claim it did.
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: false,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'no_match',
         hydrationQueued: false,
         diagnostics: { liveProviderSearched: true },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'zxqwv neverseen')
     await act(async () => {
@@ -836,22 +634,17 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('keeps stored-only copy for a citation live never checked', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'recognised_not_held',
         citation: { recognised: true, status: 'not_held' },
         diagnostics: { liveProviderSearched: false },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), '[2023] EWCA Civ 123')
     await act(async () => {
@@ -867,20 +660,15 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('labels unsupported source types instead of no-match copy', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'unsupported_source_type',
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'section 6')
     await act(async () => {
@@ -897,22 +685,17 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('rechecks queued searches on a bound and expires plainly with retry', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
         hits: [],
         cached: false,
-        indexedCount: 0,
-        skippedCount: 0,
         outcome: 'hydration_queued',
         hydrationQueued: true,
         diagnostics: { liveProviderSearched: false },
       }),
-    } as Response)
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'zxqwv neverseen')
     await act(async () => {
@@ -960,9 +743,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       .fn<typeof fetch>()
       .mockResolvedValue(createSearchResponse([], { cached: true }))
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await clickButton(container, 'UKSC')
     await act(async () => {
@@ -983,9 +764,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       .fn<typeof fetch>()
       .mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
     const input = getSearchInput(container)
 
     await clickButton(container, 'EWHC Admin')
@@ -1008,9 +787,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       .fn<typeof fetch>()
       .mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
     const input = getSearchInput(container)
 
     await changeSearchInput(input, 'Potanina')
@@ -1029,9 +806,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       .fn<typeof fetch>()
       .mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await clickButton(container, 'UKSC')
     await clickButton(container, 'Filters')
@@ -1045,8 +820,8 @@ describe('LegalSearchView debounce lifecycle', () => {
     if (!dateFromInput || !dateToInput)
       throw new Error('Date filters were not rendered')
 
-    await changeInput(dateFromInput, '2024-01-01')
-    await changeInput(dateToInput, '2024-12-31')
+    await changeSearchInput(dateFromInput, '2024-01-01')
+    await changeSearchInput(dateToInput, '2024-12-31')
     await clickButton(container, 'Apply filters')
 
     expect(container.textContent).toContain('Supreme Court')
@@ -1077,9 +852,7 @@ describe('LegalSearchView debounce lifecycle', () => {
         createSearchResponse(createTwoResultHits(), { cached: true }),
       )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1087,10 +860,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
+    const host = container
     const resultLinks = () => [
-      ...rendered.container.querySelectorAll<HTMLAnchorElement>(
-        'a[href^="/case/"]',
-      ),
+      ...host.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
     ]
     expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
@@ -1106,16 +878,14 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
   })
 
-  it('does not treat j and k as result navigation while typing', async () => {
+  it('leaves navigation keys to the search input', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
         createSearchResponse(createTwoResultHits(), { cached: true }),
       )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
     const input = getSearchInput(container)
 
     await changeSearchInput(input, 'Potanina')
@@ -1123,61 +893,15 @@ describe('LegalSearchView debounce lifecycle', () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
     await flushMicrotasks()
-    await pressKey('j', input)
-
-    const resultLinks = [
-      ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
-    ]
-    expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
-    expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
-  })
-
-  it('does not treat arrow keys as result navigation while typing', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        createSearchResponse(createTwoResultHits(), { cached: true }),
-      )
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-    const input = getSearchInput(container)
-
-    await changeSearchInput(input, 'Potanina')
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-    await pressKey('ArrowDown', input)
-
-    const resultLinks = [
-      ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
-    ]
-    expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
-    expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
-  })
-
-  it('does not open the selected result when Enter is pressed in the search input', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        createSearchResponse(createTwoResultHits(), { cached: true }),
-      )
-    vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
-    const input = getSearchInput(container)
-
-    await changeSearchInput(input, 'Potanina')
-    await act(async () => {
-      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
-    })
-    await flushMicrotasks()
-    await pressKey('Enter', input)
-
-    expect(routerMocks.navigate).not.toHaveBeenCalled()
+    for (const key of ['j', 'k', 'ArrowDown', 'ArrowUp', 'Enter']) {
+      await pressKey(key, input)
+      const resultLinks = [
+        ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
+      ]
+      expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
+      expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
+      expect(routerMocks.navigate).not.toHaveBeenCalled()
+    }
   })
 
   it('uses canonical case URLs for result links and keyboard opening', async () => {
@@ -1187,9 +911,7 @@ describe('LegalSearchView debounce lifecycle', () => {
         createSearchResponse(createTwoResultHits(), { cached: true }),
       )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1215,21 +937,20 @@ describe('LegalSearchView debounce lifecycle', () => {
   it('names the wait on rate-limited search instead of a generic failure', async () => {
     // 429 is a rate-limit signal, not a specific outage; the panel must say
     // busy, not failed, and must not imply a provider fetch.
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: false,
-      status: 429,
-      json: async () => ({
-        error: {
-          code: 'hydration_budget_exceeded',
-          message: 'Search hydration budget exceeded. Try again later.',
-          requestId: 'req_test',
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'hydration_budget_exceeded',
+            message: 'Search hydration budget exceeded. Try again later.',
+            requestId: 'req_test',
+          },
         },
-      }),
-    } as Response)
+        429,
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1247,22 +968,21 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('names the search index when it is down instead of blaming the provider', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({
-        error: {
-          code: 'search_unavailable',
-          message:
-            'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.',
-          requestId: 'req_test',
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'search_unavailable',
+            message:
+              'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.',
+            requestId: 'req_test',
+          },
         },
-      }),
-    } as Response)
+        503,
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1277,21 +997,20 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('names the legal-source store when a document-store 503 is reported', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({
-        error: {
-          code: 'storage_unavailable',
-          message: 'Legal source storage is unavailable.',
-          requestId: 'req_test',
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'storage_unavailable',
+            message: 'Legal source storage is unavailable.',
+            requestId: 'req_test',
+          },
         },
-      }),
-    } as Response)
+        503,
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1306,22 +1025,21 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('reports an incomplete search as an outage, never as a confident negative', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({
-        error: {
-          code: 'search_incomplete',
-          message:
-            'Legal search could not be completed because part of the search failed. Try again later.',
-          requestId: 'req_test',
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'search_incomplete',
+            message:
+              'Legal search could not be completed because part of the search failed. Try again later.',
+            requestId: 'req_test',
+          },
         },
-      }),
-    } as Response)
+        503,
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Human Rights Act 1998')
     await act(async () => {
@@ -1338,21 +1056,20 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('reports an unrecognised 503 as a generic outage, not a provider failure', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({
-        error: {
-          code: 'upstream_proxy_unavailable',
-          message: 'Gateway unavailable.',
-          requestId: 'req_test',
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'upstream_proxy_unavailable',
+            message: 'Gateway unavailable.',
+            requestId: 'req_test',
+          },
         },
-      }),
-    } as Response)
+        503,
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1375,9 +1092,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       },
     } as unknown as Response)
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), 'Potanina')
     await act(async () => {
@@ -1394,9 +1109,7 @@ describe('LegalSearchView debounce lifecycle', () => {
   it('opens and closes the keyboard shortcuts overlay', async () => {
     const fetchMock = vi.fn<typeof fetch>()
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await pressKey('?')
 
@@ -1415,6 +1128,12 @@ describe('LegalSearchView debounce lifecycle', () => {
 describe('LegalSearchView interactive targets and query resync', () => {
   let root: Root | null
   let container: HTMLElement | null
+
+  function mount() {
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    return rendered.container
+  }
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -1484,17 +1203,15 @@ describe('LegalSearchView interactive targets and query resync', () => {
       json: async () => response,
     } as Response)
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
-    await changeSearchInput(getSearchInput(rendered.container), query)
+    await changeSearchInput(getSearchInput(container), query)
     await act(async () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
     await flushMicrotasks()
 
-    return { fetchMock, ...rendered }
+    return { fetchMock, container, root }
   }
 
   it('leaves Enter on the focused schedule resubmit button to the button', async () => {
@@ -1598,27 +1315,6 @@ describe('LegalSearchView interactive targets and query resync', () => {
     expect(routerMocks.navigate).not.toHaveBeenCalled()
   })
 
-  it('still opens the selected result from the non-interactive surface', async () => {
-    await renderWithResponse(
-      {
-        hits: createTwoResultHits(),
-        cached: true,
-        indexedCount: 0,
-        skippedCount: 0,
-      },
-      'Potanina',
-    )
-
-    // Focus is on the input, but the event target is the window itself — the
-    // result-navigation surface the shortcut exists for.
-    await pressKey('Enter')
-
-    expect(routerMocks.navigate).toHaveBeenCalledWith({
-      to: '/case/$caseSlug',
-      params: { caseSlug: 'potanina-v-potanin-2024-uksc-3' },
-    })
-  })
-
   it('syncs the visible query when the results corrective resubmits', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -1628,9 +1324,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
       } as Response)
       .mockResolvedValueOnce(createSearchResponse([], { outcome: 'no_match' }))
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), underspecifiedQuery)
     await act(async () => {
@@ -1670,9 +1364,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
       } as Response)
       .mockResolvedValueOnce(createSearchResponse([], { outcome: 'no_match' }))
     vi.stubGlobal('fetch', fetchMock)
-    const rendered = renderLegalSearchView()
-    root = rendered.root
-    container = rendered.container
+    container = mount()
 
     await changeSearchInput(getSearchInput(container), underspecifiedQuery)
     await act(async () => {

@@ -140,7 +140,7 @@ The initial shared shell foundation for Phase 0.1 should live in:
 
 - Cloudflare Pages for public web surfaces such as `obiter.tech` and documentation
 - Hetzner VPS for API, workers, routing, PostgreSQL, Redis, and search in the early stage
-- Hetzner Object Storage for uploads, source files, artifacts, and benchmark outputs
+- Hetzner Object Storage for uploads, source files, derived document files, generated outputs and benchmark results
 - future GPU or ML worker for redaction, embeddings, reranking, and model evaluation
 
 ## Decision Log
@@ -391,7 +391,7 @@ parsing, and `documentTextLayoutSchema` validation in a new
 `services/api/src/document-pdf-view-store.ts`. Derive only the canonical
 `/text` and `/layout.json` siblings from the validated source key, verify the
 recorded text key matches, and never read `/source` or a quarantine prefix.
-Missing or malformed ready artifacts fail closed through a generic storage
+Missing or malformed ready derived files fail closed through a generic storage
 error without exposing provider or parser diagnostics. The route does not
 rerun PDF extraction.
 
@@ -745,7 +745,7 @@ There is no change to `documents.ts`, extraction, upload, or legacy routes.
 Successful merges belong in
 `services/api/src/document-collaboration-versions.ts` and use
 the S4/S5 source-key, immutable version, compensation, and audit discipline.
-A successful merge writes one ready DOCX version with a null text artifact,
+A successful merge writes one ready DOCX version with a null derived text file,
 then `document.version_create` and `document.collaboration_merge` in the same
 transaction. The latter stores only ids, operation count, a canonical
 operations SHA-256, and outcome. The `syncId` and operations hash are checked
@@ -2142,8 +2142,8 @@ document and serves the storage keys only while that version is current —
 or always to a caller with matter-level `edit`. The check runs inside the key
 lookup, so a version that flips non-current between check and read cannot
 slip through, and a denied lookup returns the same not-found as a missing
-version. Run-owned data — spans, decisions, summary, the finalized output
-artifact and the pseudonymisation token map — keeps the run-level share model:
+version. Run-owned data — spans, decisions, summary, the finalized
+output and the pseudonymisation token map — keeps the run-level share model:
 those are the review product itself, not the immutable version bytes.
 
 Decision: presence lives in Postgres (`document_presence`, migration 0032),

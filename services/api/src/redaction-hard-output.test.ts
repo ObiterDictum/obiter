@@ -59,7 +59,7 @@ function run(
         },
       ]),
     ),
-    outputArtifactId: null,
+    outputId: null,
     summary: { totalSpans: spans.length } as RedactionRunRecord['summary'],
     detectorVersion: null,
     detectionMode: 'model+supplement',

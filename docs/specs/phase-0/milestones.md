@@ -34,14 +34,14 @@
 ## M0.4
 
 - job status flows work
-- artifacts can be retrieved
+- outputs can be retrieved
 - Hetzner Object Storage integration exists
 - Redis and BullMQ are wired for background work
 - failed jobs surface safe failure states
 - desktop cache is encrypted
 - desktop offline queue persists work through restart
 - reconnect sync creates new versions for conflicts
-- artifact downloads are audited
+- output downloads are audited
 
 ## Done When
 

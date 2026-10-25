@@ -48,7 +48,7 @@ export function MattersRouteView({
         <div className="flex flex-col gap-0.5">
           <h1 className="text-sm font-semibold text-ink">Matters</h1>
           <p className="text-xs text-muted">
-            Private workspaces for documents, review, and artifacts
+            Private workspaces for documents and review
           </p>
         </div>
         <CreateMatterDialog />
@@ -100,7 +100,7 @@ export function MattersRouteView({
             <EmptyState
               icon={<Folders aria-hidden="true" size={24} weight="regular" />}
               title="No matters yet"
-              body="Create your first matter to start organising legal documents, review state, and artifacts."
+              body="Create your first matter to start organising legal documents and review state."
               action={<CreateMatterDialog trigger="Create your first matter" />}
             />
           </div>

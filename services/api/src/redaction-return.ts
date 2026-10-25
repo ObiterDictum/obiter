@@ -28,13 +28,13 @@ export type RedactionReturnResult =
 /**
  * Returns a finalized redaction output to its source document as a new
  * immutable version — the last leg of the handoff: document version → run →
- * reviewed decisions → burned DOCX artifact → linked version.
+ * reviewed decisions → burned DOCX output → linked version.
  *
  * Safety rails, all enforced inside one transaction:
  *  - `selectMutationRun` locks the run FOR UPDATE and re-checks edit access
  *    on the matter, document and run, so a revoked or raced caller loses;
  *  - the run must be document-bound, finalized, unreplaced, and its output a
- *    DOCX artifact whose stored bytes still match the sha256 recorded at
+ *    DOCX output whose stored bytes still match the sha256 recorded at
  *    finalization — provenance, not trust;
  *  - the output is a complete replacement for the source it was burned from,
  *    so the document head must still be that source version. Anything else
@@ -103,7 +103,7 @@ export async function returnRedactionToDocument(
       !run.matterId ||
       !run.documentId ||
       !run.documentVersionId ||
-      !run.outputArtifactId ||
+      !run.outputId ||
       run.summary.outputMimeType !== DOCX_MIME ||
       typeof outputSha256 !== 'string' ||
       outputSha256.length === 0
@@ -112,13 +112,13 @@ export async function returnRedactionToDocument(
       return { status: 'unavailable' }
     }
 
-    const artifact = await client.query<{ object_key: string }>(
-      `select object_key from artifacts
+    const outputRow = await client.query<{ object_key: string }>(
+      `select object_key from outputs
        where id = $1 and organisation_id = $2 and matter_id is not distinct from $3
-         and artifact_type = 'redaction_output' and status = 'ready'`,
-      [run.outputArtifactId, run.organisationId, run.matterId],
+         and output_type = 'redaction_output' and status = 'ready'`,
+      [run.outputId, run.organisationId, run.matterId],
     )
-    const objectKey = artifact.rows[0]?.object_key
+    const objectKey = outputRow.rows[0]?.object_key
     if (!objectKey) {
       await client.query('rollback')
       return { status: 'unavailable' }
@@ -182,7 +182,7 @@ export async function returnRedactionToDocument(
       expectedCurrentVersionId: locked.current.id,
       parentVersion: locked.current,
       preparedBytes: Uint8Array.from(output),
-      // No paragraph lineage: the returned bytes come from the artifact, not
+      // No paragraph lineage: the returned bytes come from the output, not
       // from run-level edits to the source model, so there is no honest
       // address map to record.
       lineage: null,
@@ -190,7 +190,7 @@ export async function returnRedactionToDocument(
         action: 'redaction.return_to_document',
         metadata: (versionId) => ({
           runId,
-          artifactId: run.outputArtifactId,
+          outputId: run.outputId,
           sourceVersionId: run.documentVersionId,
           returnedVersionId: versionId,
           outputSha256,

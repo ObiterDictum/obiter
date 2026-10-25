@@ -4,7 +4,7 @@ import type { DocumentStatus } from '@obiter/contracts'
 import { expect } from 'bun:test'
 import type { AuthzUser, AuthzVariables } from '../authz'
 import { createDocumentObjectKey } from '../database'
-import { deriveDocumentSiblingObjectKey } from '../document-artifact-store'
+import { deriveDocumentSiblingObjectKey } from '../document-derived-store'
 import type { StorageService } from '../storage'
 
 export const sourceObjectKey = createDocumentObjectKey({

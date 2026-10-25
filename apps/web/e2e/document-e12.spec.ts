@@ -1,3 +1,4 @@
+import { signIn } from './e13-support'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
@@ -103,19 +104,6 @@ async function createAccount(request: APIRequestContext, prefix: string) {
   expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
   verifyEmailInDb(databaseName, email)
   return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
 }
 
 /** Uploads the named DOCX into a fresh matter and opens it in the workspace. */
