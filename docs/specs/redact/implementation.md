@@ -53,3 +53,20 @@ Field markers and surrounding tabs, breaks and footnote references remain intact
 A redacted hyperlink loses its target relationship and every reference to that
 relationship in the story, including shared references; other display text stays.
 The whole-package residual-span gate is awaited as the last step before returning.
+
+Burn coordinates include tabs, every break and paragraph separators (including
+Mammoth's double-newline body paragraphs). Every accepted span must have a
+burnable occurrence and every covered piece must be fully consumed; otherwise
+both output paths refuse with `RedactionDocxBurnError`. Overlapping pseudonyms
+burn their union using the token at the earliest start, longest first on ties;
+adjacent tokens remain separate. A span crossing paragraphs uses that token in
+each touched paragraph.
+
+Text-box fallback copies are removed before anchoring. Text-only AlternateContent
+inside runs is flattened to its first Choice (or sole Fallback); unsupported run
+content refuses. Burned hyperlinks lose tooltips and document locations, and
+drawings inside the burned XML range lose description/title metadata. Marker
+properties are inserted in the run's active properties in schema order.
+Modified XML and the resulting DOCX are reparsed. The final gate validates all XML
+and checks raw bytes, decoded mixed/split text, paragraph text and attributes,
+including escaped entities. Uncertain burns or serialisation failures refuse.

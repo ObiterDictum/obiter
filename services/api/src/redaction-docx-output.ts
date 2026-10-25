@@ -155,33 +155,46 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
         )
       return { anchor, text: paragraphBurnText(document, anchor) }
     })
-    const storyText = paragraphs.map((paragraph) => paragraph.text).join('\n')
-    const occurrences: Array<RedactionRange & { replacement: string }> = []
-    for (const span of affected) {
-      if (!span.text)
-        throw new RedactionDocxBurnError('Empty accepted redaction.')
-      let cursor = 0
-      for (;;) {
-        const index = storyText.indexOf(span.text, cursor)
-        if (index === -1) break
-        occurrences.push({
-          start: index,
-          end: index + span.text.length,
-          spanId: span.id,
-          replacement: replacements.get(span.id) ?? '[REDACTED]',
-        })
-        cursor = index + 1
+    const piecesByParagraph: Array<
+      Array<RedactionRange & { replacement: string }>
+    > = paragraphs.map(() => [])
+    // Supplemental XML uses one newline; Mammoth body extraction uses two.
+    for (const separator of ['\n', '\n\n']) {
+      const storyText = paragraphs
+        .map((paragraph) => paragraph.text)
+        .join(separator)
+      const occurrences: Array<RedactionRange & { replacement: string }> = []
+      for (const span of affected) {
+        if (!span.text)
+          throw new RedactionDocxBurnError('Empty accepted redaction.')
+        let cursor = 0
+        for (;;) {
+          const index = storyText.indexOf(span.text, cursor)
+          if (index === -1) break
+          occurrences.push({
+            start: index,
+            end: index + span.text.length,
+            spanId: span.id,
+            replacement: replacements.get(span.id) ?? '[REDACTED]',
+          })
+          cursor = index + 1
+        }
       }
+      let offset = 0
+      paragraphs.forEach(({ text }, index) => {
+        const pieces = occurrences
+          .filter((hit) => hit.start < offset + text.length && hit.end > offset)
+          .map((hit) => ({
+            ...hit,
+            start: Math.max(0, hit.start - offset),
+            end: Math.min(text.length, hit.end - offset),
+          }))
+        piecesByParagraph[index]?.push(...pieces)
+        offset += text.length + separator.length
+      })
     }
-    let offset = 0
-    for (const { anchor, text } of paragraphs) {
-      const pieces = occurrences
-        .filter((hit) => hit.start < offset + text.length && hit.end > offset)
-        .map((hit) => ({
-          ...hit,
-          start: Math.max(0, hit.start - offset),
-          end: Math.min(text.length, hit.end - offset),
-        }))
+    for (const [index, { anchor, text }] of paragraphs.entries()) {
+      const pieces = piecesByParagraph[index] ?? []
       const hits: BurnRange[] =
         input.outputMode === 'redacted'
           ? coalesceRanges(text, pieces).map((region) => ({
@@ -207,7 +220,6 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
           ...ranges,
         ])
       }
-      offset += text.length + 1
     }
   }
   if (affected.some((span) => !covered.has(span.id)))
@@ -312,7 +324,8 @@ async function stripDocumentAuthorship(input: Uint8Array) {
 
 /**
  * Fail-closed gate over the whole container: every part's raw bytes must be
- * free of every accepted span text. Covers custom XML, embedded objects,
+ * free of every accepted span text, including decoded XML text and attributes.
+ * Covers custom XML, embedded objects,
  * comments residue, field codes, altChunks, and anything else the container
  * carries. rsids are hex run ids and cannot contain span text, so they need
  * no handling beyond this gate.
@@ -322,22 +335,23 @@ async function assertNoSpanTextSurvives(
   affected: RedactionSpan[],
 ) {
   const entries = await loadOoxmlZipEntries(Buffer.from(bytes))
-  for (const span of affected) {
-    if (!span.text) continue
-    const needle = Buffer.from(span.text, 'utf8')
-    for (const [name, payload] of entries) {
-      const decoded = /\.(?:xml|rels)$/iu.test(name)
-        ? decodedXmlText(Buffer.from(payload).toString('utf8'))
-        : []
-      if (
-        Buffer.from(payload).includes(needle) ||
-        decoded.some((text) => text.includes(span.text))
-      ) {
-        throw new RedactionDocxBurnError(
-          `Redacted text survives in ${name}; refusing .docx output.`,
-        )
-      }
-    }
+  const needles = affected
+    .filter((span) => span.text)
+    .map((span) => ({ text: span.text, bytes: Buffer.from(span.text, 'utf8') }))
+  for (const [name, payload] of entries) {
+    const decoded = /\.(?:xml|rels)$/iu.test(name)
+      ? decodedXmlText(Buffer.from(payload).toString('utf8'))
+      : []
+    if (
+      needles.some(
+        (needle) =>
+          Buffer.from(payload).includes(needle.bytes) ||
+          decoded.some((text) => text.includes(needle.text)),
+      )
+    )
+      throw new RedactionDocxBurnError(
+        `Redacted text survives in ${name}; refusing .docx output.`,
+      )
   }
 }
 

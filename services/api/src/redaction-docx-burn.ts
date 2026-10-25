@@ -65,6 +65,7 @@ export function burnParagraph(
     spans.push({ ...span })
   }
   const burned = new Map<BurnRange, Range>()
+  const consumed = new Map<BurnRange, number>()
   let offset = 0
   for (const run of paragraph.runs) {
     const prefix = source.slice(run.runRange.start, run.runRange.startTagEnd)
@@ -102,6 +103,7 @@ export function burnParagraph(
               : properties
             value += `${close}${prefix}${style}${textXml(span.text)}${close}${prefix}${properties}`
           }
+          consumed.set(span, (consumed.get(span) ?? 0) + to - from)
           const previous = burned.get(span)
           burned.set(span, {
             start: previous?.start ?? range.start,
@@ -116,6 +118,8 @@ export function burnParagraph(
       offset = end
     })
   }
+  if (spans.some((span) => consumed.get(span) !== span.to - span.from))
+    throw new RedactionDocxBurnError('Accepted text was not completely burned.')
   return [...burned.values()]
 }
 

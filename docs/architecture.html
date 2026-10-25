@@ -5842,8 +5842,12 @@
             its instructions, including instructions outside the accepted span.
             Redacted hyperlink display text also removes its relationship target
             and link references. Field markers and surrounding structure remain.
-            The whole-package residual-text gate is awaited before returning
-            bytes.
+            Accepted spans must be fully covered, including tabs, breaks and
+            paragraph boundaries. Overlapping pseudonyms burn their union.
+            Text-box fallback copies and hidden link/drawing metadata are
+            removed. Modified XML is reparsed; the awaited whole-package gate
+            checks raw bytes and decoded XML text before returning bytes.
+            Uncertain output refuses with a structured burn error.
           </div>
 
           <h3>Span categories</h3>

@@ -132,19 +132,22 @@ describe('Redact-owned DOCX bytes', () => {
     expect(output.xml).not.toContain('Doe')
   })
 
-  it('burns every paragraph piece of an accepted address', async () => {
-    const output = await burn(
-      '<w:p>' +
-        run('<w:t>1 High St</w:t>') +
-        '</w:p><w:p>' +
-        run('<w:t>London</w:t>') +
-        '</w:p>',
-      '1 High St\nLondon',
-    )
-    expect(output.xml).not.toContain('High St')
-    expect(output.xml).not.toContain('London')
-    expect(output.text).toContain('[PERSON_NAME_1]')
-  })
+  it.each(['1 High St\nLondon', '1 High St\n\nLondon'])(
+    'burns every paragraph piece of address %j',
+    async (text) => {
+      const output = await burn(
+        '<w:p>' +
+          run('<w:t>1 High St</w:t>') +
+          '</w:p><w:p>' +
+          run('<w:t>London</w:t>') +
+          '</w:p>',
+        text,
+      )
+      expect(output.xml).not.toContain('High St')
+      expect(output.xml).not.toContain('London')
+      expect(output.text).toContain('[PERSON_NAME_1]')
+    },
+  )
 
   it('refuses an accepted span absent from all burnable text', async () => {
     await expect(
