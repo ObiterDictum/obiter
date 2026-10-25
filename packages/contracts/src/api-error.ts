@@ -45,6 +45,7 @@ export const apiErrorCodeSchema = z.enum([
   // A new hard-redaction run could not produce its secure PDF. The run stays
   // unfinalized: there is no silent downgrade to text.
   'redaction_secure_pdf_failed',
+  'redaction_docx_legacy_coordinates',
   'verification_run_not_found',
   'verification_execution_failed',
   'extraction_coverage_incomplete',

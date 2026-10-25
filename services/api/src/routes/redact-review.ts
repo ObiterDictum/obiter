@@ -45,6 +45,7 @@ import {
 } from '../redaction-pdf-output'
 import {
   buildRedactedDocx,
+  RedactionDocxBurnError,
   isDocxMimeOrFilename,
   redactedDocxFilename,
 } from '../redaction-docx-output'
@@ -90,6 +91,7 @@ function redactionSourceResponseContentType(storedMimeType: string): string {
  * gate names part paths).
  */
 function burnFallbackReason(error: unknown): OutputDowngradeReason {
+  if (error instanceof RedactionDocxBurnError && error.reason === 'legacy_coordinates') return 'legacy_coordinates'
   const message = error instanceof Error ? error.message : ''
   if (message.includes('tracked change')) return 'tracked_change'
   if (message.includes('survives in')) return 'residual_text'
@@ -141,10 +143,10 @@ async function reportSecurePdfFailure(
   }
   return errorResponse(
     c,
-    'redaction_secure_pdf_failed',
+    category === 'docx_legacy_coordinates' ? 'redaction_docx_legacy_coordinates' : 'redaction_secure_pdf_failed',
     securePdfFailureMessage(category),
     // Busy or warming are retriable; the caller can try the same run again.
-    category === 'renderer_at_capacity' || category === 'renderer_not_ready'
+    category === 'docx_legacy_coordinates' ? 409 : category === 'renderer_at_capacity' || category === 'renderer_not_ready'
       ? 503
       : 502,
   )
@@ -165,6 +167,8 @@ function securePdfFailureMessage(category: HardRedactionFailureCategory) {
     case 'renderer_error':
     case 'renderer_invalid_pdf':
       return 'The secure PDF could not be produced because the document renderer is unavailable. This run was not finalized and no file was shared.'
+    case 'docx_legacy_coordinates':
+      return 'Stored extraction coordinates differ from the Word document; create a new redaction run from a fresh upload. This run was not finalized.'
     case 'docx_burn_failed':
       return 'The Word document could not be redacted safely, so no secure PDF was produced. This run was not finalized.'
     case 'pdf_burn_failed':

@@ -3363,19 +3363,20 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         body: JSON.stringify({ outputMode }),
       })
       if (outputMode === 'redacted') {
-        expect(response.status).toBe(502)
+        expect(response.status).toBe(409)
         expect(((await response.json()) as ErrorBody).error).toMatchObject({
-          code: 'redaction_secure_pdf_failed',
+          code: 'redaction_docx_legacy_coordinates',
+          message: expect.stringContaining('create a new redaction run'),
         })
         expect(textWrites).toBe(0)
         expect(binaryWrites).toBe(0)
         expect(persistedSummary).toBeNull()
         expect(log).toHaveBeenCalledWith(
           'redaction_secure_pdf_failed',
-          expect.objectContaining({ category: 'docx_burn_failed' }),
+          expect.objectContaining({ category: 'docx_legacy_coordinates' }),
         )
         expect(auditMetadata).toEqual([
-          { outputMode, failureCategory: 'docx_burn_failed' },
+          { outputMode, failureCategory: 'docx_legacy_coordinates' },
         ])
       } else {
         expect(response.status).toBe(200)
@@ -3384,7 +3385,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         }
         expect(body.warnings.outputDowngrade).toEqual({
           from: 'docx',
-          reason: 'burn_failed',
+          reason: 'legacy_coordinates',
         })
         expect(textWrites).toBe(1)
         expect(binaryWrites).toBe(0)
@@ -3392,7 +3393,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
           outputMode: 'pseudonymised',
           outputMimeType: 'text/plain',
           securePdf: false,
-          outputDowngrade: { from: 'docx', reason: 'burn_failed' },
+          outputDowngrade: { from: 'docx', reason: 'legacy_coordinates' },
         })
       }
       log.mockRestore()

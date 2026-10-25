@@ -114,6 +114,7 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   if (mapped.text !== input.text.trim())
     throw new RedactionDocxBurnError(
       'Stored extraction coordinates differ from the Word document; create a new redaction run from a fresh upload.',
+      'legacy_coordinates',
     )
   const leading = input.text.length - input.text.trimStart().length
   for (const node of mapped.nodes) {

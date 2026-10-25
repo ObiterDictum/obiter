@@ -44,6 +44,7 @@ export type HardRedactionFailureCategory =
   | 'container_unavailable'
   | 'pdf_burn_failed'
   | 'docx_burn_failed'
+  | 'docx_legacy_coordinates'
   | 'rasterization_failed'
   | 'renderer_unavailable'
   | 'renderer_timeout'
@@ -174,8 +175,8 @@ async function buildSecurePdfFromSourceDocx(input: BuildHardRedactionPdfInput) {
   } catch (error) {
     if (error instanceof RedactionDocxBurnError)
       throw new HardRedactionOutputError(
-        'docx_burn_failed',
-        'The Word document could not be redacted safely.',
+        error.reason === 'legacy_coordinates' ? 'docx_legacy_coordinates' : 'docx_burn_failed',
+        error.reason === 'legacy_coordinates' ? error.message : 'The Word document could not be redacted safely.',
       )
     throw error
   }

@@ -36,7 +36,7 @@ export type Decisions = Record<
  * in summary_json so the warning survives a page reload.
  */
 export type OutputDowngradeReason =
-  'tracked_change' | 'residual_text' | 'burn_failed'
+  'tracked_change' | 'residual_text' | 'burn_failed' | 'legacy_coordinates'
 
 export interface RunSummary {
   totalSpans: number

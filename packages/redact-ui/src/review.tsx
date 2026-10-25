@@ -232,6 +232,7 @@ async function shareOrDownload(blob: Blob, filename: string) {
 }
 
 const downgradeCopy = {
+  legacy_coordinates: 'The stored Word coordinates are from an older extraction. Create a new redaction run from a fresh upload to produce an editable Word document. A reviewed text copy was provided instead.',
   tracked_change:
     'Part of this document holds redacted text inside a tracked change, which redaction does not cover. Accept or reject the tracked changes and finalize again. Do not serve this file without checking it first.',
   residual_text:
