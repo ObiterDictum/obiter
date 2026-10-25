@@ -139,7 +139,7 @@ function projectInlineChanges(
         if (
           (change.kind !== 'delete' && !change.pending?.displayOnly) ||
           change.pending?.from !== at ||
-          (change.runId !== undefined && change.runId !== run.id) ||
+          (change.runId !== undefined && !paintedFrom(run.id, change.runId)) ||
           emitted.has(change.id)
         )
           continue
@@ -354,4 +354,10 @@ export function inlineLinkOverlay(
       offset: projection.toDisplay(marker.offset),
     })),
   }
+}
+
+/** Pending range formatting splits a run into display pieces whose ids extend
+ * the stored run id, and a pending mark must still find its source run. */
+function paintedFrom(runId: string, sourceRunId: string) {
+  return runId === sourceRunId || runId.startsWith(`${sourceRunId}:`)
 }
