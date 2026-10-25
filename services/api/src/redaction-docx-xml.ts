@@ -90,6 +90,8 @@ export function decodedXmlText(source: string) {
   const tags = elements
     .flatMap((element) => [
       {
+        element,
+        closing: false,
         start: element.start,
         end: element.startTagEnd,
         separator: isWord(element, 'tab')
@@ -101,6 +103,8 @@ export function decodedXmlText(source: string) {
       ...(!element.selfClosing
         ? [
             {
+              element,
+              closing: true,
               start: element.endTagStart,
               end: element.end,
               separator: element.localName === 'p' ? '\n' : '',
@@ -109,6 +113,8 @@ export function decodedXmlText(source: string) {
         : []),
     ])
     .sort((a, b) => a.start - b.start)
+  const parents = new Set(elements.map((element) => element.parent))
+  const stack: typeof elements = []
   let cursor = 0
   let text = ''
   let layoutText = ''
@@ -119,8 +125,14 @@ export function decodedXmlText(source: string) {
         .replace(/<!--[^]*?-->|<\?[^]*?\?>/gu, '')
         .replace(/<!\[CDATA\[([^]*?)\]\]>/gu, '$1'),
     )
-    text += content
-    layoutText += content + tag.separator
+    // Indentation between elements is not rendered text. Preserve whitespace
+    // inside text carriers, including a run containing only a space.
+    const meaningful =
+      content.trim() || !parents.has(stack.at(-1)) ? content : ''
+    text += meaningful
+    layoutText += meaningful + tag.separator
+    if (tag.closing) stack.pop()
+    else if (!tag.element.selfClosing) stack.push(tag.element)
     cursor = tag.end
   }
   const attributes = elements.flatMap((element) =>

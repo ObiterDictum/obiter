@@ -166,6 +166,7 @@ describe('Redact-owned DOCX bytes', () => {
 
   it.each([
     '<root><p><t>Jane </t><t>Doe</t></p></root>',
+    '<root><p>\n  <t>Jane </t>\n  <t>Doe</t>\n</p></root>',
     '<root><p>Smith &amp; Co</p></root>',
   ])('refuses decoded residual XML %s', async (xml) => {
     const name = xml.includes('Smith') ? 'Smith & Co' : 'Jane Doe'
