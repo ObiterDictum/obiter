@@ -139,11 +139,9 @@ export function nodeText(
     const mapped =
       hex(font, char) ??
       (/^F0../iu.test(char) ? hex(font, char.slice(2)) : undefined)
-    if (!mapped)
-      throw new RedactionDocxBurnError(
-        'A symbol uses an unsupported font or character; its extraction coordinates cannot be proved.',
-      )
-    return mapped.string
+    // An unknown glyph stays visible as a reviewable, offset-addressable
+    // placeholder. Accepting it burns the original symbol carrier as well.
+    return mapped?.string ?? '\uFFFD'
   }
   return undefined
 }

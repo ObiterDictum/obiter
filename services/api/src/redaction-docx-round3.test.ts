@@ -254,13 +254,13 @@ describe('accepted DOCX coordinates and container safety', () => {
     expect(output.text).toContain('Public addition')
     expect(output.text).toContain('Review note')
   })
-  it('refuses an unsupported symbol instead of silently dropping its character', async () => {
-    const bytes = await source(
-      p(t('Public ') + '<w:sym w:font="Unknown Custom Font" w:char="F0FF"/>'),
-    )
-    await expect(extractDocumentText('docx', bytes)).rejects.toThrow(
-      'unsupported font or character',
-    )
+  it('makes unknown symbols reviewable and burns an accepted selection containing one', async () => {
+    const body = p(t('Public ') + '<w:sym w:font="Unknown Custom Font" w:char="F0FF"/>' + t(' Name'))
+    const bytes = await source(body)
+    expect(await extractDocumentText('docx', bytes)).toBe('Public \uFFFD Name')
+    const output = await burn(body, ['\uFFFD Name'])
+    expect(output.text).toBe('Public [REDACTED]')
+    expect(output.xml).not.toContain('w:sym')
   })
   it('burns XML character data without changing surrounding visible characters', async () => {
     const output = await burn(p('<w:t>Dear <![CDATA[Jane Doe]]>,</w:t>'), [
