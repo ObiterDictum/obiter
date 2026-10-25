@@ -337,6 +337,7 @@ describe('RedactionReviewView', () => {
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           outputFilename: 'source-redacted.docx',
           outputDowngrade: null,
+          additionalDocxBurns: 3,
         },
       },
     })
@@ -366,6 +367,11 @@ describe('RedactionReviewView', () => {
     render(<RedactionReviewView runId="red_1" />)
 
     expect(screen.queryByRole('alert')).toBeNull()
+    expect(
+      screen.getByText(
+        '3 additional occurrences of accepted text removed. Explicitly rejected occurrences were preserved.',
+      ),
+    ).toBeTruthy()
     expect(
       screen.getByText('Created before secure PDF became the default output.'),
     ).toBeTruthy()

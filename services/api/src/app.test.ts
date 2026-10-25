@@ -2875,7 +2875,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(refused.outputWrites()).toBe(0)
 
     // Fresh extraction carries the note bodies, so the same source finalizes.
-    const { extractRedactionContent: extractDocumentContent } = await import('./redaction-extraction')
+    const { extractRedactionContent: extractDocumentContent } =
+      await import('./redaction-extraction')
     const footnotesSource = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
     )
@@ -2900,7 +2901,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   })
 
   it('renders a sanitized docx through the renderer and rasterizes a secure PDF', async () => {
-    const { extractRedactionContent: extractDocumentContent } = await import('./redaction-extraction')
+    const { extractRedactionContent: extractDocumentContent } =
+      await import('./redaction-extraction')
     const { default: JSZip } = await import('jszip')
     const sourceBytes = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
@@ -2957,6 +2959,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     let renderedDocx: Buffer | null = null
     let writtenKey: string | null = null
     let persistedSummary: Record<string, unknown> | null = null
+    let additionalBurnAudit: number | undefined
     let textWrites = 0
     let binaryWrites = 0
     let finalized = false
@@ -2998,7 +3001,14 @@ describe('createApiApp degraded finalization acknowledgement', () => {
           if (statement.includes('from redaction_runs')) {
             return { rows: [finalizedRow()] }
           }
-          if (statement.includes('insert into audit_logs')) return { rows: [] }
+          if (statement.includes('insert into audit_logs')) {
+            additionalBurnAudit = (
+              JSON.parse(String((params as unknown[])[5])) as {
+                additionalDocxBurns?: number
+              }
+            ).additionalDocxBurns
+            return { rows: [] }
+          }
           throw new Error(`Unexpected SQL: ${statement}`)
         },
       ),
@@ -3034,14 +3044,14 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     // The burn happens before the render hop: the sanitized .docx the renderer
     // receives no longer carries the accepted name, and the published output
     // is the rasterized image-only PDF, not the .docx.
+    expect(persistedSummary).toMatchObject({ additionalDocxBurns: 23 })
+    expect(additionalBurnAudit).toBe(23)
     expect(renderedDocx).not.toBeNull()
     const zip = await JSZip.loadAsync(renderedDocx ?? Buffer.alloc(0))
     expect(
       (await extractDocumentContent('docx', renderedDocx ?? Buffer.alloc(0)))
         .text,
-    ).toBe(
-      text.slice(0, start) + '[REDACTED]' + text.slice(start + target.length),
-    )
+    ).toBe(text.replaceAll(target, '[REDACTED]'))
     expect(await zip.file('word/document.xml')?.async('string')).toContain(
       '[REDACTED]',
     )
@@ -3054,12 +3064,17 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const footnotesXml = await (zip
       .file('word/footnotes.xml')
       ?.async('string') ?? '')
-    expect(footnotesXml).toBe(
-      await (
-        await JSZip.loadAsync(sourceBytes)
-      )
-        .file('word/footnotes.xml')
-        ?.async('string'),
+    const originalFootnotes = await (
+      await JSZip.loadAsync(sourceBytes)
+    )
+      .file('word/footnotes.xml')
+      ?.async('string')
+    const { extractWordXmlText } = await import('./document-extraction')
+    expect(extractWordXmlText(footnotesXml ?? '')).toBe(
+      extractWordXmlText(originalFootnotes ?? '').replaceAll(
+        target,
+        '[REDACTED]',
+      ),
     )
 
     expect(published).not.toBeNull()
