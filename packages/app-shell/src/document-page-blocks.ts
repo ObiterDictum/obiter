@@ -1,3 +1,4 @@
+import type { PendingRedlines } from './document-pending-redlines'
 import { pendingParagraphChanges } from './document-pending-redlines'
 import { paragraphPartName } from './document-inline-index'
 import { inlineChanges } from './document-inline-changes'
@@ -94,6 +95,7 @@ export function layoutParagraph(
   advance: () => void,
   /** Effective-text offsets of pending page breaks in this paragraph. */
   pageBreaks: readonly number[] = [],
+  pendingRedlines?: PendingRedlines,
 ): void {
   const paragraph = effectiveParagraph(
     item.paragraph,
@@ -105,7 +107,7 @@ export function layoutParagraph(
     paragraph,
     model.changes,
     partName,
-    pendingParagraphChanges(model, paragraph.id, partName),
+    pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
   )
   const text = projection.text
   // A stored break is addressed by text offset exactly like a pending one, so
@@ -329,6 +331,7 @@ export function tableHeight(
   widthPx: number,
   paragraphs: readonly DocumentParagraphWire[] = documentStory(model)
     ?.paragraphs ?? [],
+  pendingRedlines?: PendingRedlines,
 ): number {
   const paras = new Map(
     paragraphs.map((paragraph) => [paragraph.id, paragraph]),
@@ -343,8 +346,14 @@ export function tableHeight(
           if (!paragraph) return height
           return (
             height +
-            paragraphMetrics(paragraph, model, drafts, extraRuns, cellWidth)
-              .heightPx
+            paragraphMetrics(
+              paragraph,
+              model,
+              drafts,
+              extraRuns,
+              cellWidth,
+              pendingRedlines,
+            ).heightPx
           )
         }, 0),
       ),

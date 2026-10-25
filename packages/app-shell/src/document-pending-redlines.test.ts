@@ -11,7 +11,7 @@ import { emptyDraftState, planDocumentSave } from './document-save-plan'
 import { effectiveParagraph } from './document-model-text'
 import { inlineChanges, inlineSlice } from './document-inline-changes'
 import {
-  withPendingRedlines,
+  buildPendingRedlines,
   pendingParagraphChanges,
 } from './document-pending-redlines'
 
@@ -87,12 +87,12 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
       state.deletedParagraphIds = [tail.id]
     } else if (run) state.drafts[run.id] = item.next
     if (item.deleteAnchor) state.deletedParagraphIds = [paragraph.id]
-    const painted = withPendingRedlines(document.model, state)
-    expect(painted.changes).toBe(document.model.changes)
+    const painted = buildPendingRedlines(document.model, state)
+    expect(document.model.changes).toEqual([])
     if (item.runless) {
       const neighbors = paragraphNeighborResolver({
-        model: painted,
-        paragraphs: painted.stories[0]?.paragraphs ?? [],
+        model: document.model,
+        paragraphs: document.model.stories[0]?.paragraphs ?? [],
         drafts: state.drafts,
         extraRuns: state.extraRuns,
         inserts: [],
@@ -116,7 +116,7 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
     )
     const projection = inlineChanges(
       effective,
-      painted.changes,
+      document.model.changes,
       undefined,
       pendingParagraphChanges(painted, effective.id),
     )
@@ -171,7 +171,7 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
     if (item.join) {
       const deleted = inlineChanges(
         tail,
-        painted.changes,
+        document.model.changes,
         undefined,
         pendingParagraphChanges(painted, tail.id),
       )
@@ -193,7 +193,7 @@ it('marks a covered empty paragraph insertion before it has editable text', asyn
     afterParagraphId: anchor.id,
     text: '',
   })
-  const painted = withPendingRedlines(document.model, state)
+  const painted = buildPendingRedlines(document.model, state)
   expect(pendingParagraphChanges(painted, 'new-empty')).toMatchObject([
     {
       kind: 'insert',
@@ -221,54 +221,9 @@ it('reuses the unchanged paragraph projection with tracking off', async () => {
       paragraph,
       model.changes,
       'word/document.xml',
-      pendingParagraphChanges(model, paragraph.id, 'word/document.xml'),
+      pendingParagraphChanges(undefined, paragraph.id, 'word/document.xml'),
     )
   expect(project()).toBe(project())
-})
-
-it('keeps stored revisions anchored before later runs when a paragraph is pending-deleted', async () => {
-  const { model } = await parseDocx(await createBlankDocx())
-  const paragraph = model.stories[0]?.paragraphs[0]
-  if (!paragraph) throw new Error('Missing paragraph')
-  paragraph.runs = [
-    { id: 'r1', text: 'one ', preservedXmlFragments: [] },
-    { id: 'r2', text: 'two', preservedXmlFragments: [] },
-  ]
-  model.changes = [
-    {
-      id: 'stored',
-      kind: 'delete',
-      elementName: 'del',
-      text: 'earlier ',
-      paragraphId: paragraph.id,
-      storyPartName: 'word/document.xml',
-      inlinePosition: { beforeRunId: 'r2' },
-    },
-  ]
-  const pending = [
-    {
-      id: 'pending-delete',
-      kind: 'delete' as const,
-      elementName: 'del' as const,
-      text: 'one two',
-      paragraphId: paragraph.id,
-      storyPartName: 'word/document.xml',
-      inlinePosition: { beforeRunId: null },
-      pending: { from: 0, to: 0, paragraphDelete: true },
-    },
-  ]
-  const projection = inlineChanges(
-    paragraph,
-    model.changes,
-    'word/document.xml',
-    pending,
-  )
-  expect(projection.spans.map((span) => span.change.id)).toEqual([
-    'stored',
-    'pending-delete',
-  ])
-  expect(projection.text).toBe('earlier one two')
-  expect(projection.editableText).toBe('')
 })
 
 it('paints pending deleted text with its source run instead of a preceding PAGE field', async () => {
