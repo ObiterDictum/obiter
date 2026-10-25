@@ -186,6 +186,25 @@ describe('accepted DOCX coordinates and container safety', () => {
       }),
     ).rejects.toThrow('word/_rels/unrelated.xml.rels')
   })
+  it('places marker colour and highlight before w14 extension properties', async () => {
+    const output = await burn(
+      p(
+        '<w:rPr><w:b/><w14:ligatures xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:val="standard"/></w:rPr>' +
+          t('Jane Doe'),
+      ),
+      ['Jane Doe'],
+    )
+    const elements = parseXmlElements(output.xml)
+    const marker = elements.find((element) =>
+      isWord(element, 'highlight'),
+    )?.parent
+    expect(marker).toBeDefined()
+    expect(
+      elements
+        .filter((element) => element.parent === marker)
+        .map((element) => element.localName),
+    ).toEqual(['b', 'color', 'highlight', 'ligatures'])
+  })
   it('burns selected comment and deletion text while preserving other review text', async () => {
     const output = await burn(
       p(t('Public')) +

@@ -136,7 +136,10 @@ function blackProperties(
   let inner = ''
   let pending = [...additions]
   for (const child of children) {
-    const rank = order.indexOf(child.localName)
+    const rank =
+      child.namespaceUri === WORD_NAMESPACE
+        ? order.indexOf(child.localName)
+        : order.length
     const before = pending.filter((item) => order.indexOf(item.name) <= rank)
     inner += before.map((item) => item.xml).join('')
     pending = pending.filter((item) => !before.includes(item))
