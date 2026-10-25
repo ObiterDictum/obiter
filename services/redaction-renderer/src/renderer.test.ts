@@ -12,9 +12,7 @@ import {
   getDocumentProxy,
 } from 'unpdf'
 import JSZip from 'jszip'
-import {
-  createSyntheticDocx,
-} from '@obiter/ooxml'
+import { createSyntheticDocx, parseDocx } from '@obiter/ooxml'
 import { loadRendererAssets } from './assets'
 import type { RedactionRendererErrorCode } from './contract'
 import { RENDERER_LIMITS } from './limits'
@@ -59,8 +57,25 @@ async function blackBarDocx(): Promise<Uint8Array> {
   return buildRedactedDocx({
     docxBytes: Buffer.from(await createSyntheticDocx([text])),
     text,
-    spans: [{ id: 'name', start: 0, end: text.length, text, category: 'person_name', source: 'rampart_model', confidence: 'high', suggestion: 'redact' }],
-    decisions: { name: { decision: 'accept', decidedBy: 'test', decidedAt: '2026-01-01T00:00:00.000Z' } },
+    spans: [
+      {
+        id: 'name',
+        start: 0,
+        end: text.length,
+        text,
+        category: 'person_name',
+        source: 'rampart_model',
+        confidence: 'high',
+        suggestion: 'redact',
+      },
+    ],
+    decisions: {
+      name: {
+        decision: 'accept',
+        decidedBy: 'test',
+        decidedAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
     outputMode: 'redacted',
     tokenMap: {},
   })

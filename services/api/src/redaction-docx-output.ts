@@ -1,7 +1,12 @@
 import { RedactionDocxBurnError } from './redaction-docx-error'
 import { decodedXmlText, prepareDocxForBurn } from './redaction-docx-xml'
 import JSZip from 'jszip'
-import { loadOoxmlZipEntries, parseDocx, serialiseDocx } from '@obiter/ooxml'
+import {
+  loadOoxmlZipEntries,
+  parseDocx,
+  parseXmlElements,
+  serialiseDocx,
+} from '@obiter/ooxml'
 import {
   burnParagraph,
   paragraphBurnText,
@@ -62,9 +67,15 @@ export async function buildRedactedDocx(
   try {
     return await burnRedactedDocx(input)
   } catch (error) {
-    if (error instanceof RedactionDocxBurnError || error instanceof RedactionSpanIntegrityError) throw error
+    if (
+      error instanceof RedactionDocxBurnError ||
+      error instanceof RedactionSpanIntegrityError
+    )
+      throw error
     // Never return uncertain bytes or expose parser/provider internals to callers.
-    throw new RedactionDocxBurnError('The document could not be redacted safely.')
+    throw new RedactionDocxBurnError(
+      'The document could not be redacted safely.',
+    )
   }
 }
 
@@ -138,38 +149,71 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
     if (!REDACTABLE_STORY_KINDS.has(story.kind)) continue
     const paragraphs = story.paragraphs.map((paragraph) => {
       const anchor = document.paragraphAnchors.get(paragraph.id)
-      if (!anchor) throw new RedactionDocxBurnError('Redaction paragraph anchor is unavailable.')
+      if (!anchor)
+        throw new RedactionDocxBurnError(
+          'Redaction paragraph anchor is unavailable.',
+        )
       return { anchor, text: paragraphBurnText(document, anchor) }
     })
     const storyText = paragraphs.map((paragraph) => paragraph.text).join('\n')
     const occurrences: Array<RedactionRange & { replacement: string }> = []
     for (const span of affected) {
-      if (!span.text) throw new RedactionDocxBurnError('Empty accepted redaction.')
+      if (!span.text)
+        throw new RedactionDocxBurnError('Empty accepted redaction.')
       let cursor = 0
       for (;;) {
         const index = storyText.indexOf(span.text, cursor)
         if (index === -1) break
-        occurrences.push({ start: index, end: index + span.text.length, spanId: span.id, replacement: replacements.get(span.id) ?? '[REDACTED]' })
+        occurrences.push({
+          start: index,
+          end: index + span.text.length,
+          spanId: span.id,
+          replacement: replacements.get(span.id) ?? '[REDACTED]',
+        })
         cursor = index + 1
       }
     }
     let offset = 0
     for (const { anchor, text } of paragraphs) {
-      const pieces = occurrences.filter((hit) => hit.start < offset + text.length && hit.end > offset).map((hit) => ({ ...hit, start: Math.max(0, hit.start - offset), end: Math.min(text.length, hit.end - offset) }))
-      const hits: BurnRange[] = input.outputMode === 'redacted'
-        ? coalesceRanges(text, pieces).map((region) => ({ from: region.start, to: region.end, text: '[REDACTED]', black: true }))
-        : pieces.map((piece) => ({ from: piece.start, to: piece.end, text: piece.replacement }))
+      const pieces = occurrences
+        .filter((hit) => hit.start < offset + text.length && hit.end > offset)
+        .map((hit) => ({
+          ...hit,
+          start: Math.max(0, hit.start - offset),
+          end: Math.min(text.length, hit.end - offset),
+        }))
+      const hits: BurnRange[] =
+        input.outputMode === 'redacted'
+          ? coalesceRanges(text, pieces).map((region) => ({
+              from: region.start,
+              to: region.end,
+              text: '[REDACTED]',
+              black: true,
+            }))
+          : pieces.map((piece) => ({
+              from: piece.start,
+              to: piece.end,
+              text: piece.replacement,
+            }))
       if (hits.length) {
         const ranges = burnParagraph(document, anchor, hits)
-        if (!ranges.length) throw new RedactionDocxBurnError('Accepted redaction could not be burned.')
+        if (!ranges.length)
+          throw new RedactionDocxBurnError(
+            'Accepted redaction could not be burned.',
+          )
         for (const piece of pieces) covered.add(piece.spanId)
-        burned.set(anchor.partName, [...(burned.get(anchor.partName) ?? []), ...ranges])
+        burned.set(anchor.partName, [
+          ...(burned.get(anchor.partName) ?? []),
+          ...ranges,
+        ])
       }
       offset += text.length + 1
     }
   }
   if (affected.some((span) => !covered.has(span.id)))
-    throw new RedactionDocxBurnError('An accepted redaction has no burnable occurrence.')
+    throw new RedactionDocxBurnError(
+      'An accepted redaction has no burnable occurrence.',
+    )
 
   scrubBurnedFields(document, burned)
   const serialised = await serialiseDocx(document)
@@ -178,7 +222,8 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   for (const part of document.sourceParts.values()) {
     if (!part.dirty) continue
     const payload = writtenParts.get(part.name)
-    if (!payload) throw new RedactionDocxBurnError('A modified part is missing.')
+    if (!payload)
+      throw new RedactionDocxBurnError('A modified part is missing.')
     decodedXmlText(Buffer.from(payload).toString('utf8'))
   }
   await parseDocx(serialised)
@@ -203,23 +248,37 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
  */
 async function stripDocumentAuthorship(input: Uint8Array) {
   const zip = await JSZip.loadAsync(input)
-  const scrubs: Array<[RegExp, string]> = [
-    [/(<[^>]*\bcreator[^>]*>)[\s\S]*?(<\/[^>]*>)/i, 'docProps/core.xml'],
-    [/(<[^>]*\blastModifiedBy[^>]*>)[\s\S]*?(<\/[^>]*>)/i, 'docProps/core.xml'],
+  const scrubs = new Map([
     [
-      /(<[^>]*\b(?:title|subject|keywords|description|category|contentStatus)[^>]*>)[\s\S]*?(<\/[^>]*>)/gi,
       'docProps/core.xml',
+      new Set([
+        'creator',
+        'lastModifiedBy',
+        'title',
+        'subject',
+        'keywords',
+        'description',
+        'category',
+        'contentStatus',
+      ]),
     ],
-    [/(<Company[^>]*>)[\s\S]*?(<\/Company[^>]*>)/, 'docProps/app.xml'],
-    [/(<Manager[^>]*>)[\s\S]*?(<\/Manager[^>]*>)/, 'docProps/app.xml'],
-    [/(<Template[^>]*>)[\s\S]*?(<\/Template[^>]*>)/, 'docProps/app.xml'],
-  ]
-  for (const [pattern, partName] of scrubs) {
+    ['docProps/app.xml', new Set(['Company', 'Manager', 'Template'])],
+  ])
+  for (const [partName, names] of scrubs) {
     const file = zip.file(partName)
     if (!file) continue
-    const xml = await file.async('string')
-    if (!pattern.test(xml)) continue
-    zip.file(partName, xml.replace(pattern, '$1$2'))
+    const source = await file.async('string')
+    const ranges = parseXmlElements(source).filter(
+      (element) => names.has(element.localName) && !element.selfClosing,
+    )
+    let result = ''
+    let cursor = 0
+    for (const element of ranges) {
+      if (element.startTagEnd < cursor) continue
+      result += source.slice(cursor, element.startTagEnd)
+      cursor = element.endTagStart
+    }
+    zip.file(partName, result + source.slice(cursor))
   }
   if (zip.file('docProps/custom.xml')) {
     zip.file(
@@ -267,8 +326,13 @@ async function assertNoSpanTextSurvives(
     if (!span.text) continue
     const needle = Buffer.from(span.text, 'utf8')
     for (const [name, payload] of entries) {
-      const decoded = /\.(?:xml|rels)$/iu.test(name) ? decodedXmlText(Buffer.from(payload).toString('utf8')) : []
-      if (Buffer.from(payload).includes(needle) || decoded.some((text) => text.includes(span.text))) {
+      const decoded = /\.(?:xml|rels)$/iu.test(name)
+        ? decodedXmlText(Buffer.from(payload).toString('utf8'))
+        : []
+      if (
+        Buffer.from(payload).includes(needle) ||
+        decoded.some((text) => text.includes(span.text))
+      ) {
         throw new RedactionDocxBurnError(
           `Redacted text survives in ${name}; refusing .docx output.`,
         )

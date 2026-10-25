@@ -1,7 +1,12 @@
 import { scrubBurnedFields } from './redaction-docx-burn'
 import { describe, expect, it } from 'bun:test'
 import JSZip from 'jszip'
-import { createSyntheticDocx, parseDocx, parseXmlElements, attributeValue } from '@obiter/ooxml'
+import {
+  createSyntheticDocx,
+  parseDocx,
+  parseXmlElements,
+  attributeValue,
+} from '@obiter/ooxml'
 import {
   buildRedactedDocx,
   RedactionDocxBurnError,
@@ -78,10 +83,20 @@ async function burn(
   const rels =
     (await packageZip.file('word/_rels/document.xml.rels')?.async('string')) ??
     ''
-  const ids = new Set(rels ? parseXmlElements(rels).filter((element) => element.localName === 'Relationship').map((element) => attributeValue(element, '', 'Id')) : [])
+  const ids = new Set(
+    rels
+      ? parseXmlElements(rels)
+          .filter((element) => element.localName === 'Relationship')
+          .map((element) => attributeValue(element, '', 'Id'))
+      : [],
+  )
   for (const element of parseXmlElements(xml)) {
     for (const attribute of element.attributes) {
-      if (attribute.namespaceUri === R) expect(ids.has(attribute.value), `unresolved ${attribute.qualifiedName}`).toBe(true)
+      if (attribute.namespaceUri === R)
+        expect(
+          ids.has(attribute.value),
+          `unresolved ${attribute.qualifiedName}`,
+        ).toBe(true)
     }
   }
   return {
@@ -118,18 +133,31 @@ describe('Redact-owned DOCX bytes', () => {
   })
 
   it('burns every paragraph piece of an accepted address', async () => {
-    const output = await burn('<w:p>' + run('<w:t>1 High St</w:t>') + '</w:p><w:p>' + run('<w:t>London</w:t>') + '</w:p>', '1 High St\nLondon')
+    const output = await burn(
+      '<w:p>' +
+        run('<w:t>1 High St</w:t>') +
+        '</w:p><w:p>' +
+        run('<w:t>London</w:t>') +
+        '</w:p>',
+      '1 High St\nLondon',
+    )
     expect(output.xml).not.toContain('High St')
     expect(output.xml).not.toContain('London')
     expect(output.text).toContain('[PERSON_NAME_1]')
   })
 
   it('refuses an accepted span absent from all burnable text', async () => {
-    await expect(burn('<w:p>' + run('<w:t>Public</w:t>') + '</w:p>', 'Jane\tDoe')).rejects.toBeInstanceOf(RedactionDocxBurnError)
+    await expect(
+      burn('<w:p>' + run('<w:t>Public</w:t>') + '</w:p>', 'Jane\tDoe'),
+    ).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
   it('covers the union of overlapping pseudonyms with the first token', async () => {
-    const output = await burn('<w:p>' + run('<w:t>Jane Doe Smith</w:t>') + '</w:p>', 'Jane Doe Smith', ['Jane Doe', 'Doe Smith'])
+    const output = await burn(
+      '<w:p>' + run('<w:t>Jane Doe Smith</w:t>') + '</w:p>',
+      'Jane Doe Smith',
+      ['Jane Doe', 'Doe Smith'],
+    )
     expect(output.text).toBe('[PERSON_NAME_1]')
   })
 
@@ -138,58 +166,131 @@ describe('Redact-owned DOCX bytes', () => {
     '<root><p>Smith &amp; Co</p></root>',
   ])('refuses decoded residual XML %s', async (xml) => {
     const name = xml.includes('Smith') ? 'Smith & Co' : 'Jane Doe'
-    await expect(burn('<w:p>' + run('<w:t>' + name.replace('&', '&amp;') + '</w:t>') + '</w:p>', name, [name], { 'customXml/private.xml': xml })).rejects.toBeInstanceOf(RedactionDocxBurnError)
+    await expect(
+      burn(
+        '<w:p>' +
+          run('<w:t>' + name.replace('&', '&amp;') + '</w:t>') +
+          '</w:p>',
+        name,
+        [name],
+        { 'customXml/private.xml': xml },
+      ),
+    ).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
   it('removes a split-run fallback text-box copy', async () => {
-    const output = await burn('<w:p>' + run('<w:t>Jane Doe</w:t>') + '</w:p><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="w"><w:p>' + run('<w:t>Public</w:t>') + '</w:p></mc:Choice><mc:Fallback><w:pict><w:txbxContent><w:p>' + run('<w:t>Jane </w:t>') + run('<w:t>Doe</w:t>') + '</w:p></w:txbxContent></w:pict></mc:Fallback></mc:AlternateContent>')
+    const output = await burn(
+      '<w:p>' +
+        run('<w:t>Jane Doe</w:t>') +
+        '</w:p><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="w"><w:p>' +
+        run('<w:t>Public</w:t>') +
+        '</w:p></mc:Choice><mc:Fallback><w:pict><w:txbxContent><w:p>' +
+        run('<w:t>Jane </w:t>') +
+        run('<w:t>Doe</w:t>') +
+        '</w:p></w:txbxContent></w:pict></mc:Fallback></mc:AlternateContent>',
+    )
     expect(output.xml).not.toContain('Jane')
     expect(output.xml).not.toContain('Doe')
     expect(output.xml).not.toContain('mc:Fallback')
   })
 
   it('clears redacted hyperlink tooltip and document location', async () => {
-    const output = await burn('<w:p><w:hyperlink r:id="link" w:tooltip="private hint" w:docLocation="private location">' + run('<w:t>Jane Doe</w:t>') + '</w:hyperlink></w:p>')
+    const output = await burn(
+      '<w:p><w:hyperlink r:id="link" w:tooltip="private hint" w:docLocation="private location">' +
+        run('<w:t>Jane Doe</w:t>') +
+        '</w:hyperlink></w:p>',
+    )
     expect(output.xml).not.toContain('private hint')
     expect(output.xml).not.toContain('private location')
   })
 
   it('clears image alt text and title within a redacted range', async () => {
-    const output = await burn('<w:p>' + run('<w:t>Jane </w:t><w:drawing><wp:docPr xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" id="1" name="Picture" descr="private description" title="private title"/></w:drawing><w:t>Doe</w:t>') + '</w:p>')
+    const output = await burn(
+      '<w:p>' +
+        run(
+          '<w:t>Jane </w:t><w:drawing><wp:docPr xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" id="1" name="Picture" descr="private description" title="private title"/></w:drawing><w:t>Doe</w:t>',
+        ) +
+        '</w:p>',
+    )
     expect(output.xml).not.toContain('private description')
     expect(output.xml).not.toContain('private title')
   })
 
   it('refuses a redacted hyperlink when its relationship XML has no overlay', async () => {
     const zip = await JSZip.loadAsync(await createSyntheticDocx(['Jane Doe']))
-    zip.file('word/document.xml', `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body><w:p><w:hyperlink r:id="link">${run('<w:t>Jane Doe</w:t>')}</w:hyperlink></w:p></w:body></w:document>`)
-    zip.file('word/_rels/document.xml.rels', '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="link" Type="' + R + '/hyperlink" Target="' + target + '" TargetMode="External"/></Relationships>')
-    const document = await parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+    zip.file(
+      'word/document.xml',
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body><w:p><w:hyperlink r:id="link">${run('<w:t>Jane Doe</w:t>')}</w:hyperlink></w:p></w:body></w:document>`,
+    )
+    zip.file(
+      'word/_rels/document.xml.rels',
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="link" Type="' +
+        R +
+        '/hyperlink" Target="' +
+        target +
+        '" TargetMode="External"/></Relationships>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
     const rels = document.sourceParts.get('word/_rels/document.xml.rels')
     if (!rels) throw new Error('missing test relationship')
     delete rels.overlay
-    expect(() => scrubBurnedFields(document, new Map([['word/document.xml', [{ start: 0, end: 100000 }]]]))).toThrow(RedactionDocxBurnError)
+    expect(() =>
+      scrubBurnedFields(
+        document,
+        new Map([['word/document.xml', [{ start: 0, end: 100000 }]]]),
+      ),
+    ).toThrow(RedactionDocxBurnError)
   })
 
   it('styles the marker in its own rPr in schema order before rPrChange', async () => {
-    const output = await burn('<w:p>' + run('<w:rPr><w:b/><w:lang w:val="en-GB"/><w:rPrChange w:id="1" w:author="Synthetic"><w:rPr><w:i/></w:rPr></w:rPrChange></w:rPr><w:t>Jane Doe</w:t>') + '</w:p>', 'Jane Doe', ['Jane Doe'], {}, 'redacted')
-    expect(output.xml).toContain('<w:b/><w:color w:val="000000"/><w:highlight w:val="black"/><w:lang')
+    const output = await burn(
+      '<w:p>' +
+        run(
+          '<w:rPr><w:b/><w:lang w:val="en-GB"/><w:rPrChange w:id="1" w:author="Synthetic"><w:rPr><w:i/></w:rPr></w:rPrChange></w:rPr><w:t>Jane Doe</w:t>',
+        ) +
+        '</w:p>',
+      'Jane Doe',
+      ['Jane Doe'],
+      {},
+      'redacted',
+    )
+    expect(output.xml).toContain(
+      '<w:b/><w:color w:val="000000"/><w:highlight w:val="black"/><w:lang',
+    )
     expect(output.xml).not.toContain('<w:i/><w:highlight')
     expect(output.text).toBe('[REDACTED]')
   })
 
   it('burns AlternateContent inside a run without unbalancing its XML', async () => {
-    const output = await burn('<w:p>' + run('<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="w"><w:t>Jane Doe</w:t></mc:Choice><mc:Fallback><w:t>Jane Doe</w:t></mc:Fallback></mc:AlternateContent>') + '</w:p>')
+    const output = await burn(
+      '<w:p>' +
+        run(
+          '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="w"><w:t>Jane Doe</w:t></mc:Choice><mc:Fallback><w:t>Jane Doe</w:t></mc:Fallback></mc:AlternateContent>',
+        ) +
+        '</w:p>',
+    )
     expect(output.text).toBe('[PERSON_NAME_1]')
     expect(output.xml).not.toContain('Jane')
   })
 
   it('maps a Unicode burn failure to the structured refusal', async () => {
-    await expect(burn('<w:p>' + run('<w:t>😀</w:t>') + '</w:p>', '😀', ['\ud83d'])).rejects.toBeInstanceOf(RedactionDocxBurnError)
+    await expect(
+      burn('<w:p>' + run('<w:t>😀</w:t>') + '</w:p>', '😀', ['\ud83d']),
+    ).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
   it('neutralises a drawing hyperlink sharing a redacted hyperlink relationship', async () => {
-    const output = await burn('<w:p><w:hyperlink r:id="link">' + run('<w:t>Jane Doe</w:t>') + '</w:hyperlink>' + run('<w:drawing><a:hlinkClick xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" r:id="link"/></w:drawing>') + '</w:p>')
+    const output = await burn(
+      '<w:p><w:hyperlink r:id="link">' +
+        run('<w:t>Jane Doe</w:t>') +
+        '</w:hyperlink>' +
+        run(
+          '<w:drawing><a:hlinkClick xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" r:id="link"/></w:drawing>',
+        ) +
+        '</w:p>',
+    )
     expect(output.xml).not.toContain('r:id="link"')
     expect(output.rels).not.toContain(target)
   })

@@ -122,6 +122,29 @@ async function zipEntries(bytes: Uint8Array) {
 }
 
 describe('buildRedactedDocx', () => {
+  it('keeps self-closing metadata properties well formed while scrubbing authorship', async () => {
+    const source = await makeDocx({
+      coreXml:
+        '<?xml version="1.0"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:creator/><dc:title>Private title</dc:title></cp:coreProperties>',
+    })
+    const text = `Dear ${NAME}.`
+    const spans = [spanAt(text, NAME)]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: acceptAll(spans),
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    expect((await zipEntries(output)).get('docProps/core.xml')).toContain(
+      '<dc:creator/>',
+    )
+    expect((await zipEntries(output)).get('docProps/core.xml')).not.toContain(
+      'Private title',
+    )
+  })
+
   it('burns body and footnote names while keeping styles, tables, and structure', async () => {
     const source = await makeDocx()
     const text = `Dear ${NAME}. [Footnote 1] Note about ${NAME} here`

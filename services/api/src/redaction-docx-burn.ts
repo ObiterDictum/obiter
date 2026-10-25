@@ -1,7 +1,12 @@
+import {
+  burnNodes,
+  paragraphBurnText,
+  readBurnPart,
+} from './redaction-docx-text'
+export { paragraphBurnText }
 import { RedactionDocxBurnError } from './redaction-docx-error'
 import {
   attributeValue,
-  decodeXmlReferences,
   escapeXmlText,
   isWord,
   parseXmlElements,
@@ -28,26 +33,13 @@ function patch(
   value: string,
 ) {
   const part = document.sourceParts.get(partName)
-  if (!part?.overlay) throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
+  if (!part?.overlay)
+    throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
   part.dirty = true
   part.overlay.replacements.set(`${range.start}:${range.end}`, {
     ...range,
     value,
   })
-}
-
-/** Match extraction: tabs and every break consume one character. */
-export function paragraphBurnText(document: OoxmlDocument, paragraph: ParagraphAnchor) {
-  const source = document.sourceParts.get(paragraph.partName)?.overlay?.source
-  if (source === undefined) throw new RedactionDocxBurnError('Redaction source XML is unavailable.')
-  return paragraph.runs.flatMap((run) => burnNodes(source, run.runRange)).map(({ text }) => text).join('')
-}
-
-function burnNodes(source: string, run: Range) {
-  return parseXmlElements(source).filter((element) =>
-    element.parent?.start === run.start &&
-    (isWord(element, 't') || isWord(element, 'tab') || isWord(element, 'br'))
-  ).map((range) => ({ range, text: isWord(range, 'tab') ? '\t' : isWord(range, 'br') ? '\n' : decodeXmlReferences(source.slice(range.startTagEnd, range.endTagStart)) }))
 }
 
 /** Only text-bearing nodes are consumed; zero-width structure stays in place. */
@@ -79,7 +71,7 @@ export function burnParagraph(
     const close = source.slice(run.runRange.endTagStart, run.runRange.end)
     const properties = run.runProperties.join('')
     const textTag = prefix.match(/^<([^\s:>]+):/u)?.[1] ?? 'w'
-    const nodes = burnNodes(source, run.runRange)
+    const nodes = burnNodes(document, paragraph.partName, run.runRange)
     nodes.forEach(({ range, text }) => {
       const end = offset + text.length
       const hits = spans.filter((span) => span.from < end && span.to > offset)
@@ -94,12 +86,19 @@ export function burnParagraph(
           const from = Math.max(0, span.from - offset)
           const to = Math.min(text.length, span.to - offset)
           if (splitsSurrogate(text, from) || splitsSurrogate(text, to))
-            throw new RedactionDocxBurnError('Redaction splits a Unicode character.')
+            throw new RedactionDocxBurnError(
+              'Redaction splits a Unicode character.',
+            )
           value += textXml(text.slice(cursor, from))
           if (span.from >= offset) {
             // A separate marker run limits black styling to the harmless marker.
             const style = span.black
-              ? blackProperties(source, run.runRange, textTag)
+              ? blackProperties(
+                  source,
+                  readBurnPart(document, paragraph.partName).elements,
+                  run.runRange,
+                  textTag,
+                )
               : properties
             value += `${close}${prefix}${style}${textXml(span.text)}${close}${prefix}${properties}`
           }
@@ -120,9 +119,15 @@ export function burnParagraph(
   return [...burned.values()]
 }
 
-function blackProperties(source: string, run: Range, prefix: string) {
-  const elements = parseXmlElements(source)
-  const own = elements.find((element) => isWord(element, 'rPr') && element.parent?.start === run.start)
+function blackProperties(
+  source: string,
+  elements: XmlElement[],
+  run: Range,
+  prefix: string,
+) {
+  const own = elements.find(
+    (element) => isWord(element, 'rPr') && element.parent?.start === run.start,
+  )
   const additions = [
     { name: 'color', xml: `<${prefix}:color ${prefix}:val="000000"/>` },
     { name: 'highlight', xml: `<${prefix}:highlight ${prefix}:val="black"/>` },
@@ -130,7 +135,10 @@ function blackProperties(source: string, run: Range, prefix: string) {
   if (!own || own.selfClosing)
     return `<${prefix}:rPr>${additions.map((item) => item.xml).join('')}</${prefix}:rPr>`
   // CT_RPr sequence. History remains last and is never treated as active style.
-  const order = 'rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange'.split(' ')
+  const order =
+    'rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange'.split(
+      ' ',
+    )
   const children = elements.filter((element) => element.parent === own)
   let inner = ''
   let pending = [...additions]
@@ -142,7 +150,12 @@ function blackProperties(source: string, run: Range, prefix: string) {
     if (!isWord(child, 'color') && !isWord(child, 'highlight'))
       inner += source.slice(child.start, child.end)
   }
-  return source.slice(own.start, own.startTagEnd) + inner + pending.map((item) => item.xml).join('') + source.slice(own.endTagStart, own.end)
+  return (
+    source.slice(own.start, own.startTagEnd) +
+    inner +
+    pending.map((item) => item.xml).join('') +
+    source.slice(own.endTagStart, own.end)
+  )
 }
 
 function splitsSurrogate(text: string, offset: number) {
@@ -222,15 +235,31 @@ export function scrubBurnedFields(
         const id = attributeValue(element, REL_NS, 'id')
         if (id) linkIds.add(id)
       }
-      const names = isWord(element, 'hyperlink') && touches(element)
-        ? ['tooltip', 'docLocation']
-        : element.namespaceUri === 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing' && element.localName === 'docPr' && touches(element)
-          ? ['descr', 'title'] : []
+      const names =
+        isWord(element, 'hyperlink') && touches(element)
+          ? ['tooltip', 'docLocation']
+          : element.namespaceUri ===
+                'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing' &&
+              element.localName === 'docPr' &&
+              touches(element)
+            ? ['descr', 'title']
+            : []
       if (names.length) {
         let opening = source.slice(element.start, element.startTagEnd)
-        for (const attr of element.attributes.filter((attr) => names.includes(attr.localName)))
-          opening = removeAttribute(opening, { ...element, start: 0, startTagEnd: opening.length }, attr.qualifiedName)
-        patch(document, partName, { start: element.start, end: element.startTagEnd }, opening)
+        for (const attr of element.attributes.filter((attr) =>
+          names.includes(attr.localName),
+        ))
+          opening = removeAttribute(
+            opening,
+            { ...element, start: 0, startTagEnd: opening.length },
+            attr.qualifiedName,
+          )
+        patch(
+          document,
+          partName,
+          { start: element.start, end: element.startTagEnd },
+          opening,
+        )
       }
     }
     for (const field of fields) {
@@ -240,20 +269,30 @@ export function scrubBurnedFields(
     // Remove both the target and references to it, including shared references:
     // a hidden external target behind a redacted name is still a disclosure.
     for (const element of elements) {
-      const attrs = element.attributes.filter((attr) => attr.namespaceUri === REL_NS && linkIds.has(attr.value))
+      const attrs = element.attributes.filter(
+        (attr) => attr.namespaceUri === REL_NS && linkIds.has(attr.value),
+      )
       if (!attrs.length) continue
       const range = { start: element.start, end: element.startTagEnd }
       const overlay = document.sourceParts.get(partName)?.overlay
-      let opening = overlay?.replacements.get(`${range.start}:${range.end}`)?.value ?? source.slice(range.start, range.end)
+      let opening =
+        overlay?.replacements.get(`${range.start}:${range.end}`)?.value ??
+        source.slice(range.start, range.end)
       for (const attr of attrs)
-        opening = removeAttribute(opening, { ...element, start: 0, startTagEnd: opening.length }, attr.qualifiedName)
+        opening = removeAttribute(
+          opening,
+          { ...element, start: 0, startTagEnd: opening.length },
+          attr.qualifiedName,
+        )
       patch(document, partName, range, opening)
     }
     const slash = partName.lastIndexOf('/')
     const relsName = `${partName.slice(0, slash + 1)}_rels/${partName.slice(slash + 1)}.rels`
     const rels = document.sourceParts.get(relsName)?.overlay?.source
     if (linkIds.size && rels === undefined)
-      throw new RedactionDocxBurnError('Redaction relationship XML is unavailable.')
+      throw new RedactionDocxBurnError(
+        'Redaction relationship XML is unavailable.',
+      )
     if (rels !== undefined && linkIds.size) {
       for (const element of parseXmlElements(rels)) {
         if (
