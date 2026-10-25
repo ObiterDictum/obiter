@@ -47,8 +47,21 @@ export async function assertNoSpanTextSurvives(
         let start = mapping.text.indexOf(needle.text)
         while (start >= 0) {
           const end = start + needle.text.length
-          if (containsText(mapping.text.slice(Math.max(0, start - 1), end + 1), needle.text) && !preserved.some(span => span.text === needle.text && span.start === start && span.end === end))
-            throw new RedactionDocxBurnError('Redacted text survives in mapped document content; refusing .docx output.')
+          if (
+            containsText(
+              mapping.text.slice(Math.max(0, start - 1), end + 1),
+              needle.text,
+            ) &&
+            !preserved.some(
+              (span) =>
+                span.text === needle.text &&
+                span.start === start &&
+                span.end === end,
+            )
+          )
+            throw new RedactionDocxBurnError(
+              'Redacted text survives in mapped document content; refusing .docx output.',
+            )
           start = mapping.text.indexOf(needle.text, start + 1)
         }
       }
@@ -90,12 +103,22 @@ export async function assertNoSpanTextSurvives(
         const texts = decodedXmlText(
           residual,
           (element, attribute) =>
+            // Font names are definitions, not content: a person may share a
+            // name with the theme, style or run font that displays it.
             !(
-              (/^word\/theme\/[^/]+\.xml$/iu.test(name) && element.namespaceUri === 'http://schemas.openxmlformats.org/drawingml/2006/main' && attribute.localName === 'typeface') ||
-              (/^word\/(?:fontTable|styles)\.xml$/iu.test(name) && attribute.namespaceUri === WORD_NAMESPACE &&
-                ((isWord(element, 'rFonts') && ['ascii', 'hAnsi', 'eastAsia', 'cs'].includes(attribute.localName)) ||
-                  (name === 'word/fontTable.xml' && isWord(element, 'font') && attribute.localName === 'name')))
-            ) && !(
+              (element.namespaceUri ===
+                'http://schemas.openxmlformats.org/drawingml/2006/main' &&
+                attribute.localName === 'typeface') ||
+              (attribute.namespaceUri === WORD_NAMESPACE &&
+                ((isWord(element, 'rFonts') &&
+                  ['ascii', 'hAnsi', 'eastAsia', 'cs'].includes(
+                    attribute.localName,
+                  )) ||
+                  (name === 'word/fontTable.xml' &&
+                    isWord(element, 'font') &&
+                    attribute.localName === 'name')))
+            ) &&
+            !(
               attribute.namespaceUri === WORD_NAMESPACE &&
               attribute.localName === 'val' &&
               /^(?:-?\d+(?:\.\d+)?|[\da-f]{6}|auto|black|[a-z]{2,3}(?:-[a-z]{2,4})*)$/iu.test(
