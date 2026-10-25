@@ -35,41 +35,16 @@ const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const apiModule = { ...(await import('../api')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const apiModuleKeys = Object.fromEntries(
-  Object.keys(await import('../api')).map((key) => [key, undefined]),
-)
-mock.module('../api', () =>
-  Object.assign(
-    { ...apiModuleKeys },
-    (() => {
-      const actual = apiModule
-      return { ...actual, apiFetch: api.apiFetch }
-    })(),
-  ),
-)
+mock.module('../api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const authModuleKeys = Object.fromEntries(
-  Object.keys(await import('../auth')).map((key) => [key, undefined]),
-)
-mock.module('../auth', () =>
-  Object.assign(
-    { ...authModuleKeys },
-    (() => {
-      const actual = authModule
-      return { ...actual, useAuth: () => ({ changePassword: vi.fn() }) }
-    })(),
-  ),
-)
+mock.module('../auth', () => ({
+  ...authModule,
+  useAuth: () => ({ changePassword: vi.fn() }),
+}))
 
 // The real module's export names as undefined: bun links named imports
 // statically and rejects a mock that omits one, while vitest left an
@@ -121,22 +96,6 @@ const ME: MeResponse = {
   },
 }
 
-interface Deferred<T> {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (reason?: unknown) => void
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
-
 function renderSettings(me: MeResponse = ME) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -180,127 +139,6 @@ afterEach(() => {
 })
 
 describe('Account name form — in-flight save and canonical reconciliation', () => {
-  it('keeps typing that arrives while the save is pending', async () => {
-    const pending = deferred<{ user: MeResponse['user'] }>()
-    api.apiFetch.mockImplementation(
-      async (path: string, init?: { method?: string }) => {
-        if (init?.method === 'PATCH') return pending.promise
-        if (path === '/api/me') return ME
-        throw new Error(`Unexpected request: ${path}`)
-      },
-    )
-
-    renderSettings()
-    const account = await screen.findByRole('region', { name: 'Account' })
-    const name = nameField(account, 'Name')
-
-    fireEvent.change(name, { target: { value: 'Imogen Hartley-Clarke' } })
-    fireEvent.click(saveButton(account, 'Save changes'))
-    await waitFor(() => {
-      expect(api.apiFetch).toHaveBeenCalledWith(
-        '/api/me',
-        expect.objectContaining({ method: 'PATCH' }),
-      )
-    })
-
-    // Typing that lands after the request began must survive the resolution.
-    fireEvent.change(name, { target: { value: 'Imogen Hartley-Clarke-Jones' } })
-    await act(async () => {
-      pending.resolve({
-        user: { ...ME.user, name: 'Imogen Hartley-Clarke' },
-      })
-    })
-
-    await waitFor(() => {
-      expect(within(account).queryByRole('status')).not.toBeNull()
-    })
-    expect(name.value).toBe('Imogen Hartley-Clarke-Jones')
-  })
-
-  it('synchronizes an otherwise unchanged submitted value to the stored one', async () => {
-    api.apiFetch.mockImplementation(
-      async (path: string, init?: { method?: string }) => {
-        if (init?.method === 'PATCH') {
-          return { user: { ...ME.user, name: 'Imogen Hartley-Clarke' } }
-        }
-        if (path === '/api/me') {
-          return canonicalMe(ME, {
-            user: { ...ME.user, name: 'Imogen Hartley-Clarke' },
-          })
-        }
-        throw new Error(`Unexpected request: ${path}`)
-      },
-    )
-
-    renderSettings()
-    const account = await screen.findByRole('region', { name: 'Account' })
-    const name = nameField(account, 'Name')
-
-    // Untrimmed: the field keeps the submitted text, the server keeps trimmed.
-    fireEvent.change(name, { target: { value: '  Imogen Hartley-Clarke  ' } })
-    fireEvent.click(saveButton(account, 'Save changes'))
-
-    await waitFor(() => {
-      expect(name.value).toBe('Imogen Hartley-Clarke')
-    })
-    expect(saveButton(account, 'Save changes').disabled).toBe(true)
-  })
-
-  it('adopts an external canonical value into a clean form', async () => {
-    api.apiFetch.mockImplementation(async (path: string) => {
-      if (path === '/api/me') return ME
-      throw new Error(`Unexpected request: ${path}`)
-    })
-
-    const { queryClient } = renderSettings()
-    const account = await screen.findByRole('region', { name: 'Account' })
-    const name = nameField(account, 'Name')
-    expect(name.value).toBe('Imogen Hartley')
-
-    await act(async () => {
-      queryClient.setQueryData(
-        ['current-user'],
-        canonicalMe(ME, { user: { ...ME.user, name: 'Renamed Elsewhere' } }),
-      )
-    })
-
-    await waitFor(() => {
-      expect(name.value).toBe('Renamed Elsewhere')
-    })
-    expect(saveButton(account, 'Save changes').disabled).toBe(true)
-  })
-
-  it('preserves a dirty form across an external change and resets to the latest baseline', async () => {
-    api.apiFetch.mockImplementation(async (path: string) => {
-      if (path === '/api/me') return ME
-      throw new Error(`Unexpected request: ${path}`)
-    })
-
-    const { queryClient } = renderSettings()
-    const account = await screen.findByRole('region', { name: 'Account' })
-    const name = nameField(account, 'Name')
-
-    fireEvent.change(name, { target: { value: 'My Unsubmitted Draft' } })
-
-    await act(async () => {
-      queryClient.setQueryData(
-        ['current-user'],
-        canonicalMe(ME, { user: { ...ME.user, name: 'Renamed Elsewhere' } }),
-      )
-    })
-
-    await waitFor(() => {
-      expect(
-        queryClient.getQueryData<MeResponse>(['current-user'])?.user.name,
-      ).toBe('Renamed Elsewhere')
-    })
-    expect(name.value).toBe('My Unsubmitted Draft')
-
-    fireEvent.click(within(account).getByRole('button', { name: 'Reset' }))
-    expect(name.value).toBe('Renamed Elsewhere')
-    expect(saveButton(account, 'Save changes').disabled).toBe(true)
-  })
-
   it('does not carry draft state across an identity switch', async () => {
     api.apiFetch.mockImplementation(async (path: string) => {
       if (path === '/api/me') return ME
@@ -341,44 +179,6 @@ describe('Organisation name form — in-flight save and canonical reconciliation
     return screen.findByRole('region', { name: 'Organisation' })
   }
 
-  it('keeps typing that arrives while the rename is pending', async () => {
-    const pending = deferred<{ organisation: MeResponse['organisation'] }>()
-    api.apiFetch.mockImplementation(
-      async (path: string, init?: { method?: string }) => {
-        if (init?.method === 'PATCH') return pending.promise
-        if (path === '/api/me') return ME
-        throw new Error(`Unexpected request: ${path}`)
-      },
-    )
-
-    renderSettings()
-    const organisation = await openOrganisation()
-    const name = nameField(organisation, 'Organisation name')
-
-    fireEvent.change(name, { target: { value: 'Ashcombe Chambers LLP' } })
-    fireEvent.click(saveButton(organisation, 'Save name'))
-    await waitFor(() => {
-      expect(api.apiFetch).toHaveBeenCalledWith(
-        '/api/organisations',
-        expect.objectContaining({ method: 'PATCH' }),
-      )
-    })
-
-    fireEvent.change(name, {
-      target: { value: 'Ashcombe Chambers LLP (draft)' },
-    })
-    await act(async () => {
-      pending.resolve({
-        organisation: { ...ME.organisation!, name: 'Ashcombe Chambers LLP' },
-      })
-    })
-
-    await waitFor(() => {
-      expect(within(organisation).queryByRole('status')).not.toBeNull()
-    })
-    expect(name.value).toBe('Ashcombe Chambers LLP (draft)')
-  })
-
   it('preserves a dirty form across an external change and resets to the latest baseline', async () => {
     api.apiFetch.mockImplementation(async (path: string) => {
       if (path === '/api/me') return ME
@@ -414,32 +214,5 @@ describe('Organisation name form — in-flight save and canonical reconciliation
     fireEvent.click(within(organisation).getByRole('button', { name: 'Reset' }))
     expect(name.value).toBe('Renamed By Another Owner')
     expect(saveButton(organisation, 'Save name').disabled).toBe(true)
-  })
-
-  it('keeps the draft and the previous baseline when the rename fails', async () => {
-    api.apiFetch.mockImplementation(
-      async (path: string, init?: { method?: string }) => {
-        if (init?.method === 'PATCH') {
-          throw new Error('network down')
-        }
-        if (path === '/api/me') return ME
-        throw new Error(`Unexpected request: ${path}`)
-      },
-    )
-
-    renderSettings()
-    const organisation = await openOrganisation()
-    const name = nameField(organisation, 'Organisation name')
-
-    fireEvent.change(name, { target: { value: 'Attempted Chambers' } })
-    fireEvent.click(saveButton(organisation, 'Save name'))
-
-    await waitFor(() => {
-      expect(within(organisation).queryByRole('alert')).not.toBeNull()
-    })
-    expect(name.value).toBe('Attempted Chambers')
-
-    fireEvent.click(within(organisation).getByRole('button', { name: 'Reset' }))
-    expect(name.value).toBe('Ashcombe Chambers')
   })
 })

@@ -35,7 +35,7 @@ const sourcePreviewHooks = vi.hoisted(() => ({
 }))
 
 // Capture the Blob handed to the preview so a test can prove the download used
-// the exact same artifact bytes rather than refetching different ones.
+// the exact same output bytes rather than refetching different ones.
 const preview = vi.hoisted(() => ({
   file: null as Blob | null,
   onStatusChange: null as ((status: PdfPreviewStatus) => void) | null,
@@ -85,7 +85,7 @@ const baseRun = {
   policyMode: 'internal_ai_minimisation' as const,
   spans: [],
   decisions: {},
-  outputArtifactId: 'art_1',
+  outputId: 'out_1',
   detectorVersion: null,
   detectionMode: 'model+supplement' as const,
   replacesRunId: null,
@@ -110,7 +110,7 @@ function summary(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const artifact = new Blob(['%PDF-artifact-bytes'], {
+const outputFile = new Blob(['%PDF-output-bytes'], {
   type: 'application/pdf',
 })
 
@@ -142,14 +142,14 @@ beforeEach(() => {
       mimeType: 'application/pdf',
       filename: 'brief-redacted.pdf',
       text: null,
-      artifactId: 'art_1',
+      outputId: 'out_1',
       sha256: 'a'.repeat(64),
       securePdf: true,
     },
   })
   hooks.useRedactionOutputFile.mockReturnValue({
     isPending: false,
-    data: artifact,
+    data: outputFile,
     error: null,
   })
 })
@@ -200,7 +200,7 @@ describe('finalized secure redacted PDF output', () => {
   it('uses the exact same Blob for preview and download', () => {
     const createObjectURL = vi
       .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:artifact')
+      .mockReturnValue('blob:output')
     const revokeObjectURL = vi
       .spyOn(URL, 'revokeObjectURL')
       .mockImplementation(() => undefined)
@@ -210,7 +210,7 @@ describe('finalized secure redacted PDF output', () => {
     renderView()
 
     const previewBlob = preview.file
-    expect(previewBlob).toBe(artifact)
+    expect(previewBlob).toBe(outputFile)
     setPreview({ kind: 'ready', pageCount: 1 })
     fireEvent.click(screen.getByRole('button', { name: 'Download secure PDF' }))
 
@@ -223,7 +223,7 @@ describe('finalized secure redacted PDF output', () => {
     click.mockRestore()
   })
 
-  it('re-locks the download when a new artifact Blob replaces a rendered one', () => {
+  it('re-locks the download when a new output Blob replaces a rendered one', () => {
     const { rerender } = renderView()
     setPreview({ kind: 'ready', pageCount: 1 })
     expect(
@@ -274,7 +274,7 @@ describe('legacy finalized output', () => {
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         filename: 'brief-redacted.docx',
         text: null,
-        artifactId: 'art_1',
+        outputId: 'out_1',
         sha256: null,
         securePdf: false,
       },
@@ -320,7 +320,7 @@ describe('legacy finalized output', () => {
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         filename: 'brief-pseudonymised.docx',
         text: null,
-        artifactId: 'art_1',
+        outputId: 'out_1',
         sha256: null,
         securePdf: false,
       },
@@ -372,7 +372,7 @@ describe('return to document', () => {
         // summary.outputMimeType, which each case controls.
         filename: 'brief-redacted.docx',
         text: null,
-        artifactId: 'art_1',
+        outputId: 'out_1',
         sha256: null,
         securePdf: false,
       },

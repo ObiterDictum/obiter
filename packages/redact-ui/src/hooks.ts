@@ -195,7 +195,7 @@ export function useFinalizeRun(runId: string) {
         body: JSON.stringify(input),
       }),
     onSuccess: ({ run }) => {
-      // Immediate run detail update (status → finalized, outputArtifactId, summary).
+      // Immediate run detail update (status → finalized, outputId, summary).
       queryClient.setQueryData(runKey(runId), run)
       // Reconcile with server + enable/refetch output; refresh list surfaces.
       void queryClient.invalidateQueries({ queryKey: runKey(runId) })

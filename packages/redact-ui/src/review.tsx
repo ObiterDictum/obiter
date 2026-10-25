@@ -320,7 +320,7 @@ function FinalizedOutput({
     output?.filename ?? run.summary.outputFilename ?? run.sourceFilename
   const fileQuery = useRedactionOutputFile(
     run.id,
-    isFile && Boolean(run.outputArtifactId),
+    isFile && Boolean(run.outputId),
   )
   const [preview, setPreview] = useState<{
     blob: Blob | null
@@ -330,23 +330,23 @@ function FinalizedOutput({
   // Preview and download read the same immutable Blob fetched once here. The
   // secure redaction download stays disabled until its preview has rendered at
   // least the first page, so a broken preview cannot push an unchecked file.
-  const artifact = fileQuery.data
+  const outputFile = fileQuery.data
   // Trust a preview status only for the Blob it described: a refetched or new
-  // artifact must render again before the download is enabled.
+  // output must render again before the download is enabled.
   const previewStatus: PdfPreviewStatus =
-    artifact !== undefined && preview.blob === artifact
+    outputFile !== undefined && preview.blob === outputFile
       ? preview.status
       : { kind: 'loading' }
   const previewReady = isPdf && previewStatus.kind === 'ready'
   const downloadReady = isFile
     ? securePdf
-      ? previewReady && Boolean(artifact)
-      : Boolean(artifact)
+      ? previewReady && Boolean(outputFile)
+      : Boolean(outputFile)
     : output?.text != null
   const textBlob = () =>
     new Blob([output?.text ?? ''], { type: 'text/plain;charset=utf-8' })
-  const artifactBlob = () =>
-    isFile && artifact ? artifact : output?.text != null ? textBlob() : null
+  const outputBlob = () =>
+    isFile && outputFile ? outputFile : output?.text != null ? textBlob() : null
 
   // The E12 handoff back to the editor: only a document-linked run whose
   // output is editable DOCX can return, and a superseded run's output never
@@ -387,7 +387,7 @@ function FinalizedOutput({
               variant="primary"
               disabled={!downloadReady}
               onClick={() => {
-                const blob = artifactBlob()
+                const blob = outputBlob()
                 if (blob) downloadBlob(blob, filename)
               }}
             >
@@ -398,7 +398,7 @@ function FinalizedOutput({
               disabled={!downloadReady}
               onClick={() => {
                 void (async () => {
-                  const blob = artifactBlob()
+                  const blob = outputBlob()
                   if (blob) await shareOrDownload(blob, filename)
                 })()
               }}
@@ -454,7 +454,7 @@ function FinalizedOutput({
             <p className="text-sm text-danger" role="alert">
               {fileQuery.error.message}
             </p>
-          ) : isPdf && artifact ? (
+          ) : isPdf && outputFile ? (
             <div className="flex flex-col gap-2">
               {previewStatus.kind === 'error' ? (
                 <p className="text-sm text-danger" role="alert">
@@ -463,13 +463,13 @@ function FinalizedOutput({
                 </p>
               ) : null}
               <PdfDocumentPreview
-                file={artifact}
+                file={outputFile}
                 onStatusChange={(status) =>
-                  setPreview({ blob: artifact, status })
+                  setPreview({ blob: outputFile, status })
                 }
               />
             </div>
-          ) : isDocx && artifact ? (
+          ) : isDocx && outputFile ? (
             <p className="text-sm text-muted">
               The redacted document keeps its formatting. Use Download to open
               it in Word.

@@ -10,7 +10,7 @@
 
 ## Context
 
-The target is a working product within 3 months that firms can verify, then a fuller workflow at 6 months. Redact is the right first target: it's self-contained (no dependency on legal corpus or citation resolution), it's the gateway for firms (no client docs enter any AI tool without redaction), and it produces a reviewable artifact firms can inspect.
+The target is a working product within 3 months that firms can verify, then a fuller workflow at 6 months. Redact is the right first target: it's self-contained (no dependency on legal corpus or citation resolution), it's the gateway for firms (no client docs enter any AI tool without redaction), and it produces a reviewable output firms can inspect.
 
 ## What Exists Already
 
@@ -18,7 +18,7 @@ The target is a working product within 3 months that firms can verify, then a fu
 
 - `matters` table with org-scoped CRUD (migration 0002)
 - `matter_documents` with immutable `document_versions` (migration 0002)
-- `artifacts` table with `redaction_report` already in the enum (migration 0002)
+- `outputs` table with `redaction_report` already in the enum (migration 0002)
 - `audit_logs` table with `appendAuditLog()` function in `database.ts`
 - `text_object_key` column on `document_versions` (text extraction slot exists)
 
@@ -31,7 +31,7 @@ The target is a working product within 3 months that firms can verify, then a fu
 
 **Contracts:**
 
-- `artifactTypeSchema` already includes `redaction_report` (`packages/contracts/src/index.ts`)
+- `outputTypeSchema` already includes `redaction_report` (`packages/contracts/src/index.ts`)
 - `documentStatusSchema` includes `needs_review` (for redaction review state)
 - `syncStateSchema` includes `local_only` (for desktop-local redaction)
 
@@ -158,7 +158,7 @@ Rampart has a 512-token max sequence length. Documents longer than 512 tokens mu
 
 ### Storage
 
-Redaction runs stored in PostgreSQL. Spans stored as JSONB array within the run (simpler than a separate spans table for Phase 1). Output artifacts go to the existing `artifacts` table with type `redaction_report`.
+Redaction runs stored in PostgreSQL. Spans stored as JSONB array within the run (simpler than a separate spans table for Phase 1). Outputs go to the existing `outputs` table with type `redaction_report`.
 
 ### Desktop-Local
 
@@ -179,7 +179,7 @@ create table if not exists redaction_runs (
   policy_mode text not null default 'internal_ai_minimisation',
   spans_json jsonb not null default '[]'::jsonb,
   decisions_json jsonb not null default '{}'::jsonb,
-  output_artifact_id text,
+  output_id text,
   summary_json jsonb not null default '{}'::jsonb,
   detector_version text,
   created_by text not null references users(id),
@@ -331,17 +331,17 @@ Response 200: {
   run: {
     id: string
     status: 'finalized'
-    outputArtifactId: string
+    outputId: string
   }
-  artifact: {
+  output: {
     id: string
     objectKey: string
-    artifactType: 'redaction_report'
+    outputType: 'redaction_report'
   }
 }
 ```
 
-Applies all decisions: redacted output removes the accepted spans and replaces each contiguous accepted region with one `[REDACTED]` marker (or an opaque black bar in PDF and DOCX), pseudonymised text replaces with consistent tokens (`[PERSON_1]`, `[PERSON_2]`, etc.). Stores output as artifact. Writes audit log `redaction.finalize`. See [Finalized Output Presentation](#finalized-output-presentation-red-01).
+Applies all decisions: redacted output removes the accepted spans and replaces each contiguous accepted region with one `[REDACTED]` marker (or an opaque black bar in PDF and DOCX), pseudonymised text replaces with consistent tokens (`[PERSON_1]`, `[PERSON_2]`, etc.). Stores it as a row in `outputs`. Writes audit log `redaction.finalize`. See [Finalized Output Presentation](#finalized-output-presentation-red-01).
 
 ### List runs for a document
 
@@ -418,31 +418,31 @@ rasterized with no selectable text layer. Presentation is layered on top of remo
 content, never on the original.
 
 **Secure redacted PDF is the default hard-redaction output.** For `redacted` output
-the finalized artifact is always one image-only PDF. A PDF source is rasterized with
+the finalized output is always one image-only PDF. A PDF source is rasterized with
 the accepted bars burned into the page pixels. A DOCX source is first destructively
 sanitized (`buildRedactedDocx`, which removes the accepted text from the OOXML and
 styles a harmless marker as a black bar), then the sanitized bytes are sent to the
 sandboxed renderer worker, which returns an intermediate PDF that is rasterized page
 by page. A text source is paginated into image-only pages. Every path runs the same
-validation gate before the artifact is stored: a valid PDF with at least one page,
+validation gate before the output is stored: a valid PDF with at least one page,
 finite positive page geometry within configured limits, no selectable text layer, no
 their accepted source strings, no fonts, annotations, forms, attachments or
 accessibility structure from the source, directory opacity, and a file size within
-limits. A hard-redaction failure is visible: the run is not finalized, no artifact is
+limits. A hard-redaction failure is visible: the run is not finalized, no output is
 kept, and the API reports that no secure PDF was produced. It never silently falls
 back to a text or other container. Pseudonymisation remains a separate, editable
 output: it replaces accepted content with consistent category tokens, keeps its
 token map behind restricted audited access, and never renders a black bar. It is
-never rasterized; a PDF source produces token text, so the pseudonymised artifact
+never rasterized; a PDF source produces token text, so the pseudonymised output
 stays editable and visually distinct from a hard redaction.
 
-**Preview and download share one artifact.** The review view fetches the finalized
+**Preview and download share one output.** The review view fetches the finalized
 bytes once through `GET /api/redaction-runs/:runId/output/file` and uses that same
 Blob for the inline preview, the primary download and the share action. The download
 stays disabled until the preview has rendered at least its first page. A preview
 failure shows an inline error and leaves the download disabled; the source document is
-never substituted. Finalized artifacts are immutable and are not regenerated. A DOCX
-or TXT artifact created before secure PDF became the default keeps its true filename
+never substituted. Finalized outputs are immutable and are not regenerated. A DOCX
+or TXT output created before secure PDF became the default keeps its true filename
 and MIME type, downloads its original stored bytes, and is labelled as having been
 created before the change.
 
@@ -467,7 +467,7 @@ the source between them is only whitespace.
   wraps over two lines produces one bar on each line, never one rectangle across
   both.
 - Text paints one opaque black bar per region per rendered line into page pixels; no
-  `[REDACTED]` marker or source glyph remains selectable in the final artifact.
+  `[REDACTED]` marker or source glyph remains selectable in the final output.
 
 **Structural boundaries.** DOCX coalescing is per paragraph, so it cannot bridge a
 paragraph, table cell, header/footer, footnote/endnote or story boundary. PDF
@@ -477,7 +477,7 @@ stays token-based and is never coalesced into a bar.
 
 **Review overlays.** The review screen keeps its category-coloured entity overlays so
 reviewers can inspect individual detections and decisions. Those overlays are review
-UI, not output: the finalized hard-redaction artifact renders black bars in an
+UI, not output: the finalized hard-redaction output renders black bars in an
 image-only PDF, and pseudonymised output uses tokens.
 
 ## Package Structure
@@ -569,7 +569,7 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 ### Week 5-6: Output + Finalize
 
-**Goal:** Apply decisions, produce redacted/pseudonymised output, store as artifact.
+**Goal:** Apply decisions, produce redacted/pseudonymised output and store it in `outputs`.
 
 - [ ] Implement `apply.ts` in `redaction-policy`:
   - `applyRedacted(text, spans, decisions)` -> text with `[REDACTED]` replacements
@@ -578,12 +578,12 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
   - Load text from `document_versions.text_object_key`
   - Apply decisions
   - Store output in object storage
-  - Create `artifacts` row with type `redaction_report`
-  - Update run status to `finalized`, set `output_artifact_id`
+  - Create `outputs` row with type `redaction_report`
+  - Update run status to `finalized`, set `output_id`
   - Audit log `redaction.finalize`
 - [ ] Pseudonymisation consistency: same entity gets same token across the whole document (token map per run)
 - [ ] Output tests: verify redacted text has no PII, pseudonymised text has consistent tokens
-- [ ] Integration test: full flow from create run to finalize to artifact retrieval
+- [ ] Integration test: full flow from create run to finalize to output retrieval
 
 **Milestone M2 (partial): span decisions persist, output generation works.**
 
@@ -627,8 +627,8 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 - [ ] Implement audit log export for redaction runs:
   - `GET /api/redaction-runs/:runId/audit` -> structured audit record of all decisions, timestamps, users
-  - Format as JSON for M3, HTML/Markdown export as artifact
-- [ ] Redaction report artifact: contains
+  - Format as JSON for M3, HTML/Markdown export as output
+- [ ] Redaction report output: contains
   - original document reference
   - redaction run summary (spans by category, by source, decisions)
   - detector version (Rampart model version + npm package version)
@@ -672,17 +672,17 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 ## Dependencies On Existing Code
 
-| Dependency                                     | Status                                                                                                                                                                                                                                                                                                                                                                           |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `matters` table + CRUD                         | Done (migration 0002, `matters.ts`)                                                                                                                                                                                                                                                                                                                                              |
-| `matter_documents` + `document_versions`       | Done (migration 0002, `documents.ts`)                                                                                                                                                                                                                                                                                                                                            |
-| `artifacts` table with `redaction_report` type | Done (migration 0002)                                                                                                                                                                                                                                                                                                                                                            |
-| `audit_logs` + `appendAuditLog()`              | Done (`database.ts`)                                                                                                                                                                                                                                                                                                                                                             |
-| `text_object_key` on document versions         | Done (migration 0002)                                                                                                                                                                                                                                                                                                                                                            |
-| Auth middleware, org-scoping, request IDs      | Done (`app.ts`)                                                                                                                                                                                                                                                                                                                                                                  |
-| Object storage for text/output                 | Not wired (verified July 2026): no storage client exists in the API and document upload is metadata-only — no file bytes reach the server. M1–M2 run on a `StorageService` abstraction with a local-filesystem adapter (introduced in Redact PRD 1 for fallback-text persistence); M3 adds multipart content upload and the object-storage adapter (Redact PRD 3, FR1.11–FR1.12) |
-| `@nationaldesignstudio/rampart` npm package    | Not yet installed. Add to `services/api/package.json`                                                                                                                                                                                                                                                                                                                            |
-| `@huggingface/transformers` npm package        | Not yet installed. Add to `services/api/package.json` (peer dep of Rampart)                                                                                                                                                                                                                                                                                                      |
+| Dependency                                   | Status                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `matters` table + CRUD                       | Done (migration 0002, `matters.ts`)                                                                                                                                                                                                                                                                                                                                              |
+| `matter_documents` + `document_versions`     | Done (migration 0002, `documents.ts`)                                                                                                                                                                                                                                                                                                                                            |
+| `outputs` table with `redaction_report` type | Done (migration 0002)                                                                                                                                                                                                                                                                                                                                                            |
+| `audit_logs` + `appendAuditLog()`            | Done (`database.ts`)                                                                                                                                                                                                                                                                                                                                                             |
+| `text_object_key` on document versions       | Done (migration 0002)                                                                                                                                                                                                                                                                                                                                                            |
+| Auth middleware, org-scoping, request IDs    | Done (`app.ts`)                                                                                                                                                                                                                                                                                                                                                                  |
+| Object storage for text/output               | Not wired (verified July 2026): no storage client exists in the API and document upload is metadata-only — no file bytes reach the server. M1–M2 run on a `StorageService` abstraction with a local-filesystem adapter (introduced in Redact PRD 1 for fallback-text persistence); M3 adds multipart content upload and the object-storage adapter (Redact PRD 3, FR1.11–FR1.12) |
+| `@nationaldesignstudio/rampart` npm package  | Not yet installed. Add to `services/api/package.json`                                                                                                                                                                                                                                                                                                                            |
+| `@huggingface/transformers` npm package      | Not yet installed. Add to `services/api/package.json` (peer dep of Rampart)                                                                                                                                                                                                                                                                                                      |
 
 **Risk (confirmed):** Object storage is not wired — document upload creates the DB record only and no file bytes are stored anywhere (verified July 2026). M1 uses the `StorageService` local-filesystem adapter as interim, persisting fallback text at the `text_object_key` path so M2's finalize can re-read it; the object-storage adapter and multipart upload land in M3.
 
@@ -712,7 +712,7 @@ After Redact M1-M3 is deliverable at 3 months, the next 3 months target Verify C
 4. Findings UI (reviewable verification results)
 5. Verification report export
 
-This layers on top of the existing Search infrastructure and the artifact/audit patterns built during Redact. The same `artifacts` table, audit logging, and review UI patterns apply directly.
+This layers on top of the existing Search infrastructure and the output/audit patterns built during Redact. The same `outputs` table, audit logging, and review UI patterns apply directly.
 
 ## Demo (For Firms)
 

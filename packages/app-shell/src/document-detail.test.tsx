@@ -24,25 +24,11 @@ const toast = vi.hoisted(() => ({ useToast: vi.fn() }))
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const documentsModule = { ...(await import('./documents')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const documentsModuleKeys = Object.fromEntries(
-  Object.keys(await import('./documents')).map((key) => [key, undefined]),
-)
-mock.module('./documents', () =>
-  Object.assign(
-    { ...documentsModuleKeys },
-    (() => {
-      const actual = documentsModule
-      return {
-        ...actual,
-        useDocument: docs.useDocument,
-        useDeleteDocument: docs.useDeleteDocument,
-      }
-    })(),
-  ),
-)
+mock.module('./documents', () => ({
+  ...documentsModule,
+  useDocument: docs.useDocument,
+  useDeleteDocument: docs.useDeleteDocument,
+}))
 
 // The real module's export names as undefined: bun links named imports
 // statically and rejects a mock that omits one, while vitest left an
@@ -70,21 +56,10 @@ mock.module('./components/document-workspace/workspace', () =>
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('./current-user')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const currentUserModuleKeys = Object.fromEntries(
-  Object.keys(await import('./current-user')).map((key) => [key, undefined]),
-)
-mock.module('./current-user', () =>
-  Object.assign(
-    { ...currentUserModuleKeys },
-    (() => {
-      const actual = currentUserModule
-      return { ...actual, useCurrentUser: currentUser.useCurrentUser }
-    })(),
-  ),
-)
+mock.module('./current-user', () => ({
+  ...currentUserModule,
+  useCurrentUser: currentUser.useCurrentUser,
+}))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
@@ -92,44 +67,19 @@ mock.module('./current-user', () =>
 const tanstackReactRouterModule = {
   ...(await import('@tanstack/react-router')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const tanstackReactRouterModuleKeys = Object.fromEntries(
-  Object.keys(await import('@tanstack/react-router')).map((key) => [
-    key,
-    undefined,
-  ]),
-)
-mock.module('@tanstack/react-router', () =>
-  Object.assign(
-    { ...tanstackReactRouterModuleKeys },
-    (() => {
-      const actual = tanstackReactRouterModule
-      return { ...actual, useNavigate: nav.useNavigate }
-    })(),
-  ),
-)
+mock.module('@tanstack/react-router', () => ({
+  ...tanstackReactRouterModule,
+  useNavigate: nav.useNavigate,
+}))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const obiterUiModule = { ...(await import('@obiter/ui')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const obiterUiModuleKeys = Object.fromEntries(
-  Object.keys(await import('@obiter/ui')).map((key) => [key, undefined]),
-)
-mock.module('@obiter/ui', () =>
-  Object.assign(
-    { ...obiterUiModuleKeys },
-    (() => {
-      const actual = obiterUiModule
-      return { ...actual, useToast: toast.useToast }
-    })(),
-  ),
-)
+mock.module('@obiter/ui', () => ({
+  ...obiterUiModule,
+  useToast: toast.useToast,
+}))
 
 // Loaded after the registrations above: bun does not hoist mock.module the
 // way vi.mock was hoisted, and these modules capture mocked imports at

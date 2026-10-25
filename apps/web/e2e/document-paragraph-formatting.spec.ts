@@ -1,12 +1,8 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
+import { createAccount, openFixtureDocument } from './document-journey'
+import { focusParagraph, saveAndWait } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
-import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath } from './support'
 
 /*
  * E3 browser journey: Align, Line spacing and Indent must agree end to end.
@@ -19,7 +15,6 @@ import { fixturePath, verifyEmailInDb } from './support'
  * never the shared one. The fixture is the repo's synthetic DOCX.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 /** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
 // Set to a directory to capture the journey stage by stage; a normal run
@@ -31,104 +26,11 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-async function createAccount(request: APIRequestContext) {
-  // A UUID keeps the synthetic account id unique without an insecure PRNG,
-  // which CodeQL flags even in test fixtures.
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e3-${runId}@obiter.test`
-  const password = `E3-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E3 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
-
-/** Opens the synthetic fixture through the product's own navigation. */
-async function openFixtureDocument(
-  page: Page,
-  email: string,
-  password: string,
-  matterName: string,
-) {
-  await signIn(page, email, password)
-
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page.getByRole('button', { name: 'Create matter' }).first().click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
-
-  const fixtureName = path.basename(fixturePath())
-  if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
-    await expect(fileInput).toBeAttached({ timeout: 20_000 })
-    await fileInput.setInputFiles(fixturePath())
-  }
-  const documentRow = page.getByText(fixtureName).first()
-  await expect(documentRow).toBeVisible({ timeout: 30_000 })
-  await documentRow.click()
-
-  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
-    timeout: 30_000,
-  })
-}
-
-const editor = (page: Page) =>
-  page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-const paragraph = (page: Page, text: string) =>
-  page.locator('[data-paragraph-id]', { hasText: text }).first()
 const alignCentre = (page: Page) =>
   page.getByRole('button', { name: 'Align centre' })
 const lineSpacing = (page: Page) =>
   page.getByLabel('Line spacing', { exact: true })
 const indent = (page: Page) => page.getByLabel('Indent', { exact: true })
-
-async function focusParagraph(page: Page, text: string) {
-  const target = paragraph(page, text)
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused()
-      .then(() => true)
-      .catch(() => false)
-    if (focused) return
-  }
-  throw new Error(`could not focus the paragraph containing "${text}"`)
-}
 
 /** The inline paragraph layout the browser paints on the target block. */
 async function paragraphStyle(page: Page, text: string) {
@@ -144,11 +46,6 @@ async function paragraphStyle(page: Page, text: string) {
   }, text)
 }
 
-async function saveAndWait(page: Page) {
-  await save(page).click()
-  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
-}
-
 type EditBody = { operations?: Array<Record<string, unknown>> }
 
 function isEditBody(value: unknown): value is EditBody {
@@ -162,9 +59,9 @@ test('align, line spacing and indent paint, save, and reload from a fresh contex
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E3')
   const matter = `E3 paragraph ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, fixturePath())
 
   const editBodies: EditBody[] = []
   page.on('request', (outgoing) => {
@@ -214,7 +111,7 @@ test('align, line spacing and indent paint, save, and reload from a fresh contex
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await focusParagraph(reloaded, HEADING)
     await expect(alignCentre(reloaded)).toHaveAttribute('aria-pressed', 'true')
     await expect(lineSpacing(reloaded)).toHaveValue('1.5')

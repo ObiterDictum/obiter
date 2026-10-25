@@ -1,3 +1,5 @@
+import { verifyEmailInDb } from './support'
+import { signIn, focusParagraph, saveAndWait } from './e13-support'
 import {
   expect,
   test,
@@ -7,7 +9,6 @@ import {
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { verifyEmailInDb } from './support'
 
 /*
  * Save-flight regression journey: a keystroke typed while a save is landing
@@ -40,19 +41,6 @@ async function createAccount(request: APIRequestContext) {
   expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
   verifyEmailInDb(databaseName, email)
   return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
 }
 
 /** Opens the fixture document through the product's own navigation. */
@@ -127,27 +115,9 @@ const saveState = (page: Page) =>
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
 
-async function focusParagraph(page: Page, text: string) {
-  const target = page.locator('[data-paragraph-id]', { hasText: text }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused()
-      .then(() => true)
-      .catch(() => false)
-    if (focused) return
-  }
-  throw new Error(`could not focus the paragraph containing "${text}"`)
-}
-
 async function caretAtEnd(page: Page, text: string) {
   await focusParagraph(page, text)
   await page.keyboard.press('Control+End')
-}
-
-async function saveAndWait(page: Page) {
-  await save(page).click()
-  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
 }
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'References') {

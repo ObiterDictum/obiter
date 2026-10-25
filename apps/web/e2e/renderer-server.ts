@@ -7,7 +7,7 @@
  * that PDF into an image-only secure PDF and validates it, so the response must
  * be a real, parseable PDF. A checked-in synthetic text-layer fixture stands in
  * for the worker's output; the API's rasterizer strips its text layer, so the
- * downloaded artifact still has no selectable source text.
+ * downloaded output still has no selectable source text.
  */
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'

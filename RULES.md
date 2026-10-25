@@ -52,7 +52,7 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 
 - Client matter data is sensitive by default. EU hosting, encrypted transport, server-side access checks (UI hiding is not authorization). Never leak across organisations.
 - No raw document contents, secrets, tokens, or private keys in logs. Object keys contain no client/matter names, filenames, or legal text.
-- Soft delete by default. Multi-record writes for immutable versions, sync conflicts, and audit logs are transactional. Auth, matter, document, and artifact access are auditable.
+- Soft delete by default. Multi-record writes for immutable versions, sync conflicts, and audit logs are transactional. Auth, matter, document, and output access are auditable.
 - Hosted vs local-desktop redaction stays visibly distinct. External AI/model calls touching matter data appear in product state and audit logs. No real client documents in fixtures, demos, or tests without explicit approval.
 
 ## Docs
@@ -69,5 +69,5 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 
 - No placeholder architecture, fake implementations, or silent fallbacks in production code.
 - No schema drift between docs, contracts, migrations, and handlers. No duplicated state machines across platforms.
-- No avoidable races around versions, sync, artifacts, or audit logs. No later-milestone work before the current milestone is stable.
+- No avoidable races around versions, sync, outputs, or audit logs. No later-milestone work before the current milestone is stable.
 - No merges that leave the repo materially less understandable.

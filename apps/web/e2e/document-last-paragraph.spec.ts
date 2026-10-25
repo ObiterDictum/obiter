@@ -1,12 +1,8 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
-import { execFileSync } from 'node:child_process'
+import { createAccount } from './document-journey'
+import { signIn } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
+
 import { createSyntheticDocx } from '../../../packages/ooxml/src/index'
-import { resolveJourneyTargets } from '../journey-target.mjs'
 
 /*
  * E0 browser journey: the editor must never reach a zero-paragraph state.
@@ -21,54 +17,8 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
  * fictional text only.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const FIRST = 'E0 sole paragraph of the synthetic fixture.'
 const SECOND = 'E0 second paragraph after insertion.'
-
-function verifyEmailInDb(email: string) {
-  const safe = email.replace(/'/g, "''")
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
-      'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      `update users set "emailVerified"=true where email='${safe}'`,
-    ],
-    { stdio: 'pipe' },
-  )
-}
-
-async function createAccount(request: APIRequestContext) {
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e0-${runId}@obiter.test`
-  const password = `E0-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E0 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
 
 /** Uploads an in-memory one-paragraph DOCX and opens the editor. */
 async function openSyntheticDocument(
@@ -191,7 +141,7 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   request,
 }) => {
   const faults = watchForFaults(page)
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E0')
   const matter = `E0 ${String(Date.now())}`
   await openSyntheticDocument(page, email, password, matter)
 
