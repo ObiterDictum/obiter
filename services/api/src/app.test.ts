@@ -2875,7 +2875,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(refused.outputWrites()).toBe(0)
 
     // Fresh extraction carries the note bodies, so the same source finalizes.
-    const { extractDocumentContent } = await import('./document-extraction')
+    const { extractRedactionContent: extractDocumentContent } = await import('./redaction-extraction')
     const footnotesSource = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
     )
@@ -2900,7 +2900,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   })
 
   it('renders a sanitized docx through the renderer and rasterizes a secure PDF', async () => {
-    const { extractDocumentContent } = await import('./document-extraction')
+    const { extractRedactionContent: extractDocumentContent } = await import('./redaction-extraction')
     const { default: JSZip } = await import('jszip')
     const sourceBytes = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',

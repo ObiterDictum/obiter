@@ -107,3 +107,11 @@ Deleted/moved-from text is reviewable between `[Deleted text]` and
 `[End deleted text]` labels with paragraph separators. Comment bodies are
 reviewable in labelled trailing regions. Editable output preserves unaccepted
 review content; the pseudonymised text fallback uses only this reviewed text.
+
+Accepting DOCX text burns its other exact, word-bounded occurrences throughout
+the mapped stories, including detector-missed headers and comments. An explicitly
+rejected/kept span exempts only its exact offsets for the same text. Additional
+burns are counted in the persisted summary and finalize audit, and shown in the
+finalized output. The same expansion applies to the reviewed text fallback.
+Hidden copies outside mapped stories still refuse output when they cannot be
+safely burned.

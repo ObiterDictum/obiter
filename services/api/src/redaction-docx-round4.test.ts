@@ -23,3 +23,27 @@ it.each([
   expect(await findUncoveredDocxRegions(bytes, text)).toEqual([])
   expect((await findUncoveredDocxRegions(bytes, 'Public body')).length).toBeGreaterThan(0)
 })
+
+import { buildRedactedDocx } from './redaction-docx-output'
+import { acceptedDocxOccurrences } from './redaction-docx-occurrences'
+import { assertNoSpanTextSurvives } from './redaction-docx-residual'
+const decision = (decision: 'accept' | 'reject') => ({decision, decidedBy:'test', decidedAt:'2026-01-01T00:00:00Z'})
+function span(text: string, start = 0, id = 'accepted') {
+  return {id, text, start, end:start+text.length, category:'person_name' as const, source:'rampart_model' as const, confidence:'high' as const, suggestion:'redact' as const}
+}
+it('burns detector-missed body, header and comment occurrences while preserving an explicit rejection', async () => {
+  const bytes = await fixture(p('Jane Doe Jane Doe Jane Doe'), {
+    'word/header1.xml': `<w:hdr xmlns:w="${W}">${p('Jane Doe')}</w:hdr>`,
+    'word/comments.xml': `<w:comments xmlns:w="${W}"><w:comment w:id="0">${p('Jane Doe')}</w:comment></w:comments>`,
+  })
+  const {text} = await extractRedactionContent('docx', bytes)
+  const accepted = span('Jane Doe', text.indexOf('Jane Doe', 9))
+  const kept = span('Jane Doe', text.indexOf('Jane Doe', accepted.end), 'kept')
+  const spans = [accepted, kept]
+  const decisions = {accepted:decision('accept'), kept:decision('reject')}
+  expect(acceptedDocxOccurrences(text, spans, decisions).additionalBurns).toBe(3)
+  const output = await buildRedactedDocx({docxBytes:bytes,text,spans,decisions,outputMode:'pseudonymised',tokenMap:{PERSON_NAME_1:'Jane Doe'}})
+  expect((await extractRedactionContent('docx', Buffer.from(output))).text).toBe('[PERSON_NAME_1]\n\n[PERSON_NAME_1] Jane Doe [PERSON_NAME_1]\n\n[Comment 0] [PERSON_NAME_1]')
+  // The independent gate must reject mapped text without that exact exemption.
+  await expect(assertNoSpanTextSurvives(output, [accepted])).rejects.toThrow('survives in mapped')
+})

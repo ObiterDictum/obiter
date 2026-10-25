@@ -1,3 +1,4 @@
+import { acceptedDocxOccurrences } from '../redaction-docx-occurrences'
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import {
@@ -525,14 +526,17 @@ export function createRedactReviewRoutes(
         `This run cannot be finalized: part of the source was never examined (${uncoveredRegions.join('; ')}), so completeness cannot be claimed.`,
         409,
       )
+    const occurrences = isDocxMimeOrFilename(run.sourceFilename, source?.mimeType ?? run.sourceMimeType)
+      ? acceptedDocxOccurrences(text, run.spans, run.decisions)
+      : {spans: run.spans, decisions: run.decisions, additionalBurns: 0}
     let output: string
     let tokenMap: Record<string, string>
     try {
-      tokenMap = createTokenMap(text, run.spans, run.decisions)
+      tokenMap = createTokenMap(text, occurrences.spans, occurrences.decisions)
       output =
         body.data.outputMode === 'redacted'
-          ? applyRedacted(text, run.spans, run.decisions)
-          : applyPseudonymised(text, run.spans, run.decisions)
+          ? applyRedacted(text, occurrences.spans, occurrences.decisions)
+          : applyPseudonymised(text, occurrences.spans, occurrences.decisions)
     } catch (error) {
       if (error instanceof RedactionSpanIntegrityError)
         return errorResponse(
@@ -570,7 +574,7 @@ export function createRedactReviewRoutes(
             'Secure PDF storage is not available.',
           )
         const secure = await buildHardRedactionPdf({
-          run,
+          run: {...run, spans: occurrences.spans, decisions: occurrences.decisions},
           sourceText: text,
           redactedText: output,
           source,
@@ -623,8 +627,8 @@ export function createRedactReviewRoutes(
           const redactedDocx = await buildRedactedDocx({
             docxBytes: Buffer.from(docxBytes),
             text,
-            spans: run.spans,
-            decisions: run.decisions,
+            spans: occurrences.spans,
+            decisions: occurrences.decisions,
             outputMode: 'pseudonymised',
             tokenMap,
           })
@@ -686,6 +690,7 @@ export function createRedactReviewRoutes(
         outputMimeType,
         outputFilename,
         outputDowngrade,
+        additionalDocxBurns: occurrences.additionalBurns,
         outputSha256,
         securePdf,
       })

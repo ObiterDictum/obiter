@@ -1,3 +1,4 @@
+import { acceptedDocxOccurrences } from './redaction-docx-occurrences'
 import { assertNoSpanTextSurvives } from './redaction-docx-residual'
 import { mapDocxText } from './redaction-docx-map'
 import { RedactionDocxBurnError } from './redaction-docx-error'
@@ -68,9 +69,8 @@ export async function buildRedactedDocx(
 }
 
 async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
-  const affected = input.spans.filter((span) =>
-    affectsOutput(input.decisions[span.id]),
-  )
+  const expanded = acceptedDocxOccurrences(input.text, input.spans, input.decisions)
+  const affected = expanded.spans.filter((span) => affectsOutput(expanded.decisions[span.id]))
   for (const span of affected) {
     if (input.text.slice(span.start, span.end) !== span.text) {
       throw new RedactionSpanIntegrityError(span.id)
@@ -184,7 +184,12 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
       'The emitted document does not match the accepted redaction coordinates.',
     )
   const stripped = await stripDocumentAuthorship(serialised)
-  await assertNoSpanTextSurvives(stripped, affected)
+  const preserved = input.spans.filter(span => ['reject', 'override_keep'].includes(input.decisions[span.id]?.decision ?? '')).flatMap(span => {
+    if (edits.some(edit => edit.start < span.end && edit.end > span.start)) return []
+    const delta = edits.filter(edit => edit.end <= span.start).reduce((sum, edit) => sum + edit.value.length - (edit.end - edit.start), 0)
+    return [{...span, start: span.start + delta - leading, end: span.end + delta - leading}]
+  })
+  await assertNoSpanTextSurvives(stripped, affected, preserved)
   return stripped
 }
 

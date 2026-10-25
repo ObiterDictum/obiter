@@ -45,15 +45,16 @@ async function burn(
     confidence: 'high' as const,
     suggestion: 'redact' as const,
   }))
+  const rejected = starts ? [{...spans[0], id: 'kept', text: names[0] ?? '', start: 0, end: names[0]?.length ?? 0}] : []
   const bytes = await buildRedactedDocx({
     docxBytes,
     text,
-    spans,
+    spans: [...spans, ...rejected],
     decisions: Object.fromEntries(
-      spans.map((span) => [
+      [...spans, ...rejected].map((span) => [
         span.id,
         {
-          decision: 'accept' as const,
+          decision: span.id === 'kept' ? 'reject' as const : 'accept' as const,
           decidedBy: 'test',
           decidedAt: '2026-01-01T00:00:00.000Z',
         },

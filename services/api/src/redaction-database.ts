@@ -702,6 +702,7 @@ export async function finalizeRedactionRun(input: {
   unknownDetectionAcknowledged: boolean
   outputMimeType?: string
   outputFilename?: string
+  additionalDocxBurns?: number
   outputDowngrade?: RunSummary['outputDowngrade']
   outputSha256?: string
   securePdf?: boolean
@@ -766,6 +767,7 @@ export async function finalizeRedactionRun(input: {
       // Burn fallback reason persists here (not just in the finalize
       // response) so the review UI still warns after a page reload.
       outputDowngrade: input.outputDowngrade ?? null,
+      additionalDocxBurns: input.additionalDocxBurns ?? 0,
       ...(input.outputSha256 ? { outputSha256: input.outputSha256 } : {}),
       // True only for the new secure rasterized hard-redaction PDF; absent on
       // legacy DOCX/TXT outputs and pseudonymised output.
@@ -801,6 +803,7 @@ export async function finalizeRedactionRun(input: {
         outputMimeType: input.outputMimeType ?? 'text/plain',
         outputFilename: input.outputFilename ?? null,
         securePdf: input.securePdf === true,
+        additionalDocxBurns: input.additionalDocxBurns ?? 0,
         detectionMode: finalizedRun.detectionMode,
         degradedDetectionAcknowledged:
           finalizedRun.detectionMode === 'heuristics+supplement' &&

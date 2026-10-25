@@ -16,6 +16,7 @@ import { decodedXmlText } from './redaction-docx-xml'
 export async function assertNoSpanTextSurvives(
   bytes: Uint8Array,
   affected: RedactionSpan[],
+  preserved: RedactionSpan[] = [],
 ) {
   let budget = 72 * 1024 * 1024
   const needles = affected
@@ -38,7 +39,19 @@ export async function assertNoSpanTextSurvives(
         `Package contents could not be verified in ${path || 'source DOCX'}.`,
       )
     }
-    const mapped = depth === 0 ? mapDocxText(entries).nodes : []
+    const mapping = depth === 0 ? mapDocxText(entries) : null
+    if (mapping) {
+      for (const needle of needles) {
+        let start = mapping.text.indexOf(needle.text)
+        while (start >= 0) {
+          const end = start + needle.text.length
+          if (containsText(mapping.text.slice(Math.max(0, start - 1), end + 1), needle.text) && !preserved.some(span => span.text === needle.text && span.start === start && span.end === end))
+            throw new RedactionDocxBurnError('Redacted text survives in mapped document content; refusing .docx output.')
+          start = mapping.text.indexOf(needle.text, start + 1)
+        }
+      }
+    }
+    const mapped = mapping?.nodes ?? []
     const ranges = new Map<string, typeof mapped>()
     for (const node of mapped) {
       const list = ranges.get(node.partName) ?? []

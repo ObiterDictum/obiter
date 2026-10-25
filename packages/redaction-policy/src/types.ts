@@ -59,6 +59,8 @@ export interface RunSummary {
   } | null
   /** SHA-256 of the stored finalized output bytes, hex encoded. */
   outputSha256?: string
+  /** Additional exact occurrences removed from reviewed DOCX text. */
+  additionalDocxBurns?: number
   /**
    * True only for a hard-redaction PDF produced by the secure rasterized path.
    * Absent or false on legacy hard-redaction DOCX/TXT outputs and on
