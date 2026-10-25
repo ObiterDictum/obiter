@@ -1,11 +1,19 @@
 import JSZip from 'jszip'
-import { decodeXmlReferences, isWord, parseXmlElements } from '@obiter/ooxml'
+import {
+  decodeXmlReferences,
+  isWord,
+  loadOoxmlZipEntries,
+  parseXmlElements,
+} from '@obiter/ooxml'
 
 const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
 
 /** Fallback text boxes duplicate the modern drawing but escape model anchors. */
 export async function prepareDocxForBurn(bytes: Buffer) {
-  const zip = await JSZip.loadAsync(bytes)
+  // Enforce package expansion limits before JSZip or XML parsing touches data.
+  const entries = await loadOoxmlZipEntries(bytes)
+  const zip = new JSZip()
+  for (const [name, payload] of entries) zip.file(name, payload)
   for (const file of Object.values(zip.files)) {
     if (file.dir || !file.name.endsWith('.xml')) continue
     const source = await file.async('string')
@@ -76,7 +84,7 @@ export async function prepareDocxForBurn(bytes: Buffer) {
   return zip.generateAsync({ type: 'uint8array' })
 }
 
-/** Decode both attributes and text; joining leaves catches split-run copies. */
+/** Decode attributes and mixed text, both with and without layout separators. */
 export function decodedXmlText(source: string) {
   const elements = parseXmlElements(source)
   const tags = elements
