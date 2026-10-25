@@ -32,44 +32,16 @@ const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const apiModule = { ...(await import('../api')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const apiModuleKeys = Object.fromEntries(
-  Object.keys(await import('../api')).map((key) => [key, undefined]),
-)
-mock.module('../api', () =>
-  Object.assign(
-    { ...apiModuleKeys },
-    (() => {
-      const actual = apiModule
-      return { ...actual, apiFetch: api.apiFetch }
-    })(),
-  ),
-)
+mock.module('../api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const authModuleKeys = Object.fromEntries(
-  Object.keys(await import('../auth')).map((key) => [key, undefined]),
-)
-mock.module('../auth', () =>
-  Object.assign(
-    { ...authModuleKeys },
-    (() => {
-      const actual = authModule
-      return {
-        ...actual,
-        useAuth: () => ({ changePassword: vi.fn() }),
-      }
-    })(),
-  ),
-)
+mock.module('../auth', () => ({
+  ...authModule,
+  useAuth: () => ({ changePassword: vi.fn() }),
+}))
 
 // The real module's export names as undefined: bun links named imports
 // statically and rejects a mock that omits one, while vitest left an

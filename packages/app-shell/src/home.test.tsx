@@ -27,90 +27,37 @@ const mocks = vi.hoisted(() => ({
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const mattersModule = { ...(await import('./matters')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const mattersModuleKeys = Object.fromEntries(
-  Object.keys(await import('./matters')).map((key) => [key, undefined]),
-)
-mock.module('./matters', () =>
-  Object.assign(
-    { ...mattersModuleKeys },
-    (() => {
-      const actual = mattersModule
-      return { ...actual, useMattersList: mocks.useMattersList }
-    })(),
-  ),
-)
+mock.module('./matters', () => ({
+  ...mattersModule,
+  useMattersList: mocks.useMattersList,
+}))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('./current-user')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const currentUserModuleKeys = Object.fromEntries(
-  Object.keys(await import('./current-user')).map((key) => [key, undefined]),
-)
-mock.module('./current-user', () =>
-  Object.assign(
-    { ...currentUserModuleKeys },
-    (() => {
-      const actual = currentUserModule
-      return {
-        ...actual,
-        useCurrentUser: mocks.useCurrentUser,
-      }
-    })(),
-  ),
-)
+mock.module('./current-user', () => ({
+  ...currentUserModule,
+  useCurrentUser: mocks.useCurrentUser,
+}))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const redactionRunsModule = { ...(await import('./redaction-runs')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const redactionRunsModuleKeys = Object.fromEntries(
-  Object.keys(await import('./redaction-runs')).map((key) => [key, undefined]),
-)
-mock.module('./redaction-runs', () =>
-  Object.assign(
-    { ...redactionRunsModuleKeys },
-    (() => {
-      const actual = redactionRunsModule
-      return {
-        ...actual,
-        useRedactionRunsList: mocks.useRedactionRunsList,
-      }
-    })(),
-  ),
-)
+mock.module('./redaction-runs', () => ({
+  ...redactionRunsModule,
+  useRedactionRunsList: mocks.useRedactionRunsList,
+}))
 
 // The real module, snapshotted before mock.module registers: a factory
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const changelogModule = { ...(await import('./changelog')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const changelogModuleKeys = Object.fromEntries(
-  Object.keys(await import('./changelog')).map((key) => [key, undefined]),
-)
-mock.module('./changelog', () =>
-  Object.assign(
-    { ...changelogModuleKeys },
-    (() => {
-      const actual = changelogModule
-      return {
-        ...actual,
-        changelogQueryOptions: mocks.changelogQueryOptions,
-      }
-    })(),
-  ),
-)
+mock.module('./changelog', () => ({
+  ...changelogModule,
+  changelogQueryOptions: mocks.changelogQueryOptions,
+}))
 
 const ME = {
   user: {
