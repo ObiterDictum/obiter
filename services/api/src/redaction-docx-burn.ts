@@ -216,7 +216,7 @@ export function scrubBurnedFields(
           const field = fields.pop()
           // Only the innermost result owns this instruction. In particular a
           // TOC must not inherit every nested entry's instructions.
-          if (field && touches({ start: field.start, end: element.end })) clearInstructions(field.instructions)
+          if (field?.redacted) clearInstructions(field.instructions)
         }
       }
       if (
@@ -230,7 +230,7 @@ export function scrubBurnedFields(
         if (field) field.redacted = true
       }
       if (isWord(element, 'instrText')) {
-        for (const field of fields) field.instructions.push(element)
+        fields.at(-1)?.instructions.push(element)
         if (touches(element)) clearInstructions([element])
       }
       if (isWord(element, 'fldSimple') && touches(element)) {

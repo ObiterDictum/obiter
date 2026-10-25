@@ -137,6 +137,27 @@ describe('accepted DOCX coordinates and container safety', () => {
     expect(output.xml).toContain('title="Other title"')
     expect(output.xml).toContain('[REDACTED].jpg')
   })
+  it('redacts one TOC entry while keeping neighbouring entries and their instructions', async () => {
+    const begin = '<w:fldChar w:fldCharType="begin"/>'
+    const separate = '<w:fldChar w:fldCharType="separate"/>'
+    const end = '<w:fldChar w:fldCharType="end"/>'
+    const field = (instruction: string, result: string) =>
+      r(
+        begin +
+          `<w:instrText>${instruction}</w:instrText>` +
+          separate +
+          t(result) +
+          end,
+      )
+    const output = await burn(
+      `<w:p>${r(begin + '<w:instrText>TOC \\o "1-3"</w:instrText>' + separate)}${field('HYPERLINK "private"', 'Jane Doe')}${field('PAGEREF _Toc2', 'Other entry')}${r(end)}</w:p>`,
+      ['Jane Doe'],
+    )
+    expect(output.xml).not.toContain('HYPERLINK "private"')
+    expect(output.xml).toContain('TOC \\o "1-3"')
+    expect(output.xml).toContain('PAGEREF _Toc2')
+    expect(output.text).toBe('[REDACTED]Other entry')
+  })
   it('burns selected comment and deletion text while preserving other review text', async () => {
     const output = await burn(
       p(t('Public')) +
