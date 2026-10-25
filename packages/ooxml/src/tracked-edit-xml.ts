@@ -7,9 +7,9 @@ import {
 import { expandSelfClosingProperties } from './model-properties'
 import {
   applyFragmentReplacements,
+  renameFragmentElements,
   escapeXmlAttribute,
   escapeXmlText,
-  renameFragmentElements,
 } from './parts/overlay'
 import {
   lineBreakRunReplacements,
@@ -83,9 +83,10 @@ export function renameTextElements(
   anchor: TextRunAnchor,
   localName: 'delText',
 ) {
+  const origin = anchor.runRange.start
   const renamed = renameFragmentElements(
     fragment,
-    anchor.runRange.start,
+    origin,
     anchor.textElements.map((range) => ({ range })),
     localName,
   )

@@ -165,7 +165,7 @@ function locateInsideRun(
   throw new OoxmlError('comment-anchor-unresolved')
 }
 
-function rawOffsetAtDecodedBoundary(raw: string, boundary: number) {
+export function rawOffsetAtDecodedBoundary(raw: string, boundary: number) {
   let rawOffset = 0
   let decodedOffset = 0
   while (decodedOffset < boundary) {

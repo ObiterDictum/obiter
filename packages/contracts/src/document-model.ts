@@ -52,6 +52,30 @@ export const documentTextRunWireSchema = z.object({
    * so every piece keeps the field.
    */
   hyperlinkTarget: z.string().min(1).optional(),
+  /** Parser proof that a tracked replacement can split this run safely.
+   * Optional for live-client compatibility; old stored projections regenerate. */
+  textRevisionEligible: z.boolean().optional(),
+  /** Source text-element boundaries, without duplicating their text. */
+  textRevisionTextRanges: z
+    .array(
+      z.object({
+        from: z.number().int().nonnegative(),
+        to: z.number().int().nonnegative(),
+      }),
+    )
+    .optional(),
+  /** Source-ordered retained controls for whole-run revisions. Consumed
+   * text-wrapping breaks already contribute offsets through the run text. */
+  textRevisionTokens: z
+    .array(
+      z.object({
+        kind: z.literal('retained'),
+        offset: z.number().int().nonnegative(),
+        textIndex: z.number().int().nonnegative(),
+        text: z.string(),
+      }),
+    )
+    .optional(),
   text: z.string(),
   preservedXmlFragments: z.array(z.string()),
 })

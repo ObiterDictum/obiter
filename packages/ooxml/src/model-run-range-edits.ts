@@ -1,6 +1,14 @@
-import type { DocumentTextRunWire } from '@obiter/contracts'
+import {
+  hasSplittableProperties,
+  isSplittableRun,
+} from './run-revision-eligibility'
+import { isWord } from './parts/xml-elements'
+import { trackedElementText } from './parts/tracked-change-display'
+import { sliceRunRevisionMetadata } from './run-revision-slice'
+import { normaliseEditText, type DocumentTextRunWire } from '@obiter/contracts'
 
 import {
+  editableTextNodes,
   locateOffset,
   preserveTextOpeningTag,
   type InsertionPoint,
@@ -156,7 +164,7 @@ export type RunTextReplacement = {
  * boundaries exactly like applyRunEmphasisRange (same locateOffset /
  * runPieceXml / openAt / closeAt machinery, same whole-run fast path via
  * replaceTextRunAtAnchor). Covered pieces keep the run's rPr so styles
- * survive; only the w:t content is swapped.
+ * survive. Covered non-text payloads are removed; layout controls may stay.
  *
  * One pass per paragraph: every original run is split at most once and new
  * ids come from a local allocator seeded with the live model, so the
@@ -238,7 +246,8 @@ export function applyRunTextReplacementRange(
       if (
         hit.localFrom === 0 &&
         hit.localTo === run.wire.text.length &&
-        !hit.emphasis
+        !hit.emphasis &&
+        isSplittableRun(source, run)
       ) {
         if (!replaceTextRunAtAnchor(document, run, hit.text)) {
           throw new OoxmlError('model-node-not-editable')
@@ -292,36 +301,115 @@ function splitReplacedRun(
   const cuts = new Map<number, InsertionPoint>()
   for (const bound of ordered) {
     if (bound === 0 || bound === run.wire.text.length) continue
-    cuts.set(bound, locateOffset(source, paragraph, runStart + bound))
+    cuts.set(
+      bound,
+      locateOffset(
+        source,
+        paragraph,
+        runStart + bound,
+        hits.some((hit) => hit.localFrom === bound),
+      ),
+    )
   }
   const openRun = source.slice(run.runRange.start, run.runRange.startTagEnd)
   const prefix = /^<([^:>\s]+):/u.exec(openRun)?.[1] ?? 'w'
   const properties = run.runProperties.join('')
   const closeRun = source.slice(run.runRange.endTagStart, run.runRange.end)
   const fragments = [...run.wire.preservedXmlFragments]
-  const parts: Array<{ xml: string; text: string }> = []
+  const runXml = source.slice(run.runRange.start, run.runRange.end)
+  const elements = parseWrappedRun(source, runXml)
+  const textNodes = editableTextNodes(run).map(({ range }) => ({
+    start: range.start - run.runRange.start,
+    end: range.end - run.runRange.start,
+  }))
+  // Redaction removes non-text payloads inside the covered range too.
+  // Only layout controls may survive in a replacement piece.
+  const controls = elements.filter(
+    (element) =>
+      element.depth === 1 &&
+      ['tab', 'cr', 'br'].some((name) => isWord(element, name)) &&
+      !textNodes.some(
+        (node) => node.start < element.end && element.start < node.end,
+      ),
+  )
+  const parts: Array<{
+    xml: string
+    text: string
+    metadata?: ReturnType<typeof sliceRunRevisionMetadata>
+  }> = []
   for (let index = 0; index < ordered.length - 1; index += 1) {
     const start = ordered[index]!
     const end = ordered[index + 1]!
+    const startCut = start === 0 ? undefined : cuts.get(start)
+    const endCut = end === run.wire.text.length ? undefined : cuts.get(end)
     const hit = hits.find(
       (candidate) => candidate.localFrom <= start && end <= candidate.localTo,
     )
-    if (hit) {
-      const propertiesXml = hit.emphasis
-        ? patchRunEmphasisXml(properties, hit.emphasis)
-        : properties
-      parts.push({
-        xml: `${openRun}${propertiesXml}${wordRunInnerTextXml(prefix, hit.text)}${closeRun}`,
-        text: hit.text,
-      })
-    } else {
-      const startCut = start === 0 ? undefined : cuts.get(start)
-      const endCut = end === run.wire.text.length ? undefined : cuts.get(end)
+    if (!hit) {
       parts.push({
         xml: runPieceXml(source, run, startCut, endCut),
         text: run.wire.text.slice(start, end),
       })
+      continue
     }
+    const from =
+      (startCut?.sourceOffset ?? run.runRange.startTagEnd) - run.runRange.start
+    const to =
+      (endCut?.sourceOffset ?? run.runRange.endTagStart) - run.runRange.start
+    const textStart = Math.max(
+      from,
+      textNodes.find((node) => node.end > from)?.start ?? to,
+    )
+    const kept = controls.filter(
+      (control) => control.start >= from && control.end <= to,
+    )
+    const leading = kept.filter((control) => control.end <= textStart)
+    const trailing = kept.slice(leading.length)
+    const lines = normaliseEditText(hit.text).split('\n')
+    // The parser's retained tokens for what this piece writes: controls
+    // before the replacement text, then the rest after its last line.
+    const tokensOf = (items: typeof kept, offset: number, textIndex: number) =>
+      elements
+        .filter(
+          (element) =>
+            ['tab', 'cr', 'br'].some((name) => isWord(element, name)) &&
+            items.some(
+              (item) => item.start <= element.start && element.end <= item.end,
+            ),
+        )
+        .map((element) => ({
+          kind: 'retained' as const,
+          offset,
+          textIndex,
+          text: trackedElementText(runXml, element),
+        }))
+    const xmlOf = (items: typeof kept) =>
+      items.map((item) => runXml.slice(item.start, item.end)).join('')
+    const propertiesXml = hit.emphasis
+      ? patchRunEmphasisXml(properties, hit.emphasis)
+      : properties
+    let offset = 0
+    parts.push({
+      xml: `${openRun}${propertiesXml}${xmlOf(leading)}${wordRunInnerTextXml(prefix, hit.text)}${xmlOf(trailing)}${closeRun}`,
+      text: hit.text,
+      metadata:
+        kept.length === 0 &&
+        lines.length === 1 &&
+        hasSplittableProperties(run.runProperties)
+          ? { textRevisionEligible: true }
+          : {
+              textRevisionEligible: false,
+              textRevisionTokens: [
+                ...tokensOf(leading, 0, 0),
+                ...tokensOf(trailing, hit.text.length, lines.length),
+              ],
+              textRevisionTextRanges: lines.map((line) => {
+                const range = { from: offset, to: offset + line.length }
+                offset = range.to + 1
+                return range
+              }),
+            },
+    })
   }
   const wires = parts.map((part, index) => ({
     id: index === 0 ? run.wire.id : nextId(),
@@ -331,6 +419,14 @@ function splitReplacedRun(
     ...(run.wire.hyperlinkTarget
       ? { hyperlinkTarget: run.wire.hyperlinkTarget }
       : {}),
+    ...(part.metadata ??
+      sliceRunRevisionMetadata(
+        run.wire,
+        ordered[index] ?? 0,
+        ordered[index + 1] ?? run.wire.text.length,
+        run.wire.preservedXmlFragments,
+        'both',
+      )),
     text: part.text,
     preservedXmlFragments: [...fragments],
   }))
@@ -369,46 +465,4 @@ export function parseWrappedRun(partSource: string, runXml: string) {
     endTagStart: element.endTagStart - shift,
     end: element.end - shift,
   }))
-}
-
-/**
- * Coalesces the sibling `<w:r>` elements a folded page-break splice produced
- * back into one run. The splice duplicates the original run's properties onto
- * its reopened tail, so keeping every sibling's `w:rPr` would put two into one
- * run; the first sibling owns the effective properties (a property overlay
- * writes into the original run's property range, or wire fragments already
- * carry the patch), and the tail's copy is the stale snapshot. Structural
- * children (a break, a tab) are emitted in order between the chosen properties
- * and the run close.
- */
-export function mergeSiblingRuns(partSource: string, runXml: string) {
-  const elements = parseWrappedRun(partSource, runXml)
-  const runs = elements.filter((element) => element.depth === 0)
-  // A fold can legitimately hold non-run siblings — a pending hyperlink wrap
-  // emits `<w:hyperlink>` around the pieces — and merging those as if they
-  // were runs would produce malformed XML. Returning the fold unchanged lets
-  // the caller's one-run check refuse the edit with a typed error instead.
-  if (runs.some((element) => element.localName !== 'r')) return runXml
-  const first = runs[0]
-  const last = runs.at(-1)
-  if (!first || !last || runs.length <= 1) return runXml
-  const childrenByRun = runs.map((run) =>
-    elements.filter(
-      (element) =>
-        element.depth === 1 &&
-        element.start >= run.start &&
-        element.end <= run.end,
-    ),
-  )
-  const properties = childrenByRun
-    .flat()
-    .find((element) => element.localName === 'rPr')
-  let inner = properties ? runXml.slice(properties.start, properties.end) : ''
-  for (const children of childrenByRun) {
-    for (const child of children) {
-      if (child.localName === 'rPr') continue
-      inner += runXml.slice(child.start, child.end)
-    }
-  }
-  return `${runXml.slice(first.start, first.startTagEnd)}${inner}${runXml.slice(last.endTagStart, last.end)}`
 }
