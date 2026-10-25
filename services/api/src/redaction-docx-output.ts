@@ -38,15 +38,9 @@ export { RedactionDocxBurnError } from './redaction-docx-error'
 function replacementForSpan(
   span: RedactionSpan,
   outputMode: RedactedDocxInput['outputMode'],
-  tokenMap: TokenMap,
+  tokensByEntity: ReadonlyMap<string, string>,
 ) {
   if (outputMode === 'redacted') return '[REDACTED]'
-  const tokensByEntity = new Map(
-    Object.entries(tokenMap).map(([token, value]) => [
-      `${token.slice(0, token.lastIndexOf('_'))?.toLowerCase()}:${value}`,
-      token,
-    ]),
-  )
   const token = tokensByEntity.get(`${span.category}:${span.text}`)
   if (!token)
     throw new RedactionDocxBurnError(`Missing pseudonym token for redaction.`)
@@ -81,10 +75,16 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
       throw new RedactionSpanIntegrityError(span.id)
     }
   }
+  const tokensByEntity = new Map(
+    Object.entries(input.tokenMap).map(([token, value]) => [
+      `${token.slice(0, token.lastIndexOf('_'))?.toLowerCase()}:${value}`,
+      token,
+    ]),
+  )
   const replacements = new Map(
     affected.map((span) => [
       span.id,
-      replacementForSpan(span, input.outputMode, input.tokenMap),
+      replacementForSpan(span, input.outputMode, tokensByEntity),
     ]),
   )
 
