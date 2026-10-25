@@ -70,3 +70,7 @@ properties are inserted in the run's active properties in schema order.
 Modified XML and the resulting DOCX are reparsed. The final gate validates all XML
 and checks raw bytes, decoded mixed/split text, paragraph text and attributes,
 including escaped entities. Uncertain burns or serialisation failures refuse.
+
+A structured DOCX burn refusal also stops pseudonymised finalisation: no text
+substitute is written, no output is published and the run stays unfinalised.
+The existing bounded failure category is recorded in the audit event.

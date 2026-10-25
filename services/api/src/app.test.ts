@@ -3218,154 +3218,160 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
   })
 
-  it('fails visibly with no output when .docx burn refuses tracked-change text', async () => {
-    const { default: JSZip } = await import('jszip')
-    // The deletion duplicates live text exactly, so coverage passes it as
-    // examined — but the burn still refuses the residual tracked copy of
-    // the accepted span and falls back to text output.
-    const target = 'Cartwright'
-    const text = `${target} attended.`
-    const zip = new JSZip()
-    zip.file(
-      '[Content_Types].xml',
-      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Default Extension="xml" ContentType="application/xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '</Types>',
-    )
-    zip.file(
-      '_rels/.rels',
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
-        '</Relationships>',
-    )
-    zip.file(
-      'word/document.xml',
-      '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
-        `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
-        `<w:p><w:del w:id="0" w:author="A" w:date="2024-01-01T00:00:00Z"><w:r><w:delText>${target}</w:delText></w:r></w:del></w:p>` +
-        '</w:body></w:document>',
-    )
-    const sourceBytes = Buffer.from(
-      await zip.generateAsync({ type: 'uint8array' }),
-    )
-    expect(text).toContain(target)
-    const start = text.indexOf(target)
-    const readyRun = finalizedRunRow({
-      status: 'ready_for_review',
-      output_id: null,
-      source_filename: 'letter-tracked-changes.docx',
-      source_mime_type:
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
-      spans_json: [
-        {
-          id: 'span_1',
-          start,
-          end: start + target.length,
-          text: target,
-          category: 'person_name',
-          source: 'rampart_model',
-          confidence: 'high',
-          suggestion: 'redact',
+  it.each(['redacted', 'pseudonymised'] as const)(
+    'fails visibly with no output when .docx burn refuses tracked-change text in %s mode',
+    async (outputMode) => {
+      const { default: JSZip } = await import('jszip')
+      // The deletion duplicates live text exactly, so coverage passes it as
+      // examined — but the burn still refuses the residual tracked copy of
+      // the accepted span. Neither mode may publish a substitute.
+      const target = 'Cartwright'
+      const text = `${target} attended.`
+      const zip = new JSZip()
+      zip.file(
+        '[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>',
+      )
+      zip.file(
+        '_rels/.rels',
+        '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+          '</Relationships>',
+      )
+      zip.file(
+        'word/document.xml',
+        '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+          `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
+          `<w:p><w:del w:id="0" w:author="A" w:date="2024-01-01T00:00:00Z"><w:r><w:delText>${target}</w:delText></w:r></w:del></w:p>` +
+          '</w:body></w:document>',
+      )
+      const sourceBytes = Buffer.from(
+        await zip.generateAsync({ type: 'uint8array' }),
+      )
+      expect(text).toContain(target)
+      const start = text.indexOf(target)
+      const readyRun = finalizedRunRow({
+        status: 'ready_for_review',
+        output_id: null,
+        source_filename: 'letter-tracked-changes.docx',
+        source_mime_type:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
+        spans_json: [
+          {
+            id: 'span_1',
+            start,
+            end: start + target.length,
+            text: target,
+            category: 'person_name',
+            source: 'rampart_model',
+            confidence: 'high',
+            suggestion: 'redact',
+          },
+        ],
+        decisions_json: {
+          span_1: {
+            decision: 'accept',
+            decidedBy: 'usr_1',
+            decidedAt: '2026-07-30T00:00:00.000Z',
+          },
         },
-      ],
-      decisions_json: {
-        span_1: {
-          decision: 'accept',
-          decidedBy: 'usr_1',
-          decidedAt: '2026-07-30T00:00:00.000Z',
-        },
-      },
-    })
-    let textWrites = 0
-    let binaryWrites = 0
-    let persistedSummary: Record<string, unknown> | null = null
-    const auditMetadata: Array<Record<string, unknown>> = []
-    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const app = createApiApp(
-      testEnv,
-      createHybridPool(
-        async (sql, params) => {
-          if (
-            String(sql).includes('insert into audit_logs') &&
-            Array.isArray(params)
-          )
-            auditMetadata.push(
-              JSON.parse(String(params[5])) as Record<string, unknown>,
+      })
+      let textWrites = 0
+      let binaryWrites = 0
+      let persistedSummary: Record<string, unknown> | null = null
+      const auditMetadata: Array<Record<string, unknown>> = []
+      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const app = createApiApp(
+        testEnv,
+        createHybridPool(
+          async (sql, params) => {
+            if (
+              String(sql).includes('insert into audit_logs') &&
+              Array.isArray(params)
             )
-          if (String(sql).includes('from redaction_runs')) {
-            return { rows: [readyRun] }
-          }
-          return { rows: [] }
-        },
-        async (sql, params) => {
-          const statement = String(sql)
-          if (statement === 'begin' || statement === 'commit')
-            return { rows: [] }
-          if (
-            statement.includes('for update of run') ||
-            statement.includes('select matter_id, document_id, replaces_run_id')
-          )
-            return { rows: [readyRun] }
-          if (statement.includes('insert into outputs')) {
-            return {
-              rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
+              auditMetadata.push(
+                JSON.parse(String(params[5])) as Record<string, unknown>,
+              )
+            if (String(sql).includes('from redaction_runs')) {
+              return { rows: [readyRun] }
             }
-          }
-          if (statement.includes('update redaction_runs')) {
-            persistedSummary = JSON.parse(
-              (params as unknown[])[3] as string,
-            ) as Record<string, unknown>
             return { rows: [] }
-          }
-          if (statement.includes('from redaction_runs')) {
-            return { rows: [finalizedRunRow()] }
-          }
-          if (statement.includes('insert into audit_logs')) return { rows: [] }
-          throw new Error(`Unexpected SQL: ${statement}`)
-        },
-      ),
-      {
-        auth: authWithRole('member'),
-        redactionRenderer: fakeDocxRenderer(),
-        storage: {
-          readText: async () => text,
-          readBinary: async () => sourceBytes,
-          writeText: async () => {
-            textWrites += 1
           },
-          writeBinary: async () => {
-            binaryWrites += 1
+          async (sql, params) => {
+            const statement = String(sql)
+            if (statement === 'begin' || statement === 'commit')
+              return { rows: [] }
+            if (
+              statement.includes('for update of run') ||
+              statement.includes(
+                'select matter_id, document_id, replaces_run_id',
+              )
+            )
+              return { rows: [readyRun] }
+            if (statement.includes('insert into outputs')) {
+              return {
+                rows: [{ id: 'out_1', object_key: 'org/org_1/outputs/out_1' }],
+              }
+            }
+            if (statement.includes('update redaction_runs')) {
+              persistedSummary = JSON.parse(
+                (params as unknown[])[3] as string,
+              ) as Record<string, unknown>
+              return { rows: [] }
+            }
+            if (statement.includes('from redaction_runs')) {
+              return { rows: [finalizedRunRow()] }
+            }
+            if (statement.includes('insert into audit_logs'))
+              return { rows: [] }
+            throw new Error(`Unexpected SQL: ${statement}`)
           },
-          delete: async () => undefined,
+        ),
+        {
+          auth: authWithRole('member'),
+          redactionRenderer: fakeDocxRenderer(),
+          storage: {
+            readText: async () => text,
+            readBinary: async () => sourceBytes,
+            writeText: async () => {
+              textWrites += 1
+            },
+            writeBinary: async () => {
+              binaryWrites += 1
+            },
+            delete: async () => undefined,
+          },
         },
-      },
-    )
-    const response = await app.request('/api/redaction-runs/red_1/finalize', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ outputMode: 'redacted' }),
-    })
-    expect(response.status).toBe(502)
-    expect(((await response.json()) as ErrorBody).error).toMatchObject({
-      code: 'redaction_secure_pdf_failed',
-    })
-    // No silent downgrade: no text fallback, no output, no finalized run.
-    expect(textWrites).toBe(0)
-    expect(binaryWrites).toBe(0)
-    expect(persistedSummary).toBeNull()
-    expect(log).toHaveBeenCalledWith(
-      'redaction_secure_pdf_failed',
-      expect.objectContaining({ category: 'docx_burn_failed' }),
-    )
-    log.mockRestore()
-    // Only the stable category and mode cross into audit metadata.
-    expect(auditMetadata).toEqual([
-      { outputMode: 'redacted', failureCategory: 'docx_burn_failed' },
-    ])
-  })
+      )
+      const response = await app.request('/api/redaction-runs/red_1/finalize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ outputMode }),
+      })
+      expect(response.status).toBe(502)
+      expect(((await response.json()) as ErrorBody).error).toMatchObject({
+        code: 'redaction_secure_pdf_failed',
+      })
+      // No silent downgrade: no text fallback, no output, no finalized run.
+      expect(textWrites).toBe(0)
+      expect(binaryWrites).toBe(0)
+      expect(persistedSummary).toBeNull()
+      expect(log).toHaveBeenCalledWith(
+        'redaction_secure_pdf_failed',
+        expect.objectContaining({ category: 'docx_burn_failed' }),
+      )
+      log.mockRestore()
+      // Only the stable category and mode cross into audit metadata.
+      expect(auditMetadata).toEqual([
+        { outputMode, failureCategory: 'docx_burn_failed' },
+      ])
+    },
+  )
 
   it('finalizes runs with no stored source as coverage-unchecked (warning + audit)', async () => {
     const readyRun = finalizedRunRow({

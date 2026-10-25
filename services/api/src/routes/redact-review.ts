@@ -46,6 +46,7 @@ import {
   buildRedactedDocx,
   isDocxMimeOrFilename,
   redactedDocxFilename,
+  RedactionDocxBurnError,
 } from '../redaction-docx-output'
 import type { StorageService } from '../storage'
 import {
@@ -639,6 +640,19 @@ export function createRedactReviewRoutes(
         }
       } catch (error) {
         if (error instanceof RedactionSpanIntegrityError) throw error
+        if (error instanceof RedactionDocxBurnError) {
+          await storage.delete(objectKey)
+          return await reportSecurePdfFailure(c, pool, {
+            runId: run.id,
+            organisationId: run.organisationId,
+            userId: user.id,
+            outputMode: 'pseudonymised',
+            error: new HardRedactionOutputError(
+              'docx_burn_failed',
+              'The Word document could not be redacted safely.',
+            ),
+          })
+        }
         // DOCX burn failed — fall back to text output so finalize still
         // completes. The text output carries no source container, so tracked
         // changes, metadata, comments, and embedded parts cannot leak
