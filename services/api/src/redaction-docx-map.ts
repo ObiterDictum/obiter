@@ -129,7 +129,7 @@ export function nodeText(
       .map((segment) => segment[1] ?? decodeXmlReferences(segment[2] ?? ''))
       .join('')
   }
-  if (isWord(element, 'tab')) return '\t'
+  if (isWord(element, 'tab')) return element.parent && isWord(element.parent, 'r') ? '\t' : undefined
   if (isWord(element, 'br') || isWord(element, 'cr')) return '\n'
   if (isWord(element, 'noBreakHyphen')) return '\u2011'
   if (isWord(element, 'softHyphen')) return '\u00ad'

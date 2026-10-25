@@ -75,3 +75,13 @@ it('returns a coverage refusal for branchless alternate content instead of throw
   const bytes = await fixture(`<w:p><w:r><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"/></w:r></w:p>`)
   await expect(findUncoveredDocxRegions(bytes, 'legacy text')).resolves.toEqual(['DOCX review coordinates could not be verified; upload the document again'])
 })
+it('keeps text-box paragraph tab-stop definitions out of review text and renderer edits', async () => {
+  const body = `<w:p><w:r><w:pict><w:txbxContent><w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs></w:pPr>${t('Jane Doe')}${t(' Public')}</w:p></w:txbxContent></w:pict></w:r></w:p>`
+  const bytes = await fixture(body)
+  const {text} = await extractRedactionContent('docx', bytes)
+  expect(text).toBe('Jane Doe Public')
+  const output = await buildRedactedDocx({docxBytes:bytes,text,spans:[span('Jane Doe')],decisions:{accepted:decision('accept')},outputMode:'redacted',tokenMap:{}})
+  const xml = await (await JSZip.loadAsync(output)).file('word/document.xml')?.async('string')
+  expect(xml).toContain('<w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs>')
+  expect(xml).toContain(' Public')
+})
