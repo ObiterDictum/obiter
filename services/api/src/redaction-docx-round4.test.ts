@@ -71,3 +71,7 @@ it.each(['HYPERLINK &quot;mailto:j.smith@firm.invalid&quot;', 'TOC Jane Doe'])('
   expect(xml).not.toContain('TOC Jane Doe')
   expect(xml).toContain('[PERSON_NAME_1]')
 })
+it('returns a coverage refusal for branchless alternate content instead of throwing', async () => {
+  const bytes = await fixture(`<w:p><w:r><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"/></w:r></w:p>`)
+  await expect(findUncoveredDocxRegions(bytes, 'legacy text')).resolves.toEqual(['DOCX review coordinates could not be verified; upload the document again'])
+})

@@ -384,13 +384,15 @@ export async function findUncoveredDocxRegions(
   try {
     entries = await loadOoxmlZipEntries(sourceBytes)
   } catch {
-    // Unreadable here means extraction already failed upstream; nothing to add.
-    return []
+    return ['DOCX package could not be verified; upload the document again']
   }
-  const mappedCoverage =
-    mapDocxText(
-      await loadOoxmlZipEntries(await prepareDocxForBurn(sourceBytes)),
-    ).text === extractedText.trim()
+  let mappedCoverage: boolean
+  try {
+    mappedCoverage = mapDocxText(await loadOoxmlZipEntries(await prepareDocxForBurn(sourceBytes))).text === extractedText.trim()
+  } catch {
+    // Malformed/unsupported coordinates are a completeness refusal, never a 500.
+    return ['DOCX review coordinates could not be verified; upload the document again']
+  }
   const regions: string[] = []
   const pushChars = (name: string, chars: number) => {
     if (chars >= UNEXAMINED_PART_MIN_CHARS)
