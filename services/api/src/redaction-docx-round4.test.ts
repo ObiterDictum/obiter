@@ -47,3 +47,16 @@ it('burns detector-missed body, header and comment occurrences while preserving 
   // The independent gate must reject mapped text without that exact exemption.
   await expect(assertNoSpanTextSurvives(output, [accepted])).rejects.toThrow('survives in mapped')
 })
+it.each(['Shruti', 'Georgia'])('preserves font definitions named %s while burning the person', async name => {
+  const bytes = await fixture(p(name), {
+    'word/theme/theme1.xml': `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:fontScheme name="Office"><a:majorFont><a:latin typeface="${name}"/></a:majorFont></a:fontScheme></a:themeElements></a:theme>`,
+    'word/fontTable.xml': `<w:fonts xmlns:w="${W}"><w:font w:name="${name}"/></w:fonts>`,
+    'word/styles.xml': `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${name}" w:hAnsi="${name}" w:eastAsia="${name}" w:cs="${name}"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
+  })
+  const {text} = await extractRedactionContent('docx', bytes)
+  const output = await buildRedactedDocx({docxBytes:bytes,text,spans:[span(name)],decisions:{accepted:decision('accept')},outputMode:'pseudonymised',tokenMap:{PERSON_NAME_1:name}})
+  expect((await extractRedactionContent('docx', Buffer.from(output))).text).toBe('[PERSON_NAME_1]')
+  const zip = await JSZip.loadAsync(output)
+  expect(await zip.file('word/theme/theme1.xml')?.async('string')).toContain(`typeface="${name}"`)
+  expect(await zip.file('word/fontTable.xml')?.async('string')).toContain(`w:name="${name}"`)
+})

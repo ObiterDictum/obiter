@@ -89,6 +89,11 @@ export async function assertNoSpanTextSurvives(
           residual,
           (element, attribute) =>
             !(
+              (/^word\/theme\/[^/]+\.xml$/iu.test(name) && element.namespaceUri === 'http://schemas.openxmlformats.org/drawingml/2006/main' && attribute.localName === 'typeface') ||
+              (/^word\/(?:fontTable|styles)\.xml$/iu.test(name) && attribute.namespaceUri === WORD_NAMESPACE &&
+                ((isWord(element, 'rFonts') && ['ascii', 'hAnsi', 'eastAsia', 'cs'].includes(attribute.localName)) ||
+                  (name === 'word/fontTable.xml' && isWord(element, 'font') && attribute.localName === 'name')))
+            ) && !(
               attribute.namespaceUri === WORD_NAMESPACE &&
               attribute.localName === 'val' &&
               /^(?:-?\d+(?:\.\d+)?|[\da-f]{6}|auto|black|[a-z]{2,3}(?:-[a-z]{2,4})*)$/iu.test(
