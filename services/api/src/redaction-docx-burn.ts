@@ -47,6 +47,7 @@ export function burnMappedNodes(
   const burned = new Map<string, Range[]>()
   const emitted = new Set<BurnRange>()
   const styles = new Map<XmlElement, string>()
+  const propertiesByRun = new Map<XmlElement, string>()
   let firstSpan = 0
   for (const node of nodes) {
     while (
@@ -66,10 +67,13 @@ export function burnMappedNodes(
     const close = source.slice(node.run.endTagStart, node.run.end)
     const textTag =
       node.range.qualifiedName.split(':').slice(0, -1).join(':') || 'w'
-    const properties = (children.get(node.run.start) ?? [])
-      .filter((child) => isWord(child, 'rPr'))
-      .map((child) => source.slice(child.start, child.end))
-      .join('')
+    const properties =
+      propertiesByRun.get(node.run) ??
+      (children.get(node.run.start) ?? [])
+        .filter((child) => isWord(child, 'rPr'))
+        .map((child) => source.slice(child.start, child.end))
+        .join('')
+    propertiesByRun.set(node.run, properties)
     const carrier = isWord(node.range, 'delText') ? 'delText' : 't'
     const textXml = (value: string) =>
       value
