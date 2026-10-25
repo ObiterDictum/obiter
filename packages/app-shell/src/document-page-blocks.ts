@@ -1,3 +1,5 @@
+import type { PendingRedlines } from './document-pending-redlines'
+import { pendingParagraphChanges } from './document-pending-redlines'
 import { paragraphPartName } from './document-inline-index'
 import { inlineChanges } from './document-inline-changes'
 import type {
@@ -93,6 +95,7 @@ export function layoutParagraph(
   advance: () => void,
   /** Effective-text offsets of pending page breaks in this paragraph. */
   pageBreaks: readonly number[] = [],
+  pendingRedlines?: PendingRedlines,
 ): void {
   const paragraph = effectiveParagraph(
     item.paragraph,
@@ -100,7 +103,12 @@ export function layoutParagraph(
     extraRuns[item.paragraph.id] ?? [],
   )
   const partName = paragraphPartName(model, item.paragraph)
-  const projection = inlineChanges(paragraph, model.changes, partName)
+  const projection = inlineChanges(
+    paragraph,
+    model.changes,
+    partName,
+    pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
+  )
   const text = projection.text
   // A stored break is addressed by text offset exactly like a pending one, so
   // both merge into one ordered set. Only the pending path used to split, which
@@ -323,6 +331,7 @@ export function tableHeight(
   widthPx: number,
   paragraphs: readonly DocumentParagraphWire[] = documentStory(model)
     ?.paragraphs ?? [],
+  pendingRedlines?: PendingRedlines,
 ): number {
   const paras = new Map(
     paragraphs.map((paragraph) => [paragraph.id, paragraph]),
@@ -337,8 +346,14 @@ export function tableHeight(
           if (!paragraph) return height
           return (
             height +
-            paragraphMetrics(paragraph, model, drafts, extraRuns, cellWidth)
-              .heightPx
+            paragraphMetrics(
+              paragraph,
+              model,
+              drafts,
+              extraRuns,
+              cellWidth,
+              pendingRedlines,
+            ).heightPx
           )
         }, 0),
       ),

@@ -1,3 +1,5 @@
+import type { PendingRedlines } from './document-pending-redlines'
+import { pendingParagraphChanges } from './document-pending-redlines'
 import { paragraphPartName } from './document-inline-index'
 import { inlineChanges } from './document-inline-changes'
 import type {
@@ -22,6 +24,7 @@ export function keepWithNext(
   column: ColumnFrame,
   session: { y: number },
   advance: () => void,
+  pendingRedlines?: PendingRedlines,
 ): void {
   if (session.y === 0) return
   const remaining = frame.heightPx - session.y
@@ -36,6 +39,7 @@ export function keepWithNext(
       drafts,
       extraRuns,
       column.widthPx,
+      pendingRedlines,
     )
     if (!first) first = next
     heightPx += next.heightPx
@@ -99,6 +103,7 @@ export function paragraphMetrics(
   drafts: Record<string, string> | undefined,
   extraRuns: ExtraRuns,
   columnWidthPx: number,
+  pendingRedlines?: PendingRedlines,
 ) {
   const resolved = effectiveParagraph(
     paragraph,
@@ -106,7 +111,12 @@ export function paragraphMetrics(
     extraRuns[paragraph.id] ?? [],
   )
   const partName = paragraphPartName(model, paragraph)
-  const text = inlineChanges(resolved, model.changes, partName).text
+  const text = inlineChanges(
+    resolved,
+    model.changes,
+    partName,
+    pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
+  ).text
   const face = paragraphFace(resolved, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx

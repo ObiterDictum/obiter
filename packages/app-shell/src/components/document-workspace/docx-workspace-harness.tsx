@@ -193,7 +193,14 @@ function idleMutation(overrides: Record<string, unknown> = {}) {
 export function paragraph(id: string, text: string): DocumentParagraphWire {
   return {
     id,
-    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
+    runs: [
+      {
+        id: `${id}-r`,
+        text,
+        textRevisionEligible: true,
+        preservedXmlFragments: [],
+      },
+    ],
     preservedXmlFragments: [],
   }
 }

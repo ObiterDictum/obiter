@@ -1,3 +1,8 @@
+import type { SavePlan } from '../../document-save-plan'
+import {
+  buildPendingRedlines,
+  type PendingRedlines,
+} from '../../document-pending-redlines'
 import { useEffect, useMemo } from 'react'
 import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
 import {
@@ -53,6 +58,7 @@ const NO_DELETIONS = {
 
 type DraftState = Pick<
   ReturnType<typeof useWorkspaceDrafts>,
+  | 'state'
   | 'drafts'
   | 'inserts'
   | 'extraRuns'
@@ -87,6 +93,7 @@ type DraftState = Pick<
  */
 export type WorkspaceDerivations = {
   painted: DocumentModelWire | undefined
+  pendingRedlines: PendingRedlines | undefined
   pages: LaidOutPage[]
   /** The document's stored page box — the paper `@page` declares, independent
    * of which layout view is painted. */
@@ -152,7 +159,9 @@ export function useWorkspaceDerivations({
   insert,
   legalChecksOpen,
   flow,
+  saveOperations,
 }: {
+  saveOperations?: SavePlan['operations']
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
@@ -224,7 +233,7 @@ export function useWorkspaceDerivations({
   // them through the code a reloaded document uses. With no pending
   // structures the fold returns `formatted` unchanged, so a keystroke keeps
   // the block partition memoised below.
-  const painted = useMemo(
+  const structured = useMemo(
     () =>
       formatted
         ? withStructuralDrafts(
@@ -236,12 +245,20 @@ export function useWorkspaceDerivations({
         : undefined,
     [formatted, drafts.structures, drafts.drafts, deletions],
   )
+  const painted = structured
+  const pendingRedlines = useMemo(
+    () =>
+      structured && model && insert.trackChanges
+        ? buildPendingRedlines(model, drafts.state, saveOperations)
+        : undefined,
+    [structured, model, insert.trackChanges, drafts.state, saveOperations],
+  )
   // The story's block partition is a pure function of the painted model, so it
   // is scanned once per model rather than once per pagination pass.
   const blocks = useMemo(() => {
-    const story = painted ? documentStory(painted) : undefined
+    const story = structured ? documentStory(structured) : undefined
     return story ? storyBlocks(story) : []
-  }, [painted])
+  }, [structured])
   // Pending breaks are structure, not text: they are folded into a copy of the
   // painted model so pagination sees the same page and section breaks the save
   // will write, without changing what the page renders.
@@ -264,6 +281,7 @@ export function useWorkspaceDerivations({
             blocks,
             drafts.breaks,
             flow,
+            pendingRedlines,
           )
         : [],
     [
@@ -274,6 +292,7 @@ export function useWorkspaceDerivations({
       drafts.extraRuns,
       drafts.breaks,
       flow,
+      pendingRedlines,
     ],
   )
   // The `@page` rule is the document's own stored page setup — the first
@@ -411,6 +430,7 @@ export function useWorkspaceDerivations({
   )
   return {
     painted,
+    pendingRedlines,
     pages,
     printBox,
     authorities,

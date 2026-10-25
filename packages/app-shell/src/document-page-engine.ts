@@ -1,3 +1,4 @@
+import type { PendingRedlines } from './document-pending-redlines'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   flowIds,
@@ -62,6 +63,7 @@ export function layoutDocument(
   /** Pending breaks, folded at their caret offset rather than appended. */
   pageBreaks: readonly BreakDraft[] = [],
   flow?: DocumentLayoutFlow,
+  pendingRedlines?: PendingRedlines,
 ): LaidOutPage[] {
   const web = flow?.kind === 'web' ? flow : undefined
   const sections = documentSections(model)
@@ -183,6 +185,8 @@ export function layoutDocument(
         drafts,
         extraRuns,
         column().widthPx,
+        undefined,
+        pendingRedlines,
       )
       if (session.y > 0 && heightPx > geometry.frame.heightPx - session.y)
         advance()
@@ -205,6 +209,7 @@ export function layoutDocument(
       column(),
       session,
       advance,
+      pendingRedlines,
     )
     const offsets = breakOffsets.get(item.paragraph.id) ?? []
     layoutParagraph(
@@ -219,6 +224,7 @@ export function layoutDocument(
       column,
       advance,
       offsets,
+      pendingRedlines,
     )
     if (
       sections[sectionIndex]?.endParagraphId === item.paragraph.id &&
@@ -238,6 +244,7 @@ export function layoutDocument(
     session,
     column,
     advance,
+    pendingRedlines,
   )
 
   if (
@@ -262,6 +269,7 @@ function layoutNotes(
   session: PageSession,
   column: () => ColumnFrame,
   advance: () => void,
+  pendingRedlines?: PendingRedlines,
 ): void {
   const notes = documentNotes(model)
   if (notes.length === 0) return
@@ -281,6 +289,8 @@ function layoutNotes(
         session,
         column,
         advance,
+        [],
+        pendingRedlines,
       )
     }
   }

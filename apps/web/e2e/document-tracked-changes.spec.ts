@@ -694,3 +694,54 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   await expect(insertion).toBeVisible()
   await expect(deletion).toBeVisible()
 })
+
+test('native clicks place the caret inside an unsaved tracked insertion', async ({
+  page,
+  request,
+}) => {
+  buildFixture()
+  const { email, password } = await createAccount(request)
+  await openFixtureDocument(
+    page,
+    email,
+    password,
+    `E9 pending caret ${Date.now()}`,
+  )
+  await openChangesPanel(page)
+  await expect(
+    page.getByRole('button', { name: 'Track changes on' }),
+  ).toBeVisible()
+  await selectFirst(page, PLAIN, SELECTED.length)
+  await page.keyboard.type('45,000')
+  await page.keyboard.press('Escape')
+  const insertion = page
+    .locator('[data-paragraph-id] [data-inline-editable="true"]')
+    .filter({ hasText: '45,000' })
+  await expect(insertion).toHaveText('45,000')
+  const point = await insertion.evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    const text = walker.nextNode()
+    if (!text) throw new Error('Missing inserted text node')
+    const range = document.createRange()
+    range.setStart(text, 2)
+    range.setEnd(text, 3)
+    const rect = range.getBoundingClientRect()
+    const x = rect.left + 0.5
+    const y = rect.top + rect.height / 2
+    const caret = document.caretPositionFromPoint(x, y)
+    return {
+      x,
+      y,
+      hitInside: element.contains(caret?.offsetNode ?? null),
+      offset: caret?.offset,
+    }
+  })
+  expect(point.hitInside).toBe(true)
+  expect(point.offset).toBe(2)
+  await page.mouse.click(point.x, point.y)
+  await page.keyboard.type('X')
+  await expect(
+    page.locator('[data-paragraph-id] [data-inline-editable="true"]'),
+  ).toHaveText('45X,000')
+  await page.screenshot({ path: '/tmp/obiter-r2-caret-after.png' })
+})

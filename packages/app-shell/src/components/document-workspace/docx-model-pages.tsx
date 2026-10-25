@@ -1,5 +1,10 @@
+import type { PendingRedlines } from '../../document-pending-redlines'
 import { useMemo } from 'react'
-import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
+import {
+  normaliseEditText,
+  type DocumentModelWire,
+  type DocumentPresence,
+} from '@obiter/contracts'
 import { batchParagraphDeletions } from '../../document-edits'
 import { editingStoryFor } from '../../document-page-layout'
 import { pageReferenceMap } from '../../document-page-references'
@@ -23,6 +28,7 @@ import type { EditingKind } from './use-editing-story'
 export function DocxModelPages({
   model,
   painted,
+  pendingRedlines,
   pages,
   zoom,
   view = 'print',
@@ -48,6 +54,7 @@ export function DocxModelPages({
 }: {
   model: DocumentModelWire
   painted: DocumentModelWire | undefined
+  pendingRedlines?: PendingRedlines
   pages: LaidOutPage[]
   zoom: number
   /** 'web' is the continuous flow view: the sheets lose their paper chrome
@@ -130,6 +137,7 @@ export function DocxModelPages({
           chromeless={view === 'web'}
         >
           <DocumentModelPage
+            pendingRedlines={pendingRedlines}
             model={rendered}
             marginEditing={marginEditing}
             chromeless={view === 'web'}
@@ -157,7 +165,7 @@ export function DocxModelPages({
             onRunTextChange={(runId, text) =>
               drafts.setDrafts((current) => ({
                 ...current,
-                [runId]: text,
+                [runId]: normaliseEditText(text),
               }))
             }
             editing
@@ -170,7 +178,9 @@ export function DocxModelPages({
             onInsertTextChange={(clientId, text) =>
               drafts.setInserts((current) =>
                 current.map((item) =>
-                  item.clientId === clientId ? { ...item, text } : item,
+                  item.clientId === clientId
+                    ? { ...item, text: normaliseEditText(text) }
+                    : item,
                 ),
               )
             }
