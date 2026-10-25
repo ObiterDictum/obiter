@@ -414,20 +414,20 @@ export async function findUncoveredDocxRegions(
     extractedText,
     'footnote',
   )
-  if (uncoveredFootnoteChars >= UNEXAMINED_PART_MIN_CHARS)
+  if (!mappedCoverage && uncoveredFootnoteChars >= UNEXAMINED_PART_MIN_CHARS)
     regions.push(regionLabel('footnotes', uncoveredFootnoteChars))
   const uncoveredEndnoteChars = uncoveredNoteChars(
     entries,
     extractedText,
     'endnote',
   )
-  if (uncoveredEndnoteChars >= UNEXAMINED_PART_MIN_CHARS)
+  if (!mappedCoverage && uncoveredEndnoteChars >= UNEXAMINED_PART_MIN_CHARS)
     regions.push(regionLabel('endnotes', uncoveredEndnoteChars))
 
   // Headers/footers: covered when the supplemental pass carried them into
   // the extracted text, which also catches parts nothing references.
   for (const [name, xml] of storyXml) {
-    if (!/^word\/(header|footer)/i.test(name)) continue
+    if (mappedCoverage || !/^word\/(header|footer)/i.test(name)) continue
     pushChars(name, unexaminedChars(extractWordXmlText(xml), extractedText))
   }
 
