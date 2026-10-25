@@ -6,6 +6,7 @@ import {
   applyDocumentEdits,
 } from '@obiter/ooxml'
 import { inlineChanges } from './document-inline-changes'
+import { projectRangeEmphasis } from './document-format-paint'
 import { effectiveParagraph } from './document-model-text'
 import {
   buildPendingRedlines,
@@ -145,4 +146,29 @@ it('holds back pending marks for a text edit the writer refuses on a run propert
       author,
     ),
   ).toThrow()
+})
+
+it('keeps a pending deletion when pending range formatting splits its run', async () => {
+  const document = await fixture('<w:r><w:t>abc def ghi</w:t></w:r>')
+  const paragraph = document.model.stories[0]?.paragraphs[0]
+  const run = paragraph?.runs[0]
+  if (!paragraph || !run) throw new Error('Missing fixture run')
+  const state = emptyDraftState()
+  state.drafts[run.id] = 'abc def gh'
+  const pending = buildPendingRedlines(document.model, state)
+  const painted = projectRangeEmphasis(
+    effectiveParagraph(paragraph, state.drafts),
+    [{ paragraphId: paragraph.id, from: 0, to: 3, bold: true }],
+  )
+  expect(painted.runs.length).toBeGreaterThan(1)
+  const projection = inlineChanges(
+    painted,
+    document.model.changes,
+    'word/document.xml',
+    pendingParagraphChanges(pending, paragraph.id),
+  )
+  expect(projection.text).toBe('abc def ghi')
+  expect(projection.spans.some((span) => span.deleted && span.pending)).toBe(
+    true,
+  )
 })
