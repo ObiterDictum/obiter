@@ -1,3 +1,9 @@
+import { effectiveParagraph } from '../../document-model-text'
+import { useMemo } from 'react'
+import {
+  pendingParagraphChanges,
+  type PendingRedlines,
+} from '../../document-pending-redlines'
 import { inlineChanges } from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
 import type {
@@ -6,6 +12,7 @@ import type {
   DocumentRelationshipWire,
   DocumentStoryWire,
   DocumentStyleWire,
+  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import type { LaidOutBlock } from '../../document-page-engine'
@@ -56,6 +63,9 @@ export type EditableMargin = {
 export function PageMarginBand({
   stories,
   changes = [],
+  drafts,
+  extraRuns,
+  pendingRedlines = {},
   label,
   edge,
   relationships = [],
@@ -68,6 +78,9 @@ export function PageMarginBand({
   editable,
 }: {
   stories: DocumentStoryWire[]
+  drafts?: Record<string, string>
+  extraRuns?: Record<string, DocumentTextRunWire[]>
+  pendingRedlines?: Partial<PendingRedlines>
   changes?: DocumentChangeWire[]
   label: string
   edge: 'top' | 'bottom'
@@ -82,7 +95,19 @@ export function PageMarginBand({
    * it holds no visible content, so an empty header still takes the caret. */
   editable?: EditableMargin
 }) {
-  const visible = stories.filter(
+  const effective = useMemo(
+    () =>
+      drafts || extraRuns
+        ? stories.map((story) => ({
+            ...story,
+            paragraphs: story.paragraphs.map((paragraph) =>
+              effectiveParagraph(paragraph, drafts, extraRuns?.[paragraph.id]),
+            ),
+          }))
+        : stories,
+    [stories, drafts, extraRuns],
+  )
+  const visible = effective.filter(
     (story) =>
       marginStoryVisible(story) ||
       story.partName === editable?.partName ||
@@ -119,6 +144,7 @@ export function PageMarginBand({
             key={story.partName}
             story={story}
             changes={changes}
+            pendingRedlines={pendingRedlines}
             imageLabel={imageLabel}
             relationships={relationships}
             imageUrls={imageUrls}
@@ -191,6 +217,7 @@ function EditableMarginStory({
 function MarginStory({
   story,
   changes,
+  pendingRedlines,
   imageLabel,
   relationships,
   imageUrls,
@@ -199,6 +226,7 @@ function MarginStory({
   pageNumber,
 }: {
   story: DocumentStoryWire
+  pendingRedlines: Partial<PendingRedlines> | undefined
   changes: DocumentChangeWire[]
   imageLabel: string
   relationships: DocumentRelationshipWire[]
@@ -245,8 +273,16 @@ function MarginStory({
     }
     if (skip.has(block.paragraph.id)) return false
     return (
-      inlineChanges(block.paragraph, changes, story.partName).text.trim()
-        .length > 0 ||
+      inlineChanges(
+        block.paragraph,
+        changes,
+        story.partName,
+        pendingParagraphChanges(
+          pendingRedlines,
+          block.paragraph.id,
+          story.partName,
+        ),
+      ).text.trim().length > 0 ||
       paragraphImageXml(block.paragraph).length > 0 ||
       block.paragraph.runs.some((run) => runDisplayText(run, pageNumber))
     )
@@ -279,6 +315,7 @@ function MarginStory({
                     key={id}
                     paragraph={paragraph}
                     changes={changes}
+                    pendingRedlines={pendingRedlines}
                     imageLabel={imageLabel}
                     storyPartName={story.partName}
                     relationships={relationships}
@@ -307,6 +344,7 @@ function MarginStory({
             <MarginParagraph
               paragraph={block.paragraph}
               changes={changes}
+              pendingRedlines={pendingRedlines}
               imageLabel={imageLabel}
               storyPartName={story.partName}
               relationships={relationships}
@@ -325,6 +363,7 @@ function MarginStory({
 function MarginParagraph({
   paragraph,
   changes,
+  pendingRedlines,
   imageLabel,
   storyPartName,
   relationships,
@@ -334,6 +373,7 @@ function MarginParagraph({
   pageNumber,
 }: {
   paragraph: DocumentParagraphWire
+  pendingRedlines: Partial<PendingRedlines> | undefined
   changes: DocumentChangeWire[]
   imageLabel: string
   storyPartName: string
@@ -349,7 +389,12 @@ function MarginParagraph({
       !drawingIsTextBox(xml) &&
       (!background || !paragraphIsShapeOnly(paragraph)),
   )
-  const projection = inlineChanges(paragraph, changes, storyPartName)
+  const projection = inlineChanges(
+    paragraph,
+    changes,
+    storyPartName,
+    pendingParagraphChanges(pendingRedlines, paragraph.id, storyPartName),
+  )
   const projected = projection.paragraph
   const spans = new Map(projection.spans.map((span) => [span.runId, span]))
   const columns = tabColumns(projected)
@@ -360,6 +405,11 @@ function MarginParagraph({
       const text = runDisplayText(run, pageNumber)
       if (!text) return null
       const span = spans.get(run.id)
+      const faceRun = runFace(
+        projection.runSources.get(run.id)?.run ?? run,
+        face,
+        styles,
+      )
       if (span)
         return (
           <InlineChange
@@ -367,9 +417,19 @@ function MarginParagraph({
             span={span}
             text={text}
             tabStop={span.tabStop}
-          />
+          >
+            {span.pending ? (
+              <span
+                style={runCss({
+                  ...faceRun,
+                  color: 'inherit',
+                })}
+              >
+                {text}
+              </span>
+            ) : undefined}
+          </InlineChange>
         )
-      const faceRun = runFace(run, face, styles)
       const color =
         readableRunColor(faceRun.color, fill) ?? contrastFillText(fill)
       return (

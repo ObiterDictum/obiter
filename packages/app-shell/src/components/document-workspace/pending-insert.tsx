@@ -10,6 +10,7 @@ import { revealTypingLine } from './paragraph-editor'
 
 export function PendingInsert({
   insert,
+  tracked = false,
   selected,
   verticalCaret,
   onSelect,
@@ -22,6 +23,7 @@ export function PendingInsert({
   restoreCaret,
 }: {
   insert: LocalInsert
+  tracked?: boolean
   selected: boolean
   verticalCaret?: VerticalCaretColumn
   onSelect: (offset?: number) => void
@@ -70,10 +72,24 @@ export function PendingInsert({
     <div
       data-paragraph-id={insert.clientId}
       aria-current={selected ? 'true' : undefined}
-      aria-label="Pending paragraph"
+      aria-label={tracked ? 'Pending tracked insertion' : 'Pending paragraph'}
+      role={tracked ? 'insertion' : undefined}
+      data-inline-change={tracked ? `pending:${insert.clientId}` : undefined}
+      data-inline-editable={tracked || undefined}
+      data-pending-revision={tracked || undefined}
       onClick={() => onSelect(field.current?.selectionStart ?? undefined)}
       className="relative min-h-[1.15em]"
     >
+      {tracked && !text ? (
+        <span
+          data-paragraph-mark
+          data-inline-change={`pending:${insert.clientId}:mark`}
+          aria-label="Inserted paragraph mark"
+          className="pointer-events-none absolute text-[#21613e] underline"
+        >
+          ¶
+        </span>
+      ) : null}
       <textarea
         ref={field}
         aria-label="Pending paragraph text"
@@ -184,8 +200,11 @@ export function PendingInsert({
           event.stopPropagation()
           onSelect(field.current?.selectionStart ?? undefined)
         }}
-        className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none print:hidden"
-        style={{ lineHeight: '1.15', minHeight: '1.15em' }}
+        className={`field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 outline-none print:hidden ${tracked ? 'text-[#21613e] underline' : 'text-inherit'}`}
+        style={{
+          lineHeight: '1.15',
+          minHeight: '1.15em',
+        }}
       />
       {/* Print never reaches a form control reliably, so the inserted text is
           also painted as static content. Hidden on screen, where the textarea
@@ -193,8 +212,11 @@ export function PendingInsert({
       <div
         data-pending-insert-print
         aria-hidden="true"
-        className="hidden min-w-0 whitespace-pre-wrap print:block"
-        style={{ lineHeight: '1.15', minHeight: '1.15em' }}
+        className={`hidden min-w-0 whitespace-pre-wrap print:block ${tracked ? 'text-[#21613e] underline' : ''}`}
+        style={{
+          lineHeight: '1.15',
+          minHeight: '1.15em',
+        }}
       >
         {text.length > 0 ? text : '\u00a0'}
       </div>

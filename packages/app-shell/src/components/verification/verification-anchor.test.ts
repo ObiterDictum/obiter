@@ -61,6 +61,19 @@ afterEach(() => {
 })
 
 describe('renderedRangeFor', () => {
+  it('counts editable pending insertions while excluding revision decorations', () => {
+    const scope = root(
+      fragment({
+        text: 'ab<span data-inline-change="old">deleted</span><span data-inline-change="new" data-inline-editable="true">new</span>cd',
+        from: 0,
+        to: 7,
+      }),
+    )
+    const decision = renderedRangeFor(scope, target({ start: 5, end: 7 }), 'cd')
+    expect(decision.kind).toBe('attached')
+    if (decision.kind === 'attached')
+      expect(decision.range.toString()).toBe('cd')
+  })
   it('reports a hard break as a renderer limit, not a text change', () => {
     const scope = root(fragment({ text: 'abcd', from: 0, to: 4 }))
     // The model still carries the recorded excerpt `ab\ncd`; the page never

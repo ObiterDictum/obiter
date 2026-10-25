@@ -1,3 +1,7 @@
+import {
+  NO_PENDING_CHANGES,
+  type PendingInlineChange,
+} from '../../document-pending-redlines'
 import { useContext, useMemo } from 'react'
 import { paragraphChanges } from '../../document-inline-index'
 import {
@@ -55,6 +59,7 @@ import type { ParagraphWordEdit } from './model-paragraph-editor'
 export function ModelParagraph({
   paragraph,
   changes,
+  pendingChanges = NO_PENDING_CHANGES,
   selected,
   onSelectParagraph,
   drafts,
@@ -95,6 +100,7 @@ export function ModelParagraph({
   linkOverlay,
 }: {
   paragraph: DocumentParagraphWire
+  pendingChanges?: PendingInlineChange[]
   changes: DocumentChangeWire[]
   selected: boolean
   onSelectParagraph: (paragraphId: string, offset?: number) => void
@@ -155,14 +161,9 @@ export function ModelParagraph({
       item.cursor?.paragraphId === paragraph.id,
   )
   const face = useMemo(
-    // `paragraphFace` reads only the paragraph's style id and its own XML, and
-    // both keep their identity when only the paragraph's text changes. Keying
-    // on those rather than the rebuilt paragraph object means an untouched
-    // paragraph does not re-parse its formatting on every keystroke.
     () => paragraphFace(paragraph, styles),
     [paragraph.preservedXmlFragments, paragraph.styleId, styles],
   )
-  // Index the measured paragraphs × changes hot path once per change list.
   const bucket = useMemo(
     () =>
       paragraphChanges(paragraph, changes, story?.partName ?? storyPartName),
@@ -178,9 +179,19 @@ export function ModelParagraph({
         projectRangeEmphasis(effective, emphasis),
         bucket,
         story?.partName ?? storyPartName,
+        pendingChanges,
       ),
-    [effective, emphasis, bucket, story?.partName, storyPartName],
+    [
+      effective,
+      emphasis,
+      bucket,
+      story?.partName,
+      storyPartName,
+      pendingChanges,
+    ],
   )
+  if (pendingChanges.some((change) => change.pending?.paragraphDelete))
+    editing = false
   const review = useContext(InlineChangeReview)
   const fullText = paragraphPlainText(effective)
   const displayStart = from ?? 0
@@ -296,6 +307,7 @@ export function ModelParagraph({
       drafts={drafts}
       changes={bucket}
       inlineSpans={projection.spans}
+      runSources={projection.runSources}
       reviewable={!(editing && holdsCaret && paragraph.runs.length > 0)}
       styles={styles}
       face={face}
@@ -333,7 +345,7 @@ export function ModelParagraph({
         const span = projection.spans.find(
           (item) => at >= item.from && at < item.to,
         )
-        if (!span) return
+        if (!span || span.pending) return
         event.stopPropagation()
         review.selectChange(span.change.id)
       }}
