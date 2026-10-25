@@ -1,14 +1,24 @@
+import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
+import { dirname, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { expect, it } from 'bun:test'
 import ts from 'typescript'
 
 it('restricts Redact output OOXML imports to read-only parsing and serialisation', async () => {
-  const directory = new URL('./', import.meta.url)
-  const files = (await readdir(directory)).filter(
-    (file) => /^redaction-.*\.ts$/u.test(file) && !file.includes('.test.'),
+  const directory = dirname(fileURLToPath(import.meta.url))
+  const entries = (await readdir(directory))
+    .filter(
+      (file) => /^redaction-.*\.ts$/u.test(file) && !file.includes('.test.'),
+    )
+    .map((file) => resolve(directory, file))
+  expect(entries).toContain(resolve(directory, 'redaction-docx-output.ts'))
+  expect(entries).toContain(resolve(directory, 'redaction-docx-burn.ts'))
+  // The routes that finalize and return Redact output are part of the boundary.
+  entries.push(
+    resolve(directory, 'routes/redact-review.ts'),
+    resolve(directory, 'routes/redact-lifecycle.ts'),
   )
-  expect(files).toContain('redaction-docx-output.ts')
-  expect(files).toContain('redaction-docx-burn.ts')
   const allowed = new Set([
     'loadOoxmlZipEntries',
     'parseDocx',
@@ -19,12 +29,24 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
     'isWord',
     'parseXmlElements',
     'WORD_NAMESPACE',
+    'DEFAULT_OOXML_PACKAGE_LIMITS',
+    'OoxmlError',
   ])
+  // Configuration constants such as OOXML_MAX_ENTRIES are not edit operations.
+  const isAllowed = (name: string) =>
+    allowed.has(name) || /^[A-Z][A-Z\d_]+$/u.test(name)
   const violations: string[] = []
-  for (const file of files) {
+  const seen = new Set<string>()
+  // Follow local imports so a helper module cannot smuggle in editor edits.
+  const queue = [...entries]
+  while (queue.length > 0) {
+    const path = queue.pop()!
+    if (seen.has(path)) continue
+    seen.add(path)
+    const file = relative(directory, path)
     const source = ts.createSourceFile(
       file,
-      await readFile(new URL(file, directory), 'utf8'),
+      await readFile(path, 'utf8'),
       ts.ScriptTarget.Latest,
       true,
     )
@@ -44,9 +66,14 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
       if (
         (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
         node.moduleSpecifier &&
-        ts.isStringLiteral(node.moduleSpecifier) &&
-        node.moduleSpecifier.text.includes('ooxml')
+        ts.isStringLiteral(node.moduleSpecifier)
       ) {
+        const specifier = node.moduleSpecifier.text
+        if (specifier.startsWith('.')) {
+          const target = resolve(dirname(path), `${specifier}.ts`)
+          if (existsSync(target)) queue.push(target)
+        }
+        if (!specifier.includes('ooxml')) return
         if (
           ts.isImportDeclaration(node)
             ? node.importClause?.isTypeOnly
@@ -57,7 +84,7 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
           ? node.importClause?.namedBindings
           : node.exportClause
         if (
-          node.moduleSpecifier.text !== '@obiter/ooxml' ||
+          specifier !== '@obiter/ooxml' ||
           !bindings ||
           ts.isNamespaceImport(bindings) ||
           ts.isNamespaceExport(bindings) ||
@@ -68,7 +95,7 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
           for (const item of bindings.elements) {
             if (
               !item.isTypeOnly &&
-              !allowed.has((item.propertyName ?? item.name).text)
+              !isAllowed((item.propertyName ?? item.name).text)
             )
               violations.push(`${file}: ${item.name.text}`)
           }
@@ -78,5 +105,6 @@ it('restricts Redact output OOXML imports to read-only parsing and serialisation
     }
     visit(source)
   }
+  expect(seen).toContain(resolve(directory, 'redaction-docx-map.ts'))
   expect(violations).toEqual([])
 })
