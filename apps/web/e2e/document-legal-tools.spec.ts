@@ -1,13 +1,8 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
+import { createAccount, openFixtureDocument } from './document-journey'
+import { saveAndWait } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveJourneyTargets } from '../journey-target.mjs'
-import { verifyEmailInDb } from './support'
 
 /*
  * E11 browser journey: the References ribbon's legal-document controls must
@@ -27,7 +22,6 @@ import { verifyEmailInDb } from './support'
  * document.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -40,78 +34,6 @@ const shots = process.env.E11_E2E_SHOTS
 function shot(page: Page, name: string) {
   if (!shots) return Promise.resolve()
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
-}
-
-async function createAccount(request: APIRequestContext) {
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e11-${runId}@obiter.test`
-  const password = `E11-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E11 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
-
-/** Opens the fixture document through the product's own navigation. */
-async function openFixtureDocument(
-  page: Page,
-  email: string,
-  password: string,
-  matterName: string,
-) {
-  await signIn(page, email, password)
-
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page.getByRole('button', { name: 'Create matter' }).first().click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
-
-  const fixtureName = path.basename(FIXTURE)
-  if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
-    await expect(fileInput).toBeAttached({ timeout: 20_000 })
-    await fileInput.setInputFiles(FIXTURE)
-  }
-  const documentRow = page.getByText(fixtureName).first()
-  await expect(documentRow).toBeVisible({ timeout: 30_000 })
-  await documentRow.click()
-
-  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
-    timeout: 30_000,
-  })
 }
 
 const editor = (page: Page) =>
@@ -149,11 +71,6 @@ async function focusHeading(page: Page) {
   throw new Error('could not focus the fixture heading')
 }
 
-async function saveAndWait(page: Page) {
-  await save(page).click()
-  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
-}
-
 type EditBody = { operations?: Array<Record<string, unknown>> }
 
 function isEditBody(value: unknown): value is EditBody {
@@ -167,9 +84,9 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E11')
   const matter = `E11 legal ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, FIXTURE)
 
   const editBodies: EditBody[] = []
   page.on('request', (outgoing) => {
@@ -278,7 +195,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
-    await openFixtureDocument(reloaded, email, password, matter)
+    await openFixtureDocument(reloaded, email, password, matter, FIXTURE)
     await expect(reloaded.locator('[data-paragraph-id]').nth(1)).toContainText(
       CITATION,
       { timeout: 30_000 },
@@ -296,9 +213,9 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
   page,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E11')
   const matter = `E11 references ${String(Date.now())}`
-  await openFixtureDocument(page, email, password, matter)
+  await openFixtureDocument(page, email, password, matter, FIXTURE)
 
   await openReferences(page)
 

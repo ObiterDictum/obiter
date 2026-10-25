@@ -44,15 +44,35 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean
 }
 
-function renderResults(response: LegalSearchFetchResponse) {
-  const container = document.createElement('div')
+let root: ReturnType<typeof createRoot> | null = null
+let container: HTMLElement | null = null
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+})
+afterEach(() => {
+  act(() => root?.unmount())
+  container?.remove()
+  root = null
+  container = null
+})
+
+function renderResults(overrides: Partial<LegalSearchFetchResponse>) {
+  container = document.createElement('div')
   document.body.append(container)
-  const root = createRoot(container)
+  const renderedRoot = createRoot(container)
+  root = renderedRoot
 
   act(() => {
-    root.render(
+    renderedRoot.render(
       <SearchResults
-        response={response}
+        response={{
+          hits: [],
+          cached: true,
+          indexedCount: 0,
+          skippedCount: 0,
+          ...overrides,
+        }}
         selectedIndex={0}
         onSelectIndex={() => {}}
       />,
@@ -77,193 +97,48 @@ const citingHit = {
   retrievalScore: 0.8,
 }
 
+const currentHit = {
+  id: 'ukpga/2010/15/section/13',
+  resultGroup: 'legislation' as const,
+  legislationStatus: 'current' as const,
+  title: 'Equality Act 2010',
+  provisionLabel: 's. 13',
+  labelPath: 'section/13',
+  documentIdentity: 'ukpga/2010/15',
+  extent: 'E+W+S',
+  text: 'Direct discrimination applies here.',
+  snippets: [{ text: 'Direct discrimination applies here.' }],
+  officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+  sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+}
+
+const withheldHit = {
+  id: 'ukpga/2010/15/section/80',
+  resultGroup: 'legislation' as const,
+  legislationStatus: 'amended_not_held' as const,
+  title: 'Equality Act 2010',
+  provisionLabel: 's. 80',
+  labelPath: 'section/80',
+  documentIdentity: 'ukpga/2010/15',
+  extent: 'E+W+S',
+  officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
+  sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+  notice:
+    'This provision is affected by amendments that have been recorded but not yet applied.',
+}
+
 describe('SearchResults citation distinction', () => {
-  let root: ReturnType<typeof createRoot> | null
-  let container: HTMLElement | null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    root = null
-    container = null
-  })
-
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount())
-    }
-    container?.remove()
-  })
-
-  it('marks citing hits and names the not-held count', () => {
-    const rendered = renderResults({
-      hits: [citingHit],
-      cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
-      hydrationQueued: true,
-      outcome: 'results',
-      citation: { recognised: true, status: 'not_held' },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain('Cites the queried citation')
-    expect(container.textContent).toContain(
-      'Citation not held · 1 citing result from Find Case Law',
-    )
-  })
-
-  it('attributes not-held citing hits to stored sources when the path is stored', () => {
-    // The corpus-only API serves this miss path from Postgres/Meili, so a hit
-    // can no longer have come from Find Case Law. The meta line must read the
-    // retrievalPath rather than assuming the provider.
-    const rendered = renderResults({
-      hits: [{ ...citingHit, retrievalPath: 'stored_index' as const }],
-      cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-      citation: { recognised: true, status: 'not_held' },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain(
-      'Citation not held · 1 citing result from stored legal sources',
-    )
-    expect(container.textContent).not.toContain('Find Case Law')
-  })
-
-  it('stays neutral when not-held hits carry no citing label', () => {
-    const rendered = renderResults({
-      hits: [
-        {
-          ...citingHit,
-          citationMatch: 'none' as const,
-          matchReason: 'keyword_match' as const,
-        },
-      ],
-      cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
-      hydrationQueued: true,
-      outcome: 'results',
-      citation: { recognised: true, status: 'not_held' },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain(
-      'Citation not held · 1 result from Find Case Law',
-    )
-    expect(container.textContent).not.toContain('citing')
-    expect(container.textContent).not.toContain('Cites the queried citation')
-  })
-
-  it('renders the partial title match label distinctly from a full title match', () => {
-    const rendered = renderResults({
-      hits: [{ ...citingHit, matchReason: 'partial_title_match' as const }],
-      cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain('Partial title match')
-    expect(container.textContent).not.toContain('Body text match')
-  })
-
-  it('stays quiet on citationMatch for ordinary matches', () => {
-    const rendered = renderResults({
-      hits: [
-        {
-          ...citingHit,
-          citationMatch: 'exact',
-          matchReason: 'exact_neutral_citation' as const,
-        },
-      ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-      citation: { recognised: true, status: 'held_exact' },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain('Exact citation')
-    expect(container.textContent).not.toContain('Cites the queried citation')
-    expect(container.textContent).not.toContain('Citation not held')
-  })
-
-  it('attributes stored hits to stored sources even when not cached', () => {
-    const rendered = renderResults({
-      hits: [
-        {
-          ...citingHit,
-          retrievalPath: 'stored_index' as const,
-          citationMatch: undefined,
-        },
-      ],
-      cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain(
-      '1 result from stored legal sources',
-    )
-    expect(container.textContent).not.toContain('from Find Case Law')
-  })
-
-  it('names both sources for mixed stored and live hits', () => {
-    const rendered = renderResults({
-      hits: [
-        {
-          ...citingHit,
-          retrievalPath: 'stored_index' as const,
-          citationMatch: undefined,
-        },
-        {
-          ...citingHit,
-          id: 'live-2',
-          retrievalPath: 'live_provider' as const,
-          citationMatch: undefined,
-        },
-      ],
-      cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain(
-      '2 results from stored legal sources and Find Case Law',
-    )
-  })
-
   it('stays neutral for pathless non-cached results', () => {
     const {
       citationMatch: _citationMatch,
       retrievalPath: _retrievalPath,
       ...pathless
     } = citingHit
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [{ ...pathless }],
       cached: false,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
 
     expect(container.textContent).toContain('1 result from legal sources')
     expect(container.textContent).not.toContain('from Find Case Law')
@@ -271,24 +146,8 @@ describe('SearchResults citation distinction', () => {
 })
 
 describe('SearchResults legislation group', () => {
-  let root: ReturnType<typeof createRoot> | null
-  let container: HTMLElement | null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    root = null
-    container = null
-  })
-
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount())
-    }
-    container?.remove()
-  })
-
   it('renders provision text when current and the notice without text when amended', () => {
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [],
       groups: [
         {
@@ -296,52 +155,21 @@ describe('SearchResults legislation group', () => {
           label: 'Legislation',
           hits: [
             {
-              id: 'ukpga/2010/15/section/13',
-              resultGroup: 'legislation',
-              legislationStatus: 'current',
-              title: 'Equality Act 2010',
-              provisionLabel: 's. 13',
-              labelPath: 'section/13',
-              documentIdentity: 'ukpga/2010/15',
-              extent: 'E+W+S',
-              text: 'Direct discrimination applies here.',
-              snippets: [{ text: 'Direct discrimination applies here.' }],
-              officialUrl:
-                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
-              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              ...currentHit,
               canonicalUrl: '/ln/ukpga/2010/15/section/13',
               year: 2010,
             },
             {
-              id: 'ukpga/2010/15/section/80',
-              resultGroup: 'legislation',
-              legislationStatus: 'amended_not_held',
-              title: 'Equality Act 2010',
-              provisionLabel: 's. 80',
-              labelPath: 'section/80',
-              documentIdentity: 'ukpga/2010/15',
-              extent: 'E+W+S',
-              // Defence in depth: the API never sends text on amended hits,
-              // but even a caller that passes it must not see it rendered.
+              ...withheldHit,
               text: 'Stale amended wording that must never render.',
-              officialUrl:
-                'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
-              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
               canonicalUrl: '/ln/ukpga/2010/15/section/80',
               year: 2010,
-              notice:
-                'This provision is affected by amendments that have been recorded but not yet applied.',
             },
           ],
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
 
     expect(container.textContent).toContain('Legislation')
     expect(container.textContent).toContain(
@@ -377,7 +205,7 @@ describe('SearchResults legislation group', () => {
   })
 
   it('links an act-level hit through to the Act page', () => {
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [],
       groups: [
         {
@@ -401,13 +229,8 @@ describe('SearchResults legislation group', () => {
           ],
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
 
     expect(container.textContent).toContain(
       'Open the Act to browse its Parts, sections and schedules.',
@@ -420,7 +243,7 @@ describe('SearchResults legislation group', () => {
   })
 
   it('leads with legislation when the API marks the query as statute-shaped', () => {
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [citingHit],
       primaryGroup: 'legislation',
       groups: [
@@ -429,31 +252,15 @@ describe('SearchResults legislation group', () => {
           label: 'Legislation',
           hits: [
             {
-              id: 'ukpga/2010/15/section/13',
-              resultGroup: 'legislation',
-              legislationStatus: 'current',
-              title: 'Equality Act 2010',
+              ...currentHit,
               year: 2010,
-              provisionLabel: 's. 13',
-              labelPath: 'section/13',
-              documentIdentity: 'ukpga/2010/15',
-              extent: 'E+W+S',
               canonicalUrl: '/ln/ukpga/2010/15/section/13',
-              officialUrl:
-                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
-              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
-              text: 'Direct discrimination applies here.',
             },
           ],
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
     const headings = Array.from(container.querySelectorAll('h2')).map(
       (heading) => heading.textContent,
     )
@@ -461,7 +268,7 @@ describe('SearchResults legislation group', () => {
   })
 
   it('keeps case law first when the query is not a statute citation', () => {
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [citingHit],
       groups: [
         {
@@ -469,200 +276,25 @@ describe('SearchResults legislation group', () => {
           label: 'Legislation',
           hits: [
             {
-              id: 'ukpga/2010/15/section/13',
-              resultGroup: 'legislation',
-              legislationStatus: 'current',
-              title: 'Equality Act 2010',
+              ...currentHit,
               year: 2010,
-              provisionLabel: 's. 13',
-              labelPath: 'section/13',
-              documentIdentity: 'ukpga/2010/15',
-              extent: 'E+W+S',
               canonicalUrl: '/ln/ukpga/2010/15/section/13',
-              officialUrl:
-                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
-              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
-              text: 'Direct discrimination applies here.',
             },
           ],
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
     const headings = Array.from(container.querySelectorAll('h2')).map(
       (heading) => heading.textContent,
     )
     expect(headings).toEqual(['Case law', 'Legislation'])
   })
-
-  it('names an unheld Act instead of a not-held judgment citation', () => {
-    const rendered = renderResults({
-      hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'recognised_not_held',
-      citation: { recognised: true, status: 'not_held' },
-      diagnostics: {
-        legislationNote: 'Children Act 1989 is not held.',
-        legislationNotHeld: true,
-      },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    // The legislation half recognised the Act and served nothing. The page
-    // must say the Act is not held, not that a judgment citation is not held.
-    expect(container.textContent).toContain('Children Act 1989 is not held.')
-    expect(container.textContent).not.toContain('Citation not held')
-  })
-
-  it('does not surface a legislation outage as a not-held notice', () => {
-    const rendered = renderResults({
-      hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-      diagnostics: { legislationNote: 'Legislation store unavailable.' },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    // An outage note is not a not-held verdict; the legislation half still
-    // fails open and the judgment results still stand.
-    expect(container.textContent).not.toContain(
-      'Legislation store unavailable.',
-    )
-    expect(container.textContent).toContain(citingHit.title)
-  })
-
-  it('names an unresolved legislation title above judgment results', () => {
-    const rendered = renderResults({
-      hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-      diagnostics: {
-        legislationNote:
-          'No exact legislation title match was found for "Children Act 1989".',
-        legislationTitleUnresolved: true,
-      },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    // The note says only what is known; it must never claim the Act is
-    // absent while judgment results are on the page.
-    expect(container.textContent).toContain(
-      'No exact legislation title match was found for "Children Act 1989".',
-    )
-    expect(container.textContent).not.toContain('is not held')
-    expect(container.textContent).toContain(citingHit.title)
-  })
-
-  it('names an ambiguous legislation title above judgment results', () => {
-    const rendered = renderResults({
-      hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'legislation_ambiguous',
-      diagnostics: {
-        legislationNote:
-          '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
-        legislationAmbiguous: true,
-      },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain('names more than one stored Act')
-    expect(container.textContent).toContain(citingHit.title)
-  })
-
-  it('shows an underspecified-schedule corrective above judgment results', () => {
-    const rendered = renderResults({
-      hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
-      outcome: 'results',
-      diagnostics: {
-        legislationNote: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
-        legislationScheduleGuidance: {
-          example: 'Schedule 1 paragraph 2',
-          actTitle: 'Equality Act 2010',
-        },
-      },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    // The corrective is a prompt, not a verdict: it must appear alongside the
-    // judgment results, never replace them, and never claim the Act is absent.
-    expect(container.textContent).toContain('Schedule 1 paragraph 2')
-    expect(container.textContent).toContain('Equality Act 2010')
-    expect(container.textContent).toContain(citingHit.title)
-    expect(container.textContent).not.toContain('is not held')
-  })
 })
 
 describe('SearchResults withheld distinction and group headings', () => {
-  let root: ReturnType<typeof createRoot> | null
-  let container: HTMLElement | null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    root = null
-    container = null
-  })
-
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount())
-    }
-    container?.remove()
-  })
-
-  const currentHit = {
-    id: 'ukpga/2010/15/section/13',
-    resultGroup: 'legislation' as const,
-    legislationStatus: 'current' as const,
-    title: 'Equality Act 2010',
-    provisionLabel: 's. 13',
-    labelPath: 'section/13',
-    documentIdentity: 'ukpga/2010/15',
-    extent: 'E+W+S',
-    text: 'Direct discrimination applies here.',
-    snippets: [{ text: 'Direct discrimination applies here.' }],
-    officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
-    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
-  }
-
-  const withheldHit = {
-    id: 'ukpga/2010/15/section/80',
-    resultGroup: 'legislation' as const,
-    legislationStatus: 'amended_not_held' as const,
-    title: 'Equality Act 2010',
-    provisionLabel: 's. 80',
-    labelPath: 'section/80',
-    documentIdentity: 'ukpga/2010/15',
-    extent: 'E+W+S',
-    officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
-    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
-    notice:
-      'This provision is affected by amendments that have been recorded but not yet applied.',
-  }
-
   function renderMixed() {
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [citingHit],
       groups: [
         {
@@ -671,14 +303,9 @@ describe('SearchResults withheld distinction and group headings', () => {
           hits: [currentHit, withheldHit],
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
-    return rendered.container
+    return container
   }
 
   it('badges the withheld provision while the current row stays plain', () => {
@@ -726,7 +353,7 @@ describe('SearchResults withheld distinction and group headings', () => {
   })
 
   it('omits the case-law heading when no case-law hits render', () => {
-    const rendered = renderResults({
+    const { container } = renderResults({
       hits: [],
       groups: [
         {
@@ -735,13 +362,8 @@ describe('SearchResults withheld distinction and group headings', () => {
           hits: [withheldHit],
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
     })
-    root = rendered.root
-    container = rendered.container
 
     const headings = Array.from(container.querySelectorAll('h2')).map(
       (heading) => heading.textContent,
@@ -751,45 +373,199 @@ describe('SearchResults withheld distinction and group headings', () => {
   })
 })
 
-describe('SearchResults incomplete coverage', () => {
-  let root: ReturnType<typeof createRoot> | null
-  let container: HTMLElement | null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    root = null
-    container = null
-  })
-
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount())
-    }
-    container?.remove()
-  })
-
-  it('states partial coverage when the legislation half failed', () => {
-    const rendered = renderResults({
+for (const { name, response, contains, excludes } of [
+  {
+    name: 'marks citing hits and names the not-held count',
+    response: {
       hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
+      cached: false,
+      hydrationQueued: true,
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+    },
+    contains: [
+      'Cites the queried citation',
+      'Citation not held · 1 citing result from Find Case Law',
+    ],
+    excludes: [],
+  },
+  {
+    name: 'attributes not-held citing hits to stored sources when the path is stored',
+    response: {
+      hits: [{ ...citingHit, retrievalPath: 'stored_index' as const }],
+      cached: false,
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+    },
+    contains: ['Citation not held · 1 citing result from stored legal sources'],
+    excludes: ['Find Case Law'],
+  },
+  {
+    name: 'stays neutral when not-held hits carry no citing label',
+    response: {
+      hits: [
+        {
+          ...citingHit,
+          citationMatch: 'none' as const,
+          matchReason: 'keyword_match' as const,
+        },
+      ],
+      cached: false,
+      hydrationQueued: true,
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+    },
+    contains: ['Citation not held · 1 result from Find Case Law'],
+    excludes: ['citing', 'Cites the queried citation'],
+  },
+  {
+    name: 'renders the partial title match label distinctly from a full title match',
+    response: {
+      hits: [{ ...citingHit, matchReason: 'partial_title_match' as const }],
+      cached: false,
+      outcome: 'results',
+    },
+    contains: ['Partial title match'],
+    excludes: ['Body text match'],
+  },
+  {
+    name: 'stays quiet on citationMatch for ordinary matches',
+    response: {
+      hits: [
+        {
+          ...citingHit,
+          citationMatch: 'exact',
+          matchReason: 'exact_neutral_citation' as const,
+        },
+      ],
+      outcome: 'results',
+      citation: { recognised: true, status: 'held_exact' },
+    },
+    contains: ['Exact citation'],
+    excludes: ['Cites the queried citation', 'Citation not held'],
+  },
+  {
+    name: 'attributes stored hits to stored sources even when not cached',
+    response: {
+      hits: [
+        {
+          ...citingHit,
+          retrievalPath: 'stored_index' as const,
+          citationMatch: undefined,
+        },
+      ],
+      cached: false,
+      outcome: 'results',
+    },
+    contains: ['1 result from stored legal sources'],
+    excludes: ['from Find Case Law'],
+  },
+  {
+    name: 'names both sources for mixed stored and live hits',
+    response: {
+      hits: [
+        {
+          ...citingHit,
+          retrievalPath: 'stored_index' as const,
+          citationMatch: undefined,
+        },
+        {
+          ...citingHit,
+          id: 'live-2',
+          retrievalPath: 'live_provider' as const,
+          citationMatch: undefined,
+        },
+      ],
+      cached: false,
+      outcome: 'results',
+    },
+    contains: ['2 results from stored legal sources and Find Case Law'],
+    excludes: [],
+  },
+  {
+    name: 'names an unheld Act instead of a not-held judgment citation',
+    response: {
+      hits: [citingHit],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        legislationNote: 'Children Act 1989 is not held.',
+        legislationNotHeld: true,
+      },
+    },
+    contains: ['Children Act 1989 is not held.'],
+    excludes: ['Citation not held'],
+  },
+  {
+    name: 'does not surface a legislation outage as a not-held notice',
+    response: {
+      hits: [citingHit],
+      outcome: 'results',
+      diagnostics: { legislationNote: 'Legislation store unavailable.' },
+    },
+    contains: [citingHit.title],
+    excludes: ['Legislation store unavailable.'],
+  },
+  {
+    name: 'names an unresolved legislation title above judgment results',
+    response: {
+      hits: [citingHit],
+      outcome: 'results',
+      diagnostics: {
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+        legislationTitleUnresolved: true,
+      },
+    },
+    contains: [
+      'No exact legislation title match was found for "Children Act 1989".',
+      citingHit.title,
+    ],
+    excludes: ['is not held'],
+  },
+  {
+    name: 'names an ambiguous legislation title above judgment results',
+    response: {
+      hits: [citingHit],
+      outcome: 'legislation_ambiguous',
+      diagnostics: {
+        legislationNote:
+          '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+        legislationAmbiguous: true,
+      },
+    },
+    contains: ['names more than one stored Act', citingHit.title],
+    excludes: [],
+  },
+  {
+    name: 'shows an underspecified-schedule corrective above judgment results',
+    response: {
+      hits: [citingHit],
+      outcome: 'results',
+      diagnostics: {
+        legislationNote: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    },
+    contains: ['Schedule 1 paragraph 2', 'Equality Act 2010', citingHit.title],
+    excludes: ['is not held'],
+  },
+  {
+    name: 'states partial coverage when the legislation half failed',
+    response: {
+      hits: [citingHit],
       outcome: 'results',
       diagnostics: { legislationSearchFailed: true },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain(
-      'Legislation could not be searched this time',
-    )
-    // The judgment hit is still visible: the failure flags coverage, it does
-    // not suppress valid hits.
-    expect(container.textContent).toContain(citingHit.title)
-  })
-
-  it('states partial coverage when the judgment half failed', () => {
-    const rendered = renderResults({
+    },
+    contains: ['Legislation could not be searched this time', citingHit.title],
+    excludes: [],
+  },
+  {
+    name: 'states partial coverage when the judgment half failed',
+    response: {
       hits: [
         {
           ...citingHit,
@@ -798,50 +574,45 @@ describe('SearchResults incomplete coverage', () => {
           retrievalPath: 'stored_exact_lookup',
         },
       ],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
       diagnostics: { judgmentSearchFailed: true },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain(
-      'Case law could not be searched this time',
-    )
-  })
-
-  it('names both halves when both failed', () => {
-    const rendered = renderResults({
+    },
+    contains: ['Case law could not be searched this time'],
+    excludes: [],
+  },
+  {
+    name: 'names both halves when both failed',
+    response: {
       hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
       diagnostics: {
         judgmentSearchFailed: true,
         legislationSearchFailed: true,
       },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).toContain('Part of this search failed')
-  })
-
-  it('shows no incomplete banner when both halves completed', () => {
-    const rendered = renderResults({
+    },
+    contains: ['Part of this search failed'],
+    excludes: [],
+  },
+  {
+    name: 'shows no incomplete banner when both halves completed',
+    response: {
       hits: [citingHit],
-      cached: true,
-      indexedCount: 0,
-      skippedCount: 0,
       outcome: 'results',
       diagnostics: { legislationSearched: true },
-    })
-    root = rendered.root
-    container = rendered.container
-
-    expect(container.textContent).not.toContain('may be incomplete')
+    },
+    contains: [],
+    excludes: ['may be incomplete'],
+  },
+] satisfies {
+  name: string
+  response: Partial<LegalSearchFetchResponse>
+  contains: string[]
+  excludes: string[]
+}[]) {
+  it(name, () => {
+    const { container } = renderResults(response)
+    for (const text of contains) expect(container.textContent).toContain(text)
+    for (const text of excludes)
+      expect(container.textContent).not.toContain(text)
   })
-})
+}

@@ -15,26 +15,12 @@ const api = vi.hoisted(() => ({
 // that awaited its own specifier re-entered the in-flight mock and
 // deadlocked under bun's module registry.
 const apiModule = { ...(await import('./api')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const apiModuleKeys = Object.fromEntries(
-  Object.keys(await import('./api')).map((key) => [key, undefined]),
-)
-mock.module('./api', () =>
-  Object.assign(
-    { ...apiModuleKeys },
-    (() => {
-      const actual = apiModule
-      return {
-        ...actual,
-        apiFetch: api.apiFetch,
-        apiFetchBlob: api.apiFetchBlob,
-        apiFetchBlobResult: api.apiFetchBlobResult,
-      }
-    })(),
-  ),
-)
+mock.module('./api', () => ({
+  ...apiModule,
+  apiFetch: api.apiFetch,
+  apiFetchBlob: api.apiFetchBlob,
+  apiFetchBlobResult: api.apiFetchBlobResult,
+}))
 
 // Loaded after the registrations above: bun does not hoist mock.module the
 // way vi.mock was hoisted, and these modules capture mocked imports at

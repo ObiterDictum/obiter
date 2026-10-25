@@ -22,7 +22,7 @@ export const apiErrorCodeSchema = z.enum([
   // A comment or reply create retried its client key with a different
   // payload: the stored row wins and the second submit is rejected.
   'comment_client_key_conflict',
-  'artifact_not_found',
+  'output_not_found',
   'upload_failed',
   'storage_unavailable',
   // The Meilisearch product index cannot be reached, so search has no query

@@ -28,7 +28,7 @@
     "@obiter/test-dom": "workspace:*",
     "@tailwindcss/vite": "^4.3.2",
     "@vitejs/plugin-react": "^5.2.0",
-    "electron": "^37.0.0",
+    "electron": "^45.0.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "tailwindcss": "^4.3.2",

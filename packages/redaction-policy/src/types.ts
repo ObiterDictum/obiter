@@ -57,11 +57,11 @@ export interface RunSummary {
     from: 'pdf' | 'docx'
     reason: OutputDowngradeReason
   } | null
-  /** SHA-256 of the stored finalized artifact bytes, hex encoded. */
+  /** SHA-256 of the stored finalized output bytes, hex encoded. */
   outputSha256?: string
   /**
    * True only for a hard-redaction PDF produced by the secure rasterized path.
-   * Absent or false on legacy hard-redaction DOCX/TXT artifacts and on
+   * Absent or false on legacy hard-redaction DOCX/TXT outputs and on
    * pseudonymised output.
    */
   securePdf?: boolean

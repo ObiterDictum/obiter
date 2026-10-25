@@ -1,16 +1,11 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
+import { createAccount } from './document-journey'
+import { signIn, saveAndWait } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveJourneyTargets } from '../journey-target.mjs'
-import { verifyEmailInDb } from './support'
 
 /*
  * E7b browser journey: the Insert ribbon's Footnote control must survive the
@@ -27,7 +22,6 @@ import { verifyEmailInDb } from './support'
  * content-type override being created on save.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -40,32 +34,6 @@ const shots = process.env.E7B_E2E_SHOTS
 function shot(page: Page, name: string) {
   if (!shots) return Promise.resolve()
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
-}
-
-async function createAccount(request: APIRequestContext) {
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e7b-${runId}@obiter.test`
-  const password = `E7b-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E7b User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
 }
 
 async function openFixtureDocument(
@@ -127,8 +95,7 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
+
 const ribbon = (page: Page, name: 'Home' | 'Insert' | 'Review') =>
   page.getByRole('tab', { name, exact: true }).first()
 
@@ -142,11 +109,6 @@ const noteParagraph = (page: Page) =>
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
   await ribbon(page, name).click()
-}
-
-async function saveAndWait(page: Page) {
-  await save(page).click()
-  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
 }
 
 /**
@@ -176,7 +138,7 @@ test('a footnote typed into its opened story survives save, reload and export', 
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E7b')
   const matter = `E7b footnotes ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 

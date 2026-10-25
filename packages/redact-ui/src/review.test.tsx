@@ -91,7 +91,7 @@ const run = {
     },
   ],
   decisions: {},
-  outputArtifactId: 'art_1',
+  outputId: 'out_1',
   detectorVersion: null,
   detectionMode: 'model+supplement' as const,
   replacesRunId: null,
