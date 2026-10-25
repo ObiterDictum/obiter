@@ -1,3 +1,6 @@
+import { trackedElementText } from './tracked-change-display'
+import { PartIndex } from './story-index'
+import { isSplittableRun } from '../run-revision-eligibility'
 import { runHyperlinkTarget } from './hyperlink-target'
 import {
   type DocumentFieldWire,
@@ -28,7 +31,6 @@ import {
 } from './tracked-change-nodes'
 import {
   attributeValue,
-  childrenByParent,
   elementRange,
   isTextWrappingBreak,
   isWord,
@@ -49,134 +51,6 @@ export type ParsedStory = {
   anchors: TextRunAnchor[]
   paragraphAnchors: ParagraphAnchor[]
   trackedChanges: TrackedChangeNode[]
-}
-
-const NO_ELEMENTS: readonly XmlElement[] = []
-
-/**
- * One pass over a part's element list, indexing what the story walk asks for
- * over and over: children, the nearest enclosing `w:r`/`w:p`, and the tracked
- * change and `mc:Fallback` facts. Without it every paragraph and every run
- * scans the whole list, so a part costs runs × elements — 2,000 field-bearing
- * paragraphs took ~30 s before this. Elements are in document order, so a
- * parent is always seen before its children: ancestor facts are computed
- * forward and subtree facts backward, with no recursion (a part may nest
- * 20,000 deep).
- */
-class PartIndex {
-  private readonly children: Map<XmlElement, XmlElement[]>
-  private readonly byRun = new Map<XmlElement, XmlElement[]>()
-  private readonly byParagraph = new Map<XmlElement, XmlElement[]>()
-  private readonly nearestRun = new Map<XmlElement, XmlElement | undefined>()
-  private readonly nearestParagraph = new Map<
-    XmlElement,
-    XmlElement | undefined
-  >()
-  private readonly trackedAncestor = new Set<XmlElement>()
-  private readonly insideFallback = new Set<XmlElement>()
-  private readonly trackedSubtree = new Set<XmlElement>()
-
-  constructor(private readonly elements: readonly XmlElement[]) {
-    this.children = childrenByParent(elements)
-    for (const element of elements) {
-      const parent = element.parent
-      if (parent !== undefined) {
-        if (isTrackedChange(parent) || this.trackedAncestor.has(parent)) {
-          this.trackedAncestor.add(element)
-        }
-        if (
-          parent.localName === 'Fallback' ||
-          this.insideFallback.has(parent)
-        ) {
-          this.insideFallback.add(element)
-        }
-      }
-      const run =
-        parent === undefined
-          ? undefined
-          : isWord(parent, 'r')
-            ? parent
-            : this.nearestRun.get(parent)
-      this.nearestRun.set(element, run)
-      this.bucket(this.byRun, run, element)
-      const paragraph =
-        parent === undefined
-          ? undefined
-          : isWord(parent, 'p')
-            ? parent
-            : this.nearestParagraph.get(parent)
-      this.nearestParagraph.set(element, paragraph)
-      this.bucket(this.byParagraph, paragraph, element)
-    }
-    for (let index = elements.length - 1; index >= 0; index -= 1) {
-      const element = elements[index]
-      if (isTrackedChange(element)) {
-        this.trackedSubtree.add(element)
-        continue
-      }
-      for (const child of this.children.get(element) ?? NO_ELEMENTS) {
-        if (this.trackedSubtree.has(child)) {
-          this.trackedSubtree.add(element)
-          break
-        }
-      }
-    }
-  }
-
-  root() {
-    return this.elements.find(({ depth }) => depth === 0)
-  }
-
-  childrenOf(element: XmlElement) {
-    return this.children.get(element) ?? NO_ELEMENTS
-  }
-
-  /** Elements whose nearest enclosing `w:r` is `run`, in document order. */
-  descendantsOfRun(run: XmlElement) {
-    return this.byRun.get(run) ?? NO_ELEMENTS
-  }
-
-  /** Elements whose nearest enclosing `w:p` is `paragraph`. */
-  descendantsOfParagraph(paragraph: XmlElement) {
-    return this.byParagraph.get(paragraph) ?? NO_ELEMENTS
-  }
-
-  inTrackedChange(element: XmlElement) {
-    return this.trackedAncestor.has(element)
-  }
-
-  isInsideFallback(element: XmlElement) {
-    return this.insideFallback.has(element)
-  }
-
-  /** The element itself or a descendant is a tracked change. */
-  containsTrackedChange(element: XmlElement) {
-    return this.trackedSubtree.has(element)
-  }
-
-  /** A `w:del` on the paragraph's own mark, which deletes the paragraph. */
-  hasDeletedParagraphMark(paragraph: XmlElement) {
-    const properties = this.childrenOf(paragraph).find((element) =>
-      isWord(element, 'pPr'),
-    )
-    if (!properties) return false
-    const mark = this.childrenOf(properties).find((element) =>
-      isWord(element, 'rPr'),
-    )
-    if (!mark) return false
-    return this.childrenOf(mark).some((element) => isWord(element, 'del'))
-  }
-
-  private bucket(
-    into: Map<XmlElement, XmlElement[]>,
-    key: XmlElement | undefined,
-    element: XmlElement,
-  ) {
-    if (key === undefined) return
-    const entries = into.get(key)
-    if (entries) entries.push(element)
-    else into.set(key, [element])
-  }
 }
 
 export function parseStory(
@@ -430,14 +304,13 @@ function parseRun(
       : identity.allocator.nextTextRunId(),
     identity,
   )
-  const textElements = index
+  const content = index
     .descendantsOfRun(runElement)
     .filter(
       (element) =>
-        isWord(element, 't') &&
-        !index.inTrackedChange(element) &&
-        !index.isInsideFallback(element),
+        !index.inTrackedChange(element) && !index.isInsideFallback(element),
     )
+  const textElements = content.filter((element) => isWord(element, 't'))
   const propertiesElements = index
     .childrenOf(runElement)
     .filter((element) => isWord(element, 'rPr'))
@@ -453,10 +326,7 @@ function parseRun(
   const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
     .map(elementRange)
-  const textBreaks = index
-    .childrenOf(runElement)
-    .filter(isTextWrappingBreak)
-    .map(elementRange)
+  const textBreaks = content.filter(isTextWrappingBreak).map(elementRange)
   const textRanges = anchoredTextElements.map((element) => ({
     start: element.startTagEnd,
     end: element.endTagStart,
@@ -467,7 +337,7 @@ function parseRun(
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
     ...(hyperlinkTarget ? { hyperlinkTarget } : {}),
-    text: runPlainText(source, index, runElement, textElements),
+    text: runPlainText(source, content, textElements),
     preservedXmlFragments: index
       .childrenOf(runElement)
       .filter(
@@ -478,40 +348,70 @@ function parseRun(
       )
       .map((element) => elementFragment(source, element)),
   }
-  return {
+  const anchor: TextRunAnchor = {
+    partName,
     wire,
-    anchor: {
-      partName,
-      wire,
-      runRange: elementRange(runElement),
-      textRanges,
-      textElements: anchoredTextElements,
-      textBreaks,
-      runProperties: propertiesElements.map((element) =>
-        elementFragment(source, element),
-      ),
-      ...(propertiesElement
-        ? { runPropertiesRange: elementRange(propertiesElement) }
-        : {}),
-      ...(styleElement ? { runStyleRange: elementRange(styleElement) } : {}),
-    },
+    runRange: elementRange(runElement),
+    textRanges,
+    textElements: anchoredTextElements,
+    textBreaks,
+    runProperties: propertiesElements.map((element) =>
+      elementFragment(source, element),
+    ),
+    ...(propertiesElement
+      ? { runPropertiesRange: elementRange(propertiesElement) }
+      : {}),
+    ...(styleElement ? { runStyleRange: elementRange(styleElement) } : {}),
   }
+  wire.textRevisionEligible =
+    !propertiesElements.some((element) =>
+      index.containsTrackedChange(element),
+    ) && isSplittableRun(source, anchor)
+  if (!wire.textRevisionEligible) {
+    const anchored = new Set(
+      anchoredTextElements.map((element) => element.start),
+    )
+    const consumed = new Set(textBreaks.map((element) => element.start))
+    let offset = 0
+    let textIndex = 0
+    wire.textRevisionTokens = []
+    wire.textRevisionTextRanges = []
+    for (const element of content) {
+      if (!['t', 'tab', 'br', 'cr'].some((name) => isWord(element, name)))
+        continue
+      const text = trackedElementText(source, element)
+      if (anchored.has(element.start)) {
+        wire.textRevisionTextRanges.push({
+          from: offset,
+          to: offset + text.length,
+        })
+        offset += text.length
+        textIndex += 1
+      } else if (consumed.has(element.start)) {
+        offset += text.length
+      } else {
+        wire.textRevisionTokens.push({
+          kind: 'retained',
+          offset,
+          textIndex,
+          text,
+        })
+      }
+    }
+  }
+  return { wire, anchor }
 }
 
 function runPlainText(
   source: string,
-  index: PartIndex,
-  runElement: XmlElement,
+  content: readonly XmlElement[],
   textElements: readonly XmlElement[],
 ) {
   const textNodes = new Set(
     textElements.filter((element) => !element.selfClosing),
   )
   const parts: string[] = []
-  for (const element of index.descendantsOfRun(runElement)) {
-    if (index.inTrackedChange(element) || index.isInsideFallback(element)) {
-      continue
-    }
+  for (const element of content) {
     if (textNodes.has(element)) {
       parts.push(
         decodeXmlReferences(

@@ -1,3 +1,4 @@
+import { normaliseEditText } from '@obiter/contracts'
 import { OoxmlError, type OoxmlDocument, type TextRunAnchor } from './model'
 import {
   escapeXmlText,
@@ -89,8 +90,8 @@ export function textBreakReplacements(
 }
 
 export function wordRunInnerTextXml(prefix: string, text: string) {
-  return text
-    .split(/\r\n|\r|\n/u)
+  return normaliseEditText(text)
+    .split('\n')
     .map((line, index) => {
       const element = textElementXml(prefix, line)
       return index === 0 ? element : `<${prefix}:br/>${element}`
@@ -110,7 +111,7 @@ export function lineBreakRunReplacements(
   if (!first) return undefined
   const opening = source.slice(first.start, first.startTagEnd)
   const prefix = opening.match(/^<([^:>\s]+):/u)?.[1] ?? 'w'
-  const lines = text.split(/\r\n|\r|\n/u)
+  const lines = normaliseEditText(text).split('\n')
   const assigned = Math.min(lines.length, elements.length)
   return elements.map((element, index) => {
     if (index >= assigned) {

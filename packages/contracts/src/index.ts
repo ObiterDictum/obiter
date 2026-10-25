@@ -478,3 +478,5 @@ function slugifyCaseText(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 }
+
+export { planTextRevision } from './text-revision-plan'
