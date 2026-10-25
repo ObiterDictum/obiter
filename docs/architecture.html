@@ -2038,8 +2038,8 @@
                     redaction-policy · search-client
                   </td>
                   <td>
-                    Hono, better-auth, pg, mammoth, unpdf, resend, pdf-lib,
-                    @napi-rs/canvas
+                    Hono, better-auth, pg, dingbat-to-unicode, unpdf, resend,
+                    pdf-lib, @napi-rs/canvas
                   </td>
                 </tr>
                 <tr>
@@ -2290,7 +2290,9 @@
                   pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
-                <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
+                <dd>
+                  Redact source-map walker (DOCX) · unpdf (text-layer PDF)
+                </dd>
                 <dt>Render</dt>
                 <dd>
                   @napi-rs/canvas (native) · pdf-lib, for burning redactions
@@ -5836,18 +5838,20 @@
 
           <div class="callout">
             <b>Redact owns DOCX output.</b>
-            <code>redaction-docx-burn.ts</code> replaces text directly from
-            read-only OOXML anchors; editor edit operations and range splitting
-            are forbidden at this boundary. Redacting any part of a field clears
-            its instructions, including instructions outside the accepted span.
-            Redacted hyperlink display text also removes its relationship target
-            and link references. Field markers and surrounding structure remain.
-            Accepted spans must be fully covered, including tabs, breaks and
-            paragraph boundaries. Overlapping pseudonyms burn their union.
-            Text-box fallback copies and hidden link/drawing metadata are
-            removed. Modified XML is reparsed; the awaited whole-package gate
-            checks raw bytes and decoded XML text before returning bytes.
-            Uncertain output refuses with a structured burn error.
+            <code>redaction-docx-map.ts</code> supplies the same UTF-16 source
+            map to extraction and burning. Accepted offsets are verified against
+            the complete stored text; mismatched legacy coordinates require a
+            fresh run. Rejected duplicates and other words remain intact. Modern
+            Word shapes, breaks, hyphens, empty paragraphs, comments and tracked
+            text are mapped. Duplicate Fallback copies are removed. Editor edit
+            operations are forbidden at this boundary. Only selected innermost
+            fields lose instructions; accepted drawing metadata and hyperlink
+            targets are scrubbed. Emitted text must equal the expected offset
+            edits. The awaited residual gate checks hidden XML, decoded targets,
+            UTF-8/UTF-16LE binary text and nested packages with bounded
+            expansion. Hard mode refuses uncertain bytes before rendering;
+            pseudonymised mode records a visible text/plain downgrade when DOCX
+            cannot be safe.
           </div>
 
           <h3>Span categories</h3>
@@ -7068,6 +7072,18 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    DOCX extraction uses Redact's source-map walker rather than
+                    Mammoth.
+                  </td>
+                  <td>
+                    New runs map review offsets directly to Word XML. Legacy
+                    runs whose complete text differs require a fresh upload/run;
+                    text is never searched to guess coordinates.
+                  </td>
+                  <td class="id">specs/redact/implementation.md</td>
+                </tr>
                 <tr>
                   <td>
                     Merge overlap is a union, not "Rampart wins" (archived F21)
