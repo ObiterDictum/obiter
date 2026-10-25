@@ -118,6 +118,7 @@ export function decodedXmlText(source: string) {
   let cursor = 0
   let text = ''
   let layoutText = ''
+  let bodyText = ''
   for (const tag of tags) {
     // The complete part has already passed XML validation. Read its text
     // segments without treating markup removal as a string sanitiser. CDATA
@@ -134,6 +135,9 @@ export function decodedXmlText(source: string) {
       content.trim() || !parents.has(stack.at(-1)) ? content : ''
     text += meaningful
     layoutText += meaningful + tag.separator
+    bodyText +=
+      meaningful +
+      (tag.closing && tag.element.localName === 'p' ? '\n\n' : tag.separator)
     if (tag.closing) stack.pop()
     else if (!tag.element.selfClosing) stack.push(tag.element)
     cursor = tag.end
@@ -141,5 +145,5 @@ export function decodedXmlText(source: string) {
   const attributes = elements.flatMap((element) =>
     element.attributes.map((attribute) => attribute.value),
   )
-  return [text, layoutText, ...attributes]
+  return [text, layoutText, bodyText, ...attributes]
 }

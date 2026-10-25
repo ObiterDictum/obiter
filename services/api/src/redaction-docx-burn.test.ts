@@ -182,6 +182,25 @@ describe('Redact-owned DOCX bytes', () => {
     ).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
+  it('refuses a residual address across XML paragraphs with extraction separators', async () => {
+    const text = '1 High St\n\nLondon'
+    await expect(
+      burn(
+        '<w:p>' +
+          run('<w:t>1 High St</w:t>') +
+          '</w:p><w:p>' +
+          run('<w:t>London</w:t>') +
+          '</w:p>',
+        text,
+        [text],
+        {
+          'customXml/private.xml':
+            '<root><p><t>1 High St</t></p><p><t>London</t></p></root>',
+        },
+      ),
+    ).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
   it('removes a split-run fallback text-box copy', async () => {
     const output = await burn(
       '<w:p>' +
