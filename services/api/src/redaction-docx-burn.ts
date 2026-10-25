@@ -1,3 +1,4 @@
+import { containsText, decodeTarget } from './redaction-docx-residual'
 import { readBurnPart } from './redaction-docx-text'
 import type { MappedDocxNode } from './redaction-docx-map'
 import { RedactionDocxBurnError } from './redaction-docx-error'
@@ -311,6 +312,74 @@ export function scrubBurnedFields(
         )
           patch(document, relsName, element, '')
       }
+    }
+  }
+}
+
+/** Image descriptions are not positioned text. Scrub only accepted entity text,
+ * including filename spellings, throughout the owning drawing parts. */
+export function scrubDrawingMetadata(
+  document: OoxmlDocument,
+  accepted: readonly string[],
+) {
+  for (const [partName, part] of document.sourceParts) {
+    if (!part.overlay) continue
+    const { source, elements } = readBurnPart(document, partName)
+    for (const element of elements) {
+      const names =
+        element.namespaceUri ===
+          'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing' &&
+        element.localName === 'docPr'
+          ? ['descr', 'title']
+          : element.namespaceUri ===
+                'http://schemas.openxmlformats.org/drawingml/2006/picture' &&
+              element.localName === 'cNvPr'
+            ? ['descr', 'name']
+            : []
+      if (!names.length) continue
+      let opening = source.slice(element.start, element.startTagEnd)
+      for (const attr of element.attributes) {
+        if (!names.includes(attr.localName)) continue
+        let value = decodeTarget(attr.value)
+        for (const name of accepted) {
+          for (const spelling of [
+            name,
+            name.replaceAll(/\s+/gu, '_'),
+            name.replaceAll(/\s+/gu, '-'),
+          ]) {
+            if (
+              !spelling ||
+              !containsText(value.toLowerCase(), spelling.toLowerCase())
+            )
+              continue
+            const escaped = spelling.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+            value = value.replace(
+              new RegExp(
+                `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`,
+                'giu',
+              ),
+              '[REDACTED]',
+            )
+          }
+        }
+        if (value !== decodeTarget(attr.value)) {
+          opening = removeAttribute(
+            opening,
+            { ...element, start: 0, startTagEnd: opening.length },
+            attr.qualifiedName,
+          ).replace(
+            /(\/?>)$/u,
+            ` ${attr.qualifiedName}="${escapeXmlText(value).replaceAll('"', '&quot;')}"$1`,
+          )
+        }
+      }
+      if (opening !== source.slice(element.start, element.startTagEnd))
+        patch(
+          document,
+          partName,
+          { start: element.start, end: element.startTagEnd },
+          opening,
+        )
     }
   }
 }

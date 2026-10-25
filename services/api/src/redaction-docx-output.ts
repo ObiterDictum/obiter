@@ -12,6 +12,7 @@ import {
 import {
   burnMappedNodes,
   scrubBurnedFields,
+  scrubDrawingMetadata,
   type BurnRange,
 } from './redaction-docx-burn'
 import {
@@ -145,6 +146,10 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   }
   const burned = burnMappedNodes(document, mapped.nodes, union)
   scrubBurnedFields(document, burned)
+  scrubDrawingMetadata(
+    document,
+    affected.map((span) => span.text),
+  )
   const serialised = await serialiseDocx(document)
   const writtenParts = await loadOoxmlZipEntries(Buffer.from(serialised))
   // Independent output proof: rebuild reviewed text from the emitted package

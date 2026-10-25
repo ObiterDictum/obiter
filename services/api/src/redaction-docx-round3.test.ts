@@ -127,6 +127,16 @@ describe('accepted DOCX coordinates and container safety', () => {
       else expect(output.xml).toContain('Private address')
     },
   )
+  it('scrubs accepted names from nearby picture descriptions and filenames only', async () => {
+    const drawing =
+      '<w:drawing><wp:docPr xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" id="1" name="Picture" descr="Photo of Jane Doe" title="Other title"/><pic:cNvPr xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" id="2" name="jane_doe.jpg" descr="Jane Doe portrait"/></w:drawing>'
+    const output = await burn(p(t('Jane Doe')) + p(drawing), ['Jane Doe'])
+    expect(output.xml).not.toContain('Jane Doe')
+    expect(output.xml).not.toContain('jane_doe')
+    expect(output.xml).toContain('Photo of [REDACTED]')
+    expect(output.xml).toContain('title="Other title"')
+    expect(output.xml).toContain('[REDACTED].jpg')
+  })
   it('burns selected comment and deletion text while preserving other review text', async () => {
     const output = await burn(
       p(t('Public')) +
