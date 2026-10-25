@@ -63,6 +63,10 @@ export function mapDocxText(entries: ReadonlyMap<string, Uint8Array>) {
       }
       const run = isWord(element, 'r') ? element : parent && runs.get(parent)
       if (run) runs.set(element, run)
+      if (isWord(element, 'del') || isWord(element, 'moveFrom')) {
+        events.push({ at: element.start, value: '\n\n[Deleted text]\n\n' })
+        events.push({ at: element.end, value: '\n\n[End deleted text]\n\n' })
+      }
       if (isWord(element, 'p')) events.push({ at: element.end, value: '\n\n' })
       if (
         ['footnote', 'endnote', 'comment'].some((name) => isWord(element, name))

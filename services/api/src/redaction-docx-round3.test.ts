@@ -6,7 +6,8 @@ import {
   parseXmlElements,
   isWord,
 } from '@obiter/ooxml'
-import { extractDocumentText } from './document-extraction'
+import { extractRedactionContent } from './redaction-extraction'
+const extractDocumentText = async (type: 'docx', bytes: Buffer) => (await extractRedactionContent(type, bytes)).text
 import { buildRedactedDocx } from './redaction-docx-output'
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'

@@ -1,8 +1,6 @@
 import { posix } from 'node:path'
 import { documentTextLayoutSchema } from '@obiter/contracts'
-import { RedactionDocxBurnError } from './redaction-docx-error'
-import { mapDocxText } from './redaction-docx-map'
-import { prepareDocxForBurn } from './redaction-docx-xml'
+import mammoth from 'mammoth'
 import {
   DEFAULT_OOXML_PACKAGE_LIMITS,
   loadOoxmlZipEntries,
@@ -275,8 +273,6 @@ async function exactPageChars(
     return chars.length > 0 ? withSemanticSpaces(withLineBreaks(chars)) : []
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
-    if (error instanceof RedactionDocxBurnError)
-      throw new DocumentExtractionError(error.message, true)
     console.warn('PDF exact glyph geometry fallback', {
       pageNumber: pageIndex + 1,
       reason: 'operator_replay_failed',
@@ -754,14 +750,28 @@ export async function extractDocumentContent(
     if (fileType === 'pdf') return await extractPdfContent(buffer)
     const limits = dependencies.ooxmlLimits ?? DEFAULT_OOXML_PACKAGE_LIMITS
     const boundedBuffer = await boundedDocxBuffer(buffer, limits)
-    const supplemental = await readDocxSupplementalContent(
-      buffer,
-      limits,
-      dependencies.extractDocxSupplementalContent ??
-        extractDocxSupplementalContent,
-    )
-    const prepared = await prepareDocxForBurn(boundedBuffer)
-    const { text } = mapDocxText(await loadOoxmlZipEntries(prepared, limits))
+    const [result, supplemental] = await Promise.all([
+      mammoth.extractRawText({ buffer: boundedBuffer }),
+      readDocxSupplementalContent(
+        buffer,
+        limits,
+        dependencies.extractDocxSupplementalContent ??
+          extractDocxSupplementalContent,
+      ),
+    ])
+    if (result.messages.length > 0)
+      console.warn('Mammoth extraction warnings', {
+        count: result.messages.length,
+        types: [...new Set(result.messages.map((message) => message.type))],
+      })
+    const text = [
+      ...supplemental.header,
+      result.value,
+      ...supplemental.footer,
+      ...supplemental.notes,
+    ]
+      .filter((part) => part.length > 0)
+      .join('\n\n')
     if (text.trim().length === 0) {
       if (supplemental.visualContent === 'absent')
         return { text: '', layout: null }
@@ -775,8 +785,6 @@ export async function extractDocumentContent(
     return { text, layout: null }
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
-    if (error instanceof RedactionDocxBurnError)
-      throw new DocumentExtractionError(error.message, true)
     if (
       error instanceof OoxmlError &&
       error.code === 'package-limits-exceeded'

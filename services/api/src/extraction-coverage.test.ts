@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'bun:test'
-import { extractDocumentContent } from './document-extraction'
+import { extractRedactionContent as extractDocumentContent } from './redaction-extraction'
 import {
   countBodyTextboxChars,
   findUncoveredDocxRegions,

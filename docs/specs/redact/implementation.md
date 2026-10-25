@@ -98,3 +98,12 @@ selections, hidden residuals in unsupported parts, and nested-package resource
 limits. The coverage guard still refuses unreviewed altChunks, chart/DrawingML text
 and unknown parts; images require OCR when they are the only content. Comments,
 tracked text, supported shapes, breaks, hyphens and empty paragraphs are supported.
+
+### DOCX review coordinates
+
+Standalone Redact uses its own UTF-16 text walker; matter ingestion, Search,
+Verify and the document editor retain their existing extraction behaviour.
+Deleted/moved-from text is reviewable between `[Deleted text]` and
+`[End deleted text]` labels with paragraph separators. Comment bodies are
+reviewable in labelled trailing regions. Editable output preserves unaccepted
+review content; the pseudonymised text fallback uses only this reviewed text.

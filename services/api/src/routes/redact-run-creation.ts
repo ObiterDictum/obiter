@@ -4,8 +4,8 @@ import { redactionPolicyModeSchema } from '@obiter/contracts'
 import { appendAuditLog } from '../database'
 import {
   DocumentExtractionError,
-  extractDocumentContent,
 } from '../document-extraction'
+import { extractRedactionContent } from '../redaction-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { readLimitedFormData } from '../limited-request-body'
 import type { ApiRequestLimits } from '../request-limits'
@@ -106,7 +106,7 @@ export function createRedactRunCreationRoutes(
             : upload.fileType === 'docx'
               ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
               : 'text/plain'
-        const extracted = await extractDocumentContent(
+        const extracted = await extractRedactionContent(
           upload.fileType,
           upload.contents,
           { ooxmlLimits: limits.ooxmlLimits },
