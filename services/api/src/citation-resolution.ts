@@ -54,12 +54,8 @@ export interface CitationCandidateResolution {
 }
 
 /**
- * How a raw candidate is resolved. `/ln/` paths are decided by the shared path
- * grammar alone, a neutral citation is validated against the shared grammar and
- * then looked up, and everything else is offered to the legislation classifier.
- * The order matters: a neutral citation is never offered to the legislation
- * classifier, whose title grammar would otherwise see the court words as a
- * title run.
+ * Classify neutral citations before legislation: the title grammar would
+ * otherwise treat the court words as an Act title.
  */
 type CandidateShape =
   | 'blank'
@@ -130,8 +126,6 @@ export async function resolveCitationCandidates(
   }))
 }
 
-/** Resolve one candidate. Provided for the single-candidate caller; it
- * delegates to the batch so there is one implementation. */
 export async function resolveCitationCandidate(
   pool: Pick<Pool, 'query'>,
   candidate: CitationCandidate,

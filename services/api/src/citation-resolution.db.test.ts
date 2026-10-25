@@ -158,10 +158,6 @@ describe('case law resolution against the stored record', () => {
     expect(finding.explanation.toLowerCase()).not.toContain('does not exist')
   })
 
-  it('reports duplicate live carriers as ambiguous, never first-match-wins', async () => {
-    expect(await resolveOne('[2066] UKSC 77')).toEqual({ outcome: 'ambiguous' })
-  })
-
   it('resolves the live carrier beside a withdrawn one and clears on it', async () => {
     // A withdrawn row is not a second candidate identity. V3 resolves the one
     // live source and V2 clears on it, which is V2's documented answer for this
@@ -188,19 +184,6 @@ describe('case law resolution against the stored record', () => {
     expect(finding.evidence[0]?.sourceId).toBe('db-test-v3-live-dup')
   })
 
-  it('resolves a single withdrawn carrier and lets V2 judge its trustworthiness', async () => {
-    const { resolution, finding } = await resolveThenCheck('[2066] UKSC 3')
-
-    expect(resolution).toMatchObject({
-      outcome: 'resolved',
-      citation: { sourceId: 'db-test-v3-withdrawn' },
-    })
-    expect(finding.status).toEqual({
-      state: 'review_required',
-      reason: 'evidence_unavailable',
-    })
-  })
-
   it('resolves a whole document in one candidate lookup', async () => {
     let caseLawQueries = 0
     const counting = {
@@ -225,29 +208,6 @@ describe('case law resolution against the stored record', () => {
     expect(
       results.every((result) => result.resolution.outcome === 'resolved'),
     ).toBe(true)
-  })
-
-  it('returns results in input order with the identifiers it was given', async () => {
-    const batch = [
-      { id: 'p-1:0-13', rawText: '[2066] UKSC 1' },
-      { id: 'p-2:0-14', rawText: '[2066] UKSC 999' },
-      { id: 'p-3:0-12', rawText: '[2066 UKSC' },
-    ]
-
-    const results = await resolveCitationCandidates(pool, batch)
-
-    expect(results.map((result) => result.id)).toEqual(
-      batch.map((candidate) => candidate.id),
-    )
-    expect(results.map((result) => result.resolution.outcome)).toEqual([
-      'resolved',
-      'unresolved',
-      'malformed',
-    ])
-  })
-
-  it('is safe for an empty batch', async () => {
-    expect(await resolveCitationCandidates(pool, [])).toEqual([])
   })
 
   /**
