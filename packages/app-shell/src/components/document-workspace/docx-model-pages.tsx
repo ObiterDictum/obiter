@@ -1,3 +1,4 @@
+import type { PendingRedlines } from '../../document-pending-redlines'
 import { useMemo } from 'react'
 import {
   normaliseEditText,
@@ -27,6 +28,7 @@ import type { EditingKind } from './use-editing-story'
 export function DocxModelPages({
   model,
   painted,
+  pendingRedlines,
   pages,
   zoom,
   view = 'print',
@@ -52,6 +54,7 @@ export function DocxModelPages({
 }: {
   model: DocumentModelWire
   painted: DocumentModelWire | undefined
+  pendingRedlines?: PendingRedlines
   pages: LaidOutPage[]
   zoom: number
   /** 'web' is the continuous flow view: the sheets lose their paper chrome
@@ -134,6 +137,7 @@ export function DocxModelPages({
           chromeless={view === 'web'}
         >
           <DocumentModelPage
+            pendingRedlines={pendingRedlines}
             model={rendered}
             marginEditing={marginEditing}
             chromeless={view === 'web'}

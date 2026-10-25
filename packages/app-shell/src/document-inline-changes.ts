@@ -82,7 +82,15 @@ function projectInlineChanges(
       for (const [index, segment] of segments.entries()) {
         const runId = `${change.id}:inline:${index}`
         const text = markBreaks(segment.text)
-        runs.push({ id: runId, text, preservedXmlFragments: [] })
+        const source = change.pending?.paragraphDelete
+          ? paragraph.runs.find((run) => run.id === change.runId)
+          : undefined
+        runs.push({
+          ...source,
+          id: runId,
+          text,
+          preservedXmlFragments: source?.preservedXmlFragments ?? [],
+        })
         spans.push({
           ...segment,
           pending: !!change.pending,
@@ -131,6 +139,7 @@ function projectInlineChanges(
         if (
           (change.kind !== 'delete' && !change.pending?.displayOnly) ||
           change.pending?.from !== at ||
+          (change.runId !== undefined && change.runId !== run.id) ||
           emitted.has(change.id)
         )
           continue

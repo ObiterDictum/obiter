@@ -20,28 +20,28 @@ export type PendingInlineChange = DocumentChangeWire & {
   }
 }
 
-export type PendingRedlineModel = DocumentModelWire & {
+export type PendingRedlines = {
   pendingChanges?: PendingInlineChange[]
   pendingBuckets?: ReadonlyMap<string, PendingInlineChange[]>
 }
 export const NO_PENDING_CHANGES: PendingInlineChange[] = []
 
 export function pendingParagraphChanges(
-  model: Partial<PendingRedlineModel>,
+  model: Partial<PendingRedlines> | undefined,
   id: string,
   partName?: string,
 ): PendingInlineChange[] {
-  const bucket = model.pendingBuckets?.get(id)
-  if (model.pendingBuckets)
+  const bucket = model?.pendingBuckets?.get(id)
+  if (model?.pendingBuckets)
     return !partName ||
       bucket?.every((change) => change.storyPartName === partName)
       ? (bucket ?? NO_PENDING_CHANGES)
       : (bucket?.filter((change) => change.storyPartName === partName) ??
           NO_PENDING_CHANGES)
-  if (!model.pendingChanges?.length) return NO_PENDING_CHANGES
+  if (!model?.pendingChanges?.length) return NO_PENDING_CHANGES
   return paragraphChanges(
     { id, runs: [], preservedXmlFragments: [] },
-    model.pendingChanges ?? NO_PENDING_CHANGES,
+    model?.pendingChanges ?? NO_PENDING_CHANGES,
     partName,
   )
 }
@@ -76,13 +76,12 @@ const previousBuckets = new WeakMap<
   Map<string, PendingInlineChange[]>
 >()
 
-export function withPendingRedlines(
+export function buildPendingRedlines(
   model: DocumentModelWire,
   state: DraftState,
-  painted: DocumentModelWire = model,
   operations: readonly DocumentEditOperation[] = planDocumentSave(model, state)
     .operations,
-): PendingRedlineModel {
+): PendingRedlines {
   const replacements = new Map(
     operations.flatMap((op) =>
       op.type === 'replace_run_text' ? [[op.runId, op.text] as const] : [],
@@ -117,7 +116,7 @@ export function withPendingRedlines(
       ...(runId ? { runId } : {}),
       paragraphId,
       text: text || '¶',
-      inlinePosition: { beforeRunId: null },
+      inlinePosition: { beforeRunId: paragraphDelete ? (runId ?? null) : null },
       pending: {
         from,
         to: deleted || displayOnly ? from : from + text.length,
@@ -174,33 +173,39 @@ export function withPendingRedlines(
   }
   for (const { story, paragraph } of affected) {
     if (deleted.has(paragraph.id) && !replacingEmpty.has(paragraph.id)) {
-      add(
-        story.partName,
-        paragraph.id,
-        paragraph.runs
-          .map(
-            (run) =>
-              planTextRevision(
-                run.text,
-                '',
-                false,
-                run.textRevisionTokens,
-                false,
-                run.textRevisionTextRanges?.length,
-              ).removed,
-          )
-          .join(''),
-        true,
-        0,
-        { paragraphDelete: true },
-      )
+      const start = pending.length
+      for (const run of paragraph.runs) {
+        const removed = planTextRevision(
+          run.text,
+          '',
+          false,
+          run.textRevisionTokens,
+          false,
+          run.textRevisionTextRanges?.length,
+        ).removed
+        if (removed)
+          add(story.partName, paragraph.id, removed, true, 0, {
+            paragraphDelete: true,
+            runId: run.id,
+          })
+      }
+      if (pending.length === start)
+        add(story.partName, paragraph.id, '', true, 0, {
+          paragraphDelete: true,
+        })
       continue
     }
     let offset = 0
     for (const run of paragraph.runs) {
       const next =
         replacements.get(run.id)?.replace(/\r\n|\r/gu, '\n') ?? run.text
-      if (replacements.has(run.id)) {
+      if (
+        replacements.has(run.id) &&
+        !model.changes.some(
+          (change) =>
+            change.elementName === 'rPrChange' && change.runId === run.id,
+        )
+      ) {
         const plan = planTextRevision(
           run.text,
           next,
@@ -244,13 +249,11 @@ export function withPendingRedlines(
       buckets.set(id, old)
   }
   previousBuckets.set(model, buckets)
-  return pending.length
-    ? { ...painted, pendingChanges: pending, pendingBuckets: buckets }
-    : painted
+  return { pendingBuckets: buckets }
 }
 
 export function pendingParagraphDeletion(
-  model: PendingRedlineModel,
+  model: PendingRedlines | undefined,
   id: string,
 ) {
   return pendingParagraphChanges(model, id).some(

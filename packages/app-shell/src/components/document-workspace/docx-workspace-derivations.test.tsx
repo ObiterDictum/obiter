@@ -4,6 +4,7 @@ import { describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
   mountWorkspace,
+  openRibbonTab,
   multiParagraphModel,
   paragraph,
   rerenderWorkspace,
@@ -22,11 +23,23 @@ import {
  */
 const counts = vi.hoisted(() => ({
   layout: 0,
+  pageDerived: 0,
   formatted: 0,
   paintFormatted: 0,
   authorities: 0,
   storyBlocks: 0,
   wrapped: [] as string[],
+}))
+
+const lists = { ...(await import('../../document-page-lists')) }
+mock.module('../../document-page-lists', () => ({
+  ...lists,
+  documentListMarkers: (
+    ...args: Parameters<typeof lists.documentListMarkers>
+  ) => {
+    counts.pageDerived += 1
+    return lists.documentListMarkers(...args)
+  },
 }))
 
 const controlCalls = vi.hoisted(() => ({
@@ -263,6 +276,7 @@ mock.module('../../document-authorities', () =>
 )
 
 function reset() {
+  counts.pageDerived = 0
   counts.layout = 0
   counts.formatted = 0
   counts.paintFormatted = 0
@@ -357,7 +371,7 @@ describe('DocxWorkspace document derivations', () => {
     ).toBeLessThanOrEqual(1)
   })
 
-  it('does not rescan the story block partition on a keystroke', () => {
+  it('does not rescan the story block partition on a tracked keystroke', () => {
     mountWorkspace({
       models: {
         doc_1: multiParagraphModel([
@@ -366,11 +380,14 @@ describe('DocxWorkspace document derivations', () => {
         ]),
       },
     })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
     selectBodyParagraph()
     const field = screen.getByLabelText('Paragraph text')
     reset()
     fireEvent.change(field, { target: { value: 'Hello!' } })
     expect(counts.storyBlocks).toBe(0)
+    expect(counts.pageDerived).toBe(0)
   })
 
   it('keeps an untouched paragraph fresh, with its formatting, after a keystroke elsewhere', () => {

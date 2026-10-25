@@ -224,6 +224,7 @@ export function DocxWorkspace({
       }
   const {
     painted,
+    pendingRedlines,
     pages,
     printBox,
     authorities,
@@ -432,6 +433,7 @@ export function DocxWorkspace({
                   view={view}
                   model={model}
                   painted={painted}
+                  pendingRedlines={pendingRedlines}
                   pages={pages}
                   zoom={zoom}
                   editingKind={editingKind}

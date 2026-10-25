@@ -1,3 +1,4 @@
+import type { PendingRedlines } from '../../document-pending-redlines'
 import { useMemo } from 'react'
 import type {
   DocumentModelWire,
@@ -51,6 +52,7 @@ const NO_EXTRA_RUNS: ExtraRuns = {}
 
 export function DocumentModelPage({
   model,
+  pendingRedlines,
   selectedParagraphId,
   onSelectParagraph,
   onTextSelection,
@@ -91,6 +93,7 @@ export function DocumentModelPage({
   chromeless = false,
 }: {
   model: DocumentModelWire
+  pendingRedlines?: PendingRedlines
   selectedParagraphId: string | null
   onSelectParagraph: (paragraphId: string, offset?: number) => void
   onTextSelection?: (
@@ -156,9 +159,6 @@ export function DocumentModelPage({
     const story = model.stories.find((item) => item.kind === 'document')
     const headers = marginStories(model, 'header')
     const footers = marginStories(model, 'footer')
-    const page = pageLayout?.box ?? documentPageBox(model)
-    const bands = marginBandHeights(model)
-    const frame = pageLayout?.frame ?? contentFrame(page, bands)
     const listMarkers = documentListMarkers(model)
     const notes = documentNotes(model)
     const noteParagraphIds = new Set(
@@ -176,6 +176,27 @@ export function DocumentModelPage({
     // its story has to travel with the element: verification locations are
     // story-scoped, and a paragraph id alone is not unique.
     const storyOf = paragraphStoryResolver(model)
+    return {
+      story,
+      headers,
+      footers,
+      listMarkers,
+      noteParagraphIds,
+      noteMarks,
+      storyOf,
+    }
+  }, [model])
+  const {
+    story,
+    headers,
+    footers,
+    listMarkers,
+    noteParagraphIds,
+    noteMarks,
+    storyOf,
+  } = derived
+
+  const { order, neighbors } = useMemo(() => {
     const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
     // One resolver over the story's flow order per model. Building it inside
     // the per-paragraph render walked the whole document for every paragraph
@@ -188,33 +209,12 @@ export function DocumentModelPage({
       paragraphs: story?.paragraphs ?? [],
       order,
     })
-    return {
-      story,
-      headers,
-      footers,
-      page,
-      frame,
-      listMarkers,
-      noteParagraphIds,
-      noteMarks,
-      storyOf,
-      order,
-      neighbors,
-    }
-  }, [model, extraRuns, inserts, deletedParagraphIds, pageLayout])
-  const {
-    story,
-    headers,
-    footers,
-    page,
-    frame,
-    listMarkers,
-    noteParagraphIds,
-    noteMarks,
-    storyOf,
-    order,
-    neighbors,
-  } = derived
+    return { order, neighbors }
+  }, [model, story, extraRuns, inserts, deletedParagraphIds])
+
+  const page = pageLayout?.box ?? documentPageBox(model)
+  const frame =
+    pageLayout?.frame ?? contentFrame(page, marginBandHeights(model))
 
   const marginEdit = useMarginEdit(
     marginEditing,
@@ -250,6 +250,7 @@ export function DocumentModelPage({
   // the editable margin band differ only in the story they bind.
   const sharedCtx = {
     model,
+    pendingRedlines,
     selectedParagraphId,
     onSelectParagraph,
     onTextSelection,
@@ -344,7 +345,7 @@ export function DocumentModelPage({
           changes={model.changes}
           drafts={drafts}
           extraRuns={extraRuns}
-          pendingRedlines={model}
+          pendingRedlines={pendingRedlines}
           label="Document header"
           edge="top"
           className={
@@ -417,7 +418,7 @@ export function DocumentModelPage({
           changes={model.changes}
           drafts={drafts}
           extraRuns={extraRuns}
-          pendingRedlines={model}
+          pendingRedlines={pendingRedlines}
           label="Document footer"
           edge="bottom"
           className={

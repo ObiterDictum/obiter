@@ -1,4 +1,5 @@
 import {
+  type PendingRedlines,
   pendingParagraphDeletion,
   pendingParagraphChanges,
 } from '../../document-pending-redlines'
@@ -43,6 +44,7 @@ import { PageDrawing } from './page-drawing'
  */
 export type BlockContext = {
   model: DocumentModelWire
+  pendingRedlines?: PendingRedlines
   storyPartName: string
   selectedParagraphId: string | null
   onSelectParagraph: (paragraphId: string, offset?: number) => void
@@ -115,7 +117,7 @@ export function renderBlock(
             if (
               !paragraph ||
               (ctx.deletedParagraphIds.includes(paragraph.id) &&
-                !pendingParagraphDeletion(ctx.model, paragraph.id))
+                !pendingParagraphDeletion(ctx.pendingRedlines, paragraph.id))
             ) {
               return []
             }
@@ -130,7 +132,7 @@ export function renderBlock(
                 paragraph={paragraph}
                 changes={ctx.model.changes}
                 pendingChanges={pendingParagraphChanges(
-                  ctx.model,
+                  ctx.pendingRedlines,
                   paragraph.id,
                   ctx.storyOf(paragraph.id).partName,
                 )}
@@ -175,7 +177,7 @@ export function renderBlock(
   const paragraph = block.paragraph
   if (
     ctx.deletedParagraphIds.includes(paragraph.id) &&
-    !pendingParagraphDeletion(ctx.model, paragraph.id)
+    !pendingParagraphDeletion(ctx.pendingRedlines, paragraph.id)
   )
     return []
   const insert = ctx.inserts.find((item) => item.clientId === paragraph.id)
@@ -184,7 +186,9 @@ export function renderBlock(
       <PendingInsert
         key={insert.clientId}
         insert={insert}
-        tracked={pendingParagraphChanges(ctx.model, paragraph.id).length > 0}
+        tracked={
+          pendingParagraphChanges(ctx.pendingRedlines, paragraph.id).length > 0
+        }
         selected={ctx.selectedParagraphId === insert.clientId}
         verticalCaret={ctx.verticalCaret}
         onSelect={(offset) => ctx.onSelectParagraph(insert.clientId, offset)}
@@ -204,7 +208,7 @@ export function renderBlock(
       paragraph={paragraph}
       changes={ctx.model.changes}
       pendingChanges={pendingParagraphChanges(
-        ctx.model,
+        ctx.pendingRedlines,
         paragraph.id,
         ctx.storyOf(paragraph.id).partName,
       )}

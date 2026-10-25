@@ -2,7 +2,7 @@ import { effectiveParagraph } from '../../document-model-text'
 import { useMemo } from 'react'
 import {
   pendingParagraphChanges,
-  type PendingRedlineModel,
+  type PendingRedlines,
 } from '../../document-pending-redlines'
 import { inlineChanges } from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
@@ -80,7 +80,7 @@ export function PageMarginBand({
   stories: DocumentStoryWire[]
   drafts?: Record<string, string>
   extraRuns?: Record<string, DocumentTextRunWire[]>
-  pendingRedlines?: Partial<PendingRedlineModel>
+  pendingRedlines?: Partial<PendingRedlines>
   changes?: DocumentChangeWire[]
   label: string
   edge: 'top' | 'bottom'
@@ -226,7 +226,7 @@ function MarginStory({
   pageNumber,
 }: {
   story: DocumentStoryWire
-  pendingRedlines: Partial<PendingRedlineModel>
+  pendingRedlines: Partial<PendingRedlines> | undefined
   changes: DocumentChangeWire[]
   imageLabel: string
   relationships: DocumentRelationshipWire[]
@@ -373,7 +373,7 @@ function MarginParagraph({
   pageNumber,
 }: {
   paragraph: DocumentParagraphWire
-  pendingRedlines: Partial<PendingRedlineModel>
+  pendingRedlines: Partial<PendingRedlines> | undefined
   changes: DocumentChangeWire[]
   imageLabel: string
   storyPartName: string
