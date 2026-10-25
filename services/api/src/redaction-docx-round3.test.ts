@@ -224,6 +224,23 @@ describe('accepted DOCX coordinates and container safety', () => {
     expect(output.text).not.toContain('Other review note')
     expect(output.text).toContain('Keep this note')
   })
+  it('scrubs accepted identities from comment and revision authors without changing other authors', async () => {
+    const output = await burn(
+      p(t('Jane Doe')) +
+        '<w:p><w:ins w:id="1" w:author="Jane Doe">' +
+        r(t('Public addition')) +
+        '</w:ins></w:p>',
+      ['Jane Doe'],
+      {
+        'word/comments.xml': `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Jane Doe">${p(t('Review note'))}</w:comment><w:comment w:id="1" w:author="Reviewer">${p(t('Other note'))}</w:comment></w:comments>`,
+      },
+    )
+    expect(output.comments).not.toContain('Jane Doe')
+    expect(output.comments).toContain('w:author="Reviewer"')
+    expect(output.xml).not.toContain('Jane Doe')
+    expect(output.text).toContain('Public addition')
+    expect(output.text).toContain('Review note')
+  })
   it('refuses an unsupported symbol instead of silently dropping its character', async () => {
     const bytes = await source(
       p(t('Public ') + '<w:sym w:font="Unknown Custom Font" w:char="F0FF"/>'),

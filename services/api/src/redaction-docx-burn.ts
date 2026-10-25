@@ -319,9 +319,9 @@ export function scrubBurnedFields(
   }
 }
 
-/** Image descriptions are not positioned text. Scrub only accepted entity text,
- * including filename spellings, throughout the owning drawing parts. */
-export function scrubDrawingMetadata(
+/** Metadata has no review offsets. Scrub only accepted entity text, including
+ * filename spellings, preserving descriptions and authors unrelated to it. */
+export function scrubAcceptedMetadata(
   document: OoxmlDocument,
   accepted: readonly string[],
 ) {
@@ -333,12 +333,15 @@ export function scrubDrawingMetadata(
         element.namespaceUri ===
           'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing' &&
         element.localName === 'docPr'
-          ? ['descr', 'title']
+          ? ['descr', 'title', 'name']
           : element.namespaceUri ===
                 'http://schemas.openxmlformats.org/drawingml/2006/picture' &&
               element.localName === 'cNvPr'
             ? ['descr', 'name']
-            : []
+            : element.namespaceUri === WORD_NAMESPACE &&
+                element.attributes.some((attr) => attr.localName === 'author')
+              ? ['author', 'initials']
+              : []
       if (!names.length) continue
       let opening = source.slice(element.start, element.startTagEnd)
       for (const attr of element.attributes) {

@@ -12,7 +12,7 @@ import {
 import {
   burnMappedNodes,
   scrubBurnedFields,
-  scrubDrawingMetadata,
+  scrubAcceptedMetadata,
   type BurnRange,
 } from './redaction-docx-burn'
 import {
@@ -112,7 +112,7 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   // Never realign by searching: duplicates make that intrinsically ambiguous.
   if (mapped.text !== input.text.trim())
     throw new RedactionDocxBurnError(
-      'Stored extraction coordinates differ from the Word document; create a new redaction run.',
+      'Stored extraction coordinates differ from the Word document; create a new redaction run from a fresh upload.',
     )
   const leading = input.text.length - input.text.trimStart().length
   for (const node of mapped.nodes) {
@@ -146,7 +146,7 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   }
   const burned = burnMappedNodes(document, mapped.nodes, union)
   scrubBurnedFields(document, burned)
-  scrubDrawingMetadata(
+  scrubAcceptedMetadata(
     document,
     affected.map((span) => span.text),
   )
