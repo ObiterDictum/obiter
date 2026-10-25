@@ -7,7 +7,8 @@ import {
   isWord,
 } from '@obiter/ooxml'
 import { extractRedactionContent } from './redaction-extraction'
-const extractDocumentText = async (type: 'docx', bytes: Buffer) => (await extractRedactionContent(type, bytes)).text
+const extractDocumentText = async (type: 'docx', bytes: Buffer) =>
+  (await extractRedactionContent(type, bytes)).text
 import { buildRedactedDocx } from './redaction-docx-output'
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -45,7 +46,17 @@ async function burn(
     confidence: 'high' as const,
     suggestion: 'redact' as const,
   }))
-  const rejected = starts ? [{...spans[0], id: 'kept', text: names[0] ?? '', start: 0, end: names[0]?.length ?? 0}] : []
+  const rejected = starts
+    ? [
+        {
+          ...spans[0],
+          id: 'kept',
+          text: names[0] ?? '',
+          start: 0,
+          end: names[0]?.length ?? 0,
+        },
+      ]
+    : []
   const bytes = await buildRedactedDocx({
     docxBytes,
     text,
@@ -54,7 +65,8 @@ async function burn(
       [...spans, ...rejected].map((span) => [
         span.id,
         {
-          decision: span.id === 'kept' ? 'reject' as const : 'accept' as const,
+          decision:
+            span.id === 'kept' ? ('reject' as const) : ('accept' as const),
           decidedBy: 'test',
           decidedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -256,7 +268,11 @@ describe('accepted DOCX coordinates and container safety', () => {
     expect(output.text).toContain('Review note')
   })
   it('makes unknown symbols reviewable and burns an accepted selection containing one', async () => {
-    const body = p(t('Public ') + '<w:sym w:font="Unknown Custom Font" w:char="F0FF"/>' + t(' Name'))
+    const body = p(
+      t('Public ') +
+        '<w:sym w:font="Unknown Custom Font" w:char="F0FF"/>' +
+        t(' Name'),
+    )
     const bytes = await source(body)
     expect(await extractDocumentText('docx', bytes)).toBe('Public \uFFFD Name')
     const output = await burn(body, ['\uFFFD Name'])

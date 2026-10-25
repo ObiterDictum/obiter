@@ -10,7 +10,10 @@ import {
 } from '@obiter/ooxml'
 
 /** Fallback text boxes duplicate the modern drawing but escape model anchors. */
-export async function prepareDocxForBurn(bytes: Buffer, limits?: OoxmlPackageLimits) {
+export async function prepareDocxForBurn(
+  bytes: Buffer,
+  limits?: OoxmlPackageLimits,
+) {
   // Enforce package expansion limits before JSZip or XML parsing touches data.
   const entries = await loadOoxmlZipEntries(bytes, limits)
   const zip = new JSZip()

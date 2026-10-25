@@ -71,8 +71,14 @@ export async function buildRedactedDocx(
 }
 
 async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
-  const expanded = acceptedDocxOccurrences(input.text, input.spans, input.decisions)
-  const affected = expanded.spans.filter((span) => affectsOutput(expanded.decisions[span.id]))
+  const expanded = acceptedDocxOccurrences(
+    input.text,
+    input.spans,
+    input.decisions,
+  )
+  const affected = expanded.spans.filter((span) =>
+    affectsOutput(expanded.decisions[span.id]),
+  )
   for (const span of affected) {
     if (input.text.slice(span.start, span.end) !== span.text) {
       throw new RedactionSpanIntegrityError(span.id)
@@ -94,12 +100,15 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   let document
   const prepared = await prepareDocxForBurn(input.docxBytes, input.ooxmlLimits)
   try {
-    document = await parseDocx(prepared, {limits: input.ooxmlLimits})
+    document = await parseDocx(prepared, { limits: input.ooxmlLimits })
   } catch {
     throw new RedactionDocxBurnError('The source document could not be read.')
   }
 
-  const sourceEntries = await loadOoxmlZipEntries(Buffer.from(prepared), input.ooxmlLimits)
+  const sourceEntries = await loadOoxmlZipEntries(
+    Buffer.from(prepared),
+    input.ooxmlLimits,
+  )
   const mapped = mapDocxText(sourceEntries)
   for (const partName of new Set(mapped.nodes.map((node) => node.partName))) {
     const part = document.sourceParts.get(partName)
@@ -149,7 +158,11 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
     else union.push({ ...hit })
   }
   const burned = burnMappedNodes(document, mapped.nodes, union)
-  scrubBurnedFields(document, burned, affected.map(span => span.text))
+  scrubBurnedFields(
+    document,
+    burned,
+    affected.map((span) => span.text),
+  )
   scrubAcceptedMetadata(
     document,
     affected.map((span) => span.text),
@@ -157,7 +170,10 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   if (input.outputMode === 'redacted')
     normaliseRenderCharacters(document, mapped.nodes)
   const serialised = await serialiseDocx(document)
-  const writtenParts = await loadOoxmlZipEntries(Buffer.from(serialised), input.ooxmlLimits)
+  const writtenParts = await loadOoxmlZipEntries(
+    Buffer.from(serialised),
+    input.ooxmlLimits,
+  )
   // Independent output proof: rebuild reviewed text from the emitted package
   // and compare it to offset edits, including preserved synthetic separators.
   const edits: Array<{ start: number; end: number; value: string }> = []
@@ -187,12 +203,35 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
       'The emitted document does not match the accepted redaction coordinates.',
     )
   const stripped = await stripDocumentAuthorship(serialised)
-  const preserved = input.spans.filter(span => ['reject', 'override_keep'].includes(input.decisions[span.id]?.decision ?? '')).flatMap(span => {
-    if (edits.some(edit => edit.start < span.end && edit.end > span.start)) return []
-    const delta = edits.filter(edit => edit.end <= span.start).reduce((sum, edit) => sum + edit.value.length - (edit.end - edit.start), 0)
-    return [{...span, start: span.start + delta - leading, end: span.end + delta - leading}]
-  })
-  await assertNoSpanTextSurvives(stripped, affected, preserved, input.ooxmlLimits)
+  const preserved = input.spans
+    .filter((span) =>
+      ['reject', 'override_keep'].includes(
+        input.decisions[span.id]?.decision ?? '',
+      ),
+    )
+    .flatMap((span) => {
+      if (edits.some((edit) => edit.start < span.end && edit.end > span.start))
+        return []
+      const delta = edits
+        .filter((edit) => edit.end <= span.start)
+        .reduce(
+          (sum, edit) => sum + edit.value.length - (edit.end - edit.start),
+          0,
+        )
+      return [
+        {
+          ...span,
+          start: span.start + delta - leading,
+          end: span.end + delta - leading,
+        },
+      ]
+    })
+  await assertNoSpanTextSurvives(
+    stripped,
+    affected,
+    preserved,
+    input.ooxmlLimits,
+  )
   return stripped
 }
 

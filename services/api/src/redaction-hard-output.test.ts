@@ -334,13 +334,28 @@ describe('buildHardRedactionPdf', () => {
 
 it('keeps the actionable legacy-coordinate refusal distinct from burn failures', async () => {
   const docx = await minimalDocx('<w:p><w:r><w:t>New text</w:t></w:r></w:p>')
-  await expect(buildHardRedactionPdf({
-    run: run({sourceFilename:'letter.docx'}),
-    sourceText:'Old text', redactedText:'Old text',
-    source:{objectKey:'fixture',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',filename:'letter.docx'},
-    layoutObjectKey:null,
-    storage:{...textStorage('Old text'),readBinary:async()=>docx},
-    renderer:{renderDocxToPdf:async()=>{throw new Error('Must refuse before render')}},
-    tokenMap:{},
-  })).rejects.toMatchObject({category:'docx_legacy_coordinates',message:expect.stringContaining('create a new redaction run')})
+  await expect(
+    buildHardRedactionPdf({
+      run: run({ sourceFilename: 'letter.docx' }),
+      sourceText: 'Old text',
+      redactedText: 'Old text',
+      source: {
+        objectKey: 'fixture',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        filename: 'letter.docx',
+      },
+      layoutObjectKey: null,
+      storage: { ...textStorage('Old text'), readBinary: async () => docx },
+      renderer: {
+        renderDocxToPdf: async () => {
+          throw new Error('Must refuse before render')
+        },
+      },
+      tokenMap: {},
+    }),
+  ).rejects.toMatchObject({
+    category: 'docx_legacy_coordinates',
+    message: expect.stringContaining('create a new redaction run'),
+  })
 })

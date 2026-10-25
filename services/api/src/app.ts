@@ -342,7 +342,10 @@ export function createApiApp(
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createTrackedChangeRoutes(pool, storage))
   app.route('/', createRedactRunCreationRoutes(pool, storage, requestLimits))
-  app.route('/', createRedactReviewRoutes(pool, storage, redactionRenderer, requestLimits))
+  app.route(
+    '/',
+    createRedactReviewRoutes(pool, storage, redactionRenderer, requestLimits),
+  )
   app.route('/', createRedactLifecycleRoutes(pool, storage))
   app.route('/', createVerificationRunRoutes(pool, storage, corpusAccess.read))
   app.route('/', createLegalSearchRoutes(env))

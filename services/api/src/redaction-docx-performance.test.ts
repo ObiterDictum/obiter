@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto'
 import { expect, it } from 'bun:test'
 import { createSyntheticDocx } from '@obiter/ooxml'
 import { extractRedactionContent } from './redaction-extraction'
-const extractDocumentText = async (type: 'docx', bytes: Buffer) => (await extractRedactionContent(type, bytes)).text
+const extractDocumentText = async (type: 'docx', bytes: Buffer) =>
+  (await extractRedactionContent(type, bytes)).text
 import { buildRedactedDocx } from './redaction-docx-output'
 
 // Like the OOXML tracked-change scaling tests, this coarse bound catches a

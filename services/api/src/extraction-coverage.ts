@@ -389,10 +389,18 @@ export async function findUncoveredDocxRegions(
   }
   let mappedCoverage: boolean
   try {
-    mappedCoverage = mapDocxText(await loadOoxmlZipEntries(await prepareDocxForBurn(sourceBytes, limits), limits)).text === extractedText.trim()
+    mappedCoverage =
+      mapDocxText(
+        await loadOoxmlZipEntries(
+          await prepareDocxForBurn(sourceBytes, limits),
+          limits,
+        ),
+      ).text === extractedText.trim()
   } catch {
     // Malformed/unsupported coordinates are a completeness refusal, never a 500.
-    return ['DOCX review coordinates could not be verified; upload the document again']
+    return [
+      'DOCX review coordinates could not be verified; upload the document again',
+    ]
   }
   const regions: string[] = []
   const pushChars = (name: string, chars: number) => {
@@ -665,5 +673,9 @@ export async function findUncoveredRegions(input: {
   const kind = classifySource(input.filename, input.mimeType)
   if (kind === 'pdf') return findUncoveredPdfRegions(input.extractedText)
   if (kind !== 'docx' || !input.sourceBytes) return []
-  return findUncoveredDocxRegions(input.sourceBytes, input.extractedText, input.ooxmlLimits)
+  return findUncoveredDocxRegions(
+    input.sourceBytes,
+    input.extractedText,
+    input.ooxmlLimits,
+  )
 }

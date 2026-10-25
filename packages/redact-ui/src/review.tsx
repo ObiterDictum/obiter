@@ -232,7 +232,8 @@ async function shareOrDownload(blob: Blob, filename: string) {
 }
 
 const downgradeCopy = {
-  legacy_coordinates: 'The stored Word coordinates are from an older extraction. Create a new redaction run from a fresh upload to produce an editable Word document. A reviewed text copy was provided instead.',
+  legacy_coordinates:
+    'The stored Word coordinates are from an older extraction. Create a new redaction run from a fresh upload to produce an editable Word document. A reviewed text copy was provided instead.',
   tracked_change:
     'Part of this document holds redacted text inside a tracked change, which redaction does not cover. Accept or reject the tracked changes and finalize again. Do not serve this file without checking it first.',
   residual_text:
@@ -366,7 +367,12 @@ function FinalizedOutput({
     <section className="px-4 py-4 sm:px-5" aria-label="Redaction output">
       <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
         <OutputDowngradeWarning run={run} />
-        {(run.summary.additionalDocxBurns ?? 0) > 0 ? <p className="border-b border-line px-8 py-3 text-sm text-ink">{run.summary.additionalDocxBurns} additional occurrences of accepted text removed. Explicitly rejected occurrences were preserved.</p> : null}
+        {(run.summary.additionalDocxBurns ?? 0) > 0 ? (
+          <p className="border-b border-line px-8 py-3 text-sm text-ink">
+            {run.summary.additionalDocxBurns} additional occurrences of accepted
+            text removed. Explicitly rejected occurrences were preserved.
+          </p>
+        ) : null}
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-8 py-6 md:px-10">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-subtle">

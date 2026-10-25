@@ -245,11 +245,20 @@ export function scrubBurnedFields(
           )
       }
     }
-    const clearField = (field: typeof fields[number]) => {
-      const instruction = field.instructions.map(node => decodeTarget(source.slice(node.startTagEnd, node.endTagStart))).join('')
+    const clearField = (field: (typeof fields)[number]) => {
+      const instruction = field.instructions
+        .map((node) =>
+          decodeTarget(source.slice(node.startTagEnd, node.endTagStart)),
+        )
+        .join('')
       // TOC is a container of independently refreshable entry fields. Its
       // command is harmless unless the command itself contains accepted text.
-      if (field.redacted && (!/^\s*TOC(?:\s|$)/iu.test(instruction) || accepted.some(text => containsText(instruction, text)))) clearInstructions(field.instructions)
+      if (
+        field.redacted &&
+        (!/^\s*TOC(?:\s|$)/iu.test(instruction) ||
+          accepted.some((text) => containsText(instruction, text)))
+      )
+        clearInstructions(field.instructions)
     }
     const linkIds = new Set<string>()
     for (const element of elements) {

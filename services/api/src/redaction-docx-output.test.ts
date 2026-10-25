@@ -1,5 +1,6 @@
 import { extractRedactionContent } from './redaction-extraction'
-const extractDocumentText = async (type: 'docx', bytes: Buffer) => (await extractRedactionContent(type, bytes)).text
+const extractDocumentText = async (type: 'docx', bytes: Buffer) =>
+  (await extractRedactionContent(type, bytes)).text
 import JSZip from 'jszip'
 import { describe, expect, it } from 'bun:test'
 import { parseDocx } from '@obiter/ooxml'

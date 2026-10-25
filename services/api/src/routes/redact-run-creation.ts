@@ -2,9 +2,7 @@ import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { redactionPolicyModeSchema } from '@obiter/contracts'
 import { appendAuditLog } from '../database'
-import {
-  DocumentExtractionError,
-} from '../document-extraction'
+import { DocumentExtractionError } from '../document-extraction'
 import { extractRedactionContent } from '../redaction-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { readLimitedFormData } from '../limited-request-body'
