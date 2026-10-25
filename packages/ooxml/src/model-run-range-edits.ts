@@ -1,4 +1,7 @@
-import { hasSplittableProperties } from './run-revision-eligibility'
+import {
+  hasSplittableProperties,
+  isSplittableRun,
+} from './run-revision-eligibility'
 import { isWord } from './parts/xml-elements'
 import { trackedElementText } from './parts/tracked-change-display'
 import { sliceRunRevisionMetadata } from './run-revision-slice'
@@ -161,7 +164,7 @@ export type RunTextReplacement = {
  * boundaries exactly like applyRunEmphasisRange (same locateOffset /
  * runPieceXml / openAt / closeAt machinery, same whole-run fast path via
  * replaceTextRunAtAnchor). Covered pieces keep the run's rPr so styles
- * survive; only the w:t content is swapped.
+ * survive. Covered non-text payloads are removed; layout controls may stay.
  *
  * One pass per paragraph: every original run is split at most once and new
  * ids come from a local allocator seeded with the live model, so the
@@ -243,7 +246,8 @@ export function applyRunTextReplacementRange(
       if (
         hit.localFrom === 0 &&
         hit.localTo === run.wire.text.length &&
-        !hit.emphasis
+        !hit.emphasis &&
+        isSplittableRun(source, run)
       ) {
         if (!replaceTextRunAtAnchor(document, run, hit.text)) {
           throw new OoxmlError('model-node-not-editable')
@@ -318,13 +322,12 @@ function splitReplacedRun(
     start: range.start - run.runRange.start,
     end: range.end - run.runRange.start,
   }))
-  // Tabs, field characters and references are not redacted text. A replaced
-  // piece keeps those inside its cuts, as the whole-run path keeps all of
-  // them, so a redaction cannot delete content or unbalance a field.
+  // Redaction removes non-text payloads inside the covered range too.
+  // Only layout controls may survive in a replacement piece.
   const controls = elements.filter(
     (element) =>
       element.depth === 1 &&
-      !isWord(element, 'rPr') &&
+      ['tab', 'cr', 'br'].some((name) => isWord(element, name)) &&
       !textNodes.some(
         (node) => node.start < element.end && element.start < node.end,
       ),
