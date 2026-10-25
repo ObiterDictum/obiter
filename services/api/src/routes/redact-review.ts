@@ -46,7 +46,6 @@ import {
   buildRedactedDocx,
   isDocxMimeOrFilename,
   redactedDocxFilename,
-  RedactionDocxBurnError,
 } from '../redaction-docx-output'
 import type { StorageService } from '../storage'
 import {
@@ -640,36 +639,18 @@ export function createRedactReviewRoutes(
         }
       } catch (error) {
         if (error instanceof RedactionSpanIntegrityError) throw error
-        if (error instanceof RedactionDocxBurnError) {
-          await storage.delete(objectKey)
-          return await reportSecurePdfFailure(c, pool, {
-            runId: run.id,
-            organisationId: run.organisationId,
-            userId: user.id,
-            outputMode: 'pseudonymised',
-            error: new HardRedactionOutputError(
-              'docx_burn_failed',
-              'The Word document could not be redacted safely.',
-            ),
-          })
-        }
         // DOCX burn failed — fall back to text output so finalize still
         // completes. The text output carries no source container, so tracked
         // changes, metadata, comments, and embedded parts cannot leak
         // through it.
         // Do not log span ids, filenames, or document content (cover-geometry
         // errors name span ids in their message).
-        const reason =
-          error instanceof Error && error.name === 'RedactionCoverGeometryError'
-            ? 'cover geometry missing for one or more spans'
-            : error instanceof Error
-              ? error.message
-              : 'unknown failure'
-        console.error('redaction_burn_failed', {
+        console.error('redaction_pseudonymised_docx_fallback', {
           requestId: c.get('requestId'),
           runId: run.id,
-          reason,
+          reason: burnFallbackReason(error),
         })
+        await storage.delete(objectKey)
         if (attemptedBurn) downgradeReason = burnFallbackReason(error)
         await storage.writeText(objectKey, output)
         outputMimeType = 'text/plain'

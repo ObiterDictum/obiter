@@ -3036,11 +3036,15 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     // is the rasterized image-only PDF, not the .docx.
     expect(renderedDocx).not.toBeNull()
     const zip = await JSZip.loadAsync(renderedDocx ?? Buffer.alloc(0))
-    for (const name of Object.keys(zip.files)) {
-      if (name.endsWith('/')) continue
-      const content = await (zip.file(name)?.async('string') ?? '')
-      expect(content, `redacted name survives in ${name}`).not.toContain(target)
-    }
+    expect(
+      (await extractDocumentContent('docx', renderedDocx ?? Buffer.alloc(0)))
+        .text,
+    ).toBe(
+      text.slice(0, start) + '[REDACTED]' + text.slice(start + target.length),
+    )
+    expect(await zip.file('word/document.xml')?.async('string')).toContain(
+      '[REDACTED]',
+    )
     // Numbering, footnote references, and footnote bodies survive the burn.
     const documentXml = await (zip.file('word/document.xml')?.async('string') ??
       '')
@@ -3050,7 +3054,13 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const footnotesXml = await (zip
       .file('word/footnotes.xml')
       ?.async('string') ?? '')
-    expect(footnotesXml).toContain('[REDACTED]')
+    expect(footnotesXml).toBe(
+      await (
+        await JSZip.loadAsync(sourceBytes)
+      )
+        .file('word/footnotes.xml')
+        ?.async('string'),
+    )
 
     expect(published).not.toBeNull()
     expect(
@@ -3219,12 +3229,11 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   })
 
   it.each(['redacted', 'pseudonymised'] as const)(
-    'fails visibly with no output when .docx burn refuses tracked-change text in %s mode',
+    'keeps hard refusal and records visible pseudonymised text fallback for legacy DOCX coordinates in %s mode',
     async (outputMode) => {
       const { default: JSZip } = await import('jszip')
-      // The deletion duplicates live text exactly, so coverage passes it as
-      // examined — but the burn still refuses the residual tracked copy of
-      // the accepted span. Neither mode may publish a substitute.
+      // A legacy run omitted the deletion. Coverage recognises the duplicate,
+      // but its stored extraction coordinates cannot be mapped safely.
       const target = 'Cartwright'
       const text = `${target} attended.`
       const zip = new JSZip()
@@ -3353,23 +3362,40 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ outputMode }),
       })
-      expect(response.status).toBe(502)
-      expect(((await response.json()) as ErrorBody).error).toMatchObject({
-        code: 'redaction_secure_pdf_failed',
-      })
-      // No silent downgrade: no text fallback, no output, no finalized run.
-      expect(textWrites).toBe(0)
-      expect(binaryWrites).toBe(0)
-      expect(persistedSummary).toBeNull()
-      expect(log).toHaveBeenCalledWith(
-        'redaction_secure_pdf_failed',
-        expect.objectContaining({ category: 'docx_burn_failed' }),
-      )
+      if (outputMode === 'redacted') {
+        expect(response.status).toBe(502)
+        expect(((await response.json()) as ErrorBody).error).toMatchObject({
+          code: 'redaction_secure_pdf_failed',
+        })
+        expect(textWrites).toBe(0)
+        expect(binaryWrites).toBe(0)
+        expect(persistedSummary).toBeNull()
+        expect(log).toHaveBeenCalledWith(
+          'redaction_secure_pdf_failed',
+          expect.objectContaining({ category: 'docx_burn_failed' }),
+        )
+        expect(auditMetadata).toEqual([
+          { outputMode, failureCategory: 'docx_burn_failed' },
+        ])
+      } else {
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          warnings: { outputDowngrade: unknown }
+        }
+        expect(body.warnings.outputDowngrade).toEqual({
+          from: 'docx',
+          reason: 'burn_failed',
+        })
+        expect(textWrites).toBe(1)
+        expect(binaryWrites).toBe(0)
+        expect(persistedSummary).toMatchObject({
+          outputMode: 'pseudonymised',
+          outputMimeType: 'text/plain',
+          securePdf: false,
+          outputDowngrade: { from: 'docx', reason: 'burn_failed' },
+        })
+      }
       log.mockRestore()
-      // Only the stable category and mode cross into audit metadata.
-      expect(auditMetadata).toEqual([
-        { outputMode, failureCategory: 'docx_burn_failed' },
-      ])
     },
   )
 
