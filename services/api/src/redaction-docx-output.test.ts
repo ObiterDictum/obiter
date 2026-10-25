@@ -1,3 +1,4 @@
+import { extractDocumentText } from './document-extraction'
 import JSZip from 'jszip'
 import { describe, expect, it } from 'bun:test'
 import { parseDocx } from '@obiter/ooxml'
@@ -124,6 +125,8 @@ async function zipEntries(bytes: Uint8Array) {
 describe('buildRedactedDocx', () => {
   it('keeps self-closing metadata properties well formed while scrubbing authorship', async () => {
     const source = await makeDocx({
+      body: `<w:p><w:r><w:t>Dear ${NAME}.</w:t></w:r></w:p>`,
+      footnotes: null,
       coreXml:
         '<?xml version="1.0"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:creator/><dc:title>Private title</dc:title></cp:coreProperties>',
     })
@@ -147,8 +150,12 @@ describe('buildRedactedDocx', () => {
 
   it('burns body and footnote names while keeping styles, tables, and structure', async () => {
     const source = await makeDocx()
-    const text = `Dear ${NAME}. [Footnote 1] Note about ${NAME} here`
-    const spans = [spanAt(text, NAME, 1), spanAt(text, NAME, 2)]
+    const text = await extractDocumentText('docx', source)
+    const spans = [
+      spanAt(text, NAME, 1),
+      spanAt(text, NAME, 2),
+      spanAt(text, NAME, 3),
+    ]
     const decisions = Object.fromEntries(
       spans.map((span) => [
         span.id,
@@ -194,7 +201,10 @@ describe('buildRedactedDocx', () => {
   })
 
   it('pseudonymises with the run token map', async () => {
-    const source = await makeDocx()
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>Dear ${NAME}.</w:t></w:r></w:p>`,
+      footnotes: null,
+    })
     const text = `Dear ${NAME}.`
     const spans = [spanAt(text, NAME, 1)]
     const decisions = {
@@ -284,11 +294,11 @@ describe('buildRedactedDocx', () => {
     expect(document.match(/<w:br\/>/g)?.length).toBe(1)
   })
 
-  it('refuses when redacted text sits inside a tracked deletion', async () => {
+  it('preserves reviewed tracked deletions and refuses mismatched legacy text', async () => {
     const source = await makeDocx({
       body: `<w:p><w:r><w:t>Kept text</w:t></w:r></w:p><w:p><w:del w:id="0" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>${NAME}</w:delText></w:r></w:del></w:p>`,
     })
-    const text = 'Kept text'
+    const text = await extractDocumentText('docx', source)
     await expect(
       buildRedactedDocx({
         docxBytes: source,
@@ -319,7 +329,7 @@ describe('buildRedactedDocx', () => {
     ).rejects.toBeInstanceOf(RedactionDocxBurnError)
   })
 
-  it('refuses when a tracked deletion holds part of an accepted span', async () => {
+  it('refuses legacy text that omitted a tracked deletion', async () => {
     const source = await makeDocx({
       body: `<w:p><w:r><w:t>Alice Smith attended.</w:t></w:r></w:p><w:p><w:del w:id="0" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>Alice</w:delText></w:r></w:del></w:p>`,
     })
@@ -348,7 +358,7 @@ describe('buildRedactedDocx', () => {
       body: `<w:p><w:r><w:t>Redacted word here.</w:t></w:r></w:p><w:p><w:del w:id="0" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>ed</w:delText></w:r></w:del></w:p>`,
       footnotes: null,
     })
-    const text = 'Redacted word here.'
+    const text = await extractDocumentText('docx', source)
     const spans = [spanAt(text, 'Redacted', 1)]
     const output = await buildRedactedDocx({
       docxBytes: source,
@@ -411,28 +421,27 @@ describe('buildRedactedDocx', () => {
     expect(entries.has('docProps/thumbnail.jpeg')).toBe(false)
   })
 
-  it('refuses comment-bearing documents', async () => {
+  it('preserves reviewed comments while burning accepted text', async () => {
     const source = await makeDocx({
       comments: `<?xml version="1.0" encoding="UTF-8"?><w:comments xmlns:w="${W_NS}"><w:comment w:id="0" w:author="R" w:date="2026-01-01T00:00:00Z"><w:p><w:r><w:t>Review note</w:t></w:r></w:p></w:comment></w:comments>`,
     })
-    const text = `Dear ${NAME}.`
-    const spans = [spanAt(text, NAME, 1)]
-    await expect(
-      buildRedactedDocx({
-        docxBytes: source,
-        text,
-        spans,
-        decisions: {
-          [spans[0]!.id]: {
-            decision: 'accept',
-            decidedBy: 'usr_1',
-            decidedAt: '2026-01-01T00:00:00.000Z',
-          },
-        },
-        outputMode: 'redacted',
-        tokenMap: {},
-      }),
-    ).rejects.toBeInstanceOf(RedactionDocxBurnError)
+    const text = await extractDocumentText('docx', source)
+    const spans = [
+      spanAt(text, NAME, 1),
+      spanAt(text, NAME, 2),
+      spanAt(text, NAME, 3),
+    ]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: acceptAll(spans),
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const entries = await zipEntries(output)
+    expect(entries.get('word/document.xml')).not.toContain(NAME)
+    expect(entries.get('word/comments.xml')).toContain('Review note')
   })
 
   it('renders adjacent accepted words as one styled black bar', async () => {
@@ -491,7 +500,7 @@ describe('buildRedactedDocx', () => {
   })
 
   it('does not merge redactions across a paragraph boundary', async () => {
-    const text = 'John\nMichael'
+    const text = 'John\n\nMichael'
     const source = await makeDocx({
       body: `<w:p><w:r><w:t>John</w:t></w:r></w:p><w:p><w:r><w:t>Michael</w:t></w:r></w:p>`,
       footnotes: null,

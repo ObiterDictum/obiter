@@ -92,12 +92,16 @@ describe('extraction coverage guard', () => {
     }
   })
 
-  it('refuses the tracked-changes fixture deletion the reviewer never sees', async () => {
+  it('covers reviewed tracked deletions while refusing stale text that omits them', async () => {
     const source = await corpus('letter-tracked-changes.docx')
     const { text } = await extractDocumentContent('docx', source)
     expect(text).toContain('Inserted on review')
-    expect(text).not.toContain('Deleted on review')
-    const regions = await findUncoveredDocxRegions(source, text)
+    expect(text).toContain('Deleted on review')
+    expect(await findUncoveredDocxRegions(source, text)).toEqual([])
+    const regions = await findUncoveredDocxRegions(
+      source,
+      text.replaceAll('Deleted on review', ''),
+    )
     expect(regions).toHaveLength(1)
     expect(regions[0]).toMatch(
       /^tracked changes in word\/document\.xml \(\d+ chars not examined\)$/,

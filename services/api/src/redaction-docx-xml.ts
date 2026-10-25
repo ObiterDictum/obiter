@@ -1,12 +1,11 @@
 import JSZip from 'jszip'
+import { MC } from './redaction-docx-map'
 import {
   decodeXmlReferences,
   isWord,
   loadOoxmlZipEntries,
   parseXmlElements,
 } from '@obiter/ooxml'
-
-const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006'
 
 /** Fallback text boxes duplicate the modern drawing but escape model anchors. */
 export async function prepareDocxForBurn(bytes: Buffer) {
@@ -15,9 +14,22 @@ export async function prepareDocxForBurn(bytes: Buffer) {
   const zip = new JSZip()
   for (const [name, payload] of entries) zip.file(name, payload)
   for (const file of Object.values(zip.files)) {
-    if (file.dir || !file.name.endsWith('.xml')) continue
+    if (
+      file.dir ||
+      !/^word\/(?:document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/iu.test(
+        file.name,
+      )
+    )
+      continue
     const source = await file.async('string')
     const elements = parseXmlElements(source)
+    const childrenByParent = new Map<number, typeof elements>()
+    for (const element of elements) {
+      if (!element.parent) continue
+      const children = childrenByParent.get(element.parent.start) ?? []
+      children.push(element)
+      childrenByParent.set(element.parent.start, children)
+    }
     const replacements: Array<{ start: number; end: number; value: string }> =
       []
     for (const element of elements) {
@@ -29,20 +41,29 @@ export async function prepareDocxForBurn(bytes: Buffer) {
       )
         continue
       const branch =
-        elements.find(
-          (child) => child.parent === element && child.localName === 'Choice',
+        (childrenByParent.get(element.start) ?? []).find(
+          (child) => child.localName === 'Choice',
         ) ??
-        elements.find(
-          (child) => child.parent === element && child.localName === 'Fallback',
+        (childrenByParent.get(element.start) ?? []).find(
+          (child) => child.localName === 'Fallback',
         )
       if (!branch) throw new Error('Alternate content has no burnable branch.')
-      const children = elements.filter((child) => child.parent === branch)
+      const children = childrenByParent.get(branch.start) ?? []
       if (
         children.some(
-          (child) => !['t', 'tab', 'br'].some((name) => isWord(child, name)),
+          (child) =>
+            ![
+              't',
+              'tab',
+              'br',
+              'cr',
+              'noBreakHyphen',
+              'softHyphen',
+              'sym',
+            ].some((name) => isWord(child, name)),
         )
       )
-        throw new Error('Unsupported alternate run content.')
+        continue
       for (const child of children) {
         const prefix = child.qualifiedName.split(':')[0] ?? ''
         if (
@@ -56,19 +77,19 @@ export async function prepareDocxForBurn(bytes: Buffer) {
         value: source.slice(branch.startTagEnd, branch.endTagStart),
       })
     }
-    const fallbacks = elements.filter(
-      (element) =>
-        element.namespaceUri === MC &&
-        element.localName === 'Fallback' &&
-        elements.some(
-          (child) =>
-            child.start > element.start &&
-            child.end < element.end &&
-            isWord(child, 'txbxContent'),
-        ),
-    )
+    // Word's modern Choice is the canonical reviewed representation. Its
+    // legacy duplicate must not survive elsewhere in the package.
     replacements.push(
-      ...fallbacks.map((element) => ({ ...element, value: '' })),
+      ...elements
+        .filter(
+          (element) =>
+            element.namespaceUri === MC &&
+            element.localName === 'Fallback' &&
+            (childrenByParent.get(element.parent?.start ?? -1) ?? []).some(
+              (sibling) => sibling.localName === 'Choice',
+            ),
+        )
+        .map((element) => ({ ...element, value: '' })),
     )
     replacements.sort((a, b) => a.start - b.start || b.end - a.end)
     // Outermost removals also consume any nested fallback.
@@ -85,7 +106,12 @@ export async function prepareDocxForBurn(bytes: Buffer) {
 }
 
 /** Decode attributes and mixed text, both with and without layout separators. */
-export function decodedXmlText(source: string) {
+export function decodedXmlText(
+  source: string,
+  includeAttributes: (
+    element: ReturnType<typeof parseXmlElements>[number],
+  ) => boolean = () => true,
+) {
   const elements = parseXmlElements(source)
   const tags = elements
     .flatMap((element) => [
@@ -142,8 +168,10 @@ export function decodedXmlText(source: string) {
     else if (!tag.element.selfClosing) stack.push(tag.element)
     cursor = tag.end
   }
-  const attributes = elements.flatMap((element) =>
-    element.attributes.map((attribute) => attribute.value),
-  )
+  const attributes = elements
+    .filter(includeAttributes)
+    .flatMap((element) =>
+      element.attributes.map((attribute) => attribute.value),
+    )
   return [text, layoutText, bodyText, ...attributes]
 }

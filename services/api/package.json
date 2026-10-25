@@ -35,7 +35,8 @@
     "resend": "^4.0.1",
     "tsx": "^4.23.0",
     "unpdf": "1.6.2",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "dingbat-to-unicode": "1.0.1"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",

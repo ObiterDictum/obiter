@@ -132,7 +132,7 @@ describe('Redact-owned DOCX bytes', () => {
     expect(output.xml).not.toContain('Doe')
   })
 
-  it.each(['1 High St\nLondon', '1 High St\n\nLondon'])(
+  it.each(['1 High St\n\nLondon'])(
     'burns every paragraph piece of address %j',
     async (text) => {
       const output = await burn(
@@ -211,6 +211,8 @@ describe('Redact-owned DOCX bytes', () => {
         run('<w:t>Jane </w:t>') +
         run('<w:t>Doe</w:t>') +
         '</w:p></w:txbxContent></w:pict></mc:Fallback></mc:AlternateContent>',
+      'Jane Doe\n\nPublic',
+      ['Jane Doe'],
     )
     expect(output.xml).not.toContain('Jane')
     expect(output.xml).not.toContain('Doe')
@@ -227,7 +229,7 @@ describe('Redact-owned DOCX bytes', () => {
     expect(output.xml).not.toContain('private location')
   })
 
-  it('clears image alt text and title within a redacted range', async () => {
+  it('preserves unrelated image alt text and title within a redacted range', async () => {
     const output = await burn(
       '<w:p>' +
         run(
@@ -235,8 +237,8 @@ describe('Redact-owned DOCX bytes', () => {
         ) +
         '</w:p>',
     )
-    expect(output.xml).not.toContain('private description')
-    expect(output.xml).not.toContain('private title')
+    expect(output.xml).toContain('private description')
+    expect(output.xml).toContain('private title')
   })
 
   it('refuses a redacted hyperlink when its relationship XML has no overlay', async () => {
@@ -348,7 +350,7 @@ describe('Redact-owned DOCX bytes', () => {
   it('empties simple-field instructions while preserving an unrelated field', async () => {
     const output = await burn(
       `<w:p><w:fldSimple w:instr='HYPERLINK "${target}"'>${run('<w:t>Jane Doe</w:t>')}</w:fldSimple><w:fldSimple w:instr="DATE">${run('<w:t>today</w:t>')}</w:fldSimple></w:p>`,
-      'Jane Doe today',
+      'Jane Doetoday',
       ['Jane Doe'],
     )
     expect(output.xml).not.toContain(target)

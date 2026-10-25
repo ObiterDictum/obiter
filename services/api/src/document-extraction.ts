@@ -1,6 +1,7 @@
 import { posix } from 'node:path'
 import { documentTextLayoutSchema } from '@obiter/contracts'
-import mammoth from 'mammoth'
+import { mapDocxText } from './redaction-docx-map'
+import { prepareDocxForBurn } from './redaction-docx-xml'
 import {
   DEFAULT_OOXML_PACKAGE_LIMITS,
   loadOoxmlZipEntries,
@@ -750,28 +751,14 @@ export async function extractDocumentContent(
     if (fileType === 'pdf') return await extractPdfContent(buffer)
     const limits = dependencies.ooxmlLimits ?? DEFAULT_OOXML_PACKAGE_LIMITS
     const boundedBuffer = await boundedDocxBuffer(buffer, limits)
-    const [result, supplemental] = await Promise.all([
-      mammoth.extractRawText({ buffer: boundedBuffer }),
-      readDocxSupplementalContent(
-        buffer,
-        limits,
-        dependencies.extractDocxSupplementalContent ??
-          extractDocxSupplementalContent,
-      ),
-    ])
-    if (result.messages.length > 0)
-      console.warn('Mammoth extraction warnings', {
-        count: result.messages.length,
-        types: [...new Set(result.messages.map((message) => message.type))],
-      })
-    const text = [
-      ...supplemental.header,
-      result.value,
-      ...supplemental.footer,
-      ...supplemental.notes,
-    ]
-      .filter((part) => part.length > 0)
-      .join('\n\n')
+    const supplemental = await readDocxSupplementalContent(
+      buffer,
+      limits,
+      dependencies.extractDocxSupplementalContent ??
+        extractDocxSupplementalContent,
+    )
+    const prepared = await prepareDocxForBurn(boundedBuffer)
+    const { text } = mapDocxText(await loadOoxmlZipEntries(prepared, limits))
     if (text.trim().length === 0) {
       if (supplemental.visualContent === 'absent')
         return { text: '', layout: null }

@@ -1,3 +1,5 @@
+import { mapDocxText } from './redaction-docx-map'
+import { prepareDocxForBurn } from './redaction-docx-xml'
 import { loadOoxmlZipEntries } from '@obiter/ooxml'
 import {
   decodeXmlText,
@@ -385,6 +387,10 @@ export async function findUncoveredDocxRegions(
     // Unreadable here means extraction already failed upstream; nothing to add.
     return []
   }
+  const mappedCoverage =
+    mapDocxText(
+      await loadOoxmlZipEntries(await prepareDocxForBurn(sourceBytes)),
+    ).text === extractedText.trim()
   const regions: string[] = []
   const pushChars = (name: string, chars: number) => {
     if (chars >= UNEXAMINED_PART_MIN_CHARS)
@@ -431,7 +437,7 @@ export async function findUncoveredDocxRegions(
     let chars = 0
     for (const block of trackedRevisionBlocks(xml))
       chars += unexaminedChars(block, extractedText)
-    if (chars > 0)
+    if (chars > 0 && !mappedCoverage)
       regions.push(`tracked changes in ${name} (${chars} chars not examined)`)
   }
 
@@ -444,13 +450,15 @@ export async function findUncoveredDocxRegions(
         ? 'comment authors'
         : null
     if (!label) continue
-    pushChars(label, nonWhitespaceChars(wordPartText(entries, name)))
+    if (!mappedCoverage || label !== 'comments')
+      pushChars(label, nonWhitespaceChars(wordPartText(entries, name)))
   }
 
   const documentXml = storyXml.get('word/document.xml')
   if (documentXml) {
     // Body VML textboxes are dropped by mammoth; drawing textboxes the same.
-    pushChars('textboxes', countBodyTextboxChars(documentXml))
+    if (!mappedCoverage)
+      pushChars('textboxes', countBodyTextboxChars(documentXml))
     pushChars(
       'drawing textboxes',
       unexaminedChars(bodyDrawingText(documentXml), extractedText),

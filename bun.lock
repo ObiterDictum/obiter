@@ -232,6 +232,7 @@
         "@obiter/search-client": "workspace:*",
         "@obiter/verification-core": "workspace:*",
         "better-auth": "^1.6.8",
+        "dingbat-to-unicode": "1.0.1",
         "hono": "^4.12.14",
         "jszip": "^3.10.1",
         "mammoth": "^1.12.2",
