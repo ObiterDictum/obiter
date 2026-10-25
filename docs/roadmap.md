@@ -58,7 +58,7 @@ Outcome:
 - implement audit logs
 - implement encrypted local desktop cache
 - implement offline queue and reconnect sync
-- implement artifact retrieval plumbing
+- implement output retrieval plumbing
 
 Outcome:
 
@@ -96,11 +96,23 @@ Outcome:
 - implement citation resolution checks
 - implement quote mismatch detection
 - build findings UI
-- export verification artifacts
+- export verification reports as outputs
 
 Outcome:
 
 - trust workflow exists
+
+### Milestone 1.33: Matter Artefacts
+
+Built after the tester-blocking fixes, before Verify Advanced. See [Matter Artefacts](specs/matter-artefacts.md).
+
+- rename the Phase 0 `artifacts` (generated outputs) to `outputs`
+- attach judgments, legislation, links, notes and matter documents to a matter
+- show them in the matter's left column under Documents, with "Add to matter" from judgment, legislation, search and Verify surfaces
+
+Outcome:
+
+- each matter holds an explicit, bounded list of the sources it relies on
 
 ### Milestone 1.35: Verify Advanced
 
@@ -119,6 +131,7 @@ Outcome:
 - implement evidence viewer
 - add AI-assisted synthesis and summaries
 - run verification against generated outputs
+- use the matter's artefacts as the agent's bounded context
 
 Outcome:
 

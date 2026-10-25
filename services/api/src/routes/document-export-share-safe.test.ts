@@ -42,7 +42,7 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     // Product comments never entered the package — they were not listed, and
-    // the sanitizer verifies the artifact has no comments surface anyway.
+    // the sanitizer verifies the output has no comments surface anyway.
     expect(
       new TextDecoder().decode(
         exported.sourceParts.get('word/comments.xml')?.originalPayload,

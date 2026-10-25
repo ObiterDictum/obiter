@@ -1,9 +1,9 @@
 import { documentTextLayoutSchema } from '@obiter/contracts'
 import {
   deriveDocumentSiblingObjectKey,
-  DocumentArtifactStoreError,
+  DocumentDerivedStoreError,
   validateAndDeriveDocumentObjectKey,
-} from './document-artifact-store'
+} from './document-derived-store'
 import type { DocumentVersionRecord } from './database'
 import type { StorageService } from './storage'
 
@@ -17,7 +17,7 @@ type DocumentPdfViewSource = Pick<
   | 'textObjectKey'
 >
 
-export class DocumentPdfViewStoreError extends DocumentArtifactStoreError {
+export class DocumentPdfViewStoreError extends DocumentDerivedStoreError {
   constructor() {
     super('The PDF view could not be read.')
   }

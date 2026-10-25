@@ -16,7 +16,7 @@ export interface DocumentModelComparison {
 }
 
 /**
- * Compares two immutable document models — the same artifact `/model`
+ * Compares two immutable document models — the same derived file `/model`
  * serves — into a bounded, ordered entry list. Paragraph pairing is tiered:
  * paragraphs sharing a preserved `w14:paraId` anchor the alignment, leftovers
  * pair on identical text, and the still-unpaired remainder pairs on a

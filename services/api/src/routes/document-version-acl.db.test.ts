@@ -208,7 +208,7 @@ describe('historical version read gate', () => {
         expect(path).toBeTruthy()
         await expectConcealed(response)
       }
-      // The gate fires before any artifact read: a denied request never
+      // The gate fires before any output read: a denied request never
       // touches stored bytes for the historical version.
       expect(storage.binaryReads).toEqual([])
       expect(storage.textReads).toEqual([])
@@ -416,7 +416,7 @@ describe('version comparison', () => {
 
       // One historical input is enough to deny the whole comparison. The
       // denied requests precede the allowed one so the storage assertion
-      // proves the gate fired before any artifact read.
+      // proves the gate fired before any output read.
       await expectConcealed(
         await viewer.request(
           `/api/documents/${seed.documentId}/compare?baseVersionId=${seed.versionId}&targetVersionId=${seed.currentVersionId}`,

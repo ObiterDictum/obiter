@@ -3,7 +3,7 @@ import type {
   RedactionAuditLogEntry,
 } from './redaction-database'
 
-export const AUDIT_REPORT_VERSION = 'obiter.redaction-audit/v1'
+export const AUDIT_REPORT_VERSION = 'obiter.redaction-audit/v2'
 
 export function buildAuditReport(
   run: RedactionRunRecord,
@@ -30,10 +30,10 @@ export function buildAuditReport(
     detectorVersion: run.detectorVersion,
     detectionMode: run.detectionMode,
     policyMode: run.policyMode,
-    outputArtifact: run.outputArtifactId
+    output: run.outputId
       ? {
-          artifactId: run.outputArtifactId,
-          artifactType: 'redaction_output' as const,
+          outputId: run.outputId,
+          outputType: 'redaction_output' as const,
           outputMode: run.summary.outputMode ?? null,
         }
       : null,

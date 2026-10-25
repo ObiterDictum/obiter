@@ -1,13 +1,9 @@
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test'
-import { execFileSync } from 'node:child_process'
+import { createAccount } from './document-journey'
+import { signIn, focusParagraph } from './e13-support'
+import { expect, test, type Page } from '@playwright/test'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveJourneyTargets } from '../journey-target.mjs'
 
 /*
  * E47 browser regression: pressing Enter in the middle of a paragraph must
@@ -18,7 +14,6 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
  * isolated editor lane, a synthetic account and a wholly synthetic DOCX.
  */
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const FIXTURE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   'fixtures/e47-split.docx',
@@ -39,51 +34,6 @@ const PLAIN_RIGHT = PLAIN.slice(30)
 const BOLD = '3. On 3 March 2024, I inspected the property and exhibit ME/1.'
 const BOLD_LEFT = BOLD.slice(0, 10)
 const BOLD_RIGHT = BOLD.slice(10)
-
-function verifyEmailInDb(email: string) {
-  const safe = email.replace(/'/g, "''")
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
-      'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      `update users set "emailVerified"=true where email='${safe}'`,
-    ],
-    { stdio: 'pipe' },
-  )
-}
-
-async function createAccount(request: APIRequestContext) {
-  const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
-  const email = `e47-${runId}@obiter.test`
-  const password = `E47-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E47 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(email)
-  return { email, password }
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  await page.getByLabel('Email').click()
-  await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
-  await page.getByLabel('Password').click()
-  await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-    timeout: 15_000,
-  })
-  await page.waitForLoadState('networkidle')
-}
 
 /** Opens the synthetic fixture through the product's own navigation. */
 async function openFixtureDocument(
@@ -134,22 +84,6 @@ async function openFixtureDocument(
     timeout: 30_000,
   })
   return modelUrl.match(/\/api\/documents\/([^/]+)\/model$/u)?.[1] ?? ''
-}
-
-const editor = (page: Page) =>
-  page.getByLabel('Paragraph text', { exact: true })
-
-async function focusParagraph(page: Page, text: string) {
-  const target = page.locator('[data-paragraph-id]', { hasText: text }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused()
-      .then(() => true)
-      .catch(() => false)
-    if (focused) return
-  }
-  throw new Error(`could not focus the paragraph containing "${text}"`)
 }
 
 /** Clicks a paragraph and leaves the caret at a known offset. */
@@ -244,7 +178,7 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
   browser,
   request,
 }) => {
-  const { email, password } = await createAccount(request)
+  const { email, password } = await createAccount(request, 'E47')
   const matter = `E47 split ${String(Date.now())}`
   const documentId = await openFixtureDocument(page, email, password, matter)
   expect(documentId).not.toBe('')
