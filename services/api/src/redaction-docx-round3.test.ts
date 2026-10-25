@@ -61,6 +61,7 @@ async function burn(
   if (!documentPart) throw new Error('Missing output document')
   return {
     xml: await documentPart.async('string'),
+    comments: (await zip.file('word/comments.xml')?.async('string')) ?? '',
     text: await extractDocumentText('docx', Buffer.from(bytes)),
   }
 }
@@ -222,6 +223,20 @@ describe('accepted DOCX coordinates and container safety', () => {
     )
     expect(output.text).not.toContain('Other review note')
     expect(output.text).toContain('Keep this note')
+  })
+  it('refuses an unsupported symbol instead of silently dropping its character', async () => {
+    const bytes = await source(
+      p(t('Public ') + '<w:sym w:font="Unknown Custom Font" w:char="F0FF"/>'),
+    )
+    await expect(extractDocumentText('docx', bytes)).rejects.toThrow(
+      'unsupported font or character',
+    )
+  })
+  it('burns XML character data without changing surrounding visible characters', async () => {
+    const output = await burn(p('<w:t>Dear <![CDATA[Jane Doe]]>,</w:t>'), [
+      'Jane Doe',
+    ])
+    expect(output.text).toBe('Dear [REDACTED],')
   })
   it('refuses legacy coordinates that cannot be mapped exactly', async () => {
     const docxBytes = await source(p(t('Jane') + '<w:br/>' + t('Doe')))

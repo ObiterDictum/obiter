@@ -1,5 +1,6 @@
 import { posix } from 'node:path'
 import { documentTextLayoutSchema } from '@obiter/contracts'
+import { RedactionDocxBurnError } from './redaction-docx-error'
 import { mapDocxText } from './redaction-docx-map'
 import { prepareDocxForBurn } from './redaction-docx-xml'
 import {
@@ -274,6 +275,8 @@ async function exactPageChars(
     return chars.length > 0 ? withSemanticSpaces(withLineBreaks(chars)) : []
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
+    if (error instanceof RedactionDocxBurnError)
+      throw new DocumentExtractionError(error.message, true)
     console.warn('PDF exact glyph geometry fallback', {
       pageNumber: pageIndex + 1,
       reason: 'operator_replay_failed',
@@ -772,6 +775,8 @@ export async function extractDocumentContent(
     return { text, layout: null }
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
+    if (error instanceof RedactionDocxBurnError)
+      throw new DocumentExtractionError(error.message, true)
     if (
       error instanceof OoxmlError &&
       error.code === 'package-limits-exceeded'

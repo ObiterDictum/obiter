@@ -1,4 +1,5 @@
 import { hex } from 'dingbat-to-unicode'
+import { RedactionDocxBurnError } from './redaction-docx-error'
 import {
   attributeValue,
   decodeXmlReferences,
@@ -109,10 +110,21 @@ export function nodeText(
   element: XmlElement,
   source: string,
 ): string | undefined {
-  if (isWord(element, 't') || isWord(element, 'delText'))
-    return decodeXmlReferences(
-      source.slice(element.startTagEnd, element.endTagStart),
-    )
+  if (isWord(element, 't') || isWord(element, 'delText')) {
+    const inner = source.slice(element.startTagEnd, element.endTagStart)
+    const segments = [
+      ...inner.matchAll(
+        /<!\[CDATA\[([^]*?)\]\]>|<!--[^]*?-->|<\?[^]*?\?>|([^<]+)/gu,
+      ),
+    ]
+    if (segments.map((segment) => segment[0]).join('') !== inner)
+      throw new RedactionDocxBurnError(
+        'Unsupported nested markup in a Word text carrier.',
+      )
+    return segments
+      .map((segment) => segment[1] ?? decodeXmlReferences(segment[2] ?? ''))
+      .join('')
+  }
   if (isWord(element, 'tab')) return '\t'
   if (isWord(element, 'br') || isWord(element, 'cr')) return '\n'
   if (isWord(element, 'noBreakHyphen')) return '\u2011'
@@ -120,12 +132,22 @@ export function nodeText(
   if (isWord(element, 'sym')) {
     const font = attributeValue(element, WORD_NAMESPACE, 'font') ?? ''
     const char = attributeValue(element, WORD_NAMESPACE, 'char') ?? ''
-    return (
-      (
-        hex(font, char) ??
-        (/^F0../iu.test(char) ? hex(font, char.slice(2)) : undefined)
-      )?.string ?? ''
-    )
+    const mapped =
+      hex(font, char) ??
+      (/^F0../iu.test(char) ? hex(font, char.slice(2)) : undefined)
+    if (!mapped)
+      throw new RedactionDocxBurnError(
+        'A symbol uses an unsupported font or character; its extraction coordinates cannot be proved.',
+      )
+    return mapped.string
   }
   return undefined
+}
+
+/** Preserve XML annotations separately from the reviewable character data. */
+export function hiddenXmlMarkup(inner: string) {
+  return [...inner.matchAll(/<!\[CDATA\[[^]*?\]\]>|<!--[^]*?-->|<\?[^]*?\?>/gu)]
+    .filter((segment) => !segment[0].startsWith('<![CDATA['))
+    .map((segment) => segment[0])
+    .join('')
 }
