@@ -158,6 +158,34 @@ describe('accepted DOCX coordinates and container safety', () => {
     expect(output.xml).toContain('PAGEREF _Toc2')
     expect(output.text).toBe('[REDACTED]Other entry')
   })
+  it('refuses a name inside an embedded compressed xlsx and names the part', async () => {
+    const nested = new JSZip()
+    nested.file('xl/sharedStrings.xml', '<sst><si><t>Jane Doe</t></si></sst>')
+    const xlsx = await nested.generateAsync({
+      type: 'uint8array',
+      compression: 'DEFLATE',
+    })
+    await expect(
+      burn(p(t('Jane Doe')), ['Jane Doe'], {
+        'word/embeddings/private.xlsx': xlsx,
+      }),
+    ).rejects.toThrow('word/embeddings/private.xlsx!/xl/sharedStrings.xml')
+  })
+  it('refuses accepted UTF-16LE text in a binary object', async () => {
+    await expect(
+      burn(p(t('Jane Doe')), ['Jane Doe'], {
+        'word/embeddings/oleObject1.bin': Buffer.from('Jane Doe', 'utf16le'),
+      }),
+    ).rejects.toThrow('word/embeddings/oleObject1.bin')
+  })
+  it('refuses accepted text in a percent-encoded relationship target', async () => {
+    await expect(
+      burn(p(t('Jane Doe')), ['Jane Doe'], {
+        'word/_rels/unrelated.xml.rels':
+          '<Relationships><Relationship Target="https://example.invalid/Jane%20Doe"/></Relationships>',
+      }),
+    ).rejects.toThrow('word/_rels/unrelated.xml.rels')
+  })
   it('burns selected comment and deletion text while preserving other review text', async () => {
     const output = await burn(
       p(t('Public')) +

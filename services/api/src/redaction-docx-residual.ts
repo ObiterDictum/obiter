@@ -41,6 +41,10 @@ export async function assertNoSpanTextSurvives(
           `Embedded package expansion exceeds safe limits in ${partPath}.`,
         )
       const buffer = Buffer.from(payload)
+      if (buffer.length >= 4 && buffer.readUInt32LE(0) === 0x04034b50) {
+        await check(payload, partPath, depth + 1)
+        continue
+      }
       let hit = false
       if (/\.(?:xml|rels)$/iu.test(name)) {
         const source = new TextDecoder('utf-8', { fatal: true }).decode(payload)
@@ -66,12 +70,12 @@ export async function assertNoSpanTextSurvives(
             ].some((local) => isWord(element, local)),
         )
         hit = needles.some((needle) =>
-          texts.some((text) => containsText(text, needle.text)),
+          texts.some((text) => containsText(decodeTarget(text), needle.text)),
         )
       } else {
         hit = needles.some(
           (needle) =>
-            buffer.includes(needle.utf8),
+            buffer.includes(needle.utf8) || buffer.includes(needle.utf16),
         )
       }
       if (hit)
