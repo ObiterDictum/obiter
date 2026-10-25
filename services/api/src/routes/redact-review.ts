@@ -1,3 +1,4 @@
+import { DEFAULT_API_REQUEST_LIMITS, type ApiRequestLimits } from '../request-limits'
 import { acceptedDocxOccurrences } from '../redaction-docx-occurrences'
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
@@ -221,6 +222,7 @@ export function createRedactReviewRoutes(
   pool: Pool,
   storage: StorageService,
   renderer: RedactionRenderer | null = null,
+  limits: ApiRequestLimits = DEFAULT_API_REQUEST_LIMITS,
 ) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
@@ -521,6 +523,7 @@ export function createRedactReviewRoutes(
       filename: run.sourceFilename,
       mimeType: source?.mimeType ?? run.sourceMimeType ?? null,
       sourceBytes,
+      ooxmlLimits: limits.ooxmlLimits,
       extractedText: text,
     })
     if (uncoveredRegions.length > 0)
@@ -579,6 +582,7 @@ export function createRedactReviewRoutes(
           )
         const secure = await buildHardRedactionPdf({
           run: {...run, spans: occurrences.spans, decisions: occurrences.decisions},
+          ooxmlLimits: limits.ooxmlLimits,
           sourceText: text,
           redactedText: output,
           source,
@@ -630,6 +634,7 @@ export function createRedactReviewRoutes(
           const docxBytes = await storage.readBinary!(source.objectKey)
           const redactedDocx = await buildRedactedDocx({
             docxBytes: Buffer.from(docxBytes),
+            ooxmlLimits: limits.ooxmlLimits,
             text,
             spans: occurrences.spans,
             decisions: occurrences.decisions,

@@ -85,3 +85,11 @@ it('keeps text-box paragraph tab-stop definitions out of review text and rendere
   expect(xml).toContain('<w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs>')
   expect(xml).toContain(' Public')
 })
+
+import { DEFAULT_OOXML_PACKAGE_LIMITS } from '@obiter/ooxml'
+import { prepareDocxForBurn } from './redaction-docx-xml'
+it('enforces configured package limits before preparing Redact XML', async () => {
+  const bytes = await fixture(p('Public'))
+  await expect(prepareDocxForBurn(bytes, {...DEFAULT_OOXML_PACKAGE_LIMITS,maxEntries:1})).rejects.toMatchObject({code:'package-limits-exceeded'})
+  await expect(prepareDocxForBurn(bytes, DEFAULT_OOXML_PACKAGE_LIMITS)).resolves.toBeInstanceOf(Uint8Array)
+})

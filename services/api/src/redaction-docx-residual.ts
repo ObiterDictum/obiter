@@ -3,6 +3,7 @@ import {
   isWord,
   loadOoxmlZipEntries,
   WORD_NAMESPACE,
+  type OoxmlPackageLimits,
 } from '@obiter/ooxml'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { RedactionDocxBurnError } from './redaction-docx-error'
@@ -17,6 +18,7 @@ export async function assertNoSpanTextSurvives(
   bytes: Uint8Array,
   affected: RedactionSpan[],
   preserved: RedactionSpan[] = [],
+  limits?: OoxmlPackageLimits,
 ) {
   let budget = 72 * 1024 * 1024
   const needles = affected
@@ -33,7 +35,7 @@ export async function assertNoSpanTextSurvives(
       )
     let entries: Map<string, Uint8Array>
     try {
-      entries = await loadOoxmlZipEntries(input)
+      entries = await loadOoxmlZipEntries(input, limits)
     } catch {
       throw new RedactionDocxBurnError(
         `Package contents could not be verified in ${path || 'source DOCX'}.`,

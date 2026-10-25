@@ -8,7 +8,7 @@ export async function extractRedactionContent(fileType: SupportedDocumentType, b
   if (fileType !== 'docx') return extractDocumentContent(fileType, bytes, dependencies)
   try {
     const limits = dependencies.ooxmlLimits ?? DEFAULT_OOXML_PACKAGE_LIMITS
-    const prepared = await prepareDocxForBurn(bytes)
+    const prepared = await prepareDocxForBurn(bytes, limits)
     const { text } = mapDocxText(await loadOoxmlZipEntries(prepared, limits))
     // Keep the shared image-only/OCR refusal when no reviewable text exists.
     if (!text.trim()) return extractDocumentContent(fileType, bytes, dependencies)

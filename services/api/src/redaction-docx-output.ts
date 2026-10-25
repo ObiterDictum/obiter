@@ -9,6 +9,7 @@ import {
   parseDocx,
   parseXmlElements,
   serialiseDocx,
+  type OoxmlPackageLimits,
 } from '@obiter/ooxml'
 import {
   burnMappedNodes,
@@ -27,6 +28,7 @@ import {
 } from '@obiter/redaction-policy'
 
 export interface RedactedDocxInput {
+  ooxmlLimits?: OoxmlPackageLimits
   docxBytes: Buffer
   text: string
   spans: RedactionSpan[]
@@ -90,14 +92,14 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   )
 
   let document
-  const prepared = await prepareDocxForBurn(input.docxBytes)
+  const prepared = await prepareDocxForBurn(input.docxBytes, input.ooxmlLimits)
   try {
-    document = await parseDocx(prepared)
+    document = await parseDocx(prepared, {limits: input.ooxmlLimits})
   } catch {
     throw new RedactionDocxBurnError('The source document could not be read.')
   }
 
-  const sourceEntries = await loadOoxmlZipEntries(Buffer.from(prepared))
+  const sourceEntries = await loadOoxmlZipEntries(Buffer.from(prepared), input.ooxmlLimits)
   const mapped = mapDocxText(sourceEntries)
   for (const partName of new Set(mapped.nodes.map((node) => node.partName))) {
     const part = document.sourceParts.get(partName)
@@ -155,7 +157,7 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   if (input.outputMode === 'redacted')
     normaliseRenderCharacters(document, mapped.nodes)
   const serialised = await serialiseDocx(document)
-  const writtenParts = await loadOoxmlZipEntries(Buffer.from(serialised))
+  const writtenParts = await loadOoxmlZipEntries(Buffer.from(serialised), input.ooxmlLimits)
   // Independent output proof: rebuild reviewed text from the emitted package
   // and compare it to offset edits, including preserved synthetic separators.
   const edits: Array<{ start: number; end: number; value: string }> = []
@@ -190,7 +192,7 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
     const delta = edits.filter(edit => edit.end <= span.start).reduce((sum, edit) => sum + edit.value.length - (edit.end - edit.start), 0)
     return [{...span, start: span.start + delta - leading, end: span.end + delta - leading}]
   })
-  await assertNoSpanTextSurvives(stripped, affected, preserved)
+  await assertNoSpanTextSurvives(stripped, affected, preserved, input.ooxmlLimits)
   return stripped
 }
 

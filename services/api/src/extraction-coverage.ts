@@ -1,6 +1,6 @@
 import { mapDocxText } from './redaction-docx-map'
 import { prepareDocxForBurn } from './redaction-docx-xml'
-import { loadOoxmlZipEntries } from '@obiter/ooxml'
+import { loadOoxmlZipEntries, type OoxmlPackageLimits } from '@obiter/ooxml'
 import {
   decodeXmlText,
   extractWordXmlText,
@@ -379,16 +379,17 @@ export function countBodyTextboxChars(documentXml: string) {
 export async function findUncoveredDocxRegions(
   sourceBytes: Buffer,
   extractedText = '',
+  limits?: OoxmlPackageLimits,
 ): Promise<string[]> {
   let entries: Map<string, Uint8Array>
   try {
-    entries = await loadOoxmlZipEntries(sourceBytes)
+    entries = await loadOoxmlZipEntries(sourceBytes, limits)
   } catch {
     return ['DOCX package could not be verified; upload the document again']
   }
   let mappedCoverage: boolean
   try {
-    mappedCoverage = mapDocxText(await loadOoxmlZipEntries(await prepareDocxForBurn(sourceBytes))).text === extractedText.trim()
+    mappedCoverage = mapDocxText(await loadOoxmlZipEntries(await prepareDocxForBurn(sourceBytes, limits), limits)).text === extractedText.trim()
   } catch {
     // Malformed/unsupported coordinates are a completeness refusal, never a 500.
     return ['DOCX review coordinates could not be verified; upload the document again']
@@ -659,9 +660,10 @@ export async function findUncoveredRegions(input: {
   mimeType: string | null
   sourceBytes: Buffer | null
   extractedText: string
+  ooxmlLimits?: OoxmlPackageLimits
 }): Promise<string[]> {
   const kind = classifySource(input.filename, input.mimeType)
   if (kind === 'pdf') return findUncoveredPdfRegions(input.extractedText)
   if (kind !== 'docx' || !input.sourceBytes) return []
-  return findUncoveredDocxRegions(input.sourceBytes, input.extractedText)
+  return findUncoveredDocxRegions(input.sourceBytes, input.extractedText, input.ooxmlLimits)
 }
