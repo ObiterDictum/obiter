@@ -54,7 +54,12 @@ Headers precede the body; footers, labelled notes and comments follow it. Delete
 and inserted revision text is reviewable. Shapes use the modern Choice; duplicate
 Fallback content is removed. Text-only in-run alternatives are flattened.
 
-The walker supplies Redact's DOCX extraction only; matter uploads keep Mammoth. Stored runs can still export only
+The walker supplies Redact's DOCX extraction only; matter uploads keep Mammoth.
+A run on a matter DOCX extracts the version's original bytes with the walker and
+stores that text under the run (`redaction-runs/<id>/source`, allowed for matter
+runs by migration 0035); the matter version's stored text is unchanged and is
+never a DOCX run's source. A package in which the walker finds no reviewable text
+refuses run creation rather than storing coordinates the burn cannot use. Stored runs can still export only
 when their complete stored text, after edge trimming, equals the source map.
 Different legacy coordinates refuse with a request for a fresh run; offsets are
 never realigned by searching. Each accepted span must also equal its stored slice.
@@ -71,17 +76,22 @@ retain theirs. Selected hyperlinks lose their target relationship
 and references, including shared drawing references. Field markers and structure
 outside the selection remain. Accepted text is scrubbed from drawing descriptions,
 titles and picture filenames throughout the part, and from comment/revision
-authors, preserving metadata unrelated to accepted identities.
+authors, whose initials on the same element are then burned too, preserving
+metadata unrelated to accepted identities.
 Marker colour/highlight precede extension properties and property-change history.
 
 Before returning, the emitted package is independently extracted and compared to
 the expected offset edits. The residual gate excludes only those verified text
 carriers, allowing deliberate rejected duplicates. It examines other decoded XML
 text and attributes, percent/entity-decoded targets, UTF-8 and UTF-16LE binary
-content, and recursively expanded embedded packages. Font sizes and other typed
-formatting values and font names (theme typefaces, `w:rFonts`, font table
-entries) are not prose occurrences. Hidden-text matching respects Unicode
-word edges. Nested packages have a shared 72 MiB expansion budget and depth cap 4.
+content, and recursively expanded embedded packages. Any part whose content is
+XML is decoded (by BOM, UTF-16 shape or declared encoding) whatever its name;
+undecodable `.xml`/`.rels` parts refuse, and parts with other names keep the
+raw UTF-8/UTF-16 byte check too. Font sizes and other typed formatting values
+and font names (theme typefaces, `w:rFonts`, font table entries) are not prose
+occurrences. Hidden-text matching is a plain substring match, fail-closed for
+identifiers, link targets and custom XML; the one exception is that a number is
+not matched inside a longer number (accepted `24` in a `2024` date). Nested packages have a shared 72 MiB expansion budget and depth cap 4.
 A matching embedded object refuses with its part path; binaries are never edited.
 
 Hard redaction renders only this verified DOCX and refuses on burn failure.
@@ -101,6 +111,9 @@ selections, hidden residuals in unsupported parts, and nested-package resource
 limits. The coverage guard still refuses unreviewed altChunks, chart/DrawingML text
 and unknown parts; images require OCR when they are the only content. Comments,
 tracked text, supported shapes, breaks, hyphens and empty paragraphs are supported.
+The guard treats notes, revisions, comments and textboxes as reviewed only when
+the run's text equals the walker's map, and runs the walker only when the
+original checks would refuse; legacy runs keep those checks unchanged.
 
 ### DOCX review coordinates
 
@@ -113,9 +126,10 @@ review content; the pseudonymised text fallback uses only this reviewed text.
 
 Accepting DOCX text burns its other exact, word-bounded occurrences throughout
 the mapped stories, including detector-missed headers and comments. An explicitly
-rejected/kept span exempts only its exact offsets for the same text. Additional
-burns are counted in the persisted summary and finalize audit, and shown in the
-finalized output. The same expansion applies to the reviewed text fallback.
+rejected/kept span keeps every occurrence inside it: rejecting `Alice Smith`
+keeps its `Smith` even when `Smith` is accepted elsewhere. Additional burns and
+occurrences kept this way are counted in the persisted summary and finalize
+audit; additional burns are shown in the finalized output. The same expansion applies to the reviewed text fallback.
 Hidden copies outside mapped stories still refuse output when they cannot be
 safely burned.
 

@@ -403,9 +403,20 @@ export function scrubAcceptedMetadata(
               : []
       if (!names.length) continue
       let opening = source.slice(element.start, element.startTagEnd)
-      for (const attr of element.attributes) {
-        if (!names.includes(attr.localName)) continue
-        let value = decodeTarget(attr.value)
+      let authorBurned = false
+      // Initials follow a burned author whichever attribute comes first.
+      const attributes = element.attributes
+        .filter((attr) => names.includes(attr.localName))
+        .sort(
+          (a, b) =>
+            Number(a.localName === 'initials') -
+            Number(b.localName === 'initials'),
+        )
+      for (const attr of attributes) {
+        let value =
+          authorBurned && attr.localName === 'initials'
+            ? '[REDACTED]'
+            : decodeTarget(attr.value)
         for (const name of accepted) {
           for (const spelling of [
             name,
@@ -428,6 +439,7 @@ export function scrubAcceptedMetadata(
           }
         }
         if (value !== decodeTarget(attr.value)) {
+          if (attr.localName === 'author') authorBurned = true
           opening = removeAttribute(
             opening,
             { ...element, start: 0, startTagEnd: opening.length },

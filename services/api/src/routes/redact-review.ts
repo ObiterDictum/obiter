@@ -549,7 +549,12 @@ export function createRedactReviewRoutes(
       source?.mimeType ?? run.sourceMimeType,
     )
       ? acceptedDocxOccurrences(text, run.spans, run.decisions)
-      : { spans: run.spans, decisions: run.decisions, additionalBurns: 0 }
+      : {
+          spans: run.spans,
+          decisions: run.decisions,
+          additionalBurns: 0,
+          preservedOccurrences: 0,
+        }
     let output: string
     let tokenMap: Record<string, string>
     try {
@@ -718,6 +723,7 @@ export function createRedactReviewRoutes(
         outputFilename,
         outputDowngrade,
         additionalDocxBurns: occurrences.additionalBurns,
+        preservedDocxOccurrences: occurrences.preservedOccurrences,
         outputSha256,
         securePdf,
       })

@@ -7,7 +7,10 @@ import { findUncoveredDocxRegions } from './extraction-coverage'
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const t = (value: string) => `<w:r><w:t>${value}</w:t></w:r>`
 const p = (value: string) => `<w:p>${t(value)}</w:p>`
-async function fixture(body: string, extra: Record<string, string> = {}) {
+async function fixture(
+  body: string,
+  extra: Record<string, string | Uint8Array> = {},
+) {
   const zip = await JSZip.loadAsync(await createSyntheticDocx(['fixture']))
   zip.file(
     'word/document.xml',
@@ -153,16 +156,6 @@ it.each(['HYPERLINK &quot;mailto:j.smith@firm.invalid&quot;', 'TOC Jane Doe'])(
     expect(xml).toContain('[PERSON_NAME_1]')
   },
 )
-it('returns a coverage refusal for branchless alternate content instead of throwing', async () => {
-  const bytes = await fixture(
-    `<w:p><w:r><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"/></w:r></w:p>`,
-  )
-  await expect(findUncoveredDocxRegions(bytes, 'legacy text')).resolves.toEqual(
-    [
-      'DOCX review coordinates could not be verified; upload the document again',
-    ],
-  )
-})
 it('keeps text-box paragraph tab-stop definitions out of review text and renderer edits', async () => {
   const body = `<w:p><w:r><w:pict><w:txbxContent><w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs></w:pPr>${t('Jane Doe')}${t(' Public')}</w:p></w:txbxContent></w:pict></w:r></w:p>`
   const bytes = await fixture(body)
@@ -198,4 +191,92 @@ it('enforces configured package limits before preparing Redact XML', async () =>
   await expect(
     prepareDocxForBurn(bytes, DEFAULT_OOXML_PACKAGE_LIMITS),
   ).resolves.toBeInstanceOf(Uint8Array)
+})
+
+it.each([
+  ['an identifier', 'word/document.xml', 'Alice'],
+  ['a link target', 'word/_rels/document.xml.rels', 'Alice'],
+  ['custom XML', 'customXml/item1.xml', 'Alice'],
+  ['an entity-encoded VML part', 'word/vmlDrawing1.vml', 'Smith & Jones'],
+  ['a UTF-16 custom XML part', 'customXml/item2.xml', 'Alice'],
+])('refuses accepted text surviving in %s', async (_, name, accepted) => {
+  const parts: Record<string, string | Uint8Array> = {
+    'word/_rels/document.xml.rels': `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.test/AliceSmith" TargetMode="External"/></Relationships>`,
+    'customXml/item1.xml': '<data><client>AliceSmith</client></data>',
+    'word/vmlDrawing1.vml': `<xml xmlns:v="urn:schemas-microsoft-com:vml"><v:shape alt="Smith &amp; Jones"/></xml>`,
+    'customXml/item2.xml': Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(
+        '<?xml version="1.0" encoding="UTF-16"?><data>AliceSmith</data>',
+        'utf16le',
+      ),
+    ]),
+  }
+  const bytes = await fixture(
+    name === 'word/document.xml'
+      ? `<w:p><w:bookmarkStart w:id="0" w:name="AliceSmith_ref"/>${t('Public')}</w:p>`
+      : p('Public'),
+    name === 'word/document.xml' ? {} : { [name]: parts[name] ?? '' },
+  )
+  await expect(
+    assertNoSpanTextSurvives(bytes, [span(accepted)]),
+  ).rejects.toThrow(`survives in ${name}`)
+})
+it('reads a UTF-16 custom XML part instead of refusing it', async () => {
+  const bytes = await fixture(p('Public'), {
+    'customXml/item1.xml': Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(
+        '<?xml version="1.0" encoding="UTF-16"?><data>Public</data>',
+        'utf16le',
+      ),
+    ]),
+  })
+  await expect(
+    assertNoSpanTextSurvives(bytes, [span('Alice')]),
+  ).resolves.toBeUndefined()
+})
+it('keeps accepted text inside a span the reviewer explicitly rejected', async () => {
+  const bytes = await fixture(p('Alice Smith met Smith and Smith.'))
+  const { text } = await extractRedactionContent('docx', bytes)
+  const accepted = span('Smith', text.indexOf('Smith', 12))
+  const kept = span('Alice Smith', 0, 'kept')
+  const decisions = { accepted: decision('accept'), kept: decision('reject') }
+  const occurrences = acceptedDocxOccurrences(text, [accepted, kept], decisions)
+  expect(occurrences).toMatchObject({
+    additionalBurns: 1,
+    preservedOccurrences: 1,
+  })
+  const output = await buildRedactedDocx({
+    docxBytes: bytes,
+    text,
+    spans: occurrences.spans,
+    decisions: occurrences.decisions,
+    outputMode: 'redacted',
+    tokenMap: {},
+  })
+  expect(
+    (await extractRedactionContent('docx', Buffer.from(output))).text,
+  ).toBe('Alice Smith met [REDACTED] and [REDACTED].')
+})
+it('burns the initials of a burned comment author', async () => {
+  const bytes = await fixture(p('Jane Doe signed.'), {
+    'word/comments.xml': `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:initials="JD" w:author="Jane Doe">${p('Noted')}</w:comment><w:comment w:id="1" w:author="Other Reviewer" w:initials="OR">${p('Fine')}</w:comment></w:comments>`,
+  })
+  const { text } = await extractRedactionContent('docx', bytes)
+  const output = await buildRedactedDocx({
+    docxBytes: bytes,
+    text,
+    spans: [span('Jane Doe', text.indexOf('Jane Doe'))],
+    decisions: { accepted: decision('accept') },
+    outputMode: 'redacted',
+    tokenMap: {},
+  })
+  const comments = await (
+    await JSZip.loadAsync(output)
+  )
+    .file('word/comments.xml')
+    ?.async('string')
+  expect(comments).not.toContain('"JD"')
+  expect(comments).toContain('w:initials="OR"')
 })

@@ -61,6 +61,8 @@ export interface RunSummary {
   outputSha256?: string
   /** Additional exact occurrences removed from reviewed DOCX text. */
   additionalDocxBurns?: number
+  /** Occurrences of accepted text kept because they lie inside a rejected span. */
+  preservedDocxOccurrences?: number
   /**
    * True only for a hard-redaction PDF produced by the secure rasterized path.
    * Absent or false on legacy hard-redaction DOCX/TXT outputs and on

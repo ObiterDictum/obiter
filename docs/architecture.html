@@ -2696,7 +2696,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>33 migrations, 0001 to 0034, 0008 withdrawn</dd>
+                <dd>34 migrations, 0001 to 0035, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -4668,7 +4668,10 @@
                   <td class="id">
                     org/&lt;id&gt;/redaction-runs/&lt;id&gt;/source
                   </td>
-                  <td>Standalone run source text</td>
+                  <td>
+                    Standalone run source text; Redact-extracted text of a
+                    matter DOCX run (0035)
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -5841,23 +5844,27 @@
             <b>Redact owns DOCX output.</b>
             <code>redaction-docx-map.ts</code> supplies the same UTF-16 source
             map to Redact-only extraction and burning. Matter ingestion retains
-            Mammoth. Accepted offsets are verified against the complete stored
-            text; mismatched legacy coordinates require a fresh run. Explicitly
-            rejected offsets and other words remain intact. Additional exact
-            occurrences of accepted text are burned and counted in the output
-            summary and audit. Modern Word shapes, breaks, hyphens, empty
+            Mammoth. A matter DOCX run extracts the version's original bytes
+            with the walker and stores that text under the run; the matter's
+            stored text is never its source. Accepted offsets are verified
+            against the complete stored text; mismatched legacy coordinates
+            require a fresh run. Explicitly rejected spans, including accepted
+            text inside them, and other words remain intact. Additional exact
+            occurrences of accepted text are burned, and both counts go to the
+            output summary and audit. Modern Word shapes, breaks, hyphens, empty
             paragraphs, comments and tracked text are mapped. Duplicate Fallback
             copies are removed. Editor edit operations are forbidden at this
             boundary. All enclosing result fields lose instructions, except TOC
             containers whose command contains no accepted text; sibling entry
             fields stay. Accepted drawing metadata and hyperlink targets are
             scrubbed. Emitted text must equal the expected offset edits. The
-            awaited residual gate ignores font names and checks hidden XML,
-            decoded targets, UTF-8/UTF-16LE binary text and nested packages with
-            bounded expansion. Hard mode converts untouched hyphen, symbol and
-            tab carriers to equivalent Unicode for its private renderer input,
-            then refuses uncertain bytes before rendering; pseudonymised mode
-            records a visible text/plain downgrade when DOCX cannot be safe.
+            awaited residual gate ignores font names and refuses any substring
+            in hidden XML of any part name (UTF-8 or UTF-16), decoded targets,
+            UTF-8/UTF-16 binary text and nested packages with bounded expansion.
+            Hard mode converts untouched hyphen, symbol and tab carriers to
+            equivalent Unicode for its private renderer input, then refuses
+            uncertain bytes before rendering; pseudonymised mode records a
+            visible text/plain downgrade when DOCX cannot be safe.
           </div>
 
           <h3>Span categories</h3>

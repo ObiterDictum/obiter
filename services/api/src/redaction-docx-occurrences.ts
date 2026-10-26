@@ -4,7 +4,8 @@ import {
   type RedactionSpan,
 } from '@obiter/redaction-policy'
 
-/** Accepted identities apply package-wide, except an explicitly kept occurrence. */
+/** Accepted identities apply package-wide, except inside an explicitly kept
+ * span: the reviewer's decision on "Alice Smith" also keeps its "Smith". */
 export function acceptedDocxOccurrences(
   text: string,
   spans: RedactionSpan[],
@@ -18,6 +19,7 @@ export function acceptedDocxOccurrences(
   )
   const occupied = new Set(accepted.map((span) => `${span.start}:${span.end}`))
   let additionalBurns = 0
+  let preservedOccurrences = 0
   for (const span of accepted) {
     if (!span.text) continue
     const escaped = span.text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
@@ -33,16 +35,12 @@ export function acceptedDocxOccurrences(
       const start = match.index
       const end = start + span.text.length
       const key = `${start}:${end}`
-      if (
-        occupied.has(key) ||
-        kept.some(
-          (other) =>
-            other.text === span.text &&
-            other.start === start &&
-            other.end === end,
-        )
-      )
+      if (occupied.has(key)) continue
+      if (kept.some((other) => other.start <= start && end <= other.end)) {
+        occupied.add(key)
+        preservedOccurrences++
         continue
+      }
       const id = `additional_${span.id}_${start}`
       expanded.push({ ...span, id, start, end })
       resolved[id] = decisions[span.id]
@@ -50,5 +48,10 @@ export function acceptedDocxOccurrences(
       additionalBurns++
     }
   }
-  return { spans: expanded, decisions: resolved, additionalBurns }
+  return {
+    spans: expanded,
+    decisions: resolved,
+    additionalBurns,
+    preservedOccurrences,
+  }
 }
