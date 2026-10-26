@@ -49,9 +49,12 @@ export async function redetectRedactionRun(input: {
   if (detection.degraded) return { kind: 'model_unavailable' as const }
 
   const newRunId = `red_${crypto.randomUUID()}`
-  const stagedObjectKey = sourceRun.matterId
-    ? null
-    : `org/${input.organisationId}/redaction-runs/${newRunId}/source`
+  // Matter runs reading the version's stored text keep doing so; runs with
+  // Redact-extracted DOCX text carry it to the replacement.
+  const stagedObjectKey =
+    sourceRun.matterId && !sourceRun.sourceTextObjectKey
+      ? null
+      : `org/${input.organisationId}/redaction-runs/${newRunId}/source`
   if (stagedObjectKey) {
     try {
       await input.storage.writeText(stagedObjectKey, text)

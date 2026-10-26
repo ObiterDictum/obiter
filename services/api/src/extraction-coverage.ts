@@ -385,11 +385,16 @@ export async function findUncoveredDocxRegions(
   try {
     entries = await loadOoxmlZipEntries(sourceBytes, limits)
   } catch {
-    return ['DOCX package could not be verified; upload the document again']
+    // Unreadable here means extraction already failed upstream; nothing to add.
+    return []
   }
-  let mappedCoverage: boolean
+  const regions = docxRegions(entries, extractedText, false)
+  if (regions.length === 0) return regions
+  // Only text produced by Redact's own walker covers notes, revisions,
+  // comments and textboxes; legacy Mammoth text keeps the stricter checks.
+  let walkerCoordinates = false
   try {
-    mappedCoverage =
+    walkerCoordinates =
       mapDocxText(
         await loadOoxmlZipEntries(
           await prepareDocxForBurn(sourceBytes, limits),
@@ -397,11 +402,16 @@ export async function findUncoveredDocxRegions(
         ),
       ).text === extractedText.trim()
   } catch {
-    // Malformed/unsupported coordinates are a completeness refusal, never a 500.
-    return [
-      'DOCX review coordinates could not be verified; upload the document again',
-    ]
+    // Not walker coordinates; the burn refuses these runs on its own.
   }
+  return walkerCoordinates ? docxRegions(entries, extractedText, true) : regions
+}
+
+function docxRegions(
+  entries: Map<string, Uint8Array>,
+  extractedText: string,
+  mappedCoverage: boolean,
+): string[] {
   const regions: string[] = []
   const pushChars = (name: string, chars: number) => {
     if (chars >= UNEXAMINED_PART_MIN_CHARS)

@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import type { Pool } from 'pg'
 import { redactionPolicyModeSchema } from '@obiter/contracts'
 import { appendAuditLog } from '../database'
@@ -11,11 +11,13 @@ import { DEFAULT_API_REQUEST_LIMITS } from '../request-limits'
 import {
   getDocumentRedactionSource,
   listRedactionRuns,
+  mimeTypeFromStoredFileType,
   listRedactionRunsForDocument,
   publicRun,
 } from '../redaction-database'
 import { detectionMode } from '../redaction-detection'
 import { createRedactionRun } from '../redaction-run-creation'
+import { isDocxMimeOrFilename } from '../redaction-docx-output'
 import type { StorageService } from '../storage'
 import {
   detectForRoute,
@@ -27,6 +29,22 @@ import {
   type RouteVariables,
   validSourceText,
 } from './redact-shared'
+
+function extractionErrorResponse(c: Context, error: unknown) {
+  if (!(error instanceof DocumentExtractionError)) throw error
+  if (error.userFacing && error.message.startsWith('The document package'))
+    return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
+  return errorResponse(
+    c,
+    'validation_failed',
+    // Curated messages name the actual obstacle, e.g. that the document
+    // needs OCR. Wrapped library failures stay generic.
+    error.userFacing
+      ? error.message
+      : 'Document text could not be read for redaction.',
+    400,
+  )
+}
 
 function sourceInput(body: Record<string, unknown> | null) {
   const filename =
@@ -114,25 +132,7 @@ export function createRedactRunCreationRoutes(
       } catch (error) {
         if (error instanceof DocumentUploadError)
           return errorResponse(c, 'validation_failed', error.message, 400)
-        if (error instanceof DocumentExtractionError) {
-          if (
-            error.userFacing &&
-            error.message.startsWith('The document package')
-          ) {
-            return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
-          }
-          return errorResponse(
-            c,
-            'validation_failed',
-            // Curated messages name the actual obstacle, e.g. that the document
-            // needs OCR. Wrapped library failures stay generic.
-            error.userFacing
-              ? error.message
-              : 'Document text could not be read for redaction.',
-            400,
-          )
-        }
-        throw error
+        return extractionErrorResponse(c, error)
       }
     }
 
@@ -241,7 +241,35 @@ export function createRedactRunCreationRoutes(
         'Document text is not available for redaction.',
         404,
       )
-    const text = await storage.readText(source.text_object_key)
+    const id = `red_${crypto.randomUUID()}`
+    // DOCX review coordinates must come from Redact's own walker over the
+    // version's original bytes, as for uploads. The matter's stored text,
+    // extracted for Search, stays untouched and is never Redact's source.
+    const docx = isDocxMimeOrFilename(
+      source.filename,
+      mimeTypeFromStoredFileType(source.file_type),
+    )
+    let text: string
+    if (docx) {
+      if (!storage.readBinary)
+        return errorResponse(
+          c,
+          'document_version_not_found',
+          'Document source is not available for redaction.',
+          404,
+        )
+      try {
+        text = (
+          await extractRedactionContent(
+            'docx',
+            await storage.readBinary(source.object_key),
+            { ooxmlLimits: limits.ooxmlLimits },
+          )
+        ).text
+      } catch (error) {
+        return extractionErrorResponse(c, error)
+      }
+    } else text = await storage.readText(source.text_object_key)
     if (!validSourceText(text))
       return errorResponse(
         c,
@@ -251,23 +279,35 @@ export function createRedactRunCreationRoutes(
       )
     const detection = await detectForRoute(c, text)
     if (detection instanceof Response) return detection
-    const run = await createRedactionRun({
-      pool,
-      id: `red_${crypto.randomUUID()}`,
-      organisationId: user.organisationId,
-      userId: user.id,
-      sourceFilename: source.filename,
-      sourceTextObjectKey: null,
-      spans: detection.spans,
-      detectorVersion: detection.detectorVersion,
-      detectionMode: detectionMode(detection.degraded),
-      policyMode: policyMode.data,
-      matterId: source.matter_id,
-      documentId: c.req.param('documentId'),
-      documentVersionId: source.version_id,
-    })
-    if (!run)
+    const sourceTextObjectKey = docx
+      ? `org/${user.organisationId}/redaction-runs/${id}/source`
+      : null
+    if (sourceTextObjectKey) await storage.writeText(sourceTextObjectKey, text)
+    let run
+    try {
+      run = await createRedactionRun({
+        pool,
+        id,
+        organisationId: user.organisationId,
+        userId: user.id,
+        sourceFilename: source.filename,
+        sourceTextObjectKey,
+        spans: detection.spans,
+        detectorVersion: detection.detectorVersion,
+        detectionMode: detectionMode(detection.degraded),
+        policyMode: policyMode.data,
+        matterId: source.matter_id,
+        documentId: c.req.param('documentId'),
+        documentVersionId: source.version_id,
+      })
+    } catch (error) {
+      if (sourceTextObjectKey) await storage.delete(sourceTextObjectKey)
+      throw error
+    }
+    if (!run) {
+      if (sourceTextObjectKey) await storage.delete(sourceTextObjectKey)
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
+    }
     await appendAuditLog(pool, {
       organisationId: user.organisationId,
       userId: user.id,

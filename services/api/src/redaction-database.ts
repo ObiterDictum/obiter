@@ -592,9 +592,12 @@ export async function getDocumentRedactionSource(
     version_id: string
     filename: string
     text_object_key: string | null
+    object_key: string
+    file_type: string
   }>(
     `
-    select document.matter_id, version.id as version_id, version.filename, version.text_object_key
+    select document.matter_id, version.id as version_id, version.filename, version.text_object_key,
+      version.object_key, version.file_type
     from matter_documents document
     join document_versions version on version.id = document.current_version_id and version.organisation_id = document.organisation_id
     join matters matter on matter.id = document.matter_id and matter.organisation_id = document.organisation_id
@@ -703,6 +706,7 @@ export async function finalizeRedactionRun(input: {
   outputMimeType?: string
   outputFilename?: string
   additionalDocxBurns?: number
+  preservedDocxOccurrences?: number
   outputDowngrade?: RunSummary['outputDowngrade']
   outputSha256?: string
   securePdf?: boolean
@@ -768,6 +772,7 @@ export async function finalizeRedactionRun(input: {
       // response) so the review UI still warns after a page reload.
       outputDowngrade: input.outputDowngrade ?? null,
       additionalDocxBurns: input.additionalDocxBurns ?? 0,
+      preservedDocxOccurrences: input.preservedDocxOccurrences ?? 0,
       ...(input.outputSha256 ? { outputSha256: input.outputSha256 } : {}),
       // True only for the new secure rasterized hard-redaction PDF; absent on
       // legacy DOCX/TXT outputs and pseudonymised output.
@@ -804,6 +809,7 @@ export async function finalizeRedactionRun(input: {
         outputFilename: input.outputFilename ?? null,
         securePdf: input.securePdf === true,
         additionalDocxBurns: input.additionalDocxBurns ?? 0,
+        preservedDocxOccurrences: input.preservedDocxOccurrences ?? 0,
         detectionMode: finalizedRun.detectionMode,
         degradedDetectionAcknowledged:
           finalizedRun.detectionMode === 'heuristics+supplement' &&

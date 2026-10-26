@@ -260,7 +260,7 @@ export async function createRedetectionRun(input: {
       organisationId: sourceRun.organisationId,
       userId: input.userId,
       sourceFilename: sourceRun.sourceFilename,
-      sourceTextObjectKey: linkedSource ? null : input.sourceTextObjectKey,
+      sourceTextObjectKey: input.sourceTextObjectKey,
       spans: input.spans,
       detectorVersion: input.detectorVersion,
       detectionMode: input.detectionMode,
