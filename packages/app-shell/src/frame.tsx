@@ -2,16 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
 import { ToastProvider, Toaster } from '@obiter/ui'
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
 import { Sidebar } from './sidebar'
 import { TopBar } from './top-bar'
-import {
-  lastPlaceFromPath,
-  writeWorkspaceLastPlace,
-} from './workspace-continuity'
 
 /**
  * App frame. Gates the shell on a real better-auth session: unauthenticated
@@ -66,16 +62,7 @@ function AuthenticatedFrame({
   children: ReactNode
   platform: AppPlatform
 }) {
-  const currentPath = useRouterState({
-    select: (state) => state.location.pathname,
-  })
   const { data: me } = useQuery(currentUserQueryOptions())
-
-  useEffect(() => {
-    const place = lastPlaceFromPath(currentPath)
-    if (!place || typeof window === 'undefined') return
-    writeWorkspaceLastPlace(window.sessionStorage, place)
-  }, [currentPath])
 
   return (
     <div className="flex h-dvh bg-canvas text-ink">
