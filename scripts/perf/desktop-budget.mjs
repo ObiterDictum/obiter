@@ -80,10 +80,12 @@ export const BUDGETS = {
   // 456 B. Absolute: the preload bridge is a small fixed contract surface, and
   // a deliberate addition of a few methods should pass.
   preloadBundleBytes: 2_000,
-  // 5,655,726 B, re-recorded from the recorded 5,343,300 B: everything the
-  // packager reads from out/. 2.0% headroom, for the same reason as the CSS
-  // entry above.
-  applicationPayloadBytes: 5_770_000,
+  // 5,795,780 B, re-recorded for the UI redesign's auth and settings screens
+  // (27 Oct 2026): everything the packager reads from out/. The previous
+  // ceiling already sat at 0.04% headroom (5,767,785 B measured, not the
+  // recorded 5,655,726 B), so any screen would have failed it. 2.0% headroom,
+  // for the same reason as the CSS entry above.
+  applicationPayloadBytes: 5_910_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']
