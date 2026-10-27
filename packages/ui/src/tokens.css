@@ -31,8 +31,7 @@
   --obiter-shadow-sm: 0 1px 2px rgba(38, 30, 20, 0.08);
   --obiter-shadow-md:
     0 18px 44px -14px rgba(38, 30, 20, 0.3), 0 3px 10px rgba(38, 30, 20, 0.09);
-  --obiter-shadow-lg:
-    0 18px 44px -14px rgba(38, 30, 20, 0.3), 0 3px 10px rgba(38, 30, 20, 0.09);
+  --obiter-shadow-lg: var(--obiter-shadow-md);
   --obiter-status-info: #2c5c88;
   --obiter-status-info-fg: #fffdf9;
   --obiter-status-info-soft: #e4ecf4;
@@ -99,9 +98,6 @@
   --obiter-font-mono:
     'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --obiter-font-serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
-  --obiter-font-weight-regular: 400;
-  --obiter-font-weight-medium: 500;
-  --obiter-font-weight-semibold: 600;
   --obiter-radius-sm: 4px;
   --obiter-radius-md: 6px;
   --obiter-radius-lg: 10px;
@@ -112,7 +108,6 @@
   --obiter-control-compact: 28px;
   --obiter-control-default: 32px;
   --obiter-control-large: 40px;
-  --obiter-space-0: 0px;
   --obiter-space-4: 4px;
   --obiter-space-8: 8px;
   --obiter-space-12: 12px;
@@ -133,19 +128,12 @@
   --obiter-text-item: 14px;
   --obiter-text-item-line-height: 1.4;
   --obiter-text-item-weight: 500;
-  --obiter-text-item-tracking: normal;
   --obiter-text-body: 14px;
   --obiter-text-body-line-height: 1.55;
-  --obiter-text-body-weight: 400;
-  --obiter-text-body-tracking: normal;
   --obiter-text-meta: 13px;
   --obiter-text-meta-line-height: 1.45;
-  --obiter-text-meta-weight: 400;
-  --obiter-text-meta-tracking: normal;
   --obiter-text-caption: 12px;
   --obiter-text-caption-line-height: 1.4;
-  --obiter-text-caption-weight: 400;
-  --obiter-text-caption-tracking: normal;
 }
 
 [data-theme='dark'] {
@@ -156,9 +144,6 @@
   --obiter-inset: #20242a;
   --obiter-fill: #262a31;
   --obiter-fill-hover: #2d323a;
-  --obiter-paper: #fffdf8;
-  --obiter-paper-ink: #241e17;
-  --obiter-paper-muted: #6b6157;
   --obiter-border: rgba(241, 239, 232, 0.1);
   --obiter-border-strong: rgba(241, 239, 232, 0.18);
   --obiter-text: #f1efe8;
@@ -175,8 +160,7 @@
   --obiter-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.34);
   --obiter-shadow-md:
     0 18px 44px -10px rgba(0, 0, 0, 0.66), 0 3px 10px rgba(0, 0, 0, 0.4);
-  --obiter-shadow-lg:
-    0 18px 44px -10px rgba(0, 0, 0, 0.66), 0 3px 10px rgba(0, 0, 0, 0.4);
+  --obiter-shadow-lg: var(--obiter-shadow-md);
   --obiter-status-info: #8faecf;
   --obiter-status-info-fg: #0b1219;
   --obiter-status-info-soft: rgba(143, 174, 207, 0.12);

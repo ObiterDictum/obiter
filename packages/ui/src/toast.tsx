@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { CheckCircle, Info, Warning, XCircle, X } from '@phosphor-icons/react'
+import { X } from '@phosphor-icons/react'
 import { cn } from './lib/cn'
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'danger'
@@ -38,12 +38,14 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
-const toneAccent = {
-  info: { Icon: Info, className: 'text-info' },
-  success: { Icon: CheckCircle, className: 'text-success' },
-  warning: { Icon: Warning, className: 'text-warning' },
-  danger: { Icon: XCircle, className: 'text-danger' },
-} satisfies Record<ToastTone, { Icon: typeof Info; className: string }>
+/* A tone dot, like StatusDot: the title carries the meaning, so the dot is
+ * decoration and no icon font weight rides on it. */
+const toneDot = {
+  info: 'bg-info',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+} satisfies Record<ToastTone, string>
 
 const DEFAULT_TIMEOUT = 5000
 
@@ -139,7 +141,6 @@ function ToastItem({
   onDismiss: (id: string) => void
 }) {
   const isDanger = record.tone === 'danger'
-  const { Icon: ToneIcon, className: toneClass } = toneAccent[record.tone]
 
   // Auto-dismiss timer — a legitimate external-timer use of useEffect.
   useEffect(() => {
@@ -153,13 +154,15 @@ function ToastItem({
       role={isDanger ? 'alert' : 'status'}
       aria-live={isDanger ? 'assertive' : 'polite'}
       className={cn(
-        'pointer-events-auto relative flex items-start gap-3 rounded-lg bg-raised p-4 pr-10 shadow-md inset-ring-1 inset-ring-line',
+        'pointer-events-auto relative flex items-start gap-3 rounded-lg border border-line bg-raised p-4 pr-10 shadow-md',
       )}
     >
-      <ToneIcon
-        size={16}
+      <span
         aria-hidden="true"
-        className={cn('mt-1 shrink-0', toneClass)}
+        className={cn(
+          'mt-2 size-1.5 shrink-0 rounded-pill',
+          toneDot[record.tone],
+        )}
       />
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-meta text-ink">{record.title}</p>

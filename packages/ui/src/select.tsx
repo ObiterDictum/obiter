@@ -86,7 +86,7 @@ export function Select({
           <BaseSelect.Positioner sideOffset={8} className="z-50 outline-none">
             <BaseSelect.Popup
               className={cn(
-                'max-h-72 w-[var(--select-anchor-width)] overflow-auto rounded-lg bg-raised p-2 shadow-lg inset-ring-1 inset-ring-line',
+                'max-h-72 w-[var(--select-anchor-width)] overflow-auto rounded-lg border border-line bg-raised p-2 shadow-lg',
                 'outline-none',
               )}
             >

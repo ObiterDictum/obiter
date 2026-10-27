@@ -53,7 +53,7 @@ export function DialogContent({
       <BaseDialog.Popup
         className={cn(
           'fixed left-1/2 top-1/2 z-50 w-[calc(100%-var(--obiter-space-48))] max-h-[calc(100dvh-var(--obiter-space-48))] overflow-y-auto -translate-x-1/2 -translate-y-1/2 p-6',
-          'rounded-lg bg-raised shadow-lg outline-none inset-ring-1 inset-ring-line',
+          'rounded-lg border border-line bg-raised shadow-lg outline-none',
           sizeClasses[size],
           className,
         )}
