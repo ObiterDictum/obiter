@@ -145,14 +145,24 @@ A layout primitive feature screens compose instead of building their own frame:
 ```ts
 export function PageScaffold(props: {
   title: ReactNode
-  eyebrow?: ReactNode
+  description?: ReactNode // one line under the title: what the page is for
   actions?: ReactNode // slot for buttons/links in the header
   children: ReactNode // the content region
+  className?: string
 }): JSX.Element
 ```
 
-Renders the consistent page heading (eyebrow + title + actions) and a content region that uses the token spacing scale. The Redact review screen renders inside `<PageScaffold>`.
+Renders the approved page heading on the frame's content column: title at 28/600 with −0.02em tracking, description at body size on a 68ch measure, header actions vertically centred against the title (stacked below it at 1024 and under), 56px top and bottom padding, and a 40px gap between content sections. Content stops at 1120px; the gutter is 48px, and 32px at 1024 and under. The eyebrow beside the old title is gone: the mock-ups allow one page title and no uppercase label above it. The Redact review screen renders inside `<PageScaffold>`.
 
 ## 6. App frame
 
-`<AppShellLayout>` renders night workspace chrome: top mode bar (Home + Search / Matters / Verify / Redact), content-column app search, persistent icon mode rail (collapsed brand strip on Home; mode shortcuts with hover-expand on other modes), content region, floating Agent widget, and mounted `<Toaster/>`, driven by real `useCurrentUser()` data. Verify is a live surface over real verification runs; the Agent widget remains an honest “in development” surface — not a fake tool. User-facing copy uses **Obiter** throughout (FR6a).
+`<AppShellLayout>` renders the workspace chrome the approved design describes, driven by real `useCurrentUser()` data:
+
+- **One left sidebar**, labelled, 252px: the Obiter monogram with the organisation name; the modules Home, Search, Matters, Verify, Redact; Research as a disabled “Soon” entry (there is no Research route); then recent matters. Counts come from queries the frame already runs — active matters, findings waiting on a person across completed Verify runs, redaction runs awaiting a decision. A module whose count has no cheap source shows no count.
+- **Collapse** to a 64px icon rail, persisted in local storage (`obiter.sidebar.collapsed`) the same way the theme is. The rail keeps every module as a labelled control, with the count moved into the accessible name and an alert dot. At 1024 and under the rail is always compact: the mock-ups hide the sidebar below 860, which would leave a narrow window with no navigation.
+- **Top bar**, 48px, on the same content column as the page: breadcrumb (`Organisation › Module › current`), app-wide search (`AppSearchField` behaviour: type to jump, ⌘/Ctrl+K, expanded composer; icon-only with a title at 1024 and under), theme toggle and account menu.
+- **Account menu** is a disclosure anchored under the avatar: name, email and role, Account settings, Sign out. Enter/Space/ArrowDown open it and move focus into the list, arrow keys and Home/End move between items, Escape closes it and returns focus to the avatar, and Tab or a click outside closes it. It is not a floating-library popover because the frame is on a hard bundle budget; see the PR that introduced it.
+- **Shell states**: a session-check loading screen that names what it is doing; an error surface that says what is preserved and offers Retry (the route reset); not-found and permission-denied surfaces, chosen from the typed `ApiError` code (a refusal is not an error to retry); and an offline banner shown only when the browser reports no connection, which claims only that already-open pages stay readable and that saving, uploads and search will fail until it returns.
+- **Theme**: light is the default (`:root`), dark is an explicit saved choice (`[data-theme="dark"]` plus `localStorage`), applied from each document root before first paint so a dark preference does not flash light. Auth routes follow the theme; they no longer force night. There is no floating Agent widget: Research appears in the sidebar when there is something to open.
+
+`<Toaster/>` is mounted once in the frame. User-facing copy uses **Obiter** throughout (FR6a).

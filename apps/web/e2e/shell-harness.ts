@@ -1,14 +1,14 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
 /**
- * Shared harness for the shell chrome specs. The mode bar and the left rail are
- * measured through the real rendered layout, so every helper here reads boxes,
- * scroll offsets and real input effects rather than class strings, and auth is
- * mocked at the network boundary so no account, database or email is needed.
+ * Shared harness for the shell chrome specs. The sidebar and the top bar are
+ * measured through the real rendered layout, so every helper here reads boxes
+ * and real input effects rather than class strings. Auth is mocked at the
+ * network boundary so no account, database or email is needed.
  */
 export const WIDTHS = [320, 390, 768, 1024, 1440]
-export const SCROLLING_WIDTHS = [640, 768, 1024, 1279]
-export const MODES = [
+export const MODULES = [
+  { name: 'Home', path: '/' },
   { name: 'Search', path: '/search' },
   { name: 'Matters', path: '/matters' },
   { name: 'Verify', path: '/verify' },
@@ -49,15 +49,26 @@ export async function mockSession(
       },
     }),
   )
+  // The sidebar reads the workspace's counts; empty lists keep the chrome
+  // deterministic without inventing data.
+  await page.route('**/api/matters', (route) =>
+    route.fulfill({ json: { matters: [] } }),
+  )
+  await page.route('**/api/redaction-runs', (route) =>
+    route.fulfill({ json: { runs: [] } }),
+  )
+  await page.route('**/api/verification-runs**', (route) =>
+    route.fulfill({ json: { runs: [], nextCursor: null } }),
+  )
 }
 
-export function modeNav(page: Page) {
-  return page.getByRole('navigation', { name: 'Modes' })
+/** The labelled module list inside the sidebar. */
+export function workspaceNav(page: Page) {
+  return page.getByRole('navigation', { name: 'Workspace' })
 }
 
-/** The horizontally scrollable box the mode nav lives in. */
-export function modeRail(page: Page) {
-  return page.locator('nav[aria-label="Modes"]').locator('..')
+export function sidebar(page: Page) {
+  return page.locator('#app-sidebar')
 }
 
 export function documentWidths(page: Page) {
@@ -67,93 +78,22 @@ export function documentWidths(page: Page) {
   }))
 }
 
-/** The rail's width transition means a reveal must settle before measuring. */
 export async function asideWidth(aside: Locator) {
   return aside.evaluate((element) => element.getBoundingClientRect().width)
 }
 
-/**
- * Park the pointer clear of the left rail so hover expansion is not in play, and
- * wait for any expansion it caused to finish retracting. Without this a
- * measurement or a wheel can land on another control while the rail is still
- * animating underneath the pointer.
- */
-export async function parkPointer(page: Page, width: number) {
-  await page.mouse.move(width - 20, 700)
-  await page.waitForTimeout(300)
-}
-
-export async function scrollLeft(page: Page) {
-  return modeRail(page).evaluate((element) => element.scrollLeft)
-}
-
-export async function resetRailScroll(page: Page) {
-  await modeRail(page).evaluate((element) => {
-    element.scrollLeft = 0
+export async function sidebarToggle(page: Page) {
+  return sidebar(page).getByRole('button', {
+    name: /(Collapse|Expand) sidebar/,
   })
 }
 
-/**
- * Record `defaultPrevented` for real wheel events. The listener runs after the
- * rail's own non-passive handler, so a consumed wheel is visible as `true` and a
- * wheel the rail left to the browser as `false`.
- */
-export async function observeWheel(page: Page) {
-  await page.evaluate(() => {
-    const flags: boolean[] = []
-    Object.defineProperty(window, '__wheelDefaultsPrevented', {
-      value: flags,
-      configurable: true,
-    })
-    window.addEventListener(
-      'wheel',
-      (event) => {
-        flags.push(event.defaultPrevented)
-      },
-      { passive: true },
-    )
-  })
-}
-
-export async function clearWheelLog(page: Page) {
-  await page.evaluate(() => {
-    const flags = (window as unknown as { __wheelDefaultsPrevented: boolean[] })
-      .__wheelDefaultsPrevented
-    flags.length = 0
-  })
-}
-
-export async function lastWheelPrevented(page: Page) {
-  return page.evaluate(() => {
-    const flags = (window as unknown as { __wheelDefaultsPrevented: boolean[] })
-      .__wheelDefaultsPrevented
-    return flags.length > 0 ? flags[flags.length - 1] : null
-  })
-}
-
-/** Real Tab presses from the document start until a left-rail row has focus. */
-export async function tabToRailRow(page: Page): Promise<string | null> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    await page.keyboard.press('Tab')
-    const label = await page.evaluate(() => {
-      const focused = document.activeElement as HTMLElement | null
-      if (!focused?.closest('aside nav')) return null
-      return focused.getAttribute('aria-label')
-    })
-    if (label) return label
-  }
-  return null
-}
-
-/**
- * Reach a route whose rail offers another mode. `/settings` guards itself with a
- * loader that runs during SSR, where the mocked session does not apply, so it has
- * to be reached through the app rather than by a full page load.
- */
+/** Settings is reached through the account menu: its loader runs during SSR,
+ * where the mocked session does not apply, so a full page load cannot do it. */
 export async function gotoOtherMode(page: Page) {
   await page.goto('/search')
-  await expect(modeNav(page)).toBeVisible()
-  await page.locator('button[aria-haspopup="menu"]').click()
-  await page.getByRole('menuitem', { name: 'Settings' }).click()
+  await expect(workspaceNav(page)).toBeVisible()
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('menuitem', { name: 'Account settings' }).click()
   await expect(page).toHaveURL(/\/settings$/)
 }

@@ -2168,9 +2168,9 @@
             <code>packages/app-shell/src/frame.tsx</code> is the single frame
             both clients render. It gates on a real better-auth session and
             redirects unauthenticated callers to <code>/sign-in</code>; auth
-            routes render bare, with no workspace chrome. Dark is the default
-            product theme and light is the persisted preference, inverting the
-            earlier default.
+            routes render bare, with no workspace chrome. Light is the default
+            product theme and dark is a saved choice, applied from each document
+            root before first paint; auth routes follow the theme.
           </p>
           <div class="scroll">
             <table>
@@ -2183,38 +2183,46 @@
               </thead>
               <tbody>
                 <tr>
-                  <td class="id">Top mode bar</td>
+                  <td class="id">Sidebar</td>
                   <td>Global</td>
                   <td>
-                    Home plus four live modes: Search, Matters, Verify, Redact.
-                    Verify is backed by real verification runs and guides an
-                    empty list to the document where a run starts; the Agent
-                    widget remains an honest stub, not a fake tool.
+                    One labelled column: the Obiter monogram with the
+                    organisation name; Home, Search, Matters, Verify and Redact;
+                    Research as a disabled “Soon” entry; then recent matters.
+                    Counts come from queries the frame already runs — active
+                    matters, findings waiting on a person across completed
+                    Verify runs, redaction runs awaiting a decision. Collapses
+                    to a 64px icon rail (persisted in local storage, always
+                    compact at 1024 and under).
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">Icon mode rail</td>
-                  <td>Per mode</td>
+                  <td class="id">Top bar</td>
+                  <td>Global</td>
                   <td>
-                    Collapsed icons are always visible and expand to labels on
-                    hover or focus-within. Sections are data-driven per mode:
-                    live matters, matter documents, verification runs needing
-                    review, redaction runs needing attention, recent searches
-                    from session storage. Home has no rail — the desk already
-                    carries those entry points.
+                    Breadcrumb (organisation, module, current page), app-wide
+                    search, theme toggle and account menu, on the same content
+                    column as the page. The account menu is a disclosure with
+                    the full keyboard contract: arrows, Home/End, Escape
+                    returning focus to the avatar.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">App search field</td>
                   <td>Content column</td>
                   <td>
-                    Shell-level search, distinct from the case-law search view.
+                    Shell-level search, distinct from the case-law search view;
+                    icon-only at 1024 and under.
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">Agent widget</td>
+                  <td class="id">Shell states</td>
                   <td>Global</td>
-                  <td>Floating surface, currently an in-development stub.</td>
+                  <td>
+                    Session-check loading, error with Retry, not found,
+                    permission denied (from the typed API error code) and an
+                    offline banner, all inside the frame's chrome.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">Home desk</td>
@@ -2563,8 +2571,9 @@
                 </dd>
                 <dt>Shell</dt>
                 <dd>
-                  frame (mode bar, icon rail, chrome) · app-search-field ·
-                  agent-widget · workspace-continuity · wordmark
+                  frame · sidebar · top-bar · shell-states · content-frame ·
+                  page-scaffold · app-search-field · navigation ·
+                  workspace-continuity
                 </dd>
                 <dt>Contract</dt>
                 <dd>

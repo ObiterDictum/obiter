@@ -9,8 +9,8 @@ import {
   invitePreviewQueryOptions,
   type InvitePreviewResult,
 } from '../organisation-membership'
-import { Wordmark } from '../wordmark'
-import { ResendVerificationControl, useForceNightTheme } from './sign-in'
+import { ObiterMark } from '@obiter/ui'
+import { ResendVerificationControl } from './sign-in'
 
 function inviteTokenFromSearch(search: { token?: unknown }): string {
   return typeof search.token === 'string' && search.token.length > 0
@@ -37,8 +37,6 @@ export function AcceptInviteRouteView() {
   })
   const [error, setError] = useState<AcceptFailure | null>(null)
   const [submitting, setSubmitting] = useState(false)
-
-  useForceNightTheme()
 
   const preview = previewQuery.data
   const previewFailure = previewFailureFromResult(preview)
@@ -78,7 +76,7 @@ export function AcceptInviteRouteView() {
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
       <div className="flex w-full max-w-[28rem] flex-col gap-8">
         <header className="flex flex-col items-center gap-4 text-center">
-          <Wordmark className="text-[1.35rem]" />
+          <ObiterMark className="size-8" />
           <div className="flex flex-col gap-1.5">
             <h1 className="text-lg font-semibold tracking-tight text-ink">
               Accept organisation invite
