@@ -11,6 +11,7 @@ export {
   DialogDescription,
   DialogClose,
   DialogCloseButton,
+  DialogFooter,
   type DialogContentProps,
 } from './dialog'
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
@@ -34,4 +35,7 @@ export { EmptyState, type EmptyStateProps } from './empty-state'
 export { Skeleton, type SkeletonProps } from './skeleton'
 export { ProgressBar, type ProgressBarProps } from './progress-bar'
 export { Table, THead, TBody, TR, TH, TD, type THProps } from './table'
-export { Card, type CardProps } from './card'
+export { ListRow, type ListRowProps } from './list-row'
+export { SidePanel, type SidePanelProps } from './side-panel'
+export { StatusDot, type StatusDotProps } from './status-dot'
+export { KeyboardHint } from './keyboard-hint'

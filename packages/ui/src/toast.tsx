@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { X } from '@phosphor-icons/react'
+import { CheckCircle, Info, Warning, XCircle, X } from '@phosphor-icons/react'
 import { cn } from './lib/cn'
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'danger'
@@ -39,11 +39,11 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null)
 
 const toneAccent = {
-  info: 'before:bg-info',
-  success: 'before:bg-success',
-  warning: 'before:bg-warning',
-  danger: 'before:bg-danger',
-} satisfies Record<ToastTone, string>
+  info: { Icon: Info, className: 'text-info' },
+  success: { Icon: CheckCircle, className: 'text-success' },
+  warning: { Icon: Warning, className: 'text-warning' },
+  danger: { Icon: XCircle, className: 'text-danger' },
+} satisfies Record<ToastTone, { Icon: typeof Info; className: string }>
 
 const DEFAULT_TIMEOUT = 5000
 
@@ -139,6 +139,7 @@ function ToastItem({
   onDismiss: (id: string) => void
 }) {
   const isDanger = record.tone === 'danger'
+  const { Icon: ToneIcon, className: toneClass } = toneAccent[record.tone]
 
   // Auto-dismiss timer — a legitimate external-timer use of useEffect.
   useEffect(() => {
@@ -152,26 +153,27 @@ function ToastItem({
       role={isDanger ? 'alert' : 'status'}
       aria-live={isDanger ? 'assertive' : 'polite'}
       className={cn(
-        'pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-md border border-line bg-raised p-3 pr-9 shadow-md',
-        'before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1',
-        toneAccent[record.tone],
+        'pointer-events-auto relative flex items-start gap-3 rounded-lg bg-raised p-4 pr-10 shadow-md inset-ring-1 inset-ring-line',
       )}
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="text-sm font-semibold text-ink">{record.title}</p>
+      <ToneIcon
+        size={16}
+        aria-hidden="true"
+        className={cn('mt-1 shrink-0', toneClass)}
+      />
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="text-meta text-ink">{record.title}</p>
         {record.description ? (
-          <p className="text-xs leading-relaxed text-muted">
-            {record.description}
-          </p>
+          <p className="text-caption text-muted">{record.description}</p>
         ) : null}
       </div>
       <button
         type="button"
         aria-label="Dismiss notification"
         onClick={() => onDismiss(record.id)}
-        className="absolute right-2 top-2 rounded p-1 text-subtle hover:bg-surface hover:text-ink"
+        className="absolute right-2 top-2 rounded-sm p-1 text-subtle hover:bg-hover hover:text-ink"
       >
-        <X size={14} aria-hidden="true" />
+        <X size={16} aria-hidden="true" />
       </button>
     </div>
   )

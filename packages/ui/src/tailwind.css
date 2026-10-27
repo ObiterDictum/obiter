@@ -55,6 +55,61 @@
   --color-danger: var(--obiter-status-danger);
   --color-danger-fg: var(--obiter-status-danger-fg);
 
+  --color-inset: var(--obiter-inset);
+  --color-fill: var(--obiter-fill);
+  --color-fill-hover: var(--obiter-fill-hover);
+  --color-paper: var(--obiter-paper);
+  --color-paper-ink: var(--obiter-paper-ink);
+  --color-paper-muted: var(--obiter-paper-muted);
+  --color-brand-hover: var(--obiter-brand-hover);
+  --color-brand-soft: var(--obiter-brand-soft);
+  --color-hover: var(--obiter-hover);
+  --color-info-soft: var(--obiter-status-info-soft);
+  --color-success-soft: var(--obiter-status-success-soft);
+  --color-warning-soft: var(--obiter-status-warning-soft);
+  --color-danger-soft: var(--obiter-status-danger-soft);
+  --font-serif: var(--obiter-font-serif);
+  --height-control-compact: var(--obiter-control-compact);
+  --height-control: var(--obiter-control-default);
+  --height-control-large: var(--obiter-control-large);
+  --height-row: var(--obiter-row-height);
+  --min-height-row: var(--obiter-row-height);
+  --width-panel: var(--obiter-panel-width);
+  --spacing-0: var(--obiter-space-0);
+  --spacing-1: var(--obiter-space-4);
+  --spacing-2: var(--obiter-space-8);
+  --spacing-3: var(--obiter-space-12);
+  --spacing-4: var(--obiter-space-16);
+  --spacing-6: var(--obiter-space-24);
+  --spacing-8: var(--obiter-space-32);
+  --spacing-10: var(--obiter-space-40);
+  --spacing-12: var(--obiter-space-48);
+  --spacing-14: var(--obiter-space-56);
+  --text-page: var(--obiter-text-page);
+  --text-page--line-height: var(--obiter-text-page-line-height);
+  --text-page--font-weight: var(--obiter-text-page-weight);
+  --text-page--letter-spacing: var(--obiter-text-page-tracking);
+  --text-section: var(--obiter-text-section);
+  --text-section--line-height: var(--obiter-text-section-line-height);
+  --text-section--font-weight: var(--obiter-text-section-weight);
+  --text-section--letter-spacing: var(--obiter-text-section-tracking);
+  --text-item: var(--obiter-text-item);
+  --text-item--line-height: var(--obiter-text-item-line-height);
+  --text-item--font-weight: var(--obiter-text-item-weight);
+  --text-item--letter-spacing: var(--obiter-text-item-tracking);
+  --text-body: var(--obiter-text-body);
+  --text-body--line-height: var(--obiter-text-body-line-height);
+  --text-body--font-weight: var(--obiter-text-body-weight);
+  --text-body--letter-spacing: var(--obiter-text-body-tracking);
+  --text-meta: var(--obiter-text-meta);
+  --text-meta--line-height: var(--obiter-text-meta-line-height);
+  --text-meta--font-weight: var(--obiter-text-meta-weight);
+  --text-meta--letter-spacing: var(--obiter-text-meta-tracking);
+  --text-caption: var(--obiter-text-caption);
+  --text-caption--line-height: var(--obiter-text-caption-line-height);
+  --text-caption--font-weight: var(--obiter-text-caption-weight);
+  --text-caption--letter-spacing: var(--obiter-text-caption-tracking);
+
   /* Redaction span categories — bg + fg per contract §2.3 */
   --color-span-person-name: var(--obiter-span-person-name-bg);
   --color-span-person-name-fg: var(--obiter-span-person-name-fg);
@@ -111,6 +166,8 @@
     background-color: var(--obiter-bg);
     color: var(--obiter-text);
     font-family: var(--obiter-font-sans);
+    font-size: var(--obiter-text-body);
+    line-height: var(--obiter-text-body-line-height);
   }
 
   :focus-visible {

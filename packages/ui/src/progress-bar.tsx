@@ -21,24 +21,22 @@ export function ProgressBar({
   className,
 }: ProgressBarProps) {
   return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       {label || helperText ? (
         <div className="flex items-baseline justify-between">
-          {label ? (
-            <span className="text-sm font-medium text-ink">{label}</span>
-          ) : null}
+          {label ? <span className="text-meta text-ink">{label}</span> : null}
           {helperText ? (
-            <span className="text-xs text-muted">{helperText}</span>
+            <span className="text-caption text-subtle">{helperText}</span>
           ) : null}
         </div>
       ) : null}
       <BaseProgress.Root
         value={value ?? null}
         max={100}
-        className="h-2 w-full overflow-hidden rounded-pill bg-line"
+        className="h-1 w-full overflow-hidden rounded-pill bg-fill"
       >
         <BaseProgress.Track className="h-full">
-          <BaseProgress.Indicator className="h-full rounded-pill bg-brand transition-[width] duration-300" />
+          <BaseProgress.Indicator className="h-full rounded-pill bg-brand transition-[width] duration-300 data-[indeterminate]:w-1/3 data-[indeterminate]:animate-pulse" />
         </BaseProgress.Track>
       </BaseProgress.Root>
     </div>

@@ -1,5 +1,6 @@
 import { Button as BaseButton } from '@base-ui-components/react/button'
 import type { ReactNode, Ref } from 'react'
+import { CircleNotch } from '@phosphor-icons/react'
 import { cn } from './lib/cn'
 
 type BaseButtonRender = React.ComponentProps<typeof BaseButton>['render']
@@ -26,17 +27,17 @@ export interface ButtonProps {
 }
 
 const variantClasses = {
-  primary: 'bg-brand text-brand-fg hover:bg-brand-pressed shadow-sm',
-  secondary:
-    'bg-surface text-ink border border-line hover:border-line-strong hover:bg-raised',
-  ghost: 'bg-transparent text-ink hover:bg-surface',
-  danger: 'bg-danger text-danger-fg hover:brightness-95 shadow-sm',
+  primary:
+    'bg-brand text-brand-fg hover:bg-brand-hover active:bg-brand-pressed',
+  secondary: 'bg-fill text-ink hover:bg-fill-hover',
+  ghost: 'bg-transparent text-muted hover:bg-hover hover:text-ink',
+  danger: 'bg-danger text-danger-fg hover:brightness-105',
 } satisfies Record<NonNullable<ButtonProps['variant']>, string>
 
 const sizeClasses = {
-  sm: 'h-8 px-3 text-sm gap-1.5 pointer-coarse:h-11',
-  md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-6 text-base gap-2.5',
+  sm: 'h-control-compact px-2 text-item gap-1',
+  md: 'h-control px-3 text-item gap-2',
+  lg: 'h-control-large px-4 text-item gap-2',
 } satisfies Record<NonNullable<ButtonProps['size']>, string>
 
 /**
@@ -59,12 +60,12 @@ export function Button({
     <BaseButton
       nativeButton
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center rounded-md font-medium whitespace-nowrap select-none',
-        'transition-[background-color,border-color,transform,box-shadow] duration-200',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
-        'disabled:cursor-not-allowed disabled:opacity-60',
-        'active:translate-y-px',
+        'inline-flex items-center justify-center rounded-md whitespace-nowrap select-none',
+        'transition-[background-color,border-color,transform,box-shadow] duration-150',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        'disabled:cursor-not-allowed disabled:opacity-45',
         variantClasses[variant],
         sizeClasses[size],
         className,
@@ -72,27 +73,13 @@ export function Button({
       render={render}
       {...props}
     >
-      {loading ? <Spinner /> : iconStart}
+      {loading ? (
+        <CircleNotch size={16} className="animate-spin" aria-hidden="true" />
+      ) : (
+        iconStart
+      )}
       {children}
       {iconEnd}
     </BaseButton>
-  )
-}
-
-function Spinner() {
-  return (
-    <svg
-      width="1em"
-      height="1em"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      className="animate-spin"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
   )
 }
