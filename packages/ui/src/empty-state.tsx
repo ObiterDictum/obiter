@@ -32,7 +32,7 @@ export function EmptyState({
       <div className="flex flex-col gap-2">
         <h2 className="text-section text-ink">{title}</h2>
         {body ? (
-          <p className="max-w-[52ch] text-meta text-muted">{body}</p>
+          <p className="max-w-prose text-meta text-muted">{body}</p>
         ) : null}
       </div>
       {action ? (

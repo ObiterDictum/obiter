@@ -36,7 +36,7 @@ export function SidePanel({
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay" />
         <BaseDialog.Popup
           className={cn(
-            'fixed inset-y-0 right-0 z-50 flex w-panel max-w-full flex-col bg-surface text-ink shadow-lg outline-none inset-ring-1 inset-ring-line',
+            'fixed inset-y-0 right-0 z-50 flex w-panel max-w-full flex-col border-l border-line bg-surface text-ink shadow-lg outline-none',
             'transition-transform duration-150 ease-out motion-reduce:transition-none',
             'data-[starting-style]:translate-x-2 data-[ending-style]:translate-x-2',
             className,

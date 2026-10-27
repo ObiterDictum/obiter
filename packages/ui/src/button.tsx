@@ -31,7 +31,7 @@ const variantClasses = {
     'bg-brand text-brand-fg hover:bg-brand-hover active:bg-brand-pressed',
   secondary: 'bg-fill text-ink hover:bg-fill-hover',
   ghost: 'bg-transparent text-muted hover:bg-hover hover:text-ink',
-  danger: 'bg-danger text-danger-fg hover:brightness-105',
+  danger: 'bg-danger text-danger-fg hover:opacity-90',
 } satisfies Record<NonNullable<ButtonProps['variant']>, string>
 
 const sizeClasses = {
