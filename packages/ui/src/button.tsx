@@ -5,9 +5,12 @@ import { cn } from './lib/cn'
 
 type BaseButtonRender = React.ComponentProps<typeof BaseButton>['render']
 
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+export type ButtonSize = 'sm' | 'md' | 'lg'
+
 export interface ButtonProps {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
-  size?: 'sm' | 'md' | 'lg'
+  variant?: ButtonVariant
+  size?: ButtonSize
   loading?: boolean
   iconStart?: ReactNode
   iconEnd?: ReactNode
@@ -28,19 +31,42 @@ export interface ButtonProps {
   'data-testid'?: string
 }
 
+const baseClasses =
+  'inline-flex items-center justify-center rounded-md whitespace-nowrap select-none ' +
+  'transition-[background-color,border-color,transform,box-shadow] duration-150 ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+  'disabled:cursor-not-allowed disabled:opacity-45'
+
 const variantClasses = {
   primary:
     'bg-brand text-brand-fg hover:bg-brand-hover active:bg-brand-pressed',
   secondary: 'bg-fill text-ink hover:bg-fill-hover',
   ghost: 'bg-transparent text-muted hover:bg-hover hover:text-ink',
   danger: 'bg-danger text-danger-fg hover:opacity-90',
-} satisfies Record<NonNullable<ButtonProps['variant']>, string>
+} satisfies Record<ButtonVariant, string>
 
 const sizeClasses = {
   sm: 'h-control-compact px-2 text-item gap-1',
   md: 'h-control px-3 text-item gap-2',
   lg: 'h-control-large px-4 text-item gap-2',
-} satisfies Record<NonNullable<ButtonProps['size']>, string>
+} satisfies Record<ButtonSize, string>
+
+/**
+ * The button's visual classes, for a control that must stay something else —
+ * a navigation `Link`, which is a link to a screen reader and to the browser's
+ * own menu, not a button. Use `Button` for actions.
+ */
+export function buttonClassName({
+  variant = 'primary',
+  size = 'md',
+  className,
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  className?: string
+} = {}) {
+  return cn(baseClasses, variantClasses[variant], sizeClasses[size], className)
+}
 
 /**
  * Button — the single interactive element style. Calm, tactile, keyboard-first.
@@ -64,15 +90,7 @@ export function Button({
       nativeButton={nativeButton}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(
-        'inline-flex items-center justify-center rounded-md whitespace-nowrap select-none',
-        'transition-[background-color,border-color,transform,box-shadow] duration-150',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-        'disabled:cursor-not-allowed disabled:opacity-45',
-        variantClasses[variant],
-        sizeClasses[size],
-        className,
-      )}
+      className={buttonClassName({ variant, size, className })}
       render={render}
       {...props}
     >

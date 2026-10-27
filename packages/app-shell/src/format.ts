@@ -19,3 +19,17 @@ export function formatDate(value: string) {
     year: 'numeric',
   }).format(date)
 }
+
+/** One absolute time style: 24 Oct 2026, 14:32. */
+export function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}

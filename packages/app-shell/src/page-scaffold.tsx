@@ -4,6 +4,8 @@ import { ContentFrame } from './content-frame'
 
 export interface PageScaffoldProps {
   title: ReactNode
+  /** A quiet line above the title: today's date, a client, a reference. */
+  eyebrow?: ReactNode
   /** One line under the title: what the page is for, in a lawyer's terms. */
   description?: ReactNode
   actions?: ReactNode
@@ -18,6 +20,7 @@ export interface PageScaffoldProps {
  */
 export function PageScaffold({
   title,
+  eyebrow,
   description,
   actions,
   children,
@@ -27,11 +30,14 @@ export function PageScaffold({
     <ContentFrame className={cn('py-14', className)}>
       <header className="mb-10 flex items-center justify-between gap-6 max-compact:flex-col max-compact:items-stretch max-compact:gap-4">
         <div className="min-w-0">
+          {eyebrow ? (
+            <p className="mb-1 text-meta text-subtle">{eyebrow}</p>
+          ) : null}
           <h1 className="text-page text-ink">{title}</h1>
           {description ? (
-            <p className="mt-2 max-w-[68ch] text-body text-muted">
+            <div className="mt-2 max-w-[68ch] text-body text-muted">
               {description}
-            </p>
+            </div>
           ) : null}
         </div>
         {actions ? (
