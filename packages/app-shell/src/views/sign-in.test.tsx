@@ -122,7 +122,7 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('lex@obiter.dev', 'wrong-password')
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Invalid email or password.')).toBeTruthy()
@@ -141,7 +141,7 @@ describe('SignInRouteView — password submit outcomes', () => {
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('livetest@example.com', 'SuperSecret123!')
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Continue/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
     })
 
     await waitFor(() => {
@@ -160,7 +160,7 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('lex@obiter.dev', 'password123')
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Email not verified')).toBeTruthy()
@@ -178,7 +178,9 @@ describe('SignInRouteView — password submit outcomes', () => {
   it('points account creation at /sign-up', () => {
     render(<SignInRouteView platform="web" />)
     expect(
-      screen.getByRole('link', { name: /create one/i }).getAttribute('href'),
+      screen
+        .getByRole('link', { name: /create an account/i })
+        .getAttribute('href'),
     ).toBe('/sign-up')
   })
 
@@ -187,7 +189,7 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="desktop" />)
     fillPasswordForm('lex@obiter.dev', 'password123')
-    fireEvent.click(screen.getByRole('button', { name: /Continue/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Network down')).toBeTruthy()
@@ -200,7 +202,7 @@ describe('SignInRouteView — password submit outcomes', () => {
     authMocks.requestMagicLink.mockResolvedValueOnce({ ok: true })
 
     render(<SignInRouteView platform="web" />)
-    fireEvent.click(screen.getByRole('button', { name: /magic link/i }))
+    fireEvent.click(screen.getByRole('button', { name: /email link/i }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'lex@obiter.dev' },
     })
@@ -218,7 +220,7 @@ describe('SignInRouteView — password submit outcomes', () => {
     authMocks.requestMagicLink.mockResolvedValueOnce({ ok: true })
 
     render(<SignInRouteView platform="web" />)
-    fireEvent.click(screen.getByRole('button', { name: /magic link/i }))
+    fireEvent.click(screen.getByRole('button', { name: /email link/i }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'lex@obiter.dev' },
     })

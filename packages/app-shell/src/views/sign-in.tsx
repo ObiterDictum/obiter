@@ -1,18 +1,24 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { ArrowRight } from '@phosphor-icons/react'
-import { Button, Input, ObiterMark } from '@obiter/ui'
+import { CheckCircle } from '@phosphor-icons/react'
+import { Button, Input } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
+import { SegmentedControl } from '../segmented-control'
+import { AuthForm, AuthFoot, AuthHeading, AuthLayout } from './auth-layout'
 
 type Mode = 'password' | 'magic-link'
+
+const MODES = [
+  { value: 'password' as const, label: 'Password' },
+  { value: 'magic-link' as const, label: 'Email link' },
+]
 
 /**
  * Sign-in against the auth API (better-auth email/password + magic link).
  * Account creation lives on /sign-up. The frame renders this route bare; on
- * success the user is sent to Home. Auth always forces the night aesthetic so
- * the entry gate matches product chrome.
+ * success the user is sent to Home.
  */
 export function SignInRouteView({
   platform: _platform,
@@ -102,112 +108,106 @@ export function SignInRouteView({
   const handleSubmit = mode === 'password' ? handlePassword : handleMagicLink
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
-      <div className="flex w-full max-w-[28rem] flex-col gap-8">
-        <header className="flex flex-col items-center gap-4 text-center">
-          <ObiterMark className="size-8" />
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-lg font-semibold tracking-tight text-ink">
-              Sign in to Obiter
-            </h1>
-            <p className="text-sm text-muted">
-              Legal infrastructure for evidence-first work.
-            </p>
-          </div>
-        </header>
+    <AuthLayout footnote="Need help? Contact your firm administrator.">
+      <AuthHeading
+        title="Sign in"
+        description="Continue to your firm's Obiter workspace."
+      />
 
-        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
-          <form
-            onSubmit={handleSubmit}
-            className="flex flex-col gap-4"
-            noValidate
-          >
-            <Input
-              label="Email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+      {notice && mode === 'password' ? (
+        <p
+          role="status"
+          className="mt-6 flex items-start gap-2 rounded-md bg-success-soft px-4 py-3 text-meta text-ink"
+        >
+          <CheckCircle size={16} aria-hidden className="mt-0.5 text-success" />
+          {notice}
+        </p>
+      ) : null}
 
-            {mode === 'password' ? (
-              <Input
-                label="Password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                error={error ?? undefined}
-              />
-            ) : null}
+      <div className="mt-6">
+        <SegmentedControl
+          label="Sign-in method"
+          value={mode}
+          options={MODES}
+          onChange={setMode}
+        />
+      </div>
 
-            {mode === 'password' ? (
-              <div className="flex justify-end">
+      <AuthForm onSubmit={handleSubmit}>
+        <Input
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          className="h-control-large"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          error={mode === 'magic-link' ? (error ?? undefined) : undefined}
+        />
+
+        {mode === 'password' ? (
+          <>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <label
+                  htmlFor="sign-in-password"
+                  className="text-meta text-ink"
+                >
+                  Password
+                </label>
                 <Link
                   to="/forgot-password"
-                  className="text-xs font-medium text-brand hover:text-brand-pressed"
+                  className="text-caption text-muted hover:text-ink"
                 >
                   Forgot password?
                 </Link>
               </div>
-            ) : null}
-
-            {mode === 'magic-link' && error ? (
-              <p className="text-sm text-danger">{error}</p>
-            ) : null}
-            {notice ? <p className="text-sm text-muted">{notice}</p> : null}
-            {unverified ? (
-              <ResendVerificationControl
-                email={email}
-                callbackURL={inviteAcceptCallbackURL(inviteToken)}
-                resendVerificationEmail={resendVerificationEmail}
+              <Input
+                id="sign-in-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="h-control-large"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={error ?? undefined}
               />
-            ) : null}
+            </div>
+          </>
+        ) : null}
 
-            <Button
-              type="submit"
-              loading={submitting}
-              iconEnd={<ArrowRight size={16} weight="bold" />}
-              className="w-full"
-            >
-              {mode === 'password' ? 'Continue' : 'Send sign-in link'}
-            </Button>
-          </form>
+        {mode === 'magic-link' && error ? (
+          <p className="text-meta text-danger">{error}</p>
+        ) : null}
+        {unverified ? (
+          <ResendVerificationControl
+            email={email}
+            callbackURL={inviteAcceptCallbackURL(inviteToken)}
+            resendVerificationEmail={resendVerificationEmail}
+          />
+        ) : null}
 
-          <div className="flex items-center justify-center gap-1 text-sm text-muted">
-            <ModeButton
-              active={mode === 'password'}
-              onClick={() => setMode('password')}
-            >
-              Password
-            </ModeButton>
-            <span aria-hidden="true" className="text-subtle">
-              ·
-            </span>
-            <ModeButton
-              active={mode === 'magic-link'}
-              onClick={() => setMode('magic-link')}
-            >
-              Magic link
-            </ModeButton>
-          </div>
-        </div>
+        <Button
+          type="submit"
+          size="lg"
+          loading={submitting}
+          className="mt-1 w-full"
+        >
+          {mode === 'password' ? 'Sign in' : 'Send sign-in link'}
+        </Button>
+      </AuthForm>
 
-        <p className="text-center text-xs text-subtle">
-          Need an account?{' '}
-          <Link
-            to="/sign-up"
-            search={inviteToken ? { token: inviteToken } : undefined}
-            className="font-medium text-brand hover:text-brand-pressed"
-          >
-            Create one
-          </Link>
-          .
-        </p>
-      </div>
-    </main>
+      <AuthFoot>
+        New to Obiter?{' '}
+        <Link
+          to="/sign-up"
+          search={inviteToken ? { token: inviteToken } : undefined}
+          className="text-ink hover:text-brand"
+        >
+          Create an account
+        </Link>
+      </AuthFoot>
+    </AuthLayout>
   )
 }
 
@@ -260,33 +260,7 @@ export function ResendVerificationControl({
       >
         Resend verification email
       </Button>
-      {status ? <p className="text-sm text-muted">{status}</p> : null}
+      {status ? <p className="text-meta text-muted">{status}</p> : null}
     </div>
-  )
-}
-
-function ModeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={
-        'rounded-md px-2.5 py-1 transition-[color,background-color] duration-200 ' +
-        (active
-          ? 'bg-raised font-medium text-ink'
-          : 'text-muted hover:text-ink')
-      }
-    >
-      {children}
-    </button>
   )
 }

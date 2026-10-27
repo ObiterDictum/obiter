@@ -49,10 +49,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 /**
  * Applies a saved dark choice before the first paint. Light is the default, so
- * only an explicit "dark" needs the attribute changed; doing it here rather
- * than in an effect stops a dark preference flashing light on every load.
+ * only "dark" — or "system" on a machine that asks for dark — needs the
+ * attribute changed; doing it here rather than in an effect stops a dark
+ * preference flashing light on every load.
  */
-const THEME_BOOTSTRAP = `try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='dark'||t==='light'){document.documentElement.dataset.theme=t}}catch(e){}`
+const THEME_BOOTSTRAP = `try{var d=document.documentElement,t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='dark'||t==='light'){d.dataset.theme=t}else if(t==='system'&&matchMedia('(prefers-color-scheme: dark)').matches){d.dataset.theme='dark'}}catch(e){}`
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
