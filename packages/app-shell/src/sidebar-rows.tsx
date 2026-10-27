@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import type { MatterRecord } from './matters'
-import { cn } from '@obiter/ui'
-import type { ReactNode } from 'react'
+import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
+import type { ReactElement, ReactNode } from 'react'
 
 /** The tile label: the client reference's letters, else the name's initials. */
 export function matterTileLabel(matter: MatterRecord): string {
@@ -83,23 +83,22 @@ export function ModuleRow({
         : 'text-muted hover:bg-hover hover:text-ink',
   )
 
-  // An icon-only control keeps its label on hover and on long-press through a
-  // title: the rail needs no hover surface of its own, and the label is already
-  // the control's accessible name.
-  const tip = collapsed ? accessibleName : undefined
-
   if (disabled || !to) {
-    return (
-      <span aria-disabled="true" title={tip} className={rowClass}>
+    const unavailable = (
+      <span aria-disabled="true" className={rowClass}>
         {body}
       </span>
     )
+    return collapsed ? (
+      <RailTooltip label={accessibleName}>{unavailable}</RailTooltip>
+    ) : (
+      unavailable
+    )
   }
 
-  return (
+  const row = (
     <Link
       to={to}
-      title={tip}
       aria-label={accessibleName}
       aria-current={current ? 'page' : undefined}
       className={rowClass}
@@ -119,6 +118,32 @@ export function ModuleRow({
         />
       ) : null}
     </Link>
+  )
+  return collapsed ? (
+    <RailTooltip label={accessibleName}>{row}</RailTooltip>
+  ) : (
+    row
+  )
+}
+
+/**
+ * The rail's labels. The tooltip is supplementary: the control's accessible
+ * name already carries the label (and its count), so a keyboard or screen
+ * reader user never has to hover to know what a row is.
+ */
+function RailTooltip({
+  label,
+  children,
+}: {
+  label: string
+  /** A control to anchor the label to; it keeps its own role and name. */
+  children: ReactElement<Record<string, unknown>>
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -154,7 +179,6 @@ export function MatterRow({
     <Link
       to="/matters/$matterId"
       params={{ matterId: matter.id }}
-      title={collapsed ? matter.name : undefined}
       aria-label={
         matter.clientReference
           ? `${matter.name} — ${matter.clientReference}`
@@ -196,5 +220,9 @@ export function MatterRow({
     </Link>
   )
 
-  return link
+  return collapsed ? (
+    <RailTooltip label={matter.name}>{link}</RailTooltip>
+  ) : (
+    link
+  )
 }
