@@ -69,6 +69,10 @@
   --color-warning-soft: var(--obiter-status-warning-soft);
   --color-danger-soft: var(--obiter-status-danger-soft);
   --font-serif: var(--obiter-font-serif);
+  /* The frame's compact breakpoint. The mock-ups go compact AT 1024px, and
+     Tailwind's `max-*` variants are exclusive (`max-lg` is `width < 1024px`),
+     so the design's boundary needs its own key one pixel above it. */
+  --breakpoint-compact: 1025px;
   --height-control-compact: var(--obiter-control-compact);
   --height-control: var(--obiter-control-default);
   --height-control-large: var(--obiter-control-large);
@@ -158,9 +162,18 @@
   --shadow-lg: var(--obiter-shadow-lg);
 }
 
-/* Base element defaults so every screen inherits the token system. */
+/* Base element defaults so every screen inherits the token system.
+   Body copy is 14px, but the root stays at the browser default: every rem —
+   Tailwind's spacing and breakpoints included — is then the size the design
+   names it (1024px is `lg`, 4px is one step). Setting the root to 14px shrank
+   every rem by 12.5%, so `lg` landed at 896px and a 36px row drew at 31.5px. */
 @layer base {
-  html,
+  html {
+    background-color: var(--obiter-bg);
+    color: var(--obiter-text);
+    font-family: var(--obiter-font-sans);
+  }
+
   body {
     background-color: var(--obiter-bg);
     color: var(--obiter-text);
