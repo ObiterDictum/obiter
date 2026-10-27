@@ -1,4 +1,4 @@
-import { Eye, EyeSlash } from '@phosphor-icons/react'
+import { CheckCircle, Eye, EyeSlash } from '@phosphor-icons/react'
 import { Input } from '@obiter/ui'
 import { useState, type ReactNode, type RefObject } from 'react'
 import type { CurrentUser } from '@obiter/contracts'
@@ -13,24 +13,16 @@ export function ReadOnlyField({
   label,
   value,
   helper,
-  mono,
 }: {
   label: string
   value: ReactNode
   helper?: ReactNode
-  mono?: boolean
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="text-sm font-medium text-ink">{label}</dt>
-      <dd
-        className={
-          mono ? 'font-mono text-[13px] text-muted' : 'text-sm text-muted'
-        }
-      >
-        {value}
-      </dd>
-      {helper ? <p className="text-xs leading-4 text-muted">{helper}</p> : null}
+      <dt className="text-meta text-ink">{label}</dt>
+      <dd className="text-meta text-muted">{value}</dd>
+      {helper ? <p className="text-caption text-subtle">{helper}</p> : null}
     </div>
   )
 }
@@ -39,18 +31,21 @@ export function SectionHeading({
   id,
   title,
   description,
+  level: Heading = 'h2',
 }: {
   id: string
   title: string
   description: string
+  /** A group inside a settings section is a level below its heading. */
+  level?: 'h2' | 'h3'
 }) {
   return (
-    <>
-      <h2 id={id} className="text-base font-semibold tracking-tight text-ink">
+    <div>
+      <Heading id={id} className="text-section text-ink">
         {title}
-      </h2>
-      <p className="mt-1 text-sm text-muted">{description}</p>
-    </>
+      </Heading>
+      <p className="mt-1 max-w-[62ch] text-meta text-muted">{description}</p>
+    </div>
   )
 }
 
@@ -108,7 +103,11 @@ export function SavedNotice({
 }) {
   if (!show) return null
   return (
-    <p role="status" className="text-sm text-success">
+    <p
+      role="status"
+      className="inline-flex items-center gap-1 text-caption text-success"
+    >
+      <CheckCircle size={12} aria-hidden />
       {message}
     </p>
   )
@@ -116,7 +115,7 @@ export function SavedNotice({
 
 export function ErrorNotice({ message }: { message: string }) {
   return (
-    <p role="alert" className="text-sm text-danger">
+    <p role="alert" className="text-meta text-danger">
       {message}
     </p>
   )

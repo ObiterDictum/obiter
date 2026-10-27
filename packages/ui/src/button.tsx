@@ -20,6 +20,8 @@ export interface ButtonProps {
   ref?: Ref<HTMLButtonElement>
   /** Polymorphic render (e.g. `render={<Link to="/x" />}`). See Base UI render prop. */
   render?: BaseButtonRender
+  /** Whether the rendered element is a real `<button>`. Pass false for a link. */
+  nativeButton?: boolean
   'aria-label'?: string
   'aria-pressed'?: boolean
   'aria-describedby'?: string
@@ -53,12 +55,13 @@ export function Button({
   className,
   disabled,
   render,
+  nativeButton = true,
   children,
   ...props
 }: ButtonProps) {
   return (
     <BaseButton
-      nativeButton
+      nativeButton={nativeButton}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(

@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform, MeResponse } from '@obiter/contracts'
 import { useQuery } from '@tanstack/react-query'
-import { CaretRight, Moon, Sun } from '@phosphor-icons/react'
+import { CaretRight } from '@phosphor-icons/react'
 import {
   Menu,
   MenuContent,
@@ -16,9 +16,10 @@ import { AppSearchField } from './app-search-field'
 import { useAuth } from './auth'
 import { ContentFrame } from './content-frame'
 import { currentUserQueryOptions } from './current-user'
+import { initialsOf } from './format'
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
-import { setAppTheme, useAppTheme } from './use-app-theme'
+import { ThemeToggle } from './theme-toggle'
 
 /**
  * The top bar: where you are, app-wide search, the theme choice and the account.
@@ -89,37 +90,6 @@ function CrumbSeparator() {
       className="shrink-0 text-subtle opacity-60"
     />
   )
-}
-
-const iconButtonClass =
-  'grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
-
-function ThemeToggle() {
-  const theme = useAppTheme()
-  const next = theme === 'light' ? 'dark' : 'light'
-  const label = `Switch to ${next} theme`
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={() => setAppTheme(next)}
-      className={iconButtonClass}
-    >
-      {theme === 'light' ? (
-        <Moon size={16} aria-hidden />
-      ) : (
-        <Sun size={16} aria-hidden />
-      )}
-    </button>
-  )
-}
-
-function initialsOf(name: string) {
-  const words = name.split(/\s+/).filter(Boolean)
-  const first = words[0]?.[0] ?? '?'
-  const last = words.length > 1 ? words[words.length - 1][0] : ''
-  return `${first}${last}`.toUpperCase()
 }
 
 /** "Owner · Harrington Vale LLP", or whichever half is known. */

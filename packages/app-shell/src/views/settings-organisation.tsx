@@ -43,11 +43,11 @@ export function OrganisationSection({
       <div>
         <h2
           id="settings-organisation-heading"
-          className="text-base font-semibold tracking-tight text-ink"
+          className="text-section text-ink"
         >
           Organisation
         </h2>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-1 max-w-[62ch] text-meta text-muted">
           {organisation
             ? 'Changes here apply to everyone in your organisation.'
             : 'Name the organisation you work in. Matters and Redact work without one: you keep a personal workspace until you create one.'}
@@ -59,29 +59,23 @@ export function OrganisationSection({
           {me.user.role === 'owner' ? (
             <OrganisationNameForm organisation={organisation} />
           ) : (
-            <div className="flex max-w-lg flex-col gap-3">
+            <div className="flex max-w-[420px] flex-col gap-3">
               <dl>
                 <ReadOnlyField
                   label="Organisation name"
                   value={organisation.name}
                 />
               </dl>
-              <p className="text-sm text-muted">
+              <p className="text-meta text-muted">
                 Only an owner can rename the organisation.
               </p>
             </div>
           )}
 
-          <dl className="flex max-w-lg flex-col gap-4">
+          <dl className="flex max-w-[420px] flex-col gap-4">
             <ReadOnlyField
               label="Your role"
               value={me.user.role ? roleLabel(me.user.role) : 'Member'}
-            />
-            <ReadOnlyField
-              label="Organisation ID"
-              value={organisation.id}
-              mono
-              helper="Quote this when contacting support."
             />
           </dl>
 
@@ -89,6 +83,7 @@ export function OrganisationSection({
             <OrganisationPeople
               organisationId={organisation.id}
               role={me.user.role}
+              selfId={me.user.id}
               active={active}
             />
           ) : null}
@@ -121,7 +116,7 @@ function OrganisationNameForm({
 
   return (
     <form
-      className="flex max-w-lg flex-col gap-4"
+      className="flex max-w-[420px] flex-col gap-4"
       onSubmit={field.submit}
       noValidate
     >
@@ -210,7 +205,7 @@ function CreateOrganisationForm() {
 
   return (
     <form
-      className="flex max-w-lg flex-col gap-4"
+      className="flex max-w-[420px] flex-col gap-4"
       onSubmit={handleCreate}
       noValidate
     >

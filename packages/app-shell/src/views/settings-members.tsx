@@ -1,4 +1,4 @@
-import { ArrowRight } from '@phosphor-icons/react'
+import { Plus } from '@phosphor-icons/react'
 import { Button, Input, Table, TBody, TD, TH, THead, TR } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { userRoleSchema, type UserRole } from '@obiter/contracts'
@@ -10,6 +10,7 @@ import {
   useRemoveOrganisationMember,
   useRevokeOrganisationInvite,
 } from '../organisation-membership'
+import { formatDate, initialsOf } from '../format'
 import { ErrorNotice } from './settings-fields'
 
 /**
@@ -20,10 +21,13 @@ import { ErrorNotice } from './settings-fields'
 export function OrganisationPeople({
   organisationId,
   role,
+  selfId,
   active,
 }: {
   organisationId: string
   role: 'owner' | 'admin'
+  /** The caller's own member id: you cannot remove yourself from here. */
+  selfId: string
   active: boolean
 }) {
   const canRemove = role === 'owner'
@@ -83,40 +87,59 @@ export function OrganisationPeople({
   }
 
   return (
-    <div className="flex flex-col gap-4 border-t border-line pt-6">
-      <h3 className="text-sm font-semibold text-ink">Members and invites</h3>
+    <div className="flex flex-col gap-6 border-t border-line pt-6">
+      <h3 className="text-section text-ink">Members</h3>
       {actionError ? <ErrorNotice message={actionError} /> : null}
 
       {members.data && members.data.length > 0 ? (
         // The table is wider than a narrow viewport; it scrolls inside its own
         // box rather than widening the page.
-        <div className="max-w-2xl overflow-x-auto">
+        <div className="overflow-x-auto">
           <Table className="min-w-[32rem]">
             <THead>
               <TR>
-                <TH>Name</TH>
-                <TH>Email</TH>
+                <TH>Member</TH>
                 <TH>Role</TH>
-                {canRemove ? <TH>Actions</TH> : null}
+                {canRemove ? <TH align="end">Remove</TH> : null}
               </TR>
             </THead>
             <TBody>
               {members.data.map((member) => (
                 <TR key={member.id}>
-                  <TD>{member.name}</TD>
-                  <TD>{member.email}</TD>
+                  <TD>
+                    <span className="flex items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="grid size-7 shrink-0 place-items-center rounded-pill bg-fill text-caption text-muted"
+                      >
+                        {initialsOf(member.name)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-item text-ink">
+                          {member.name}
+                        </span>
+                        <span className="block truncate text-caption text-subtle">
+                          {member.email}
+                        </span>
+                      </span>
+                    </span>
+                  </TD>
                   <TD className="capitalize">{member.role}</TD>
                   {canRemove ? (
-                    <TD>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        loading={remove.isPending}
-                        onClick={() => void handleRemove(member.id)}
-                      >
-                        Remove
-                      </Button>
+                    <TD className="text-end">
+                      {member.id === selfId ? (
+                        <span className="text-subtle">—</span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          loading={remove.isPending}
+                          onClick={() => void handleRemove(member.id)}
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </TD>
                   ) : null}
                 </TR>
@@ -125,15 +148,15 @@ export function OrganisationPeople({
           </Table>
         </div>
       ) : (
-        <p className="text-sm text-muted">No members to show.</p>
+        <p className="text-meta text-muted">No members to show.</p>
       )}
 
       <form
-        className="flex max-w-lg flex-col gap-3"
+        className="flex max-w-[420px] flex-col gap-3"
         onSubmit={handleInvite}
         noValidate
       >
-        <p className="text-sm font-medium text-ink">Invite a colleague</p>
+        <p className="text-item text-ink">Invite a member</p>
         <Input
           label="Email"
           type="email"
@@ -146,9 +169,9 @@ export function OrganisationPeople({
           }}
         />
         <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink">Role</span>
+          <span className="text-item text-ink">Role</span>
           <select
-            className="h-10 rounded-md border border-line bg-surface px-3 text-sm text-ink"
+            className="h-control rounded-md border border-line bg-raised px-3 text-meta text-ink"
             value={inviteRole}
             onChange={(event) => {
               const parsed = userRoleSchema.safeParse(event.target.value)
@@ -165,30 +188,34 @@ export function OrganisationPeople({
             type="submit"
             loading={invite.isPending}
             disabled={email.trim().length === 0 || invite.isPending}
-            iconEnd={<ArrowRight size={16} weight="bold" />}
+            iconStart={<Plus size={16} aria-hidden />}
           >
             Send invite
           </Button>
         </div>
       </form>
 
-      <h4 className="text-sm font-medium text-ink">Pending invites</h4>
+      <h3 className="text-section text-ink">Pending invites</h3>
       {invites.data && invites.data.length > 0 ? (
-        <div className="max-w-2xl overflow-x-auto">
+        <div className="overflow-x-auto">
           <Table className="min-w-[32rem]">
             <THead>
               <TR>
                 <TH>Email</TH>
                 <TH>Role</TH>
-                <TH>Actions</TH>
+                <TH>Sent</TH>
+                <TH align="end"> </TH>
               </TR>
             </THead>
             <TBody>
               {invites.data.map((pending) => (
                 <TR key={pending.id}>
-                  <TD>{pending.email}</TD>
+                  <TD className="truncate">{pending.email}</TD>
                   <TD className="capitalize">{pending.role}</TD>
-                  <TD>
+                  <TD className="text-muted">
+                    {formatDate(pending.createdAt)}
+                  </TD>
+                  <TD className="text-end">
                     <Button
                       type="button"
                       variant="ghost"
@@ -205,7 +232,7 @@ export function OrganisationPeople({
           </Table>
         </div>
       ) : (
-        <p className="text-sm text-muted">No pending invites.</p>
+        <p className="text-meta text-muted">No pending invites.</p>
       )}
     </div>
   )

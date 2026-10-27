@@ -151,12 +151,14 @@ describe('SettingsRouteView — organisation', () => {
     expect(within(organisation).getByText(/apply to everyone in/i)).toBeTruthy()
   })
 
-  it('shows the role and the stable identifier as read-only context', async () => {
+  it('shows the role as read-only context and never the internal identifier', async () => {
     renderSettings()
     const organisation = await openSection('Organisation')
 
     expect(readOnlyValue(organisation, 'Your role')).toBe('Owner')
-    expect(readOnlyValue(organisation, 'Organisation ID')).toBe('org_1')
+    // A raw organisation id is an internal identifier: it is not shown.
+    expect(within(organisation).queryByText('Organisation ID')).toBeNull()
+    expect(within(organisation).queryByText('org_1')).toBeNull()
   })
 
   it('shows a member the organisation without an editing control', async () => {
