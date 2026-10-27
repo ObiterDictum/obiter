@@ -1,0 +1,1144 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obiter — Preferences</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="obiter.css" />
+    <style>
+      /* Layout only: table column measures and the roles list. Sections, fields,
+   cards and rows are shared components. */
+      .members-table {
+        overflow: hidden;
+      }
+      .members-table .ob-table {
+        table-layout: fixed;
+      }
+      .members-grid th:nth-child(1) {
+        width: 54%;
+      }
+      .members-grid th:nth-child(2) {
+        width: 18%;
+      }
+      .members-grid th:nth-child(3) {
+        width: 28%;
+      }
+      .invites-grid th:nth-child(1) {
+        width: 42%;
+      }
+      .invites-grid th:nth-child(2) {
+        width: 15%;
+      }
+      .invites-grid th:nth-child(3) {
+        width: 22%;
+      }
+      .invites-grid th:nth-child(4) {
+        width: 21%;
+      }
+      .members-name {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .members-main {
+        min-width: 0;
+      }
+      .members-name .ob-table-sub {
+        display: block;
+        margin-top: 4px;
+      }
+      .invites-email {
+        font-size: 12px;
+        color: var(--ob-muted);
+      }
+      .invites {
+        display: flex;
+        flex-direction: column;
+      }
+      .invite-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 90px 130px auto;
+        gap: 16px;
+        align-items: center;
+        min-height: 52px;
+        padding: 16px 0;
+      }
+      .invite-row + .invite-row {
+        border-top: 1px solid var(--ob-line);
+      }
+      .invite-email {
+        font-size: 13px;
+        color: var(--ob-ink);
+        min-width: 0;
+      }
+      .invite-meta {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .role-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .role-item {
+        display: grid;
+        grid-template-columns: 84px minmax(0, 1fr);
+        gap: 16px;
+      }
+      .role-name {
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .role-desc {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--ob-muted);
+      }
+      .role-desc span {
+        display: block;
+        font-size: 12px;
+        color: var(--ob-subtle);
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Canonical sprite: icons.svg. This inline copy keeps the page
+     self-contained and lets it work over file:// without a server. -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      style="
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+        pointer-events: none;
+      "
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <defs>
+        <!-- Brand: the Obiter monogram. One weight, one colour, no tile. -->
+        <symbol id="i-obiter" viewBox="0 0 26 26">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="7.75" cy="14.6" r="4.9" />
+            <path d="M18.25 3.4v16.1" />
+            <path d="M18.25 9.7a4.9 4.9 0 0 1 0 9.8" />
+          </g>
+        </symbol>
+
+        <!-- Navigation -->
+        <symbol id="i-home" viewBox="0 0 16 16">
+          <path
+            d="M2.4 7.1 8 2.6l5.6 4.5V13a.6.6 0 0 1-.6.6h-3.3V9.4H6.3v4.2H3a.6.6 0 0 1-.6-.6z"
+          />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 16 16">
+          <circle cx="7" cy="7" r="4.2" />
+          <path d="m10.1 10.1 3.5 3.5" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 16 16">
+          <path
+            d="M2.2 5.1a1.5 1.5 0 0 1 1.5-1.5h2.4l1.3 1.6h4.9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H3.7a1.5 1.5 0 0 1-1.5-1.5z"
+          />
+        </symbol>
+        <symbol id="i-document" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 9h5.2M5.4 11.2h3.4" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6" />
+        </symbol>
+        <symbol id="i-verify" viewBox="0 0 16 16">
+          <path
+            d="M8 2.1 12.9 4v3.5c0 2.9-2.1 4.9-4.9 6.2-2.8-1.3-4.9-3.3-4.9-6.2V4z"
+          />
+          <path d="m5.9 7.8 1.4 1.4 3-3.4" />
+        </symbol>
+        <symbol id="i-redact" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 6.6h2.2M5.4 11.4h5.2" />
+          <rect
+            x="5.4"
+            y="8.4"
+            width="5.2"
+            height="1.9"
+            rx=".4"
+            fill="currentColor"
+            stroke="none"
+          />
+        </symbol>
+        <symbol id="i-research" viewBox="0 0 16 16">
+          <path
+            d="M6.5 2.4h3M7.1 2.4v3.8l-3 6.2a1.1 1.1 0 0 0 1 1.6h5.8a1.1 1.1 0 0 0 1-1.6l-3-6.2V2.4"
+          />
+          <path d="M5.4 10.6h5.2" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 16 16">
+          <path d="M2.4 5h4.2M10.2 5h3.4M2.4 11h3.2M8.2 11h5.4" />
+          <circle cx="8" cy="5" r="1.6" />
+          <circle cx="6.4" cy="11" r="1.6" />
+        </symbol>
+
+        <!-- Common actions -->
+        <symbol id="i-plus" viewBox="0 0 16 16">
+          <path d="M8 3v10M3 8h10" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16">
+          <path d="M3 8h10" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 16 16">
+          <path d="M8 10.4V2.6M5.2 5.4 8 2.6l2.8 2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 16 16">
+          <path d="M8 2.6v7.8M5.2 7.6 8 10.4l2.8-2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-share" viewBox="0 0 16 16">
+          <circle cx="3.9" cy="8" r="1.7" />
+          <circle cx="12.1" cy="3.9" r="1.7" />
+          <circle cx="12.1" cy="12.1" r="1.7" />
+          <path d="m5.4 7.2 5.2-2.5M5.4 8.8l5.2 2.5" />
+        </symbol>
+        <symbol id="i-more" viewBox="0 0 16 16">
+          <circle cx="3.4" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="12.6" cy="8" r="1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 16 16">
+          <path d="M2.6 4.2h10.8M6 4.2V2.8h4v1.4" />
+          <path d="M4.4 4.2l.6 9h6l.6-9" />
+          <path d="M6.6 6.6v4.2M9.4 6.6v4.2" />
+        </symbol>
+        <symbol id="i-edit" viewBox="0 0 16 16">
+          <path d="M2.6 13.4h2.8L13 5.8 10.2 3 2.6 10.6z" />
+          <path d="m9.3 3.9 2.8 2.8" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 16 16">
+          <rect x="5.4" y="5.4" width="8" height="8" rx="1.2" />
+          <path
+            d="M10.6 5.4V3.8a1.2 1.2 0 0 0-1.2-1.2H3.8a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.6"
+          />
+        </symbol>
+        <symbol id="i-print" viewBox="0 0 16 16">
+          <path d="M4.6 5.6V2.4h6.8v3.2" />
+          <rect x="2.4" y="5.6" width="11.2" height="5.4" rx="1.1" />
+          <path d="M4.6 9.4h6.8v4.2H4.6z" />
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 16 16">
+          <path d="M9.4 2.6h4v4M13.4 2.6 7.6 8.4" />
+          <path
+            d="M11.4 9.4v3.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V5.6a1 1 0 0 1 1-1h3.2"
+          />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 16 16">
+          <path
+            d="M6.4 9.6a2.6 2.6 0 0 0 3.7 0l1.8-1.8a2.6 2.6 0 0 0-3.7-3.7l-.7.7"
+          />
+          <path
+            d="M9.6 6.4a2.6 2.6 0 0 0-3.7 0L4.1 8.2a2.6 2.6 0 0 0 3.7 3.7l.7-.7"
+          />
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 16 16">
+          <path d="M6.2 2.4h3.6l-.5 3.4 2.3 1.8v1.3H4.4V7.6l2.3-1.8z" />
+          <path d="M8 8.9v4.7" />
+        </symbol>
+        <symbol id="i-filter" viewBox="0 0 16 16">
+          <path d="M2.6 4h10.8M4.6 8h6.8M6.6 12h2.8" />
+        </symbol>
+        <symbol id="i-sort" viewBox="0 0 16 16">
+          <path d="M4.4 3.2v9.6M2.4 10.8l2 2 2-2" />
+          <path d="M11.6 12.8V3.2M9.6 5.2l2-2 2 2" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 16 16">
+          <path
+            d="M1.7 8S3.9 3.9 8 3.9 14.3 8 14.3 8 12.1 12.1 8 12.1 1.7 8 1.7 8z"
+          />
+          <circle cx="8" cy="8" r="2" />
+        </symbol>
+        <symbol id="i-eye-off" viewBox="0 0 16 16">
+          <path d="M2.2 2.2 13.8 13.8" />
+          <path
+            d="M6.3 4.3A6.5 6.5 0 0 1 8 4.1c4.1 0 6.3 3.9 6.3 3.9a10 10 0 0 1-2.2 2.6"
+          />
+          <path
+            d="M10.1 12A6.7 6.7 0 0 1 8 12.1C3.9 12.1 1.7 8 1.7 8a10.5 10.5 0 0 1 2.3-2.7"
+          />
+        </symbol>
+        <symbol id="i-history" viewBox="0 0 16 16">
+          <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+          <path d="M2.4 2.6v3.6h3.6" />
+          <path d="M8 5.4V8l2 1.3" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 16 16">
+          <path d="M13.2 8A5.3 5.3 0 1 1 11.3 3.8" />
+          <path d="M13.2 2.6v4h-4" />
+        </symbol>
+        <symbol id="i-undo" viewBox="0 0 16 16">
+          <path d="M6.4 4 3.4 7l3 3" />
+          <path d="M3.6 7h5.6a3.4 3.4 0 0 1 0 6.8H6.6" />
+        </symbol>
+        <symbol id="i-redo" viewBox="0 0 16 16">
+          <path d="M9.6 4l3 3-3 3" />
+          <path d="M12.4 7H6.8a3.4 3.4 0 0 0 0 6.8h2.6" />
+        </symbol>
+        <symbol id="i-bold" viewBox="0 0 16 16">
+          <path
+            d="M4.8 3h3.7a2.4 2.4 0 0 1 0 4.8H4.8zM4.8 7.8h4.4a2.6 2.6 0 0 1 0 5.2H4.8z"
+          />
+        </symbol>
+        <symbol id="i-italic" viewBox="0 0 16 16">
+          <path d="M9.8 3H6.6M9.4 13H6.2M9.2 3 6.8 13" />
+        </symbol>
+        <symbol id="i-underline" viewBox="0 0 16 16">
+          <path d="M5 3v4.2a3 3 0 0 0 6 0V3M4 13.5h8" />
+        </symbol>
+        <symbol id="i-align-left" viewBox="0 0 16 16">
+          <path d="M2.8 4h10.4M2.8 8h6.4M2.8 12h9" />
+        </symbol>
+        <symbol id="i-list-ordered" viewBox="0 0 16 16">
+          <path d="M6.4 4h6.8M6.4 8h6.8M6.4 12h6.8" />
+          <path d="M2.6 2.8h1v3M2.6 10.4h1.8l-1.8 2.1h1.8" />
+        </symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16">
+          <rect x="2.4" y="3" width="11.2" height="10" rx="1.2" />
+          <path d="M8 3v10" />
+        </symbol>
+        <symbol id="i-bell" viewBox="0 0 16 16">
+          <path
+            d="M12.2 6.4a4.2 4.2 0 0 0-8.4 0c0 3.2-1.2 4-1.2 4h10.8s-1.2-.8-1.2-4z"
+          />
+          <path d="M6.7 12.8a1.5 1.5 0 0 0 2.6 0" />
+        </symbol>
+        <symbol id="i-keyboard" viewBox="0 0 16 16">
+          <rect x="1.8" y="4" width="12.4" height="8" rx="1.4" />
+          <path
+            d="M4.2 6.6h.1M6.8 6.6h.1M9.4 6.6h.1M12 6.6h.1M4.2 9.4h.1M6.4 9.4h3M11.8 9.4h.1"
+          />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 16 16">
+          <path d="m4 4 8 8M12 4l-8 8" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 16 16">
+          <path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 16 16">
+          <path d="m3.2 8.4 3 3 6.6-7" />
+        </symbol>
+        <symbol id="i-minus-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M5.2 8h5.6" />
+        </symbol>
+        <symbol id="i-check-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+
+        <!-- Chevrons and arrows -->
+        <symbol id="i-chevron-down" viewBox="0 0 16 16">
+          <path d="m4.5 6.4 3.5 3.5 3.5-3.5" />
+        </symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 16 16">
+          <path d="m4.5 9.6 3.5-3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 16 16">
+          <path d="m6.4 4.5 3.5 3.5-3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 16 16">
+          <path d="m9.6 4.5-3.5 3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevrons-left" viewBox="0 0 16 16">
+          <path d="m7.8 4.6-3.4 3.4 3.4 3.4M11.8 4.6 8.4 8l3.4 3.4" />
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 16 16">
+          <path d="M13 8H3M6.5 4.5 3 8l3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 16 16">
+          <path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 16 16">
+          <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" />
+        </symbol>
+
+        <!-- Status and meaning -->
+        <symbol id="i-flag" viewBox="0 0 16 16">
+          <path d="M3.8 14V2.4M3.8 2.6h8.1l-1.3 2.9 1.3 2.9H3.8" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 16 16">
+          <path d="M8 2.4 14 13.2H2z" />
+          <path d="M8 6.4v3.1M8 11.5v.1" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M8 7.3v3.9M8 5.2v.1" />
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path
+            d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.75c-.5.3-.8.75-.8 1.3v.45M8 11.9v.1"
+          />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.6" />
+          <path d="M8 4.7V8l2.2 1.4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" />
+        </symbol>
+        <symbol id="i-lock-open" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.6-.8" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 16 16">
+          <circle cx="8" cy="5.4" r="2.6" />
+          <path d="M3.4 13.6a4.6 4.6 0 0 1 9.2 0" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 16 16">
+          <circle cx="6" cy="5.6" r="2.3" />
+          <path d="M2.4 13.2a3.8 3.8 0 0 1 7.2 0" />
+          <path
+            d="M10.6 3.6a2.3 2.3 0 0 1 0 4.2M11.4 9.7a3.6 3.6 0 0 1 2.2 3.3"
+          />
+        </symbol>
+
+        <!-- Sources and documents -->
+        <symbol id="i-scale" viewBox="0 0 16 16">
+          <path d="M8 2v11M4.6 13h6.8M2.6 4.4h10.8" />
+          <path d="M4.2 4.4 2.6 8.2h3.2zM11.8 4.4 10.2 8.2h3.2z" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 16 16">
+          <path
+            d="M2.6 3.4A1.4 1.4 0 0 1 4 2h9.4v11.6H4a1.4 1.4 0 0 0-1.4 1.4z"
+          />
+          <path d="M2.6 12.6h10.8" />
+        </symbol>
+        <symbol id="i-note" viewBox="0 0 16 16">
+          <path d="M3 3.4h10v6.6L9.4 13H3z" />
+          <path d="M9.4 13V10h3.6" />
+          <path d="M5.4 6h5.2" />
+        </symbol>
+        <symbol id="i-comment" viewBox="0 0 16 16">
+          <path
+            d="M13.2 8.1v.6a4.6 4.6 0 0 1-4.6 4.6H6.1L3 15.2v-3.1a4.6 4.6 0 0 1-.8-2.6V8.1a4.6 4.6 0 0 1 4.6-4.6h1.8a4.6 4.6 0 0 1 4.6 4.6z"
+          />
+        </symbol>
+        <symbol id="i-track-changes" viewBox="0 0 16 16">
+          <path d="M2.6 3.4v9.2" />
+          <path d="M5.2 5h7.2M5.2 8h4.4M5.2 11h7.2" />
+          <path d="M11.6 7.2v3.6M9.8 9h3.6" />
+        </symbol>
+        <symbol id="i-accept" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+        <symbol id="i-reject" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.8 5.8 4.4 4.4M10.2 5.8 5.8 10.2" />
+        </symbol>
+
+        <!-- Theme and chrome -->
+        <symbol id="i-sun" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="2.4" />
+          <path
+            d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1"
+          />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 16 16">
+          <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.8 5.8 0 1 0 6.8 6.8z" />
+        </symbol>
+        <symbol id="i-sidebar-collapse" viewBox="0 0 16 16">
+          <rect x="2" y="3" width="12" height="10" rx="1.4" />
+          <path d="M6.4 3v10M9.9 6.4 8.3 8l1.6 1.6" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 16 16">
+          <path d="M2.6 4.5h10.8M2.6 8h10.8M2.6 11.5h10.8" />
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 16 16">
+          <path d="M5.6 4h8M5.6 8h8M5.6 12h8" />
+          <circle cx="2.9" cy="4" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="8" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="12" r=".8" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 16 16">
+          <rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1" />
+        </symbol>
+        <symbol id="i-paperclip" viewBox="0 0 16 16">
+          <path
+            d="M12.6 7.4 7.8 12.2a3 3 0 0 1-4.2-4.2l5.2-5.2a2 2 0 0 1 2.8 2.8l-5.1 5.1a1 1 0 0 1-1.4-1.4l4.6-4.6"
+          />
+        </symbol>
+        <symbol id="i-calendar" viewBox="0 0 16 16">
+          <rect x="2.4" y="3.4" width="11.2" height="10.2" rx="1.4" />
+          <path d="M2.4 6.6h11.2M5.6 2.2v2.4M10.4 2.2v2.4" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 16 16">
+          <path
+            d="M2.6 7V3.4a.8.8 0 0 1 .8-.8H7l6.4 6.4a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0z"
+          />
+          <circle cx="5.4" cy="5.4" r=".9" />
+        </symbol>
+        <symbol id="i-sparkle" viewBox="0 0 16 16">
+          <path d="M8 2.2 9.2 6l3.8 1.2L9.2 8.4 8 12.2 6.8 8.4 3 7.2 6.8 6z" />
+          <path d="M12.6 11.6v2M11.6 12.6h2" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="ob-app" id="app">
+      <aside class="ob-side" aria-label="Sidebar">
+        <div class="ob-side-head">
+          <a class="ob-logo" href="dashboard.html" aria-label="Obiter home"
+            ><svg aria-hidden="true"><use href="#i-obiter" /></svg
+          ></a>
+          <div class="ob-brand-text">
+            <div class="ob-brand-name">Obiter</div>
+            <div class="ob-brand-firm">Harrington Vale LLP</div>
+          </div>
+        </div>
+
+        <nav class="ob-nav" aria-label="Workspace">
+          <a class="ob-nav-item" href="dashboard.html" title="Home">
+            <svg aria-hidden="true"><use href="#i-home" /></svg
+            ><span class="ob-nav-text">Home</span>
+          </a>
+          <a class="ob-nav-item" href="search.html" title="Search">
+            <svg aria-hidden="true"><use href="#i-search" /></svg
+            ><span class="ob-nav-text">Search</span>
+          </a>
+          <a class="ob-nav-item" href="matters.html" title="Matters">
+            <svg aria-hidden="true"><use href="#i-folder" /></svg
+            ><span class="ob-nav-text">Matters</span
+            ><span class="ob-nav-count">4</span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="verify.html"
+            title="Verify — 1 flagged finding"
+          >
+            <svg aria-hidden="true"><use href="#i-verify" /></svg
+            ><span class="ob-nav-text">Verify</span
+            ><span class="ob-nav-count is-danger">1</span
+            ><span class="ob-nav-dot is-danger"></span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="redact-start.html"
+            title="Redact — 1 run in review"
+          >
+            <svg aria-hidden="true"><use href="#i-redact" /></svg
+            ><span class="ob-nav-text">Redact</span
+            ><span class="ob-nav-count is-info">1</span
+            ><span class="ob-nav-dot is-info"></span>
+          </a>
+          <a
+            class="ob-nav-item is-quiet"
+            href="#"
+            title="Research — coming soon"
+            aria-disabled="true"
+          >
+            <svg aria-hidden="true"><use href="#i-research" /></svg
+            ><span class="ob-nav-text">Research</span
+            ><span class="ob-nav-soon">Soon</span>
+          </a>
+
+          <div class="ob-nav-label">
+            <span>Pinned matters</span
+            ><button
+              class="ob-nav-add"
+              type="button"
+              title="Pin a matter"
+              aria-label="Pin a matter"
+            >
+              <svg class="is-12" aria-hidden="true"><use href="#i-plus" /></svg>
+            </button>
+          </div>
+
+          <a
+            class="ob-pin"
+            href="matter.html"
+            title="Northgate Foods v Brightwater Packaging — NGF-0418"
+          >
+            <span class="ob-pin-tile">NG</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">Northgate Foods v Brightwater</span>
+              <span class="ob-pin-sub">NGF-0418 · 3 documents</span>
+            </span>
+            <span
+              class="ob-pin-dot is-danger"
+              title="1 flagged citation"
+            ></span>
+          </a>
+          <a
+            class="ob-pin"
+            href="matter-redaction.html"
+            title="FOI request: Cheshire Council 2026/114 — redaction matter"
+          >
+            <span class="ob-pin-tile">FOI</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">FOI request: Cheshire Council</span>
+              <span class="ob-pin-sub">FOI-2026-114 · in review</span>
+            </span>
+            <span class="ob-pin-dot is-info" title="Redaction in review"></span>
+          </a>
+        </nav>
+
+        <div class="ob-side-foot">
+          <button
+            class="ob-side-toggle"
+            id="sidebarToggle"
+            type="button"
+            aria-expanded="true"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <svg aria-hidden="true"><use href="#i-sidebar-collapse" /></svg
+            ><span>Collapse sidebar</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="ob-main">
+        <header class="ob-top">
+          <nav class="ob-crumbs ob-crumbs--fit" aria-label="Breadcrumb">
+            <a href="dashboard.html">Harrington Vale LLP</a>
+            <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            <a href="settings-account.html">Settings</a>
+            <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            <span class="ob-crumb-current">Preferences</span>
+          </nav>
+
+          <div
+            class="ob-searchbar"
+            role="button"
+            tabindex="0"
+            aria-label="Search Obiter"
+          >
+            <svg aria-hidden="true"><use href="#i-search" /></svg>
+            <span>Search Obiter</span>
+            <span class="ob-kbd">⌘K</span>
+          </div>
+
+          <button
+            class="ob-icon-btn"
+            id="themeButton"
+            type="button"
+            aria-label="Switch to dark theme"
+            data-tip="Switch theme"
+            data-tip-bottom
+            data-tip-align="end"
+          >
+            <svg class="ob-theme-sun" aria-hidden="true">
+              <use href="#i-sun" />
+            </svg>
+            <svg class="ob-theme-moon" aria-hidden="true">
+              <use href="#i-moon" />
+            </svg>
+          </button>
+
+          <div class="ob-account">
+            <button
+              class="ob-avatar-button"
+              id="accountButton"
+              type="button"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              <span class="ob-avatar">AM</span>
+            </button>
+            <div class="ob-menu" id="accountMenu" role="menu" hidden>
+              <div class="ob-menu-head">
+                <div class="ob-menu-name">Alex Morgan</div>
+                <div class="ob-menu-sub">Owner · Harrington Vale LLP</div>
+              </div>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-account.html"
+              >
+                <svg aria-hidden="true"><use href="#i-user" /></svg>Account
+                settings
+              </a>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-preferences.html"
+              >
+                <svg aria-hidden="true"><use href="#i-settings" /></svg
+                >Preferences
+              </a>
+              <button
+                class="ob-menu-item"
+                role="menuitem"
+                type="button"
+                id="menuTheme"
+              >
+                <svg class="ob-theme-sun" aria-hidden="true">
+                  <use href="#i-sun" />
+                </svg>
+                <svg class="ob-theme-moon" aria-hidden="true">
+                  <use href="#i-moon" />
+                </svg>
+                <span id="menuThemeLabel">Switch to dark theme</span>
+              </button>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                <svg aria-hidden="true"><use href="#i-keyboard" /></svg>Keyboard
+                shortcuts
+              </button>
+              <div class="ob-menu-sep"></div>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                Sign out
+              </button>
+              <div class="ob-menu-foot">Obiter · Firm workspace</div>
+            </div>
+          </div>
+        </header>
+
+        <div class="ob-content">
+          <div class="ob-wrap">
+            <div class="ob-page-head">
+              <div class="ob-page-head-main">
+                <h1 class="ob-page-title">Settings</h1>
+                <p class="ob-page-sub">
+                  Your account, security and the organisation you work in.
+                </p>
+              </div>
+            </div>
+
+            <div class="ob-settings">
+              <nav class="ob-settings-nav" aria-label="Settings sections">
+                <a class="ob-settings-link" href="settings-account.html"
+                  ><svg aria-hidden="true"><use href="#i-user" /></svg
+                  >Account</a
+                >
+                <a class="ob-settings-link" href="settings-security.html"
+                  ><svg aria-hidden="true"><use href="#i-lock" /></svg
+                  >Security</a
+                >
+                <a class="ob-settings-link" href="settings-organisation.html"
+                  ><svg aria-hidden="true"><use href="#i-users" /></svg
+                  >Organisation</a
+                >
+                <a
+                  class="ob-settings-link is-active"
+                  href="settings-preferences.html"
+                  aria-current="page"
+                  ><svg aria-hidden="true"><use href="#i-settings" /></svg
+                  >Preferences</a
+                >
+              </nav>
+
+              <div class="ob-settings-body">
+                <div class="ob-settings-head" style="margin-bottom: 8px">
+                  <div>
+                    <h2 class="ob-settings-title">Preferences</h2>
+                    <p class="ob-settings-desc">
+                      Changes apply immediately and are saved to your account.
+                    </p>
+                  </div>
+                </div>
+
+                <section
+                  class="ob-settings-section"
+                  style="margin-top: 16px; padding-top: 0; border-top: 0"
+                >
+                  <div class="ob-settings-head">
+                    <div>
+                      <h3 class="ob-item-title">Appearance</h3>
+                    </div>
+                  </div>
+                  <div style="margin-top: 8px">
+                    <div class="ob-pref-row">
+                      <div class="ob-pref-main">
+                        <div class="ob-pref-title">Theme</div>
+                        <p class="ob-pref-desc">
+                          Light is the default. Dark suits a dim room, and Match
+                          system follows the setting on this computer.
+                        </p>
+                      </div>
+                      <div class="ob-pref-control">
+                        <div class="ob-seg" role="group" aria-label="Theme">
+                          <button
+                            class="ob-seg-item is-active"
+                            type="button"
+                            data-set-theme="light"
+                            aria-pressed="true"
+                          >
+                            <svg class="is-12" aria-hidden="true">
+                              <use href="#i-sun" /></svg
+                            >Light (default)
+                          </button>
+                          <button
+                            class="ob-seg-item"
+                            type="button"
+                            data-set-theme="dark"
+                            aria-pressed="false"
+                          >
+                            <svg class="is-12" aria-hidden="true">
+                              <use href="#i-moon" /></svg
+                            >Dark
+                          </button>
+                          <button
+                            class="ob-seg-item"
+                            type="button"
+                            data-set-theme="system"
+                            aria-pressed="false"
+                          >
+                            Match system
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="ob-pref-row">
+                      <div class="ob-pref-main">
+                        <div class="ob-pref-title">Reduce motion</div>
+                        <p class="ob-pref-desc">
+                          Turn off the small transitions when panels open and
+                          rows change. Your system setting is respected either
+                          way.
+                        </p>
+                      </div>
+                      <div class="ob-pref-control">
+                        <label class="ob-switch-row"
+                          ><input class="ob-switch" type="checkbox" /><span
+                            class="ob-sr"
+                            >Reduce motion</span
+                          ></label
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="ob-settings-section">
+                  <div class="ob-settings-head">
+                    <div>
+                      <h3 class="ob-item-title">Dates</h3>
+                    </div>
+                  </div>
+                  <div style="margin-top: 8px">
+                    <div class="ob-pref-row">
+                      <div class="ob-pref-main">
+                        <div class="ob-pref-title">Date style</div>
+                        <p class="ob-pref-desc">
+                          Used in lists, tables and matter details. Times are
+                          shown as 24-hour where they matter.
+                        </p>
+                      </div>
+                      <div class="ob-pref-control">
+                        <div class="ob-select-wrap" style="width: 180px">
+                          <select class="ob-select" aria-label="Date style">
+                            <option>26 Oct 2026</option>
+                            <option>26 October 2026</option>
+                          </select>
+                          <svg class="ob-select-caret" aria-hidden="true">
+                            <use href="#i-chevron-down" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="ob-settings-section">
+                  <div class="ob-settings-head">
+                    <div>
+                      <h3 class="ob-item-title">Working</h3>
+                    </div>
+                  </div>
+                  <div style="margin-top: 8px">
+                    <div class="ob-pref-row">
+                      <div class="ob-pref-main">
+                        <div class="ob-pref-title">
+                          Open documents in a new tab
+                        </div>
+                        <p class="ob-pref-desc">
+                          Keeps the matter page open when you open a document
+                          from a list.
+                        </p>
+                      </div>
+                      <div class="ob-pref-control">
+                        <label class="ob-switch-row"
+                          ><input
+                            class="ob-switch"
+                            type="checkbox"
+                            checked
+                          /><span class="ob-sr"
+                            >Open documents in a new tab</span
+                          ></label
+                        >
+                      </div>
+                    </div>
+                    <div class="ob-pref-row">
+                      <div class="ob-pref-main">
+                        <div class="ob-pref-title">Show keyboard hints</div>
+                        <p class="ob-pref-desc">
+                          Shows shortcuts such as ⌘K beside search and in menus.
+                        </p>
+                      </div>
+                      <div class="ob-pref-control">
+                        <label class="ob-switch-row"
+                          ><input
+                            class="ob-switch"
+                            type="checkbox"
+                            checked
+                          /><span class="ob-sr"
+                            >Show keyboard hints</span
+                          ></label
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      ;(function () {
+        'use strict'
+        var root = document.documentElement
+        var app = document.getElementById('app')
+        var themeButton = document.getElementById('themeButton')
+        var accountButton = document.getElementById('accountButton')
+        var accountMenu = document.getElementById('accountMenu')
+        var sidebarToggle = document.getElementById('sidebarToggle')
+
+        function setTheme(theme) {
+          root.dataset.theme = theme
+          if (!themeButton) return
+          var toLight = theme === 'dark'
+          themeButton.setAttribute(
+            'aria-label',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+          themeButton.setAttribute(
+            'data-tip',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+        }
+        if (themeButton) {
+          themeButton.addEventListener('click', function () {
+            setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark')
+          })
+        }
+
+        if (accountButton && accountMenu) {
+          accountButton.addEventListener('click', function (e) {
+            e.stopPropagation()
+            accountMenu.hidden = !accountMenu.hidden
+            accountButton.setAttribute(
+              'aria-expanded',
+              String(!accountMenu.hidden),
+            )
+          })
+          accountMenu.addEventListener('click', function (e) {
+            e.stopPropagation()
+          })
+          document.addEventListener('click', function () {
+            accountMenu.hidden = true
+            accountButton.setAttribute('aria-expanded', 'false')
+          })
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+              accountMenu.hidden = true
+              accountButton.setAttribute('aria-expanded', 'false')
+            }
+          })
+        }
+
+        if (sidebarToggle && app) {
+          sidebarToggle.addEventListener('click', function () {
+            var collapsed = !app.classList.contains('is-collapsed')
+            app.classList.toggle('is-collapsed', collapsed)
+            sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
+            sidebarToggle.setAttribute(
+              'aria-label',
+              collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+            )
+            sidebarToggle.title = collapsed
+              ? 'Expand sidebar'
+              : 'Collapse sidebar'
+            sidebarToggle.querySelector('span').textContent = collapsed
+              ? 'Expand sidebar'
+              : 'Collapse sidebar'
+          })
+          if (location.hash === '#collapsed') {
+            app.classList.add('is-collapsed')
+            sidebarToggle.querySelector('span').textContent = 'Expand sidebar'
+          }
+        }
+
+        function states() {
+          return (location.hash || '')
+            .replace(/^#/, '')
+            .split(/[,+]/)
+            .filter(Boolean)
+        }
+        function has(keys, h) {
+          return keys.some(function (k) {
+            return h.indexOf(k) >= 0
+          })
+        }
+        function applyStates() {
+          var h = states()
+          document
+            .querySelectorAll('[data-state],[data-hide-state]')
+            .forEach(function (el) {
+              var show = el.hasAttribute('data-state')
+                ? has(el.getAttribute('data-state').split(/\s+/), h)
+                : true
+              if (
+                el.hasAttribute('data-hide-state') &&
+                has(el.getAttribute('data-hide-state').split(/\s+/), h)
+              ) {
+                show = false
+              }
+              el.hidden = !show
+            })
+          document.querySelectorAll('[data-active-on]').forEach(function (el) {
+            var on = h.length
+              ? has(el.getAttribute('data-active-on').split(/\s+/), h)
+              : el.hasAttribute('data-active-default')
+            el.classList.toggle('is-active', on)
+          })
+        }
+        window.addEventListener('hashchange', applyStates)
+        applyStates()
+      })()
+    </script>
+
+    <script>
+      ;(function () {
+        var themeButton = document.getElementById('themeButton')
+        var choice = 'light'
+
+        /* The saved choice may be light, dark, or “match system”. The system choice
+     resolves to a real theme; the choice itself is what the control shows. */
+        function resolve(name) {
+          if (name !== 'system') return name
+          return window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light'
+        }
+
+        function label(theme) {
+          var toLight = theme === 'dark'
+          if (themeButton) {
+            themeButton.setAttribute(
+              'aria-label',
+              toLight ? 'Switch to light theme' : 'Switch to dark theme',
+            )
+            themeButton.setAttribute(
+              'data-tip',
+              toLight ? 'Switch to light theme' : 'Switch to dark theme',
+            )
+          }
+        }
+
+        function sync(name) {
+          choice = name
+          var theme = resolve(name)
+          document.documentElement.dataset.theme = theme
+          document
+            .querySelectorAll('[data-set-theme]')
+            .forEach(function (other) {
+              var on = other.getAttribute('data-set-theme') === name
+              other.classList.toggle('is-active', on)
+              other.setAttribute('aria-pressed', String(on))
+            })
+          label(theme)
+        }
+
+        document
+          .querySelectorAll('[data-set-theme]')
+          .forEach(function (button) {
+            button.addEventListener('click', function () {
+              sync(button.getAttribute('data-set-theme'))
+            })
+          })
+
+        window
+          .matchMedia('(prefers-color-scheme: dark)')
+          .addEventListener('change', function () {
+            if (choice === 'system') sync('system')
+          })
+
+        if (themeButton) {
+          themeButton.addEventListener('click', function () {
+            /* A direct toggle drops out of “match system”. */
+            sync(
+              document.documentElement.dataset.theme === 'dark'
+                ? 'light'
+                : 'dark',
+            )
+          })
+        }
+
+        sync(document.documentElement.dataset.theme || 'light')
+      })()
+    </script>
+
+    <script>
+      /* One account menu and one theme switch across every screen. Pages that
+   predate the shared menu get the same handler here. */
+      ;(function () {
+        var button = document.getElementById('menuTheme')
+        if (!button || button.dataset.bound === 'true') return
+        button.dataset.bound = 'true'
+        button.addEventListener('click', function () {
+          var root = document.documentElement
+          var next = root.dataset.theme === 'dark' ? 'light' : 'dark'
+          root.dataset.theme = next
+          var toLight = next === 'dark'
+          var themeButton = document.getElementById('themeButton')
+          var label = document.getElementById('menuThemeLabel')
+          if (themeButton) {
+            themeButton.setAttribute(
+              'aria-label',
+              toLight ? 'Switch to light theme' : 'Switch to dark theme',
+            )
+            themeButton.setAttribute(
+              'data-tip',
+              toLight ? 'Switch to light theme' : 'Switch to dark theme',
+            )
+          }
+          if (label)
+            label.textContent = toLight
+              ? 'Switch to light theme'
+              : 'Switch to dark theme'
+        })
+      })()
+    </script>
+  </body>
+</html>
