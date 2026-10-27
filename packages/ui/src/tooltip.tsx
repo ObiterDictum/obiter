@@ -32,10 +32,10 @@ export function TooltipContent({
 }) {
   return (
     <BaseTooltip.Portal>
-      <BaseTooltip.Positioner sideOffset={6} className="z-50">
+      <BaseTooltip.Positioner sideOffset={8} className="z-50">
         <BaseTooltip.Popup
           className={cn(
-            'max-w-xs rounded-md border border-line-strong bg-raised px-2.5 py-1.5 text-xs text-ink shadow-md',
+            'max-w-xs rounded-md bg-raised px-3 py-2 text-caption text-ink shadow-lg inset-ring-1 inset-ring-line',
             'outline-none',
             className,
           )}

@@ -4,17 +4,9 @@ export interface SkeletonProps {
   className?: string
 }
 
-/** Skeleton — a shimmering placeholder matching the layout of pending content. */
+/** Static so a failed owner cannot leave a perpetual loading animation. */
 export function Skeleton({ className }: SkeletonProps) {
   return (
-    <div
-      className={cn(
-        'animate-pulse rounded-md bg-line',
-        'bg-[linear-gradient(110deg,transparent_35%,var(--color-line-strong)_50%,transparent_65%)]',
-        'bg-[length:200%_100%]',
-        className,
-      )}
-      aria-hidden="true"
-    />
+    <div className={cn('rounded-md bg-fill', className)} aria-hidden="true" />
   )
 }

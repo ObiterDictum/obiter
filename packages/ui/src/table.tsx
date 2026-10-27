@@ -11,7 +11,7 @@ export function Table({
 }: HTMLAttributes<HTMLTableElement>) {
   return (
     <table
-      className={cn('w-full border-collapse text-sm text-ink', className)}
+      className={cn('w-full border-collapse text-meta text-ink', className)}
       {...props}
     />
   )
@@ -24,7 +24,7 @@ export function THead({
   return (
     <thead
       className={cn(
-        'border-b border-line-strong text-left text-xs uppercase tracking-wide text-subtle',
+        'border-b border-line text-left text-caption text-subtle',
         className,
       )}
       {...props}
@@ -38,7 +38,10 @@ export function TBody({
 }: HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <tbody
-      className={cn('[&>tr]:border-b [&>tr]:border-line', className)}
+      className={cn(
+        '[&>tr]:border-b [&>tr]:border-line last:[&>tr]:border-0',
+        className,
+      )}
       {...props}
     />
   )
@@ -50,7 +53,7 @@ export function TR({
 }: HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn('transition-colors hover:bg-surface', className)}
+      className={cn('h-row transition-colors hover:bg-hover', className)}
       {...props}
     />
   )
@@ -67,7 +70,7 @@ export function TH({ className, align = 'start', ...props }: THProps) {
   return (
     <th
       className={cn(
-        'px-3 py-2 font-medium',
+        'px-6 pb-3 font-normal',
         align === 'end' && 'text-end',
         className,
       )}
@@ -80,5 +83,5 @@ export function TD({
   className,
   ...props
 }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn('px-3 py-2.5', className)} {...props} />
+  return <td className={cn('px-6 py-4', className)} {...props} />
 }

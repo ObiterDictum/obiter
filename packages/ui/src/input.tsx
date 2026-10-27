@@ -42,9 +42,9 @@ export function Input({
   const describedBy = showError || helperText ? describedById : undefined
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {label ? (
-        <label htmlFor={inputId} className="text-sm font-medium text-ink">
+        <label htmlFor={inputId} className="text-meta text-ink">
           {label}
         </label>
       ) : null}
@@ -54,11 +54,11 @@ export function Input({
           aria-invalid={showError || undefined}
           aria-describedby={describedBy}
           className={cn(
-            'h-10 w-full rounded-md border bg-surface px-3 text-sm text-ink',
+            'h-control w-full rounded-md border bg-raised px-3 text-meta text-ink',
             'placeholder:text-subtle',
-            'transition-[border-color,box-shadow] duration-200',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
-            'disabled:cursor-not-allowed disabled:opacity-60',
+            'transition-[border-color,box-shadow] duration-150',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'disabled:cursor-not-allowed disabled:opacity-45',
             showError
               ? 'border-danger'
               : 'border-line hover:border-line-strong',
@@ -77,7 +77,7 @@ export function Input({
         <p
           id={describedById}
           className={cn(
-            'text-xs leading-4',
+            'text-caption',
             showError ? 'text-danger' : 'text-muted',
           )}
         >
