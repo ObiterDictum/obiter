@@ -26,14 +26,19 @@ export function TooltipTrigger(
 export function TooltipContent({
   children,
   className,
+  side = 'top',
 }: {
   children: ReactNode
   className?: string
+  /** Preferred side. Base UI still flips it when the popup would not fit. */
+  side?: 'top' | 'right' | 'bottom' | 'left'
 }) {
   return (
     <BaseTooltip.Portal>
-      <BaseTooltip.Positioner sideOffset={8} className="z-50">
+      <BaseTooltip.Positioner side={side} sideOffset={8} className="z-50">
         <BaseTooltip.Popup
+          // rc.0 leaves the popup's role to the caller.
+          role="tooltip"
           className={cn(
             'max-w-xs rounded-md border border-line bg-raised px-3 py-2 text-caption text-ink shadow-lg',
             'outline-none',

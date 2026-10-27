@@ -2,8 +2,16 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform, MeResponse } from '@obiter/contracts'
 import { useQuery } from '@tanstack/react-query'
 import { CaretRight, Moon, Sun } from '@phosphor-icons/react'
-import { Skeleton, cn } from '@obiter/ui'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import {
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  Skeleton,
+  cn,
+} from '@obiter/ui'
+import { Fragment } from 'react'
 import { AppSearchField } from './app-search-field'
 import { useAuth } from './auth'
 import { ContentFrame } from './content-frame'
@@ -114,9 +122,6 @@ function initialsOf(name: string) {
   return `${first}${last}`.toUpperCase()
 }
 
-const menuItemClass =
-  'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-item text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring'
-
 /** "Owner · Harrington Vale LLP", or whichever half is known. */
 function accountContext(me: MeResponse) {
   const role = me.user.role
@@ -126,12 +131,10 @@ function accountContext(me: MeResponse) {
 }
 
 /**
- * The account menu. A disclosure rather than a floating-library popover: this
- * is the only menu in the shell and the frame is on a hard bundle budget, so
- * the keyboard contract is implemented here and covered by the shell e2e spec:
- * Enter/Space/ArrowDown open and move into the list, Arrow keys and Home/End
- * move between items, Escape closes and returns focus to the avatar, and Tab
- * or a click elsewhere closes it.
+ * The account menu. Base UI Menu supplies the roles and the keyboard contract
+ * the shell e2e spec asserts (Enter/Space/ArrowDown open into the list, arrows
+ * and Home/End move, Escape closes and returns focus to the avatar, Tab or an
+ * outside click closes); the trigger and popup carry only the visual layer.
  */
 function AccountMenu({
   platform,
@@ -142,131 +145,51 @@ function AccountMenu({
 }) {
   const navigate = useNavigate()
   const { signOut } = useAuth()
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  // Focus moves into the menu when it opens, and a pointer press outside it
-  // closes it. Both are document-level browser events, not React state.
-  useEffect(() => {
-    if (!open) return
-    menuRef.current?.querySelector('button')?.focus()
-    function onPointerDown(event: MouseEvent) {
-      if (
-        event.target instanceof Node &&
-        !menuRef.current?.contains(event.target) &&
-        !triggerRef.current?.contains(event.target)
-      ) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open])
 
   if (!me) return <Skeleton className="size-7 rounded-pill" />
 
   const context = accountContext(me)
 
-  function close() {
-    setOpen(false)
-    triggerRef.current?.focus()
-  }
-
-  function onMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      close()
-      return
-    }
-    if (event.key === 'Tab') {
-      setOpen(false)
-      return
-    }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
-    const items = [...(menuRef.current?.querySelectorAll('button') ?? [])]
-    if (items.length === 0) return
-    event.preventDefault()
-    // SAFETY: the list was queried for `button` elements, so the focused node
-    // can only be one of them or something outside the menu (index -1).
-    const current = items.indexOf(document.activeElement as HTMLButtonElement)
-    const next =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? items.length - 1
-          : event.key === 'ArrowDown'
-            ? (current + 1) % items.length
-            : (current - 1 + items.length) % items.length
-    items[next]?.focus()
-  }
-
   return (
-    <div className="relative shrink-0">
-      <button
-        ref={triggerRef}
-        type="button"
+    <Menu>
+      <MenuTrigger
         aria-label="Account menu"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? 'account-menu' : undefined}
-        onClick={() => setOpen((value) => !value)}
         className={cn(
-          'grid size-7 place-items-center rounded-pill bg-brand text-caption font-medium text-brand-fg',
+          'grid size-7 shrink-0 place-items-center rounded-pill bg-brand text-caption font-medium text-brand-fg',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         )}
       >
         {initialsOf(me.user.name)}
-      </button>
-      {open ? (
-        <div
-          ref={menuRef}
-          id="account-menu"
-          role="menu"
-          aria-label="Account"
-          onKeyDown={onMenuKeyDown}
-          className="absolute top-8 right-0 z-50 w-72 rounded-lg border border-line bg-raised p-2 shadow-lg"
-        >
-          <div className="px-3 py-2">
-            <p className="truncate text-item text-ink">{me.user.name}</p>
-            <p className="break-all text-caption text-subtle">
-              {me.user.email}
-            </p>
-            {context ? (
-              <p className="mt-1 truncate text-caption text-subtle">
-                {context}
-              </p>
-            ) : null}
-          </div>
-          <div className="my-1 border-t border-line" />
-          <button
-            type="button"
-            role="menuitem"
-            className={menuItemClass}
-            onClick={() => {
-              setOpen(false)
-              void navigate({ to: '/settings' })
-            }}
-          >
-            Account settings
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={menuItemClass}
-            onClick={() => {
-              setOpen(false)
-              void signOut()
-              void navigate({ to: '/sign-in' })
-            }}
-          >
-            Sign out
-          </button>
-          <p className="px-3 pt-2 pb-1 text-caption text-subtle">
-            Obiter · {platform === 'desktop' ? 'Desktop' : 'Web'}
-          </p>
+      </MenuTrigger>
+      <MenuContent aria-label="Account">
+        {/* Whose account this is, not an action: presentation keeps the menu
+            list a list of menuitems for screen readers. */}
+        <div role="presentation" className="px-3 py-2">
+          <p className="truncate text-item text-ink">{me.user.name}</p>
+          <p className="break-all text-caption text-subtle">{me.user.email}</p>
+          {context ? (
+            <p className="mt-1 truncate text-caption text-subtle">{context}</p>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+        <MenuSeparator />
+        <MenuItem onClick={() => void navigate({ to: '/settings' })}>
+          Account settings
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            void signOut()
+            void navigate({ to: '/sign-in' })
+          }}
+        >
+          Sign out
+        </MenuItem>
+        <p
+          role="presentation"
+          className="px-3 pt-2 pb-1 text-caption text-subtle"
+        >
+          Obiter · {platform === 'desktop' ? 'Desktop' : 'Web'}
+        </p>
+      </MenuContent>
+    </Menu>
   )
 }

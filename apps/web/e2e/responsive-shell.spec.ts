@@ -165,6 +165,61 @@ test('the account menu opens inside a narrow viewport, closes on Escape and retu
   }
 })
 
+test('the account menu is opened and driven from the keyboard', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.goto('/search')
+
+  const trigger = page.getByRole('button', { name: 'Account menu' })
+  const menu = page.getByRole('menu', { name: 'Account' })
+  const settings = menu.getByRole('menuitem', { name: 'Account settings' })
+  const signOut = menu.getByRole('menuitem', { name: 'Sign out' })
+
+  // Enter on the trigger opens the menu and moves focus into it.
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeVisible()
+  await expect(settings).toBeFocused()
+
+  // Arrows and Home/End move between the items the menu owns.
+  await page.keyboard.press('ArrowDown')
+  await expect(signOut).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(settings).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(signOut).toBeFocused()
+
+  // Escape closes it and returns focus to the avatar.
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(trigger).toBeFocused()
+
+  // ArrowDown opens it as well, and Tab closes it without trapping focus.
+  await page.keyboard.press('ArrowDown')
+  await expect(menu).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(menu).toBeHidden()
+  await expect(trigger).not.toBeFocused()
+})
+
+test('the collapsed rail keeps accessible names and labels its icons', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.goto('/search')
+  await expect(workspaceNav(page)).toBeVisible()
+
+  // A rail row is still a link with its module name, not a button: the label
+  // tooltip is supplementary, so the icon has to stay a link for navigation.
+  const matters = workspaceNav(page).getByRole('link', { name: 'Matters' })
+  await expect(matters).toHaveCount(1)
+  await matters.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Matters')
+})
+
 test('the expanded search panel stays inside the viewport', async ({
   page,
 }) => {
