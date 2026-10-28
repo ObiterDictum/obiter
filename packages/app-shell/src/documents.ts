@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import type {
+  DocumentOpenResponse,
+  RecentlyOpenedDocumentResponse,
+} from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
 import { declaredFileType } from './file-type'
 
@@ -70,6 +75,7 @@ export const documentsKeys = {
     [...documentsKeys.all, 'matter', matterId] as const,
   detail: (documentId: string) =>
     [...documentsKeys.all, 'detail', documentId] as const,
+  recentlyOpened: () => [...documentsKeys.all, 'recently-opened'] as const,
 }
 
 export function documentsNeedStatusPoll(
@@ -117,6 +123,52 @@ export function documentQueryOptions(documentId: string) {
       apiFetch<DocumentDetailResponse>(`/api/documents/${documentId}`),
     retry: retryDocumentLookup,
   })
+}
+
+/** The document this person opened most recently, or null before the first one. */
+export function recentlyOpenedDocumentQueryOptions() {
+  return queryOptions({
+    queryKey: documentsKeys.recentlyOpened(),
+    queryFn: async () => {
+      const response = await apiFetch<RecentlyOpenedDocumentResponse>(
+        '/api/documents/recently-opened',
+      )
+      return response.document
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useRecentlyOpenedDocument(options?: { enabled?: boolean }) {
+  return useQuery({
+    ...recentlyOpenedDocumentQueryOptions(),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+/**
+ * Record that the document on screen is the one this person opened. Opening a
+ * document is a navigation event, not a render value, so it is reported once
+ * per document id from an effect — the one place a lifecycle hook is the honest
+ * way to say "this happened". The write is fire-and-forget: the dashboard line
+ * it feeds is a convenience, and a failure must not interrupt reading.
+ */
+export function useRecordDocumentOpen(documentId: string) {
+  const queryClient = useQueryClient()
+  const { mutate } = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<DocumentOpenResponse>(`/api/documents/${id}/opened`, {
+        method: 'POST',
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: documentsKeys.recentlyOpened(),
+      }),
+  })
+
+  useEffect(() => {
+    mutate(documentId)
+  }, [documentId, mutate])
 }
 
 export function useMatterDocuments(
