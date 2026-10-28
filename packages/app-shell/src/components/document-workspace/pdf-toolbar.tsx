@@ -70,7 +70,9 @@ export function PdfWorkspaceToolbar({
           icon={<FileArrowDown size={16} aria-hidden />}
         />
       ) : null}
-      <span className="pl-2 text-caption text-muted">View only, not editable</span>
+      <span className="pl-2 text-caption text-muted">
+        View only, not editable
+      </span>
     </div>
   )
 }

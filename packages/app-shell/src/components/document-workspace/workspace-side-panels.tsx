@@ -127,7 +127,11 @@ export function WorkspaceSidePanels({
   }
   if (panel === 'comments') {
     return (
-      <DockedPanel title="Comments" onClose={onClose} popout={popout('comments')}>
+      <DockedPanel
+        title="Comments"
+        onClose={onClose}
+        popout={popout('comments')}
+      >
         <DocumentCommentsPanel
           comments={comments}
           importedComments={importedComments}
@@ -163,7 +167,11 @@ export function WorkspaceSidePanels({
   }
   if (panel === 'authorities') {
     return (
-      <DockedPanel title="Authorities" onClose={onClose} popout={popout('authorities')}>
+      <DockedPanel
+        title="Authorities"
+        onClose={onClose}
+        popout={popout('authorities')}
+      >
         <DocumentAuthoritiesPanel
           citations={authorities}
           onSelect={onSelectAuthority}
@@ -172,7 +180,11 @@ export function WorkspaceSidePanels({
     )
   }
   return (
-    <DockedPanel title="Legal checks" onClose={onClose} popout={popout('legal-checks')}>
+    <DockedPanel
+      title="Legal checks"
+      onClose={onClose}
+      popout={popout('legal-checks')}
+    >
       <LegalChecksPanel
         checks={legalChecks}
         focus={legalChecksFocus ?? 'terms'}

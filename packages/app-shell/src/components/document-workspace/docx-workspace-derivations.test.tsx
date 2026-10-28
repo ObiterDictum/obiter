@@ -10,9 +10,7 @@ import {
   rerenderWorkspace,
   selectBodyParagraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
-
 
 /*
  * The workspace derives its painted model, its pagination and its authority

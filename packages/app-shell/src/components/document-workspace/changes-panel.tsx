@@ -75,7 +75,9 @@ export function DocumentReviewPanel({
     comments,
     importedComments,
   })
-  const counts = reviewCounts(rows.filter((row) => row.kind === 'change').map((row) => row.item))
+  const counts = reviewCounts(
+    rows.filter((row) => row.kind === 'change').map((row) => row.item),
+  )
   const commentCount = rows.filter((row) => row.kind === 'comment').length
   const visible = rows.filter((row) => rowMatchesFilter(row, filter))
   const activeIndex = rows.findIndex(
@@ -88,7 +90,10 @@ export function DocumentReviewPanel({
   // reach a decision: the selection is read through the rows that still exist.
   const selectedItems = rows.filter(
     (row) =>
-      row.kind === 'change' && row.item && selected.has(row.id) && itemDecidable(row.item),
+      row.kind === 'change' &&
+      row.item &&
+      selected.has(row.id) &&
+      itemDecidable(row.item),
   )
   const selectedIds = selectedItems.flatMap((row) =>
     row.kind === 'change' ? itemChangeIds(row.item) : [],
@@ -115,7 +120,10 @@ export function DocumentReviewPanel({
   function goToRow(row: ReviewRow) {
     if (row.kind === 'comment') {
       if (row.imported) return
-      onRevealComment(row.comment as DocumentComment)
+      const comment = row.comment
+      // SAFETY: reviewRows sets `imported` false only for product comments,
+      // which are the only ones with an anchor the workspace can reveal.
+      onRevealComment(comment as DocumentComment)
       return
     }
     const id = itemLead(row.item).id
@@ -125,8 +133,13 @@ export function DocumentReviewPanel({
 
   /** Moves the review to the next row that can be decided or read. */
   function step(direction: -1 | 1) {
-    const from = activeIndex >= 0 ? activeIndex : direction === 1 ? -1 : rows.length
-    for (let index = from + direction; index >= 0 && index < rows.length; index += direction) {
+    const from =
+      activeIndex >= 0 ? activeIndex : direction === 1 ? -1 : rows.length
+    for (
+      let index = from + direction;
+      index >= 0 && index < rows.length;
+      index += direction
+    ) {
       const row = rows[index]
       if (!row) continue
       if (row.kind === 'change' && !itemDecidable(row.item)) continue
@@ -166,13 +179,13 @@ export function DocumentReviewPanel({
             total={rows.length}
             reason={
               review.unavailable ??
-              (active?.kind === 'change'
-                ? review.targetUnavailable
-                : undefined)
+              (active?.kind === 'change' ? review.targetUnavailable : undefined)
             }
             pending={review.pending}
             canPrevious={activeIndex > 0}
-            canNext={activeIndex < 0 ? rows.length > 0 : activeIndex < rows.length - 1}
+            canNext={
+              activeIndex < 0 ? rows.length > 0 : activeIndex < rows.length - 1
+            }
             onPrevious={() => step(-1)}
             onNext={() => step(1)}
             onAccept={() => decide('accept')}
@@ -184,7 +197,9 @@ export function DocumentReviewPanel({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <p className="text-caption text-muted">
-            {counts.changes === 1 ? '1 change' : `${String(counts.changes)} changes`}
+            {counts.changes === 1
+              ? '1 change'
+              : `${String(counts.changes)} changes`}
             {counts.moves > 0
               ? ` · ${counts.moves === 1 ? '1 move' : `${String(counts.moves)} moves`}`
               : ''}
@@ -334,7 +349,11 @@ export function DocumentReviewPanel({
                       ) : null}
                     </button>
                     {reason ? (
-                      <p id={noteId} className="text-caption text-muted" role="note">
+                      <p
+                        id={noteId}
+                        className="text-caption text-muted"
+                        role="note"
+                      >
                         {reason}
                       </p>
                     ) : null}
@@ -431,7 +450,9 @@ function CommentRow({
           {changedWords(body, 160)}
         </span>
         {row.context ? (
-          <span className="truncate text-caption text-muted">{row.context}</span>
+          <span className="truncate text-caption text-muted">
+            {row.context}
+          </span>
         ) : null}
       </button>
     </li>
@@ -445,7 +466,8 @@ function ChangeText({ item }: { item: ReviewItem }) {
     return <span className="text-body text-muted">Formatting</span>
   }
   const deleted =
-    lead.kind === 'delete' || (lead.kind === 'move' && lead.direction === 'from')
+    lead.kind === 'delete' ||
+    (lead.kind === 'move' && lead.direction === 'from')
   const style = reviewerStyle(lead.author)
   return (
     <span

@@ -10,9 +10,7 @@ import {
   paragraph,
   selectBodyParagraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
-
 
 describe('DocxWorkspace print', () => {
   it('offers an enabled Print control that opens the platform print dialog', () => {

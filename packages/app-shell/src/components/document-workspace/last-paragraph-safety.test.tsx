@@ -6,7 +6,7 @@ import '@obiter/test-dom'
  * matrix lives in document-edits.test.ts; this file proves the ribbon and the
  * caret-facing behaviour the save path depends on.
  */
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { LAST_PARAGRAPH_MESSAGE } from '../../document-edits'
 import {
@@ -74,10 +74,7 @@ describe('last-paragraph deletion safety', () => {
     expect(renderedParagraphCount()).toBe(1)
     expect(selectedParagraphId()).toBe('p1')
     expect(saveButton()).toHaveProperty('disabled', true)
-    expect(command('Undo')).toHaveProperty(
-      'disabled',
-      true,
-    )
+    expect(command('Undo')).toHaveProperty('disabled', true)
   })
 
   it('enables Delete paragraph after inserting a paragraph and disables it again on deletion', () => {

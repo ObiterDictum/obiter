@@ -42,7 +42,11 @@ export function useWorkspaceView(modelLoaded = true) {
   const [compareOpen, setCompareOpen] = useState(false)
   // The key handler cannot reach the chrome's own surfaces, so a request is a
   // counter: a repeat press still opens the surface it names.
-  const [requests, setRequests] = useState({ find: 0, palette: 0, formatting: 0 })
+  const [requests, setRequests] = useState({
+    find: 0,
+    palette: 0,
+    formatting: 0,
+  })
   const request = (surface: keyof typeof requests) =>
     setRequests((current) => ({
       ...current,

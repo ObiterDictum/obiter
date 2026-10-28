@@ -9,7 +9,6 @@ import {
   paragraph,
   rerenderWorkspace,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
 
 import {

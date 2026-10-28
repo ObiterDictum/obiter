@@ -1,6 +1,5 @@
 import { openRibbonTab } from './editor-test-commands'
-import { command, commandOrNull } from './editor-test-commands'
-
+import { command } from './editor-test-commands'
 
 import '@obiter/test-dom'
 import { type PropsWithChildren } from 'react'
@@ -408,10 +407,7 @@ describe('document-scoped editor state', () => {
     editSharedParagraph('Alpha edited')
     fireEvent.click(command('Undo'))
     // A now holds a redo branch for the edit it just stepped back from.
-    expect(command('Redo')).toHaveProperty(
-      'disabled',
-      false,
-    )
+    expect(command('Redo')).toHaveProperty('disabled', false)
 
     switchTo(view, 'doc_b')
 
@@ -453,13 +449,7 @@ describe('document-scoped editor state', () => {
     expect(screen.getByText('Beta first')).toBeTruthy()
     expect(screen.getByText('Beta tail')).toBeTruthy()
     expect(screen.queryByText('Alpha edited')).toBeNull()
-    expect(command('Undo')).toHaveProperty(
-      'disabled',
-      true,
-    )
-    expect(command('Redo')).toHaveProperty(
-      'disabled',
-      true,
-    )
+    expect(command('Undo')).toHaveProperty('disabled', true)
+    expect(command('Redo')).toHaveProperty('disabled', true)
   })
 })

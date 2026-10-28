@@ -60,7 +60,9 @@ export function ReviewDecisionBar({
               >
                 {style.initials}
               </span>
-              <span className="truncate">{lead.author ?? 'Unknown author'}</span>
+              <span className="truncate">
+                {lead.author ?? 'Unknown author'}
+              </span>
               <span className="shrink-0 text-caption text-subtle">
                 {itemKindLabel(item!)}
               </span>

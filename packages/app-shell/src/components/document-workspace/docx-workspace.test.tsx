@@ -16,7 +16,6 @@ import {
   commandOrNull,
 } from './docx-workspace-harness'
 
-
 /** The authoritative lineage a text-only save returns: no structural slots. */
 /**
  * A text-only save of `r1` in `p1`: the run keeps its result address, which
@@ -76,19 +75,12 @@ describe('DocxWorkspace chrome', () => {
         false,
       )
     }
-    expect(
-      command('Clear formatting'),
-    ).toHaveProperty('disabled', false)
+    expect(command('Clear formatting')).toHaveProperty('disabled', false)
     expect(
       screen.getByRole('combobox', { name: 'Line spacing' }),
     ).toHaveProperty('disabled', false)
-    expect(command('Bullets')).toHaveProperty(
-      'disabled',
-      true,
-    )
-    expect(
-      command('Multilevel numbering'),
-    ).toHaveProperty('disabled', true)
+    expect(command('Bullets')).toHaveProperty('disabled', true)
+    expect(command('Multilevel numbering')).toHaveProperty('disabled', true)
     openRibbonTab('Insert')
     // Table and picture are real controls; with no caret paragraph they
     // report an honest reason instead of a placeholder label.
@@ -108,33 +100,19 @@ describe('DocxWorkspace chrome', () => {
     expect(
       screen.getByRole('combobox', { name: 'Document type' }),
     ).toHaveProperty('disabled', false)
-    expect(command('Privileged')).toHaveProperty(
-      'disabled',
-      false,
-    )
-    expect(command('Draft')).toHaveProperty(
-      'disabled',
-      false,
-    )
-    expect(
-      command('Without prejudice'),
-    ).toHaveProperty('disabled', false)
+    expect(command('Privileged')).toHaveProperty('disabled', false)
+    expect(command('Draft')).toHaveProperty('disabled', false)
+    expect(command('Without prejudice')).toHaveProperty('disabled', false)
     openRibbonTab('References')
-    expect(
-      command('Insert authority'),
-    ).toHaveProperty('disabled', false)
+    expect(command('Insert authority')).toHaveProperty('disabled', false)
     expect(screen.queryByRole('combobox', { name: /Harvard/i })).toBeNull()
     openRibbonTab('Review')
     // The document-level Redact action is real; the ribbon entry reveals it
     // rather than claiming the capability does not exist.
-    expect(
-      command('Redact this document'),
-    ).toHaveProperty('disabled', false)
+    expect(command('Redact this document')).toHaveProperty('disabled', false)
     // Share-safe export is a live route: refusal comes from the server, not a
     // placeholder control.
-    expect(
-      command('Share-safe export'),
-    ).toHaveProperty('disabled', false)
+    expect(command('Share-safe export')).toHaveProperty('disabled', false)
   })
 
   it('allows partial emphasis while track changes is on', () => {
@@ -154,10 +132,7 @@ describe('DocxWorkspace chrome', () => {
     expect(bold).toHaveProperty('disabled', false)
     // The tracked range formats as a pending draft, not a refused control.
     fireEvent.click(bold)
-    expect(command('Save')).toHaveProperty(
-      'disabled',
-      false,
-    )
+    expect(command('Save')).toHaveProperty('disabled', false)
   })
 
   it('replaces find hits and lists extracted authorities', () => {
@@ -690,21 +665,13 @@ describe('DocxWorkspace track changes toggle', () => {
     const view = mountWorkspace({ models: { doc_1: tracked } })
     openRibbonTab('Review')
     fireEvent.click(command('Track changes on'))
-    await waitFor(() =>
-      expect(
-        commandOrNull('Track changes off'),
-      ).toBeTruthy(),
-    )
+    await waitFor(() => expect(commandOrNull('Track changes off')).toBeTruthy())
 
     // Unsaved work survives a remount through the draft store — a pending
     // flip is unsaved work, so the reopened toggle is still off.
     view.unmount()
     mountWorkspace({ models: { doc_1: tracked } })
     openRibbonTab('Review')
-    await waitFor(() =>
-      expect(
-        commandOrNull('Track changes off'),
-      ).toBeTruthy(),
-    )
+    await waitFor(() => expect(commandOrNull('Track changes off')).toBeTruthy())
   })
 })

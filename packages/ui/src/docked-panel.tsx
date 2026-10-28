@@ -81,10 +81,14 @@ export function DockedPanel({
     if (!popout) return
     const rect = panelRef.current?.getBoundingClientRect()
     popout.onMove(
-      clampPanelPosition(next, { width: innerWidth, height: innerHeight }, {
-        width: rect?.width ?? 380,
-        height: rect?.height ?? 480,
-      }),
+      clampPanelPosition(
+        next,
+        { width: innerWidth, height: innerHeight },
+        {
+          width: rect?.width ?? 380,
+          height: rect?.height ?? 480,
+        },
+      ),
     )
   }
   return (
@@ -93,7 +97,11 @@ export function DockedPanel({
       data-docked-panel
       data-panel-mode={floating ? 'floating' : 'docked'}
       aria-label={name}
-      style={floating ? { left: popout.position.x, top: popout.position.y } : undefined}
+      style={
+        floating
+          ? { left: popout.position.x, top: popout.position.y }
+          : undefined
+      }
       className={cn(
         'flex w-panel max-w-full min-w-0 shrink-0 flex-col bg-surface text-ink',
         floating &&
@@ -104,12 +112,15 @@ export function DockedPanel({
       <div
         className={cn(
           'flex shrink-0 items-center justify-between gap-2 border-b border-line px-6 py-3',
-          floating && 'cursor-grab touch-none select-none active:cursor-grabbing',
+          floating &&
+            'cursor-grab touch-none select-none active:cursor-grabbing',
         )}
         {...(floating
           ? {
               onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
                 // A press on a control in the header is not a drag.
+                // SAFETY: pointer events from this header always target an
+                // Element; a text node cannot start a pointer event.
                 if ((event.target as HTMLElement).closest('button')) return
                 drag.current = {
                   pointerId: event.pointerId,

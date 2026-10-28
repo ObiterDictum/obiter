@@ -62,7 +62,9 @@ export function reviewRows({
   }
   const orderOf = (paragraphId: string | undefined, offset: number) => {
     const index = paragraphId ? indexOf.get(paragraphId) : undefined
-    return index === undefined ? Number.MAX_SAFE_INTEGER : index * 10_000 + offset
+    return index === undefined
+      ? Number.MAX_SAFE_INTEGER
+      : index * 10_000 + offset
   }
   const rows: ReviewRow[] = []
   for (const item of reviewItems(changes)) {
@@ -111,7 +113,9 @@ export function rowMatchesFilter(row: ReviewRow, filter: ReviewFilter) {
   if (filter === 'all') return true
   if (filter === 'comment') return row.kind === 'comment'
   if (row.kind === 'comment') return false
-  return filter === 'move' ? row.item.kind === 'move' : row.item.kind === 'change'
+  return filter === 'move'
+    ? row.item.kind === 'move'
+    : row.item.kind === 'change'
 }
 
 /**
@@ -120,7 +124,10 @@ export function rowMatchesFilter(row: ReviewRow, filter: ReviewFilter) {
  * document does not print.
  */
 export function paragraphLocation(
-  paragraphs: ReadonlyArray<{ id: string; runs?: ReadonlyArray<{ text: string }> }>,
+  paragraphs: ReadonlyArray<{
+    id: string
+    runs?: ReadonlyArray<{ text: string }>
+  }>,
   indexOf: ReadonlyMap<string, number>,
   paragraphId: string | undefined,
   drafts?: Record<string, string>,
@@ -153,7 +160,10 @@ export function leadingNumber(text: string) {
 }
 
 function firstWords(text: string, count: number) {
-  const words = text.trim().split(/\s+/u).filter((word) => word !== '')
+  const words = text
+    .trim()
+    .split(/\s+/u)
+    .filter((word) => word !== '')
   return words.slice(0, count).join(' ')
 }
 

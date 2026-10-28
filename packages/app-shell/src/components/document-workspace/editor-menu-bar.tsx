@@ -27,7 +27,10 @@ export function EditorMenuBar({
   className?: string
 }) {
   return (
-    <nav aria-label="Document menu" className={cn('flex items-stretch', className)}>
+    <nav
+      aria-label="Document menu"
+      className={cn('flex items-stretch', className)}
+    >
       {menus.map((menu) => (
         <Menu key={menu.id} modal={false}>
           <MenuTrigger
@@ -61,7 +64,11 @@ export function EditorMenuBar({
   )
 }
 
-function MenuGroupCommands({ commands }: { commands: readonly EditorCommand[] }) {
+function MenuGroupCommands({
+  commands,
+}: {
+  commands: readonly EditorCommand[]
+}) {
   const rows = commands.map((command) => (
     <EditorMenuItem
       key={command.id}

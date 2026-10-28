@@ -310,11 +310,6 @@ export function DocxWorkspace({
   const chrome = docxWorkspaceChrome({
     save,
     drafts,
-    remoteChange,
-    transientNotice: transientBanner,
-    selectionNotice:
-      selectionNotice ?? selectionAnnouncement(selectionSegments.size),
-    onReload: reload,
     trackChanges,
     zoom,
     panels,
@@ -363,7 +358,8 @@ export function DocxWorkspace({
     <InlineChangeReview
       value={inlineReviewOf(changeReview, () => togglePanel('review'))}
     >
-      <WorkspaceShell layout={layout}
+      <WorkspaceShell
+        layout={layout}
         onKeyDown={(event) =>
           workspaceKeyDown(event, {
             panels,
@@ -485,7 +481,9 @@ export function DocxWorkspace({
             <InsertAuthorityDialog
               open={insertAuthorityOpen}
               onOpenChange={setInsertAuthorityOpen}
-              disabled={!selectedParagraphId && !documentStory(model)?.paragraphs[0]}
+              disabled={
+                !selectedParagraphId && !documentStory(model)?.paragraphs[0]
+              }
               citationStyle={legalTools.citationStyle}
               onInsert={(citation) =>
                 insertAuthority(citation, legalTools.citationStyle === 'house')

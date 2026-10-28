@@ -377,7 +377,8 @@ function EntryBody({ entry }: { entry: DocumentComparisonEntry }) {
       return (
         <p className="text-caption text-muted">
           {entryLabel(entry)}
-          {'storyPartName' in entry && entry.storyPartName !== 'word/document.xml'
+          {'storyPartName' in entry &&
+          entry.storyPartName !== 'word/document.xml'
             ? ` · ${entry.storyPartName}`
             : ''}
         </p>

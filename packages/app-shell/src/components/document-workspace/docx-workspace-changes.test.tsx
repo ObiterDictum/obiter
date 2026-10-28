@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
@@ -13,7 +13,6 @@ import {
   paragraph,
   selectBodyParagraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
 
 import { editorMenus } from './editor-commands'
@@ -77,38 +76,30 @@ describe('DocxWorkspace change review', () => {
   it('navigates the list and reveals the active change', () => {
     mountWorkspace({ changes: [inserted, format] })
     openRibbonTab('Review')
+    fireEvent.click(command('Changes (2)'))
+    const panel = screen.getByRole('complementary', {
+      name: 'Changes and comments',
+    })
+    const next = () => within(panel).getByRole('button', { name: /^Next/ })
+    const previous = () =>
+      within(panel).getByRole('button', { name: /^Previous/ })
 
-    // No target yet: the single-change controls say so instead of guessing.
-    expect(
-      screen.getByRole('button', {
-        name: 'Accept change: Go to a change first — use Previous, Next or the Changes list.',
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: 'Previous change: There is no earlier change.',
-      }),
-    ).toHaveProperty('disabled', true)
+    // Nothing is current yet, so the bar offers navigation only and says so.
+    expect(panel.textContent).toContain('No change selected')
+    expect(previous()).toHaveProperty('disabled', true)
 
-    fireEvent.click(command('Next change'))
-    // The reveal lands the caret on the change's paragraph.
+    fireEvent.click(next())
+    // The reveal lands the caret on the change's paragraph and the row is
+    // current, so its Accept can run and the bar names it.
     expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
-    expect(
-      command('Accept change'),
-    ).toHaveProperty('disabled', false)
-    expect(
-      screen.getByRole('button', {
-        name: 'Previous change: There is no earlier change.',
-      }),
-    ).toHaveProperty('disabled', true)
+    expect(panel.textContent).toContain('1 of 2')
+    // The first row has nothing before it, so Previous stays unavailable.
+    expect(previous()).toHaveProperty('disabled', true)
 
-    fireEvent.click(command('Next change'))
-    // The menu row keeps its plain name; the reason is the disabled state's
-    // own caption, which the command publishes the same way it always did.
-    expect(command('Next change')).toHaveProperty('disabled', true)
-    expect(
-      command('Previous change'),
-    ).toHaveProperty('disabled', false)
+    fireEvent.click(next())
+    expect(panel.textContent).toContain('2 of 2')
+    expect(next()).toHaveProperty('disabled', true)
+    expect(previous()).toHaveProperty('disabled', false)
   })
 
   it('reveals a missing inline anchor at the paragraph end', () => {
@@ -335,7 +326,6 @@ describe('DocxWorkspace change review', () => {
         openFormatting: () => undefined,
         openFind: () => undefined,
         openPalette: () => undefined,
-        openHelp: () => undefined,
         openTable: () => undefined,
         openLink: () => undefined,
         openCrossReference: () => undefined,
@@ -375,11 +365,17 @@ describe('DocxWorkspace change review', () => {
       within(panel).getAllByRole('button', { name: 'Show this change' })[0]!,
     )
 
-    // The merged move row is the one current target, so the per-change
-    // controls name why it cannot be decided.
-    expect(command('Accept change')).toHaveProperty('disabled', true)
-    expect(command('Reject change')).toHaveProperty('disabled', true)
-    expect(within(panel).getAllByText(unsupportedMoveReason).length).toBeGreaterThan(0)
+    // The merged move row is the one current target, so the panel states why
+    // it cannot be decided and its Accept cannot run.
+    for (const accept of within(panel).getAllByRole('button', {
+      name: 'Accept',
+    })) {
+      if (accept.closest('li')?.textContent?.includes('cannot be paired'))
+        expect(accept).toHaveProperty('disabled', true)
+    }
+    expect(
+      within(panel).getAllByText(unsupportedMoveReason).length,
+    ).toBeGreaterThan(0)
     expect(decide).not.toHaveBeenCalled()
   })
 
@@ -440,9 +436,7 @@ describe('DocxWorkspace change review', () => {
       decideAsync: decide,
     })
     openRibbonTab('Review')
-    fireEvent.click(
-      command('Accept all supported changes'),
-    )
+    fireEvent.click(command('Accept all supported changes'))
 
     // The undecidable change is never put on the wire — the request is one
     // atomic decision over the supported ids only.

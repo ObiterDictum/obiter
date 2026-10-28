@@ -13,7 +13,6 @@ import {
   paragraph,
   rerenderWorkspace,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
 
 import {
@@ -302,9 +301,9 @@ describe('formatting a cross-paragraph selection', () => {
     ]
     const { editAsync } = mount(model)
     selectAcrossBoundary()
-    fireEvent.change(screen.getByLabelText('Paragraph style'), {
-      target: { value: 'Quote' },
-    })
+    // The paragraph style picker is a Base UI Select; its choices are also
+    // Format menu rows, which is the path a keyboard user takes to them.
+    fireEvent.click(command('Quote'))
     save()
     const operations = saveOperations(editAsync)
     expect(operations).toEqual(

@@ -15,7 +15,6 @@ import {
   multiParagraphModel,
   paragraph,
   tabledBodyModel,
-  commandOrNull,
   commandPrefix,
 } from './docx-workspace-harness'
 

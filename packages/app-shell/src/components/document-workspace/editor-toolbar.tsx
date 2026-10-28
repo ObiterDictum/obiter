@@ -1,11 +1,9 @@
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
-  ChatText,
   Command,
   ListBullets,
   ListNumbers,
-  PencilLine,
   TextAlignCenter,
   TextAlignJustify,
   TextAlignLeft,
@@ -15,7 +13,11 @@ import {
   TextUnderline,
   TextAa,
 } from '@phosphor-icons/react'
-import { EditorIconButton, EditorSelect, EditorTextButton } from './editor-controls'
+import {
+  EditorIconButton,
+  EditorSelect,
+  EditorTextButton,
+} from './editor-controls'
 import type { EditorChromeProps } from './editor-commands'
 import { styleDisplayName } from './editor-commands'
 
@@ -155,7 +157,11 @@ export function EditorToolbar({
       />
       <ToolbarDivider />
       <EditorTextButton
-        label={props.commentCount > 0 ? `Comments (${String(props.commentCount)})` : 'Comments'}
+        label={
+          props.commentCount > 0
+            ? `Comments (${String(props.commentCount)})`
+            : 'Comments'
+        }
         pressed={props.commentsOpen}
         onClick={props.onToggleComments}
       />

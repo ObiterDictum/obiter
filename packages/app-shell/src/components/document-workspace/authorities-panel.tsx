@@ -33,7 +33,13 @@ export function DocumentAuthoritiesPanel({
   for (const hit of citations) {
     const group = groups.find((item) => item.citation === hit.citation)
     if (group) group.hits.push(hit)
-    else groups.push({ citation: hit.citation, name: null, hits: [hit], finding: undefined })
+    else
+      groups.push({
+        citation: hit.citation,
+        name: null,
+        hits: [hit],
+        finding: undefined,
+      })
   }
   const findings = verification?.findings ?? []
   for (const group of groups) {
@@ -139,9 +145,7 @@ function AuthorityRow({
   onShowFinding?: (findingId: string) => void
 }) {
   const first = group.hits[0]
-  const title = group.name
-    ? `${group.name} ${group.citation}`
-    : group.citation
+  const title = group.name ? `${group.name} ${group.citation}` : group.citation
   return (
     <li className="flex flex-col gap-1 border-t border-line py-3 first:border-t-0">
       <Button

@@ -7,7 +7,10 @@ import { fireEvent, screen } from '@testing-library/react'
  * harness that registers those mocks.
  */
 /** Where each command that is not always on screen lives. */
-const COMMAND_HOME: Record<string, 'File' | 'Edit' | 'Insert' | 'Format' | 'Review' | 'View' | 'formatting'> = {
+type CommandHome =
+  'File' | 'Edit' | 'Insert' | 'Format' | 'Review' | 'View' | 'formatting'
+
+const COMMAND_HOME = {
   'Page break': 'Insert',
   'Section break': 'Insert',
   'Insert table': 'Insert',
@@ -30,7 +33,7 @@ const COMMAND_HOME: Record<string, 'File' | 'Edit' | 'Insert' | 'Format' | 'Revi
   Paste: 'Edit',
   'Insert paragraph': 'Edit',
   'Delete paragraph': 'Edit',
-  'Print': 'File',
+  Print: 'File',
   Export: 'File',
   'Share-safe export': 'File',
   'Compare versions': 'File',
@@ -72,7 +75,7 @@ const COMMAND_HOME: Record<string, 'File' | 'Edit' | 'Insert' | 'Format' | 'Revi
   'Decrease list indent': 'formatting',
   'Continue list': 'formatting',
   'Restart numbering': 'formatting',
-}
+} satisfies Record<string, CommandHome>
 
 /**
  * A command's control, opening the surface that holds it when it is not
@@ -87,14 +90,21 @@ export function command(name: string | RegExp): HTMLElement {
   const matched =
     typeof name === 'string'
       ? name
-      : (Object.keys(COMMAND_HOME) as string[]).find((key) => name.test(key))
-  const home = matched ? COMMAND_HOME[matched] : undefined
-  const open = (surface: string) =>
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: new RegExp(`^${surface}$`),
-      }),
-    )
+      : Object.keys(COMMAND_HOME).find((key) => name.test(key))
+  // SAFETY: `matched` can only be a string key of COMMAND_HOME, whether it was
+  // given directly or found by matching one of those keys with the regex.
+  const home = matched
+    ? COMMAND_HOME[matched as keyof typeof COMMAND_HOME]
+    : undefined
+  // A trigger whose menu is already open would be closed by another click,
+  // so an open surface is left alone.
+  const open = (surface: string) => {
+    const trigger = screen.getByRole('button', {
+      name: new RegExp(`^${surface}$`),
+    })
+    if (trigger.getAttribute('aria-expanded') === 'true') return
+    fireEvent.click(trigger)
+  }
   if (home === 'formatting') {
     open('Font, paragraph and page')
   } else if (home) {
@@ -102,7 +112,14 @@ export function command(name: string | RegExp): HTMLElement {
   } else {
     // A command with no recorded home (a style, a footnote label that changes
     // with state) is found by opening the menus in order.
-    for (const surface of ['File', 'Edit', 'Insert', 'Format', 'Review', 'View']) {
+    for (const surface of [
+      'File',
+      'Edit',
+      'Insert',
+      'Format',
+      'Review',
+      'View',
+    ]) {
       open(surface)
       if (
         screen
@@ -125,11 +142,11 @@ export function commandPrefix(prefix: string): HTMLElement {
     .queryAllByRole('button')
     .find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
   if (visible) return visible
-  const home = (Object.keys(COMMAND_HOME) as string[]).find((key) =>
-    key.startsWith(prefix),
-  )
+  const home = Object.keys(COMMAND_HOME).find((key) => key.startsWith(prefix))
   if (home) {
-    const target = COMMAND_HOME[home]
+    // SAFETY: `home` came from Object.keys(COMMAND_HOME), so indexing with it
+    // is in bounds.
+    const target = COMMAND_HOME[home as keyof typeof COMMAND_HOME]
     if (target === 'formatting') {
       fireEvent.click(
         screen.getByRole('button', { name: 'Font, paragraph and page' }),
@@ -140,6 +157,8 @@ export function commandPrefix(prefix: string): HTMLElement {
       )
     }
   }
+  // SAFETY: `home` is one of the literal COMMAND_HOME values, each of which
+  // names a rendered menu trigger.
   const found = screen
     .queryAllByRole('button')
     .find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
@@ -158,7 +177,6 @@ export function commandOrNull(name: string | RegExp): HTMLElement | null {
     return null
   }
 }
-
 
 const MENU_OF_TAB = {
   Home: 'Format',
@@ -191,4 +209,3 @@ export function openRibbonTab(name: keyof typeof MENU_OF_TAB) {
     screen.getByRole('button', { name: new RegExp(`^${MENU_OF_TAB[name]}$`) }),
   )
 }
-
