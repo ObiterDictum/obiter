@@ -158,7 +158,7 @@ export function PageScaffold(props: {
 }): JSX.Element
 ```
 
-Renders the approved page heading on the frame's content column: title at 28/600 with −0.02em tracking, description at body size on a 68ch measure, header actions vertically centred against the title (stacked below it at 1024 and under), 56px top and bottom padding, and a 40px gap between content sections. Content stops at 1120px; the gutter is 48px, and 32px at 1024 and under. There is no uppercase label above the title. The optional eyebrow is quiet metadata (Home's date, `Monday 26 Oct 2026`), which the dashboard mock-up places above the greeting; it aligns on the same left edge as the title. The Redact review screen renders inside `<PageScaffold>`.
+Renders the approved page heading on the frame's content column: title at 28/600 with −0.02em tracking, description at body size on a 68ch measure, header actions vertically centred against the title (stacked below it at 1024 and under), 56px top and bottom padding, and a 40px gap between content sections. Content stops at 1120px; the gutter is 48px, and 32px at 1024 and under. There is no uppercase label above the title. The optional eyebrow is quiet metadata (Home's date, `Monday 26 Oct 2026`), which the dashboard mock-up places above the greeting; it aligns on the same left edge as the title. Screens that are working surfaces rather than pages do not compose it: the Redact review screen carries its own document header (filename as the title, matter and review state beneath, actions at the end) on the frame's content gutter, because a reviewer works in it for the length of a run and the approved mock-up sets it at document scale. The Redact finalised screen is a page and does render inside `<PageScaffold>`.
 
 ## 6. App frame
 

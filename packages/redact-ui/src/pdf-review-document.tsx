@@ -6,12 +6,26 @@ import {
   snapDeviceCoverOutward,
 } from '@obiter/redaction-policy'
 import type { DocumentTextLayout } from './types'
-import type { RedactionSpan } from '@obiter/redaction-policy'
+import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
+import { spanDecisionState } from './span-copy'
+
+/**
+ * The decision state as the page paints it. A kept span fades back so it can
+ * never be mistaken for one that will be removed, and an undecided span carries
+ * a warning outline. The panel states every state in words as well.
+ */
+const decisionOverlayClass = {
+  accepted: 'opacity-80',
+  rejected: 'opacity-25',
+  pseudonymised: 'opacity-80 ring-1 ring-info',
+  pending: 'opacity-80 outline-2 outline-warning',
+} satisfies Record<ReturnType<typeof spanDecisionState>, string>
 
 interface PdfReviewDocumentProps {
   file: Blob
   layout: DocumentTextLayout
   spans: RedactionSpan[]
+  decisions: Decisions
   selectedId: string | null
   onSelect: (id: string) => void
   categoryClassName: Record<string, string>
@@ -21,6 +35,7 @@ export function PdfReviewDocument({
   file,
   layout,
   spans,
+  decisions,
   selectedId,
   onSelect,
   categoryClassName,
@@ -87,6 +102,7 @@ export function PdfReviewDocument({
           pageIndex={index}
           layout={layout}
           spans={spans}
+          decisions={decisions}
           selectedId={selectedId}
           onSelect={onSelect}
           onError={setError}
@@ -136,6 +152,7 @@ function PdfPage({
   pageIndex,
   layout,
   spans,
+  decisions,
   selectedId,
   onSelect,
   onError,
@@ -146,6 +163,7 @@ function PdfPage({
   pageIndex: number
   layout: DocumentTextLayout
   spans: RedactionSpan[]
+  decisions: Decisions
   selectedId: string | null
   onSelect: (id: string) => void
   onError: (message: string) => void
@@ -271,8 +289,11 @@ function PdfPage({
               aria-label={`${box.span.category.replaceAll('_', ' ')}: ${box.span.text}`}
               aria-pressed={selectedId === box.span.id}
               className={cn(
-                'pointer-events-auto absolute rounded-sm border border-transparent opacity-80 transition-opacity hover:opacity-95',
+                'pointer-events-auto absolute rounded-sm border border-transparent transition-opacity hover:opacity-95',
                 categoryClassName[box.span.category],
+                decisionOverlayClass[
+                  spanDecisionState(decisions[box.span.id]?.decision)
+                ],
                 selectedId === box.span.id && 'opacity-100 ring-2 ring-ring',
               )}
               style={{
