@@ -46,6 +46,7 @@ export function caseLawDocumentQueryOptions(caseId: string) {
     // from cache on mount, so a judgment withdrawn since the last visit
     // revalidates and the banner renders on fresh data.
     staleTime: 0,
+    retry: 1,
     refetchOnMount: 'always',
     queryFn: async () => {
       const response = await fetch(

@@ -233,7 +233,7 @@ const caseSlugRoute = createRoute({
   path: 'case/$caseSlug',
   loader: ({ context, params }) => {
     const caseId = resolveCaseDocumentIdFromSlug(params.caseSlug)
-    return context.queryClient.ensureQueryData(
+    return context.queryClient.prefetchQuery(
       caseLawDocumentQueryOptions(caseId),
     )
   },
@@ -254,7 +254,7 @@ const legislationRoute = createRoute({
     if (!provisionPath) {
       throw new Error('Legislation provision path is missing.')
     }
-    return context.queryClient.ensureQueryData(
+    return context.queryClient.prefetchQuery(
       legislationProvisionQueryOptions(provisionPath),
     )
   },

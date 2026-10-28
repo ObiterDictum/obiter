@@ -21,7 +21,7 @@ export interface CaseLawSnippet {
   matchReason?: LegalSearchMatchReason
 }
 
-export type LegalSearchMatchReason =
+type LegalSearchMatchReason =
   | 'exact_document_id'
   | 'exact_neutral_citation'
   | 'title_match'
@@ -29,7 +29,7 @@ export type LegalSearchMatchReason =
   | 'body_text_match'
   | 'keyword_match'
 
-export type LegalSearchRetrievalPath =
+type LegalSearchRetrievalPath =
   'stored_exact_lookup' | 'stored_index' | 'stored_source' | 'live_provider'
 export type LegalSearchOutcome =
   | 'results'
@@ -82,7 +82,7 @@ export interface LegislationSearchResultHit {
   retrievalRank?: number
 }
 
-export interface LegalSearchFetchGroup {
+interface LegalSearchFetchGroup {
   key: 'judgments' | 'legislation'
   label: string
   hits: LegislationSearchResultHit[]
@@ -96,6 +96,7 @@ export interface LegalSearchFetchResponse {
   cached: boolean
   indexedCount: number
   skippedCount: number
+  estimatedTotalHits?: number
   hydrationQueued?: boolean
   outcome?: LegalSearchOutcome
   /** Citation honesty; absent for responses that predate it. */
@@ -159,7 +160,12 @@ export interface LegalSearchRequestFilters {
   legislationVersion?: string
 }
 
-export interface CourtOption {
+export interface SearchCourtShortcut {
+  code: string
+  label: string
+}
+
+interface CourtOption {
   code: string
   label: string
 }
@@ -286,6 +292,17 @@ export const courtOptionGroups: CourtOptionGroup[] = [
     ],
   },
 ]
+
+export function getReadableCourtLabel(court: string) {
+  const normalized = court.replace(/-/g, '/')
+  const direct = getCourtLabel(normalized)
+  if (direct !== normalized) return direct
+  return court
+    .split(/[-/]/)
+    .filter(Boolean)
+    .map((part) => part.toUpperCase())
+    .join(' ')
+}
 
 export function getCourtLabel(code: string) {
   if (!code) return 'All courts and tribunals'

@@ -49,7 +49,7 @@ const DOCUMENT_PAYLOAD = {
     neutralCitation: '[2024] UKSC 3',
     court: 'uksc',
     dateDecided: '2024-01-31',
-    sourceUrl: 'https://example.org/uksc/2024/3',
+    sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
     // Stored as LegalDocML parses it: the court's `<num>` in paragraphNumber,
     // not in the text, and not equal to the paragraph's position.
     paragraphs: [
@@ -166,6 +166,38 @@ describe('CaseLawDocumentView', () => {
     })
   })
 
+  it('names the source and records that no retrieval date is stored', async () => {
+    mockFetch()
+    renderView()
+
+    await screen.findByRole('document')
+    expect(
+      screen.getAllByText('The National Archives (Find Case Law)').length,
+    ).toBeGreaterThan(0)
+    expect(screen.getAllByText('Retrieval date not recorded').length).toBe(1)
+    // The payload carries no judge or party fields; the page must not invent
+    // them from the title.
+    expect(screen.queryByText('Judges')).toBeNull()
+    expect(screen.queryByText('Panel')).toBeNull()
+  })
+
+  it('shows a source failure with a retry instead of an empty judgment', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new Error('network down'))
+    vi.stubGlobal('fetch', fetchMock)
+    renderView()
+
+    expect(
+      await screen.findByText('Judgment could not be loaded', undefined, {
+        timeout: 3000,
+      }),
+    ).toBeTruthy()
+    fetchMock.mockResolvedValueOnce(jsonResponse(DOCUMENT_PAYLOAD))
+    screen.getByRole('button', { name: 'Retry' }).click()
+    expect(await screen.findByRole('document')).toBeTruthy()
+  })
+
   it('renders stored metadata with the full-text-unavailable state for a summary-only row', async () => {
     vi.stubGlobal(
       'fetch',
@@ -177,7 +209,7 @@ describe('CaseLawDocumentView', () => {
             neutralCitation: '[2024] UKSC 3',
             court: 'uksc',
             dateDecided: '2024-01-31',
-            sourceUrl: 'https://example.org/uksc/2024/3',
+            sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
           },
         }),
       ),
