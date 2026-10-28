@@ -1,12 +1,10 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
-import { Button, Input } from '@obiter/ui'
+import { Button, Input, ObiterMark } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
-import { THEME_STORAGE_KEY } from '../use-app-theme'
-import { Wordmark } from '../wordmark'
 
 type Mode = 'password' | 'magic-link'
 
@@ -44,8 +42,6 @@ export function SignInRouteView({
   )
   const [submitting, setSubmitting] = useState(false)
   const [unverified, setUnverified] = useState(false)
-
-  useForceNightTheme()
 
   async function goToHome() {
     if (inviteToken) {
@@ -109,7 +105,7 @@ export function SignInRouteView({
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
       <div className="flex w-full max-w-[28rem] flex-col gap-8">
         <header className="flex flex-col items-center gap-4 text-center">
-          <Wordmark className="text-[1.35rem]" />
+          <ObiterMark className="size-8" />
           <div className="flex flex-col gap-1.5">
             <h1 className="text-lg font-semibold tracking-tight text-ink">
               Sign in to Obiter
@@ -293,19 +289,4 @@ function ModeButton({
       {children}
     </button>
   )
-}
-
-/** Auth routes always present night chrome regardless of persisted preference. */
-export function useForceNightTheme() {
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    return () => {
-      // After auth, restore an explicit light preference only; otherwise stay night.
-      const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
-      document.documentElement.setAttribute(
-        'data-theme',
-        stored === 'light' ? 'light' : 'dark',
-      )
-    }
-  }, [])
 }

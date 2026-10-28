@@ -4,8 +4,7 @@ import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
-import { Wordmark } from '../wordmark'
-import { useForceNightTheme } from './sign-in'
+import { ObiterMark } from '@obiter/ui'
 
 /**
  * Reset-password screen. The reset email links here with ?token=.
@@ -27,8 +26,6 @@ export function ResetPasswordRouteView() {
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-
-  useForceNightTheme()
 
   const TOKEN_DEAD_CODES = new Set(['INVALID_TOKEN', 'TOKEN_EXPIRED'])
 
@@ -73,7 +70,7 @@ export function ResetPasswordRouteView() {
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
       <div className="flex w-full max-w-[28rem] flex-col gap-8">
         <header className="flex flex-col items-center gap-4 text-center">
-          <Wordmark className="text-[1.35rem]" />
+          <ObiterMark className="size-8" />
           <div className="flex flex-col gap-1.5">
             <h1 className="text-lg font-semibold tracking-tight text-ink">
               Set a new password

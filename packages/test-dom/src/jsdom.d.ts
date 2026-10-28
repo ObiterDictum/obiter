@@ -16,6 +16,8 @@ declare module 'jsdom' {
     getComputedStyle(element: Element): object
     requestAnimationFrame(callback: (time: number) => void): number
     cancelAnimationFrame(handle: number): void
+    /** Absent in jsdom's own types: it implements no layout. */
+    matchMedia?(query: string): MediaQueryList
   }
   export class JSDOM {
     constructor(

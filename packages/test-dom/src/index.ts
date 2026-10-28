@@ -74,6 +74,24 @@ async function install(): Promise<void> {
     pretendToBeVisual: true,
   })
   const window = dom.window
+  // jsdom implements no layout, so it has no matchMedia at all. The shell reads
+  // media queries for its compact rail; a stub that reports "no match" keeps
+  // those components renderable, and a test that needs a matching query
+  // overrides it on the window it owns.
+  if (typeof window.matchMedia !== 'function') {
+    // jsdom has no layout engine, so the stub reports no match and never fires.
+    window.matchMedia = (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })
+  }
+
   // SAFETY: jsdom installs every DOM global (Node, Element, Document, Event) as an own property of its window, including non-enumerable ones, so the copy loop below must read through a string-keyed view; the intersection keeps the declared window type while only adding keyed reads, and values are copied verbatim.
   const source = window as typeof window & Record<string, unknown>
 

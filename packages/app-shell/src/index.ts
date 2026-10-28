@@ -59,9 +59,16 @@ export {
   type SyncState,
 } from './documents'
 
+export { setAppTheme, useAppTheme, THEME_STORAGE_KEY } from './use-app-theme'
+
 // Layout primitives
 export { AppShellLayout } from './frame'
 export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
+export {
+  ShellError,
+  ShellNotFound,
+  ShellPermissionDenied,
+} from './shell-states'
 
 // Route views
 export { SignInRouteView } from './views/sign-in'

@@ -1,72 +1,61 @@
 import { test, expect } from '@playwright/test'
 import {
-  documentWidths,
   LONG_NAME,
   LONG_ORG,
-  mockSession,
-  MODES,
-  modeNav,
+  MODULES,
   WIDTHS,
+  asideWidth,
+  documentWidths,
+  gotoOtherMode,
+  mockSession,
+  sidebar,
+  sidebarToggle,
+  workspaceNav,
 } from './shell-harness'
 
 /**
  * Shell chrome layout regression.
  *
- * The shell mode bar used to be wider than a narrow viewport: the four mode
- * controls could not shrink, the nav had no scroll containment, and the header
- * grew the document (scrollWidth 450 at a 390px viewport) and drew the last
- * modes over the account controls. This measures the real rendered layout at
- * every supported width and fails if the document widens beyond the viewport, if
- * a mode is covered by other chrome, if a mode cannot be activated, or if a
- * floating panel leaves the viewport.
- *
- * The pointer and keyboard paths into the mode bar and the left rail, which are
- * the mechanisms the narrow-viewport fix rests on, live in mode-rail.spec.ts.
+ * The sidebar replaced the top mode bar and the hover-expand icon rail. This
+ * measures the real rendered layout at every supported width and fails if the
+ * document widens beyond the viewport, if a module is covered by other chrome,
+ * if a module cannot be activated, if collapsing the sidebar strands a module,
+ * or if a floating surface leaves the viewport.
  */
-test('shell chrome fits every supported width and every mode stays reachable', async ({
+test('the shell fits every supported width and every module stays reachable', async ({
   page,
 }) => {
   await mockSession(page)
+  // Entry is /search because a client route's loader runs against the mocked
+  // API; a full load of / or /matters is server-rendered and would sign in for
+  // real before any route mock applies.
   await page.goto('/search')
-  await expect(modeNav(page)).toBeVisible()
+  await expect(workspaceNav(page)).toBeVisible()
 
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 800 })
-    await page.waitForTimeout(100)
+    await page.waitForTimeout(150)
 
     const layout = await page.evaluate(() => {
       const doc = document.documentElement
-      const nav = document.querySelector('nav[aria-label="Modes"]')
-      const rail = nav?.parentElement ?? null
-      const account = document.querySelector('button[aria-haspopup="menu"]')
-      const railRect = rail?.getBoundingClientRect()
-      const accountRect = account?.getBoundingClientRect()
-      return {
-        scrollWidth: doc.scrollWidth,
-        clientWidth: doc.clientWidth,
-        railRight: railRect?.right ?? null,
-        accountLeft: accountRect?.left ?? null,
-      }
+      return { scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth }
     })
-
     expect(
       layout.scrollWidth,
       `document scrolls horizontally at ${width}px (scrollWidth ${layout.scrollWidth}, clientWidth ${layout.clientWidth})`,
     ).toBeLessThanOrEqual(layout.clientWidth)
-    expect(
-      layout.railRight,
-      `mode rail overlaps the account controls at ${width}px`,
-    ).toBeLessThanOrEqual(layout.accountLeft ?? 0)
 
-    for (const mode of MODES) {
-      const link = modeNav(page).getByRole('link', { name: mode.name })
+    for (const module of MODULES) {
+      const link = workspaceNav(page).getByRole('link', {
+        name: new RegExp(`^${module.name}`),
+      })
       await expect(link).toHaveCount(1)
       await link.focus()
       await expect(link).toBeFocused()
 
-      // A focused mode must be on-screen inside its rail, not covered by the
-      // account controls, and must activate. Covering is what made the last
-      // modes unreachable before the fix, so hit-test rather than trust CSS.
+      // A focused module must be on-screen, not covered by the top bar, and
+      // able to activate. Covering is what made the last modes unreachable in
+      // the old rail, so hit-test rather than trust CSS.
       const state = await link.evaluate((element) => {
         const rect = element.getBoundingClientRect()
         const top = document.elementFromPoint(
@@ -81,33 +70,154 @@ test('shell chrome fits every supported width and every mode stays reachable', a
       })
       expect(
         state.left,
-        `mode ${mode.name} off-screen at ${width}px`,
+        `module ${module.name} off-screen at ${width}px`,
       ).toBeGreaterThanOrEqual(-1)
       expect(
         state.right,
-        `mode ${mode.name} extends past the viewport at ${width}px`,
+        `module ${module.name} extends past the viewport at ${width}px`,
       ).toBeLessThanOrEqual(width + 1)
       expect(
         state.covered,
-        `mode ${mode.name} is covered by other chrome at ${width}px`,
+        `module ${module.name} is covered by other chrome at ${width}px`,
       ).toBe(false)
     }
   }
 })
 
-test('every mode is announced as current when its route is active', async ({
+test('every module is announced as current when its route is active', async ({
   page,
 }) => {
   await mockSession(page)
   await page.goto('/search')
-  await expect(modeNav(page)).toBeVisible()
-  await page.setViewportSize({ width: 390, height: 800 })
+  await expect(workspaceNav(page)).toBeVisible()
 
-  for (const mode of MODES) {
-    const link = modeNav(page).getByRole('link', { name: mode.name })
+  for (const module of MODULES) {
+    const link = workspaceNav(page).getByRole('link', {
+      name: new RegExp(`^${module.name}`),
+    })
     await link.click()
     await expect(link).toHaveAttribute('aria-current', 'page')
   }
+})
+
+test('the sidebar collapses to an icon rail and remembers the choice', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.goto('/search')
+  await expect(workspaceNav(page)).toBeVisible()
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  await expect(sidebar(page)).toHaveCSS('width', '252px')
+  await (await sidebarToggle(page)).click()
+  await expect
+    .poll(async () => asideWidth(sidebar(page)))
+    .toBeLessThanOrEqual(64)
+
+  // The rail keeps every module as a labelled control, including the ones the
+  // expanded sidebar shows with a count.
+  for (const module of MODULES) {
+    await expect(
+      workspaceNav(page).getByRole('link', {
+        name: new RegExp(`^${module.name}`),
+      }),
+    ).toBeVisible()
+  }
+
+  await page.reload()
+  await expect(workspaceNav(page)).toBeVisible()
+  await expect
+    .poll(async () => asideWidth(sidebar(page)))
+    .toBeLessThanOrEqual(64)
+
+  await (await sidebarToggle(page)).click()
+  await expect.poll(async () => asideWidth(sidebar(page))).toBeGreaterThan(200)
+})
+
+test('the account menu opens inside a narrow viewport, closes on Escape and returns focus', async ({
+  page,
+}) => {
+  await mockSession(page)
+
+  for (const width of [320, 390, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/search')
+    const trigger = page.getByRole('button', { name: 'Account menu' })
+    await trigger.click()
+
+    const menu = page.getByRole('menu', { name: 'Account' })
+    await expect(menu).toBeVisible()
+    expect(await menu.getByRole('menuitem', { name: 'Sign out' }).count()).toBe(
+      1,
+    )
+
+    const widths = await documentWidths(page)
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth)
+
+    const box = await menu.boundingBox()
+    expect(box, `no account menu at ${width}px`).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(-1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
+
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(trigger).toBeFocused()
+  }
+})
+
+test('the account menu is opened and driven from the keyboard', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.goto('/search')
+
+  const trigger = page.getByRole('button', { name: 'Account menu' })
+  const menu = page.getByRole('menu', { name: 'Account' })
+  const settings = menu.getByRole('menuitem', { name: 'Account settings' })
+  const signOut = menu.getByRole('menuitem', { name: 'Sign out' })
+
+  // Enter on the trigger opens the menu and moves focus into it.
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeVisible()
+  await expect(settings).toBeFocused()
+
+  // Arrows and Home/End move between the items the menu owns.
+  await page.keyboard.press('ArrowDown')
+  await expect(signOut).toBeFocused()
+  await page.keyboard.press('Home')
+  await expect(settings).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(signOut).toBeFocused()
+
+  // Escape closes it and returns focus to the avatar.
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(trigger).toBeFocused()
+
+  // ArrowDown opens it as well, and Tab closes it without trapping focus.
+  await page.keyboard.press('ArrowDown')
+  await expect(menu).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(menu).toBeHidden()
+  await expect(trigger).not.toBeFocused()
+})
+
+test('the collapsed rail keeps accessible names and labels its icons', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 390, height: 800 })
+  await page.goto('/search')
+  await expect(workspaceNav(page)).toBeVisible()
+
+  // A rail row is still a link with its module name, not a button: the label
+  // tooltip is supplementary, so the icon has to stay a link for navigation.
+  const matters = workspaceNav(page).getByRole('link', { name: 'Matters' })
+  await expect(matters).toHaveCount(1)
+  await matters.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Matters')
 })
 
 test('the expanded search panel stays inside the viewport', async ({
@@ -119,9 +229,18 @@ test('the expanded search panel stays inside the viewport', async ({
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/search')
 
+    // At 1024 and below the field is an icon-only control that opens the
+    // composer; above that, the field itself takes the query.
     const field = page.getByRole('textbox', { name: 'Search Obiter' })
-    await field.click()
-    await field.fill('arbitration clause enforcement in the commercial court')
+    if (await field.isVisible()) {
+      await field.click()
+      await field.fill('arbitration clause enforcement in the commercial court')
+    } else {
+      await page.getByRole('button', { name: 'Search Obiter' }).click()
+      await page
+        .getByRole('textbox', { name: 'Expanded search' })
+        .fill('arbitration clause enforcement in the commercial court')
+    }
 
     const dialog = page.getByRole('dialog', { name: 'Expanded search' })
     await expect(dialog).toBeVisible()
@@ -136,34 +255,34 @@ test('the expanded search panel stays inside the viewport', async ({
   }
 })
 
-test('the account menu opens inside a narrow viewport with long names', async ({
+test('the account menu survives a long name and organisation', async ({
   page,
 }) => {
   await mockSession(page, LONG_NAME, LONG_ORG)
   await page.goto('/search')
-  await expect(modeNav(page)).toBeVisible()
+  await page.setViewportSize({ width: 320, height: 800 })
 
-  for (const width of [320, 390]) {
-    await page.setViewportSize({ width, height: 800 })
-    await page.locator('button[aria-haspopup="menu"]').click()
-    const menu = page.getByRole('menu')
-    await expect(menu).toBeVisible()
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  const menu = page.getByRole('menu', { name: 'Account' })
+  await expect(menu).toBeVisible()
 
-    const layout = await page.evaluate(() => {
-      const doc = document.documentElement
-      const menu = document.querySelector('[role="menu"]')
-      const rect = menu?.getBoundingClientRect()
-      return {
-        scrollWidth: doc.scrollWidth,
-        clientWidth: doc.clientWidth,
-        menuLeft: rect?.left ?? null,
-        menuRight: rect?.right ?? null,
-      }
-    })
-    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
-    expect(layout.menuLeft).toBeGreaterThanOrEqual(-1)
-    expect(layout.menuRight).toBeLessThanOrEqual(width + 1)
+  const layout = await page.evaluate(() => {
+    const doc = document.documentElement
+    const popup = document.querySelector('[aria-label="Account"]')
+    const rect = popup?.getBoundingClientRect()
+    return {
+      scrollWidth: doc.scrollWidth,
+      clientWidth: doc.clientWidth,
+      left: rect?.left ?? null,
+      right: rect?.right ?? null,
+    }
+  })
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+  expect(layout.left).toBeGreaterThanOrEqual(-1)
+  expect(layout.right).toBeLessThanOrEqual(321)
+})
 
-    await page.locator('button[aria-label="Close menu"]').click()
-  }
+test('settings stays reachable from the account menu', async ({ page }) => {
+  await mockSession(page)
+  await gotoOtherMode(page)
 })

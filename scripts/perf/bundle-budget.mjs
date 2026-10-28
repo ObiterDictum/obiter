@@ -63,8 +63,19 @@ import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 // matter overview (#339, about +1.0 kB). Both were trimmed before this
 // change. Expected after both land is about 407.3 kB, leaving roughly 0.7%
 // headroom; initial, per-chunk and PDF-worker budgets are unchanged.
+//
+// The initial budget was re-baselined to 236 kB on 2026-10-27. The shell's
+// account menu and collapsed-rail labels are Base UI Menu and Tooltip
+// (decided 27 Oct 2026; contract §1 makes Base UI the headless layer), and the
+// floating/menu machinery Base UI already ships for Dialog and Select now
+// belongs to the entry graph because the shell is on every page: initial
+// measures 237,570 B gzip (232.0 kB, up from 187.7 kB). That is a move, not a
+// copy — lazy route chunks fall from 407.9 kB to 368.5 kB and the chunks that
+// need the shared code import the entry — so the net cost is about 5 kB gzip,
+// the menu and tooltip themselves. 236 kB leaves 1.7% headroom over the
+// measurement; the lazy, per-chunk and PDF-worker budgets are unchanged.
 export const BUDGETS = {
-  initialGzipBytes: 212 * 1024,
+  initialGzipBytes: 236 * 1024,
   lazyGzipBytes: 410 * 1024,
   largestLazyChunkGzipBytes: 200 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,

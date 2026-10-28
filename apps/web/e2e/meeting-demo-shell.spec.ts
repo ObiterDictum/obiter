@@ -1,11 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
-import { documentWidths, mockSession, modeNav } from './shell-harness'
+import { documentWidths, mockSession, workspaceNav } from './shell-harness'
 
 /**
  * The meeting-demo repairs that can be proven without a database: Verify's
- * identity and live status, the mode rail's expanded width, the search focus
- * rings, and the 390px viewport. The API is mocked at the network boundary so
- * the assertions read rendered layout and focus, not a seeded fixture.
+ * identity and live status, the search focus rings, and the 390px viewport.
+ * The API is mocked at the network boundary so the assertions read rendered
+ * layout and focus, not a seeded fixture. The sidebar's own layout has its
+ * spec in responsive-shell.spec.ts.
  */
 
 const RUN_ID = 'vrun_6f2ffddc-4c20-4df5-b981-44ea5e1bd4dc'
@@ -99,77 +100,45 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
   await mockVerifyData(page)
 
   await page.goto('/verify')
-  await expect(modeNav(page)).toBeVisible()
+  await expect(workspaceNav(page)).toBeVisible()
 
-  // The nav no longer calls a working capability "Soon".
-  const verifyMode = modeNav(page).getByRole('link', { name: 'Verify' })
+  // The nav no longer calls a working capability "Soon": only Research is
+  // marked as coming later, and it is not a link.
+  const verifyMode = workspaceNav(page).getByRole('link', {
+    name: /^Verify/,
+  })
   await expect(verifyMode).toBeVisible()
-  await expect(verifyMode).not.toContainText('Soon')
+  await expect(verifyMode).toHaveAttribute('aria-current', 'page')
+  await expect(workspaceNav(page).getByText('Soon')).toHaveCount(1)
 
-  // Identity is the document and matter, not the run or version UUID.
-  await expect(page.getByText('Potanina-skeleton-argument.docx')).toBeVisible()
-  await expect(page.getByText(/Potanina v Potanin/)).toBeVisible()
+  // Identity is the document and matter, not the run or version UUID. The
+  // sidebar also lists the matter, so the page's own copy is what is read here.
+  await expect(
+    page.locator('main').getByText('Potanina-skeleton-argument.docx'),
+  ).toBeVisible()
+  await expect(
+    page
+      .locator('main')
+      .getByText(/Potanina v Potanin/)
+      .first(),
+  ).toBeVisible()
   await expect(
     page.locator('main').getByText('Review required (2)'),
   ).toBeVisible()
   await expect(page.getByText(RUN_ID)).toBeHidden()
-  await expect(page.getByRole('link', { name: 'Open document' })).toBeVisible()
+  await expect(
+    page.locator('main').getByRole('link', { name: 'Open document' }),
+  ).toBeVisible()
 
   // The stored version stays visible beside the friendly identity.
-  await expect(page.getByText(/ver_9a6135fb/)).toBeVisible()
-})
-
-test('the verify rail reflects real runs instead of "In development"', async ({
-  page,
-}) => {
-  await mockSession(page)
-  await mockVerifyData(page)
-  await page.goto('/verify')
-  await expect(modeNav(page)).toBeVisible()
-
-  // Expand the left rail so its sections render.
-  await page.mouse.move(20, 400)
-  const rail = page.locator('aside')
-  await expect(rail.getByText('In development')).toHaveCount(0)
-  await expect(rail.getByText('Review required (2)').first()).toBeVisible()
-  await expect(rail.getByText('Nothing to review')).toHaveCount(0)
-})
-
-test('an expanded rail keeps every mode label, including Redact', async ({
-  page,
-}) => {
-  await mockSession(page)
-  await mockVerifyData(page)
-  await page.goto('/search')
-  await expect(modeNav(page)).toBeVisible()
-
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await page.mouse.move(20, 400)
-  await page.waitForTimeout(400)
-
-  const rail = await page.evaluate(() => {
-    const nav = document.querySelector('nav[aria-label="Modes"]')
-    const rail = nav?.parentElement ?? null
-    return {
-      scrollWidth: rail?.scrollWidth ?? 0,
-      clientWidth: rail?.clientWidth ?? 0,
-      labels: [...(nav?.querySelectorAll('a') ?? [])].map((a) =>
-        (a.textContent ?? '').trim(),
-      ),
-    }
-  })
-  expect(rail.labels).toEqual(['Search', 'Matters', 'Verify', 'Redact'])
-  expect(
-    rail.scrollWidth,
-    `the expanded mode rail still clips at 1440 (scrollWidth ${rail.scrollWidth}, clientWidth ${rail.clientWidth})`,
-  ).toBeLessThanOrEqual(rail.clientWidth)
+  await expect(page.locator('main').getByText(/ver_9a6135fb/)).toBeVisible()
 })
 
 test('both search fields show a keyboard focus ring', async ({ page }) => {
   await mockSession(page)
   await mockVerifyData(page)
   await page.goto('/search')
-  await expect(modeNav(page)).toBeVisible()
+  await expect(workspaceNav(page)).toBeVisible()
 
   const topField = page.locator('input[aria-label="Search Obiter"]')
   await topField.focus()
@@ -205,7 +174,7 @@ test('the verify list and its controls fit a 390px viewport', async ({
   await mockVerifyData(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/verify')
-  await expect(modeNav(page)).toBeVisible()
+  await expect(workspaceNav(page)).toBeVisible()
 
   const openDocument = page.getByRole('link', { name: 'Open document' })
   await expect(openDocument).toBeVisible()
