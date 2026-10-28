@@ -77,7 +77,13 @@ function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
     createdAt: '2026-10-01T09:00:00.000Z',
     startedAt: '2026-10-01T09:00:01.000Z',
     completedAt: '2026-10-01T09:00:02.000Z',
-    summary: { findingCount: 0, flaggedCount: 0, reviewRequiredCount: 0 },
+    summary: {
+      findingCount: 0,
+      flaggedCount: 0,
+      reviewRequiredCount: 0,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
     ...overrides,
@@ -191,7 +197,13 @@ describe('sidebar data helpers', () => {
     expect(
       verificationAttentionCount([
         run({
-          summary: { findingCount: 3, flaggedCount: 2, reviewRequiredCount: 1 },
+          summary: {
+            findingCount: 3,
+            flaggedCount: 2,
+            reviewRequiredCount: 1,
+            dismissedCount: 0,
+            notCheckedCount: 0,
+          },
         }),
         run({ id: 'vrun_running', status: 'running' }),
         run({ id: 'vrun_clean' }),
@@ -222,7 +234,13 @@ describe('Sidebar', () => {
     mocks.runs = [{ id: 'run_1', status: 'reviewing' }]
     mocks.verificationRuns = [
       run({
-        summary: { findingCount: 1, flaggedCount: 1, reviewRequiredCount: 0 },
+        summary: {
+          findingCount: 1,
+          flaggedCount: 1,
+          reviewRequiredCount: 0,
+          dismissedCount: 0,
+          notCheckedCount: 0,
+        },
       }),
     ]
     renderSidebar('/matters')

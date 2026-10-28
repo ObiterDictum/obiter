@@ -1,87 +1,100 @@
 import '@obiter/test-dom'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
-import type { ReactNode } from 'react'
-import type { VerificationRun } from '@obiter/contracts'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
+import { ToastProvider } from '@obiter/ui'
+import type {
+  VerificationFindingView,
+  VerificationRun,
+} from '@obiter/contracts'
+import type { MatterRecord } from '../matters'
+import type { MatterDocumentRecord } from '../documents'
 
-const hooks = vi.hoisted(() => ({
-  useCurrentUser: vi.fn(),
-  useOrganisationVerificationRuns: vi.fn(),
-  useVerificationRunDocuments: vi.fn(),
-  useMattersList: vi.fn(),
+const mocks = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
+const currentUserModule = { ...(await import('../current-user')) }
+mock.module('../current-user', () => ({
+  ...currentUserModule,
+  useCurrentUser: mocks.useCurrentUser,
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const currentUserModuleKeys = Object.fromEntries(
-  Object.keys(await import('../current-user')).map((key) => [key, undefined]),
-)
-mock.module('../current-user', () =>
-  Object.assign(
-    { ...currentUserModuleKeys },
-    (() => ({
-      useCurrentUser: hooks.useCurrentUser,
-    }))(),
-  ),
-)
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const verificationRunsModuleKeys = Object.fromEntries(
-  Object.keys(await import('../verification-runs')).map((key) => [
-    key,
-    undefined,
-  ]),
-)
-mock.module('../verification-runs', () =>
-  Object.assign(
-    { ...verificationRunsModuleKeys },
-    (() => ({
-      useOrganisationVerificationRuns: hooks.useOrganisationVerificationRuns,
-      useVerificationRunDocuments: hooks.useVerificationRunDocuments,
-    }))(),
-  ),
-)
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const mattersModuleKeys = Object.fromEntries(
-  Object.keys(await import('../matters')).map((key) => [key, undefined]),
-)
-mock.module('../matters', () =>
-  Object.assign(
-    { ...mattersModuleKeys },
-    (() => ({
-      useMattersList: hooks.useMattersList,
-    }))(),
-  ),
-)
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const tanstackReactRouterModuleKeys = Object.fromEntries(
-  Object.keys(await import('@tanstack/react-router')).map((key) => [
-    key,
-    undefined,
-  ]),
-)
-mock.module('@tanstack/react-router', () =>
-  Object.assign(
-    { ...tanstackReactRouterModuleKeys },
-    (() => ({
-      Link: ({ to, children }: { to?: string; children: ReactNode }) => (
-        <a href={to ?? '#'}>{children}</a>
-      ),
-    }))(),
-  ),
-)
-
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
+// Loaded after the registration above.
 const { VerifyRouteView } = await import('./verify')
+
+const at = '2026-10-26T09:02:00.000Z'
+
+function matter(overrides: Partial<MatterRecord> = {}): MatterRecord {
+  return {
+    id: 'mtr_1',
+    organisationId: 'org_1',
+    name: 'Northgate Foods v Brightwater Packaging',
+    description: null,
+    primaryJurisdiction: 'England & Wales',
+    secondaryJurisdictions: [],
+    legalDomains: ['Commercial contracts'],
+    clientReference: 'NGF-0418',
+    status: 'active',
+    createdBy: 'usr_1',
+    createdAt: at,
+    updatedAt: at,
+    deletedAt: null,
+    deletedBy: null,
+    ...overrides,
+  }
+}
+
+function document(
+  matterId: string,
+  id: string,
+  filename: string,
+  currentVersionNumber: number,
+): MatterDocumentRecord {
+  return {
+    id,
+    organisationId: 'org_1',
+    matterId,
+    currentVersionId: `ver_${id}_${String(currentVersionNumber)}`,
+    logicalKey: filename,
+    createdBy: 'usr_1',
+    createdAt: at,
+    updatedAt: at,
+    deletedAt: null,
+    deletedBy: null,
+    currentVersion: {
+      id: `ver_${id}_${String(currentVersionNumber)}`,
+      organisationId: 'org_1',
+      matterId,
+      matterDocumentId: id,
+      filename,
+      fileType: 'docx',
+      sizeBytes: '1024',
+      objectKey: `org/org_1/matters/${matterId}/documents/${id}/versions/1/source`,
+      textObjectKey: null,
+      documentStatus: 'ready',
+      failureReason: null,
+      versionNumber: currentVersionNumber,
+      contentSha256: 'a'.repeat(64),
+      syncState: 'synced',
+      createdBy: 'usr_1',
+      createdAt: at,
+      updatedAt: at,
+    },
+  }
+}
 
 function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
   return {
@@ -89,274 +102,398 @@ function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
     organisationId: 'org_1',
     matterId: 'mtr_1',
     documentId: 'doc_1',
-    documentVersionId: 'ver_1',
+    documentVersionId: 'ver_doc_1_1',
     status: 'completed',
     failureCode: null,
     createdBy: 'usr_1',
-    createdAt: '2026-09-14T00:00:00.000Z',
-    startedAt: '2026-09-14T00:00:01.000Z',
-    completedAt: '2026-09-14T00:00:02.000Z',
-    summary: { findingCount: 1, flaggedCount: 0, reviewRequiredCount: 0 },
-    documentCurrentVersionId: 'ver_1',
+    createdAt: at,
+    startedAt: at,
+    completedAt: at,
+    summary: {
+      findingCount: 3,
+      flaggedCount: 1,
+      reviewRequiredCount: 1,
+      notCheckedCount: 0,
+      dismissedCount: 0,
+    },
+    documentCurrentVersionId: 'ver_doc_1_1',
     stale: false,
     ...overrides,
   }
 }
 
-function listResult(
-  runs: VerificationRun[],
-  overrides: Record<string, unknown> = {},
-) {
+function finding(
+  overrides: Partial<VerificationFindingView> = {},
+): VerificationFindingView {
   return {
-    isPending: false,
-    isError: false,
-    runs,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: vi.fn(),
+    id: 'vf_clear',
+    type: 'citation_resolution',
+    state: 'clear',
+    dismissal: null,
+    reviewReason: null,
+    severity: null,
+    confidence: null,
+    requiresReview: false,
+    explanation: 'The citation resolved to one stored authority.',
+    excerpt: '[2017] UKSC 24',
+    location: { paragraphId: 'p1', start: 0, end: 13 },
+    authorityLabel: '[2017] UKSC 24',
+    evidence: [
+      {
+        id: 'd-wood:judgment_paragraph:10',
+        sourceId: 'd-wood',
+        label: 'Judgment d-wood, paragraph 10',
+        source: {
+          url: 'https://caselaw.nationalarchives.gov.uk/uksc/2017/24',
+          canonicalUrl: '/case/wood-v-capita-2017-uksc-24',
+          pinpoint: 'judgment [10]',
+          anchor: 'para-10',
+        },
+      },
+    ],
     ...overrides,
   }
 }
 
-function signedIn() {
-  hooks.useCurrentUser.mockReturnValue({
-    data: { organisation: { id: 'org_1' } },
-  })
-  hooks.useVerificationRunDocuments.mockReturnValue(
-    new Map([
-      ['doc_1', { status: 'available', filename: 'demo-fixture.docx' }],
-    ]),
-  )
-  hooks.useMattersList.mockReturnValue({
-    data: [{ id: 'mtr_1', name: 'Potanina v Potanin appeal' }],
-  })
+const flagged = finding({
+  id: 'vf_flagged',
+  state: 'flagged',
+  authorityLabel: 'Rock Advertising Ltd v MWB [2018] UKSC 24',
+  excerpt: '[2018] UKSC 24',
+  explanation: 'The citation names a different authority from the case named.',
+})
+
+const needsReview = finding({
+  id: 'vf_review',
+  type: 'quote_fidelity',
+  state: 'review_required',
+  reviewReason: 'citation_unresolved',
+  authorityLabel: 'Unmatched citation',
+  excerpt: '[2099] UKSC 9',
+  explanation: 'The quotation could not be attributed.',
+  evidence: [],
+})
+
+let runs: VerificationRun[]
+let findings: VerificationFindingView[]
+let dismissals: string[]
+let dismissFails = false
+
+function fulfil(body: unknown, status = 200) {
+  return Response.json(body, { status })
 }
+
+function jsonBody(init?: RequestInit) {
+  return init?.body ? JSON.parse(String(init.body)) : {}
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  runs = [run()]
+  findings = [flagged, needsReview, finding()]
+  dismissals = []
+  dismissFails = false
+  mocks.useCurrentUser.mockReturnValue({
+    data: {
+      user: {
+        id: 'usr_1',
+        email: 'alex@example.com',
+        name: 'Alex',
+        role: 'owner',
+      },
+      organisation: {
+        id: 'org_1',
+        name: 'Harrington Vale LLP',
+        plan: 'private_beta',
+      },
+    },
+  })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), 'http://localhost').pathname
+      if (path === '/api/matters') {
+        return fulfil({ matters: [matter()] })
+      }
+      if (path === '/api/verification-runs') {
+        return fulfil({ runs, nextCursor: null })
+      }
+      if (path === '/api/documents/doc_1') {
+        return fulfil({
+          document: document('mtr_1', 'doc_1', 'advice-note-northgate.docx', 2),
+          versions: [
+            {
+              ...document('mtr_1', 'doc_1', 'advice-note-northgate.docx', 1)
+                .currentVersion!,
+              id: 'ver_doc_1_1',
+              versionNumber: 1,
+            },
+            document('mtr_1', 'doc_1', 'advice-note-northgate.docx', 2)
+              .currentVersion!,
+          ],
+        })
+      }
+      const dismiss = path.match(
+        /^\/api\/verification-runs\/([^/]+)\/findings\/([^/]+)\/dismiss$/,
+      )
+      if (dismiss) {
+        if (dismissFails) {
+          return fulfil(
+            {
+              error: {
+                code: 'verification_run_not_found',
+                message: 'Verification finding not found.',
+                requestId: 'req',
+              },
+            },
+            404,
+          )
+        }
+        const findingId = decodeURIComponent(dismiss[2]!)
+        const body = jsonBody(init) as { reason?: string }
+        dismissals.push(findingId)
+        const dismissal = {
+          reason: body.reason ?? null,
+          dismissedBy: 'usr_1',
+          dismissedAt: at,
+        }
+        findings = findings.map((item) =>
+          item.id === findingId ? { ...item, dismissal } : item,
+        )
+        return fulfil({ dismissal }, 201)
+      }
+      const findingsPage = path.match(
+        /^\/api\/verification-runs\/([^/]+)\/findings$/,
+      )
+      if (findingsPage) {
+        return fulfil({ run: runs[0], findings, nextCursor: null })
+      }
+      return fulfil(
+        {
+          error: {
+            code: 'document_not_found',
+            message: 'No route',
+            requestId: 'req',
+          },
+        },
+        404,
+      )
+    }),
+  )
+})
 
 afterEach(() => {
   cleanup()
-  vi.clearAllMocks()
+  vi.unstubAllGlobals()
 })
 
-describe('VerifyRouteView', () => {
-  it('shows the loading state while runs are pending', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue({
-      isPending: true,
-      isError: false,
-      runs: [],
-    })
-    const { container } = render(<VerifyRouteView />)
-    expect(container.querySelector('.h-24')).toBeTruthy()
-  })
-
-  it('shows an actionable empty state rather than the old placeholder', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue(listResult([]))
-    render(<VerifyRouteView />)
-    expect(screen.getByText('No verification runs yet')).toBeTruthy()
-    expect(screen.queryByText('In development')).toBeNull()
-    // The page cannot start a run; it must send the user to where one starts.
-    expect(
-      screen.getByRole('link', { name: 'Open matters' }).getAttribute('href'),
-    ).toBe('/matters')
-  })
-
-  it('surfaces a runs failure', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue({
-      isPending: false,
-      isError: true,
-      error: new Error('verify service is down'),
-      runs: [],
-    })
-    render(<VerifyRouteView />)
-    expect(screen.getByText('Verification runs are unavailable')).toBeTruthy()
-    expect(screen.getByText('verify service is down')).toBeTruthy()
-  })
-
-  it('lists completed, review-required, and failed runs with their document', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue(
-      listResult([
-        run({
-          id: 'vrun_review',
-          summary: {
-            findingCount: 2,
-            flaggedCount: 0,
-            reviewRequiredCount: 1,
-          },
-        }),
-        run({
-          id: 'vrun_failed',
-          status: 'failed',
-          failureCode: 'execution_failed',
-        }),
-        run({ id: 'vrun_clean' }),
-      ]),
-    )
-    render(<VerifyRouteView />)
-    // Identity is the document filename and matter, never the raw run or
-    // version UUID as the principal label.
-    expect(screen.getAllByText('demo-fixture.docx')).toHaveLength(3)
-    expect(
-      screen.getAllByText(/Potanina v Potanin appeal/).length,
-    ).toBeGreaterThan(0)
-    expect(screen.queryByText('vrun_review')).toBeNull()
-    expect(screen.getByText('Review required (1)')).toBeTruthy()
-    expect(screen.getByText('Failed')).toBeTruthy()
-    expect(screen.getAllByText('Completed')).toHaveLength(2)
-    expect(screen.getAllByText('Open document')).toHaveLength(3)
-    // The stored version stays visible beside the friendly identity.
-    expect(screen.getAllByText('ver_1').length).toBeGreaterThan(0)
-  })
-
-  it('does not present a flagged run as a plain green completion', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue(
-      listResult([
-        run({
-          id: 'vrun_flagged',
-          summary: {
-            findingCount: 3,
-            flaggedCount: 2,
-            reviewRequiredCount: 1,
-          },
-        }),
-      ]),
-    )
-    render(<VerifyRouteView />)
-    expect(screen.getByText('Flagged findings (2)')).toBeTruthy()
-    // The result is announced, not left to colour.
-    expect(
-      screen.getByText('Attention required: flagged findings were found.'),
-    ).toBeTruthy()
-  })
-
-  it('offers an explicit, bounded continuation for more runs', () => {
-    signedIn()
-    const fetchNextPage = vi.fn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue(
-      listResult([run({ id: 'vrun_page_1' })], {
-        hasNextPage: true,
-        fetchNextPage,
+function buildRouter() {
+  const rootRoute = createRootRoute()
+  return createRouter({
+    routeTree: rootRoute.addChildren([
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/verify',
+        component: () => (
+          <QueryClientProvider
+            client={
+              new QueryClient({
+                defaultOptions: { queries: { retry: false } },
+              })
+            }
+          >
+            <ToastProvider>
+              <VerifyRouteView />
+            </ToastProvider>
+          </QueryClientProvider>
+        ),
       }),
-    )
-    render(<VerifyRouteView />)
-    fireEvent.click(screen.getByRole('button', { name: 'Load more runs' }))
-    expect(fetchNextPage).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows a pending document lookup as loading, never as unavailable', () => {
-    signedIn()
-    hooks.useVerificationRunDocuments.mockReturnValue(
-      new Map([['doc_1', { status: 'pending' }]]),
-    )
-    hooks.useOrganisationVerificationRuns.mockReturnValue(listResult([run()]))
-    render(<VerifyRouteView />)
-    expect(screen.queryByText('Document unavailable')).toBeNull()
-    expect(screen.getByText('Loading document…')).toBeTruthy()
-  })
-
-  it('reserves the unavailable state for a completed failed lookup', () => {
-    signedIn()
-    hooks.useVerificationRunDocuments.mockReturnValue(
-      new Map([['doc_1', { status: 'unavailable' }]]),
-    )
-    hooks.useOrganisationVerificationRuns.mockReturnValue(listResult([run()]))
-    render(<VerifyRouteView />)
-    expect(screen.getByText('Document unavailable')).toBeTruthy()
-  })
-
-  it('keeps a valid run visible when another document lookup fails', () => {
-    signedIn()
-    hooks.useVerificationRunDocuments.mockReturnValue(
-      new Map([
-        ['doc_1', { status: 'available', filename: 'demo-fixture.docx' }],
-        ['doc_2', { status: 'unavailable' }],
-      ]),
-    )
-    hooks.useOrganisationVerificationRuns.mockReturnValue(
-      listResult([
-        run({ id: 'vrun_1', documentId: 'doc_1' }),
-        run({ id: 'vrun_2', documentId: 'doc_2' }),
-      ]),
-    )
-    render(<VerifyRouteView />)
-    expect(screen.getByText('demo-fixture.docx')).toBeTruthy()
-    expect(screen.getByText('Document unavailable')).toBeTruthy()
-    expect(screen.getAllByRole('link', { name: 'Open document' })).toHaveLength(
-      2,
-    )
-  })
-
-  it('places a failed run at its recorded failure time', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue(
-      listResult([
-        run({
-          status: 'failed',
-          failureCode: 'execution_failed',
-          createdAt: '2026-09-14T00:00:00.000Z',
-          completedAt: '2026-09-14T03:00:00.000Z',
+      ...[
+        '/matters',
+        '/settings',
+        '/matters/$matterId/documents/$documentId',
+        '/case/$caseSlug',
+        '/ln/$',
+      ].map((path) =>
+        createRoute({
+          getParentRoute: () => rootRoute,
+          path,
+          component: () => <div>Elsewhere</div>,
         }),
-      ]),
-    )
-    render(<VerifyRouteView />)
-    const at = (value: string) =>
-      new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date(value))
+      ),
+    ]),
+    history: createMemoryHistory({ initialEntries: ['/verify'] }),
+  })
+}
+
+async function renderVerify() {
+  render(<RouterProvider router={buildRouter()} />)
+  await screen.findByRole('heading', { name: 'Verify' })
+}
+
+describe('VerifyRouteView', () => {
+  it('groups findings by matter and document and names the version it checked', async () => {
+    await renderVerify()
     expect(
-      screen.getByText((content) =>
-        content.includes(`Failed ${at('2026-09-14T03:00:00.000Z')}`),
+      await screen.findByText('Northgate Foods v Brightwater Packaging'),
+    ).toBeTruthy()
+    expect(screen.getByText('NGF-0418')).toBeTruthy()
+    expect(screen.getByText('advice-note-northgate.docx')).toBeTruthy()
+    expect(screen.getAllByText(/1 flagged/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/1 needs review/).length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText(/1 matches the checked source/).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('says plainly that the checked version is older than the one stored now', async () => {
+    runs = [run({ stale: true, documentCurrentVersionId: 'ver_doc_1_2' })]
+    await renderVerify()
+    expect(
+      await screen.findByText(
+        /Checked version 1\. Version 2 is stored now, so this result covers the earlier text, not the current one\./,
       ),
     ).toBeTruthy()
   })
 
-  it('shows an account-loading state before the account resolves', () => {
-    hooks.useCurrentUser.mockReturnValue({ data: undefined })
-    hooks.useVerificationRunDocuments.mockReturnValue(new Map())
-    hooks.useMattersList.mockReturnValue({ data: [] })
-    hooks.useOrganisationVerificationRuns.mockReturnValue({
-      isPending: true,
-      isError: false,
-      runs: [],
-    })
-    render(<VerifyRouteView />)
-    expect(screen.getByRole('status')).toBeTruthy()
-    expect(screen.queryByText('No organisation yet')).toBeNull()
-  })
-
-  it('explains an organisationless account instead of loading forever', () => {
-    hooks.useCurrentUser.mockReturnValue({ data: { organisation: null } })
-    hooks.useVerificationRunDocuments.mockReturnValue(new Map())
-    hooks.useMattersList.mockReturnValue({ data: [] })
-    // A disabled infinite query stays pending; the view must not read that as
-    // an organisation's runs still loading.
-    hooks.useOrganisationVerificationRuns.mockReturnValue({
-      isPending: true,
-      isError: false,
-      runs: [],
-    })
-    render(<VerifyRouteView />)
-    expect(screen.getByText('No organisation yet')).toBeTruthy()
+  it('claims a citation match only for a check that ran, and states each uncertainty', async () => {
+    await renderVerify()
     expect(
-      screen.getByRole('link', { name: 'Open settings' }).getAttribute('href'),
-    ).toBe('/settings')
-    // No organisation-scoped request may be fired for an organisationless user.
-    expect(hooks.useOrganisationVerificationRuns).toHaveBeenCalledWith(false)
+      await screen.findByText('Citation matches checked source'),
+    ).toBeTruthy()
+    expect(screen.getAllByText('Flagged').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Needs review').length).toBeGreaterThan(0)
+    expect(
+      screen.getByText(
+        /The citation did not match a stored source\. It may be wrong/,
+      ),
+    ).toBeTruthy()
   })
 
-  it('still shows the runs skeleton while an organisation loads its runs', () => {
-    signedIn()
-    hooks.useOrganisationVerificationRuns.mockReturnValue({
-      isPending: true,
-      isError: false,
-      runs: [],
+  it('links the stored source page and its pinpoint', async () => {
+    await renderVerify()
+    const link = (
+      await screen.findAllByRole('link', { name: 'Open judgment' })
+    )[0]!
+    expect(link.getAttribute('href')).toBe(
+      '/case/wood-v-capita-2017-uksc-24#para-10',
+    )
+    expect(
+      screen.getAllByText(/The National Archives \(Find Case Law\)/).length,
+    ).toBeGreaterThan(0)
+    expect(screen.getAllByText(/judgment \[10\]/).length).toBeGreaterThan(0)
+  })
+
+  it('counts the filters apart and shows only the state chosen', async () => {
+    await renderVerify()
+    fireEvent.click(await screen.findByRole('tab', { name: /Needs review/ }))
+    await waitFor(() => {
+      expect(screen.queryByText('Citation matches checked source')).toBeNull()
     })
-    const { container } = render(<VerifyRouteView />)
-    expect(container.querySelector('.h-24')).toBeTruthy()
-    expect(screen.queryByText('No organisation yet')).toBeNull()
+    // The status word appears on the row, not only in the selected filter.
+    expect(screen.getAllByText('Needs review').length).toBeGreaterThan(0)
+    expect(
+      screen.queryByText('Flagged', { selector: '[class*="text-meta"]' }),
+    ).toBeNull()
+  })
+
+  it('records a dismissal with a reason and shows who decided and when', async () => {
+    await renderVerify()
+    const buttons = await screen.findAllByRole('button', {
+      name: 'Dismiss finding',
+    })
+    fireEvent.click(buttons[0]!)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, {
+      target: { value: 'The paragraph quotes the judgment directly.' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dismiss finding', hidden: false }),
+    )
+    await waitFor(() => expect(dismissals).toEqual(['vf_flagged']))
+    expect(
+      await screen.findByText(/Dismissed by you · 26 Oct 2026, 09:02/),
+    ).toBeTruthy()
+    expect(
+      screen.getByText('The paragraph quotes the judgment directly.'),
+    ).toBeTruthy()
+    // The check's own outcome is unchanged: it is still a flagged finding.
+    expect(screen.getAllByText('Flagged').length).toBeGreaterThan(0)
+  })
+
+  it('says a dismissal was not saved and keeps the finding open when it fails', async () => {
+    dismissFails = true
+    await renderVerify()
+    const buttons = await screen.findAllByRole('button', {
+      name: 'Dismiss finding',
+    })
+    fireEvent.click(buttons[0]!)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Dismiss finding' }),
+    )
+    expect(
+      await within(dialog).findByText(/The dismissal was not saved\./),
+    ).toBeTruthy()
+    // Nothing is recorded, so the finding is still undismissed.
+    expect(dismissals).toEqual([])
+    expect(screen.queryByText(/Dismissed by you/)).toBeNull()
+  })
+
+  it('states a failed run, why it stopped, and offers a retry', async () => {
+    runs = [
+      run({
+        status: 'failed',
+        failureCode: 'execution_failed',
+        summary: {
+          findingCount: 0,
+          flaggedCount: 0,
+          reviewRequiredCount: 0,
+          notCheckedCount: 0,
+          dismissedCount: 0,
+        },
+      }),
+    ]
+    findings = []
+    await renderVerify()
+    expect(
+      await screen.findByText('The run stopped before it finished'),
+    ).toBeTruthy()
+    expect(screen.getByText(/No successful result was recorded/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry Verify' })).toBeTruthy()
+  })
+
+  it('states a queued run without claiming anything was checked', async () => {
+    runs = [run({ status: 'queued', startedAt: null, completedAt: null })]
+    findings = []
+    await renderVerify()
+    expect(
+      await screen.findByText('Queued. Nothing has been checked yet.'),
+    ).toBeTruthy()
+  })
+
+  it('names the earlier completed result when the newest run failed', async () => {
+    runs = [
+      run({
+        id: 'vrun_failed',
+        status: 'failed',
+        failureCode: 'model_unavailable',
+        completedAt: at,
+      }),
+      run({ id: 'vrun_done', completedAt: '2026-10-26T08:00:00.000Z' }),
+    ]
+    await renderVerify()
+    expect(
+      await screen.findByText(
+        /The findings below come from the earlier completed run/,
+      ),
+    ).toBeTruthy()
+  })
+
+  it('offers the matter route when there is nothing to verify yet', async () => {
+    runs = []
+    await renderVerify()
+    expect(await screen.findByText('No verification runs yet')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open matters' })).toBeTruthy()
   })
 })

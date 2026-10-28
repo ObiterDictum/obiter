@@ -12,6 +12,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, mock } from 'bun:test'
@@ -120,6 +121,7 @@ function finding(
       end: 4,
     },
     authorityLabel: `Authority ${index}`,
+    dismissal: null,
     evidence: [],
     ...overrides,
   } satisfies VerificationFindingView
@@ -150,7 +152,13 @@ function run(): VerificationRun {
     createdAt: '2026-09-14T00:00:00.000Z',
     startedAt: '2026-09-14T00:00:01.000Z',
     completedAt: '2026-09-14T00:00:02.000Z',
-    summary: { findingCount: 55, flaggedCount: 2, reviewRequiredCount: 0 },
+    summary: {
+      findingCount: 55,
+      flaggedCount: 2,
+      reviewRequiredCount: 0,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
   }
@@ -223,21 +231,28 @@ describe('contextual verification pagination', () => {
     await waitFor(() => {
       expect(dock.textContent).toContain('2 flagged')
     })
-    expect(dock.textContent).toContain('53 clear')
-    expect(dock.textContent).toContain('0 needs review')
+    expect(dock.textContent).toContain('53 match the checked source')
+    expect(dock.textContent).not.toContain('needs review')
   })
 
   it('makes a finding past the first page reachable and reports the run total', async () => {
     mount()
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'View all findings' }),
-    )
+    const allFindings = (
+      await screen.findAllByRole('button', { name: 'All findings' })
+    )[0]! as HTMLButtonElement
+    await waitFor(() => expect(allFindings.disabled).toBe(false))
+    fireEvent.click(allFindings)
     const index = await screen.findByRole('dialog')
     // The row for a second-page finding is present and activatable.
     await waitFor(() => {
       expect(index.textContent).toContain('Page two explanation')
     })
-    fireEvent.click(screen.getByText('Page two explanation'))
+    const row = within(index)
+      .getByText('Page two explanation')
+      .closest('article')
+    fireEvent.click(
+      within(row as HTMLElement).getByRole('button', { name: 'Open finding' }),
+    )
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('Page two authority')
     // "51 of 55": the position uses the server total, not the loaded subset.

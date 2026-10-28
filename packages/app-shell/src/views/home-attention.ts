@@ -109,7 +109,11 @@ function verificationAttentionItem(
     case 'running':
       return []
     case 'completed': {
-      const { flaggedCount, reviewRequiredCount } = run.summary
+      const { flaggedCount } = run.summary
+      // A check that did not run is unfinished work, so it joins the review
+      // count here; the Verify page still reports the two states apart.
+      const reviewRequiredCount =
+        run.summary.reviewRequiredCount + run.summary.notCheckedCount
       if (flaggedCount === 0 && reviewRequiredCount === 0) return []
       return [
         {

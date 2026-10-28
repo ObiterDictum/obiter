@@ -24,7 +24,13 @@ function run(overrides: Partial<VerificationRun>): VerificationRun {
     createdAt: '2026-10-26T16:40:00.000Z',
     startedAt: '2026-10-26T16:40:00.000Z',
     completedAt: '2026-10-26T16:41:00.000Z',
-    summary: { findingCount: 4, flaggedCount: 0, reviewRequiredCount: 0 },
+    summary: {
+      findingCount: 4,
+      flaggedCount: 0,
+      reviewRequiredCount: 0,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_2',
     stale: false,
     ...overrides,
@@ -104,6 +110,7 @@ describe('verifyChipState', () => {
     )
     expect(chip.label).toBe('Checked · version 2')
     expect(chip.current).toBe(true)
+    expect(chip.detail).toContain('not a statement of legal correctness')
   })
 
   it('names the older version a stale run checked, never the current text', () => {
@@ -114,7 +121,7 @@ describe('verifyChipState', () => {
       }),
       versions as DocumentVersionRecord[],
     )
-    expect(chip.label).toBe('Checked version 1 · out of date')
+    expect(chip.label).toBe('Check out of date · version 1')
     expect(chip.current).toBe(false)
     expect(chip.detail).toContain('has changed since')
   })
@@ -130,7 +137,13 @@ describe('verifyChipState', () => {
     const chip = verifyChipState(
       verification({
         run: run({
-          summary: { findingCount: 3, flaggedCount: 1, reviewRequiredCount: 2 },
+          summary: {
+            findingCount: 3,
+            flaggedCount: 1,
+            reviewRequiredCount: 2,
+            dismissedCount: 0,
+            notCheckedCount: 0,
+          },
         }),
       }),
       versions as DocumentVersionRecord[],

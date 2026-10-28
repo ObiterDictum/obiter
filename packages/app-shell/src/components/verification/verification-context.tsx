@@ -85,6 +85,10 @@ export type VerificationWorkspaceValue = {
   dirty: boolean
   ready: boolean
   checkedVersionId: string | null
+  /** The stored version number a result is about, to name it in words. */
+  checkedVersionNumber: number | undefined
+  /** The version a run would check now. Undefined while the document loads. */
+  currentVersionNumber: number | undefined
   /** The checked version is no longer the stored one: either the API says so or
    * the open document has moved on since the run. */
   stale: boolean
@@ -199,6 +203,12 @@ export function VerificationWorkspaceProvider({
   const version = document.data?.document.currentVersion
   const ready = version?.documentStatus === 'ready'
   const checkedVersionId = latest?.documentVersionId ?? version?.id ?? null
+  const versionNumbers = new Map(
+    (document.data?.versions ?? []).map((record) => [
+      record.id,
+      record.versionNumber,
+    ]),
+  )
   // The run row reports staleness against the stored pointer. The open
   // document's own version is the faster and, after a save, the truer signal,
   // so either one marks the evidence as earlier than the document.
@@ -313,6 +323,10 @@ export function VerificationWorkspaceProvider({
     ready,
     totalFindings,
     checkedVersionId,
+    checkedVersionNumber: checkedVersionId
+      ? versionNumbers.get(checkedVersionId)
+      : undefined,
+    currentVersionNumber: version?.versionNumber,
     stale,
     startRun: () => {
       if (!ready || !version || create.isPending || dirty) return

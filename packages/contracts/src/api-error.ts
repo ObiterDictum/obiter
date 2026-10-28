@@ -46,6 +46,10 @@ export const apiErrorCodeSchema = z.enum([
   // unfinalized: there is no silent downgrade to text.
   'redaction_secure_pdf_failed',
   'verification_run_not_found',
+  'verification_finding_not_found',
+  // A clear finding has nothing to dismiss: the check ran and found no problem,
+  // so there is no finding for a person to decide about.
+  'verification_finding_not_dismissable',
   'verification_execution_failed',
   'extraction_coverage_incomplete',
   'payload_too_large',
