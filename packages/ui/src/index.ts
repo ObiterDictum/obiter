@@ -1,4 +1,5 @@
 export { cn } from './lib/cn'
+export { Card, CardHead, CardBody, CardFoot } from './card'
 
 export {
   Button,
