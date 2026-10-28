@@ -103,62 +103,45 @@ export function AuthFoot({ children }: { children: ReactNode }) {
 }
 
 /**
- * A real clause with a tracked change, set in serif on paper, beside the
- * judgment that governs how a court reads it. It is an illustration of the
- * product, not state: the sheet is hidden from assistive technology and the
- * panel is labelled so a screen reader knows what it is.
+ * The right-hand panel is decoration: it carries the product's mood and nothing
+ * a person has to read, so it is hidden from assistive technology (the region is
+ * labelled) and from every window narrower than the 1025px breakpoint.
+ *
+ * The artwork is a single image per theme, full-bleed and cropped by the panel.
+ * Karl supplies them: `apps/web/public/auth/auth-art-light.webp` and
+ * `auth-art-dark.webp`, AVIF or WebP, at most 200 kB each, at least 1200x1600
+ * so the crop survives a tall window. Until those files exist `AUTH_ART` stays
+ * null and the panel is plain paper — a broken image is worse than no image.
  */
+const AUTH_ART: { light: string; dark: string } | null = null
+
 function AuthSamplePanel() {
   return (
     <aside
       aria-label="About Obiter"
-      className="hidden flex-col justify-between gap-8 border-l border-line bg-surface p-10 compact:flex"
+      className="relative hidden overflow-hidden border-l border-line bg-surface compact:block"
     >
-      <div className="my-auto">
-        <p className="mb-3 text-caption text-subtle">
-          Clause 4.2 · Northgate Foods v Brightwater Packaging
-        </p>
-        <div
-          aria-hidden="true"
-          className="mx-auto w-[348px] max-w-full rounded-sm bg-paper px-8 py-8 font-serif text-meta text-paper-ink shadow-md"
-        >
-          <p className="mb-3 font-sans text-caption text-paper-muted">
-            Supply Agreement · 12 January 2025
-          </p>
-          <h2 className="mb-2 text-item">4. Volumes</h2>
-          <p className="mb-2">
-            4.1 The Supplier shall supply the Products in accordance with each
-            Order.
-          </p>
-          <p className="mb-2">
-            4.2 The Buyer shall order, and the Supplier shall supply, not less
-            than{' '}
-            <del className="bg-danger-soft text-danger line-through">
-              60,000
-            </del>{' '}
-            <ins className="bg-success-soft text-success underline">45,000</ins>{' '}
-            units of the Products in each calendar month during the Term.
-          </p>
-          <p className="mt-4 border-t border-paper-muted/25 pt-3 font-sans text-caption text-paper-muted">
-            Changed by Brightwater (Legal) · 24 Oct 2026
-          </p>
-        </div>
-      </div>
-
-      <div className="max-w-[42ch]">
-        <p className="mb-1 text-caption text-subtle">Summary of the judgment</p>
-        <p className="font-serif text-body text-ink">
-          Interpretation is a unitary exercise. The court reads the words used
-          in the context of the contract as a whole, and gives more or less
-          weight to that wider context depending on the quality of the drafting.
-        </p>
-        <p className="mt-3 text-caption text-subtle">
-          <em className="font-serif">Wood v Capita Insurance Services Ltd</em>{' '}
-          [2017] UKSC 24 at [10]–[12]
-        </p>
-      </div>
-
-      <p className="text-caption text-subtle">Evidence-first legal work</p>
+      {AUTH_ART ? (
+        <>
+          <img
+            src={AUTH_ART.light}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover dark:hidden"
+          />
+          <img
+            src={AUTH_ART.dark}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="hidden size-full object-cover dark:block"
+          />
+        </>
+      ) : null}
+      <p className="absolute inset-x-0 bottom-0 p-10 text-caption text-subtle">
+        Evidence-first legal work
+      </p>
     </aside>
   )
 }

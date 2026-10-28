@@ -1,7 +1,18 @@
 import { useQueries } from '@tanstack/react-query'
 import { MagnifyingGlass } from '@phosphor-icons/react'
 import type { AppPlatform } from '@obiter/contracts'
-import { Button, Card, CardFoot, EmptyState, Skeleton, cn } from '@obiter/ui'
+import {
+  Button,
+  Card,
+  CardFoot,
+  EmptyState,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
+  Skeleton,
+  cn,
+} from '@obiter/ui'
 import { useState } from 'react'
 import { matterDocumentsQueryOptions } from '../documents'
 import { formatDateTime } from '../format'
@@ -85,6 +96,14 @@ export function MattersRouteView({
   const selected =
     visible.find((row) => row.matter.id === selectedId) ?? visible[0] ?? null
   const domains = legalDomainOptions(list)
+  // Four chips fit a 1440px row beside the search box; the rest would run to the
+  // edge, so they fold into one menu. A selected domain always stays a chip.
+  const VISIBLE_DOMAIN_CHIPS = 4
+  const visibleDomains = domains.slice(0, VISIBLE_DOMAIN_CHIPS)
+  if (domain && !visibleDomains.includes(domain)) visibleDomains.unshift(domain)
+  const foldedDomains = domains.filter(
+    (option) => !visibleDomains.includes(option),
+  )
   const withOpenWork = rows.filter((row) => (row.openWork?.total ?? 0) > 0)
 
   function select(matterId: string) {
@@ -163,7 +182,7 @@ export function MattersRouteView({
               active={needsAttention}
               onClick={() => setNeedsAttention(true)}
             />
-            {domains.map((option) => (
+            {visibleDomains.map((option) => (
               <FilterChip
                 key={option}
                 label={option}
@@ -171,6 +190,30 @@ export function MattersRouteView({
                 onClick={() => setDomain(option)}
               />
             ))}
+            {foldedDomains.length > 0 ? (
+              <Menu>
+                <MenuTrigger
+                  render={
+                    <Button variant="secondary" size="md">
+                      More ({foldedDomains.length})
+                    </Button>
+                  }
+                />
+                <MenuContent aria-label="More legal domains">
+                  {foldedDomains.map((option) => (
+                    <MenuItem
+                      key={option}
+                      onClick={() => {
+                        setNeedsAttention(false)
+                        setDomain(option)
+                      }}
+                    >
+                      {option}
+                    </MenuItem>
+                  ))}
+                </MenuContent>
+              </Menu>
+            ) : null}
           </div>
 
           <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">

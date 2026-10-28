@@ -5,6 +5,7 @@ import type {
   MatterShareCreateResponse,
   MatterShareListResponse,
   MatterShareRevokeResponse,
+  MatterShareUpdateResponse,
 } from '@obiter/contracts'
 import { apiFetch } from './api'
 
@@ -46,6 +47,29 @@ export function useGrantMatterShare(matterId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: matterSharesKeys.forMatter(matterId),
+      }),
+  })
+}
+
+/**
+ * Change one grant's access in place. The list is invalidated rather than
+ * patched, because the row shows the level the API stored, not the level the
+ * dialog hoped for.
+ */
+export function useUpdateMatterShare(matterId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { shareId: string; accessLevel: MatterAccessLevel }) =>
+      apiFetch<MatterShareUpdateResponse>(
+        `/api/matters/${matterId}/shares/${input.shareId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ accessLevel: input.accessLevel }),
+        },
+      ),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: matterSharesKeys.forMatter(matterId),

@@ -70,6 +70,20 @@ export type MatterShareCreateResponse = z.infer<
   typeof matterShareCreateResponseSchema
 >
 
+export const matterShareUpdateRequestSchema = z.object({
+  accessLevel: matterAccessLevelSchema,
+})
+export type MatterShareUpdateRequest = z.infer<
+  typeof matterShareUpdateRequestSchema
+>
+
+export const matterShareUpdateResponseSchema = z.object({
+  share: matterShareGrantSchema,
+})
+export type MatterShareUpdateResponse = z.infer<
+  typeof matterShareUpdateResponseSchema
+>
+
 export const matterShareRevokeRequestSchema = z.object({
   shareId: z.string().min(1),
 })
@@ -342,6 +356,35 @@ export const documentTextResponseSchema = z.object({
   text: z.string(),
 })
 export type DocumentTextResponse = z.infer<typeof documentTextResponseSchema>
+
+/**
+ * "Continue where you left off": the document a person opened most recently,
+ * resolved with its matter and current version so the dashboard can name all
+ * three without a second read. Null until they open one.
+ */
+export const recentlyOpenedDocumentSchema = z.object({
+  documentId: z.string().min(1),
+  matterId: z.string().min(1),
+  matterName: z.string().min(1),
+  filename: z.string().min(1),
+  openedAt: z.string().datetime({ offset: true }),
+})
+export type RecentlyOpenedDocument = z.infer<
+  typeof recentlyOpenedDocumentSchema
+>
+
+export const recentlyOpenedDocumentResponseSchema = z.object({
+  document: recentlyOpenedDocumentSchema.nullable(),
+})
+export type RecentlyOpenedDocumentResponse = z.infer<
+  typeof recentlyOpenedDocumentResponseSchema
+>
+
+export const documentOpenResponseSchema = z.object({
+  documentId: z.string().min(1),
+  openedAt: z.string().datetime({ offset: true }),
+})
+export type DocumentOpenResponse = z.infer<typeof documentOpenResponseSchema>
 
 export const redactionFinalizeInputSchema = z.object({
   outputMode: outputModeSchema,

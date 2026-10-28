@@ -34,8 +34,18 @@ export interface ButtonProps {
 const baseClasses =
   'inline-flex items-center justify-center rounded-md whitespace-nowrap select-none ' +
   'transition-[background-color,border-color,transform,box-shadow] duration-150 ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
-  'disabled:cursor-not-allowed disabled:opacity-45'
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+
+/**
+ * A disabled control that is not working looks muted; one that is working keeps
+ * its own colour, because a button that goes grey while it works is
+ * indistinguishable from a button you may not press. `loading` also disables
+ * the button, so the two states are chosen here rather than fought over in CSS.
+ */
+const stateClasses = {
+  idle: 'disabled:cursor-not-allowed disabled:opacity-45',
+  loading: 'cursor-progress',
+} satisfies Record<'idle' | 'loading', string>
 
 const variantClasses = {
   primary:
@@ -59,13 +69,21 @@ const sizeClasses = {
 export function buttonClassName({
   variant = 'primary',
   size = 'md',
+  loading = false,
   className,
 }: {
   variant?: ButtonVariant
   size?: ButtonSize
+  loading?: boolean
   className?: string
 } = {}) {
-  return cn(baseClasses, variantClasses[variant], sizeClasses[size], className)
+  return cn(
+    baseClasses,
+    variantClasses[variant],
+    sizeClasses[size],
+    loading ? stateClasses.loading : stateClasses.idle,
+    className,
+  )
 }
 
 /**
@@ -90,7 +108,7 @@ export function Button({
       nativeButton={nativeButton}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={buttonClassName({ variant, size, className })}
+      className={buttonClassName({ variant, size, loading, className })}
       render={render}
       {...props}
     >

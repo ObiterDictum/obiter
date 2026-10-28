@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
 import { ToastProvider, Toaster } from '@obiter/ui'
-import type { ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { AgentPanel } from './agent-panel'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
@@ -63,10 +64,24 @@ function AuthenticatedFrame({
   platform: AppPlatform
 }) {
   const { data: me } = useQuery(currentUserQueryOptions())
+  const [agentOpen, setAgentOpen] = useState(false)
+  const agentTriggerRef = useRef<HTMLButtonElement>(null)
+
+  // Closing the panel returns focus to the row that opened it, so a keyboard
+  // user is never dropped back at the top of the document.
+  function closeAgent() {
+    setAgentOpen(false)
+    agentTriggerRef.current?.focus()
+  }
 
   return (
     <div className="flex h-dvh bg-canvas text-ink">
-      <Sidebar orgName={me?.organisation?.name} />
+      <Sidebar
+        orgName={me?.organisation?.name}
+        agentOpen={agentOpen}
+        onToggleAgent={() => (agentOpen ? closeAgent() : setAgentOpen(true))}
+        agentTriggerRef={agentTriggerRef}
+      />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopBar platform={platform} />
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
@@ -74,6 +89,7 @@ function AuthenticatedFrame({
           {children}
         </main>
       </div>
+      {agentOpen ? <AgentPanel onClose={closeAgent} /> : null}
     </div>
   )
 }

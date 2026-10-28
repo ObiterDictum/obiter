@@ -10,13 +10,13 @@ export interface SelectOption {
 
 export interface SelectProps {
   options: SelectOption[]
+  /** The control's name when no visible label is shown beside it. */
+  ariaLabel?: string
   value?: string
   defaultValue?: string
   onValueChange?: (value: string | null) => void
   placeholder?: string
   label?: ReactNode
-  /** Accessible name when the select has no visible label, as in a toolbar. */
-  ariaLabel?: string
   invalid?: boolean
   name?: string
   disabled?: boolean
@@ -35,12 +35,12 @@ function optionLabel(options: SelectOption[], value: string) {
  */
 export function Select({
   options,
+  ariaLabel,
   value,
   defaultValue,
   onValueChange,
   placeholder = 'Select…',
   label,
-  ariaLabel,
   invalid,
   name,
   disabled,
