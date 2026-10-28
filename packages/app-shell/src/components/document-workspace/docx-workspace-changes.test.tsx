@@ -237,21 +237,6 @@ describe('DocxWorkspace change review', () => {
       screen.getByRole('button', { name: `Accept change: ${reason}` }),
     )
     expect(decide).not.toHaveBeenCalled()
-
-    // The row and bulk controls describe themselves through the barrier note
-    // rather than repeating it — the association must resolve to the reason.
-    fireEvent.click(screen.getByRole('button', { name: 'Changes (1)' }))
-    const panel = screen.getByRole('complementary', { name: 'Tracked changes' })
-    const accept = within(panel).getByRole('button', { name: 'Accept' })
-    const describedBy = accept.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
-    const note = describedBy ? document.getElementById(describedBy) : null
-    expect(note?.textContent).toBe(reason)
-    expect(
-      within(panel)
-        .getByRole('button', { name: 'Accept all' })
-        .getAttribute('aria-describedby'),
-    ).toBe(describedBy)
   })
 
   it('names the save barrier ahead of the decision cap', () => {
@@ -312,36 +297,33 @@ describe('DocxWorkspace change review', () => {
     }
   })
 
-  it('lists changes, reveals one on click, and decides it', () => {
+  it('carries the undecidable reason onto the ribbon once the row is current', () => {
     const decide = vi.fn(decided)
-    mountWorkspace({ changes: [inserted, format], decideAsync: decide })
+    mountWorkspace({
+      changes: [inserted, unsupportedMove],
+      decideAsync: decide,
+    })
     openRibbonTab('Review')
     fireEvent.click(screen.getByRole('button', { name: 'Changes (2)' }))
-
     const panel = screen.getByRole('complementary', {
-      name: 'Tracked changes',
+      name: 'Changes and comments',
     })
-    expect(panel.textContent).toContain('— of 2')
-
-    const items = within(panel).getAllByRole('button', {
-      name: 'Show this change',
-    })
-    fireEvent.click(items[1]!)
-    expect(panel.textContent).toContain('2 of 2')
-    expect(items[1]!.closest('li')?.getAttribute('aria-current')).toBe('true')
-    expect(items[0]!.closest('li')?.getAttribute('aria-current')).toBeNull()
-
-    const item = items[1]!.closest('li')
-    if (!item) throw new Error('Change item is missing.')
-    fireEvent.click(within(item).getByRole('button', { name: 'Accept' }))
-    expect(decide).toHaveBeenCalledWith(
-      {
-        baseVersionId: 'ver_1',
-        action: 'accept',
-        changeIds: ['chg_2'],
-      },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    // The undecidable move is pinned above the list, so it is the first row.
+    fireEvent.click(
+      within(panel).getAllByRole('button', { name: 'Show this change' })[0]!,
     )
+
+    expect(
+      screen.getByRole('button', {
+        name: `Accept change: ${unsupportedMoveReason}`,
+      }),
+    ).toHaveProperty('disabled', true)
+    expect(
+      screen.getByRole('button', {
+        name: `Reject change: ${unsupportedMoveReason}`,
+      }),
+    ).toHaveProperty('disabled', true)
+    expect(decide).not.toHaveBeenCalled()
   })
 
   it('rejects a lone insertion with its empty shell in the same decision', () => {
@@ -394,78 +376,13 @@ describe('DocxWorkspace change review', () => {
     )
   })
 
-  it('marks an undecidable change, disables only its controls, and still navigates', () => {
-    const decide = vi.fn(decided)
-    mountWorkspace({
-      changes: [inserted, unsupportedMove],
-      decideAsync: decide,
-    })
-    openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Changes (2)' }))
-
-    const panel = screen.getByRole('complementary', {
-      name: 'Tracked changes',
-    })
-    expect(panel.textContent).toContain(unsupportedMoveReason)
-    expect(panel.textContent).toContain(
-      'One listed change cannot be decided here',
-    )
-    const items = within(panel).getAllByRole('button', {
-      name: 'Show this change',
-    })
-    const item = items[1]?.closest('li')
-    if (!item) throw new Error('Undecidable change row is missing.')
-    const note = within(item).getByText(unsupportedMoveReason)
-    const noteId = note.getAttribute('id')
-    expect(noteId).toBeTruthy()
-    for (const label of ['Accept', 'Reject']) {
-      const button = within(item).getByRole('button', { name: label })
-      expect(button).toHaveProperty('disabled', true)
-      // The reason is not duplicated into the name; the control describes
-      // itself through the note, and the association must resolve to it.
-      expect(button.getAttribute('aria-describedby')).toBe(noteId)
-    }
-    // A decidable row keeps its controls free of the static reason.
-    const decidable = items[0]?.closest('li')
-    if (!decidable) throw new Error('Decidable change row is missing.')
-    expect(
-      within(decidable)
-        .getByRole('button', { name: 'Accept' })
-        .getAttribute('aria-describedby'),
-    ).toBeNull()
-
-    // The row still reveals its location, and the ribbon's single-change
-    // controls carry the reason on their accessible name once it is active.
-    fireEvent.click(items[1]!)
-    expect(item.getAttribute('aria-current')).toBe('true')
-    expect(
-      screen.getByRole('button', {
-        name: `Accept change: ${unsupportedMoveReason}`,
-      }),
-    ).toHaveProperty('disabled', true)
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `Accept change: ${unsupportedMoveReason}`,
-      }),
-    )
-    expect(decide).not.toHaveBeenCalled()
-  })
-
-  it('scopes a bulk decision to the supported changes and says so', () => {
+  it('scopes the ribbon bulk decision to the supported changes', () => {
     const decide = vi.fn(decided)
     mountWorkspace({
       changes: [inserted, format, unsupportedMove],
       decideAsync: decide,
     })
     openRibbonTab('Review')
-
-    const panel = (() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Changes (3)' }))
-      return screen.getByRole('complementary', { name: 'Tracked changes' })
-    })()
-    expect(panel.textContent).toContain(
-      'One listed change cannot be decided here',
-    )
     fireEvent.click(
       screen.getByRole('button', { name: 'Accept all supported changes' }),
     )

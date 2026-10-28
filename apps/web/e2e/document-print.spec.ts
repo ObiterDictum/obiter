@@ -135,6 +135,27 @@ async function mockWorkspace(page: Page) {
       },
     }),
   )
+  // The detail route (and the `?` panel's version list) read this on open.
+  await page.route('**/api/documents/doc_print', (route) =>
+    route.fulfill({
+      json: {
+        document: {
+          id: 'doc_print',
+          organisationId: 'org_shell_test',
+          matterId: 'mtr_print',
+          currentVersionId: 'ver_1',
+          logicalKey: 'print-fixture.docx',
+          createdBy: 'usr_shell_test',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          deletedAt: null,
+          deletedBy: null,
+          currentVersion: VERSION,
+        },
+        versions: [VERSION],
+      },
+    }),
+  )
   await page.route('**/api/documents/doc_print/model', (route) =>
     route.fulfill({ json: MODEL }),
   )
@@ -165,14 +186,18 @@ async function mockWorkspace(page: Page) {
  */
 async function openWorkspace(page: Page) {
   await page.goto('/search')
-  const modes = page.getByRole('navigation', { name: 'Modes' })
-  await expect(modes).toBeVisible()
-  await modes.getByRole('link', { name: 'Matters' }).first().click()
+  const nav = page.getByRole('navigation', { name: 'Workspace' })
+  await expect(nav).toBeVisible()
+  await nav.getByRole('link', { name: 'Matters' }).first().click()
   await page
     .getByRole('main')
     .getByRole('link', { name: /Print Matter/ })
     .click()
-  await page.getByRole('button', { name: /print-fixture\.docx/ }).click()
+  // Stage 5 lists a matter's documents as links, not buttons.
+  await page
+    .getByRole('link', { name: /print-fixture\.docx/ })
+    .first()
+    .click()
   await expect(page.locator('[data-document-desk]')).toBeVisible()
 }
 

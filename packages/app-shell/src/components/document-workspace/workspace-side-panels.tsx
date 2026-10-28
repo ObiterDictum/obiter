@@ -7,7 +7,7 @@ import type {
 import { DockedPanel } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { DocumentAuthoritiesPanel } from './authorities-panel'
-import { DocumentChangesPanel } from './changes-panel'
+import { DocumentReviewPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
 import { DocumentInfoPanel } from './document-info-panel'
 import { LegalChecksPanel } from './legal-checks-panel'
@@ -46,6 +46,7 @@ export function WorkspaceSidePanels({
   onReopenComment,
   onRevealCommentAnchor,
   changeReview,
+  threadCount,
   authorities,
   onSelectAuthority,
   legalChecks,
@@ -78,6 +79,8 @@ export function WorkspaceSidePanels({
   onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void
   /** The shared review state the ribbon also uses; required with the panel. */
   changeReview: ChangeReview
+  /** Comment threads, counted by the review panel but decided in their own. */
+  threadCount: number
   authorities: AuthorityHit[]
   onSelectAuthority: (paragraphId: string) => void
   /** The check derivations, or null while the model loads. */
@@ -139,11 +142,13 @@ export function WorkspaceSidePanels({
       </DockedPanel>
     )
   }
-  if (panel === 'changes') {
+  if (panel === 'review') {
     return (
-      <DockedPanel title="Tracked changes" onClose={onClose}>
-        <DocumentChangesPanel review={changeReview} />
-      </DockedPanel>
+      <DocumentReviewPanel
+        review={changeReview}
+        commentCount={threadCount}
+        onClose={onClose}
+      />
     )
   }
   if (panel === 'authorities') {
