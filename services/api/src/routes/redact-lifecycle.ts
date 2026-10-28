@@ -3,13 +3,21 @@ import type { Pool } from 'pg'
 import {
   redactionReturnRequestSchema,
   redactionReturnResponseSchema,
+  redactionSaveToMatterRequestSchema,
+  redactionSaveToMatterResponseSchema,
 } from '@obiter/contracts'
+import { saveRedactionOutputToMatter } from '../redaction-save-to-matter'
 import { requireManageRole } from '../authz'
+import { buildAuditReport } from '../redaction-audit-report'
 import {
-  buildAuditReport,
-  renderAuditHtml,
-  renderAuditMarkdown,
-} from '../redaction-audit-report'
+  renderScheduleDocx,
+  renderSchedulePdf,
+  scheduleExportFilename,
+} from '../redaction-schedule-export'
+import {
+  downloadContentDisposition,
+  safeDownloadFilename,
+} from '../download-filename'
 import {
   getDeletedRedactionRunForAudit,
   getRedactionRun,
@@ -206,6 +214,67 @@ export function createRedactLifecycleRoutes(
     )
   })
 
+  /**
+   * Files a finalized standalone run's copy into a matter as version 1 of a new
+   * document. A run that is already document-linked has a version to return to
+   * and is refused here.
+   */
+  routes.post('/api/redaction-runs/:runId/save-to-matter', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const request = redactionSaveToMatterRequestSchema.safeParse(
+      await c.req.json().catch(() => null),
+    )
+    if (!request.success)
+      return errorResponse(c, 'validation_failed', 'A matter is required.', 400)
+    const result = await saveRedactionOutputToMatter(pool, storage, {
+      user,
+      runId: c.req.param('runId'),
+      matterId: request.data.matterId,
+      requestId: c.get('requestId'),
+    })
+    if (result.status === 'not_found')
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    if (result.status === 'not_finalized')
+      return errorResponse(
+        c,
+        'redaction_run_not_reviewable',
+        'Only a finalised run has a copy to save.',
+        400,
+      )
+    if (result.status === 'not_standalone')
+      return errorResponse(
+        c,
+        'redaction_return_unavailable',
+        'This run belongs to a document. Return its copy to that document instead.',
+        422,
+      )
+    if (result.status === 'matter_not_found')
+      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+    if (result.status === 'unavailable')
+      return errorResponse(
+        c,
+        'redaction_return_unavailable',
+        'This redaction output cannot be saved to a matter.',
+        422,
+      )
+    return c.json(
+      redactionSaveToMatterResponseSchema.parse({
+        status: result.status,
+        matterId: result.matterId,
+        documentId: result.documentId,
+        versionId: result.versionId,
+        versionNumber: result.versionNumber,
+      }),
+      result.status === 'saved' ? 201 : 200,
+    )
+  })
+
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
@@ -239,18 +308,31 @@ export function createRedactLifecycleRoutes(
     const report = buildAuditReport(run, await listRedactionAuditLog(pool, run))
     const format = c.req.query('format') ?? 'json'
     if (format === 'json') return c.json(report)
-    if (format === 'markdown')
-      return c.body(renderAuditMarkdown(report), 200, {
-        'content-type': 'text/markdown; charset=utf-8',
+    if (format === 'pdf' || format === 'docx') {
+      const bytes =
+        format === 'pdf'
+          ? await renderSchedulePdf(report)
+          : await renderScheduleDocx(report)
+      return c.body(Uint8Array.from(bytes), 200, {
+        'content-type':
+          format === 'pdf'
+            ? 'application/pdf'
+            : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'content-disposition': downloadContentDisposition(
+          safeDownloadFilename(
+            scheduleExportFilename(
+              report.originalDocument.filename,
+              `.${format}`,
+            ),
+            { fallback: 'schedule', extension: `.${format}` },
+          ),
+        ),
       })
-    if (format === 'html')
-      return c.body(renderAuditHtml(report), 200, {
-        'content-type': 'text/html; charset=utf-8',
-      })
+    }
     return errorResponse(
       c,
       'validation_failed',
-      'Audit format must be json, markdown, or html.',
+      'Schedule format must be json, pdf, or docx.',
       400,
     )
   })

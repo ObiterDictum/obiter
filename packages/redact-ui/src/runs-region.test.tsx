@@ -85,10 +85,14 @@ describe('RedactionRunsRegion', () => {
       data: {
         runs: [
           run({
+            sourceFilename: 'witness-statement.docx',
+            sourceMimeType:
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             status: 'failed',
             summary: {
               totalSpans: 0,
               reviewedCount: 0,
+              // A reason recorded by a PDF run must not be shown for a .docx.
               failureReason: 'No text layer was found in this PDF.',
             },
           }),
@@ -96,9 +100,8 @@ describe('RedactionRunsRegion', () => {
       },
     })
     render(<RedactionRunsRegion documentId="doc_1" onOpenRun={vi.fn()} />)
-    expect(screen.getByRole('alert').textContent).toContain(
-      'No text layer was found in this PDF.',
-    )
+    expect(screen.getByText(/could not read this Word document/u)).toBeTruthy()
+    expect(screen.queryByText(/text layer/iu)).toBeNull()
   })
 
   it('cannot start a run until text extraction has finished', () => {

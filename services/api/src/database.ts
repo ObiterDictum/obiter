@@ -67,6 +67,7 @@ export interface AuditRecordInput {
     | 'redaction.coverage_unchecked'
     | 'redaction.token_map_access'
     | 'redaction.return_to_document'
+    | 'redaction.saved_to_matter'
     | 'redaction_run.delete'
     | 'redaction_run.restore'
     | 'verification.run_create'

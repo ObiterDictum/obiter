@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { RedactionReturnResponse } from '@obiter/contracts'
+import type {
+  RedactionReturnResponse,
+  RedactionSaveToMatterResponse,
+} from '@obiter/contracts'
 import {
   apiFetch,
   apiFetchBlob,
@@ -120,17 +123,15 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
 }
 
 /**
- * The redaction schedule is the run's own audit report: every decided span, its
- * category, the decision, the reviewer and the time, plus the audit log. The API
- * serves it only for a finalised run, so the query is enabled only then.
+ * The redaction schedule is the run's own audit report: every decision with its
+ * category, reviewer and time, plus the audit log, and never the removed words.
+ * PDF and Word are generated server-side on demand — the API serves a schedule
+ * only for a finalised run.
  */
-export function useRedactionSchedule(runId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ['redaction-run-schedule', runId],
-    queryFn: () =>
-      apiFetchBlob(`/api/redaction-runs/${runId}/audit?format=markdown`),
-    enabled,
-    staleTime: 60_000,
+export function useRedactionScheduleExport(runId: string) {
+  return useMutation({
+    mutationFn: (format: 'pdf' | 'docx') =>
+      apiFetchBlob(`/api/redaction-runs/${runId}/audit?format=${format}`),
   })
 }
 
@@ -146,10 +147,16 @@ export function useRedactionOutputFile(runId: string, enabled: boolean) {
 export function useSpanDecision(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ spanId, decision }: SpanDecisionInput) =>
+    mutationFn: ({ spanId, decision, applyToSameText }: SpanDecisionInput) =>
       apiFetch<{ run: RedactionRun }>(
         `/api/redaction-runs/${runId}/spans/${spanId}/decision`,
-        { method: 'POST', body: JSON.stringify({ decision }) },
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            decision,
+            ...(applyToSameText ? { applyToSameText: true } : {}),
+          }),
+        },
       ),
     onSuccess: ({ run }) => queryClient.setQueryData(runKey(runId), run),
   })
@@ -194,6 +201,29 @@ export function useReturnToDocument(runId: string) {
       void queryClient.invalidateQueries({
         queryKey: ['document-redaction-runs'],
       })
+      void queryClient.invalidateQueries({
+        queryKey: documentsKeys.detail(result.documentId),
+      })
+    },
+  })
+}
+
+/**
+ * File a finalized standalone run's copy into a matter. The server creates the
+ * document and its version, access-checked against the matter (edit) and
+ * audited; the run records the version it became, so a retry resolves to it.
+ */
+export function useSaveToMatter(runId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (matterId: string) =>
+      apiFetch<RedactionSaveToMatterResponse>(
+        `/api/redaction-runs/${runId}/save-to-matter`,
+        { method: 'POST', body: JSON.stringify({ matterId }) },
+      ),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: runKey(runId) })
+      void queryClient.invalidateQueries({ queryKey: runsKey })
       void queryClient.invalidateQueries({
         queryKey: documentsKeys.detail(result.documentId),
       })
