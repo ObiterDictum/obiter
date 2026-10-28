@@ -4,6 +4,11 @@ import { DetectionModeWarning } from './detection-mode-warning'
 import { useRedetectRun } from './hooks'
 import type { RedactionRun } from './types'
 
+/**
+ * The retry path for a run whose model detection did not run: a replacement run
+ * is created from the stored source text, and this run and its decisions are
+ * left exactly as they were.
+ */
 export function DetectionRetryWarning({
   run,
   onOpenRun,
@@ -19,7 +24,7 @@ export function DetectionRetryWarning({
   const replacementRunId = run.replacementRunId
 
   return (
-    <div className="flex flex-col gap-1 border-b border-line">
+    <div className="flex flex-col gap-2 border-b border-line px-12 py-3 max-compact:px-8">
       <DetectionModeWarning
         detectionMode={limitedDetectionMode}
         action={
@@ -51,16 +56,16 @@ export function DetectionRetryWarning({
           )
         }
       />
-      <p className="px-5 pb-3 text-xs text-subtle sm:px-6">
+      <p className="text-caption text-subtle">
         {replacementRunId
           ? run.status === 'finalized'
-            ? 'A newer model-detected run is available. This finalized run remains unchanged as part of the audit history.'
-            : 'A newer model-detected run is available. This run remains unchanged and can no longer be finalized.'
-          : 'This creates a new run from the stored source text. This run and its review history remain unchanged.'}
+            ? 'A newer model-detected run is available. This finalised run stays unchanged as part of the audit history.'
+            : 'A newer model-detected run is available. This run stays unchanged and can no longer be finalised.'
+          : 'This creates a new run from the stored source text. This run and its review history stay unchanged.'}
       </p>
       {!replacementRunId && redetect.error ? (
-        <p className="px-5 pb-3 text-sm text-danger sm:px-6" role="alert">
-          {redetect.error.message}
+        <p className="text-meta text-danger" role="alert">
+          The re-detection did not start. {redetect.error.message}
         </p>
       ) : null}
     </div>

@@ -119,6 +119,21 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
   })
 }
 
+/**
+ * The redaction schedule is the run's own audit report: every decided span, its
+ * category, the decision, the reviewer and the time, plus the audit log. The API
+ * serves it only for a finalised run, so the query is enabled only then.
+ */
+export function useRedactionSchedule(runId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['redaction-run-schedule', runId],
+    queryFn: () =>
+      apiFetchBlob(`/api/redaction-runs/${runId}/audit?format=markdown`),
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
 export function useRedactionOutputFile(runId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['redaction-run-output-file', runId],

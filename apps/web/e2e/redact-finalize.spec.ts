@@ -46,54 +46,80 @@ test('finalizes a DOCX into a previewable secure PDF download', async ({
 
   // Standalone DOCX upload of the synthetic demo fixture.
   await page.goto('/redact', { waitUntil: 'networkidle' })
-  await page.getByLabel('Or upload a document').setInputFiles(fixturePath())
+  await page
+    .getByLabel('Upload a document to redact')
+    .setInputFiles(fixturePath())
 
-  // Uploading creates the run; open its review screen from the runs list.
-  const reviewButton = page.getByRole('button', { name: 'Review' }).first()
-  await expect(reviewButton).toBeVisible({ timeout: 30_000 })
-  await reviewButton.click()
-  await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 20_000 })
+  // Uploading creates the run and opens its review screen.
+  await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 60_000 })
 
-  // Finalize in the default redacted mode. The run may ask for the
-  // unreviewed-spans and/or degraded-detection acknowledgement; tick both.
+  // Finalising is blocked until every detected span has a decision, so decide
+  // them all from the listbox (Enter accepts the selected span, ArrowDown moves
+  // to the next). This is the disclosure gate, not test setup.
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
+  await listbox.focus()
+  const unreviewed = page.getByRole('tab', { name: /^Unreviewed/u })
+  const total = Number(
+    (await page.getByRole('tab', { name: /^All/u }).textContent())?.replace(
+      /\D+/gu,
+      '',
+    ),
+  )
+  for (let index = 0; index < total; index += 1) {
+    const before = Number(
+      (await unreviewed.textContent())?.replace(/\D+/gu, ''),
+    )
+    if (before === 0) break
+    await page.keyboard.press('Enter')
+    await expect(
+      page.getByRole('tab', { name: `Unreviewed ${before - 1}` }),
+    ).toBeVisible({ timeout: 20_000 })
+    await page.keyboard.press('ArrowDown')
+  }
+  await expect(unreviewed).toHaveText('Unreviewed 0', { timeout: 20_000 })
+
+  // Finalise in the default redacted mode. The run may also ask for the
+  // degraded-detection acknowledgement; the page review is always required.
   await expect(
-    page.getByRole('button', { name: 'Finalize', exact: true }),
+    page.getByRole('button', { name: 'Finalise', exact: true }),
   ).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('button', { name: 'Finalize', exact: true }).click()
+  await page.getByRole('button', { name: 'Finalise', exact: true }).click()
   await expect(
-    page.getByRole('heading', { name: 'Finalize redaction output' }),
+    page.getByRole('heading', { name: 'Finalise this redaction?' }),
   ).toBeVisible()
   const acknowledgements = page.getByRole('checkbox')
   for (let index = 0; index < (await acknowledgements.count()); index += 1)
     await acknowledgements.nth(index).check()
-  await page.getByRole('button', { name: 'Create secure PDF' }).click()
+  await page.getByRole('button', { name: 'Finalise redacted PDF' }).click()
 
-  // Secure PDF: the finalized heading, the preview-before-download copy and no
+  // Secure PDF: the finalised heading, the preview-before-download copy and no
   // downgrade warning.
-  await expect(page.getByText('Finalized', { exact: true })).toBeVisible({
-    timeout: 30_000,
-  })
+  await expect(
+    page.getByRole('heading', { name: 'Redaction finalised' }),
+  ).toBeVisible({ timeout: 30_000 })
   await page.screenshot({
     path: `/tmp/redact-finalized-${runId}.png`,
     fullPage: true,
   })
   await expect(
-    page.getByRole('heading', { name: 'Secure redacted PDF' }),
+    page.getByRole('heading', { name: 'Disclosure copy' }),
   ).toBeVisible({ timeout: 15_000 })
   await expect(
     page.getByText(
-      'Preview the finalized file below. Download and share this PDF only after checking every page.',
+      'Check every page of the preview before you download or share this copy.',
     ),
+  ).toBeVisible()
+  // The schedule is a separate, access-controlled file and says so.
+  await expect(
+    page.getByText('The schedule contains the original redacted text.'),
   ).toBeVisible()
   await expect(
     page.getByText('Word document unavailable — text file provided instead'),
   ).toBeHidden()
 
   // The primary download stays disabled until the preview has rendered.
-  const downloadButton = page.getByRole('button', {
-    name: 'Download secure PDF',
-  })
-  await expect(page.getByText(/^Preview ready, /)).toBeVisible({
+  const downloadButton = page.getByRole('button', { name: 'Download PDF' })
+  await expect(page.getByText(/^Preview ready · /u)).toBeVisible({
     timeout: 30_000,
   })
   await expect(downloadButton).toBeEnabled({ timeout: 15_000 })

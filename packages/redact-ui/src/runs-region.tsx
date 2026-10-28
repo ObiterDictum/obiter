@@ -1,10 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRef } from 'react'
 import { apiFetch, useDocument } from '@obiter/app-shell'
-import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
+import { Button, Card, EmptyState, Skeleton, StatusDot } from '@obiter/ui'
 import type { RedactionRun } from './types'
 import { useCreateDocumentRedactionRun } from './hooks'
+import { formatDate } from './span-copy'
 
+const runStatus = {
+  pending: { label: 'Waiting to start', tone: 'neutral' },
+  detecting: { label: 'Detecting', tone: 'info' },
+  ready_for_review: { label: 'Ready for review', tone: 'warning' },
+  reviewing: { label: 'In review', tone: 'info' },
+  finalized: { label: 'Finalised', tone: 'success' },
+  failed: { label: 'Failed', tone: 'danger' },
+} satisfies Record<
+  RedactionRun['status'],
+  { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' }
+>
+
+/**
+ * The redaction runs for one document, on the document page (contract §4). A
+ * run is described by its state and its decided count, never by its id.
+ */
 export function RedactionRunsRegion({
   documentId,
   onOpenRun,
@@ -54,111 +71,97 @@ export function RedactionRunsRegion({
       <EmptyState
         title="Redaction runs are unavailable"
         body={query.error.message}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void query.refetch()}
+          >
+            Try again
+          </Button>
+        }
       />
     )
-  if (!query.data?.runs.length)
-    return (
-      <div className="flex flex-col gap-3">
-        <EmptyState
-          title="No redaction runs yet"
-          body={
-            ready
-              ? 'Create a run to detect sensitive information before reviewing this document.'
-              : failed
-                ? version?.failureReason ||
-                  'Text extraction failed for this document.'
-                : 'This document must finish text extraction before it can be redacted.'
-          }
-        />
-        <CreateDocumentRunButton
-          disabled={!ready}
-          pending={create.isPending}
-          onClick={createRun}
-        />
-        {create.error ? (
-          <p className="text-sm text-danger">{create.error.message}</p>
-        ) : null}
-      </div>
-    )
-  return (
-    <div className="flex flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
-        <p className="text-[11px] font-medium tracking-wide text-muted">
-          Redaction runs
-        </p>
-        <CreateDocumentRunButton
-          disabled={!ready}
-          pending={create.isPending}
-          onClick={createRun}
-        />
-      </div>
-      {create.error ? (
-        <p className="mt-2 text-sm text-danger">{create.error.message}</p>
-      ) : null}
-      <ul className="flex flex-col divide-y divide-line">
-        {query.data.runs.map((run) => (
-          <li
-            key={run.id}
-            className="flex items-center justify-between gap-3 py-3"
-          >
-            <div className="min-w-0">
-              <p className="font-mono text-xs text-ink">{run.id}</p>
-              <p className="text-[11px] text-muted">
-                {run.summary.totalSpans} spans · {run.summary.reviewedCount}{' '}
-                reviewed
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {run.replacementRunId ? (
-                <Badge tone="neutral">Replaced</Badge>
-              ) : run.replacesRunId ? (
-                <Badge tone="info">Re-detection</Badge>
-              ) : null}
-              {run.detectionMode === 'heuristics+supplement' ? (
-                <Badge tone="warning">Degraded detection</Badge>
-              ) : run.detectionMode === 'unknown' ? (
-                <Badge tone="warning">Detection mode unknown</Badge>
-              ) : null}
-              <Badge tone={run.status === 'finalized' ? 'success' : 'info'}>
-                {run.status.replaceAll('_', ' ')}
-              </Badge>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => onOpenRun(run.id)}
-              >
-                Review
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
 
-function CreateDocumentRunButton({
-  disabled,
-  pending,
-  onClick,
-}: {
-  disabled: boolean
-  pending: boolean
-  onClick: () => void
-}) {
+  const runs = query.data?.runs ?? []
   return (
-    <Button
-      size="sm"
-      variant="primary"
-      // `w-fit` stops the empty-state flex column stretching this into a
-      // content-column-wide bar, which read as a rendering bug rather than a
-      // primary action.
-      className="w-fit"
-      disabled={disabled}
-      loading={pending}
-      onClick={onClick}
-    >
-      Redact this document
-    </Button>
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
+        <div>
+          <h2 className="text-section text-ink">Redaction runs</h2>
+          <p className="mt-0.5 text-meta text-muted">
+            {runs.length === 0
+              ? 'No runs yet for this document.'
+              : `${String(runs.length)} ${runs.length === 1 ? 'run' : 'runs'} for this document.`}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={!ready}
+          loading={create.isPending}
+          onClick={createRun}
+        >
+          Redact this document
+        </Button>
+      </div>
+      {!ready ? (
+        <p className="px-6 pt-4 text-meta text-muted">
+          {failed
+            ? (version?.failureReason ??
+              'Text extraction failed for this document, so it cannot be redacted yet.')
+            : 'This document must finish text extraction before it can be redacted.'}
+        </p>
+      ) : null}
+      {create.error ? (
+        <p className="px-6 pt-4 text-meta text-danger" role="alert">
+          The run was not started. {create.error.message}
+        </p>
+      ) : null}
+      {runs.length === 0 ? (
+        <p className="px-6 py-4 text-meta text-muted">
+          Create a run to find the sensitive spans in this document before you
+          finalise a redacted copy.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-col">
+          {runs.map((run) => {
+            const status = runStatus[run.status]
+            return (
+              <li
+                key={run.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <StatusDot tone={status.tone}>{status.label}</StatusDot>
+                    <span className="text-caption tabular-nums text-muted">
+                      {run.summary.reviewedCount} of {run.summary.totalSpans}{' '}
+                      decided
+                    </span>
+                  </div>
+                  <p className="mt-1 text-caption text-subtle">
+                    Started {formatDate(run.createdAt)}
+                  </p>
+                  {run.status === 'failed' ? (
+                    <p className="mt-1 text-caption text-danger" role="alert">
+                      {run.summary.failureReason ??
+                        'The detector stopped before it finished, so this run found nothing.'}
+                    </p>
+                  ) : null}
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onOpenRun(run.id)}
+                >
+                  {run.status === 'finalized' ? 'View' : 'Review'}
+                </Button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
   )
 }

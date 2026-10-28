@@ -1,6 +1,6 @@
 import '@obiter/test-dom'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, mock } from 'bun:test'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 
 const hooks = vi.hoisted(() => ({
@@ -10,9 +10,6 @@ const hooks = vi.hoisted(() => ({
   useDeleteRedactionRun: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const hooksModuleKeys = Object.fromEntries(
   Object.keys(await import('./hooks')).map((key) => [key, undefined]),
 )
@@ -21,152 +18,142 @@ mock.module('./hooks', () =>
 )
 
 const ui = vi.hoisted(() => ({ useToast: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const obiterUiModule = { ...(await import('@obiter/ui')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterUiModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/ui')).map((key) => [key, undefined]),
 )
 mock.module('@obiter/ui', () =>
   Object.assign(
     { ...obiterUiModuleKeys },
-    (() => {
-      const actual = obiterUiModule
-      return { ...actual, useToast: ui.useToast }
-    })(),
+    (() => ({ ...obiterUiModule, useToast: ui.useToast }))(),
   ),
 )
 
 const shell = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const obiterAppShellModule = { ...(await import('@obiter/app-shell')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterAppShellModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
 )
 mock.module('@obiter/app-shell', () =>
   Object.assign(
     { ...obiterAppShellModuleKeys },
-    (() => {
-      const actual = obiterAppShellModule
-      return { ...actual, useCurrentUser: shell.useCurrentUser }
-    })(),
+    (() => ({
+      ...obiterAppShellModule,
+      useCurrentUser: shell.useCurrentUser,
+    }))(),
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { RedactionRunsView } = await import('./runs')
 
-describe('RedactionRunsView', () => {
-  it('keeps pasted text as the standalone default and accepts DOCX, PDF, and TXT uploads', () => {
-    hooks.useRedactionRuns.mockReturnValue({
-      isPending: false,
-      data: { runs: [] },
-    })
-    hooks.useCreateRedactionRun.mockReturnValue({ mutate: vi.fn() })
-    hooks.useCreateUploadedRedactionRun.mockReturnValue({ mutate: vi.fn() })
-    hooks.useDeleteRedactionRun.mockReturnValue({ mutateAsync: vi.fn() })
-    ui.useToast.mockReturnValue({ toast: vi.fn() })
-    shell.useCurrentUser.mockReturnValue({
-      data: {
-        user: {
-          id: 'usr_1',
-          email: 'lex@obiter.dev',
-          name: 'Lex',
-          role: 'owner',
-        },
-        organisation: {
-          id: 'org_1',
-          name: 'Obiter Legal',
-          plan: 'private_beta',
-        },
-      },
-    })
+function run(overrides: Record<string, unknown>) {
+  return {
+    id: 'red_1',
+    sourceFilename: 'statement.pdf',
+    matterId: null,
+    matterName: null,
+    status: 'ready_for_review',
+    detectionMode: 'model+supplement',
+    replacesRunId: null,
+    replacementRunId: null,
+    returnedDocumentVersionId: null,
+    createdAt: '2026-10-26T14:00:00.000Z',
+    summary: { totalSpans: 21, reviewedCount: 18 },
+    ...overrides,
+  }
+}
 
+beforeEach(() => {
+  hooks.useRedactionRuns.mockReturnValue({
+    isPending: false,
+    data: { runs: [] },
+  })
+  hooks.useCreateRedactionRun.mockReturnValue({ mutate: vi.fn() })
+  hooks.useCreateUploadedRedactionRun.mockReturnValue({ mutate: vi.fn() })
+  hooks.useDeleteRedactionRun.mockReturnValue({ mutateAsync: vi.fn() })
+  ui.useToast.mockReturnValue({ toast: vi.fn() })
+  shell.useCurrentUser.mockReturnValue({
+    data: {
+      user: {
+        id: 'usr_1',
+        email: 'lex@obiter.dev',
+        name: 'Lex',
+        role: 'owner',
+      },
+      organisation: { id: 'org_1', name: 'Obiter Legal', plan: 'private_beta' },
+    },
+  })
+})
+
+describe('RedactionRunsView', () => {
+  it('leads with the upload and keeps pasted text as an alternative', () => {
     render(<RedactionRunsView onOpenRun={vi.fn()} />)
 
-    expect(screen.getByLabelText('Document text')).toBeTruthy()
-    const upload = screen.getByLabelText('Or upload a document')
+    const upload = screen.getByLabelText('Upload a document to redact')
     expect(upload).toHaveProperty('accept', expect.stringContaining('.docx'))
     expect(upload).toHaveProperty('accept', expect.stringContaining('.txt'))
     expect(upload).toHaveProperty('accept', expect.stringContaining('.pdf'))
-    expect(screen.getByText(/text-layer PDF/)).toBeTruthy()
-    expect(screen.getByText(/up to 25 MB/)).toBeTruthy()
+    expect(screen.getByText('Drop the document here')).toBeTruthy()
+    expect(screen.getByText(/Up to 25 MB/u)).toBeTruthy()
+    expect(screen.getByText(/The original is never changed/u)).toBeTruthy()
+    // Pasted text is behind a disclosure, and says what it costs.
+    expect(screen.queryByLabelText('Document text')).toBeNull()
+    expect(
+      screen.getByText(
+        /For a short extract\. Formatting and comments are not carried across/u,
+      ),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Paste text instead' }))
+    expect(screen.getByLabelText('Document text')).toBeTruthy()
   })
 
-  it('distinguishes degraded and unknown runs without labelling model-detected runs', () => {
+  it('reports an upload that failed instead of pretending a run started', () => {
+    hooks.useCreateUploadedRedactionRun.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+      error: new Error('Only DOCX, PDF and text files are supported.'),
+    })
+    render(<RedactionRunsView onOpenRun={vi.fn()} />)
+    expect(screen.getByRole('alert').textContent).toContain(
+      'The document was not uploaded, so no run was started.',
+    )
+  })
+
+  it('states what each run is doing, what is undecided and why a run failed', () => {
     hooks.useRedactionRuns.mockReturnValue({
       isPending: false,
       data: {
         runs: [
-          {
-            id: 'red_degraded',
-            sourceFilename: 'degraded.txt',
-            matterId: null,
-            status: 'ready_for_review',
-            detectionMode: 'heuristics+supplement',
-            replacementRunId: 'red_model',
-            returnedDocumentVersionId: null,
-            createdAt: '2026-07-09T00:00:00.000Z',
-          },
-          {
-            id: 'red_unknown',
-            sourceFilename: 'unknown.txt',
-            matterId: null,
-            status: 'ready_for_review',
-            detectionMode: 'unknown',
-            createdAt: '2026-07-09T00:00:00.000Z',
-          },
-          {
-            id: 'red_model',
-            sourceFilename: 'model.txt',
-            matterId: null,
-            status: 'ready_for_review',
-            detectionMode: 'model+supplement',
-            replacesRunId: 'red_degraded',
-            createdAt: '2026-07-09T00:00:00.000Z',
-          },
+          run({ id: 'red_reviewing', status: 'reviewing' }),
+          run({
+            id: 'red_failed',
+            sourceFilename: 'scan.pdf',
+            status: 'failed',
+            summary: {
+              totalSpans: 0,
+              reviewedCount: 0,
+              failureReason: 'No text layer was found in this PDF.',
+            },
+          }),
+          run({
+            id: 'red_done',
+            sourceFilename: 'bundle.pdf',
+            status: 'finalized',
+          }),
         ],
       },
     })
-    hooks.useCreateRedactionRun.mockReturnValue({ mutate: vi.fn() })
-    hooks.useCreateUploadedRedactionRun.mockReturnValue({ mutate: vi.fn() })
-    hooks.useDeleteRedactionRun.mockReturnValue({ mutateAsync: vi.fn() })
-    ui.useToast.mockReturnValue({ toast: vi.fn() })
-    shell.useCurrentUser.mockReturnValue({
-      data: {
-        user: {
-          id: 'usr_1',
-          email: 'lex@obiter.dev',
-          name: 'Lex',
-          role: 'member',
-        },
-        organisation: {
-          id: 'org_1',
-          name: 'Obiter Legal',
-          plan: 'private_beta',
-        },
-      },
-    })
-
     render(<RedactionRunsView onOpenRun={vi.fn()} />)
 
-    expect(screen.getByText('degraded.txt')).toBeTruthy()
-    expect(screen.getByText('unknown.txt')).toBeTruthy()
-    expect(screen.getByText('model.txt')).toBeTruthy()
-    expect(screen.getAllByText('Degraded detection')).toHaveLength(1)
-    expect(screen.getAllByText('Detection mode unknown')).toHaveLength(1)
-    expect(screen.getByText('Replaced')).toBeTruthy()
-    expect(screen.getByText('Re-detection')).toBeTruthy()
+    expect(screen.getByText('In review')).toBeTruthy()
+    expect(screen.getByText('Finalised')).toBeTruthy()
+    expect(screen.getByText('Failed')).toBeTruthy()
+    expect(screen.getAllByText('18 of 21 decided')).toHaveLength(2)
+    expect(
+      screen.getByText('No text layer was found in this PDF.'),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'View' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Details' })).toBeTruthy()
   })
 })
