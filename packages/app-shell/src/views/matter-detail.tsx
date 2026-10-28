@@ -102,6 +102,7 @@ export function MatterRouteView({
   )
   const openWorkUnavailable = verification.isError || redactionRuns.isError
   const attentionReady = verification.isSuccess && redactionRuns.isSuccess
+  const attentionTotal = attentionReady ? (attention.get(m.id)?.total ?? 0) : 0
   // Only the matter's owner may read or change its access list; only an owner
   // or administrator of the organisation may delete the matter.
   const isOwner = me.user.id === m.createdBy
@@ -168,8 +169,8 @@ export function MatterRouteView({
                 {documents.data
                   ? [
                       `${documents.data.length} ${documents.data.length === 1 ? 'file' : 'files'}`,
-                      attentionReady && attention.get(m.id)?.total
-                        ? `${attention.get(m.id)?.total} needs attention`
+                      attentionTotal
+                        ? `${attentionTotal} ${attentionTotal === 1 ? 'needs' : 'need'} attention`
                         : null,
                     ]
                       .filter(Boolean)
