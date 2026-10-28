@@ -88,7 +88,7 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   ).toBeVisible({ timeout: 10_000 })
   // Open the create-matter dialog
   const createMatterTrigger = page
-    .getByRole('button', { name: 'Create matter' })
+    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
     .first()
   await createMatterTrigger.click()
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
