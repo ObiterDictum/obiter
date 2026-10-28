@@ -409,6 +409,26 @@ async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
       },
     }),
   )
+  await page.route(`**/api/documents/${TRACKED_DOC_ID}`, (route) =>
+    route.fulfill({
+      json: {
+        document: {
+          id: TRACKED_DOC_ID,
+          organisationId: 'org_shell_test',
+          matterId: TRACKED_MATTER_ID,
+          currentVersionId: `ver_${saved ? '2' : '1'}`,
+          logicalKey: TRACKED_FILENAME,
+          createdBy: 'usr_shell_test',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          deletedAt: null,
+          deletedBy: null,
+          currentVersion: version(saved ? 2 : 1),
+        },
+        versions: [version(1), ...(saved ? [version(2)] : [])],
+      },
+    }),
+  )
   await page.route(`**/api/documents/${TRACKED_DOC_ID}/model`, (route) =>
     route.fulfill({ json: trackedModel(saved) }),
   )
@@ -492,14 +512,18 @@ async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
  */
 async function openTrackedDocument(page: Page) {
   await page.goto('/search')
-  const modes = page.getByRole('navigation', { name: 'Modes' })
-  await expect(modes).toBeVisible()
-  await modes.getByRole('link', { name: 'Matters' }).first().click()
+  const nav = page.getByRole('navigation', { name: 'Workspace' })
+  await expect(nav).toBeVisible()
+  await nav.getByRole('link', { name: 'Matters' }).first().click()
   await page
     .getByRole('main')
     .getByRole('link', { name: /Tracked Format Matter/ })
     .click()
-  await page.getByRole('button', { name: /tracked-format\.docx/ }).click()
+  // Stage 5 lists a matter's documents as links, not buttons.
+  await page
+    .getByRole('link', { name: /tracked-format\.docx/ })
+    .first()
+    .click()
   await expect(page.locator('[data-document-desk]')).toBeVisible()
 }
 
