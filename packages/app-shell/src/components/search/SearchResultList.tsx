@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from '@phosphor-icons/react'
 import { Button, StatusDot } from '@obiter/ui'
 import { caseResultLocation } from '../../case-navigation'
 import { formatDate } from '../../format'
@@ -9,7 +8,6 @@ import {
   LegislationExtractProvenance,
   SearchSnippet,
 } from './SearchSnippet'
-import { judgmentIsHeld } from './provenance'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
 
@@ -87,23 +85,14 @@ function JudgmentResult({
             {hit.title}
           </Link>
         </h3>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="compact:hidden"
-            onClick={onPreview}
-          >
-            Preview
-          </Button>
-          <Link
-            {...caseResultLocation(hit)}
-            aria-label={`Open ${hit.title}`}
-            className="inline-flex size-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-ink"
-          >
-            <ArrowRight aria-hidden size={16} />
-          </Link>
-        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="compact:hidden"
+          onClick={onPreview}
+        >
+          Preview
+        </Button>
       </div>
       <p className="mt-1 flex flex-wrap items-center gap-2 text-meta text-subtle">
         <span>{hit.neutralCitation ?? 'No neutral citation'}</span>
@@ -123,8 +112,7 @@ function JudgmentResult({
           source.
         </p>
       )}
-      <div className="mt-3 flex items-center justify-between gap-3 text-caption text-subtle">
-        <span>{judgmentIsHeld(hit) ? 'Stored source' : 'Source record'}</span>
+      <div className="mt-3 text-caption">
         <Link
           {...caseResultLocation(hit)}
           className="text-ink underline-offset-2 hover:underline"
@@ -170,23 +158,14 @@ function LegislationResult({
             {hit.provisionLabel} · {hit.title}
           </Link>
         </h3>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="compact:hidden"
-            onClick={onPreview}
-          >
-            Preview
-          </Button>
-          <Link
-            {...provisionResultLocation(hit)}
-            aria-label={`Open ${hit.provisionLabel} ${hit.title}`}
-            className="inline-flex size-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-ink"
-          >
-            <ArrowRight aria-hidden size={16} />
-          </Link>
-        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="compact:hidden"
+          onClick={onPreview}
+        >
+          Preview
+        </Button>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-meta text-subtle">
         <span>{hit.extent ? hit.extent : 'Extent not recorded'}</span>
@@ -205,15 +184,6 @@ function LegislationResult({
       ) : (
         <p className="mt-3 text-meta text-muted">{hit.notice}</p>
       )}
-      <div className="mt-3 flex items-center justify-between gap-3 text-caption text-subtle">
-        <span>legislation.gov.uk</span>
-        <Link
-          {...provisionResultLocation(hit)}
-          className="text-ink underline-offset-2 hover:underline"
-        >
-          Open provision
-        </Link>
-      </div>
     </article>
   )
 }

@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight } from '@phosphor-icons/react'
 import {
@@ -13,50 +13,17 @@ import {
 } from '@obiter/ui'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
-import { apiUrl } from '../lib/api-url'
 import { sourceNameForUrl } from '../components/search/provenance'
+import { SourceActions } from '../components/sources/SourceActions'
+import { formatDate } from '../format'
+import { provisionResultLocation } from '../legislation-navigation'
+import {
+  legislationProvisionQueryOptions,
+  type LegislationProvisionSubsection,
+} from './legislation-document-query'
 
-interface LegislationProvisionDocument {
-  id: string
-  documentIdentity: string
-  title: string
-  year: number
-  provisionLabel: string
-  labelPath: string
-  extent: string
-  legislationStatus: 'current' | 'amended_not_held'
-  text?: string
-  officialUrl: string
-  sourceUrl: string
-  notice?: string
-  canonicalUrl: string
-}
-
-export interface LegislationProvisionResponse {
-  provision: LegislationProvisionDocument
-}
-
-export function legislationProvisionQueryOptions(provisionPath: string) {
-  return queryOptions({
-    queryKey: ['legislation-provision', provisionPath],
-    staleTime: 0,
-    retry: 1,
-    refetchOnMount: 'always',
-    queryFn: async () => {
-      const response = await fetch(
-        apiUrl(`/api/search/legislation/${provisionPath}`),
-      )
-      if (response.status === 404) {
-        throw new Error('Legislation provision was not found.')
-      }
-      if (!response.ok) {
-        throw new Error('Legislation provision could not be loaded.')
-      }
-      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:path returns LegislationProvisionResponse per the search API contract.
-      return (await response.json()) as LegislationProvisionResponse
-    },
-  })
-}
+export { legislationProvisionQueryOptions }
+export type { LegislationProvisionResponse } from './legislation-document-query'
 
 export function LegislationProvisionView({
   provisionPath,
@@ -116,6 +83,15 @@ export function LegislationProvisionView({
       }
       actions={
         <>
+          <SourceActions
+            source={{
+              kind: 'legislation',
+              sourceId: `${provision.documentIdentity}/${provision.labelPath}`,
+              title: provision.title,
+              citation: provision.provisionLabel,
+              sourceUrl: provision.officialUrl,
+            }}
+          />
           <a
             className={buttonClassName({ variant: 'secondary', size: 'md' })}
             href={provision.officialUrl}
@@ -153,16 +129,42 @@ export function LegislationProvisionView({
                 Read the official revised provision
               </a>
             </div>
-          ) : provision.text ? (
+          ) : provision.text || provision.subsections ? (
             <article
               role="document"
-              aria-label={`${provision.provisionLabel} ${provision.title}`}
+              aria-label={[
+                provision.provisionLabel,
+                provision.heading,
+                provision.title,
+              ]
+                .filter(Boolean)
+                .join(' ')}
               data-legislation-status="current"
               className="rounded-lg bg-paper px-8 py-10 font-serif text-paper-ink shadow-md md:px-12"
             >
-              <p className="whitespace-pre-wrap text-[16px] leading-[1.85]">
-                {provision.text}
-              </p>
+              {provision.heading ? (
+                <h2 className="mb-4 font-serif text-section text-paper-ink">
+                  {provision.heading}
+                </h2>
+              ) : null}
+              {provision.text ? (
+                <p className="whitespace-pre-wrap text-[16px] leading-[1.85]">
+                  {provision.text}
+                </p>
+              ) : null}
+              {provision.subsections ? (
+                <div className="mt-2 flex flex-col">
+                  {provision.subsections.map((subsection) => (
+                    <SubsectionNode
+                      key={subsection.labelPath}
+                      node={subsection}
+                      documentIdentity={provision.documentIdentity}
+                      parentLabel={provision.provisionLabel}
+                      depth={0}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </article>
           ) : (
             <EmptyState
@@ -211,7 +213,9 @@ export function LegislationProvisionView({
                     {sourceName}
                   </a>
                   <span className="text-caption text-subtle">
-                    Retrieval date not recorded
+                    {provision.acquiredAt
+                      ? `Retrieved ${formatDate(provision.acquiredAt)}`
+                      : 'Retrieval date not recorded'}
                   </span>
                   <a
                     href={provision.officialUrl}
@@ -238,5 +242,72 @@ export function LegislationProvisionView({
         </aside>
       </div>
     </PageScaffold>
+  )
+}
+
+/**
+ * One level of the provision: its own number, then its words, then its
+ * children indented beneath. The number shown is the label minus its parent's
+ * ("(3)", "(a)"), and it links to that level's own page — which is what makes
+ * "s. 13(3)" citable rather than a phrase inside a section.
+ */
+function SubsectionNode({
+  node,
+  documentIdentity,
+  parentLabel,
+  depth,
+}: {
+  node: LegislationProvisionSubsection
+  documentIdentity: string
+  parentLabel: string
+  depth: number
+}) {
+  const label = node.label.startsWith(parentLabel)
+    ? node.label.slice(parentLabel.length).trim()
+    : node.label
+  const withheld = node.legislationStatus === 'amended_not_held'
+  return (
+    <div className={depth > 0 ? 'ml-6 border-l border-line pl-4' : undefined}>
+      <p className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 py-1 text-[16px] leading-[1.85]">
+        <Link
+          {...provisionResultLocation({
+            documentIdentity,
+            labelPath: node.labelPath,
+            canonicalUrl: node.href,
+          })}
+          aria-label={`${node.label} of this provision`}
+          title={node.label}
+          className="pt-0.5 text-right font-sans text-meta text-paper-muted tabular-nums underline-offset-2 hover:underline"
+        >
+          {label}
+        </Link>
+        {withheld ? (
+          <span className="text-meta text-paper-muted">
+            Wording withheld: amendments are recorded but not applied.{' '}
+            <a
+              className="text-paper-ink underline"
+              href={node.href}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Read the official revised provision
+            </a>
+          </span>
+        ) : (
+          <span className="whitespace-pre-wrap">
+            {node.text ?? 'No stored wording for this level.'}
+          </span>
+        )}
+      </p>
+      {node.children.map((child) => (
+        <SubsectionNode
+          key={child.labelPath}
+          node={child}
+          documentIdentity={documentIdentity}
+          parentLabel={node.label}
+          depth={depth + 1}
+        />
+      ))}
+    </div>
   )
 }

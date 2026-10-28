@@ -1,4 +1,4 @@
-import { Button } from '@obiter/ui'
+import { Button, formatDdMmYyyy } from '@obiter/ui'
 import type { SearchResultType } from './searchResultRows'
 import { getCourtLabel } from './searchTypes'
 
@@ -37,15 +37,15 @@ export function SearchToolbar({
       ) : null}
       {dateFrom ? (
         <FilterChip
-          label={`From ${dateFrom}`}
-          removeLabel={`Remove from ${dateFrom} filter`}
+          label={`From ${formatDdMmYyyy(dateFrom)}`}
+          removeLabel={`Remove from ${formatDdMmYyyy(dateFrom)} filter`}
           onRemove={onRemoveDateFrom}
         />
       ) : null}
       {dateTo ? (
         <FilterChip
-          label={`To ${dateTo}`}
-          removeLabel={`Remove to ${dateTo} filter`}
+          label={`To ${formatDdMmYyyy(dateTo)}`}
+          removeLabel={`Remove to ${formatDdMmYyyy(dateTo)} filter`}
           onRemove={onRemoveDateTo}
         />
       ) : null}

@@ -5,6 +5,9 @@ interface SearchFeedbackPanelProps {
     label: string
     onClick: () => void
   }
+  /** Public sources to continue the search in, so an empty answer is a route
+   * onward rather than a dead end. */
+  searchLinks?: Array<{ label: string; href: string }>
   body: string
   eyebrow: string
   title: string
@@ -13,6 +16,7 @@ interface SearchFeedbackPanelProps {
 
 export function SearchFeedbackPanel({
   action,
+  searchLinks = [],
   body,
   eyebrow,
   title,
@@ -33,6 +37,24 @@ export function SearchFeedbackPanel({
             <Button variant="secondary" size="sm" onClick={action.onClick}>
               {action.label}
             </Button>
+          </div>
+        ) : null}
+        {searchLinks.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3">
+            <p className="text-caption text-subtle">
+              Search the public sources
+            </p>
+            {searchLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex w-fit items-center gap-1 text-meta text-ink underline-offset-2 hover:underline"
+              >
+                {link.label}
+              </a>
+            ))}
           </div>
         ) : null}
       </CardBody>

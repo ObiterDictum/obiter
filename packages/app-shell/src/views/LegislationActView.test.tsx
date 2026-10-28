@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { ToastProvider } from '@obiter/ui'
 
 // The real module's export names as undefined: bun links named imports
 // statically and rejects a mock that omits one, while vitest left an
@@ -173,12 +174,16 @@ function renderView(identity: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
+  // The page's source actions confirm with a toast, so the provider the frame
+  // mounts is here too.
   return render(
-    <QueryClientProvider client={queryClient}>
-      <Suspense fallback={<div>Loading</div>}>
-        <LegislationActView identity={identity} />
-      </Suspense>
-    </QueryClientProvider>,
+    <ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div>Loading</div>}>
+          <LegislationActView identity={identity} />
+        </Suspense>
+      </QueryClientProvider>
+    </ToastProvider>,
   )
 }
 

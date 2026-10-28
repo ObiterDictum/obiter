@@ -88,11 +88,13 @@ export interface Crumb {
  * The breadcrumb trail below the organisation, which is the top bar's first
  * crumb and always links home. A matter page names the matter once the matters
  * list (already loaded for the sidebar) knows it; until then it falls back to
- * the module name rather than showing an id.
+ * the module name rather than showing an id. A source page names the source
+ * once its own query answers, for the same reason.
  */
 export function breadcrumbTrail(
   path: string,
   matterName: string | null,
+  sourceTitle: string | null = null,
 ): Crumb[] {
   const section = resolveSection(path)
   if (section === 'home') return [{ label: 'Home' }]
@@ -108,5 +110,13 @@ export function breadcrumbTrail(
   // An address the shell does not know ends at the page itself rather than at a
   // separator with nothing after it.
   if (section === 'other') return [{ label: 'Page not found' }]
+  // A judgment or provision page sits under Search, so the trail keeps the
+  // link back to the results and names what is open.
+  if (section === 'search' && path !== '/search' && sourceTitle) {
+    return [
+      { label: sectionLabel(section), to: modulePath ?? '/search' },
+      { label: sourceTitle },
+    ]
+  }
   return [{ ...sectionCrumb, to: undefined }]
 }
