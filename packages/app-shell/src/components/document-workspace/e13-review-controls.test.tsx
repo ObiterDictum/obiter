@@ -6,10 +6,11 @@ import {
   bodyEditor,
   mountSaveWorkspace,
   openReviewTab,
+  openTab,
 } from './docx-workspace-save-harness'
 
 function openViewTab() {
-  fireEvent.click(screen.getByRole('tab', { name: 'View' }))
+  openTab('View')
 }
 
 describe('E13 review and view controls', () => {

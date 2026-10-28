@@ -49,6 +49,7 @@ export function DocumentPage({
   return (
     <div
       data-document-sheet-frame
+      data-page-zoom={zoom}
       className="relative"
       style={{
         width: width * scale,

@@ -9,6 +9,8 @@ import {
   openRibbonTab,
   paragraph,
   selectBodyParagraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 
 describe('DocxWorkspace print', () => {
@@ -16,7 +18,7 @@ describe('DocxWorkspace print', () => {
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
     mountWorkspace({})
     openRibbonTab('Review')
-    const button = screen.getByRole('button', { name: 'Print' })
+    const button = command('Print')
     expect(button).toHaveProperty('disabled', false)
     fireEvent.click(button)
     expect(print).toHaveBeenCalledTimes(1)
@@ -55,7 +57,7 @@ describe('DocxWorkspace print', () => {
     })
 
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+    fireEvent.click(command('Print'))
 
     expect(print).toHaveBeenCalledTimes(1)
     // The edited paragraph is now painted statically, still carrying the draft.
@@ -82,7 +84,7 @@ describe('DocxWorkspace print', () => {
     })
     mountWorkspace({})
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+    fireEvent.click(command('Print'))
     expect(screen.getByText('Printing failed: printer offline')).toBeTruthy()
     print.mockRestore()
   })
@@ -97,7 +99,7 @@ describe('DocxWorkspace print', () => {
     try {
       mountWorkspace({})
       openRibbonTab('Review')
-      fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+      fireEvent.click(command('Print'))
       expect(
         screen.getByText('Printing is not available in this environment.'),
       ).toBeTruthy()
@@ -120,7 +122,7 @@ describe('DocxWorkspace print', () => {
   it('keeps the document paper size in @page while the web layout is painted', () => {
     mountWorkspace({})
     openRibbonTab('View')
-    fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+    fireEvent.click(command('Web layout'))
 
     // The web flow's internal frame is unbounded; it must never reach @page.
     expect(
@@ -143,12 +145,12 @@ describe('DocxWorkspace print', () => {
       },
     })
     openRibbonTab('View')
-    fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+    fireEvent.click(command('Web layout'))
     const webSheet = document.querySelector('[data-document-sheet]')
     expect(webSheet?.className).toContain('bg-transparent')
 
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+    fireEvent.click(command('Print'))
 
     expect(print).toHaveBeenCalledTimes(1)
     // The dialog saw paginated paper sheets, not the continuous web sheet.
@@ -169,7 +171,7 @@ describe('DocxWorkspace print', () => {
   it('repaginates for a browser-initiated print too', () => {
     mountWorkspace({})
     openRibbonTab('View')
-    fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+    fireEvent.click(command('Web layout'))
 
     // Ctrl+P / menu print dispatch beforeprint without touching the ribbon.
     fireEvent(window, new Event('beforeprint'))
@@ -192,10 +194,10 @@ describe('DocxWorkspace print', () => {
     try {
       mountWorkspace({})
       openRibbonTab('View')
-      fireEvent.click(screen.getByRole('button', { name: 'Web layout' }))
+      fireEvent.click(command('Web layout'))
 
       openRibbonTab('Review')
-      fireEvent.click(screen.getByRole('button', { name: 'Print' }))
+      fireEvent.click(command('Print'))
 
       expect(
         screen.getByText('Printing is not available in this environment.'),

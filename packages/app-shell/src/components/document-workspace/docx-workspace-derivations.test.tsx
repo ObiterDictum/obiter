@@ -9,6 +9,8 @@ import {
   paragraph,
   rerenderWorkspace,
   selectBodyParagraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 
 /*
@@ -381,7 +383,7 @@ describe('DocxWorkspace document derivations', () => {
       },
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(command('Track changes off'))
     selectBodyParagraph()
     const field = screen.getByLabelText('Paragraph text')
     reset()
@@ -433,7 +435,7 @@ describe('DocxWorkspace document derivations', () => {
     editor.setSelectionRange(0, 2)
     fireEvent.select(editor)
     fireEvent.mouseUp(editor)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     fireEvent.keyDown(editor, { key: 'Escape' })
     reset()
     fireEvent.change(editor, { target: { value: 'Hello!X' } })
@@ -484,7 +486,7 @@ describe('DocxWorkspace document derivations', () => {
 
     // An emphasis change rebuilds the painted model exactly once: the format
     // draft is its memo key. The toolbar itself issues no rebuild of its own.
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     expect(counts.formatted).toBe(1)
     expect(counts.paintFormatted).toBe(1)
 

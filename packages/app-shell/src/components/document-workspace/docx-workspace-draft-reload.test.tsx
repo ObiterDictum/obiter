@@ -1,3 +1,4 @@
+import { command, commandOrNull } from './docx-workspace-harness'
 import '@obiter/test-dom'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
@@ -36,7 +37,7 @@ describe('E45 unsaved drafts must survive a reload', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(saveState()).toBe('saved'))
 
     cleanup()

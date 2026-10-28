@@ -13,18 +13,20 @@ import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import { bodyField, clickParagraph } from './paragraph-selection-harness'
 
 function deleteButton(): HTMLButtonElement {
-  const button = screen.queryByRole('button', { name: /Delete paragraph/ })
+  const button = commandOrNull(/^Delete paragraph/)
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error('Delete paragraph control is missing.')
   }
   return button
 }
 
-const saveButton = () => screen.getByRole('button', { name: 'Save' })
+const saveButton = () => command('Save')
 
 function renderedParagraphCount(): number {
   return new Set(
@@ -72,7 +74,7 @@ describe('last-paragraph deletion safety', () => {
     expect(renderedParagraphCount()).toBe(1)
     expect(selectedParagraphId()).toBe('p1')
     expect(saveButton()).toHaveProperty('disabled', true)
-    expect(screen.getByRole('button', { name: 'Undo' })).toHaveProperty(
+    expect(command('Undo')).toHaveProperty(
       'disabled',
       true,
     )
@@ -85,7 +87,7 @@ describe('last-paragraph deletion safety', () => {
 
     // A pending inserted paragraph is an effective paragraph, so the guard
     // lifts as soon as the second paragraph exists.
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     expect(renderedParagraphCount()).toBe(2)
     expect(deleteButton().disabled).toBe(false)
 
@@ -113,7 +115,7 @@ describe('last-paragraph deletion safety', () => {
     expect(deleteButton().disabled).toBe(true)
     expect(saveButton()).toHaveProperty('disabled', false)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(command('Undo'))
     expect(renderedParagraphCount()).toBe(2)
     expect(deleteButton().disabled).toBe(false)
   })

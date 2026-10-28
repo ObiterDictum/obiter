@@ -13,6 +13,8 @@ import {
   openRibbonTab,
   paragraph,
   rerenderWorkspace,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import {
   bodyField,
@@ -294,7 +296,7 @@ describe('comment cards', () => {
     })
     openCommentsPanel()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show in document' }))
+    fireEvent.click(command('Show in document'))
 
     expect(selectionStatus()).toMatch(/1 paragraph selected/)
     expect(document.querySelector('[data-selected-text]')?.textContent).toBe(
@@ -313,7 +315,7 @@ describe('comment cards', () => {
 
     expect(screen.getByText(/anchor no longer resolves/)).toBeTruthy()
     expect(
-      screen.queryByRole('button', { name: 'Show in document' }),
+      commandOrNull('Show in document'),
     ).toBeNull()
   })
 
@@ -409,7 +411,7 @@ describe('resolve and reopen', () => {
     })
     openCommentsPanel()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resolve' }))
+    fireEvent.click(command('Resolve'))
     expect(resolveComment).toHaveBeenCalledWith('cmt_1')
   })
 
@@ -423,7 +425,7 @@ describe('resolve and reopen', () => {
     })
     openCommentsPanel()
 
-    expect(screen.queryByRole('button', { name: 'Resolve' })).toBeNull()
+    expect(commandOrNull('Resolve')).toBeNull()
   })
 
   it('still shows resolve to a member on their own thread', () => {
@@ -434,7 +436,7 @@ describe('resolve and reopen', () => {
     })
     openCommentsPanel()
 
-    expect(screen.getByRole('button', { name: 'Resolve' })).toBeTruthy()
+    expect(command('Resolve')).toBeTruthy()
   })
 
   it('reopens a resolved thread through the reopen action', () => {
@@ -453,7 +455,7 @@ describe('resolve and reopen', () => {
     })
     openCommentsPanel()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+    fireEvent.click(command('Reopen'))
     expect(reopenComment).toHaveBeenCalledWith('cmt_1')
   })
 })
@@ -470,7 +472,7 @@ describe('imported comments', () => {
     expect(screen.getByText('Imported margin note')).toBeTruthy()
     expect(screen.getByText('Reviewer A')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show in document' }))
+    fireEvent.click(command('Show in document'))
     expect(document.querySelector('[data-selected-text]')?.textContent).toBe(
       'Bravo',
     )
@@ -486,7 +488,7 @@ describe('imported comments', () => {
     openCommentsPanel()
 
     expect(screen.getByText(/resolved in file/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull()
+    expect(commandOrNull('Reopen')).toBeNull()
   })
 
   it('replies to an imported thread under its ooxml identity', async () => {

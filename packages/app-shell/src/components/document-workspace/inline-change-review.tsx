@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { markBreaks, type InlineSpan } from '../../document-inline-changes'
 import type { ChangeReview } from './use-change-review'
+import { reviewerStyle } from './reviewer-identity'
 
 export const InlineChangeReview = createContext<{
   activeChangeId?: string
@@ -92,6 +93,11 @@ export function InlineChange({
     }
   }, [active, tabStop])
   const content = children ?? labelledBreaks(text)
+  // Each reviewer keeps one hue wherever their revisions paint, and the strike
+  // or underline still says which kind of revision it is, so the distinction
+  // never rests on colour alone.
+  const reviewer = reviewerStyle(author)
+
   return (
     <span
       ref={node}
@@ -113,6 +119,7 @@ export function InlineChange({
           ? `Unsaved ${deleted ? 'deletion' : 'insertion'}`
           : `${deleted ? 'Deletion' : 'Insertion'} by ${author}`
       }
+      data-reviewer={reviewer.slot}
       title={
         pending
           ? 'Unsaved tracked change'
@@ -135,7 +142,7 @@ export function InlineChange({
         event.stopPropagation()
         review?.selectChange(change.id)
       }}
-      className={`${pending ? (editable ? 'pointer-events-auto' : 'pointer-events-none') : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-[#345e90] ${deleted ? 'text-[#9a3c32]' : 'text-[#21613e]'} ${active ? 'bg-[#f9e0a2]' : ''}`}
+      className={`${pending ? (editable ? 'pointer-events-auto' : 'pointer-events-none') : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-ring ${reviewer.text} ${active ? 'bg-warning-soft' : ''}`}
       style={{
         textDecoration: deleted ? 'line-through' : 'underline',
       }}

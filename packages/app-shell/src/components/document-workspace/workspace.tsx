@@ -21,8 +21,8 @@ import { VerificationDock } from '../verification/verification-dock'
 import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
-import { IconButton, ToolbarGroup } from './ribbon-primitives'
-import { PdfWorkspaceToolbar } from './toolbar'
+import { EditorIconButton } from './editor-controls'
+import { PdfWorkspaceToolbar } from './pdf-toolbar'
 import {
   LoadingBlock,
   QueryError,
@@ -225,13 +225,13 @@ function DownloadRibbon({
         role="toolbar"
         aria-label="Document tools"
       >
-        <ToolbarGroup label="File">
-          <IconButton
+        <div className="flex items-center gap-1">
+          <EditorIconButton
             label="Download"
             onClick={onDownload}
             icon={<FileArrowDown size={16} aria-hidden />}
           />
-        </ToolbarGroup>
+        </div>
         <span className="pl-2 text-xs text-muted">{note}</span>
       </div>
       {error ? (

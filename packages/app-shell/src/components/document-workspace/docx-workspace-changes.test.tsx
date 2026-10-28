@@ -12,8 +12,10 @@ import {
   paragraph,
   openRibbonTab,
   selectBodyParagraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
-import { ReviewRibbon } from './ribbon-review'
+import { editorMenus } from './editor-commands'
 
 const inserted: DocumentChangeWire = {
   id: 'chg_1',
@@ -87,11 +89,11 @@ describe('DocxWorkspace change review', () => {
       }),
     ).toHaveProperty('disabled', true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
+    fireEvent.click(command('Next change'))
     // The reveal lands the caret on the change's paragraph.
     expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
     expect(
-      screen.getByRole('button', { name: 'Accept change' }),
+      command('Accept change'),
     ).toHaveProperty('disabled', false)
     expect(
       screen.getByRole('button', {
@@ -99,14 +101,14 @@ describe('DocxWorkspace change review', () => {
       }),
     ).toHaveProperty('disabled', true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
+    fireEvent.click(command('Next change'))
     expect(
       screen.getByRole('button', {
         name: 'Next change: There is no later change.',
       }),
     ).toHaveProperty('disabled', true)
     expect(
-      screen.getByRole('button', { name: 'Previous change' }),
+      command('Previous change'),
     ).toHaveProperty('disabled', false)
   })
 
@@ -115,7 +117,7 @@ describe('DocxWorkspace change review', () => {
       changes: [{ ...inserted, inlinePosition: { beforeRunId: 'missing' } }],
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
+    fireEvent.click(command('Next change'))
     const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
     expect(field.selectionStart).toBe(field.value.length)
     expect(field.selectionStart).toBeGreaterThan(0)
@@ -168,8 +170,8 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted, format], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Accept change' }))
+    fireEvent.click(command('Next change'))
+    fireEvent.click(command('Accept change'))
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -185,7 +187,7 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted, format], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }))
+    fireEvent.click(command('Accept all changes'))
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -201,8 +203,8 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }))
+    fireEvent.click(command('Track changes off'))
+    fireEvent.click(command('Accept all changes'))
 
     // A pending flip is unsaved state the decision commits with the version,
     // so the request carries it; without one the field stays absent.
@@ -267,22 +269,83 @@ describe('DocxWorkspace change review', () => {
   })
 
   it('names the absent review surface instead of a boundary reason', () => {
-    render(
-      <ReviewRibbon
-        canEdit
-        trackChanges={false}
-        commentsOpen={false}
-        changesOpen={false}
-        commentCount={0}
-        changeCount={0}
-        onToggleComments={() => undefined}
-        onToggleChanges={() => undefined}
-        onToggleTrackChanges={() => undefined}
-        onExportText={() => undefined}
-      />,
-    )
-
+    // A surface with no review state at all (a read-only document) must say so
+    // rather than borrow one of the save barriers.
     const absent = 'Change review is not available for this document.'
+    const menus = editorMenus(
+      {
+        canEdit: false,
+        trackChanges: false,
+        zoom: 100,
+        commentsOpen: false,
+        changesOpen: false,
+        authoritiesOpen: false,
+        infoOpen: false,
+        commentCount: 0,
+        changeCount: 0,
+        onToggleComments: () => undefined,
+        onToggleChanges: () => undefined,
+        onToggleAuthorities: () => undefined,
+        onInsertAuthority: () => undefined,
+        citationStyle: 'oscola',
+        onToggleTrackChanges: () => undefined,
+        onZoom: () => undefined,
+        onExportText: () => undefined,
+        onExportShareSafe: () => undefined,
+        onPrint: () => undefined,
+        onUndo: () => undefined,
+        onRedo: () => undefined,
+        onInsertParagraph: () => undefined,
+        onDeleteParagraph: () => undefined,
+        onSave: () => undefined,
+        canSave: false,
+        onPageBreak: () => undefined,
+        onSectionBreak: () => undefined,
+        structure: {
+          crossReferenceTargets: [],
+          onOpenStory: () => undefined,
+          onCloseStory: () => undefined,
+          onInsertTable: () => undefined,
+          onInsertLink: () => ({
+            inserted: false,
+            reason: 'not available',
+          }),
+          onInsertCrossReference: () => ({
+            inserted: false,
+            reason: 'not available',
+          }),
+          onMarkDefinedTerm: () => undefined,
+          onInsertPageNumber: () => undefined,
+          onInsertTableOfContents: () => undefined,
+          onInsertTableOfAuthorities: () => undefined,
+          onUpdateTableOfAuthorities: () => undefined,
+          onInsertFootnote: () => undefined,
+          onInsertPicture: () => undefined,
+          picturePicker: null,
+        },
+        view: 'print',
+        onView: () => undefined,
+        rulerOn: false,
+        onToggleRuler: () => undefined,
+        navOpen: false,
+        onToggleNavPane: () => undefined,
+        spelling: false,
+        onToggleSpelling: () => undefined,
+      },
+      {
+        openFormatting: () => undefined,
+        openFind: () => undefined,
+        openPalette: () => undefined,
+        openHelp: () => undefined,
+        openTable: () => undefined,
+        openLink: () => undefined,
+        openCrossReference: () => undefined,
+        closeStory: () => undefined,
+      },
+    )
+    const rows = menus
+      .flatMap((menu) => menu.groups)
+      .flatMap((group) => group.commands)
     for (const label of [
       'Previous change',
       'Next change',
@@ -291,9 +354,9 @@ describe('DocxWorkspace change review', () => {
       'Accept all changes',
       'Reject all changes',
     ]) {
-      expect(
-        screen.getByRole('button', { name: `${label}: ${absent}` }),
-      ).toHaveProperty('disabled', true)
+      const row = rows.find((command) => command.label === label)
+      expect(row?.disabled).toBe(true)
+      expect(row?.disabledReason).toBe(absent)
     }
   })
 
@@ -304,7 +367,7 @@ describe('DocxWorkspace change review', () => {
       decideAsync: decide,
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Changes (2)' }))
+    fireEvent.click(command('Changes (2)'))
     const panel = screen.getByRole('complementary', {
       name: 'Changes and comments',
     })
@@ -363,7 +426,7 @@ describe('DocxWorkspace change review', () => {
       decideAsync: decide,
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Reject all changes' }))
+    fireEvent.click(command('Reject all changes'))
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -384,7 +447,7 @@ describe('DocxWorkspace change review', () => {
     })
     openRibbonTab('Review')
     fireEvent.click(
-      screen.getByRole('button', { name: 'Accept all supported changes' }),
+      command('Accept all supported changes'),
     )
 
     // The undecidable change is never put on the wire — the request is one

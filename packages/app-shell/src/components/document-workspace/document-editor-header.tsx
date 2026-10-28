@@ -57,15 +57,13 @@ export function headerSaveState({
     case 'saving':
       return { label: 'Saving…', tone: null }
     case 'failed':
-      return {
-        label: 'Save failed: your work is not on the server',
-        tone: 'danger',
-      }
+      // One line: the header has room for a status, not a sentence, and a
+      // wrapped label read as a stray separator at the start of line two.
+      return { label: 'Save failed — not on the server', tone: 'danger' }
     case 'stale':
-      return {
-        label: 'The document has changed on the server',
-        tone: 'warning',
-      }
+      // The banner below the chrome already says this once, with Reload; the
+      // header only stops claiming the work is saved.
+      return { label: '', tone: null }
     case 'blocked':
       return {
         label: 'Saved, but the edit history needs a reload',
@@ -137,7 +135,10 @@ function DocumentEditorHeader({
             ) : headline.tone === null ? (
               <span>{headline.label}</span>
             ) : (
-              <StatusDot tone={headline.tone} className="text-caption">
+              <StatusDot
+                tone={headline.tone}
+                className="text-caption whitespace-nowrap"
+              >
                 {headline.label}
               </StatusDot>
             )}

@@ -15,6 +15,8 @@ import {
   openRibbonTab,
   paragraph,
   tabledBodyModel,
+  commandOrNull,
+  commandPrefix,
 } from './docx-workspace-harness'
 import {
   bodyField,
@@ -46,7 +48,7 @@ function stubClipboard(
 }
 
 function control(prefix: string): HTMLButtonElement {
-  const button = screen.getByRole('button', { name: new RegExp(`^${prefix}`) })
+  const button = commandPrefix(prefix)
   if (!(button instanceof HTMLButtonElement)) throw new Error(`no ${prefix}`)
   return button
 }

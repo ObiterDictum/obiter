@@ -31,6 +31,7 @@ function finding(
     excerpt: '[2017] UKSC 24',
     location: { paragraphId: 'p1', start: 0, end: 13 },
     authorityLabel: '[2017] UKSC 24',
+    authorityName: null,
     evidence: [],
     ...overrides,
   }

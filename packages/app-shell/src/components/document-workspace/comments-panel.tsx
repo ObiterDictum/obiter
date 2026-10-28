@@ -79,14 +79,32 @@ export function DocumentCommentsPanel({
             }
             disabled={!commentTarget || pending}
           />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={!commentTarget || body.trim() === '' || pending}
-            loading={pending}
-          >
-            Add comment
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!commentTarget || body.trim() === '' || pending}
+              loading={pending}
+              aria-describedby="comment-add-reason"
+            >
+              Add comment
+            </Button>
+            {!commentTarget ? (
+              <span
+                id="comment-add-reason"
+                className="text-caption text-subtle"
+              >
+                Select text or place the caret in a paragraph first.
+              </span>
+            ) : body.trim() === '' ? (
+              <span
+                id="comment-add-reason"
+                className="text-caption text-subtle"
+              >
+                Write the comment, then add it.
+              </span>
+            ) : null}
+          </div>
         </form>
       ) : (
         <p className="text-caption text-muted">

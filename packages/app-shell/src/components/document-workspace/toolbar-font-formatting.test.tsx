@@ -15,8 +15,11 @@ import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
+  command,
+  commandOrNull,
+  openRibbonTab,
 } from './docx-workspace-harness'
-import { fontColourSelectValue } from './ribbon-home'
+import { fontColourSelectValue } from './editor-formatting-panel'
 import { clickParagraph, nativeSelect } from './paragraph-selection-harness'
 
 const DECORATED_XML =
@@ -89,7 +92,7 @@ function emphasisOperations(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
@@ -231,9 +234,9 @@ describe('the font formatting controls', () => {
     // control stays live with tracking on and queues its range operation.
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
-    fireEvent.click(screen.getByRole('tab', { name: 'Home' }))
+    openRibbonTab('Review')
+    fireEvent.click(command('Track changes off'))
+    openRibbonTab('Home')
     clickParagraph('p1')
     nativeSelect(1, 4)
 

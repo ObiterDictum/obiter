@@ -8,6 +8,8 @@ import {
   multiParagraphModel,
   openRibbonTab,
   paragraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
@@ -20,7 +22,7 @@ it('paints unsaved tracked replacements while keeping inserted text editable and
     editAsync,
   })
   openRibbonTab('Review')
-  fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+  fireEvent.click(command('Track changes off'))
   clickParagraph('p1')
   const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
   fireEvent.change(field, { target: { value: 'Order 45,000 units' } })
@@ -46,7 +48,7 @@ it('paints unsaved tracked replacements while keeping inserted text editable and
   expect(marks().map((node) => node.textContent)).toEqual(['60,000', '45,00'])
   fireEvent.keyDown(field, { key: 'z', ctrlKey: true })
   expect(marks().map((node) => node.textContent)).toEqual(['60,000', '45,000'])
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   await waitFor(() => expect(editAsync).toHaveBeenCalled())
   expect(editAsync.mock.calls[0]?.[0]).toEqual(
     expect.objectContaining({
@@ -63,7 +65,7 @@ it('shows an empty inserted paragraph mark without adding editable characters', 
     models: { doc_1: multiParagraphModel([paragraph('p1', 'Anchor')]) },
   })
   openRibbonTab('Review')
-  fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+  fireEvent.click(command('Track changes off'))
   clickParagraph('p1')
   const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
   field.setSelectionRange(field.value.length, field.value.length)
