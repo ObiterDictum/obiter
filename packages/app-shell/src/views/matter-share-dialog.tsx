@@ -117,9 +117,9 @@ function MatterPeopleStack({ people }: { people: MatterPerson[] }) {
           key={person.id}
           title={person.name ?? 'Someone outside your member list'}
           className={cn(
-            'grid size-6 place-items-center rounded-pill text-caption',
+            'grid size-7 place-items-center rounded-pill text-caption',
             'ring-2 ring-canvas',
-            index > 0 && '-ml-2',
+            index > 0 && '-ml-1',
             person.isOwner ? 'bg-brand text-brand-fg' : 'bg-fill text-muted',
           )}
         >
@@ -127,7 +127,7 @@ function MatterPeopleStack({ people }: { people: MatterPerson[] }) {
         </span>
       ))}
       {extra > 0 ? (
-        <span className="grid size-6 place-items-center rounded-pill bg-fill text-caption text-muted ring-2 ring-canvas -ml-2">
+        <span className="grid size-7 place-items-center rounded-pill bg-fill text-caption text-muted ring-2 ring-canvas -ml-1">
           +{extra}
         </span>
       ) : null}
