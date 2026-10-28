@@ -213,7 +213,7 @@ export function HomeRibbon({
           />
           <RibbonSelect
             label="Font colour"
-            className="w-20"
+            className="w-auto"
             value={fontColourSelectValue(format?.colour)}
             options={[DEFAULT_COLOUR, ...FONT_COLOURS]}
             disabled={!editing}

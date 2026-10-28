@@ -30,6 +30,13 @@ export type WorkspaceCommentsPanelProps = ReturnType<
   typeof useWorkspaceComments
 >['props']
 
+/** Every thread in the document: the stored ones and the imported Word ones. */
+export function commentThreadCount(
+  listed: DocumentCommentListResponse | undefined,
+) {
+  return (listed?.comments.length ?? 0) + (listed?.importedComments.length ?? 0)
+}
+
 export function useWorkspaceComments({
   documentId,
   listed,
@@ -87,8 +94,7 @@ export function useWorkspaceComments({
   }
 
   return {
-    threadCount:
-      (listed?.comments.length ?? 0) + (listed?.importedComments.length ?? 0),
+    threadCount: commentThreadCount(listed),
     props: {
       comments: listed?.comments ?? [],
       importedComments: listed?.importedComments ?? [],
