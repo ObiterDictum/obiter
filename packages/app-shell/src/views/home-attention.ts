@@ -3,6 +3,10 @@ import type {
   VerificationRun,
 } from '@obiter/contracts'
 import type { RedactionRunListItem } from '../redaction-runs'
+import {
+  redactionRunNeedsDecision,
+  undecidedSpanCount,
+} from '../redaction-runs'
 
 /**
  * Anything on Home that is waiting for a person, assembled from the endpoints
@@ -144,57 +148,32 @@ function redactionAttentionItem(
   run: RedactionRunListItem,
   sources: AttentionSources,
 ): AttentionItem[] {
+  // The rule the sidebar counts by, so the count here and there always match.
+  if (!redactionRunNeedsDecision(run)) return []
   const matter = run.matterId ? sources.matters.get(run.matterId) : undefined
-  const base: AttentionBase = {
-    runId: run.id,
-    matterId: run.matterId,
-    matterName: run.matterName ?? matter?.name ?? null,
-    matterReference: matter?.clientReference || null,
-    filename: run.sourceFilename,
-    waitingSince: run.updatedAt,
-  }
   const decisions = run.summary?.byDecision
-  const undecidedCount =
-    decisions?.undecided ?? run.summary?.unreviewedCount ?? null
-  const counts = {
-    undecidedCount,
-    totalSpans: run.summary?.totalSpans ?? null,
-    redactedCount:
-      decisions === undefined
-        ? null
-        : (decisions.accept ?? 0) + (decisions.override_redact ?? 0),
-    keptCount:
-      decisions === undefined
-        ? null
-        : (decisions.reject ?? 0) + (decisions.override_keep ?? 0),
-  }
-  switch (run.status) {
-    case 'pending':
-    case 'detecting':
-    // Finalised output is done; a run at zero undecided spans needs finalising,
-    // not a legal decision, so it belongs to Redact rather than this queue.
-    case 'finalized':
-      return []
-    case 'ready_for_review':
-    case 'reviewing':
-      if (undecidedCount === 0) return []
-      return [
-        {
-          ...base,
-          ...counts,
-          id: `redact:${run.id}`,
-          kind: 'redact_decision',
-        },
-      ]
-    case 'failed':
-      return [
-        { ...base, ...counts, id: `redact:${run.id}`, kind: 'redact_failed' },
-      ]
-    default: {
-      const unhandled: never = run.status
-      throw new Error(`Unknown redaction run status: ${String(unhandled)}`)
-    }
-  }
+  return [
+    {
+      runId: run.id,
+      matterId: run.matterId,
+      matterName: run.matterName ?? matter?.name ?? null,
+      matterReference: matter?.clientReference || null,
+      filename: run.sourceFilename,
+      waitingSince: run.updatedAt,
+      undecidedCount: undecidedSpanCount(run.summary),
+      totalSpans: run.summary?.totalSpans ?? null,
+      redactedCount:
+        decisions === undefined
+          ? null
+          : (decisions.accept ?? 0) + (decisions.override_redact ?? 0),
+      keptCount:
+        decisions === undefined
+          ? null
+          : (decisions.reject ?? 0) + (decisions.override_keep ?? 0),
+      id: `redact:${run.id}`,
+      kind: run.status === 'failed' ? 'redact_failed' : 'redact_decision',
+    },
+  ]
 }
 
 /** Risk first, then the longest wait, then the id so a tie never jitters. */
