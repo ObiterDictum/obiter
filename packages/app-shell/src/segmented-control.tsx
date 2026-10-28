@@ -45,9 +45,12 @@ export function SegmentedControl<Value extends string>({
             onClick={() => onChange(option.value)}
             className={cn(
               'inline-flex h-7 items-center justify-center gap-1 rounded-sm px-2 text-caption whitespace-nowrap',
-              'transition-[color,background-color] duration-150',
+              'transition-[color,background-color,box-shadow] duration-150',
+              // Same raised, outlined selection as TabsTrigger: in dark the
+              // raised surface is darker than the fill, so the outline carries
+              // the state.
               active
-                ? 'bg-raised text-ink shadow-sm'
+                ? 'bg-raised font-medium text-ink shadow-sm ring-1 ring-brand/40'
                 : 'text-subtle hover:text-ink',
             )}
           >

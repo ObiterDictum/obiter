@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { CaretRight, FileText } from '@phosphor-icons/react'
 import {
   Card,
+  EmptyState,
   Skeleton,
   StatusDot,
   TBody,
@@ -16,9 +17,15 @@ import type { StatusDotProps } from '@obiter/ui'
 import type { MatterDocumentRecord } from '../documents'
 import { formatDate } from '../format'
 import {
+  attentionRunLabel,
+  useRedactionRunsList,
+  type RedactionRunListItem,
+} from '../redaction-runs'
+import {
   useLatestVerificationRuns,
   type DocumentVerificationState,
 } from '../verification-runs'
+import { MatterUploadButton, NewDocumentButton } from './matter-upload'
 
 export interface VerifyPart {
   label: string
@@ -78,6 +85,45 @@ function documentVerifyParts(state: DocumentVerificationState): VerifyPart[] {
   }
 }
 
+/**
+ * A document's Redact state: the newest run on it, in the same words Redact uses
+ * for a run's own status. A run started from Redact as a standalone job is not
+ * attached to a document, so it never appears here.
+ */
+function documentRedactPart(run: RedactionRunListItem): VerifyPart {
+  switch (run.status) {
+    case 'failed':
+      return { label: attentionRunLabel(run.status), tone: 'danger' }
+    case 'finalized':
+      return { label: attentionRunLabel(run.status), tone: 'success' }
+    case 'pending':
+      return { label: attentionRunLabel(run.status), tone: 'neutral' }
+    case 'detecting':
+    case 'ready_for_review':
+    case 'reviewing':
+      return { label: attentionRunLabel(run.status), tone: 'info' }
+    default: {
+      const unhandled: never = run.status
+      return unhandled
+    }
+  }
+}
+
+/** The newest run per document, from the run list the shell already reads. */
+function latestRunsByDocument(
+  runs: RedactionRunListItem[],
+): Map<string, RedactionRunListItem> {
+  const latest = new Map<string, RedactionRunListItem>()
+  for (const run of runs) {
+    if (!run.documentId) continue
+    const current = latest.get(run.documentId)
+    if (!current || run.createdAt > current.createdAt) {
+      latest.set(run.documentId, run)
+    }
+  }
+  return latest
+}
+
 /** The document glyph, the same in the table and in the list's preview. */
 export function DocumentIcon() {
   return (
@@ -127,6 +173,28 @@ export function MatterDocumentsTable({
 }) {
   const files = documents ?? []
   const verify = useLatestVerificationRuns(files.map((file) => file.id))
+  const redaction = latestRunsByDocument(
+    useRedactionRunsList().data?.runs ?? [],
+  )
+
+  // Nothing to tabulate yet: an empty table said "No documents yet" in one grey
+  // line, which is a dead end in the place a matter starts. The page takes a
+  // dropped file too (MatterDropZone).
+  if (!loading && !error && files.length === 0) {
+    return (
+      <EmptyState
+        icon={<FileText size={18} aria-hidden />}
+        title="No documents yet"
+        body="Upload a DOCX, text-layer PDF or TXT file — or drop one anywhere on this page — and it will be checked for citations here."
+        action={
+          <>
+            <MatterUploadButton matterId={matterId} variant="primary" />
+            <NewDocumentButton matterId={matterId} />
+          </>
+        }
+      />
+    )
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -134,8 +202,9 @@ export function MatterDocumentsTable({
         <THead>
           <TR className="hover:bg-transparent">
             <TH className="pl-4">Document</TH>
-            <TH className="px-4">Verify</TH>
-            <TH className="px-4 text-right">Updated</TH>
+            <TH className="px-3">Verify</TH>
+            <TH className="px-3">Redact</TH>
+            <TH className="px-3 text-right">Updated</TH>
             <TH className="pr-4">
               <span className="sr-only">Open</span>
             </TH>
@@ -148,10 +217,13 @@ export function MatterDocumentsTable({
                 <TD className="pl-4">
                   <Skeleton className="h-4 w-56" />
                 </TD>
-                <TD className="px-4">
+                <TD className="px-3">
                   <Skeleton className="h-3 w-24" />
                 </TD>
-                <TD className="px-4 text-right">
+                <TD className="px-3">
+                  <Skeleton className="h-3 w-16" />
+                </TD>
+                <TD className="px-3 text-right">
                   <Skeleton className="ml-auto h-3 w-20" />
                 </TD>
                 <TD />
@@ -159,20 +231,15 @@ export function MatterDocumentsTable({
             ))
           ) : error ? (
             <TR className="hover:bg-transparent">
-              <TD colSpan={4} className="pl-4 text-meta text-muted">
+              <TD colSpan={5} className="pl-4 text-meta text-muted">
                 {error}
-              </TD>
-            </TR>
-          ) : files.length === 0 ? (
-            <TR className="hover:bg-transparent">
-              <TD colSpan={4} className="pl-4 text-meta text-muted">
-                No documents yet. Upload a DOCX, text-layer PDF or TXT file.
               </TD>
             </TR>
           ) : (
             files.map((file) => {
               const version = file.currentVersion
               const filename = version?.filename ?? file.logicalKey
+              const redactRun = redaction.get(file.id)
               return (
                 <TR key={file.id}>
                   <TD className="pl-4">
@@ -194,14 +261,23 @@ export function MatterDocumentsTable({
                       </div>
                     </div>
                   </TD>
-                  <TD className="px-4">
+                  <TD className="px-3 whitespace-nowrap">
                     <VerifyWords
                       parts={documentVerifyParts(
                         verify.get(file.id) ?? { status: 'pending' },
                       )}
                     />
                   </TD>
-                  <TD className="px-4 text-right text-meta text-subtle tabular-nums">
+                  <TD className="px-3 whitespace-nowrap">
+                    <VerifyWords
+                      parts={
+                        redactRun
+                          ? [documentRedactPart(redactRun)]
+                          : [{ label: 'Not run', tone: 'neutral' }]
+                      }
+                    />
+                  </TD>
+                  <TD className="px-3 text-right text-meta whitespace-nowrap text-subtle tabular-nums">
                     {formatDate(version?.updatedAt ?? file.updatedAt)}
                   </TD>
                   <TD className="pr-4 text-right">

@@ -7,8 +7,8 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
   Select,
+  cn,
   useToast,
 } from '@obiter/ui'
 import type { MatterAccessLevel } from '@obiter/contracts'
@@ -18,6 +18,7 @@ import {
   useGrantMatterShare,
   useMatterShares,
   useRevokeMatterShare,
+  useUpdateMatterShare,
 } from '../matter-shares'
 import type { MatterRecord } from '../matters'
 import { useOrganisationMembers } from '../organisation-membership'
@@ -28,12 +29,11 @@ const ACCESS_OPTIONS = [
 ]
 
 /**
- * Who can open this matter, from the API that owns access. Only the matter's
- * owner may read or change grants, so the caller offers the dialog only to them.
- * A grant carries the grantee's user id, so names come from the organisation's
- * member list — the same read Settings uses.
+ * Share, and who is on the matter. The stack of faces is the answer to "who can
+ * see this?" without opening anything; both controls open the same dialog, which
+ * is the only place access changes.
  */
-export function MatterShareDialog({
+export function MatterShareControls({
   matter,
   organisationId,
 }: {
@@ -41,6 +41,117 @@ export function MatterShareDialog({
   organisationId: string | null
 }) {
   const [open, setOpen] = useState(false)
+  const people = useMatterPeople(matter.id, organisationId)
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="ghost"
+        size="md"
+        iconStart={<Users size={16} />}
+        onClick={() => setOpen(true)}
+      >
+        Share
+      </Button>
+      {people.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={`Show who is on ${matter.name}`}
+          className="flex items-center rounded-pill p-0.5 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <MatterPeopleStack people={people} />
+        </button>
+      ) : null}
+      <MatterShareDialog
+        matter={matter}
+        organisationId={organisationId}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </div>
+  )
+}
+
+interface MatterPerson {
+  id: string
+  name: string | null
+  isOwner: boolean
+}
+
+/**
+ * The owner and the people they have shared with, in grant order. A grant whose
+ * person is no longer in the member list still counts: the access exists.
+ */
+function useMatterPeople(
+  matterId: string,
+  organisationId: string | null,
+): MatterPerson[] {
+  const shares = useMatterShares(matterId)
+  const members = useOrganisationMembers(organisationId ?? '', {
+    enabled: organisationId !== null,
+  })
+  const nameOf = (userId: string) =>
+    members.data?.find((member) => member.id === userId)?.name ?? null
+  const ownerUserId = shares.data?.ownerUserId
+  if (!ownerUserId) return []
+  return [
+    { id: ownerUserId, name: nameOf(ownerUserId), isOwner: true },
+    ...(shares.data?.shares ?? []).map((share) => ({
+      id: share.id,
+      name: nameOf(share.granteeUserId),
+      isOwner: false,
+    })),
+  ]
+}
+
+const STACK_LIMIT = 3
+
+function MatterPeopleStack({ people }: { people: MatterPerson[] }) {
+  const shown = people.slice(0, STACK_LIMIT)
+  const extra = people.length - shown.length
+  return (
+    <span className="flex items-center">
+      {shown.map((person, index) => (
+        <span
+          key={person.id}
+          title={person.name ?? 'Someone outside your member list'}
+          className={cn(
+            'grid size-6 place-items-center rounded-pill text-caption',
+            'ring-2 ring-canvas',
+            index > 0 && '-ml-2',
+            person.isOwner ? 'bg-brand text-brand-fg' : 'bg-fill text-muted',
+          )}
+        >
+          {person.name ? initialsOf(person.name) : '?'}
+        </span>
+      ))}
+      {extra > 0 ? (
+        <span className="grid size-6 place-items-center rounded-pill bg-fill text-caption text-muted ring-2 ring-canvas -ml-2">
+          +{extra}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * Who can open this matter, from the API that owns access. Only the matter's
+ * owner may read or change grants, so the caller offers the controls only to
+ * them. A grant carries the grantee's user id, so names come from the
+ * organisation's member list — the same read Settings uses.
+ */
+function MatterShareDialog({
+  matter,
+  organisationId,
+  open,
+  onOpenChange,
+}: {
+  matter: MatterRecord
+  organisationId: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const shares = useMatterShares(matter.id, { enabled: open })
   // A member who owns a matter cannot list colleagues: the member list needs an
   // owner or administrator. The grants still read, so the list stands and the
@@ -61,14 +172,7 @@ export function MatterShareDialog({
   const access = shares.data ? people.length + 1 : null
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="md" iconStart={<Users size={16} />}>
-            Share
-          </Button>
-        }
-      />
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -171,6 +275,7 @@ function ShareRow({
   level: MatterAccessLevel
 }) {
   const revoke = useRevokeMatterShare(matterId)
+  const update = useUpdateMatterShare(matterId)
   const { toast } = useToast()
   return (
     <li className="flex items-center gap-3 border-b border-line py-3">
@@ -190,9 +295,32 @@ function ShareRow({
           </span>
         ) : null}
       </span>
-      <span className="text-meta text-subtle">
-        {level === 'edit' ? 'Can edit' : 'Can view'}
-      </span>
+      {/* Access changes in place: revoke-and-regrant would briefly remove the
+          access being adjusted. */}
+      <Select
+        className="w-28 shrink-0"
+        ariaLabel={`Access for ${name ?? 'this person'}`}
+        options={ACCESS_OPTIONS}
+        value={level}
+        disabled={update.isPending}
+        onValueChange={(next) => {
+          if (next !== 'view' && next !== 'edit') return
+          if (next === level) return
+          update.mutate(
+            { shareId, accessLevel: next },
+            {
+              onSuccess: () =>
+                toast({ title: 'Access updated', tone: 'success' }),
+              onError: (error) =>
+                toast({
+                  title: 'Could not change access',
+                  description: error.message,
+                  tone: 'danger',
+                }),
+            },
+          )
+        }}
+      />
       <Button
         variant="ghost"
         size="sm"
