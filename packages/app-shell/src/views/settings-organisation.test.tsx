@@ -161,6 +161,23 @@ describe('SettingsRouteView — organisation', () => {
     expect(within(organisation).queryByText('org_1')).toBeNull()
   })
 
+  it('offers the invite role through the shared select, not a native form control', async () => {
+    renderSettings()
+    const organisation = await openSection('Organisation')
+
+    const role = within(organisation).getByRole('combobox', { name: 'Role' })
+    expect(role.tagName).toBe('BUTTON')
+    expect(organisation.querySelector('select')).toBeNull()
+  })
+
+  it('states the role once, under Organisation and not under Account', async () => {
+    renderSettings()
+    const account = await openSection('Account')
+
+    expect(within(account).queryByText('Your role')).toBeNull()
+    expect(within(account).queryByText('Owner')).toBeNull()
+  })
+
   it('shows a member the organisation without an editing control', async () => {
     signedIn(MEMBER_ME)
     renderSettings()

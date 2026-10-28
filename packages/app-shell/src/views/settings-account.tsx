@@ -1,17 +1,12 @@
 import { Input, Button } from '@obiter/ui'
 import { useRef } from 'react'
-import {
-  USER_NAME_MAX_LENGTH,
-  type CurrentOrganisation,
-  type CurrentUser,
-} from '@obiter/contracts'
+import { USER_NAME_MAX_LENGTH, type CurrentUser } from '@obiter/contracts'
 import { useUpdateProfile } from '../current-user'
 import {
   ErrorNotice,
   ReadOnlyField,
   SavedNotice,
   SectionHeading,
-  roleLabel,
 } from './settings-fields'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
@@ -22,11 +17,9 @@ import { useCanonicalNameField } from './use-canonical-name-field'
  */
 export function AccountSection({
   user,
-  organisation,
   active,
 }: {
   user: CurrentUser
-  organisation: CurrentOrganisation | null
   active: boolean
 }) {
   const updateProfile = useUpdateProfile()
@@ -109,28 +102,6 @@ export function AccountSection({
           value={user.email}
           helper="Ask your firm administrator to change the email you sign in with."
         />
-      </div>
-
-      <div className="flex flex-col gap-6 border-t border-line pt-8">
-        <SectionHeading
-          id="settings-role-heading"
-          level="h3"
-          title="Your role"
-          description="Roles decide who can invite people, change the organisation and remove members."
-        />
-        {organisation && user.role ? (
-          <ReadOnlyField
-            label="Role"
-            value={roleLabel(user.role)}
-            helper={`Your role in ${organisation.name}.`}
-          />
-        ) : (
-          <ReadOnlyField
-            label="Role"
-            value="No organisation yet"
-            helper="Create one in Organisation settings when you are ready to share work."
-          />
-        )}
       </div>
     </section>
   )
