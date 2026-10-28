@@ -12,12 +12,12 @@ import {
   cn,
 } from '@obiter/ui'
 import {
-  DETECTION_COVERAGE_CAVEAT,
   categoryLabel,
   confidenceLabel,
   decisionRecord,
   decisionStateLabel,
   decisionStateTone,
+  detectionSummary,
   sourceLabel,
   spanDecisionState,
 } from './span-copy'
@@ -199,8 +199,9 @@ export function ReviewPanel({
                       {page === null
                         ? ''
                         : `Page ${page}${pageCount === null ? '' : ` of ${pageCount}`} · `}
-                      {sourceLabel[span.source]} · detection confidence:{' '}
-                      {confidenceLabel[span.confidence].toLowerCase()}
+                      {sourceLabel[span.source].toLowerCase()} ·{' '}
+                      {confidenceLabel[span.confidence].toLowerCase()}{' '}
+                      confidence
                     </span>
                     {record ? (
                       <span className="text-caption text-ink">
@@ -221,14 +222,10 @@ export function ReviewPanel({
       </Tabs>
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-line px-6 py-3">
-        <p className="text-caption text-muted">
-          Detected by: {bySource.rampartModel} model ·{' '}
-          {bySource.rampartDeterministic} pattern · {bySource.ukSupplement} UK
-          supplement. {DETECTION_COVERAGE_CAVEAT}
-        </p>
+        <p className="text-caption text-muted">{detectionSummary(bySource)}</p>
         <p className="text-caption text-subtle">
-          The redaction schedule is a separate file. It contains the original
-          redacted text, so keep it inside the matter.
+          The redaction schedule is a separate file. It lists each decision
+          without the removed words.
         </p>
       </div>
     </aside>

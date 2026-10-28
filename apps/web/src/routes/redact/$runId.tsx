@@ -18,11 +18,10 @@ function RedactionReviewRoute() {
         })
       }
       onBack={() => navigate({ to: '/redact' })}
-      onOpenDocument={(run) => {
-        if (!run.documentId || !run.matterId) return
+      onOpenDocument={({ matterId, documentId }) => {
         void navigate({
           to: '/matters/$matterId/documents/$documentId',
-          params: { matterId: run.matterId, documentId: run.documentId },
+          params: { matterId, documentId },
         })
       }}
     />

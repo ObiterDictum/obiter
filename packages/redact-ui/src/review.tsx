@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent, ReactNode } from 'react'
-import {
-  ArrowLeft,
-  CircleNotch,
-  ShieldCheck,
-  Warning,
-} from '@phosphor-icons/react'
+import type { KeyboardEvent } from 'react'
+import { ArrowLeft, CircleNotch, ShieldCheck } from '@phosphor-icons/react'
 import type { SpanDecision } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
+import { sameTextOccurrences } from '@obiter/redaction-policy'
 import {
   Badge,
   Button,
@@ -18,6 +14,7 @@ import {
 } from '@obiter/ui'
 import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
+  useCreateUploadedRedactionRun,
   useRedactionDocumentText,
   useRedactionOutput,
   useRedactionRun,
@@ -26,130 +23,26 @@ import {
 import { useRedactionSource } from './source-preview-hooks'
 import { PdfReviewDocument } from './pdf-review-document'
 import { DetectionRetryWarning } from './detection-retry-warning'
+import { DetectionFailure, zeroSpanBody } from './detection-failure'
 import { FinalizeDialog } from './finalize-dialog'
 import { FinalizedOutput } from './finalized-output'
 import { DecisionBar } from './decision-bar'
-import { ReviewPanel, type SpanFilter } from './review-panel'
 import {
-  DETECTION_COVERAGE_CAVEAT,
-  categoryLabel,
-  confidenceLabel,
-  decisionCounts,
-  decisionMarkClass,
-  sourceLabel,
-  spanDecisionState,
-} from './span-copy'
+  CategoryLegend,
+  HighlightedText,
+  Paper,
+  categoryClasses,
+} from './review-document-text'
+import { ReviewPanel, type SpanFilter } from './review-panel'
+import { decisionCounts, spanDecisionState } from './span-copy'
 import type { RedactionRun } from './types'
 
-const categoryClasses = {
-  person_name: 'bg-span-person-name text-span-person-name-fg',
-  email: 'bg-span-email text-span-email-fg',
-  phone: 'bg-span-phone text-span-phone-fg',
-  address: 'bg-span-address text-span-address-fg',
-  date: 'bg-span-date text-span-date-fg',
-  government_id: 'bg-span-government-id text-span-government-id-fg',
-  account_number: 'bg-span-account-number text-span-account-number-fg',
-  passport: 'bg-span-passport text-span-passport-fg',
-  drivers_license: 'bg-span-drivers-license text-span-drivers-license-fg',
-  url: 'bg-span-url text-span-url-fg',
-  ip_address: 'bg-span-ip-address text-span-ip-address-fg',
-  national_insurance:
-    'bg-span-national-insurance text-span-national-insurance-fg',
-  case_reference: 'bg-span-case-reference text-span-case-reference-fg',
-  organisation_name: 'bg-span-organisation-name text-span-organisation-name-fg',
-  secret: 'bg-span-secret text-span-secret-fg',
-} satisfies Record<RedactionSpan['category'], string>
-
-const sourceClasses = {
-  rampart_model: 'border-solid',
-  rampart_deterministic: 'border-dotted',
-  uk_supplement: 'border-dashed',
-} satisfies Record<RedactionSpan['source'], string>
-
 /**
- * The source text as the reviewer reads it. A span is painted by category (the
- * contract's palette) and its decision state is never carried by colour alone:
- * an accepted span keeps its fill, a kept span fades and keeps a dashed
- * baseline, and an undecided span carries a warning outline. The decision is
- * also stated in words in the panel and in the decision bar.
+ * The review header states where the run sits — filed in a matter, or not —
+ * in words a reviewer understands, never "standalone run".
  */
-function HighlightedText({
-  text,
-  run,
-  selectedId,
-  onSelect,
-}: {
-  text: string
-  run: RedactionRun
-  selectedId: string | null
-  onSelect: (id: string) => void
-}) {
-  const spans = [...run.spans].sort(
-    (left, right) => left.start - right.start || right.end - left.end,
-  )
-  let position = 0
-  return (
-    <article
-      className="max-w-[68ch] text-base leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
-      aria-label="Original document text"
-    >
-      {spans.map((span) => {
-        if (span.start < position || span.end > text.length) return null
-        const before = text.slice(position, span.start)
-        position = span.end
-        const state = spanDecisionState(run.decisions[span.id]?.decision)
-        return (
-          <span key={span.id}>
-            {before}
-            <button
-              type="button"
-              data-span-id={span.id}
-              onClick={() => onSelect(span.id)}
-              className={[
-                'inline rounded-sm border-b-2 px-0.5 text-left align-baseline',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                categoryClasses[span.category],
-                sourceClasses[span.source],
-                decisionMarkClass[state],
-                selectedId === span.id ? 'ring-2 ring-ring' : '',
-              ].join(' ')}
-              aria-pressed={selectedId === span.id}
-              title={`${categoryLabel[span.category]} — ${sourceLabel[span.source]} — detection confidence ${confidenceLabel[span.confidence].toLowerCase()}`}
-            >
-              {span.text}
-            </button>
-          </span>
-        )
-      })}
-      {text.slice(position)}
-    </article>
-  )
-}
-
-function zeroSpanBody(run: RedactionRun) {
-  if (run.detectionMode === 'heuristics+supplement')
-    return 'The deterministic detectors did not find matching patterns. Model detection did not run, so check the document yourself for names, addresses and dates of birth before finalising.'
-  if (run.detectionMode === 'unknown')
-    return 'No matching patterns were recorded, and the detection mode is unknown. Check the document yourself for names, addresses and dates of birth before relying on this run.'
-  return 'Rampart and the UK supplement did not find matching patterns. Detection finds candidates, not everything sensitive, so check the document yourself before finalising.'
-}
-
-/**
- * The page is paper in both themes, so the span palette is pinned to the light
- * token set for this subtree: a dark-theme span tint would paint a dark block on
- * white paper and read as a redaction that is not there.
- */
-function Paper({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex justify-center px-12 py-8 max-compact:px-8">
-      <div
-        data-theme="light"
-        className="w-full max-w-[860px] rounded-lg bg-paper px-10 py-10 text-body text-paper-ink shadow-md"
-      >
-        {children}
-      </div>
-    </div>
-  )
+function runPosition(run: RedactionRun) {
+  return run.matterName ?? 'Not filed in a matter'
 }
 
 export function RedactionReviewView({
@@ -160,9 +53,9 @@ export function RedactionReviewView({
 }: {
   runId: string
   onOpenRun: (runId: string) => void
-  /** Opens a source document's own page after a return-to-document; absent
-   * where the host has no route for it. */
-  onOpenDocument?: (run: RedactionRun) => void
+  /** Opens the matter document the copy became; absent where the host has no
+   * route for it. */
+  onOpenDocument?: (target: { matterId: string; documentId: string }) => void
   /** Returns to the Redact run list; absent where the host has no route. */
   onBack?: () => void
 }) {
@@ -180,6 +73,7 @@ export function RedactionReviewView({
     runId,
     runQuery.data?.status === 'finalized',
   )
+  const replaceRun = useCreateUploadedRedactionRun()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<SpanFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -196,7 +90,11 @@ export function RedactionReviewView({
       ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedId])
 
-  if (runQuery.isPending || textQuery.isPending) {
+  // A failed run needs no document text to explain itself: waiting for text it
+  // may never have would turn a dead end into a loading screen that fails.
+  const failedWithoutText =
+    runQuery.data?.status === 'failed' && !textQuery.data
+  if (runQuery.isPending || (textQuery.isPending && !failedWithoutText)) {
     return (
       <div className="mx-auto w-full max-w-[1216px] px-12 py-14 max-compact:px-8">
         <div className="flex flex-col gap-4" aria-busy="true">
@@ -208,13 +106,13 @@ export function RedactionReviewView({
   }
   // Prefer cached data over a background refetch error (e.g. finalise
   // invalidateQueries failing) so a successful local write is not blanked out.
-  if (!runQuery.data || !textQuery.data) {
+  if (!runQuery.data) {
     return (
       <PageScaffold title="Redaction review">
         <EmptyState
           title="This redaction run could not be loaded"
           body={
-            (runQuery.error ?? textQuery.error)?.message ??
+            runQuery.error?.message ??
             'Check that you still have access to the matter, then try again.'
           }
           action={
@@ -229,6 +127,46 @@ export function RedactionReviewView({
 
   const run = runQuery.data
   const currentUserId = me?.user.id
+
+  if (run.status === 'failed') {
+    return (
+      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
+        <DetectionFailure
+          run={run}
+          uploading={replaceRun.isPending}
+          uploadError={replaceRun.error?.message ?? null}
+          onTryAnotherFile={(file) =>
+            replaceRun.mutate(file, {
+              onSuccess: ({ run: next }) => onOpenRun(next.id),
+            })
+          }
+          onBack={onBack}
+        />
+      </PageScaffold>
+    )
+  }
+
+  if (!textQuery.data) {
+    return (
+      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
+        <EmptyState
+          title="The document text could not be loaded"
+          body={
+            textQuery.error?.message ??
+            'This run and its decisions are unchanged; the text they refer to could not be read.'
+          }
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => void textQuery.refetch()}
+            >
+              Try again
+            </Button>
+          }
+        />
+      </PageScaffold>
+    )
+  }
 
   if (run.status === 'finalized')
     return (
@@ -252,21 +190,6 @@ export function RedactionReviewView({
               aria-hidden="true"
             />
           }
-        />
-      </PageScaffold>
-    )
-  }
-
-  if (run.status === 'failed') {
-    return (
-      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
-        <EmptyState
-          title="Detection failed"
-          body={
-            run.summary.failureReason ??
-            'The detector stopped before it finished, so this run found nothing. Start a new run before you rely on this document.'
-          }
-          icon={<Warning size={28} aria-hidden="true" />}
         />
       </PageScaffold>
     )
@@ -305,6 +228,21 @@ export function RedactionReviewView({
   const decide = (decisionValue: SpanDecision) => {
     if (!selected || decision.isPending) return
     decision.mutate({ spanId: selected.id, decision: decisionValue })
+  }
+
+  // Same text, same decision: one "Priya" kept and another redacted leaks the
+  // name in the copy that leaves, so the decision can be repeated on every
+  // occurrence in one recorded action.
+  const occurrences = selected
+    ? sameTextOccurrences(run.spans, selected.text).length
+    : 0
+  const applyToAll = (decisionValue: SpanDecision) => {
+    if (!selected || decision.isPending) return
+    decision.mutate({
+      spanId: selected.id,
+      decision: decisionValue,
+      applyToSameText: true,
+    })
   }
 
   const move = (delta: number) => {
@@ -374,7 +312,7 @@ export function RedactionReviewView({
               {run.sourceFilename}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-muted">
-              <span>{run.matterName ?? 'Standalone run'}</span>
+              <span>{runPosition(run)}</span>
               <span aria-hidden="true">·</span>
               <span>Redaction review</span>
               {run.replacementRunId ? (
@@ -390,10 +328,11 @@ export function RedactionReviewView({
           {run.replacementRunId ? null : (
             <FinalizeDialog
               run={run}
-              onShowUndecided={() => {
-                setFilter('pending')
-                const first = run.spans.find((span) => !run.decisions[span.id])
-                if (first) setSelectedId(first.id)
+              onShowSpan={(spanId) => {
+                setFilter('all')
+                setCategoryFilter('all')
+                setSourceFilter('all')
+                setSelectedId(spanId)
                 listRef.current?.focus()
               }}
             />
@@ -411,10 +350,10 @@ export function RedactionReviewView({
           value={progress}
           className="max-w-[200px] min-w-[120px] flex-1"
         />
-        <p className="text-caption text-subtle">
-          {remaining > 0 ? `${remaining} left · ` : ''}
-          {DETECTION_COVERAGE_CAVEAT}
-        </p>
+        {remaining > 0 ? (
+          <p className="text-caption text-subtle">{remaining} left</p>
+        ) : null}
+        <CategoryLegend categories={categories} />
         <div className="ml-auto flex items-center gap-4">
           <span className="flex items-center gap-4 text-caption text-muted">
             <StatusDot tone="success">
@@ -489,6 +428,7 @@ export function RedactionReviewView({
                 currentUserId={currentUserId}
                 page={selected ? pageFor(selected) : null}
                 pageCount={pageCount}
+                occurrences={occurrences}
                 pending={decision.isPending}
                 error={
                   decision.error
@@ -500,6 +440,7 @@ export function RedactionReviewView({
                 onPrevious={() => move(-1)}
                 onNext={() => move(1)}
                 onDecide={decide}
+                onApplyToAll={applyToAll}
               />
             )}
           </div>
