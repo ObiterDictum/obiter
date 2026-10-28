@@ -200,7 +200,10 @@ export function EditorMenuItem({
         </span>
       ) : null}
       {shortcut ? (
-        <span className="shrink-0 font-mono text-caption text-subtle">
+        <span
+          aria-hidden
+          className="shrink-0 font-mono text-caption text-subtle"
+        >
           {shortcut}
         </span>
       ) : null}

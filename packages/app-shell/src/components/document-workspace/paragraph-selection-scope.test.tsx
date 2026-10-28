@@ -2,6 +2,7 @@ import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -9,8 +10,8 @@ import {
   rerenderWorkspace,
   command,
   commandOrNull,
-  openRibbonTab,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,

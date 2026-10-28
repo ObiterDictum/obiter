@@ -1,4 +1,5 @@
-import { command, commandOrNull } from './docx-workspace-harness'
+import { command, commandOrNull } from './editor-test-commands'
+
 import '@obiter/test-dom'
 import { createElement, type PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'

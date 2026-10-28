@@ -3,18 +3,19 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import { ApiError } from '../../api'
+import { openRibbonTab } from './editor-test-commands'
 import {
   downloadBlob,
   fetchDocumentExport,
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   selectBodyParagraph,
   staleConflict,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 
 /** The authoritative lineage a text-only save returns: no structural slots. */
 /**

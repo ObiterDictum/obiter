@@ -94,7 +94,10 @@ export function ReviewDecisionBar({
             disabled={!canPrevious || pending}
             onClick={onPrevious}
           >
-            Previous <KeyboardHint>K</KeyboardHint>
+            Previous{' '}
+            <span aria-hidden>
+              <KeyboardHint>K</KeyboardHint>
+            </span>
           </Button>
           <Button
             variant="ghost"
@@ -102,7 +105,10 @@ export function ReviewDecisionBar({
             disabled={!canNext || pending}
             onClick={onNext}
           >
-            Next <KeyboardHint>J</KeyboardHint>
+            Next{' '}
+            <span aria-hidden>
+              <KeyboardHint>J</KeyboardHint>
+            </span>
           </Button>
         </div>
         {item ? (
@@ -114,7 +120,10 @@ export function ReviewDecisionBar({
               onClick={onReject}
               iconStart={<X size={12} aria-hidden />}
             >
-              Reject <KeyboardHint>R</KeyboardHint>
+              Reject{' '}
+              <span aria-hidden>
+                <KeyboardHint>R</KeyboardHint>
+              </span>
             </Button>
             <Button
               variant="primary"
@@ -123,7 +132,10 @@ export function ReviewDecisionBar({
               onClick={onAccept}
               iconStart={<Check size={12} aria-hidden />}
             >
-              Accept <KeyboardHint>A</KeyboardHint>
+              Accept{' '}
+              <span aria-hidden>
+                <KeyboardHint>A</KeyboardHint>
+              </span>
             </Button>
           </div>
         ) : null}

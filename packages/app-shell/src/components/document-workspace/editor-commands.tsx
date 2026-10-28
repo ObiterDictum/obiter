@@ -837,6 +837,7 @@ export function editorMenus(
               label: 'Previous change',
               icon: <ArrowUp size={14} aria-hidden />,
               shortcut: 'K',
+              stayOpen: true,
               disabled: !review || !review.canPrevious,
               disabledReason: review
                 ? 'There is no earlier change.'
@@ -848,6 +849,7 @@ export function editorMenus(
               label: 'Next change',
               icon: <ArrowDown size={14} aria-hidden />,
               shortcut: 'J',
+              stayOpen: true,
               disabled: !review || !review.canNext,
               disabledReason: review ? 'There is no later change.' : reviewAbsent,
               run: review?.onNextChange,

@@ -6,6 +6,7 @@ import {
   insertParagraphRuns,
   type DocumentEditOperation,
 } from '@obiter/contracts'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -13,8 +14,8 @@ import {
   rerenderWorkspace,
   command,
   commandOrNull,
-  openRibbonTab,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,

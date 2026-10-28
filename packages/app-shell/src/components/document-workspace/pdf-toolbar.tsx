@@ -43,6 +43,7 @@ export function PdfWorkspaceToolbar({
       />
       {find ? (
         <input
+          id="document-find"
           type="text"
           value={find.query}
           onChange={(event) => find.onQuery(event.target.value)}

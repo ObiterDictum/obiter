@@ -7,15 +7,16 @@ import type {
   DocumentComment,
   DocumentImportedCommentThread,
 } from '@obiter/contracts'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   rerenderWorkspace,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,

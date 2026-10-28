@@ -11,14 +11,15 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
   command,
   commandOrNull,
-  openRibbonTab,
 } from './docx-workspace-harness'
+
 import { fontColourSelectValue } from './editor-formatting-panel'
 import { clickParagraph, nativeSelect } from './paragraph-selection-harness'
 
