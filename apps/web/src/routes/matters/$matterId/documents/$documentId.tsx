@@ -4,6 +4,7 @@ import {
   documentQueryOptions,
   guardAuth,
   matterQueryOptions,
+  useRecordDocumentOpen,
 } from '@obiter/app-shell'
 import { RedactionRunsRegion } from '@obiter/redact-ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -37,6 +38,8 @@ export const Route = createFileRoute(
 function DocumentDetailRouteComponent() {
   const { matterId, documentId } = Route.useParams()
   const navigate = useNavigate()
+  // Feeds Home's "continue where you left off" line.
+  useRecordDocumentOpen(documentId)
   return (
     <DocumentDetailLayoutView
       matterId={matterId}

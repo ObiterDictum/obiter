@@ -1,20 +1,12 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Flag, PencilSimple, Warning } from '@phosphor-icons/react'
-import {
-  Card,
-  CardFoot,
-  Skeleton,
-  StatusDot,
-  buttonClassName,
-  cn,
-} from '@obiter/ui'
+import { Card, CardFoot, Skeleton, buttonClassName, cn } from '@obiter/ui'
 import { useVerificationFindings } from '../verification-runs'
 import type { AttentionItem, VerificationAttentionItem } from './home-attention'
 import {
   attentionExplanation,
   attentionMeta,
   attentionReason,
-  attentionStatus,
   attentionTitle,
   topUnresolvedFinding,
 } from './home-attention-copy'
@@ -96,7 +88,14 @@ export function AttentionSection({
 }
 
 function AttentionRow({ item, rank }: { item: AttentionItem; rank: number }) {
-  const status = attentionStatus(item)
+  // The title already carries the state ("Flagged finding", "2 findings need
+  // review"), so the row does not repeat it as a pill beside the title.
+  const tone =
+    item.kind === 'redact_decision'
+      ? 'bg-info-soft text-info'
+      : item.kind === 'verify_review'
+        ? 'bg-warning-soft text-warning'
+        : 'bg-danger-soft text-danger'
   return (
     <li
       className={cn(
@@ -111,24 +110,14 @@ function AttentionRow({ item, rank }: { item: AttentionItem; rank: number }) {
         {rank}
       </span>
       <span
-        className={cn(
-          'grid size-8 place-items-center rounded-sm',
-          item.kind === 'redact_decision'
-            ? 'bg-info-soft text-info'
-            : status.tone === 'warning'
-              ? 'bg-warning-soft text-warning'
-              : 'bg-danger-soft text-danger',
-        )}
+        className={cn('grid size-8 place-items-center rounded-sm', tone)}
         aria-hidden="true"
       >
         <AttentionIcon item={item} />
       </span>
       <div className="min-w-0">
         <p className="text-caption text-muted">{attentionReason(item)}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h3 className="text-item text-ink">{attentionTitle(item)}</h3>
-          <StatusDot tone={status.tone}>{status.label}</StatusDot>
-        </div>
+        <h3 className="mt-1 text-item text-ink">{attentionTitle(item)}</h3>
         <p className="mt-1 flex flex-wrap items-center gap-2 text-meta text-subtle">
           {item.filename ? (
             <span className="text-muted">{item.filename}</span>
