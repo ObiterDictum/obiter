@@ -14,7 +14,6 @@ import {
   SettingsRouteView,
   ShellError,
   ShellNotFound,
-  VerifyRouteView,
   caseLawDocumentQueryOptions,
   legislationProvisionQueryOptions,
   createCanonicalCasePath,
@@ -40,6 +39,7 @@ import {
 } from '@tanstack/react-router'
 import { DesktopSearchPage } from '../../pages/search'
 import { Suspense, lazy } from 'react'
+import { VerifyRouteView } from '@obiter/app-shell'
 
 /**
  * Redact is a whole module with its own review desk, PDF preview and output

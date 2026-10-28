@@ -96,6 +96,48 @@ describe('verification run routes', () => {
     expect(JSON.stringify(body)).not.toContain('org_2')
   })
 
+  it('rejects a dismissal reason over the stored limit', async () => {
+    const response = await app(emptyQuery()).request(
+      '/api/verification-runs/vrun_1/findings/vf%3Ax/dismiss',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'x'.repeat(2001) }),
+      },
+    )
+    expect(response.status).toBe(400)
+    expect(apiErrorResponseSchema.parse(await response.json())).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+  })
+
+  it('rejects a dismissal request with an unknown field', async () => {
+    const response = await app(emptyQuery()).request(
+      '/api/verification-runs/vrun_1/findings/vf%3Ax/dismiss',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'Fine.', dismissedBy: 'usr_2' }),
+      },
+    )
+    expect(response.status).toBe(400)
+  })
+
+  it('does not dismiss a finding on a run the caller cannot reach', async () => {
+    const response = await app(emptyQuery()).request(
+      '/api/verification-runs/vrun_other/findings/vf%3Ax/dismiss',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+    expect(response.status).toBe(404)
+    expect(apiErrorResponseSchema.parse(await response.json()).error.code).toBe(
+      'verification_finding_not_found',
+    )
+  })
+
   it('returns an empty parsed run list for an organisation with none', async () => {
     const response = await app(emptyQuery()).request('/api/verification-runs')
     expect(response.status).toBe(200)

@@ -2735,7 +2735,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>33 migrations, 0001 to 0034, 0008 withdrawn</dd>
+                <dd>34 migrations, 0001 to 0035, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3602,6 +3602,19 @@
                     preserved with the checked finding. Historical runs without
                     snapshots return no passages; never substitute current
                     corpus text.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST
+                    /api/verification-runs/:runId/findings/:findingId/dismiss
+                  </td>
+                  <td class="id">verification-runs.ts</td>
+                  <td>
+                    Edit-gated. Records who dismissed one stored finding, when
+                    and why. Upserts the reason on a repeat dismissal. A finding
+                    that matched its checked source is refused, because there is
+                    nothing to decide.
                   </td>
                 </tr>
                 <tr>
@@ -4588,6 +4601,19 @@
                     slice (no BullMQ worker yet).
                   </td>
                   <td class="id">0024</td>
+                </tr>
+                <tr>
+                  <td class="id">verification_finding_dismissals</td>
+                  <td>
+                    One recorded human decision per stored finding: who
+                    dismissed it, when, and an optional reason. The finding
+                    keeps its own state, so a dismissal never rewrites the
+                    check's outcome; the run summary counts dismissed findings
+                    apart and excludes them from the attention counts. Cascades
+                    with the finding, so no dismissal outlives the evidence it
+                    decided.
+                  </td>
+                  <td class="id">0035</td>
                 </tr>
               </tbody>
             </table>

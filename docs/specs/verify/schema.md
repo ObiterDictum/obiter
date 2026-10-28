@@ -34,6 +34,19 @@
 - Indexed by `(organisation_id, run_id, created_at, finding_id)` for keyset
   pagination.
 
+`verification_finding_dismissals` (migration 0035)
+
+- Primary key `(run_id, finding_id)`: a dismissal answers one run's finding,
+  not every future run of the same citation.
+- `reason` is optional, trimmed and bounded to 2,000 characters; `dismissed_by`
+  references `users(id)` and `dismissed_at` records the decision time.
+- Composite FKs to `(run_id, finding_id)` and `(run_id, organisation_id)`, both
+  cascade: a replaced or interrupted run deletes its findings, and a dismissal
+  of a finding nobody can inspect must not survive.
+- The finding keeps its own `status_state`. Dismissals are read as a left join
+  for the findings page and for the run summary, so the run's counts can exclude
+  a decided finding without touching the evidence record.
+
 `verification_claims`
 
 Deferred to Verify Advanced (proposition support).

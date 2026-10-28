@@ -162,9 +162,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   // own button takes focus rather than a second run-starter appearing.
   await expect(verifyButton).toBeEnabled()
   await verifyButton.click()
-  await expect(
-    page.getByRole('button', { name: 'Run verification' }),
-  ).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
   await shot(page, '07-verify-revealed')
 
   const operations = editBodies.flatMap((body) => body.operations ?? [])

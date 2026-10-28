@@ -18,7 +18,7 @@ import {
 } from './redaction-runs'
 import { MatterRow, ModuleRow } from './sidebar-rows'
 import { useMediaQuery } from './use-media-query'
-import { verificationOutcomeTone } from './verification-copy'
+import type { VerificationRunSummary } from '@obiter/contracts'
 import { useOrganisationVerificationRuns } from './verification-runs'
 
 const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
@@ -38,28 +38,46 @@ export function redactionAttentionCount(
   return runs.filter(redactionRunNeedsDecision).length
 }
 
-/** Findings from completed Verify runs that nobody has resolved yet. */
+/**
+ * Findings from completed Verify runs that nobody has resolved yet. A check
+ * that did not run is unfinished work too, so it counts here even though the
+ * run summary reports it apart from a check that ran and could not conclude.
+ */
 export function verificationAttentionCount(runs: VerificationRun[]): number {
   return runs
     .filter((run) => run.status === 'completed')
     .reduce(
       (total, run) =>
-        total + run.summary.flaggedCount + run.summary.reviewRequiredCount,
+        total +
+        run.summary.flaggedCount +
+        run.summary.reviewRequiredCount +
+        run.summary.notCheckedCount,
       0,
     )
 }
 
 /**
- * How serious the waiting work is, by the rule Verify itself uses: a flagged
- * finding outranks one that merely needs review, so the sidebar never shows a
- * softer colour than the page it leads to.
+ * The tone of one run's waiting findings, by the rule Verify uses: a flagged
+ * finding outranks one that needs review, and a check that did not run is still
+ * unfinished work rather than a pass.
+ */
+function verificationAttentionToneFor(summary: VerificationRunSummary) {
+  if (summary.flaggedCount > 0) return 'danger' as const
+  if (summary.reviewRequiredCount > 0 || summary.notCheckedCount > 0)
+    return 'warning' as const
+  return 'success' as const
+}
+
+/**
+ * How serious the waiting work is, so the sidebar never shows a softer colour
+ * than the page it leads to.
  */
 export function verificationAttentionTone(
   runs: VerificationRun[],
 ): 'danger' | 'warning' | 'success' {
   const tones = runs
     .filter((run) => run.status === 'completed')
-    .map((run) => verificationOutcomeTone(run.summary))
+    .map((run) => verificationAttentionToneFor(run.summary))
   if (tones.includes('danger')) return 'danger'
   if (tones.includes('warning')) return 'warning'
   return 'success'

@@ -22,10 +22,156 @@ describe('verification presenters', () => {
       finding_count: 1,
       flagged_count: 0,
       review_required_count: 1,
+      not_checked_count: 0,
+      dismissed_count: 0,
       document_current_version_id: 'ver_2',
     })
     expect(run.documentVersionId).toBe('ver_1')
     expect(run.stale).toBe(true)
+  })
+
+  it('builds the source page and pinpoint from the stored source, and invents neither', () => {
+    const subject = { documentId: 'doc_1', versionId: 'ver_1' }
+    const location = { paragraphId: 'p1', start: 0, end: 13 }
+    const base = {
+      type: 'quote_fidelity' as const,
+      subject,
+      citation: { rawText: 'the court must consider', location },
+      normalizedCitation: {
+        kind: 'case_law' as const,
+        neutralCitation: '[2017] UKSC 24',
+        sourceId: 'd-wood',
+      },
+      status: { state: 'clear' as const },
+      severity: null,
+      confidence: null,
+      explanation: 'The quotation appears in the stored source.',
+    }
+    const judgment = createVerificationFindingId({
+      subject,
+      type: 'quote_fidelity',
+      location,
+    })
+    const sources = new Map([
+      [
+        'judgment:d-wood',
+        {
+          url: 'https://caselaw.nationalarchives.gov.uk/uksc/2017/24',
+          title: 'Wood v Capita Insurance Services Ltd',
+          neutralCitation: '[2017] UKSC 24',
+        },
+      ],
+      [
+        'legislation:ukpga/2010/15',
+        {
+          url: 'https://www.legislation.gov.uk/ukpga/2010/15',
+          title: null,
+          neutralCitation: null,
+        },
+      ],
+    ])
+    const paragraph = toPublicFinding(
+      {
+        ...base,
+        id: judgment,
+        evidence: [
+          {
+            sourceType: 'judgment',
+            granularity: 'fragment',
+            sourceId: 'd-wood',
+            ordinal: 10,
+            paragraphNumber: 10,
+          },
+        ],
+      },
+      { sources },
+    )
+    expect(paragraph.evidence[0]?.source).toEqual({
+      url: 'https://caselaw.nationalarchives.gov.uk/uksc/2017/24',
+      canonicalUrl:
+        '/case/d-wood-wood-v-capita-insurance-services-ltd-2017-uksc-24',
+      pinpoint: 'judgment [10]',
+      anchor: 'para-10',
+    })
+
+    // A whole-document reference names no pinpoint and no anchor.
+    const wholeAct = toPublicFinding(
+      {
+        ...base,
+        id: judgment,
+        type: 'authority_existence',
+        normalizedCitation: {
+          kind: 'legislation',
+          documentIdentity: 'ukpga/2010/15',
+          labelPath: null,
+        },
+        evidence: [
+          {
+            sourceType: 'legislation_document',
+            granularity: 'document',
+            sourceId: 'ukpga/2010/15',
+          },
+        ],
+      },
+      { sources },
+    )
+    expect(wholeAct.evidence[0]?.source).toEqual({
+      url: 'https://www.legislation.gov.uk/ukpga/2010/15',
+      canonicalUrl: '/ln/ukpga/2010/15',
+      pinpoint: null,
+      anchor: null,
+    })
+
+    // A provision keeps its label path as the pinpoint and the page path.
+    const provision = toPublicFinding(
+      {
+        ...base,
+        id: judgment,
+        type: 'authority_existence',
+        normalizedCitation: {
+          kind: 'legislation',
+          documentIdentity: 'ukpga/2010/15',
+          labelPath: 'section/40',
+        },
+        evidence: [
+          {
+            sourceType: 'legislation_provision',
+            granularity: 'fragment',
+            sourceId: 'ukpga/2010/15',
+            labelPath: 'section/40',
+          },
+        ],
+      },
+      { sources },
+    )
+    expect(provision.evidence[0]?.source).toEqual({
+      url: 'https://www.legislation.gov.uk/ukpga/2010/15',
+      canonicalUrl: '/ln/ukpga/2010/15/section/40',
+      pinpoint: 'section 40',
+      anchor: null,
+    })
+
+    // Without a stored record there is no page and no name to read, and the
+    // judgement's printed pinpoint is still stated.
+    const unheld = toPublicFinding({
+      ...base,
+      id: judgment,
+      evidence: [
+        {
+          sourceType: 'judgment',
+          granularity: 'fragment',
+          sourceId: 'd-missing',
+          ordinal: 3,
+          paragraphNumber: null,
+        },
+      ],
+    })
+    expect(unheld.evidence[0]?.source).toEqual({
+      url: null,
+      canonicalUrl: null,
+      pinpoint: 'judgment position 3',
+      anchor: null,
+    })
   })
 
   it('exposes the V1 evidence identity rather than an internal discriminant', () => {

@@ -18,7 +18,9 @@ describe('contextual verification evidence', () => {
   it('navigates between mapped findings while keeping the document context', async () => {
     mount([finding(), quoteFinding()])
     fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+      await screen.findByRole('button', {
+        name: /Citation, Citation matches checked source/,
+      }),
     )
     const panel = await screen.findByRole('dialog')
     fireEvent.click(await screen.findByRole('button', { name: 'Next finding' }))
@@ -41,7 +43,7 @@ describe('contextual verification evidence', () => {
   it('closes on a document-level Escape and restores focus to the originating marker', async () => {
     mount([finding()])
     const marker = await screen.findByRole('button', {
-      name: /Citation resolution, Clear/,
+      name: /Citation, Citation matches checked source/,
     })
     fireEvent.click(marker)
     const panel = await screen.findByRole('dialog')
@@ -59,22 +61,24 @@ describe('contextual verification evidence', () => {
   it('keeps the panel through a real pointerdown inside the findings index', async () => {
     mount([finding(), quoteFinding()])
     fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+      await screen.findByRole('button', {
+        name: /Citation, Citation matches checked source/,
+      }),
     )
     await screen.findByRole('dialog')
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'All findings' })[0]!)
     const index = await screen.findByRole('dialog')
     // A real pointerdown, not a click: the panel's dismissal listener must not
     // treat the modal index as outside it. The modal aria-hides the panel while
     // it is open, so assert the element survives rather than staying exposed.
     fireEvent.pointerDown(index)
     expect(document.querySelector('[data-verification-panel]')).toBeTruthy()
-    expect(screen.queryByText('All findings')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'All findings' })).toBeTruthy()
     // Escape inside the index closes only the index; the panel returns with the
     // same finding selected.
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => {
-      expect(screen.queryByText('All findings')).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'All findings' })).toBeNull()
     })
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('[2012] UKSC 7')
@@ -83,12 +87,14 @@ describe('contextual verification evidence', () => {
   it('opens a finding from an index row and closes the index', async () => {
     mount([finding(), quoteFinding()])
     fireEvent.click(
-      await screen.findByRole('button', { name: 'View all findings' }),
+      (await screen.findAllByRole('button', { name: 'All findings' }))[0]!,
     )
     const index = await screen.findByRole('dialog')
-    fireEvent.click(within(index).getByText(quoteFinding().explanation))
+    fireEvent.click(
+      within(index).getAllByRole('button', { name: 'Open finding' })[1]!,
+    )
     await waitFor(() => {
-      expect(screen.queryByText('All findings')).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'All findings' })).toBeNull()
     })
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('[2012] UKSC 40')
@@ -97,7 +103,7 @@ describe('contextual verification evidence', () => {
   it('does not carry selection or markers across a same-pane document switch', async () => {
     const view = mount([finding()])
     const marker = await screen.findByRole('button', {
-      name: /Citation resolution, Clear/,
+      name: /Citation, Citation matches checked source/,
     })
     fireEvent.click(marker)
     await screen.findByRole('dialog')
@@ -113,9 +119,9 @@ describe('contextual verification evidence', () => {
     mount([hardBreakFinding()])
     await screen.findByRole('region', { name: 'Verification' })
     expect(
-      screen.queryByRole('button', { name: /Quote fidelity, Flagged/ }),
+      screen.queryByRole('button', { name: /Quotation, Flagged/ }),
     ).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'All findings' })[0]!)
     const index = await screen.findByRole('dialog')
     expect(index.textContent).toContain('line break')
     expect(index.textContent).not.toContain(
@@ -125,21 +131,29 @@ describe('contextual verification evidence', () => {
 
   it('does not read a run of not-checked findings as all-clear', async () => {
     mount([finding({ state: 'not_checked' })], {
-      summary: { findingCount: 1, flaggedCount: 0, reviewRequiredCount: 1 },
+      summary: {
+        findingCount: 1,
+        flaggedCount: 0,
+        reviewRequiredCount: 0,
+        dismissedCount: 0,
+        notCheckedCount: 1,
+      },
     })
     const dock = await screen.findByRole('region', { name: 'Verification' })
     expect(dock.textContent).toContain('1 not checked')
-    expect(dock.textContent).toContain('Review required (1)')
+    expect(dock.textContent).toContain('Nothing checked')
     expect(dock.textContent).not.toContain('No findings need attention')
   })
 
   it('keeps an unmappable finding reachable with a stated reason', async () => {
     mount([finding(), unmappableFinding()])
-    await screen.findByRole('button', { name: /Citation resolution, Clear/ })
+    await screen.findByRole('button', {
+      name: /Citation, Citation matches checked source/,
+    })
     expect(
       screen.queryByRole('button', { name: /Authority existence.*2099/ }),
     ).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'All findings' })[0]!)
     const index = await screen.findByRole('dialog')
     expect(index.textContent).toContain('Not shown in the document')
   })
@@ -150,17 +164,19 @@ describe('contextual verification evidence', () => {
     const dock = await screen.findByRole('region', {
       name: 'Verification',
     })
-    expect(dock.textContent).toContain('Stored version')
+    expect(dock.textContent).toContain('stored version')
     expect(dock.textContent).toContain('unsaved')
     expect(
       (
         screen.getByRole('button', {
-          name: 'Run verification',
+          name: /^Run (Verify|again)$/,
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true)
     fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+      await screen.findByRole('button', {
+        name: /Citation, Citation matches checked source/,
+      }),
     )
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('stored version ver_1')
@@ -172,7 +188,9 @@ describe('contextual verification evidence', () => {
   it('falls back to a drawer when the viewport cannot fit the panel', async () => {
     mount([finding()])
     fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+      await screen.findByRole('button', {
+        name: /Citation, Citation matches checked source/,
+      }),
     )
     await screen.findByRole('dialog')
     Object.defineProperty(window, 'innerWidth', {
@@ -190,10 +208,12 @@ describe('contextual verification evidence', () => {
   it('keeps the selected finding when the index opens and returns', async () => {
     mount([finding(), quoteFinding()])
     fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+      await screen.findByRole('button', {
+        name: /Citation, Citation matches checked source/,
+      }),
     )
     await screen.findByRole('dialog')
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'All findings' })[0]!)
     const index = await screen.findByRole('dialog')
     expect(index.textContent).toContain('All findings')
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
@@ -205,14 +225,14 @@ describe('contextual verification evidence', () => {
     setStoredVersionId('ver_2')
     mount([finding()])
     const dock = await screen.findByRole('region', { name: 'Verification' })
-    expect(await screen.findByText('Earlier version')).toBeTruthy()
-    expect(dock.textContent).toContain('Stored version ver_1')
+    expect(dock.textContent).toContain('A newer version is stored')
+    expect(dock.textContent).toContain('stored version ver_1')
   })
 
   it('moves focus to the run status when a run starts', async () => {
     mount([finding()])
     const start = await screen.findByRole('button', {
-      name: 'Run verification',
+      name: /^Run (Verify|again)$/,
     })
     fireEvent.click(start)
     expect(document.activeElement?.getAttribute('role')).toBe('status')
@@ -221,9 +241,11 @@ describe('contextual verification evidence', () => {
   it('shows totals, the next actionable finding and the stored version', async () => {
     mount([finding(), quoteFinding(), unmappableFinding()])
     const dock = await screen.findByRole('region', { name: 'Verification' })
-    expect(dock.textContent).toContain('1 clear · 1 flagged · 1 needs review')
+    expect(dock.textContent).toContain(
+      '1 flagged · 1 needs review · 1 matches the checked source',
+    )
     expect(dock.textContent).toContain('ver_1')
-    fireEvent.click(screen.getByRole('button', { name: 'Go to next finding' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Go to finding' }))
     expect(await screen.findByRole('dialog')).toBeTruthy()
   })
 })

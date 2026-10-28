@@ -107,7 +107,7 @@ export function WorkspaceSidePanels({
   if (panel === 'verify') {
     return (
       <DockedPanel title="Verify" onClose={onClose}>
-        <VerificationDock panel />
+        <VerificationDock panel currentUserId={currentUserId} />
       </DockedPanel>
     )
   }

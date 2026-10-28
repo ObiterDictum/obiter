@@ -1,6 +1,4 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Button } from '@obiter/ui'
 import {
   verificationEvidenceResponseSchema,
   type VerificationFindingView,
@@ -136,26 +134,6 @@ export function VerificationSourceEvidence({
       {finding.evidence.length === 0 ? (
         <p className="text-xs text-muted">No source evidence attached.</p>
       ) : null}
-    </div>
-  )
-}
-
-export function VerificationEvidenceToggle(props: {
-  runId: string
-  finding: VerificationFindingView
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div>
-      <Button
-        size="sm"
-        variant="ghost"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        {open ? 'Hide evidence' : 'View evidence'}
-      </Button>
-      {open ? <VerificationSourceEvidence {...props} /> : null}
     </div>
   )
 }
