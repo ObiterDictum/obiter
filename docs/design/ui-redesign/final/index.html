@@ -1,0 +1,1663 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obiter — Final designs</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="obiter.css" />
+    <style>
+      /* Gallery layout only. Components come from obiter.css. */
+      .gl {
+        min-height: 100vh;
+        background: var(--ob-bg);
+      }
+      .gl-top {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 56px;
+        padding: 0 32px;
+        background: color-mix(in srgb, var(--ob-bg) 88%, transparent);
+        backdrop-filter: blur(14px);
+        box-shadow: inset 0 -1px 0 var(--ob-line);
+      }
+      .gl-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .gl-brand .ob-logo {
+        width: 28px;
+        height: 28px;
+      }
+      .gl-brand .ob-logo svg {
+        width: 28px;
+        height: 28px;
+      }
+      .gl-brand-sub {
+        color: var(--ob-subtle);
+        font-weight: 400;
+      }
+      .gl-top nav {
+        display: flex;
+        gap: 4px;
+        margin-left: 24px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .gl-top nav a {
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--ob-muted);
+        white-space: nowrap;
+      }
+      .gl-top nav a:hover {
+        background: var(--ob-hover);
+        color: var(--ob-ink);
+      }
+      .gl-top-act {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .gl-count {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+
+      .gl-main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 56px 32px 56px;
+      }
+      .gl-intro {
+        max-width: 720px;
+        margin-bottom: 40px;
+      }
+      .gl-intro h1 {
+        margin-top: 8px;
+      }
+      .gl-intro p {
+        margin-top: 12px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ob-muted);
+        max-width: 62ch;
+      }
+      .gl-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 16px;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+
+      .gl-index {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 24px;
+      }
+      .gl-index a {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 12px 16px;
+        border-radius: 6px;
+        background: var(--ob-surface);
+      }
+      .gl-index a:hover {
+        background: var(--ob-surface-2);
+      }
+      .gl-index b {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--ob-ink);
+      }
+      .gl-index span {
+        font-size: 12px;
+        color: var(--ob-subtle);
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .gl-group {
+        padding-top: 56px;
+        scroll-margin-top: 56px;
+      }
+      .gl-group-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .gl-group-head h2 {
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+      .gl-group-head span {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .gl-blurb {
+        margin-top: 8px;
+        font-size: 13px;
+        color: var(--ob-muted);
+        max-width: 70ch;
+      }
+      .gl-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, 380px);
+        gap: 24px;
+        margin-top: 24px;
+      }
+
+      .gl-card {
+        border-radius: 10px;
+        background: var(--ob-surface);
+        overflow: hidden;
+        box-shadow: inset 0 0 0 1px var(--ob-line);
+        transition: box-shadow 140ms var(--ob-ease);
+      }
+      .gl-card:hover {
+        box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+      }
+      .gl-shot {
+        position: relative;
+        width: 380px;
+        height: 237.5px;
+        overflow: hidden;
+        background: var(--ob-bg);
+      }
+      .gl-shot iframe {
+        width: 1440px;
+        height: 900px;
+        border: 0;
+        transform: scale(0.263889);
+        transform-origin: 0 0;
+        pointer-events: none;
+      }
+      .gl-open {
+        position: absolute;
+        inset: 0;
+      }
+      .gl-open:focus-visible {
+        outline-offset: -3px;
+        box-shadow: inset 0 0 0 2px var(--ob-ring);
+      }
+
+      .gl-body {
+        padding: 16px;
+      }
+      .gl-title {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+      .gl-title a:hover {
+        color: var(--ob-link);
+      }
+      .gl-desc {
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--ob-muted);
+        min-height: 36px;
+      }
+      .gl-states {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        box-shadow: inset 0 1px 0 var(--ob-line);
+      }
+      .gl-states a,
+      .gl-states span {
+        font-size: 12px;
+        color: var(--ob-link);
+      }
+      .gl-states a:hover {
+        text-decoration: underline;
+      }
+      .gl-states span {
+        color: var(--ob-subtle);
+      }
+
+      @media (max-width: 1024px) {
+        .gl-top {
+          padding: 0 32px;
+        }
+        .gl-top nav {
+          display: none;
+        }
+        .gl-main {
+          padding: 56px 32px 56px;
+        }
+        .gl-index {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      style="position: absolute; overflow: hidden"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <defs>
+        <!-- Brand: the Obiter monogram. One weight, one colour, no tile. -->
+        <symbol id="i-obiter" viewBox="0 0 26 26">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="7.75" cy="14.6" r="4.9" />
+            <path d="M18.25 3.4v16.1" />
+            <path d="M18.25 9.7a4.9 4.9 0 0 1 0 9.8" />
+          </g>
+        </symbol>
+      </defs>
+    </svg>
+    <div class="gl">
+      <header class="gl-top">
+        <div class="gl-brand">
+          <span class="ob-logo" aria-hidden="true"
+            ><svg aria-hidden="true"><use href="#i-obiter" /></svg></span
+          >Obiter <span class="gl-brand-sub">Final UI</span>
+        </div>
+        <nav aria-label="Gallery sections">
+          <a href="#shell">Shell and dashboard</a><a href="#account">Account</a
+          ><a href="#matters">Matters</a><a href="#documents">Documents</a
+          ><a href="#search">Search and sources</a><a href="#redact">Redact</a
+          ><a href="#verify">Verify</a><a href="#settings">Settings</a
+          ><a href="#system">System</a>
+        </nav>
+        <div class="gl-top-act">
+          <span class="gl-count">36 screens</span>
+          <button
+            class="ob-btn ob-btn--secondary ob-btn--sm"
+            id="themeToggle"
+            type="button"
+          >
+            Dark theme
+          </button>
+        </div>
+      </header>
+
+      <main class="gl-main">
+        <section class="gl-intro">
+          <div class="ob-page-date">26 Oct 2026 · Harrington Vale LLP</div>
+          <h1 class="ob-display">Every screen, one product</h1>
+          <p>
+            The final Obiter interface, grouped by area. Each preview is the
+            live page, scaled down; open it full size or jump straight to a
+            state. One stylesheet, one icon sprite, one set of demo data.
+          </p>
+          <div class="gl-meta">
+            <span>36 screens</span><span>1440 × 900 and 1024 × 768</span
+            ><span>Dark and light</span
+            ><span><a class="ob-link" href="system.html">Style guide</a></span>
+          </div>
+          <div class="gl-index">
+            <a href="#shell"><b>Shell and dashboard</b><span>8</span></a
+            ><a href="#account"><b>Account</b><span>6</span></a
+            ><a href="#matters"><b>Matters</b><span>3</span></a
+            ><a href="#documents"><b>Documents</b><span>5</span></a
+            ><a href="#search"><b>Search and sources</b><span>4</span></a
+            ><a href="#redact"><b>Redact</b><span>3</span></a
+            ><a href="#verify"><b>Verify</b><span>2</span></a
+            ><a href="#settings"><b>Settings</b><span>4</span></a
+            ><a href="#system"><b>System</b><span>1</span></a>
+          </div>
+        </section>
+
+        <section class="gl-group" id="shell">
+          <div class="gl-group-head">
+            <h2>Shell and dashboard</h2>
+            <span>8 screens</span>
+          </div>
+          <p class="gl-blurb">
+            The frame every screen lives in, and the states it can be in.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="dashboard.html"
+                  title="Preview of Dashboard"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="dashboard.html"
+                  aria-label="Open Dashboard"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="dashboard.html">Dashboard</a></h3>
+                <p class="gl-desc">
+                  The day’s work, ranked. One flagged citation, one redaction,
+                  one review, one failed run.
+                </p>
+                <div class="gl-states">
+                  <a href="dashboard.html#account">Account menu</a
+                  ><a href="dashboard.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="dashboard-empty.html"
+                  title="Preview of Dashboard — first run"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="dashboard-empty.html"
+                  aria-label="Open Dashboard — first run"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="dashboard-empty.html">Dashboard — first run</a>
+                </h3>
+                <p class="gl-desc">
+                  Nothing pinned yet, with one clear way in.
+                </p>
+                <div class="gl-states">
+                  <a href="dashboard-empty.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="shell.html"
+                  title="Preview of Shell states"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="shell.html"
+                  aria-label="Open Shell states"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="shell.html">Shell states</a></h3>
+                <p class="gl-desc">
+                  The shared chrome, command palette and toast, in one specimen.
+                </p>
+                <div class="gl-states">
+                  <a href="shell.html#palette">Command palette</a
+                  ><a href="shell.html#toast">Toast</a
+                  ><a href="shell.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="shell-loading.html"
+                  title="Preview of Loading"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="shell-loading.html"
+                  aria-label="Open Loading"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="shell-loading.html">Loading</a>
+                </h3>
+                <p class="gl-desc">
+                  Skeletons that hold the layout while a matter list loads.
+                </p>
+                <div class="gl-states">
+                  <a href="shell-loading.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="shell-error.html"
+                  title="Preview of Error"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="shell-error.html"
+                  aria-label="Open Error"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="shell-error.html">Error</a></h3>
+                <p class="gl-desc">
+                  A recoverable error, with retry and a way back.
+                </p>
+                <div class="gl-states">
+                  <a href="shell-error.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="shell-not-found.html"
+                  title="Preview of Not found"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="shell-not-found.html"
+                  aria-label="Open Not found"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="shell-not-found.html">Not found</a>
+                </h3>
+                <p class="gl-desc">404 without dead ends.</p>
+                <div class="gl-states">
+                  <a href="shell-not-found.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="shell-offline.html"
+                  title="Preview of Offline"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="shell-offline.html"
+                  aria-label="Open Offline"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="shell-offline.html">Offline</a>
+                </h3>
+                <p class="gl-desc">
+                  A quiet banner over the matter already on screen.
+                </p>
+                <div class="gl-states">
+                  <a href="shell-offline.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="shell-permission-denied.html"
+                  title="Preview of Permission denied"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="shell-permission-denied.html"
+                  aria-label="Open Permission denied"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="shell-permission-denied.html">Permission denied</a>
+                </h3>
+                <p class="gl-desc">
+                  No access to a matter, and exactly who to ask.
+                </p>
+                <div class="gl-states">
+                  <a href="shell-permission-denied.html#collapsed"
+                    >Collapsed sidebar</a
+                  >
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="account">
+          <div class="gl-group-head">
+            <h2>Account</h2>
+            <span>6 screens</span>
+          </div>
+          <p class="gl-blurb">
+            The way in and the way back: small, calm, and never a marketing
+            page.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="auth-sign-in.html"
+                  title="Preview of Sign in"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="auth-sign-in.html"
+                  aria-label="Open Sign in"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="auth-sign-in.html">Sign in</a>
+                </h3>
+                <p class="gl-desc">
+                  Password and magic link, with the sent state.
+                </p>
+                <div class="gl-states">
+                  <a href="auth-sign-in.html#magic">Magic link</a
+                  ><a href="auth-sign-in.html#sent">Magic link sent</a
+                  ><a href="auth-sign-in.html#expired">Session expired banner</a
+                  ><a href="auth-sign-in.html#reset">Password reset</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="auth-sign-up.html"
+                  title="Preview of Create an account"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="auth-sign-up.html"
+                  aria-label="Open Create an account"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="auth-sign-up.html">Create an account</a>
+                </h3>
+                <p class="gl-desc">
+                  Firm, name, email and password, with validation.
+                </p>
+                <div class="gl-states">
+                  <a href="auth-sign-up.html#sent">Invite sent</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="auth-forgot-password.html"
+                  title="Preview of Forgot password"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="auth-forgot-password.html"
+                  aria-label="Open Forgot password"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="auth-forgot-password.html">Forgot password</a>
+                </h3>
+                <p class="gl-desc">
+                  One field, one instruction, one sent state.
+                </p>
+                <div class="gl-states">
+                  <a href="auth-forgot-password.html#sent">Email sent</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="auth-reset-password.html"
+                  title="Preview of Reset password"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="auth-reset-password.html"
+                  aria-label="Open Reset password"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="auth-reset-password.html">Reset password</a>
+                </h3>
+                <p class="gl-desc">
+                  Choose a new password; the invalid-link state included.
+                </p>
+                <div class="gl-states">
+                  <a href="auth-reset-password.html#invalid">Link expired</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="auth-accept-invite.html"
+                  title="Preview of Accept invite"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="auth-accept-invite.html"
+                  aria-label="Open Accept invite"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="auth-accept-invite.html">Accept invite</a>
+                </h3>
+                <p class="gl-desc">Joining Harrington Vale LLP.</p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="auth-session-expired.html"
+                  title="Preview of Session expired"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="auth-session-expired.html"
+                  aria-label="Open Session expired"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="auth-session-expired.html">Session expired</a>
+                </h3>
+                <p class="gl-desc">Sign in again without losing the thread.</p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="matters">
+          <div class="gl-group-head">
+            <h2>Matters</h2>
+            <span>3 screens</span>
+          </div>
+          <p class="gl-blurb">
+            The client file: what holds documents, artefacts and open work.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="matters.html"
+                  title="Preview of Matters"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="matters.html"
+                  aria-label="Open Matters"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="matters.html">Matters</a></h3>
+                <p class="gl-desc">
+                  Four client files, with documents, open work and last
+                  activity.
+                </p>
+                <div class="gl-states">
+                  <a href="matters.html#empty">Empty list</a
+                  ><a href="matters.html#new">Create matter dialog</a
+                  ><a href="matters.html#validation">Create matter — errors</a
+                  ><a href="matters.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="matter.html"
+                  title="Preview of Matter"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="matter.html"
+                  aria-label="Open Matter"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="matter.html">Matter</a></h3>
+                <p class="gl-desc">
+                  An ordinary commercial matter: documents, artefacts, activity.
+                </p>
+                <div class="gl-states">
+                  <a href="matter.html#new">New matter</a
+                  ><a href="matter.html#activity">Matter activity</a
+                  ><a href="matter.html#edit">Edit details</a
+                  ><a href="matter.html#share">Share matter</a
+                  ><a href="matter.html#add-artefact">Add artefact</a
+                  ><a href="matter.html#withdrawn">Withdrawn source</a
+                  ><a href="matter.html#delete">Delete matter</a
+                  ><a href="matter.html#collapsed">Collapsed sidebar</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="matter-redaction.html"
+                  title="Preview of Matter — redaction"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="matter-redaction.html"
+                  aria-label="Open Matter — redaction"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="matter-redaction.html">Matter — redaction</a>
+                </h3>
+                <p class="gl-desc">
+                  The FOI matter, with its runs and redaction documents.
+                </p>
+                <div class="gl-states">
+                  <a href="matter-redaction.html#collapsed"
+                    >Collapsed sidebar</a
+                  >
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="documents">
+          <div class="gl-group-head">
+            <h2>Documents</h2>
+            <span>5 screens</span>
+          </div>
+          <p class="gl-blurb">
+            A Word-like page with the chrome kept out of the way.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="document.html"
+                  title="Preview of Document editor"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="document.html"
+                  aria-label="Open Document editor"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="document.html">Document editor</a>
+                </h3>
+                <p class="gl-desc">
+                  The supply agreement, with a Verify that has not run.
+                </p>
+                <div class="gl-states">
+                  <a href="document.html#insert">Insert tab</a
+                  ><a href="document.html#layout">Layout tab</a
+                  ><a href="document.html#references">References tab</a
+                  ><a href="document.html#view">View tab</a
+                  ><a href="document.html#findings">Verify panel</a
+                  ><a href="document.html#all-findings">All findings dialog</a
+                  ><a href="document.html#info">Document information</a
+                  ><a href="document.html#comment">Comment thread</a
+                  ><a href="document.html#find">Find and replace</a
+                  ><a href="document.html#presence">Someone else viewing</a
+                  ><a href="document.html#readonly">Older version</a
+                  ><a href="document.html#unsaved">Unsaved changes</a
+                  ><a href="document.html#savefailed">Saving failed</a
+                  ><a href="document.html#stale">Check out of date</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="document-review.html"
+                  title="Preview of Review tracked changes"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="document-review.html"
+                  aria-label="Open Review tracked changes"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="document-review.html">Review tracked changes</a>
+                </h3>
+                <p class="gl-desc">
+                  Changes, comments and one undecidable move, decided in place.
+                </p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="document-dialogs.html"
+                  title="Preview of Share and export"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="document-dialogs.html"
+                  aria-label="Open Share and export"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="document-dialogs.html">Share and export</a>
+                </h3>
+                <p class="gl-desc">
+                  The document menus, share dialog and export options.
+                </p>
+                <div class="gl-states">
+                  <a href="document-dialogs.html#share">Share dialog</a
+                  ><a href="document-dialogs.html#export">Export menu</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="document-versions.html"
+                  title="Preview of Versions"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="document-versions.html"
+                  aria-label="Open Versions"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="document-versions.html">Versions</a>
+                </h3>
+                <p class="gl-desc">History, compare and side by side.</p>
+                <div class="gl-states">
+                  <a href="document-versions.html#compare">Compare versions</a
+                  ><a href="document-versions.html#side">Side by side</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="document-upload.html"
+                  title="Preview of Upload"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="document-upload.html"
+                  aria-label="Open Upload"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="document-upload.html">Upload</a>
+                </h3>
+                <p class="gl-desc">
+                  Drag and drop, progress and a rejected file.
+                </p>
+                <div class="gl-states">
+                  <a href="document-upload.html#over">Dragging over</a>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="search">
+          <div class="gl-group-head">
+            <h2>Search and sources</h2>
+            <span>4 screens</span>
+          </div>
+          <p class="gl-blurb">
+            UK case law and legislation, read as a lawyer reads it.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="search.html"
+                  title="Preview of Search results"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="search.html"
+                  aria-label="Open Search results"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="search.html">Search results</a>
+                </h3>
+                <p class="gl-desc">
+                  Results with a preview, filters and one quiet highlight.
+                </p>
+                <div class="gl-states">
+                  <a href="search.html#landing">Search landing</a
+                  ><a href="search.html#none">No results</a
+                  ><a href="search.html#filters">Filters open</a
+                  ><a href="search.html#add">Add to matter</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="judgment.html"
+                  title="Preview of Judgment"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="judgment.html"
+                  aria-label="Open Judgment"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="judgment.html">Judgment</a></h3>
+                <p class="gl-desc">
+                  A judgment set as reading, with the held point and related
+                  authority.
+                </p>
+                <div class="gl-states">
+                  <a href="judgment.html#add">Add to matter</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="legislation.html"
+                  title="Preview of Legislation"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="legislation.html"
+                  aria-label="Open Legislation"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="legislation.html">Legislation</a>
+                </h3>
+                <p class="gl-desc">An Act with a real contents structure.</p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="legislation-provision.html"
+                  title="Preview of Provision"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="legislation-provision.html"
+                  aria-label="Open Provision"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="legislation-provision.html">Provision</a>
+                </h3>
+                <p class="gl-desc">
+                  One section, its history and the cases that turn on it.
+                </p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="redact">
+          <div class="gl-group-head">
+            <h2>Redact</h2>
+            <span>3 screens</span>
+          </div>
+          <p class="gl-blurb">
+            Detect, decide, finalise. Always in the FOI matter.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="redact-start.html"
+                  title="Preview of Start a redaction"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="redact-start.html"
+                  aria-label="Open Start a redaction"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="redact-start.html">Start a redaction</a>
+                </h3>
+                <p class="gl-desc">
+                  Upload first, then choose a redaction matter.
+                </p>
+                <div class="gl-states">
+                  <a href="redact-start.html#matter">Matter picker</a
+                  ><a href="redact-start.html#detecting">Detecting spans</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="redact-review.html"
+                  title="Preview of Review redactions"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="redact-review.html"
+                  aria-label="Open Review redactions"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="redact-review.html">Review redactions</a>
+                </h3>
+                <p class="gl-desc">
+                  Twenty-one spans, three left; the page stays judgeable.
+                </p>
+                <div class="gl-states">
+                  <a href="redact-review.html#edit">Edit a span</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="redact-finalise.html"
+                  title="Preview of Finalise"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="redact-finalise.html"
+                  aria-label="Open Finalise"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="redact-finalise.html">Finalise</a>
+                </h3>
+                <p class="gl-desc">
+                  Secure PDF or pseudonymised Word, then the result.
+                </p>
+                <div class="gl-states">
+                  <a href="redact-finalise.html#finalised">Finalised</a
+                  ><a href="redact-finalise.html#failed">Failed</a
+                  ><a href="redact-finalise.html#return">Return to document</a>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="verify">
+          <div class="gl-group-head">
+            <h2>Verify</h2>
+            <span>2 screens</span>
+          </div>
+          <p class="gl-blurb">
+            Citations, authorities and quotations, checked against stored
+            sources.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="verify.html"
+                  title="Preview of Verify findings"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="verify.html"
+                  aria-label="Open Verify findings"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="verify.html">Verify findings</a>
+                </h3>
+                <p class="gl-desc">
+                  Findings grouped by document, with the authority and the fix.
+                </p>
+                <div class="gl-states">
+                  <a href="verify.html#run">Run Verify dialog</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="verify-run.html"
+                  title="Preview of Verify run"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="verify-run.html"
+                  aria-label="Open Verify run"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="verify-run.html">Verify run</a>
+                </h3>
+                <p class="gl-desc">
+                  A run in progress, and the same run stopped.
+                </p>
+                <div class="gl-states">
+                  <a href="verify-run.html#failed">Run failed</a>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="settings">
+          <div class="gl-group-head">
+            <h2>Settings</h2>
+            <span>4 screens</span>
+          </div>
+          <p class="gl-blurb">
+            Account, security, the firm and the reading preferences.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="settings-account.html"
+                  title="Preview of Account"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="settings-account.html"
+                  aria-label="Open Account"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="settings-account.html">Account</a>
+                </h3>
+                <p class="gl-desc">Name, email and role.</p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="settings-security.html"
+                  title="Preview of Security"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="settings-security.html"
+                  aria-label="Open Security"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="settings-security.html">Security</a>
+                </h3>
+                <p class="gl-desc">Password and signed-in sessions.</p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="settings-organisation.html"
+                  title="Preview of Organisation"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="settings-organisation.html"
+                  aria-label="Open Organisation"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="settings-organisation.html">Organisation</a>
+                </h3>
+                <p class="gl-desc">Members, roles and pending invites.</p>
+                <div class="gl-states">
+                  <a href="settings-organisation.html#invite">Invite member</a
+                  ><a href="settings-organisation.html#remove">Remove member</a>
+                </div>
+              </div>
+            </article>
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="settings-preferences.html"
+                  title="Preview of Preferences"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="settings-preferences.html"
+                  aria-label="Open Preferences"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title">
+                  <a href="settings-preferences.html">Preferences</a>
+                </h3>
+                <p class="gl-desc">Theme and date display.</p>
+                <div class="gl-states"><span>One state</span></div>
+              </div>
+            </article>
+          </div>
+        </section>
+        <section class="gl-group" id="system">
+          <div class="gl-group-head">
+            <h2>System</h2>
+            <span>1 screen</span>
+          </div>
+          <p class="gl-blurb">
+            The tokens, components and rules behind every screen.
+          </p>
+          <div class="gl-grid">
+            <article class="gl-card">
+              <div class="gl-shot">
+                <iframe
+                  src="system.html"
+                  title="Preview of Style guide"
+                  loading="lazy"
+                  tabindex="-1"
+                  aria-hidden="true"
+                  onload="
+                    try {
+                      this.contentDocument.documentElement.dataset.theme =
+                        document.documentElement.dataset.theme
+                    } catch (e) {}
+                  "
+                ></iframe>
+                <a
+                  class="gl-open"
+                  href="system.html"
+                  aria-label="Open Style guide"
+                ></a>
+              </div>
+              <div class="gl-body">
+                <h3 class="gl-title"><a href="system.html">Style guide</a></h3>
+                <p class="gl-desc">
+                  Tokens, type, components, states and boundaries.
+                </p>
+                <div class="gl-states">
+                  <a href="system.html#drawer">Drawer</a
+                  ><a href="system.html#light">Light theme</a>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      ;(function () {
+        var root = document.documentElement
+        var button = document.getElementById('themeToggle')
+        function frames() {
+          return document.querySelectorAll('.gl-shot iframe')
+        }
+        function apply(theme) {
+          root.dataset.theme = theme
+          var toLight = theme === 'dark'
+          button.textContent = toLight ? 'Light theme' : 'Dark theme'
+          frames().forEach(function (frame) {
+            try {
+              frame.contentDocument.documentElement.dataset.theme = theme
+            } catch (e) {}
+          })
+        }
+        button.addEventListener('click', function () {
+          apply(root.dataset.theme === 'dark' ? 'light' : 'dark')
+        })
+        window.addEventListener('load', function () {
+          frames().forEach(function (frame) {
+            frame.addEventListener('load', function () {
+              try {
+                frame.contentDocument.documentElement.dataset.theme =
+                  root.dataset.theme
+              } catch (e) {}
+            })
+          })
+        })
+      })()
+    </script>
+  </body>
+</html>

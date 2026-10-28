@@ -1,0 +1,2367 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obiter — Supply agreement</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="obiter.css" />
+    <style>
+      /* Page layout only. Components live in obiter.css. */
+
+      /* Chrome aligns to the same gutter as the breadcrumb and the page column.
+     Row padding plus the first group's padding adds up to the gutter, so the
+     first control starts on the same x as the breadcrumb and the page title. */
+      .ob-doc-head {
+        padding-left: var(--ob-gutter);
+        padding-right: var(--ob-gutter);
+      }
+      .ob-ribbon-tabs {
+        padding-left: var(--ob-gutter);
+        padding-right: var(--ob-gutter);
+      }
+      .ob-ribbon-row {
+        padding-left: 24px;
+        padding-right: 24px;
+      }
+      .ob-ribbon-group:first-child {
+        padding-left: 24px;
+      }
+      @media (max-width: 1024px) {
+        .ob-ribbon-row {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .ob-ribbon-group:first-child {
+          padding-left: 16px;
+        }
+      }
+
+      .doc-head-main {
+        min-width: 0;
+      }
+      .ob-doc > .ob-banner {
+        margin: 16px var(--ob-gutter) 0;
+      }
+      .doc-head-sub {
+        min-width: 0;
+        overflow: hidden;
+      }
+      .doc-presence {
+        flex: 0 0 auto;
+      }
+      .doc-empty {
+        padding: 24px;
+      }
+      .doc-note {
+        margin-top: 4px;
+      }
+      .doc-check-note {
+        margin-top: 4px;
+      }
+      .notefield {
+        margin-top: 8px;
+      }
+      .paper-foot {
+        margin-top: 32px;
+        text-align: center;
+      }
+
+      /* The find bar's native inputs carry no box padding of their own. */
+      .ob-findbar-field input {
+        padding: 0;
+      }
+      .ob-findbar-count {
+        font-variant-numeric: normal;
+      }
+
+      /* Shared-component corrections, to lift into obiter.css. The on state is
+     carried by the switch and the tint, not by a heavier 12px label. */
+      .ob-trackpill.is-on {
+        font-weight: 400;
+      }
+      .ob-infonote b {
+        font-weight: 400;
+      }
+      .ob-thread-who {
+        font-weight: 400;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Canonical sprite: icons.svg. This inline copy keeps the page
+     self-contained and lets it work over file:// without a server. -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      style="position: absolute; overflow: hidden"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <defs>
+        <!-- Brand: the Obiter monogram. One weight, one colour, no tile. -->
+        <symbol id="i-obiter" viewBox="0 0 26 26">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="7.75" cy="14.6" r="4.9" />
+            <path d="M18.25 3.4v16.1" />
+            <path d="M18.25 9.7a4.9 4.9 0 0 1 0 9.8" />
+          </g>
+        </symbol>
+
+        <!-- Navigation -->
+        <symbol id="i-home" viewBox="0 0 16 16">
+          <path
+            d="M2.4 7.1 8 2.6l5.6 4.5V13a.6.6 0 0 1-.6.6h-3.3V9.4H6.3v4.2H3a.6.6 0 0 1-.6-.6z"
+          />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 16 16">
+          <circle cx="7" cy="7" r="4.2" />
+          <path d="m10.1 10.1 3.5 3.5" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 16 16">
+          <path
+            d="M2.2 5.1a1.5 1.5 0 0 1 1.5-1.5h2.4l1.3 1.6h4.9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H3.7a1.5 1.5 0 0 1-1.5-1.5z"
+          />
+        </symbol>
+        <symbol id="i-document" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 9h5.2M5.4 11.2h3.4" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6" />
+        </symbol>
+        <symbol id="i-verify" viewBox="0 0 16 16">
+          <path
+            d="M8 2.1 12.9 4v3.5c0 2.9-2.1 4.9-4.9 6.2-2.8-1.3-4.9-3.3-4.9-6.2V4z"
+          />
+          <path d="m5.9 7.8 1.4 1.4 3-3.4" />
+        </symbol>
+        <symbol id="i-redact" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 6.6h2.2M5.4 11.4h5.2" />
+          <rect
+            x="5.4"
+            y="8.4"
+            width="5.2"
+            height="1.9"
+            rx=".4"
+            fill="currentColor"
+            stroke="none"
+          />
+        </symbol>
+        <symbol id="i-research" viewBox="0 0 16 16">
+          <path
+            d="M6.5 2.4h3M7.1 2.4v3.8l-3 6.2a1.1 1.1 0 0 0 1 1.6h5.8a1.1 1.1 0 0 0 1-1.6l-3-6.2V2.4"
+          />
+          <path d="M5.4 10.6h5.2" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 16 16">
+          <path d="M2.4 5h4.2M10.2 5h3.4M2.4 11h3.2M8.2 11h5.4" />
+          <circle cx="8" cy="5" r="1.6" />
+          <circle cx="6.4" cy="11" r="1.6" />
+        </symbol>
+
+        <!-- Common actions -->
+        <symbol id="i-plus" viewBox="0 0 16 16">
+          <path d="M8 3v10M3 8h10" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16">
+          <path d="M3 8h10" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 16 16">
+          <path d="M8 10.4V2.6M5.2 5.4 8 2.6l2.8 2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 16 16">
+          <path d="M8 2.6v7.8M5.2 7.6 8 10.4l2.8-2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-share" viewBox="0 0 16 16">
+          <circle cx="3.9" cy="8" r="1.7" />
+          <circle cx="12.1" cy="3.9" r="1.7" />
+          <circle cx="12.1" cy="12.1" r="1.7" />
+          <path d="m5.4 7.2 5.2-2.5M5.4 8.8l5.2 2.5" />
+        </symbol>
+        <symbol id="i-more" viewBox="0 0 16 16">
+          <circle cx="3.4" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="12.6" cy="8" r="1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 16 16">
+          <path d="M2.6 4.2h10.8M6 4.2V2.8h4v1.4" />
+          <path d="M4.4 4.2l.6 9h6l.6-9" />
+          <path d="M6.6 6.6v4.2M9.4 6.6v4.2" />
+        </symbol>
+        <symbol id="i-edit" viewBox="0 0 16 16">
+          <path d="M2.6 13.4h2.8L13 5.8 10.2 3 2.6 10.6z" />
+          <path d="m9.3 3.9 2.8 2.8" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 16 16">
+          <rect x="5.4" y="5.4" width="8" height="8" rx="1.2" />
+          <path
+            d="M10.6 5.4V3.8a1.2 1.2 0 0 0-1.2-1.2H3.8a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.6"
+          />
+        </symbol>
+        <symbol id="i-print" viewBox="0 0 16 16">
+          <path d="M4.6 5.6V2.4h6.8v3.2" />
+          <rect x="2.4" y="5.6" width="11.2" height="5.4" rx="1.1" />
+          <path d="M4.6 9.4h6.8v4.2H4.6z" />
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 16 16">
+          <path d="M9.4 2.6h4v4M13.4 2.6 7.6 8.4" />
+          <path
+            d="M11.4 9.4v3.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V5.6a1 1 0 0 1 1-1h3.2"
+          />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 16 16">
+          <path
+            d="M6.4 9.6a2.6 2.6 0 0 0 3.7 0l1.8-1.8a2.6 2.6 0 0 0-3.7-3.7l-.7.7"
+          />
+          <path
+            d="M9.6 6.4a2.6 2.6 0 0 0-3.7 0L4.1 8.2a2.6 2.6 0 0 0 3.7 3.7l.7-.7"
+          />
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 16 16">
+          <path d="M6.2 2.4h3.6l-.5 3.4 2.3 1.8v1.3H4.4V7.6l2.3-1.8z" />
+          <path d="M8 8.9v4.7" />
+        </symbol>
+        <symbol id="i-filter" viewBox="0 0 16 16">
+          <path d="M2.6 4h10.8M4.6 8h6.8M6.6 12h2.8" />
+        </symbol>
+        <symbol id="i-sort" viewBox="0 0 16 16">
+          <path d="M4.4 3.2v9.6M2.4 10.8l2 2 2-2" />
+          <path d="M11.6 12.8V3.2M9.6 5.2l2-2 2 2" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 16 16">
+          <path
+            d="M1.7 8S3.9 3.9 8 3.9 14.3 8 14.3 8 12.1 12.1 8 12.1 1.7 8 1.7 8z"
+          />
+          <circle cx="8" cy="8" r="2" />
+        </symbol>
+        <symbol id="i-eye-off" viewBox="0 0 16 16">
+          <path d="M2.2 2.2 13.8 13.8" />
+          <path
+            d="M6.3 4.3A6.5 6.5 0 0 1 8 4.1c4.1 0 6.3 3.9 6.3 3.9a10 10 0 0 1-2.2 2.6"
+          />
+          <path
+            d="M10.1 12A6.7 6.7 0 0 1 8 12.1C3.9 12.1 1.7 8 1.7 8a10.5 10.5 0 0 1 2.3-2.7"
+          />
+        </symbol>
+        <symbol id="i-history" viewBox="0 0 16 16">
+          <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+          <path d="M2.4 2.6v3.6h3.6" />
+          <path d="M8 5.4V8l2 1.3" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 16 16">
+          <path d="M13.2 8A5.3 5.3 0 1 1 11.3 3.8" />
+          <path d="M13.2 2.6v4h-4" />
+        </symbol>
+        <symbol id="i-undo" viewBox="0 0 16 16">
+          <path d="M6.4 4 3.4 7l3 3" />
+          <path d="M3.6 7h5.6a3.4 3.4 0 0 1 0 6.8H6.6" />
+        </symbol>
+        <symbol id="i-redo" viewBox="0 0 16 16">
+          <path d="M9.6 4l3 3-3 3" />
+          <path d="M12.4 7H6.8a3.4 3.4 0 0 0 0 6.8h2.6" />
+        </symbol>
+        <symbol id="i-bold" viewBox="0 0 16 16">
+          <path
+            d="M4.8 3h3.7a2.4 2.4 0 0 1 0 4.8H4.8zM4.8 7.8h4.4a2.6 2.6 0 0 1 0 5.2H4.8z"
+          />
+        </symbol>
+        <symbol id="i-italic" viewBox="0 0 16 16">
+          <path d="M9.8 3H6.6M9.4 13H6.2M9.2 3 6.8 13" />
+        </symbol>
+        <symbol id="i-underline" viewBox="0 0 16 16">
+          <path d="M5 3v4.2a3 3 0 0 0 6 0V3M4 13.5h8" />
+        </symbol>
+        <symbol id="i-align-left" viewBox="0 0 16 16">
+          <path d="M2.8 4h10.4M2.8 8h6.4M2.8 12h9" />
+        </symbol>
+        <symbol id="i-list-ordered" viewBox="0 0 16 16">
+          <path d="M6.4 4h6.8M6.4 8h6.8M6.4 12h6.8" />
+          <path d="M2.6 2.8h1v3M2.6 10.4h1.8l-1.8 2.1h1.8" />
+        </symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16">
+          <rect x="2.4" y="3" width="11.2" height="10" rx="1.2" />
+          <path d="M8 3v10" />
+        </symbol>
+        <symbol id="i-bell" viewBox="0 0 16 16">
+          <path
+            d="M12.2 6.4a4.2 4.2 0 0 0-8.4 0c0 3.2-1.2 4-1.2 4h10.8s-1.2-.8-1.2-4z"
+          />
+          <path d="M6.7 12.8a1.5 1.5 0 0 0 2.6 0" />
+        </symbol>
+        <symbol id="i-keyboard" viewBox="0 0 16 16">
+          <rect x="1.8" y="4" width="12.4" height="8" rx="1.4" />
+          <path
+            d="M4.2 6.6h.1M6.8 6.6h.1M9.4 6.6h.1M12 6.6h.1M4.2 9.4h.1M6.4 9.4h3M11.8 9.4h.1"
+          />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 16 16">
+          <path d="m4 4 8 8M12 4l-8 8" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 16 16">
+          <path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 16 16">
+          <path d="m3.2 8.4 3 3 6.6-7" />
+        </symbol>
+        <symbol id="i-minus-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M5.2 8h5.6" />
+        </symbol>
+        <symbol id="i-check-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+
+        <!-- Chevrons and arrows -->
+        <symbol id="i-chevron-down" viewBox="0 0 16 16">
+          <path d="m4.5 6.4 3.5 3.5 3.5-3.5" />
+        </symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 16 16">
+          <path d="m4.5 9.6 3.5-3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 16 16">
+          <path d="m6.4 4.5 3.5 3.5-3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 16 16">
+          <path d="m9.6 4.5-3.5 3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevrons-left" viewBox="0 0 16 16">
+          <path d="m7.8 4.6-3.4 3.4 3.4 3.4M11.8 4.6 8.4 8l3.4 3.4" />
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 16 16">
+          <path d="M13 8H3M6.5 4.5 3 8l3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 16 16">
+          <path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 16 16">
+          <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" />
+        </symbol>
+
+        <!-- Status and meaning -->
+        <symbol id="i-flag" viewBox="0 0 16 16">
+          <path d="M3.8 14V2.4M3.8 2.6h8.1l-1.3 2.9 1.3 2.9H3.8" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 16 16">
+          <path d="M8 2.4 14 13.2H2z" />
+          <path d="M8 6.4v3.1M8 11.5v.1" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M8 7.3v3.9M8 5.2v.1" />
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path
+            d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.75c-.5.3-.8.75-.8 1.3v.45M8 11.9v.1"
+          />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.6" />
+          <path d="M8 4.7V8l2.2 1.4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" />
+        </symbol>
+        <symbol id="i-lock-open" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.6-.8" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 16 16">
+          <circle cx="8" cy="5.4" r="2.6" />
+          <path d="M3.4 13.6a4.6 4.6 0 0 1 9.2 0" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 16 16">
+          <circle cx="6" cy="5.6" r="2.3" />
+          <path d="M2.4 13.2a3.8 3.8 0 0 1 7.2 0" />
+          <path
+            d="M10.6 3.6a2.3 2.3 0 0 1 0 4.2M11.4 9.7a3.6 3.6 0 0 1 2.2 3.3"
+          />
+        </symbol>
+
+        <!-- Sources and documents -->
+        <symbol id="i-scale" viewBox="0 0 16 16">
+          <path d="M8 2v11M4.6 13h6.8M2.6 4.4h10.8" />
+          <path d="M4.2 4.4 2.6 8.2h3.2zM11.8 4.4 10.2 8.2h3.2z" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 16 16">
+          <path
+            d="M2.6 3.4A1.4 1.4 0 0 1 4 2h9.4v11.6H4a1.4 1.4 0 0 0-1.4 1.4z"
+          />
+          <path d="M2.6 12.6h10.8" />
+        </symbol>
+        <symbol id="i-note" viewBox="0 0 16 16">
+          <path d="M3 3.4h10v6.6L9.4 13H3z" />
+          <path d="M9.4 13V10h3.6" />
+          <path d="M5.4 6h5.2" />
+        </symbol>
+        <symbol id="i-comment" viewBox="0 0 16 16">
+          <path
+            d="M13.2 8.1v.6a4.6 4.6 0 0 1-4.6 4.6H6.1L3 15.2v-3.1a4.6 4.6 0 0 1-.8-2.6V8.1a4.6 4.6 0 0 1 4.6-4.6h1.8a4.6 4.6 0 0 1 4.6 4.6z"
+          />
+        </symbol>
+        <symbol id="i-track-changes" viewBox="0 0 16 16">
+          <path d="M2.6 3.4v9.2" />
+          <path d="M5.2 5h7.2M5.2 8h4.4M5.2 11h7.2" />
+          <path d="M11.6 7.2v3.6M9.8 9h3.6" />
+        </symbol>
+        <symbol id="i-accept" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+        <symbol id="i-reject" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.8 5.8 4.4 4.4M10.2 5.8 5.8 10.2" />
+        </symbol>
+
+        <!-- Theme and chrome -->
+        <symbol id="i-sun" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="2.4" />
+          <path
+            d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1"
+          />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 16 16">
+          <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.8 5.8 0 1 0 6.8 6.8z" />
+        </symbol>
+        <symbol id="i-sidebar-collapse" viewBox="0 0 16 16">
+          <rect x="2" y="3" width="12" height="10" rx="1.4" />
+          <path d="M6.4 3v10M9.9 6.4 8.3 8l1.6 1.6" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 16 16">
+          <path d="M2.6 4.5h10.8M2.6 8h10.8M2.6 11.5h10.8" />
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 16 16">
+          <path d="M5.6 4h8M5.6 8h8M5.6 12h8" />
+          <circle cx="2.9" cy="4" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="8" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="12" r=".8" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 16 16">
+          <rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1" />
+        </symbol>
+        <symbol id="i-paperclip" viewBox="0 0 16 16">
+          <path
+            d="M12.6 7.4 7.8 12.2a3 3 0 0 1-4.2-4.2l5.2-5.2a2 2 0 0 1 2.8 2.8l-5.1 5.1a1 1 0 0 1-1.4-1.4l4.6-4.6"
+          />
+        </symbol>
+        <symbol id="i-calendar" viewBox="0 0 16 16">
+          <rect x="2.4" y="3.4" width="11.2" height="10.2" rx="1.4" />
+          <path d="M2.4 6.6h11.2M5.6 2.2v2.4M10.4 2.2v2.4" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 16 16">
+          <path
+            d="M2.6 7V3.4a.8.8 0 0 1 .8-.8H7l6.4 6.4a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0z"
+          />
+          <circle cx="5.4" cy="5.4" r=".9" />
+        </symbol>
+        <symbol id="i-sparkle" viewBox="0 0 16 16">
+          <path d="M8 2.2 9.2 6l3.8 1.2L9.2 8.4 8 12.2 6.8 8.4 3 7.2 6.8 6z" />
+          <path d="M12.6 11.6v2M11.6 12.6h2" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="ob-app" id="app" data-auto-collapse="true">
+      <aside class="ob-side" aria-label="Sidebar">
+        <div class="ob-side-head">
+          <a class="ob-logo" href="dashboard.html" aria-label="Obiter home"
+            ><svg aria-hidden="true"><use href="#i-obiter" /></svg
+          ></a>
+          <div class="ob-brand-text">
+            <div class="ob-brand-name">Obiter</div>
+            <div class="ob-brand-firm">Harrington Vale LLP</div>
+          </div>
+        </div>
+
+        <nav class="ob-nav" aria-label="Workspace">
+          <a class="ob-nav-item" href="dashboard.html" title="Home">
+            <svg aria-hidden="true"><use href="#i-home" /></svg
+            ><span class="ob-nav-text">Home</span>
+          </a>
+          <a class="ob-nav-item" href="search.html" title="Search">
+            <svg aria-hidden="true"><use href="#i-search" /></svg
+            ><span class="ob-nav-text">Search</span>
+          </a>
+          <a
+            class="ob-nav-item is-active"
+            href="matters.html"
+            title="Matters"
+            aria-current="page"
+          >
+            <svg aria-hidden="true"><use href="#i-folder" /></svg
+            ><span class="ob-nav-text">Matters</span
+            ><span class="ob-nav-count">4</span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="verify.html"
+            title="Verify — 1 flagged finding"
+          >
+            <svg aria-hidden="true"><use href="#i-verify" /></svg
+            ><span class="ob-nav-text">Verify</span
+            ><span class="ob-nav-count is-danger">1</span
+            ><span class="ob-nav-dot is-danger"></span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="redact-start.html"
+            title="Redact — 1 run in review"
+          >
+            <svg aria-hidden="true"><use href="#i-redact" /></svg
+            ><span class="ob-nav-text">Redact</span
+            ><span class="ob-nav-count is-info">1</span
+            ><span class="ob-nav-dot is-info"></span>
+          </a>
+          <a
+            class="ob-nav-item is-quiet"
+            href="#"
+            title="Research — coming soon"
+            aria-disabled="true"
+          >
+            <svg aria-hidden="true"><use href="#i-research" /></svg
+            ><span class="ob-nav-text">Research</span
+            ><span class="ob-nav-soon">Soon</span>
+          </a>
+
+          <div class="ob-nav-label">
+            <span>Pinned matters</span
+            ><button
+              class="ob-nav-add"
+              type="button"
+              title="Pin a matter"
+              aria-label="Pin a matter"
+            >
+              <svg class="is-12" aria-hidden="true"><use href="#i-plus" /></svg>
+            </button>
+          </div>
+
+          <a
+            class="ob-pin is-current"
+            href="matter.html"
+            title="Northgate Foods v Brightwater Packaging — NGF-0418"
+          >
+            <span class="ob-pin-tile">NG</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">Northgate Foods v Brightwater</span>
+              <span class="ob-pin-sub">NGF-0418 · 3 documents</span>
+            </span>
+            <span
+              class="ob-pin-dot is-danger"
+              title="1 flagged citation"
+            ></span>
+          </a>
+          <a
+            class="ob-pin"
+            href="matter-redaction.html"
+            title="FOI request: Cheshire Council 2026/114 — redaction matter"
+          >
+            <span class="ob-pin-tile">FOI</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">FOI request: Cheshire Council</span>
+              <span class="ob-pin-sub">FOI-2026-114 · in review</span>
+            </span>
+            <span class="ob-pin-dot is-info" title="Redaction in review"></span>
+          </a>
+        </nav>
+
+        <div class="ob-side-foot">
+          <button
+            class="ob-side-toggle"
+            id="sidebarToggle"
+            type="button"
+            aria-expanded="true"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <svg aria-hidden="true"><use href="#i-sidebar-collapse" /></svg
+            ><span>Collapse sidebar</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="ob-main">
+        <header class="ob-top">
+          <nav class="ob-crumbs ob-crumbs--fit" aria-label="Breadcrumb">
+            <a href="matters.html">Matters</a>
+            <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            <span class="ob-crumb-current"
+              >Northgate Foods v Brightwater Packaging</span
+            >
+          </nav>
+
+          <div
+            class="ob-searchbar"
+            role="button"
+            tabindex="0"
+            aria-label="Search Obiter"
+          >
+            <svg aria-hidden="true"><use href="#i-search" /></svg>
+            <span>Search Obiter</span>
+            <span class="ob-kbd">⌘K</span>
+          </div>
+
+          <button
+            class="ob-icon-btn"
+            id="themeButton"
+            type="button"
+            aria-label="Switch to dark theme"
+            data-tip="Switch theme"
+            data-tip-bottom
+            data-tip-align="end"
+          >
+            <svg class="ob-theme-sun" aria-hidden="true">
+              <use href="#i-sun" />
+            </svg>
+            <svg class="ob-theme-moon" aria-hidden="true">
+              <use href="#i-moon" />
+            </svg>
+          </button>
+
+          <div class="ob-account">
+            <button
+              class="ob-avatar-button"
+              id="accountButton"
+              type="button"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              <span class="ob-avatar">AM</span>
+            </button>
+            <div class="ob-menu" id="accountMenu" role="menu" hidden>
+              <div class="ob-menu-head">
+                <div class="ob-menu-name">Alex Morgan</div>
+                <div class="ob-menu-sub">Owner · Harrington Vale LLP</div>
+              </div>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-account.html"
+              >
+                <svg aria-hidden="true"><use href="#i-user" /></svg>Account
+                settings
+              </a>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-preferences.html"
+              >
+                <svg aria-hidden="true"><use href="#i-settings" /></svg
+                >Preferences
+              </a>
+              <button
+                class="ob-menu-item"
+                role="menuitem"
+                type="button"
+                id="menuTheme"
+              >
+                <svg class="ob-theme-sun" aria-hidden="true">
+                  <use href="#i-sun" />
+                </svg>
+                <svg class="ob-theme-moon" aria-hidden="true">
+                  <use href="#i-moon" />
+                </svg>
+                <span id="menuThemeLabel">Switch to dark theme</span>
+              </button>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                <svg aria-hidden="true"><use href="#i-keyboard" /></svg>Keyboard
+                shortcuts
+              </button>
+              <div class="ob-menu-sep"></div>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                Sign out
+              </button>
+              <div class="ob-menu-foot">Obiter · Firm workspace</div>
+            </div>
+          </div>
+        </header>
+
+        <main class="ob-doc">
+          <div class="ob-banner is-warning" id="readonlyBar" hidden>
+            <svg aria-hidden="true"><use href="#i-lock" /></svg>
+            <div class="ob-banner-main">
+              <div class="ob-banner-title">
+                You are viewing version 1, saved 24 Oct 2026, 09:14
+              </div>
+              <div class="ob-banner-text">
+                Older versions cannot be edited. Restore this version to
+                continue working on a new copy.
+              </div>
+            </div>
+            <div class="ob-banner-acts">
+              <button class="ob-btn ob-btn--secondary ob-btn--sm" type="button">
+                Restore this version
+              </button>
+              <a
+                class="ob-btn ob-btn--ghost ob-btn--sm"
+                href="document-versions.html"
+                >Back to current version</a
+              >
+            </div>
+          </div>
+
+          <header class="ob-doc-head">
+            <a
+              class="ob-icon-btn ob-doc-back"
+              href="matter.html"
+              aria-label="Back to matter"
+              data-tip="Back to matter"
+              data-tip-bottom
+            >
+              <svg aria-hidden="true"><use href="#i-arrow-left" /></svg>
+            </a>
+            <div class="doc-head-main">
+              <h1
+                class="ob-doc-title"
+                title="supply-agreement-northgate.docx"
+                data-audit-long-title
+              >
+                supply-agreement-northgate.docx
+              </h1>
+              <div class="ob-doc-sub doc-head-sub">
+                <span class="ob-save-state" id="saveState">
+                  <svg aria-hidden="true"><use href="#i-check-circle" /></svg
+                  ><span id="saveLabel">Saved · version 2</span>
+                  <button
+                    class="ob-btn ob-btn--ghost ob-btn--sm"
+                    id="saveRetry"
+                    type="button"
+                    hidden
+                  >
+                    Retry
+                  </button>
+                </span>
+                <span class="ob-sep">·</span>
+                <span class="ob-nowrap"
+                  >Northgate Foods v Brightwater Packaging</span
+                >
+              </div>
+            </div>
+
+            <div class="ob-doc-actions">
+              <span
+                class="ob-avatars doc-presence ob-hide-md"
+                aria-label="Viewing now: Alex Morgan and Priya Shah"
+              >
+                <span
+                  class="ob-avatar"
+                  data-tip="Alex Morgan · editing"
+                  data-tip-bottom
+                  >AM</span
+                >
+                <span
+                  class="ob-avatar is-quiet"
+                  data-tip="Priya Shah · viewing"
+                  data-tip-bottom
+                  >PS</span
+                >
+              </span>
+              <span class="ob-presence ob-hide-md" id="presenceNote" hidden
+                ><span class="ob-dot"></span>Priya is viewing</span
+              >
+              <label
+                class="ob-trackpill is-on"
+                id="trackPill"
+                title="Track changes is on"
+              >
+                <input
+                  class="ob-switch"
+                  id="trackSwitch"
+                  type="checkbox"
+                  checked
+                />
+                <span id="trackLabel">Track changes on</span>
+              </label>
+              <a
+                class="ob-chip"
+                id="verifyChip"
+                href="#findings"
+                title="Checked version 2 on 26 Oct 2026, 16:40"
+              >
+                <svg class="is-12" aria-hidden="true">
+                  <use href="#i-verify" />
+                </svg>
+                <span class="ob-status is-success" id="verifyChipText"
+                  ><span class="ob-dot"></span>Checked · version 2</span
+                >
+              </a>
+              <button
+                class="ob-btn ob-btn--secondary ob-btn--sm ob-hide-md"
+                id="runVerify"
+                type="button"
+              >
+                <svg class="is-12" aria-hidden="true">
+                  <use href="#i-refresh" /></svg
+                >Run
+              </button>
+              <button
+                class="ob-icon-btn"
+                id="infoButton"
+                type="button"
+                aria-label="Document information"
+                data-tip="Document information"
+                data-tip-bottom
+              >
+                <svg aria-hidden="true"><use href="#i-info" /></svg>
+              </button>
+              <a
+                class="ob-btn ob-btn--secondary ob-btn--sm"
+                href="document-dialogs.html#share"
+              >
+                <svg class="is-12" aria-hidden="true">
+                  <use href="#i-share" /></svg
+                >Share
+              </a>
+              <a
+                class="ob-icon-btn"
+                href="document-dialogs.html#export"
+                aria-label="More document actions"
+                data-tip="More actions"
+                data-tip-bottom
+              >
+                <svg aria-hidden="true"><use href="#i-more" /></svg>
+              </a>
+            </div>
+          </header>
+
+          <div class="ob-ribbon">
+            <div class="ob-ribbon-tabs" role="tablist" aria-label="Ribbon">
+              <button
+                class="ob-ribbon-tab is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                data-tab="home"
+              >
+                Home
+              </button>
+              <button
+                class="ob-ribbon-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-tab="insert"
+              >
+                Insert
+              </button>
+              <button
+                class="ob-ribbon-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-tab="layout"
+              >
+                Layout
+              </button>
+              <button
+                class="ob-ribbon-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-tab="references"
+              >
+                References
+              </button>
+              <a
+                class="ob-ribbon-tab"
+                href="document-review.html"
+                title="Review tracked changes and comments"
+                >Review</a
+              >
+              <button
+                class="ob-ribbon-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-tab="view"
+              >
+                View
+              </button>
+              <span class="ob-ribbon-meta"
+                ><span>Version 2</span><span>·</span
+                ><span>Edited 26 Oct 2026, 16:12</span></span
+              >
+            </div>
+
+            <!-- Home -->
+            <div class="ob-ribbon-row" data-panel="home" role="tabpanel">
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Undo"
+                    data-tip="Undo"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-undo" />
+                    </svg>
+                  </button>
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Redo"
+                    data-tip="Redo"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-redo" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Editing</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <select class="ob-rsel ob-rsel--font" aria-label="Font">
+                    <option>Georgia</option>
+                    <option>Inter</option>
+                    <option>Times New Roman</option>
+                    <option>Arial</option>
+                  </select>
+                  <select class="ob-rsel ob-rsel--size" aria-label="Font size">
+                    <option>11 pt</option>
+                    <option selected>12 pt</option>
+                    <option>13 pt</option>
+                    <option>14 pt</option>
+                  </select>
+                  <button
+                    class="ob-rbtn is-active"
+                    type="button"
+                    aria-label="Bold"
+                    data-tip="Bold"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-bold" />
+                    </svg>
+                  </button>
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Italic"
+                    data-tip="Italic"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-italic" />
+                    </svg>
+                  </button>
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Underline"
+                    data-tip="Underline"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-underline" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Font</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <select
+                    class="ob-rsel ob-rsel--margins"
+                    aria-label="Alignment"
+                  >
+                    <option>Left</option>
+                    <option>Centred</option>
+                    <option>Right</option>
+                    <option>Justified</option>
+                  </select>
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Bulleted list"
+                    data-tip="Bulleted list"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-list" />
+                    </svg>
+                  </button>
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Numbered list"
+                    data-tip="Numbered list"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-list-ordered" />
+                    </svg>
+                  </button>
+                  <select
+                    class="ob-rsel ob-rsel--spacing"
+                    aria-label="Line spacing"
+                  >
+                    <option>1.15</option>
+                    <option selected>1.5</option>
+                    <option>2.0</option>
+                  </select>
+                </div>
+                <span class="ob-ribbon-label">Paragraph</span>
+              </div>
+              <div class="ob-ribbon-group ob-hide-md">
+                <div class="ob-ribbon-controls">
+                  <select
+                    class="ob-rsel ob-rsel--style"
+                    aria-label="Paragraph style"
+                  >
+                    <option>Body text</option>
+                    <option>Heading 1</option>
+                    <option>Heading 2</option>
+                    <option>Quote</option>
+                  </select>
+                </div>
+                <span class="ob-ribbon-label">Styles</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button
+                    class="ob-rbtn ob-rbtn--wide"
+                    type="button"
+                    onclick="showFind()"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-search" /></svg
+                    >Find
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Find and replace</span>
+              </div>
+            </div>
+
+            <!-- Insert -->
+            <div
+              class="ob-ribbon-row"
+              data-panel="insert"
+              role="tabpanel"
+              hidden
+            >
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-file" /></svg
+                    >Page break
+                  </button>
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-document" /></svg
+                    >Page number
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Pages</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <a
+                    class="ob-rbtn ob-rbtn--wide"
+                    href="document-dialogs.html#table"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-grid" /></svg
+                    >Table</a
+                  >
+                </div>
+                <span class="ob-ribbon-label">Tables</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <a
+                    class="ob-rbtn ob-rbtn--wide"
+                    href="document-dialogs.html#link"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-link" /></svg
+                    >Link</a
+                  >
+                  <a
+                    class="ob-rbtn ob-rbtn--wide"
+                    href="document-dialogs.html#xref"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-note" /></svg
+                    >Cross-reference</a
+                  >
+                </div>
+                <span class="ob-ribbon-label">Links</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <a
+                    class="ob-rbtn ob-rbtn--wide"
+                    href="document-dialogs.html#authority"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    >Authority</a
+                  >
+                </div>
+                <span class="ob-ribbon-label">Citations</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <a class="ob-rbtn ob-rbtn--wide" href="#comment"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-comment" /></svg
+                    >Comment</a
+                  >
+                </div>
+                <span class="ob-ribbon-label">Comments</span>
+              </div>
+            </div>
+
+            <!-- Layout -->
+            <div
+              class="ob-ribbon-row"
+              data-panel="layout"
+              role="tabpanel"
+              hidden
+            >
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <select class="ob-rsel ob-rsel--margins" aria-label="Margins">
+                    <option>Normal</option>
+                    <option>Narrow</option>
+                    <option>Wide</option>
+                  </select>
+                  <select
+                    class="ob-rsel ob-rsel--orientation"
+                    aria-label="Orientation"
+                  >
+                    <option>Portrait</option>
+                    <option>Landscape</option>
+                  </select>
+                  <select
+                    class="ob-rsel ob-rsel--margins"
+                    aria-label="Paper size"
+                  >
+                    <option>A4</option>
+                    <option>Letter</option>
+                  </select>
+                </div>
+                <span class="ob-ribbon-label">Page setup</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <select
+                    class="ob-rsel ob-rsel--spacing"
+                    aria-label="Line spacing"
+                  >
+                    <option>1.15</option>
+                    <option selected>1.5</option>
+                    <option>2.0</option>
+                  </select>
+                  <select
+                    class="ob-rsel ob-rsel--margins"
+                    aria-label="Paragraph spacing"
+                  >
+                    <option>Normal</option>
+                    <option>Tight</option>
+                    <option>Relaxed</option>
+                  </select>
+                </div>
+                <span class="ob-ribbon-label">Spacing</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <select class="ob-rsel ob-rsel--margins" aria-label="Columns">
+                    <option>One</option>
+                    <option>Two</option>
+                  </select>
+                </div>
+                <span class="ob-ribbon-label">Columns</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-arrow-left" /></svg
+                    >Indent
+                  </button>
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    Outdent<svg class="is-14" aria-hidden="true">
+                      <use href="#i-arrow-right" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Indent</span>
+              </div>
+            </div>
+
+            <!-- References -->
+            <div
+              class="ob-ribbon-row"
+              data-panel="references"
+              role="tabpanel"
+              hidden
+            >
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <a
+                    class="ob-rbtn ob-rbtn--wide"
+                    href="document-dialogs.html#authority"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    >Insert authority</a
+                  >
+                  <a
+                    class="ob-rbtn ob-rbtn--wide"
+                    href="document-dialogs.html#xref"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-note" /></svg
+                    >Cross-reference</a
+                  >
+                </div>
+                <span class="ob-ribbon-label">Citations</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-list" /></svg
+                    >Contents
+                  </button>
+                  <button
+                    class="ob-rbtn"
+                    type="button"
+                    aria-label="Update table of contents"
+                    data-tip="Update contents"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-refresh" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Contents</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-note" /></svg
+                    >Footnote
+                  </button>
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    Endnote
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Notes</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <a class="ob-rbtn ob-rbtn--wide" href="#findings"
+                    ><svg class="is-14" aria-hidden="true">
+                      <use href="#i-verify" /></svg
+                    >Check citations</a
+                  >
+                </div>
+                <span class="ob-ribbon-label">Verify</span>
+              </div>
+            </div>
+
+            <!-- View -->
+            <div class="ob-ribbon-row" data-panel="view" role="tabpanel" hidden>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <select
+                    class="ob-rsel ob-rsel--markup"
+                    aria-label="Markup view"
+                  >
+                    <option selected>All markup</option>
+                    <option>Simple markup</option>
+                    <option>No markup</option>
+                    <option>Original</option>
+                  </select>
+                  <label class="ob-switch-row ob-switch-row--sm"
+                    ><input
+                      class="ob-switch"
+                      type="checkbox"
+                      checked
+                    />Comments</label
+                  >
+                </div>
+                <span class="ob-ribbon-label">Markup</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button class="ob-rbtn" type="button" aria-label="Zoom out">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-minus" />
+                    </svg>
+                  </button>
+                  <select class="ob-rsel ob-rsel--zoom" aria-label="Zoom">
+                    <option>75%</option>
+                    <option selected>100%</option>
+                    <option>125%</option>
+                  </select>
+                  <button class="ob-rbtn" type="button" aria-label="Zoom in">
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-plus" />
+                    </svg>
+                  </button>
+                  <button class="ob-rbtn ob-rbtn--wide" type="button">
+                    Fit width
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Zoom</span>
+              </div>
+              <div class="ob-ribbon-group">
+                <div class="ob-ribbon-controls">
+                  <button
+                    class="ob-rbtn ob-rbtn--wide"
+                    type="button"
+                    onclick="openPanel('info')"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-info" /></svg
+                    >Info
+                  </button>
+                  <button
+                    class="ob-rbtn ob-rbtn--wide"
+                    type="button"
+                    onclick="openPanel('comment')"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-comment" /></svg
+                    >Comments
+                  </button>
+                  <button
+                    class="ob-rbtn ob-rbtn--wide"
+                    type="button"
+                    onclick="openPanel('findings')"
+                  >
+                    <svg class="is-14" aria-hidden="true">
+                      <use href="#i-verify" /></svg
+                    >Findings
+                  </button>
+                </div>
+                <span class="ob-ribbon-label">Panels</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ob-findbar" id="findBar" hidden>
+            <div class="ob-findbar-field">
+              <svg class="is-12" aria-hidden="true">
+                <use href="#i-search" />
+              </svg>
+              <input
+                type="search"
+                value="liability"
+                aria-label="Find in document"
+                spellcheck="false"
+              />
+            </div>
+            <span class="ob-findbar-count">3 of 7</span>
+            <button
+              class="ob-icon-btn"
+              type="button"
+              aria-label="Previous match"
+            >
+              <svg aria-hidden="true"><use href="#i-chevron-left" /></svg>
+            </button>
+            <button class="ob-icon-btn" type="button" aria-label="Next match">
+              <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            </button>
+            <div class="ob-findbar-field">
+              <input
+                type="text"
+                placeholder="Replace with"
+                aria-label="Replace with"
+              />
+            </div>
+            <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+              Replace
+            </button>
+            <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+              Replace all
+            </button>
+            <label class="ob-findbar-opt"
+              ><input class="ob-check" type="checkbox" />Match case</label
+            >
+            <label class="ob-findbar-opt"
+              ><input class="ob-check" type="checkbox" />Whole word</label
+            >
+            <span class="ob-grow"></span>
+            <button
+              class="ob-icon-btn"
+              type="button"
+              aria-label="Close find and replace"
+              onclick="hideFind()"
+            >
+              <svg aria-hidden="true"><use href="#i-x" /></svg>
+            </button>
+          </div>
+
+          <div class="ob-doc-body is-wide" id="docBody">
+            <div class="ob-canvas" id="canvas">
+              <article class="ob-paper">
+                <p class="ob-paper-mark">Dated 12 January 2025</p>
+                <h1 class="ob-paper-title">Supply Agreement</h1>
+                <p class="ob-paper-intro">
+                  This Agreement is made between <b>Northgate Foods Limited</b>,
+                  a company registered in England and Wales with company number
+                  10293847, whose registered office is at 4 Kingsway, Leeds LS1
+                  4DL (“the Buyer”), and <b>Brightwater Packaging Limited</b>, a
+                  company registered in England and Wales with company number
+                  09384756, whose registered office is at Unit 7, Brackmills
+                  Industrial Estate, Northampton NN4 7DY (“the Supplier”).
+                </p>
+
+                <h2>1. Definitions and interpretation</h2>
+                <p>
+                  1.1 In this Agreement, “Charges” means the sums payable by the
+                  Buyer for the Products, “Contract Year” means each period of
+                  twelve months beginning on the date of this Agreement, and
+                  “Products” means the packaging materials listed in Schedule 1.
+                </p>
+                <p>
+                  1.2 Clause headings are for convenience only and do not affect
+                  the interpretation of this Agreement.
+                </p>
+
+                <h2>2. Supply</h2>
+                <p>
+                  2.1 The Supplier shall supply the Products to the Buyer in
+                  accordance with each Order accepted by the Supplier.
+                </p>
+                <p>
+                  2.2 Each Order shall be placed at least 30 days before the
+                  requested delivery date and shall specify the quantities, the
+                  delivery address and the date by which delivery is required.
+                </p>
+
+                <h2>4. Volumes</h2>
+                <p>
+                  4.1 The Supplier shall supply the Products in accordance with
+                  each Order.
+                </p>
+                <p class="ob-changebar">
+                  4.2 The Buyer shall order, and the Supplier shall supply, not
+                  less than <span class="ob-del">60,000</span>
+                  <span class="ob-ins">45,000</span> units of the Products in
+                  each calendar month during the Term.
+                </p>
+                <p>
+                  4.3 Where the Supplier is unable to supply the minimum volume
+                  in any month, it shall notify the Buyer in writing not less
+                  than 30 days before the start of that month.<span
+                    class="ob-caret"
+                    id="caret"
+                    data-name="Priya Shah"
+                    hidden
+                  ></span>
+                </p>
+
+                <h2>12. Liability</h2>
+                <p>
+                  12.1 Neither party limits its liability for death or personal
+                  injury caused by its negligence, or for fraud.
+                </p>
+                <p class="ob-changebar">
+                  12.2 Subject to clause 12.1, each party’s total liability in
+                  any Contract Year shall not exceed the Charges
+                  <span class="ob-del">paid in that Contract Year</span>
+                  <span class="ob-ins">paid in the preceding 12 months</span
+                  >.<span
+                    class="ob-cmark is-brand"
+                    title="Comment from Alex Morgan"
+                    >1</span
+                  >
+                </p>
+
+                <h2>21. Variation</h2>
+                <p>
+                  21.1 No variation of this Agreement shall be effective unless
+                  it is in writing and signed by or on behalf of each of the
+                  parties.
+                </p>
+
+                <h2>22. Governing law</h2>
+                <p>
+                  22.1 This Agreement and any dispute arising out of it shall be
+                  governed by the law of England and Wales.
+                </p>
+
+                <p class="ob-paper-mark paper-foot">1</p>
+              </article>
+            </div>
+
+            <aside
+              class="ob-panel ob-panel--divided"
+              id="infoPanel"
+              aria-label="Document information"
+              hidden
+            >
+              <div class="ob-panel-head">
+                <span class="ob-panel-title">Document information</span>
+                <button
+                  class="ob-icon-btn"
+                  type="button"
+                  aria-label="Close document information"
+                  onclick="closePanels()"
+                >
+                  <svg aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="ob-panel-body">
+                <dl class="ob-doc-meta-list">
+                  <dt>Name</dt>
+                  <dd>supply-agreement-northgate.docx</dd>
+                  <dt>Type</dt>
+                  <dd>Word document (.docx)</dd>
+                  <dt>Size</dt>
+                  <dd>37.8 KB</dd>
+                  <dt>Created</dt>
+                  <dd>24 Oct 2026, 09:14</dd>
+                  <dt>Updated</dt>
+                  <dd>26 Oct 2026, 16:12</dd>
+                  <dt>Owner</dt>
+                  <dd>Alex Morgan</dd>
+                  <dt>Verify</dt>
+                  <dd id="infoVerify">
+                    Checked · version 2<span>26 Oct 2026, 16:40</span>
+                  </dd>
+                </dl>
+
+                <div class="ob-section">
+                  <div class="ob-section-head">
+                    <h2 class="ob-item-title">Versions</h2>
+                    <a class="ob-section-action" href="document-versions.html"
+                      >All versions<svg aria-hidden="true">
+                        <use href="#i-arrow-right" /></svg
+                    ></a>
+                  </div>
+                  <div class="ob-version">
+                    <span class="ob-version-num">v2</span>
+                    <div class="ob-version-main">
+                      <b>Current version</b
+                      ><span>26 Oct 2026, 16:12 · 37.8 KB</span>
+                    </div>
+                  </div>
+                  <div class="ob-version">
+                    <span class="ob-version-num">v1</span>
+                    <div class="ob-version-main">
+                      <b>Version 1</b><span>24 Oct 2026, 09:14 · 37.0 KB</span>
+                    </div>
+                    <a
+                      class="ob-btn ob-btn--ghost ob-btn--sm"
+                      href="document.html#readonly"
+                      >View</a
+                    >
+                  </div>
+                  <div class="ob-cluster" style="margin-top: 12px">
+                    <a
+                      class="ob-btn ob-btn--secondary ob-btn--sm"
+                      href="document-versions.html#compare"
+                    >
+                      <svg class="is-12" aria-hidden="true">
+                        <use href="#i-compare" /></svg
+                      >Compare versions
+                    </a>
+                  </div>
+                  <div class="ob-infonote notefield">
+                    <svg class="is-12" aria-hidden="true">
+                      <use href="#i-lock" />
+                    </svg>
+                    <div>
+                      <b>What “immutable versions” means</b>
+                      A version is a locked copy. Once saved it cannot be
+                      changed by anyone. Editing always creates a new version,
+                      so a copy you have shared stays exactly as it was.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ob-section">
+                  <div class="ob-section-head">
+                    <h2 class="ob-item-title">Matter</h2>
+                  </div>
+                  <dl class="ob-doc-meta-list">
+                    <dt>Matter</dt>
+                    <dd>Northgate Foods v Brightwater Packaging</dd>
+                    <dt>Reference</dt>
+                    <dd class="ob-mono">NGF-0418</dd>
+                    <dt>Practice area</dt>
+                    <dd>Commercial contracts</dd>
+                  </dl>
+                </div>
+              </div>
+              <div class="ob-panel-foot">
+                <a
+                  class="ob-btn ob-btn--ghost ob-btn--sm"
+                  href="document-versions.html"
+                  >Version history</a
+                >
+              </div>
+            </aside>
+
+            <aside
+              class="ob-panel ob-panel--divided"
+              id="commentPanel"
+              aria-label="Comments"
+              hidden
+            >
+              <div class="ob-panel-head">
+                <span class="ob-panel-title">Comments</span>
+                <button
+                  class="ob-icon-btn"
+                  type="button"
+                  aria-label="Close comments"
+                  onclick="closePanels()"
+                >
+                  <svg aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="ob-panel-body">
+                <div class="ob-cluster" style="margin-bottom: 4px">
+                  <span class="ob-meta">Clause 12.2 · Liability</span>
+                  <span class="ob-sep ob-subtle">·</span>
+                  <span class="ob-status is-warning"
+                    ><span class="ob-dot"></span>Open</span
+                  >
+                </div>
+
+                <div class="ob-thread">
+                  <article class="ob-thread-item">
+                    <span class="ob-avatar ob-avatar--sm">AM</span>
+                    <div>
+                      <div class="ob-thread-head">
+                        <span class="ob-thread-who">Alex Morgan</span
+                        ><span>·</span><time>12 Oct 2026, 16:24</time>
+                      </div>
+                      <div class="ob-thread-text">
+                        Should the cap track the Charges paid in the preceding
+                        12 months? Check the tender clarification before we
+                        accept this wording.
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="ob-thread-item">
+                    <span class="ob-avatar ob-avatar--sm is-quiet">PS</span>
+                    <div>
+                      <div class="ob-thread-head">
+                        <span class="ob-thread-who">Priya Shah</span
+                        ><span>·</span><time>13 Oct 2026, 09:05</time>
+                      </div>
+                      <div class="ob-thread-text">
+                        The tender clarification says the cap is the fees paid
+                        in the preceding 12 months, so the wording matches what
+                        was negotiated. I would keep it.
+                      </div>
+                      <div class="ob-thread-acts">
+                        <button class="ob-thread-act" type="button">
+                          Reply
+                        </button>
+                        <button class="ob-thread-act" type="button">
+                          Resolve
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="ob-thread-item">
+                    <span class="ob-avatar ob-avatar--sm is-author-2">BW</span>
+                    <div>
+                      <div class="ob-thread-head">
+                        <span class="ob-thread-who">Brightwater (Legal)</span
+                        ><span>·</span><time>24 Oct 2026, 16:14</time>
+                      </div>
+                      <div class="ob-thread-text">
+                        Agreed. Our client’s position is that the cap should
+                        follow the fees actually paid, not the Contract Year.
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <div class="ob-thread-compose">
+                  <span class="ob-avatar ob-avatar--sm">AM</span>
+                  <textarea
+                    class="ob-textarea"
+                    rows="2"
+                    placeholder="Reply to the thread"
+                    aria-label="Reply to the thread"
+                  ></textarea>
+                </div>
+                <div class="ob-thread-send">
+                  <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+                    Cancel
+                  </button>
+                  <button
+                    class="ob-btn ob-btn--primary ob-btn--sm"
+                    type="button"
+                  >
+                    Reply
+                  </button>
+                </div>
+              </div>
+              <div class="ob-panel-foot ob-spread">
+                <span class="ob-meta">1 open thread</span>
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  type="button"
+                >
+                  <svg class="is-12" aria-hidden="true">
+                    <use href="#i-check" /></svg
+                  >Resolve thread
+                </button>
+              </div>
+            </aside>
+
+            <aside
+              class="ob-panel ob-panel--divided"
+              id="findingsPanel"
+              aria-label="Verify findings"
+              hidden
+            >
+              <div class="ob-panel-head">
+                <div>
+                  <span class="ob-panel-title">Verify</span>
+                  <div class="ob-meta doc-note">
+                    supply-agreement-northgate.docx
+                  </div>
+                </div>
+                <button
+                  class="ob-icon-btn"
+                  type="button"
+                  aria-label="Close findings"
+                  onclick="closePanels()"
+                >
+                  <svg aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+
+              <div class="ob-panel-body" style="padding: 0">
+                <div class="ob-empty doc-empty" id="verifyStale" hidden>
+                  <span class="ob-empty-icon"
+                    ><svg aria-hidden="true"><use href="#i-clock" /></svg
+                  ></span>
+                  <div class="ob-empty-title">Check out of date</div>
+                  <p class="ob-empty-text">
+                    The document changed after the last check. Version 2 was
+                    checked on 26 Oct 2026, 16:40; edits made since then have
+                    not been checked.
+                  </p>
+                  <div class="ob-empty-acts">
+                    <button
+                      class="ob-btn ob-btn--primary ob-btn--sm"
+                      type="button"
+                      data-run-verify
+                    >
+                      <svg class="is-12" aria-hidden="true">
+                        <use href="#i-refresh" /></svg
+                      >Run Verify
+                    </button>
+                    <a
+                      class="ob-btn ob-btn--ghost ob-btn--sm"
+                      href="#all-findings"
+                      >All findings</a
+                    >
+                  </div>
+                </div>
+
+                <div class="ob-empty doc-empty" id="verifyRunning" hidden>
+                  <span class="ob-empty-icon"
+                    ><svg aria-hidden="true"><use href="#i-refresh" /></svg
+                  ></span>
+                  <div class="ob-empty-title">
+                    Checking the supply agreement
+                  </div>
+                  <p class="ob-empty-text">
+                    Reading 8 citations, 3 authorities and 2 quotations against
+                    the stored corpus.
+                  </p>
+                  <div class="ob-progress" style="margin-top: 8px; width: 100%">
+                    <div class="ob-progress-bar" style="width: 46%"></div>
+                  </div>
+                </div>
+
+                <div class="ob-empty doc-empty" id="verifyClear">
+                  <span class="ob-empty-icon is-success"
+                    ><svg aria-hidden="true"><use href="#i-check-circle" /></svg
+                  ></span>
+                  <div class="ob-empty-title">Checked · version 2</div>
+                  <p class="ob-empty-text">
+                    8 citations, 3 authorities and 2 quotations match the stored
+                    corpus at version 2, checked 26 Oct 2026, 16:40. Nothing
+                    needs your attention.
+                  </p>
+                  <div class="ob-empty-acts">
+                    <button
+                      class="ob-btn ob-btn--secondary ob-btn--sm"
+                      type="button"
+                      data-run-verify
+                    >
+                      <svg class="is-12" aria-hidden="true">
+                        <use href="#i-refresh" /></svg
+                      >Run again
+                    </button>
+                    <a
+                      class="ob-btn ob-btn--ghost ob-btn--sm"
+                      href="#all-findings"
+                      >All findings</a
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <div class="ob-panel-foot ob-spread">
+                <span class="ob-meta" id="verifyFootMeta"
+                  >Checked · version 2</span
+                >
+                <a class="ob-btn ob-btn--ghost ob-btn--sm" href="#all-findings"
+                  >All findings</a
+                >
+              </div>
+            </aside>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div class="ob-backdrop" id="allFindings" hidden>
+      <div
+        class="ob-dialog ob-dialog--wide ob-dialog--fixed"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="allFindingsTitle"
+      >
+        <div class="ob-dialog-head">
+          <div>
+            <h2 class="ob-dialog-title" id="allFindingsTitle">All findings</h2>
+            <p class="ob-meta" style="margin-top: 4px">
+              Northgate Foods v Brightwater Packaging · checked 26 Oct 2026,
+              09:02
+            </p>
+          </div>
+          <button
+            class="ob-icon-btn"
+            type="button"
+            aria-label="Close"
+            onclick="closeDialog()"
+          >
+            <svg aria-hidden="true"><use href="#i-x" /></svg>
+          </button>
+        </div>
+
+        <div class="ob-dialog-body">
+          <div class="ob-cluster" style="margin-bottom: 4px">
+            <span class="ob-flag"><span class="ob-dot"></span>1 flagged</span>
+            <span class="ob-status is-warning"
+              ><span class="ob-dot"></span>2 need review</span
+            >
+            <span class="ob-status is-success"
+              ><span class="ob-dot"></span>9 clear</span
+            >
+          </div>
+
+          <div class="ob-finding-doc">
+            <svg class="is-12" aria-hidden="true">
+              <use href="#i-document" />
+            </svg>
+            <span>advice-note-northgate.docx</span>
+            <span class="ob-finding-doc-meta"
+              >Checked 26 Oct 2026, 09:02 · 1 flagged, 2 need review</span
+            >
+          </div>
+
+          <article class="ob-finding ob-finding--flush">
+            <span class="ob-finding-mark is-danger"
+              ><svg aria-hidden="true"><use href="#i-flag" /></svg
+            ></span>
+            <div class="ob-finding-body">
+              <div class="ob-finding-head">
+                <span class="ob-finding-title"
+                  >Citation does not match the case</span
+                >
+              </div>
+              <div class="ob-finding-quote">
+                “In <em>Wood v Capita Insurance Services Ltd</em>
+                <span class="ob-cite">[2018] UKSC 24</span> the Supreme Court
+                held…”<cite
+                  >Paragraph 8 · checked against the stored judgment</cite
+                >
+              </div>
+              <p class="ob-finding-why">
+                <span class="ob-cite">[2018] UKSC 24</span> is
+                <em>Rock Advertising v MWB</em>. <em>Wood v Capita</em> is
+                <span class="ob-cite">[2017] UKSC 24</span>. Change the year, or
+                point the citation at <em>Rock Advertising</em>.
+              </p>
+              <div class="ob-finding-acts">
+                <button class="ob-btn ob-btn--primary ob-btn--sm" type="button">
+                  Go to paragraph</button
+                ><button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+                  Correct citation
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="ob-finding ob-finding--flush">
+            <span class="ob-finding-mark is-warning"
+              ><svg aria-hidden="true"><use href="#i-help" /></svg
+            ></span>
+            <div class="ob-finding-body">
+              <div class="ob-finding-head">
+                <span class="ob-finding-title"
+                  >Quotation could not be checked</span
+                >
+              </div>
+              <div class="ob-finding-quote">
+                “a clause requiring variations to be in writing is legally
+                effective”<cite>Paragraph 11 · no exact match found</cite>
+              </div>
+              <p class="ob-finding-why">
+                Close to the judgment’s words, but not an exact quotation. Use
+                quotation marks only for text you can verify.
+              </p>
+              <div class="ob-finding-acts">
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  type="button"
+                >
+                  Go to paragraph
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="ob-finding ob-finding--flush">
+            <span class="ob-finding-mark is-warning"
+              ><svg aria-hidden="true"><use href="#i-help" /></svg
+            ></span>
+            <div class="ob-finding-body">
+              <div class="ob-finding-head">
+                <span class="ob-finding-title"
+                  >Authority not in the corpus</span
+                >
+              </div>
+              <div class="ob-finding-quote">
+                “<em
+                  >Globe Motors Ltd v TRW Lucas Varity Electric Steering Ltd</em
+                >”<cite>Paragraph 14 · not in the stored set</cite>
+              </div>
+              <p class="ob-finding-why">
+                The case is not in the stored UK case law set. Add a source to
+                the matter, or remove the citation.
+              </p>
+              <div class="ob-finding-acts">
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  type="button"
+                >
+                  Find a source
+                </button>
+              </div>
+            </div>
+          </article>
+
+          <article class="ob-finding ob-finding--flush">
+            <span class="ob-finding-mark is-success"
+              ><svg aria-hidden="true"><use href="#i-check" /></svg
+            ></span>
+            <div class="ob-finding-body">
+              <div class="ob-finding-head">
+                <span class="ob-finding-title"
+                  >9 citations and quotations checked</span
+                >
+              </div>
+              <p class="ob-finding-why">
+                Each matched its source, including
+                <em>Rock Advertising v MWB</em>
+                <span class="ob-cite">[2018] UKSC 24</span> and
+                <em>Secretary of State for Business and Trade v Mercer</em>
+                <span class="ob-cite">[2024] UKSC 12</span>.
+              </p>
+            </div>
+          </article>
+
+          <div class="ob-finding-doc">
+            <svg class="is-12" aria-hidden="true">
+              <use href="#i-document" />
+            </svg>
+            <span>supply-agreement-northgate.docx</span>
+            <span class="ob-finding-doc-meta">Not run</span>
+            <button
+              class="ob-btn ob-btn--secondary ob-btn--sm"
+              type="button"
+              data-run-verify
+            >
+              Run Verify
+            </button>
+          </div>
+          <p class="ob-finding-why doc-check-note">
+            This document has not been checked. Run Verify to compare its
+            citations, authorities and quotations with the stored corpus.
+          </p>
+        </div>
+
+        <div class="ob-dialog-foot">
+          <button
+            class="ob-btn ob-btn--ghost"
+            type="button"
+            onclick="closeDialog()"
+          >
+            Close
+          </button>
+          <button class="ob-btn ob-btn--secondary" type="button">
+            <svg aria-hidden="true"><use href="#i-refresh" /></svg>Run Verify
+            again
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      ;(function () {
+        'use strict'
+        var root = document.documentElement
+        var app = document.getElementById('app')
+        var accountButton = document.getElementById('accountButton')
+        var accountMenu = document.getElementById('accountMenu')
+        var themeButton = document.getElementById('themeButton')
+        var menuTheme = document.getElementById('menuTheme')
+        var menuThemeLabel = document.getElementById('menuThemeLabel')
+
+        function setTheme(theme) {
+          root.dataset.theme = theme
+          var toLight = theme === 'dark'
+          themeButton.setAttribute(
+            'aria-label',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+          themeButton.setAttribute(
+            'data-tip',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+          menuThemeLabel.textContent = toLight
+            ? 'Switch to light theme'
+            : 'Switch to dark theme'
+        }
+        themeButton.addEventListener('click', function () {
+          setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark')
+        })
+
+        function closeMenu() {
+          accountMenu.hidden = true
+          accountButton.setAttribute('aria-expanded', 'false')
+        }
+        accountButton.addEventListener('click', function (e) {
+          e.stopPropagation()
+          accountMenu.hidden = !accountMenu.hidden
+          accountButton.setAttribute(
+            'aria-expanded',
+            String(!accountMenu.hidden),
+          )
+        })
+        accountMenu.addEventListener('click', function (e) {
+          e.stopPropagation()
+        })
+        document.addEventListener('click', closeMenu)
+        menuTheme.addEventListener('click', function () {
+          setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark')
+          closeMenu()
+        })
+
+        var sidebarToggle = document.getElementById('sidebarToggle')
+        function setCollapsed(collapsed) {
+          app.classList.toggle('is-collapsed', collapsed)
+          sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
+          sidebarToggle.setAttribute(
+            'aria-label',
+            collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+          )
+          sidebarToggle.title = collapsed
+            ? 'Expand sidebar'
+            : 'Collapse sidebar'
+          sidebarToggle.querySelector('span').textContent = collapsed
+            ? 'Expand sidebar'
+            : 'Collapse sidebar'
+        }
+        sidebarToggle.addEventListener('click', function () {
+          setCollapsed(!app.classList.contains('is-collapsed'))
+        })
+
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') closeMenu()
+        })
+
+        if (app.dataset.autoCollapse === 'true' && window.innerWidth < 1240)
+          setCollapsed(true)
+        if (location.hash === '#collapsed') setCollapsed(true)
+        if (location.hash === '#expanded') setCollapsed(false)
+        if (location.hash === '#account') {
+          accountMenu.hidden = false
+          accountButton.setAttribute('aria-expanded', 'true')
+        }
+      })()
+    </script>
+
+    <script>
+      ;(function () {
+        'use strict'
+        var body = document.getElementById('docBody')
+        var panels = {
+          info: document.getElementById('infoPanel'),
+          comment: document.getElementById('commentPanel'),
+          findings: document.getElementById('findingsPanel'),
+        }
+        var findBar = document.getElementById('findBar')
+
+        function closePanels() {
+          Object.keys(panels).forEach(function (k) {
+            panels[k].hidden = true
+          })
+          body.classList.add('is-wide')
+        }
+
+        function openPanel(kind) {
+          closePanels()
+          if (!panels[kind]) return
+          panels[kind].hidden = false
+          body.classList.remove('is-wide')
+        }
+
+        function showFind() {
+          findBar.hidden = false
+        }
+
+        function hideFind() {
+          findBar.hidden = true
+        }
+
+        function selectTab(name) {
+          var tabs = document.querySelectorAll('[data-tab]')
+          var rows = document.querySelectorAll('[data-panel]')
+          for (var i = 0; i < tabs.length; i++) {
+            var on = tabs[i].getAttribute('data-tab') === name
+            tabs[i].classList.toggle('is-active', on)
+            tabs[i].setAttribute('aria-selected', String(on))
+          }
+          for (var j = 0; j < rows.length; j++) {
+            rows[j].hidden = rows[j].getAttribute('data-panel') !== name
+          }
+        }
+
+        for (
+          var i = 0;
+          i < document.querySelectorAll('[data-tab]').length;
+          i++
+        ) {
+          document
+            .querySelectorAll('[data-tab]')
+            [i].addEventListener('click', function () {
+              selectTab(this.getAttribute('data-tab'))
+            })
+        }
+
+        var trackSwitch = document.getElementById('trackSwitch')
+        var trackPill = document.getElementById('trackPill')
+        var trackLabel = document.getElementById('trackLabel')
+        trackSwitch.addEventListener('change', function () {
+          trackPill.classList.toggle('is-on', trackSwitch.checked)
+          trackLabel.textContent = trackSwitch.checked
+            ? 'Track changes on'
+            : 'Track changes off'
+        })
+
+        var saveState = document.getElementById('saveState')
+        var saveLabel = document.getElementById('saveLabel')
+        var caret = document.getElementById('caret')
+        var readonlyBar = document.getElementById('readonlyBar')
+
+        var saveRetry = document.getElementById('saveRetry')
+        saveRetry.addEventListener('click', function () {
+          setSave('none')
+        })
+
+        function setSave(kind) {
+          saveState.className = 'ob-save-state'
+          saveRetry.hidden = true
+          if (kind === 'dirty') {
+            saveState.classList.add('is-dirty')
+            saveState.querySelector('use').setAttribute('href', '#i-clock')
+            saveLabel.textContent = 'Unsaved changes'
+          } else if (kind === 'error') {
+            saveState.classList.add('is-error')
+            saveState.querySelector('use').setAttribute('href', '#i-alert')
+            saveLabel.textContent = 'Could not save'
+            saveRetry.hidden = false
+          } else if (kind === 'readonly') {
+            saveState.querySelector('use').setAttribute('href', '#i-lock')
+            saveLabel.textContent = 'Read-only'
+          } else {
+            saveState
+              .querySelector('use')
+              .setAttribute('href', '#i-check-circle')
+            saveLabel.textContent = 'Saved · version 2'
+          }
+        }
+
+        function openDialog() {
+          document.getElementById('allFindings').hidden = false
+        }
+
+        function closeDialog() {
+          document.getElementById('allFindings').hidden = true
+        }
+
+        function applyHash() {
+          var hash = location.hash.replace('#', '')
+          if (
+            ['home', 'insert', 'layout', 'references', 'view'].indexOf(hash) >
+            -1
+          ) {
+            selectTab(hash)
+          }
+          if (hash === 'info' || hash === 'comment' || hash === 'findings')
+            openPanel(hash)
+          if (hash === 'find') showFind()
+          if (hash === 'unsaved') setSave('dirty')
+          if (hash === 'stale') {
+            openPanel('findings')
+            showVerify('stale')
+          }
+          if (hash === 'savefailed') setSave('error')
+          if (hash === 'presence') {
+            caret.hidden = false
+            document.getElementById('presenceNote').hidden = false
+          }
+          if (hash === 'readonly') {
+            readonlyBar.hidden = false
+            document.querySelector('.ob-ribbon').classList.add('is-locked')
+            var controls = document.querySelectorAll(
+              '.ob-ribbon button, .ob-ribbon select, .ob-ribbon input, .ob-ribbon a',
+            )
+            for (var i = 0; i < controls.length; i++)
+              controls[i].setAttribute('disabled', 'disabled')
+            trackPill.style.display = 'none'
+            setSave('readonly')
+          }
+          if (hash === 'all-findings') openDialog()
+        }
+
+        document
+          .getElementById('infoButton')
+          .addEventListener('click', function () {
+            openPanel('info')
+          })
+
+        /* Verify is tied to a version. The header chip names the version it covers;
+     an edit after the check turns it into “Check out of date”, and the panel
+     says which version was checked and when. */
+        var verifyChip = document.getElementById('verifyChip')
+        var verifyChipText = document.getElementById('verifyChipText')
+        var verifyStale = document.getElementById('verifyStale')
+        var verifyRunning = document.getElementById('verifyRunning')
+        var verifyClear = document.getElementById('verifyClear')
+        var verifyFootMeta = document.getElementById('verifyFootMeta')
+        var infoVerify = document.getElementById('infoVerify')
+        var verifyTimer = null
+
+        var VERIFY = {
+          clear: {
+            chip: 'Checked · version 2',
+            tone: 'is-success',
+            foot: 'Checked · version 2',
+            title: 'Checked version 2 on 26 Oct 2026, 16:40',
+            info: 'Checked · version 2',
+          },
+          stale: {
+            chip: 'Check out of date · Run Verify',
+            tone: 'is-warning',
+            foot: 'Check out of date',
+            title: 'The document changed after the check on version 2',
+            info: 'Check out of date',
+          },
+          running: {
+            chip: 'Checking…',
+            tone: '',
+            foot: 'Checking…',
+            title: 'Checking version 3',
+            info: 'Checking version 3',
+          },
+        }
+
+        function showVerify(state) {
+          if (!verifyStale) return
+          verifyStale.hidden = state !== 'stale'
+          verifyRunning.hidden = state !== 'running'
+          verifyClear.hidden = state !== 'clear'
+          var conf = VERIFY[state]
+          verifyChipText.className = 'ob-status ' + conf.tone
+          verifyChipText.innerHTML = '<span class="ob-dot"></span>' + conf.chip
+          verifyChip.setAttribute('title', conf.title)
+          verifyFootMeta.textContent = conf.foot
+          if (infoVerify) {
+            infoVerify.innerHTML =
+              conf.info +
+              '<span>' +
+              (state === 'running' ? 'Not finished' : '26 Oct 2026, 16:40') +
+              '</span>'
+          }
+        }
+
+        function runVerify() {
+          closeDialog()
+          openPanel('findings')
+          showVerify('running')
+          window.clearTimeout(verifyTimer)
+          verifyTimer = window.setTimeout(function () {
+            showVerify('clear')
+            verifyFootMeta.textContent = 'Checked · version 3'
+            verifyChipText.innerHTML =
+              '<span class="ob-dot"></span>Checked · version 3'
+            verifyChip.setAttribute('title', 'Checked version 3 just now')
+          }, 1400)
+        }
+
+        document
+          .getElementById('runVerify')
+          .addEventListener('click', runVerify)
+        document
+          .querySelectorAll('[data-run-verify]')
+          .forEach(function (button) {
+            button.addEventListener('click', runVerify)
+          })
+
+        window.addEventListener('hashchange', applyHash)
+        applyHash()
+
+        window.openPanel = openPanel
+        window.closePanels = closePanels
+        window.showFind = showFind
+        window.hideFind = hideFind
+        window.closeDialog = closeDialog
+      })()
+    </script>
+  </body>
+</html>
