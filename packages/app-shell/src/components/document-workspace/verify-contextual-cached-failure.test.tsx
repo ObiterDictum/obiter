@@ -127,6 +127,7 @@ function finding(
       end: 4,
     },
     authorityLabel: `Authority ${index}`,
+    dismissal: null,
     evidence: [],
     ...overrides,
   }
@@ -148,7 +149,13 @@ function run(): VerificationRun {
     createdAt: '2026-09-14T00:00:00.000Z',
     startedAt: '2026-09-14T00:00:01.000Z',
     completedAt: '2026-09-14T00:00:02.000Z',
-    summary: { findingCount: 4, flaggedCount: 0, reviewRequiredCount: 0 },
+    summary: {
+      findingCount: 4,
+      flaggedCount: 0,
+      reviewRequiredCount: 0,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
   }
@@ -274,10 +281,10 @@ describe('cached-document findings failure', () => {
     const region = verificationRegion()
     // The server-computed total is still shown; the summary is not derived from
     // the loaded page.
-    expect(region.textContent).toContain('4 clear')
+    expect(region.textContent).toContain('4 match the checked source')
 
     fireEvent.click(
-      within(region).getByRole('button', { name: 'View all findings' }),
+      within(region).getByRole('button', { name: 'All findings' }),
     )
     const dialog = await screen.findByRole('dialog')
     // Retry lives in the surface that lists findings, next to the failure.
@@ -314,11 +321,12 @@ describe('cached-document findings failure', () => {
 
     fireEvent.click(
       within(verificationRegion()).getByRole('button', {
-        name: 'View all findings',
+        name: 'All findings',
       }),
     )
     const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByText('Explanation 1'))
+    const row = within(dialog).getByText('Explanation 1').closest('article')!
+    fireEvent.click(within(row).getByRole('button', { name: 'Open finding' }))
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('Authority 1')
 
@@ -350,7 +358,7 @@ describe('cached-document findings failure', () => {
     expect(within(region).getByRole('button', { name: /retry/i })).toBeTruthy()
 
     fireEvent.click(
-      within(region).getByRole('button', { name: 'View all findings' }),
+      within(region).getByRole('button', { name: 'All findings' }),
     )
     const dialog = await screen.findByRole('dialog')
     // Both cached pages are still listed while the refetch failure is shown.
@@ -390,7 +398,7 @@ describe('cached-document findings failure', () => {
     })
     fireEvent.click(
       within(verificationRegion()).getByRole('button', {
-        name: 'View all findings',
+        name: 'All findings',
       }),
     )
     const dialog = await screen.findByRole('dialog')

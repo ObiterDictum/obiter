@@ -27,7 +27,13 @@ function verificationRun(
     createdAt: '2026-10-26T09:02:00.000Z',
     startedAt: '2026-10-26T09:02:00.000Z',
     completedAt: '2026-10-26T09:04:00.000Z',
-    summary: { findingCount: 3, flaggedCount: 1, reviewRequiredCount: 2 },
+    summary: {
+      findingCount: 3,
+      flaggedCount: 1,
+      reviewRequiredCount: 2,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
     ...overrides,
@@ -82,7 +88,13 @@ describe('rankAttentionItems', () => {
       [
         verificationRun({
           id: 'verify_review',
-          summary: { findingCount: 1, flaggedCount: 0, reviewRequiredCount: 1 },
+          summary: {
+            findingCount: 1,
+            flaggedCount: 0,
+            reviewRequiredCount: 1,
+            dismissedCount: 0,
+            notCheckedCount: 0,
+          },
         }),
         verificationRun({
           id: 'verify_failed',
@@ -181,7 +193,13 @@ describe('buildAttentionItems', () => {
         verificationRun({ id: 'running', status: 'running' }),
         verificationRun({
           id: 'clear',
-          summary: { findingCount: 1, flaggedCount: 0, reviewRequiredCount: 0 },
+          summary: {
+            findingCount: 1,
+            flaggedCount: 0,
+            reviewRequiredCount: 0,
+            dismissedCount: 0,
+            notCheckedCount: 0,
+          },
         }),
       ],
       [

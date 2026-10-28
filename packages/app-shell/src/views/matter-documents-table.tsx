@@ -50,7 +50,11 @@ function documentVerifyParts(state: DocumentVerificationState): VerifyPart[] {
       return [{ label: 'Failed', tone: 'danger' }, ...stale]
     case 'completed': {
       const parts: VerifyPart[] = []
-      const { flaggedCount, reviewRequiredCount } = run.summary
+      const { flaggedCount } = run.summary
+      // A check that did not run is still waiting on a person, so the table
+      // folds it into review the way the attention queue does.
+      const reviewRequiredCount =
+        run.summary.reviewRequiredCount + run.summary.notCheckedCount
       if (flaggedCount > 0) {
         parts.push({
           label: `${flaggedCount} flagged`,

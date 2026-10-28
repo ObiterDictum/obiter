@@ -86,15 +86,67 @@ const draftLocationSchema = z
     path: ['end'],
   })
 
+/**
+ * Where one piece of evidence can be read. `url` is the stored upstream source
+ * and is the only thing the source's name is read from; `canonicalUrl` is the
+ * in-app source page built in stage 7; `pinpoint` is the human location inside
+ * it and `anchor` the fragment that lands on it. A missing pin cite is null,
+ * never an invented one.
+ */
+export const verificationEvidenceSourceSchema = z
+  .object({
+    url: z.string().min(1).nullable(),
+    canonicalUrl: z.string().min(1).nullable(),
+    pinpoint: z.string().min(1).nullable(),
+    anchor: z.string().min(1).nullable(),
+  })
+  .strict()
+export type VerificationEvidenceSource = z.infer<
+  typeof verificationEvidenceSourceSchema
+>
+
 export const verificationEvidenceViewSchema = z
   .object({
     id: z.string().min(1),
     sourceId: z.string().min(1),
     label: z.string().min(1),
+    source: verificationEvidenceSourceSchema,
   })
   .strict()
 export type VerificationEvidenceView = z.infer<
   typeof verificationEvidenceViewSchema
+>
+
+/**
+ * A finding a person has dismissed, with who and when. It is a recorded human
+ * decision about one finding in one run, so it never rewrites the check's own
+ * outcome: the finding keeps its state and the dismissal is shown beside it.
+ */
+export const verificationFindingDismissalSchema = z
+  .object({
+    reason: z.string().min(1).nullable(),
+    dismissedBy: z.string().min(1),
+    dismissedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+export type VerificationFindingDismissal = z.infer<
+  typeof verificationFindingDismissalSchema
+>
+
+export const verificationFindingDismissRequestSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict()
+export type VerificationFindingDismissRequest = z.infer<
+  typeof verificationFindingDismissRequestSchema
+>
+
+export const verificationFindingDismissResponseSchema = z
+  .object({ dismissal: verificationFindingDismissalSchema })
+  .strict()
+export type VerificationFindingDismissResponse = z.infer<
+  typeof verificationFindingDismissResponseSchema
 >
 
 export const verificationFindingViewSchema = z
@@ -102,6 +154,7 @@ export const verificationFindingViewSchema = z
     id: z.string().min(1),
     type: verificationFindingTypeSchema,
     state: verificationFindingStateSchema,
+    dismissal: verificationFindingDismissalSchema.nullable(),
     reviewReason: verificationReviewReasonSchema.nullable(),
     severity: verificationSeveritySchema.nullable(),
     confidence: verificationSeveritySchema.nullable(),
@@ -117,11 +170,21 @@ export type VerificationFindingView = z.infer<
   typeof verificationFindingViewSchema
 >
 
+/**
+ * `findingCount` is every persisted finding. The outcome counts are findings
+ * still waiting on a person, so a dismissed finding is counted only in
+ * `dismissedCount` and never reads as attention outstanding. A check that did
+ * not run is counted apart from one that ran and could not conclude: they are
+ * different answers, and folding them together was how "needs review" came to
+ * cover findings nothing had been compared against.
+ */
 export const verificationRunSummarySchema = z
   .object({
     findingCount: z.number().int().nonnegative(),
     flaggedCount: z.number().int().nonnegative(),
     reviewRequiredCount: z.number().int().nonnegative(),
+    notCheckedCount: z.number().int().nonnegative(),
+    dismissedCount: z.number().int().nonnegative(),
   })
   .strict()
 export type VerificationRunSummary = z.infer<

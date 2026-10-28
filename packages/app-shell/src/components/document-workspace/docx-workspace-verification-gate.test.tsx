@@ -270,7 +270,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(
       await screen.findByRole('region', { name: 'Verification' }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run verification' })).toBe(
+    expect(screen.getByRole('button', { name: 'Run Verify' })).toBe(
       document.activeElement,
     )
   })
