@@ -1,6 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Flag, PencilSimple, Warning } from '@phosphor-icons/react'
-import { Skeleton, StatusDot, buttonClassName, cn } from '@obiter/ui'
+import {
+  Card,
+  CardFoot,
+  Skeleton,
+  StatusDot,
+  buttonClassName,
+  cn,
+} from '@obiter/ui'
 import { useVerificationFindings } from '../verification-runs'
 import type { AttentionItem, VerificationAttentionItem } from './home-attention'
 import {
@@ -49,11 +56,13 @@ export function AttentionSection({
           <span className="sr-only">Loading your open work…</span>
         </div>
       ) : error ? (
-        <p className="rounded-lg bg-surface p-6 text-body text-muted">
-          Your open work could not be loaded. {error}
-        </p>
+        <Card>
+          <p className="p-6 text-body text-muted">
+            Your open work could not be loaded. {error}
+          </p>
+        </Card>
       ) : (
-        <div className="rounded-lg bg-surface">
+        <Card>
           {items.length === 0 ? (
             <p className="px-6 py-8 text-body text-muted">
               No Verify findings, redaction decisions or failed runs are
@@ -66,7 +75,7 @@ export function AttentionSection({
               ))}
             </ol>
           )}
-          <div className="flex items-center justify-between gap-4 border-t border-line px-6 py-3 text-caption">
+          <CardFoot>
             <Link
               to="/verify"
               className="inline-flex items-center gap-1 text-muted hover:text-ink"
@@ -79,8 +88,8 @@ export function AttentionSection({
             >
               All redaction runs <ArrowRight size={12} aria-hidden />
             </Link>
-          </div>
-        </div>
+          </CardFoot>
+        </Card>
       )}
     </section>
   )
@@ -218,7 +227,22 @@ function VerificationExplanation({
   )
 }
 
-function AttentionAction({ item }: { item: AttentionItem }) {
+export function AttentionAction({
+  item,
+  variant = 'button',
+}: {
+  item: AttentionItem
+  /** 'text' for a quiet row action inside a rail or preview. */
+  variant?: 'button' | 'text'
+}) {
+  const className =
+    variant === 'text'
+      ? 'text-meta text-brand hover:text-ink'
+      : buttonClassName({ variant: 'secondary', size: 'sm' })
+  const primaryClass =
+    variant === 'text'
+      ? 'text-meta text-brand hover:text-ink'
+      : buttonClassName({ variant: 'primary', size: 'sm' })
   const kind = item.kind
   switch (kind) {
     case 'verify_flagged':
@@ -226,7 +250,7 @@ function AttentionAction({ item }: { item: AttentionItem }) {
         <Link
           to="/matters/$matterId/documents/$documentId"
           params={{ matterId: item.matterId, documentId: item.documentId }}
-          className={buttonClassName({ variant: 'primary', size: 'sm' })}
+          className={primaryClass}
         >
           Review finding
         </Link>
@@ -237,7 +261,7 @@ function AttentionAction({ item }: { item: AttentionItem }) {
         <Link
           to="/matters/$matterId/documents/$documentId"
           params={{ matterId: item.matterId, documentId: item.documentId }}
-          className={buttonClassName({ variant: 'secondary', size: 'sm' })}
+          className={className}
         >
           {kind === 'verify_review' ? 'Review findings' : 'Open document'}
         </Link>
@@ -247,7 +271,7 @@ function AttentionAction({ item }: { item: AttentionItem }) {
         <Link
           to="/redact/$runId"
           params={{ runId: item.runId }}
-          className={buttonClassName({ variant: 'secondary', size: 'sm' })}
+          className={className}
         >
           Continue review
         </Link>
@@ -257,7 +281,7 @@ function AttentionAction({ item }: { item: AttentionItem }) {
         <Link
           to="/redact/$runId"
           params={{ runId: item.runId }}
-          className={buttonClassName({ variant: 'secondary', size: 'sm' })}
+          className={className}
         >
           Open run
         </Link>

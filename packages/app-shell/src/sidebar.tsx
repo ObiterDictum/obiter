@@ -2,7 +2,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import type { VerificationRun } from '@obiter/contracts'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { cn, ObiterMark } from '@obiter/ui'
-import { useState, useSyncExternalStore } from 'react'
+import { useState } from 'react'
 import { useMattersList, type MatterRecord } from './matters'
 import {
   MODULES,
@@ -17,6 +17,7 @@ import {
   type RedactionRunListItem,
 } from './redaction-runs'
 import { MatterRow, ModuleRow } from './sidebar-rows'
+import { useMediaQuery } from './use-media-query'
 import { verificationOutcomeTone } from './verification-copy'
 import { useOrganisationVerificationRuns } from './verification-runs'
 
@@ -28,22 +29,6 @@ const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
  */
 const NARROW_QUERY = '(max-width: 1023px)'
 const RECENT_MATTERS_LIMIT = 4
-
-function subscribeNarrow(callback: () => void) {
-  const query = window.matchMedia(NARROW_QUERY)
-  query.addEventListener('change', callback)
-  return () => query.removeEventListener('change', callback)
-}
-
-/** A narrow viewport is browser state, so it is read from the media query
- * rather than copied into React state by an effect. */
-function useNarrowViewport(): boolean {
-  return useSyncExternalStore(
-    subscribeNarrow,
-    () => window.matchMedia(NARROW_QUERY).matches,
-    () => false,
-  )
-}
 
 /** Runs a person still has to decide, by the rule `redaction-runs` owns, so the
  * sidebar count and the Home queue never disagree about what is pending. */
@@ -96,7 +81,7 @@ function readStoredCollapsed(): boolean {
 }
 
 export function Sidebar({ orgName }: { orgName?: string | null }) {
-  const narrow = useNarrowViewport()
+  const narrow = useMediaQuery(NARROW_QUERY)
   const [chosenCollapsed, setChosenCollapsed] = useState(readStoredCollapsed)
   const collapsed = narrow || chosenCollapsed
   const currentPath = useRouterState({

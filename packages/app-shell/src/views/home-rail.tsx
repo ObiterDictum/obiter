@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, FileText } from '@phosphor-icons/react'
-import { Skeleton } from '@obiter/ui'
+import { Card, CardBody, CardHead, Skeleton } from '@obiter/ui'
 import { formatDate, initialsOf } from '../format'
 
 export interface RecentDocument {
@@ -29,10 +29,7 @@ export function RecentDocumentsCard({
 }) {
   if (!loading && documents.length === 0) return null
   return (
-    <section
-      aria-labelledby="recent-documents"
-      className="rounded-lg bg-surface"
-    >
+    <Card aria-labelledby="recent-documents">
       <CardHead title="Recent documents" titleId="recent-documents">
         <Link
           to="/matters"
@@ -86,7 +83,7 @@ export function RecentDocumentsCard({
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   )
 }
 
@@ -102,7 +99,7 @@ export function YourMattersCard({
   totalMatters: number
 }) {
   return (
-    <section aria-labelledby="your-matters" className="rounded-lg bg-surface">
+    <Card aria-labelledby="your-matters">
       <CardHead title="Your matters" titleId="your-matters">
         <Link
           to="/matters"
@@ -115,15 +112,19 @@ export function YourMattersCard({
       {loading ? (
         <RowsSkeleton />
       ) : error ? (
-        <p className="px-6 pb-6 text-meta text-muted">
-          Your matters could not be loaded.{' '}
-          <Link to="/matters" className="text-ink hover:text-brand">
-            Open Matters
-          </Link>{' '}
-          to retry.
-        </p>
+        <CardBody>
+          <p className="text-meta text-muted">
+            Your matters could not be loaded.{' '}
+            <Link to="/matters" className="text-ink hover:text-brand">
+              Open Matters
+            </Link>{' '}
+            to retry.
+          </p>
+        </CardBody>
       ) : matters.length === 0 ? (
-        <p className="px-6 pb-6 text-meta text-muted">No active matters yet.</p>
+        <CardBody>
+          <p className="text-meta text-muted">No active matters yet.</p>
+        </CardBody>
       ) : (
         <ul>
           {matters.map((matter) => (
@@ -158,7 +159,7 @@ export function YourMattersCard({
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   )
 }
 
@@ -169,25 +170,6 @@ function matterLines(matter: MatterSummary) {
       ? null
       : `${matter.documentCount} ${matter.documentCount === 1 ? 'document' : 'documents'}`
   return [documents, matter.clientReference || null].filter(Boolean).join(' · ')
-}
-
-function CardHead({
-  title,
-  titleId,
-  children,
-}: {
-  title: string
-  titleId: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-4">
-      <h2 id={titleId} className="text-item text-ink">
-        {title}
-      </h2>
-      {children}
-    </div>
-  )
 }
 
 function RowsSkeleton() {

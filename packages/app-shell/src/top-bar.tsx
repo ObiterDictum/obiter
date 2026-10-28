@@ -125,7 +125,7 @@ function AccountMenu({
       <MenuTrigger
         aria-label="Account menu"
         className={cn(
-          'grid size-7 shrink-0 place-items-center rounded-pill bg-brand text-caption font-medium text-brand-fg',
+          'grid size-7 shrink-0 place-items-center rounded-pill bg-brand text-caption text-brand-fg',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         )}
       >

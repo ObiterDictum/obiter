@@ -1,5 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Plus, Trash } from '@phosphor-icons/react'
+import { DotsThree } from '@phosphor-icons/react'
+import type { AppPlatform } from '@obiter/contracts'
 import {
   Button,
   Dialog,
@@ -8,21 +9,36 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
   EmptyState,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   Skeleton,
+  StatusDot,
+  buttonClassName,
   useToast,
 } from '@obiter/ui'
-import type { AppPlatform } from '@obiter/contracts'
 import { useState } from 'react'
-import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import { ContentFrame } from '../content-frame'
 import { useCurrentUser } from '../current-user'
-import { blankDocumentFile } from '../document-blank'
-import { useMatterDocuments, useUploadMatterDocument } from '../documents'
+import { useMatterDocuments } from '../documents'
 import { useDeleteMatter, useMatter } from '../matters'
+import { useRedactionRunsList } from '../redaction-runs'
+import { PageScaffold } from '../page-scaffold'
+import { useOrganisationVerificationRuns } from '../verification-runs'
+import { buildAttentionItems } from './home-attention'
+import { MatterDocumentsTable } from './matter-documents-table'
 import { MatterOverview } from './matter-overview'
+import { MatterShareDialog } from './matter-share-dialog'
+import { openWorkByMatter, openWorkFor } from './matters-rows'
+import { MatterUploadButton, NewDocumentButton } from './matter-upload'
 
-/** Matter detail — document list plus an in-place viewer/editor. */
+/**
+ * Matter — the matter's documents, its facts, and what is waiting in it, from
+ * reads the shell already makes. Deleting lives in the overflow menu, as the
+ * mock-up has it: a destructive action is never the only thing in a header.
+ */
 export function MatterRouteView({
   matterId,
   platform: _platform,
@@ -33,264 +49,226 @@ export function MatterRouteView({
   const { data: me } = useCurrentUser()
   const matter = useMatter(matterId)
   const documents = useMatterDocuments(matterId)
-  const upload = useUploadMatterDocument(matterId)
-  const deleteMatter = useDeleteMatter()
-  const navigate = useNavigate()
-  const { toast } = useToast()
-  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
-  const documentCount = documents.data?.length ?? 0
-  const isDocumentCountLoading = documents.isLoading
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
-    null,
-  )
+  const redactionRuns = useRedactionRunsList()
+  const verification = useOrganisationVerificationRuns(true)
 
   if (matter.isError && !matter.isLoading) {
     return (
-      <div className="flex h-full min-h-[24rem] items-center justify-center p-6">
-        <EmptyState
-          title="Matter not found"
-          body="This matter does not exist in your organisation, or your session may have expired."
-          action={
-            <Link
-              className="font-semibold text-brand hover:text-brand-pressed"
-              to="/matters"
-            >
-              Return to matters
-            </Link>
-          }
-        />
-      </div>
+      <EmptyState
+        title="Matter not found"
+        body="This matter does not exist in your organisation, or your session may have expired."
+        action={
+          <Link
+            to="/matters"
+            className={buttonClassName({ variant: 'secondary', size: 'md' })}
+          >
+            Return to matters
+          </Link>
+        }
+      />
     )
   }
 
-  if (matter.isLoading || !matter.data) {
+  if (matter.isPending) {
     return (
-      <div className="flex h-full min-h-[24rem] flex-col">
-        <div className="border-b border-line px-5 py-3 sm:px-6">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-2 h-3 w-64" />
-        </div>
-        <div className="grid flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-          <div className="border-b border-line p-4 lg:border-b-0 lg:border-r">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="mt-2 h-10 w-full" />
-          </div>
-          <div className="p-5">
-            <Skeleton className="h-32 w-full" />
-          </div>
-        </div>
-      </div>
+      <ContentFrame className="flex flex-col gap-6 py-14" aria-busy="true">
+        <Skeleton className="h-8 w-96" />
+        <Skeleton className="h-64" />
+        <span className="sr-only">Loading the matter…</span>
+      </ContentFrame>
     )
   }
 
   const m = matter.data
-  const selectedDocument =
-    documents.data?.find((document) => document.id === selectedDocumentId) ??
-    null
-
-  function addDocument(file: File) {
-    upload.mutate(file, {
-      onSuccess: (result) => {
-        setSelectedDocumentId(result.document.id)
-      },
-    })
-  }
+  const attention = openWorkByMatter(
+    buildAttentionItems({
+      verificationRuns: verification.runs,
+      redactionRuns: redactionRuns.data?.runs ?? [],
+      documentFilenames: new Map(
+        (documents.data ?? []).flatMap((document) =>
+          document.currentVersion
+            ? [[document.id, document.currentVersion.filename] as const]
+            : [],
+        ),
+      ),
+      matters: new Map([
+        [m.id, { name: m.name, clientReference: m.clientReference }],
+      ]),
+    }),
+  )
+  const openWorkUnavailable = verification.isError || redactionRuns.isError
+  const attentionReady = verification.isSuccess && redactionRuns.isSuccess
+  // Only the matter's owner may read or change its access list; only an owner
+  // or administrator of the organisation may delete the matter.
+  const isOwner = me.user.id === m.createdBy
+  const canManage = me.user.role === 'owner' || me.user.role === 'admin'
 
   return (
-    <div className="flex h-full min-h-[24rem] flex-col">
-      <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3 sm:px-6">
-        <div className="min-w-0">
-          <Link
-            to="/matters"
-            className="text-[11px] font-medium text-muted transition-colors hover:text-ink"
-          >
-            ← Matters
-          </Link>
-          <h1 className="mt-1 truncate text-sm font-semibold tracking-tight text-ink sm:text-base">
-            {m.name}
-          </h1>
-          <p className="mt-0.5 text-xs text-muted">
-            {m.status}
-            {m.clientReference ? ` · ${m.clientReference}` : ''}
-            {m.primaryJurisdiction ? ` · ${m.primaryJurisdiction}` : ''}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <PageScaffold
+      eyebrow={
+        <span className="flex flex-wrap items-center gap-2">
+          {m.legalDomains[0] ? (
+            <span className="inline-flex h-6 items-center rounded-sm bg-fill px-2 text-caption text-muted">
+              {m.legalDomains[0]}
+            </span>
+          ) : null}
+          {m.clientReference ? (
+            <span className="font-mono">{m.clientReference}</span>
+          ) : null}
+          <StatusDot tone={m.status === 'active' ? 'success' : 'neutral'}>
+            {m.status === 'active'
+              ? 'Active'
+              : m.status === 'archived'
+                ? 'Archived'
+                : 'Deleted'}
+          </StatusDot>
+        </span>
+      }
+      title={m.name}
+      description={m.description ?? undefined}
+      actions={
+        <>
+          <MatterUploadButton matterId={m.id} />
+          <NewDocumentButton matterId={m.id} />
+          {isOwner ? (
+            <MatterShareDialog matter={m} organisationId={m.organisationId} />
+          ) : null}
           {canManage ? (
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <Button variant="ghost" size="sm" aria-label="Delete matter">
-                    <Trash aria-hidden /> Delete
-                  </Button>
-                }
-              />
-              <DialogContent size="md">
-                <DialogTitle>Delete matter</DialogTitle>
-                <DialogDescription>
-                  {isDocumentCountLoading ? (
-                    <>Loading the document count before deletion.</>
-                  ) : (
-                    <>
-                      Deleting this matter also removes {documentCount}{' '}
-                      {documentCount === 1 ? 'document' : 'documents'} and their
-                      redaction runs. Removals are soft; rows persist for audit
-                      and can be restored by an operator.
-                    </>
-                  )}
-                </DialogDescription>
-                <div className="flex justify-end gap-2">
-                  <DialogClose
-                    render={<Button variant="ghost">Cancel</Button>}
-                  />
-                  <Button
-                    variant="danger"
-                    loading={deleteMatter.isPending}
-                    disabled={isDocumentCountLoading}
-                    onClick={async () => {
-                      await deleteMatter.mutateAsync(matterId)
-                      toast({ title: 'Matter deleted' })
-                      navigate({ to: '/matters' })
-                    }}
-                  >
-                    Delete matter
-                  </Button>
-                </div>
-                <DialogCloseButton />
-              </DialogContent>
-            </Dialog>
-          ) : null}
-        </div>
-      </header>
-
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-        <section
-          className="min-h-0 overflow-y-auto border-b border-line lg:border-b-0 lg:border-r"
-          aria-label="Documents"
-        >
-          <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3 sm:px-5">
-            <p className="text-[11px] font-medium tracking-wide text-muted">
-              Documents
-            </p>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={upload.isPending}
-                loading={upload.isPending}
-                iconStart={<Plus size={14} weight="bold" aria-hidden />}
-                onClick={() => {
-                  void blankDocumentFile()
-                    .then(addDocument)
-                    .catch((error: unknown) => {
-                      toast({
-                        title:
-                          error instanceof Error
-                            ? error.message
-                            : 'Could not create the document.',
-                        tone: 'danger',
-                      })
-                    })
-                }}
-              >
-                New
-              </Button>
-              <label className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-raised">
-                {upload.isPending ? 'Uploading…' : 'Upload'}
-                <input
-                  type="file"
-                  accept=".docx,.pdf,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  className="sr-only"
-                  disabled={upload.isPending}
-                  aria-label="Upload document"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (file) addDocument(file)
-                    event.target.value = ''
-                  }}
-                />
-              </label>
-            </div>
-          </div>
-          <p className="px-4 pb-2 text-[11px] text-subtle sm:px-5">
-            DOCX, PDF, and TXT, up to 25 MB
-          </p>
-          {upload.error ? (
-            <p className="px-4 pb-2 text-sm text-danger sm:px-5">
-              {upload.error.message}
-            </p>
-          ) : null}
-
-          {documents.isError ? (
-            <div className="p-4">
-              <EmptyState
-                title="Couldn’t load documents"
-                body="Check your connection and try again."
-              />
-            </div>
-          ) : documents.isLoading ? (
-            <div className="flex flex-col gap-1 px-2" aria-busy="true">
-              {[0, 1].map((index) => (
-                <Skeleton key={index} className="h-12 w-full rounded-md" />
-              ))}
-            </div>
-          ) : documents.data && documents.data.length > 0 ? (
-            <ul className="flex flex-col gap-0.5 px-2 pb-3 sm:px-3">
-              {documents.data.map((document) => {
-                const version = document.currentVersion
-                const selected = document.id === selectedDocumentId
-                return (
-                  <li key={document.id}>
-                    <button
-                      type="button"
-                      aria-current={selected ? 'true' : undefined}
-                      className={
-                        selected
-                          ? 'flex w-full flex-col gap-0.5 rounded-md bg-raised px-2.5 py-2 text-left'
-                          : 'flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-raised'
-                      }
-                      onClick={() => setSelectedDocumentId(document.id)}
-                    >
-                      <span className="truncate text-sm font-medium text-ink">
-                        {version?.filename ?? document.logicalKey}
-                      </span>
-                      <span className="truncate text-[11px] text-muted">
-                        {version?.fileType ?? 'Unknown type'}
-                        {version ? ` · v${version.versionNumber}` : ''}
-                        {version?.documentStatus
-                          ? ` · ${version.documentStatus}`
-                          : ''}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <div className="p-4">
-              <EmptyState
-                title="No documents yet"
-                body="Create a Word document here, or upload a DOCX, text-layer PDF, or TXT file."
-              />
-            </div>
-          )}
-        </section>
-
-        <section
-          className="flex h-full min-h-0 flex-col overflow-hidden"
-          aria-label={selectedDocument ? 'Document' : 'Matter detail'}
-        >
-          {selectedDocument ? (
-            <DocumentWorkspace
-              documentId={selectedDocument.id}
-              version={selectedDocument.currentVersion}
-              layout="pane"
+            <MatterActionsMenu
+              matterId={m.id}
+              documentCount={documents.data?.length}
             />
-          ) : (
-            <MatterOverview matter={m} documents={documents} />
-          )}
+          ) : null}
+        </>
+      }
+    >
+      <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+        <section aria-labelledby="matter-documents">
+          <div className="mb-4 flex items-baseline justify-between gap-4">
+            <h2 id="matter-documents" className="text-section text-ink">
+              Documents
+            </h2>
+            <span className="text-meta text-subtle">
+              {documents.data
+                ? [
+                    `${documents.data.length} ${documents.data.length === 1 ? 'file' : 'files'}`,
+                    attentionReady && attention.get(m.id)?.total
+                      ? `${attention.get(m.id)?.total} needs attention`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : null}
+            </span>
+          </div>
+          <MatterDocumentsTable
+            matterId={m.id}
+            documents={documents.data}
+            loading={documents.isPending}
+            error={
+              documents.isError
+                ? 'The documents could not be loaded. Check your connection and try again.'
+                : null
+            }
+          />
         </section>
+
+        <aside aria-label="Matter details">
+          <MatterOverview
+            matter={m}
+            openWork={attentionReady ? openWorkFor(attention, m.id) : null}
+            openWorkUnavailable={openWorkUnavailable}
+          />
+        </aside>
       </div>
-    </div>
+    </PageScaffold>
+  )
+}
+
+/**
+ * The matter's actions that are not a primary job of this page. Only delete is
+ * here today: there is no archive or export endpoint, and editing the record is
+ * not part of this stage.
+ */
+function MatterActionsMenu({
+  matterId,
+  documentCount,
+}: {
+  matterId: string
+  documentCount: number | undefined
+}) {
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  return (
+    <>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button variant="ghost" size="md" aria-label="More matter actions">
+              <DotsThree size={18} aria-hidden />
+            </Button>
+          }
+        />
+        <MenuContent aria-label="Matter actions">
+          <MenuItem onClick={() => setDeleteOpen(true)}>Delete matter</MenuItem>
+        </MenuContent>
+      </Menu>
+      <DeleteMatterDialog
+        matterId={matterId}
+        documentCount={documentCount}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
+    </>
+  )
+}
+
+function DeleteMatterDialog({
+  matterId,
+  documentCount,
+  open,
+  onOpenChange,
+}: {
+  matterId: string
+  documentCount: number | undefined
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const deleteMatter = useDeleteMatter()
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="md">
+        <DialogTitle>Delete matter</DialogTitle>
+        <DialogDescription>
+          {documentCount === undefined ? (
+            'Loading the document count before deletion.'
+          ) : (
+            <>
+              Deleting this matter also removes {documentCount}{' '}
+              {documentCount === 1 ? 'document' : 'documents'} and their
+              redaction runs. Removals are soft; rows persist for audit and can
+              be restored by an operator.
+            </>
+          )}
+        </DialogDescription>
+        <div className="mt-6 flex justify-end gap-2">
+          <DialogClose render={<Button variant="ghost">Cancel</Button>} />
+          <Button
+            variant="danger"
+            loading={deleteMatter.isPending}
+            disabled={documentCount === undefined}
+            onClick={async () => {
+              await deleteMatter.mutateAsync(matterId)
+              toast({ title: 'Matter deleted' })
+              await navigate({ to: '/matters' })
+            }}
+          >
+            Delete matter
+          </Button>
+        </div>
+        <DialogCloseButton />
+      </DialogContent>
+    </Dialog>
   )
 }
