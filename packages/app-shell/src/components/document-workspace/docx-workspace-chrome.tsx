@@ -29,7 +29,6 @@ import { InsertTableDialog } from './insert-table-dialog'
 import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
 import { WorkspaceBanners } from './workspace-banners'
-import { useVerificationWorkspace } from '../verification/verification-context'
 import { WorkspaceRibbon } from './workspace-chrome'
 
 type DocumentExportHandlers = ReturnType<typeof documentExportHandlers>
@@ -110,24 +109,7 @@ export function DocxWorkspaceChrome({
     openHelp: () => setHelpOpen(true),
     closeStory: props.structure.onCloseStory,
   }
-  // Verification's own availability answer is the one the dock's Run control
-  // uses, so the menu entry can never be enabled with nothing to reveal.
-  const verification = useVerificationWorkspace()
-  const menus = editorMenus(
-    {
-      ...props,
-      verify: verification
-        ? {
-            available: verification.startAvailability.available,
-            reason: verification.startAvailability.available
-              ? ''
-              : verification.startAvailability.reason,
-            pending: verification.startPending,
-          }
-        : undefined,
-    },
-    actions,
-  )
+  const menus = editorMenus(props, actions)
   return (
     <WorkspaceRibbon>
       <div className="flex items-stretch border-b border-line px-3">

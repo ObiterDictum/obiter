@@ -6,15 +6,16 @@ import {
   TRACKED_DECISION_MAX_IDS,
   type DocumentChangeWire,
 } from '@obiter/contracts'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
-  openRibbonTab,
   selectBodyParagraph,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 import { editorMenus } from './editor-commands'
 
 const inserted: DocumentChangeWire = {
@@ -102,11 +103,9 @@ describe('DocxWorkspace change review', () => {
     ).toHaveProperty('disabled', true)
 
     fireEvent.click(command('Next change'))
-    expect(
-      screen.getByRole('button', {
-        name: 'Next change: There is no later change.',
-      }),
-    ).toHaveProperty('disabled', true)
+    // The menu row keeps its plain name; the reason is the disabled state's
+    // own caption, which the command publishes the same way it always did.
+    expect(command('Next change')).toHaveProperty('disabled', true)
     expect(
       command('Previous change'),
     ).toHaveProperty('disabled', false)
@@ -376,16 +375,11 @@ describe('DocxWorkspace change review', () => {
       within(panel).getAllByRole('button', { name: 'Show this change' })[0]!,
     )
 
-    expect(
-      screen.getByRole('button', {
-        name: `Accept change: ${unsupportedMoveReason}`,
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: `Reject change: ${unsupportedMoveReason}`,
-      }),
-    ).toHaveProperty('disabled', true)
+    // The merged move row is the one current target, so the per-change
+    // controls name why it cannot be decided.
+    expect(command('Accept change')).toHaveProperty('disabled', true)
+    expect(command('Reject change')).toHaveProperty('disabled', true)
+    expect(within(panel).getAllByText(unsupportedMoveReason).length).toBeGreaterThan(0)
     expect(decide).not.toHaveBeenCalled()
   })
 

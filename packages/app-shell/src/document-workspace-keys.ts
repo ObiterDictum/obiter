@@ -153,6 +153,10 @@ export type WorkspaceKeySources = {
   }
 }
 
+/** The read-only viewers keep a find field always mounted beside the page. */
+const focusDocumentFind = () =>
+  document.getElementById('document-find')?.focus()
+
 /** Binds the workspace's command sources to the key handler table. */
 export function documentWorkspaceKeyDown(
   event: WorkspaceKeyEvent,
@@ -174,7 +178,7 @@ export function documentWorkspaceKeyDown(
     redo,
     print,
     review,
-    focusFind: openFind,
+    focusFind: openFind ?? focusDocumentFind,
     openPalette,
     toggleBold: emphasis?.onToggleBold,
     toggleItalic: emphasis?.onToggleItalic,

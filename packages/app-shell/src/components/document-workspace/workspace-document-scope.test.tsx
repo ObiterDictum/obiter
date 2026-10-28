@@ -1,8 +1,7 @@
-import {
-  command,
-  commandOrNull,
-  openRibbonTab,
-} from './docx-workspace-harness'
+import { openRibbonTab } from './editor-test-commands'
+import { command, commandOrNull } from './editor-test-commands'
+
+
 import '@obiter/test-dom'
 import { type PropsWithChildren } from 'react'
 import {

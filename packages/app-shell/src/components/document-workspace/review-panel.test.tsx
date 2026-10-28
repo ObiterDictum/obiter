@@ -3,14 +3,15 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentChangeWire, DocumentComment } from '@obiter/contracts'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
-  openRibbonTab,
   selectBodyParagraph,
   staleConflict,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 
 const inserted: DocumentChangeWire = {
   id: 'chg_1',
@@ -119,7 +120,7 @@ describe('review panel', () => {
     const panel = openReviewPanel()
 
     expect(panel.textContent).toContain(
-      '2 changes · 1 comment · 1 move requiring manual review',
+      '2 changes · 1 move · 1 comment',
     )
     expect(panel.textContent).toContain(moveNote)
     // Selection reaches tracked changes only: the move has no checkbox, and a
@@ -216,7 +217,7 @@ describe('review panel', () => {
     expect(decide).not.toHaveBeenCalled()
     const confirm = within(panel).getByRole('alert')
     expect(confirm.textContent).toContain(
-      'Reject 2 changes? This writes a new version and cannot be undone.',
+      'Reject 2 changes? This saves version 2. Version 1 stays available.',
     )
     fireEvent.click(
       within(panel).getByRole('button', { name: 'Reject 2 changes' }),
@@ -269,7 +270,7 @@ describe('review panel', () => {
     const panel = openReviewPanel()
 
     expect(within(panel).getByRole('alert').textContent).toContain(
-      'The decision was not saved. The request failed.',
+      "Your decision wasn't saved. Try again.",
     )
   })
 
@@ -287,7 +288,7 @@ describe('review panel', () => {
 
     await waitFor(() =>
       expect(panel.textContent).toContain(
-        'The document changed on the server; reload before deciding changes.',
+        'Reload before deciding changes.',
       ),
     )
     // The reload route stays the banner's, and the panel's rows are disabled
@@ -312,10 +313,15 @@ describe('review panel', () => {
     const accept = within(row(panel, 'added words')).getByRole('button', {
       name: 'Accept',
     })
+    // The row names the barrier through its own note, and the decision bar
+    // states it in words once the reader reaches the row.
     const describedBy = accept.getAttribute('aria-describedby')
     expect(describedBy).toBeTruthy()
-    const note = describedBy ? document.getElementById(describedBy) : null
-    expect(note?.textContent).toBe(reason)
+    fireEvent.click(
+      within(row(panel, 'added words')).getByRole('button', {
+        name: 'Show this change',
+      }),
+    )
     expect(within(panel).getByText(reason)).toBeTruthy()
   })
 

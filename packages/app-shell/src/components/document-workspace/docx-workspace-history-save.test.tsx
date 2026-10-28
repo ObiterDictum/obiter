@@ -29,14 +29,15 @@ import {
 import { ApiError } from '../../api'
 import { emptyDraftState } from '../../document-save-plan'
 import { writeDocumentDraft } from '../../document-draft-store'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   rerenderWorkspace,
-  openRibbonTab,
   selectBodyParagraph,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 import { clickParagraph, nativeSelect } from './paragraph-selection-harness'
 
 type PersistedParagraph = { runs: Array<{ text: string }> }

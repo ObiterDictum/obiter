@@ -1,4 +1,5 @@
-import { command, commandOrNull } from './docx-workspace-harness'
+import { command, commandOrNull } from './editor-test-commands'
+
 import '@obiter/test-dom'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'

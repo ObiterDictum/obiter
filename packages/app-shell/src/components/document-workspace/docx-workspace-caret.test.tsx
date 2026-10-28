@@ -1,15 +1,16 @@
 import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   rerenderWorkspace,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 
 describe('DocxWorkspace vertical caret delivery', () => {
   const marker = 'ZXQMARK'

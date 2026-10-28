@@ -1,8 +1,6 @@
-import {
-  command,
-  commandOrNull,
-  openRibbonTab,
-} from './docx-workspace-harness'
+import { command, commandOrNull, openRibbonTab } from './editor-test-commands'
+
+
 import '@obiter/test-dom'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'

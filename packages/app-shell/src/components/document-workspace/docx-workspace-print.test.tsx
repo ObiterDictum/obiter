@@ -2,16 +2,17 @@ import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { openRibbonTab } from './editor-test-commands'
 import {
   fetchDocumentExport,
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   selectBodyParagraph,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 
 describe('DocxWorkspace print', () => {
   it('offers an enabled Print control that opens the platform print dialog', () => {

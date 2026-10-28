@@ -9,15 +9,16 @@ import '@obiter/test-dom'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   tabledBodyModel,
   commandOrNull,
   commandPrefix,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,

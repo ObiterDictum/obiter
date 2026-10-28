@@ -2,9 +2,9 @@ import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
-  openRibbonTab,
   multiParagraphModel,
   paragraph,
   rerenderWorkspace,
@@ -12,6 +12,7 @@ import {
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 
 /*
  * The workspace derives its painted model, its pagination and its authority

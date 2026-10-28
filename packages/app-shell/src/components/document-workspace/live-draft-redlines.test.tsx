@@ -3,14 +3,15 @@ import '@obiter/test-dom'
 import { expect, it } from 'bun:test'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+
 import { clickParagraph } from './paragraph-selection-harness'
 
 it('paints unsaved tracked replacements while keeping inserted text editable and the save batch unchanged', async () => {
