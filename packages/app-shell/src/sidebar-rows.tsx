@@ -104,7 +104,11 @@ export function ModuleRow({
       className={rowClass}
     >
       {body}
-      {count && toneClass !== 'text-subtle' ? (
+      {/* The rail has no count, so it gets the mock-up's alert dot. The
+          expanded row shows the coloured count instead, and its `relative`
+          anchor only exists when collapsed — an absolute dot outside that
+          lands in the corner of the window. */}
+      {collapsed && count && toneClass !== 'text-subtle' ? (
         <span
           aria-hidden
           className={cn(
@@ -151,7 +155,10 @@ function RailTooltip({
 function countToneLabel(label: string, count?: number) {
   if (!count) return null
   if (label === 'Matters') return `${count} active`
-  if (label === 'Verify') return `${count} to review`
+  // Findings, not runs: one run can leave several unresolved, and Home shows
+  // one queue row for that run.
+  if (label === 'Verify')
+    return `${count} unresolved ${count === 1 ? 'finding' : 'findings'}`
   if (label === 'Redact') return `${count} waiting`
   return `${count}`
 }
