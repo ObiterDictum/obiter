@@ -1,6 +1,7 @@
 import {
   Button,
   StatusDot,
+  cn,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -8,7 +9,11 @@ import {
 import type { ReactNode } from 'react'
 import type { DocumentPresence } from '@obiter/contracts'
 import type { DocumentVersionRecord } from '../../documents'
-import { DocumentVerifyChip } from './document-verify-chip'
+import {
+  DocumentVerifyChip,
+  VerifyRunButton,
+  VerifyRunReason,
+} from './document-verify-chip'
 import { useOffline } from '../../shell-states'
 import type { DocumentSave, SaveState } from './use-document-save'
 import { FloppyDisk } from '@phosphor-icons/react'
@@ -124,7 +129,7 @@ function DocumentEditorHeader({
         </h1>
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-caption text-subtle">
           <span
-            className="inline-flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap"
             data-save-state={save?.state.status}
           >
             {headline === null ? (
@@ -171,17 +176,45 @@ function DocumentEditorHeader({
           </Tooltip>
         ) : null}
         {trackChanges === undefined || !onToggleTrackChanges ? null : (
-          <Button
-            variant={trackChanges ? 'secondary' : 'ghost'}
-            size="sm"
-            aria-pressed={trackChanges}
-            aria-label={
-              trackChanges ? 'Turn off track changes' : 'Turn on track changes'
-            }
-            onClick={onToggleTrackChanges}
+          // The switch, not a toggle button: the visible pill carries the
+          // state and the control is a real checkbox with switch semantics,
+          // so assistive technology reads on/off rather than a pressed button.
+          <label
+            className={cn(
+              'inline-flex cursor-pointer items-center gap-2 rounded-pill px-2 py-1 text-caption select-none',
+              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
+              'pointer-coarse:min-h-11',
+              trackChanges
+                ? 'bg-brand-soft text-ink'
+                : 'text-muted hover:bg-hover hover:text-ink',
+            )}
           >
-            {trackChanges ? 'Track changes on' : 'Track changes off'}
-          </Button>
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Track changes"
+              checked={trackChanges}
+              onChange={onToggleTrackChanges}
+              className="peer sr-only"
+            />
+            <span
+              aria-hidden
+              className={cn(
+                'relative h-4 w-7 shrink-0 rounded-pill transition-colors duration-150',
+                trackChanges ? 'bg-brand' : 'bg-line-strong',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 size-3 rounded-pill bg-surface-raised transition-[left] duration-150',
+                  trackChanges ? 'left-3.5' : 'left-0.5',
+                )}
+              />
+            </span>
+            <span>
+              {trackChanges ? 'Track changes on' : 'Track changes off'}
+            </span>
+          </label>
         )}
         {verify}
         {saveButton}
@@ -219,6 +252,7 @@ export function DocxEditorHeader({
   trackChanges,
   onToggleTrackChanges,
   versions,
+  onOpenVerify,
   infoOpen,
   onToggleInfo,
   back,
@@ -234,6 +268,7 @@ export function DocxEditorHeader({
   trackChanges: boolean
   onToggleTrackChanges: () => void
   versions: DocumentVersionRecord[]
+  onOpenVerify: () => void
   infoOpen: boolean
   onToggleInfo?: () => void
   back?: ReactNode
@@ -256,7 +291,13 @@ export function DocxEditorHeader({
       currentUserId={currentUserId}
       trackChanges={trackChanges}
       onToggleTrackChanges={onToggleTrackChanges}
-      verify={<DocumentVerifyChip versions={versions} />}
+      verify={
+        <>
+          <DocumentVerifyChip versions={versions} onOpen={onOpenVerify} />
+          <VerifyRunReason />
+          <VerifyRunButton onOpen={onOpenVerify} />
+        </>
+      }
       saveButton={
         // preventDefault keeps the caret in the editor while the save flight
         // runs, so keystrokes typed during it still land. Keyboard activation
@@ -273,7 +314,7 @@ export function DocxEditorHeader({
             onClick={save.save}
             iconStart={<FloppyDisk size={16} aria-hidden />}
           >
-            Save
+            <span className="max-compact:sr-only">Save</span>
           </Button>
         </span>
       }

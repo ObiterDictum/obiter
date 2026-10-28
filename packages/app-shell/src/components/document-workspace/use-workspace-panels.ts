@@ -3,7 +3,7 @@ import type { LegalChecksFocus } from './ribbon-types'
 
 /** The docked panels beside the paper. One is open at a time. */
 export type WorkspacePanel =
-  'info' | 'comments' | 'changes' | 'authorities' | 'legal-checks'
+  'info' | 'verify' | 'comments' | 'changes' | 'authorities' | 'legal-checks'
 
 export type WorkspacePanelState =
   | { panel: Exclude<WorkspacePanel, 'legal-checks'> }
@@ -42,6 +42,12 @@ export function useWorkspacePanels() {
     )
   }
 
+  /** Open a panel without toggling it closed, keeping the opener for focus. */
+  function openPanel(panel: WorkspacePanel) {
+    if (state?.panel === panel) return
+    open(panel === 'legal-checks' ? { panel, focus: 'terms' } : { panel })
+  }
+
   /** Focus the legal-checks panel on a section, or move it between sections. */
   function openLegalChecks(focus: LegalChecksFocus) {
     if (state?.panel === 'legal-checks') {
@@ -69,6 +75,7 @@ export function useWorkspacePanels() {
     active: state?.panel ?? null,
     legalChecksFocus: state?.panel === 'legal-checks' ? state.focus : null,
     toggle,
+    open: openPanel,
     openLegalChecks,
     close,
     dismiss,

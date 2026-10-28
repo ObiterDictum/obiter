@@ -17,7 +17,6 @@ import {
 } from '../../document-workspace-api'
 import { revealParagraph, withCaretRefocus } from './document-actions'
 import { DocxWorkspaceDesk } from './docx-workspace-desk'
-import { VerificationDock } from '../verification/verification-dock'
 import { docxWorkspaceRibbon } from './docx-workspace-ribbon'
 import { DocxEditorHeader } from './document-editor-header'
 import {
@@ -156,6 +155,17 @@ export function DocxWorkspace({
   // E45 recovery paths keep it unsaved until the work is actually covered.
   usePublishDocumentDirty(save.saveState.status !== 'saved')
 
+  // The ribbon's quiet meta names the stored version, not the unsaved state.
+  const storedVersionId = modelQuery.data?.versionId ?? versionId
+  const storedVersion = versions.find(
+    (version) => version.id === storedVersionId,
+  )
+  const versionMeta = storedVersion
+    ? {
+        number: modelQuery.data?.versionNumber ?? versionNumber ?? 1,
+        editedAt: storedVersion.createdAt,
+      }
+    : undefined
   const caret = useWorkspaceCaret({ documentId, model, drafts })
   const {
     selectedParagraphId,
@@ -350,6 +360,8 @@ export function DocxWorkspace({
     onToggleNavPane: toggleNavigation,
     spelling,
     onToggleSpelling: () => toggleSpelling(setBanner),
+    versionMeta,
+    onOpenVerify: () => panels.open('verify'),
   })
 
   return (
@@ -390,13 +402,13 @@ export function DocxWorkspace({
           trackChanges={trackChanges}
           onToggleTrackChanges={() => drafts.setTrackChangesFlip(!trackChanges)}
           versions={versions}
+          onOpenVerify={() => panels.toggle('verify')}
           infoOpen={panels.active === 'info'}
           onToggleInfo={documentRecord ? () => togglePanel('info') : undefined}
           back={headerLinks?.back}
           matterLink={headerLinks?.matter}
           actions={headerActions}
         />
-        <VerificationDock />
         {modelQuery.isLoading ? (
           <LoadingBlock label="Loading document model" />
         ) : modelQuery.isError && !model ? (

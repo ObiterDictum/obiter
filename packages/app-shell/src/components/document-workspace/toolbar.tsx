@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList } from '@obiter/ui'
 import { DownloadSimple, FileArrowDown } from '@phosphor-icons/react'
+import { formatDateTime } from '../../format'
 import { HomeRibbon } from './ribbon-home'
 import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
@@ -93,6 +94,7 @@ export function DocumentWorkspaceToolbar({
   citationStyle,
   onCitationStyle,
   legalChecks,
+  onOpenVerify,
   onToggleTrackChanges,
   onZoom,
   onExportText,
@@ -123,6 +125,7 @@ export function DocumentWorkspaceToolbar({
   onToggleNavPane,
   spelling,
   onToggleSpelling,
+  versionMeta,
 }: {
   trackChanges: boolean
   zoom: number
@@ -145,6 +148,7 @@ export function DocumentWorkspaceToolbar({
     open: LegalChecksFocus | null
     onOpen: (focus: LegalChecksFocus) => void
   }
+  onOpenVerify?: () => void
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
@@ -183,21 +187,32 @@ export function DocumentWorkspaceToolbar({
   /** Browser-dictionary spell-checking; absent where not offered. */
   spelling?: boolean
   onToggleSpelling?: () => void
+  /** The stored version the tab row names, as the mock-up's quiet meta. */
+  versionMeta?: { number: number; editedAt: string }
 }) {
   return (
     <Tabs defaultValue="home">
-      <TabsList
-        aria-label="Ribbon"
-        className="flex h-[34px] flex-wrap items-stretch gap-1 rounded-none border-b border-line bg-transparent px-12 max-compact:px-8"
-      >
-        <RibbonTab value="home">Home</RibbonTab>
-        <RibbonTab value="insert">Insert</RibbonTab>
-        <RibbonTab value="layout">Layout</RibbonTab>
-        <RibbonTab value="references">References</RibbonTab>
-        <RibbonTab value="review">Review</RibbonTab>
-        <RibbonTab value="view">View</RibbonTab>
-      </TabsList>
-      <div className="flex min-h-12 min-w-0 flex-wrap items-stretch gap-x-2 px-0">
+      <div className="flex h-[34px] items-stretch justify-between gap-3 border-b border-line px-12 max-compact:px-8">
+        <TabsList
+          aria-label="Ribbon"
+          className="flex items-stretch gap-1 rounded-none bg-transparent p-0"
+        >
+          <RibbonTab value="home">Home</RibbonTab>
+          <RibbonTab value="insert">Insert</RibbonTab>
+          <RibbonTab value="layout">Layout</RibbonTab>
+          <RibbonTab value="references">References</RibbonTab>
+          <RibbonTab value="review">Review</RibbonTab>
+          <RibbonTab value="view">View</RibbonTab>
+        </TabsList>
+        {versionMeta ? (
+          <span className="flex shrink-0 items-center gap-2 text-caption whitespace-nowrap text-subtle tabular-nums">
+            <span>Version {versionMeta.number}</span>
+            <span aria-hidden>·</span>
+            <span>Edited {formatDateTime(versionMeta.editedAt)}</span>
+          </span>
+        ) : null}
+      </div>
+      <div className="flex min-h-12 min-w-0 items-stretch gap-x-2">
         <TabsContent value="home" className="min-w-0 flex-1 pt-0">
           <HomeRibbon
             canEdit={canEdit}
@@ -235,6 +250,7 @@ export function DocumentWorkspaceToolbar({
             onCitationStyle={onCitationStyle}
             legalChecks={legalChecks}
             structure={structure}
+            onOpenVerify={onOpenVerify}
           />
         </TabsContent>
         <TabsContent value="review" className="min-w-0 flex-1 pt-0">
