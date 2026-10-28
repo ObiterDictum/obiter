@@ -46,6 +46,8 @@ Additional presentation primitives (no domain state):
 
 **Re-exports from `@obiter/ui` index:** the full set above, plus `cn` (the class-merge helper, which registers the semantic type scale so a size utility never drops the colour utility beside it).
 
+**Link-styled actions.** `buttonClassName({ variant?, size?, className? })` returns the same visual classes for a navigation `Link`. A link stays a link to the browser and to assistive technology, instead of an anchor carrying `role="button"`; use `Button` for actions and `buttonClassName` on a `Link` for navigation.
+
 ## 2. Design tokens (`--obiter-*`)
 
 Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@theme`. **Token names are frozen; values may tune within the same theme.** Light is the token default (`:root`); dark is an explicit `[data-theme="dark"]` override. Both themes must render every screen correctly (FR6). Light is the default the product renders; the saved choice is light, dark, or **match system**, and matching the system follows `prefers-color-scheme` live (a media-query subscription, not an effect on derived state).
@@ -146,6 +148,7 @@ A layout primitive feature screens compose instead of building their own frame:
 ```ts
 export function PageScaffold(props: {
   title: ReactNode
+  eyebrow?: ReactNode // quiet line above the title: Home's date
   description?: ReactNode // one line under the title: what the page is for
   actions?: ReactNode // slot for buttons/links in the header
   children: ReactNode // the content region
@@ -153,7 +156,7 @@ export function PageScaffold(props: {
 }): JSX.Element
 ```
 
-Renders the approved page heading on the frame's content column: title at 28/600 with −0.02em tracking, description at body size on a 68ch measure, header actions vertically centred against the title (stacked below it at 1024 and under), 56px top and bottom padding, and a 40px gap between content sections. Content stops at 1120px; the gutter is 48px, and 32px at 1024 and under. The eyebrow beside the old title is gone: the mock-ups allow one page title and no uppercase label above it. The Redact review screen renders inside `<PageScaffold>`.
+Renders the approved page heading on the frame's content column: title at 28/600 with −0.02em tracking, description at body size on a 68ch measure, header actions vertically centred against the title (stacked below it at 1024 and under), 56px top and bottom padding, and a 40px gap between content sections. Content stops at 1120px; the gutter is 48px, and 32px at 1024 and under. There is no uppercase label above the title. The optional eyebrow is quiet metadata (Home's date, `Monday 26 Oct 2026`), which the dashboard mock-up places above the greeting; it aligns on the same left edge as the title. The Redact review screen renders inside `<PageScaffold>`.
 
 ## 6. App frame
 

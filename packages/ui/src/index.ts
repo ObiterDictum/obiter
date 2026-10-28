@@ -1,6 +1,12 @@
 export { cn } from './lib/cn'
 
-export { Button, type ButtonProps } from './button'
+export {
+  Button,
+  buttonClassName,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+} from './button'
 export { Input, type InputProps } from './input'
 export { Select, type SelectProps, type SelectOption } from './select'
 export {

@@ -73,6 +73,10 @@
      Tailwind's `max-*` variants are exclusive (`max-lg` is `width < 1024px`),
      so the design's boundary needs its own key one pixel above it. */
   --breakpoint-compact: 1025px;
+  /* The dashboard and matter mock-ups go single-column AT 1180px, where the
+     320px rail plus the 1120px content max stop fitting. Tailwind's `xl` is
+     1280, so the design's own boundary needs a key. */
+  --breakpoint-wide: 1181px;
   --height-control-compact: var(--obiter-control-compact);
   --height-control: var(--obiter-control-default);
   --height-control-large: var(--obiter-control-large);

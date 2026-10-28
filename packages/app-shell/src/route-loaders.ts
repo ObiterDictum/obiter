@@ -2,7 +2,6 @@ import { redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import { ApiError } from './api'
 import { currentUserQueryOptions } from './current-user'
-import { changelogQueryOptions } from './changelog'
 import { mattersListQueryOptions } from './matters'
 import { invitePreviewQueryOptions } from './organisation-membership'
 
@@ -42,10 +41,10 @@ export async function guardAuth<T>(
 }
 
 /**
- * Home route loader: ensures the current user and changelog, then prefetches
- * the matters list. Org-less users get a personal workspace via the API on
- * first matters access. The current-user/changelog fetches are wrapped in
- * `guardAuth` so a 401 redirects to /sign-in rather than throwing.
+ * Home route loader: ensures the current user, then prefetches the matters
+ * list. Org-less users get a personal workspace via the API on
+ * first matters access. The current-user fetch is wrapped in `guardAuth` so a
+ * 401 redirects to /sign-in rather than throwing.
  *
  * Shared by the web and desktop Home routes.
  */
@@ -53,10 +52,7 @@ export async function prefetchHomeData(
   queryClient: QueryClient,
 ): Promise<void> {
   await guardAuth(queryClient, () =>
-    Promise.all([
-      queryClient.ensureQueryData(currentUserQueryOptions()),
-      queryClient.ensureQueryData(changelogQueryOptions()),
-    ]),
+    queryClient.ensureQueryData(currentUserQueryOptions()),
   )
   await queryClient.prefetchQuery(mattersListQueryOptions())
 }

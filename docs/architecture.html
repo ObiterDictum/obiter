@@ -2225,14 +2225,18 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">Home desk</td>
+                  <td class="id">Home</td>
                   <td>Route <code>/</code></td>
                   <td>
-                    Attention, recent matters, redaction runs, workspace totals,
-                    and a “continue where you left off” strip backed by
-                    <code>workspace-continuity.ts</code> (last place persisted
-                    in local storage; never records <code>/</code> or auth
-                    routes).
+                    The workspace queue: “Needs your attention” ranked by legal
+                    risk then time waiting, from Verify runs with unresolved
+                    findings, Redact runs awaiting a decision and failed runs
+                    (<code>views/home-attention.ts</code>, one pure ranker).
+                    Recent documents and your matters come from the existing
+                    matters and per-matter documents queries; the empty
+                    workspace offers create matter, choose a matter and search.
+                    No assignment, activity or totals are stored, so none are
+                    shown.
                   </td>
                 </tr>
               </tbody>
@@ -2572,8 +2576,7 @@
                 <dt>Shell</dt>
                 <dd>
                   frame · sidebar · top-bar · shell-states · content-frame ·
-                  page-scaffold · app-search-field · navigation ·
-                  workspace-continuity
+                  page-scaffold · app-search-field · navigation
                 </dd>
                 <dt>Contract</dt>
                 <dd>

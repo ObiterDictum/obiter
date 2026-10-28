@@ -13,6 +13,8 @@ import {
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
 import type { MatterRecord } from './matters'
 import { matterTileLabel } from './sidebar-rows'
+import type { RedactionRunListItem } from './redaction-runs'
+import { buildAttentionItems } from './views/home-attention'
 import {
   Sidebar,
   recentMatters,
@@ -82,6 +84,19 @@ function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
   }
 }
 
+function redactionRun(
+  overrides: Partial<RedactionRunListItem> & { id: string },
+): RedactionRunListItem {
+  return {
+    sourceFilename: 'witness-statement.docx',
+    status: 'reviewing',
+    matterId: 'mtr_1',
+    createdAt: '2026-10-25T16:20:00.000Z',
+    updatedAt: '2026-10-25T16:20:00.000Z',
+    ...overrides,
+  }
+}
+
 function renderSidebar(path = '/') {
   const rootRoute = createRootRoute()
   const sidebar = () => <Sidebar orgName="Harrington Vale LLP" />
@@ -131,9 +146,45 @@ describe('sidebar data helpers', () => {
         { status: 'pending' },
         { status: 'finalized' },
       ]),
-    ).toBe(2)
+    ).toBe(1)
+    // Every span decided: the run needs finalising, not a decision.
+    expect(
+      redactionAttentionCount([
+        {
+          status: 'ready_for_review',
+          summary: { totalSpans: 4, byDecision: { accept: 4, undecided: 0 } },
+        },
+      ]),
+    ).toBe(0)
     // A failed run also waits on a person: the same rule the Redact list uses.
     expect(redactionAttentionCount([{ status: 'failed' }])).toBe(1)
+  })
+
+  // The count and the queue are two views of one rule; this fails if they drift.
+  it('counts exactly the Redact runs Home queues', () => {
+    const runs = [
+      redactionRun({ id: 'reviewing' }),
+      redactionRun({ id: 'queued', status: 'pending' }),
+      redactionRun({
+        id: 'decided',
+        status: 'ready_for_review',
+        summary: { totalSpans: 2, byDecision: { accept: 2, undecided: 0 } },
+      }),
+      redactionRun({ id: 'failed', status: 'failed' }),
+      redactionRun({
+        id: 'open',
+        summary: { totalSpans: 4, byDecision: { accept: 1, undecided: 3 } },
+      }),
+    ]
+    const queued = buildAttentionItems({
+      verificationRuns: [],
+      redactionRuns: runs,
+      documentFilenames: new Map(),
+      matters: new Map(),
+    }).filter((item) => item.kind.startsWith('redact'))
+
+    expect(queued).toHaveLength(3)
+    expect(redactionAttentionCount(runs)).toBe(queued.length)
   })
 
   it('counts unresolved findings on completed Verify runs only', () => {
@@ -179,7 +230,7 @@ describe('Sidebar', () => {
     const matters = await screen.findByRole('link', { name: /Matters/ })
     expect(matters.getAttribute('aria-current')).toBe('page')
     expect(
-      screen.getByRole('link', { name: 'Verify, 1 to review' }),
+      screen.getByRole('link', { name: 'Verify, 1 unresolved finding' }),
     ).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Redact, 1 waiting' })).toBeTruthy()
   })

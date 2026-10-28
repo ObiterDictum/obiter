@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
+import type { VerificationRun } from '@obiter/contracts'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { cn, ObiterMark } from '@obiter/ui'
 import { useState, useSyncExternalStore } from 'react'
@@ -11,7 +11,11 @@ import {
   resolveSection,
   type ModuleId,
 } from './navigation'
-import { isAttentionRun, useRedactionRunsList } from './redaction-runs'
+import {
+  redactionRunNeedsDecision,
+  useRedactionRunsList,
+  type RedactionRunListItem,
+} from './redaction-runs'
 import { MatterRow, ModuleRow } from './sidebar-rows'
 import { verificationOutcomeTone } from './verification-copy'
 import { useOrganisationVerificationRuns } from './verification-runs'
@@ -42,11 +46,11 @@ function useNarrowViewport(): boolean {
 }
 
 /** Runs a person still has to decide, by the rule `redaction-runs` owns, so the
- * sidebar count and the Redact list never disagree about what is pending. */
+ * sidebar count and the Home queue never disagree about what is pending. */
 export function redactionAttentionCount(
-  runs: Array<{ status: RedactionRunStatus }>,
+  runs: Array<Pick<RedactionRunListItem, 'status' | 'summary'>>,
 ): number {
-  return runs.filter((run) => isAttentionRun(run.status)).length
+  return runs.filter(redactionRunNeedsDecision).length
 }
 
 /** Findings from completed Verify runs that nobody has resolved yet. */

@@ -24,7 +24,6 @@ export {
   useCreateOrganisation,
   type CreateOrganisationResult,
 } from './current-user'
-export { changelogQueryOptions } from './changelog'
 export {
   guardAuth,
   prefetchHomeData,

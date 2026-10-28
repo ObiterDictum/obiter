@@ -46,16 +46,37 @@ export function useRedactionRunsList(options?: { enabled?: boolean }) {
   })
 }
 
-const ATTENTION_STATUSES = new Set<RedactionRunStatus>([
-  'pending',
-  'detecting',
-  'ready_for_review',
-  'reviewing',
-  'failed',
-])
+/** Spans nobody has decided yet, or null when the summary does not say. */
+export function undecidedSpanCount(
+  summary: RedactionRunListItem['summary'],
+): number | null {
+  return summary?.byDecision?.undecided ?? summary?.unreviewedCount ?? null
+}
 
-export function isAttentionRun(status: RedactionRunStatus) {
-  return ATTENTION_STATUSES.has(status)
+/**
+ * A run waiting on a person: one that failed, or one in review with a span
+ * still undecided. The single definition the sidebar count and the Home queue
+ * share, so the two can never disagree about what is pending. A run with every
+ * span decided needs finalising, not a decision, so it belongs to Redact only.
+ */
+export function redactionRunNeedsDecision(
+  run: Pick<RedactionRunListItem, 'status' | 'summary'>,
+): boolean {
+  switch (run.status) {
+    case 'pending':
+    case 'detecting':
+    case 'finalized':
+      return false
+    case 'ready_for_review':
+    case 'reviewing':
+      return undecidedSpanCount(run.summary) !== 0
+    case 'failed':
+      return true
+    default: {
+      const unhandled: never = run.status
+      throw new Error(`Unknown redaction run status: ${String(unhandled)}`)
+    }
+  }
 }
 
 export function attentionRunLabel(status: RedactionRunStatus): string {
