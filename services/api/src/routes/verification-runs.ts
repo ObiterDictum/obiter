@@ -10,8 +10,8 @@ import { ensureOrgUser } from '../authz'
 import { readLimitedJsonBody } from '../limited-request-body'
 import { DEFAULT_JSON_BODY_MAX_BYTES } from '../request-limit-defaults'
 import type { StorageService } from '../storage'
+import { dismissVerificationFinding } from '../verification-dismissals'
 import {
-  dismissVerificationFinding,
   getVerificationRun,
   listVerificationFindings,
   listVerificationRuns,
