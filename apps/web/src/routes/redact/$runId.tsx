@@ -17,6 +17,7 @@ function RedactionReviewRoute() {
           params: { runId: replacementRunId },
         })
       }
+      onBack={() => navigate({ to: '/redact' })}
       onOpenDocument={(run) => {
         if (!run.documentId || !run.matterId) return
         void navigate({

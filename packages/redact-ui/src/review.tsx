@@ -1,39 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import {
-  Check,
+  ArrowLeft,
   CircleNotch,
-  EyeSlash,
-  Funnel,
   ShieldCheck,
   Warning,
 } from '@phosphor-icons/react'
-import type { SpanCategory, SpanDecision, SpanSource } from '@obiter/contracts'
+import type { SpanDecision } from '@obiter/contracts'
+import type { RedactionSpan } from '@obiter/redaction-policy'
 import {
   Badge,
   Button,
   EmptyState,
   ProgressBar,
-  Select,
   Skeleton,
-  cn,
+  StatusDot,
 } from '@obiter/ui'
+import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useRedactionDocumentText,
   useRedactionOutput,
-  useRedactionOutputFile,
   useRedactionRun,
-  useReturnToDocument,
   useSpanDecision,
 } from './hooks'
 import { useRedactionSource } from './source-preview-hooks'
-import {
-  PdfDocumentPreview,
-  type PdfPreviewStatus,
-} from './pdf-document-preview'
 import { PdfReviewDocument } from './pdf-review-document'
 import { DetectionRetryWarning } from './detection-retry-warning'
 import { FinalizeDialog } from './finalize-dialog'
+import { FinalizedOutput } from './finalized-output'
+import { DecisionBar } from './decision-bar'
+import { ReviewPanel, type SpanFilter } from './review-panel'
+import {
+  DETECTION_COVERAGE_CAVEAT,
+  categoryLabel,
+  confidenceLabel,
+  decisionCounts,
+  decisionMarkClass,
+  sourceLabel,
+  spanDecisionState,
+} from './span-copy'
 import type { RedactionRun } from './types'
 
 const categoryClasses = {
@@ -53,99 +58,21 @@ const categoryClasses = {
   case_reference: 'bg-span-case-reference text-span-case-reference-fg',
   organisation_name: 'bg-span-organisation-name text-span-organisation-name-fg',
   secret: 'bg-span-secret text-span-secret-fg',
-} satisfies Record<SpanCategory, string>
+} satisfies Record<RedactionSpan['category'], string>
+
 const sourceClasses = {
   rampart_model: 'border-solid',
   rampart_deterministic: 'border-dotted',
   uk_supplement: 'border-dashed',
-} satisfies Record<SpanSource, string>
-const sourceLabel = {
-  rampart_model: 'Rampart model',
-  rampart_deterministic: 'Rampart deterministic',
-  uk_supplement: 'UK supplement',
-} satisfies Record<SpanSource, string>
-const decisions: Array<{
-  value: SpanDecision
-  label: string
-  shortcut?: string
-}> = [
-  { value: 'accept', label: 'Accept', shortcut: 'Enter' },
-  { value: 'reject', label: 'Reject', shortcut: 'R' },
-  // Override redact and override keep deliberately carry no chord. Ctrl+R and
-  // Ctrl+K are the browser's reload and the app shell's search, and binding a
-  // legal decision to either recorded a decision the user did not intend.
-  { value: 'override_redact', label: 'Override redact' },
-  { value: 'override_keep', label: 'Override keep' },
-  { value: 'pseudonymise', label: 'Pseudonymise', shortcut: 'P' },
-]
+} satisfies Record<RedactionSpan['source'], string>
 
-function ReviewDeskShell({
-  title,
-  meta,
-  actions,
-  children,
-}: {
-  title: ReactNode
-  meta?: ReactNode
-  actions?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <div className="flex h-full min-h-[24rem] flex-col">
-      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-5 py-3 sm:px-6">
-        <div className="min-w-0">
-          <h1 className="text-sm font-semibold tracking-tight text-ink">
-            {title}
-          </h1>
-          {meta ? <p className="mt-0.5 text-xs text-muted">{meta}</p> : null}
-        </div>
-        {actions ? (
-          <div className="flex shrink-0 items-center gap-2">{actions}</div>
-        ) : null}
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function ReviewSummary({ run }: { run: RedactionRun }) {
-  const total = run.summary.totalSpans
-  const progress = total === 0 ? 100 : (run.summary.reviewedCount / total) * 100
-  return (
-    <section
-      className="flex flex-col gap-2 border-b border-line px-5 py-3 sm:px-6"
-      aria-label="Review summary"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Review progress</h2>
-          <p className="text-xs text-muted">
-            {total} spans · {run.summary.reviewedCount} reviewed ·{' '}
-            {run.summary.unreviewedCount} unreviewed
-          </p>
-        </div>
-        {run.summary.reviewedCount === total ? (
-          <Badge tone="success">
-            <Check size={14} aria-hidden="true" /> All spans reviewed
-          </Badge>
-        ) : null}
-      </div>
-      <ProgressBar
-        value={progress}
-        label="Reviewed spans"
-        helperText={`${Math.round(progress)}% complete`}
-      />
-      <p className="text-[11px] text-subtle">
-        {run.summary.bySource.rampartModel} Rampart model ·{' '}
-        {run.summary.bySource.rampartDeterministic} deterministic ·{' '}
-        {run.summary.bySource.ukSupplement} UK supplement
-      </p>
-    </section>
-  )
-}
-
+/**
+ * The source text as the reviewer reads it. A span is painted by category (the
+ * contract's palette) and its decision state is never carried by colour alone:
+ * an accepted span keeps its fill, a kept span fades and keeps a dashed
+ * baseline, and an undecided span carries a warning outline. The decision is
+ * also stated in words in the panel and in the decision bar.
+ */
 function HighlightedText({
   text,
   run,
@@ -163,13 +90,14 @@ function HighlightedText({
   let position = 0
   return (
     <article
-      className="whitespace-pre-wrap text-base leading-relaxed text-ink [overflow-wrap:anywhere]"
+      className="max-w-[68ch] text-base leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
       aria-label="Original document text"
     >
       {spans.map((span) => {
         if (span.start < position || span.end > text.length) return null
         const before = text.slice(position, span.start)
         position = span.end
+        const state = spanDecisionState(run.decisions[span.id]?.decision)
         return (
           <span key={span.id}>
             {before}
@@ -177,14 +105,16 @@ function HighlightedText({
               type="button"
               data-span-id={span.id}
               onClick={() => onSelect(span.id)}
-              className={cn(
-                'inline rounded-sm border-b-2 px-0.5 text-left align-baseline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              className={[
+                'inline rounded-sm border-b-2 px-0.5 text-left align-baseline',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                 categoryClasses[span.category],
                 sourceClasses[span.source],
-                selectedId === span.id && 'ring-2 ring-ring',
-              )}
+                decisionMarkClass[state],
+                selectedId === span.id ? 'ring-2 ring-ring' : '',
+              ].join(' ')}
               aria-pressed={selectedId === span.id}
-              title={`${span.category.replaceAll('_', ' ')} — ${sourceLabel[span.source]}`}
+              title={`${categoryLabel[span.category]} — ${sourceLabel[span.source]} — detection confidence ${confidenceLabel[span.confidence].toLowerCase()}`}
             >
               {span.text}
             </button>
@@ -196,320 +126,47 @@ function HighlightedText({
   )
 }
 
-/**
- * How long a download's object URL is kept alive after the click. Revoking on
- * the next macrotask races a browser that defers the blob fetch (WebKit in
- * particular), which then fails the download. A minute is far past any realistic
- * scheduling delay and still releases the URL promptly.
- */
-const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  // Defer revoke past the click handler so the browser can start the download.
-  setTimeout(() => {
-    URL.revokeObjectURL(url)
-  }, DOWNLOAD_URL_REVOKE_DELAY_MS)
-}
-
-async function shareOrDownload(blob: Blob, filename: string) {
-  const file = new File([blob], filename, {
-    type: blob.type || 'application/octet-stream',
-  })
-  try {
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: filename })
-      return
-    }
-  } catch {
-    // User cancelled share or share failed — fall through to download.
-  }
-  downloadBlob(blob, filename)
-}
-
-const downgradeCopy = {
-  tracked_change:
-    'Part of this document holds redacted text inside a tracked change, which redaction does not cover. Accept or reject the tracked changes and finalize again. Do not serve this file without checking it first.',
-  residual_text:
-    'Some redacted text could not be removed from the document safely. Do not serve this file without checking it first.',
-  burn_failed:
-    'The formatted document could not be produced, so a plain-text file was provided instead. Do not serve this file without checking it first.',
-} satisfies Record<string, string>
-
-function OutputDowngradeWarning({ run }: { run: RedactionRun }) {
-  const downgrade = run.summary.outputDowngrade
-  if (!downgrade) return null
-  const title =
-    downgrade.from === 'docx'
-      ? 'Word document unavailable — text file provided instead'
-      : 'PDF unavailable — text file provided instead'
-  return (
-    <section
-      className="flex flex-wrap items-start gap-3 border-b border-warning/40 bg-raised/40 px-5 py-3 text-sm text-ink sm:px-6"
-      role="alert"
-    >
-      <Warning
-        className="mt-0.5 shrink-0 text-warning"
-        size={18}
-        aria-hidden="true"
-      />
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold">{title}</p>
-        <p className="mt-1 text-muted">
-          {downgradeCopy[downgrade.reason] ?? downgradeCopy.burn_failed}
-        </p>
-      </div>
-    </section>
-  )
-}
-
-const DOCX_MIME =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-
-function isSecureRedacted(run: RedactionRun, mimeType: string) {
-  return run.summary.outputMode === 'redacted' && mimeType === 'application/pdf'
-}
-
-function finalizedOutputCopy(run: RedactionRun, securePdf: boolean) {
-  if (run.summary.outputMode === 'pseudonymised')
-    return {
-      heading: 'Pseudonymised editable copy',
-      body: 'Replaces accepted content with consistent category tokens for continued internal work. Token-map access remains restricted and audited.',
-      download: 'Download editable copy',
-      share: 'Share editable copy',
-    }
-  if (securePdf)
-    return {
-      heading: 'Secure redacted PDF',
-      body: 'Preview the finalized file below. Download and share this PDF only after checking every page.',
-      download: 'Download secure PDF',
-      share: 'Share secure PDF',
-    }
-  return {
-    heading: 'Finalized output',
-    body: 'Created before secure PDF became the default output.',
-    download: 'Download',
-    share: 'Share',
-  }
-}
-
-function FinalizedOutput({
-  run,
-  outputQuery,
-  onOpenDocument,
-}: {
-  run: RedactionRun
-  outputQuery: ReturnType<typeof useRedactionOutput>
-  /** Opens the source document's page after a return; absent where the host
-   * cannot route there. */
-  onOpenDocument?: (run: RedactionRun) => void
-}) {
-  const output = outputQuery.data
-  const mimeType =
-    output?.mimeType ?? run.summary.outputMimeType ?? 'text/plain'
-  const securePdf = output?.securePdf ?? isSecureRedacted(run, mimeType)
-  const isPdf = mimeType === 'application/pdf'
-  const isDocx = mimeType === DOCX_MIME
-  // Both burned outputs download as files; only the PDF previews inline.
-  const isFile = isPdf || isDocx
-  const filename =
-    output?.filename ?? run.summary.outputFilename ?? run.sourceFilename
-  const fileQuery = useRedactionOutputFile(
-    run.id,
-    isFile && Boolean(run.outputId),
-  )
-  const [preview, setPreview] = useState<{
-    blob: Blob | null
-    status: PdfPreviewStatus
-  }>({ blob: null, status: { kind: 'loading' } })
-  const copy = finalizedOutputCopy(run, securePdf)
-  // Preview and download read the same immutable Blob fetched once here. The
-  // secure redaction download stays disabled until its preview has rendered at
-  // least the first page, so a broken preview cannot push an unchecked file.
-  const outputFile = fileQuery.data
-  // Trust a preview status only for the Blob it described: a refetched or new
-  // output must render again before the download is enabled.
-  const previewStatus: PdfPreviewStatus =
-    outputFile !== undefined && preview.blob === outputFile
-      ? preview.status
-      : { kind: 'loading' }
-  const previewReady = isPdf && previewStatus.kind === 'ready'
-  const downloadReady = isFile
-    ? securePdf
-      ? previewReady && Boolean(outputFile)
-      : Boolean(outputFile)
-    : output?.text != null
-  const textBlob = () =>
-    new Blob([output?.text ?? ''], { type: 'text/plain;charset=utf-8' })
-  const outputBlob = () =>
-    isFile && outputFile ? outputFile : output?.text != null ? textBlob() : null
-
-  // The E12 handoff back to the editor: only a document-linked run whose
-  // output is editable DOCX can return, and a superseded run's output never
-  // can — its review decisions no longer describe the source. The base the
-  // request names is the version the run redacted; a moved head is refused
-  // server-side rather than overwritten here.
-  const returnable =
-    run.documentId !== null &&
-    run.documentVersionId !== null &&
-    isDocx &&
-    !run.replacementRunId
-  const returned = run.returnedDocumentVersionId ?? null
-  const returnToDocument = useReturnToDocument(run.id)
-
-  return (
-    <section className="px-4 py-4 sm:px-5" aria-label="Redaction output">
-      <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
-        <OutputDowngradeWarning run={run} />
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-8 py-6 md:px-10">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
-              Finalized
-            </p>
-            <h2 className="mt-2 break-words text-lg font-semibold leading-snug text-ink">
-              {copy.heading}
-            </h2>
-            <p className="mt-1 break-all text-sm text-muted">{filename}</p>
-            <p className="mt-2 text-sm text-muted">{copy.body}</p>
-            {isPdf && previewStatus.kind === 'ready' ? (
-              <p className="mt-1 text-xs text-muted" role="status">
-                Preview ready, {previewStatus.pageCount}{' '}
-                {previewStatus.pageCount === 1 ? 'page' : 'pages'}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="primary"
-              disabled={!downloadReady}
-              onClick={() => {
-                const blob = outputBlob()
-                if (blob) downloadBlob(blob, filename)
-              }}
-            >
-              {copy.download}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!downloadReady}
-              onClick={() => {
-                void (async () => {
-                  const blob = outputBlob()
-                  if (blob) await shareOrDownload(blob, filename)
-                })()
-              }}
-            >
-              {copy.share}
-            </Button>
-            {returned ? (
-              <>
-                <Badge tone="success">Returned to document</Badge>
-                {onOpenDocument && run.documentId ? (
-                  <Button
-                    variant="secondary"
-                    onClick={() => onOpenDocument(run)}
-                  >
-                    Open document
-                  </Button>
-                ) : null}
-              </>
-            ) : returnable ? (
-              <Button
-                variant="secondary"
-                loading={returnToDocument.isPending}
-                onClick={() =>
-                  returnToDocument.mutate({
-                    baseVersionId: run.documentVersionId!,
-                  })
-                }
-              >
-                Return to document
-              </Button>
-            ) : null}
-          </div>
-          {returned && returnToDocument.data ? (
-            <p className="mt-2 text-xs text-muted" role="status">
-              Saved as version {returnToDocument.data.versionNumber} of the
-              source document; the original version is unchanged.
-            </p>
-          ) : null}
-          {returnToDocument.error ? (
-            <p className="mt-2 text-sm text-danger" role="alert">
-              {returnToDocument.error.message}
-            </p>
-          ) : null}
-        </header>
-        <div className="px-4 py-4 sm:px-5 md:px-6">
-          {outputQuery.isPending || (isFile && fileQuery.isPending) ? (
-            <Skeleton className="h-32" />
-          ) : outputQuery.error ? (
-            <p className="text-sm text-danger" role="alert">
-              {outputQuery.error.message}
-            </p>
-          ) : isFile && fileQuery.error ? (
-            <p className="text-sm text-danger" role="alert">
-              {fileQuery.error.message}
-            </p>
-          ) : isPdf && outputFile ? (
-            <div className="flex flex-col gap-2">
-              {previewStatus.kind === 'error' ? (
-                <p className="text-sm text-danger" role="alert">
-                  The finalized PDF could not be previewed, so the download is
-                  disabled until it loads. This is not the source document.
-                </p>
-              ) : null}
-              <PdfDocumentPreview
-                file={outputFile}
-                onStatusChange={(status) =>
-                  setPreview({ blob: outputFile, status })
-                }
-              />
-            </div>
-          ) : isDocx && outputFile ? (
-            <p className="text-sm text-muted">
-              The redacted document keeps its formatting. Use Download to open
-              it in Word.
-            </p>
-          ) : (
-            <div className="px-4 pb-4 text-base leading-relaxed text-ink [overflow-wrap:anywhere] whitespace-pre-wrap md:px-5">
-              {output?.text}
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function reviewEyebrow(run: RedactionRun) {
-  return run.matterId
-    ? `Matter ${run.matterName ?? run.matterId} · ${run.sourceFilename}`
-    : `Standalone · ${run.sourceFilename}`
-}
-
 function zeroSpanBody(run: RedactionRun) {
   if (run.detectionMode === 'heuristics+supplement')
-    return 'The deterministic detectors did not find matching patterns. Model detection did not run, so manually check for names, addresses and dates of birth before finalising.'
+    return 'The deterministic detectors did not find matching patterns. Model detection did not run, so check the document yourself for names, addresses and dates of birth before finalising.'
   if (run.detectionMode === 'unknown')
-    return 'No matching patterns were recorded, and the detection mode is unknown. Manually check for names, addresses and dates of birth before relying on this run.'
-  return 'Rampart and the UK supplement did not find matching patterns. You can still finalize this run without changes.'
+    return 'No matching patterns were recorded, and the detection mode is unknown. Check the document yourself for names, addresses and dates of birth before relying on this run.'
+  return 'Rampart and the UK supplement did not find matching patterns. Detection finds candidates, not everything sensitive, so check the document yourself before finalising.'
+}
+
+/**
+ * The page is paper in both themes, so the span palette is pinned to the light
+ * token set for this subtree: a dark-theme span tint would paint a dark block on
+ * white paper and read as a redaction that is not there.
+ */
+function Paper({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex justify-center px-12 py-8 max-compact:px-8">
+      <div
+        data-theme="light"
+        className="w-full max-w-[860px] rounded-lg bg-paper px-10 py-10 text-body text-paper-ink shadow-md"
+      >
+        {children}
+      </div>
+    </div>
+  )
 }
 
 export function RedactionReviewView({
   runId,
   onOpenRun,
   onOpenDocument,
+  onBack,
 }: {
   runId: string
   onOpenRun: (runId: string) => void
   /** Opens a source document's own page after a return-to-document; absent
    * where the host has no route for it. */
   onOpenDocument?: (run: RedactionRun) => void
+  /** Returns to the Redact run list; absent where the host has no route. */
+  onBack?: () => void
 }) {
+  const { data: me } = useCurrentUser()
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
   const pdfPreviewEnabled = runQuery.data?.sourcePreview?.available === true
@@ -524,145 +181,161 @@ export function RedactionReviewView({
     runQuery.data?.status === 'finalized',
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<SpanFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
+  const listRef = useRef<HTMLDivElement | null>(null)
   const decision = useSpanDecision(runId)
 
-  // Keep the document mark for the selected span in view when choosing from the list.
+  // Keep the document mark for the selected span in view when choosing from the
+  // list, and the list row in view when walking with the decision bar.
   useEffect(() => {
     if (!selectedId) return
-    const mark = document.querySelector<HTMLElement>(
-      `[data-span-id="${CSS.escape(selectedId)}"]`,
-    )
-    mark?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    document
+      .querySelector<HTMLElement>(`[data-span-id="${CSS.escape(selectedId)}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedId])
 
   if (runQuery.isPending || textQuery.isPending) {
     return (
-      <ReviewDeskShell title="Loading review" meta="Redact">
-        <div className="flex flex-col gap-3 overflow-y-auto p-5">
-          <Skeleton className="h-28" />
-          <Skeleton className="h-96" />
+      <div className="mx-auto w-full max-w-[1216px] px-12 py-14 max-compact:px-8">
+        <div className="flex flex-col gap-4" aria-busy="true">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-96 w-full rounded-lg" />
         </div>
-      </ReviewDeskShell>
+      </div>
     )
   }
-  // Prefer cached data over a background refetch error (e.g. finalize
+  // Prefer cached data over a background refetch error (e.g. finalise
   // invalidateQueries failing) so a successful local write is not blanked out.
   if (!runQuery.data || !textQuery.data) {
     return (
-      <ReviewDeskShell title="Review unavailable" meta="Redact">
-        <div className="overflow-y-auto p-6">
-          <EmptyState
-            title="Could not load this redaction run"
-            body={(runQuery.error ?? textQuery.error)?.message}
-            icon={<EyeSlash size={28} aria-hidden="true" />}
-          />
-        </div>
-      </ReviewDeskShell>
+      <PageScaffold title="Redaction review">
+        <EmptyState
+          title="This redaction run could not be loaded"
+          body={
+            (runQuery.error ?? textQuery.error)?.message ??
+            'Check that you still have access to the matter, then try again.'
+          }
+          action={
+            <Button variant="secondary" onClick={() => void runQuery.refetch()}>
+              Try again
+            </Button>
+          }
+        />
+      </PageScaffold>
     )
   }
 
   const run = runQuery.data
-  const eyebrow = reviewEyebrow(run)
+  const currentUserId = me?.user.id
+
+  if (run.status === 'finalized')
+    return (
+      <FinalizedOutput
+        run={run}
+        outputQuery={outputQuery}
+        onOpenDocument={onOpenDocument}
+      />
+    )
 
   if (run.status === 'detecting' || run.status === 'pending') {
     return (
-      <ReviewDeskShell title="Detection in progress" meta="Redact">
-        <div className="overflow-y-auto p-6">
-          <EmptyState
-            title="Rampart is scanning the document"
-            body="This may take a moment for a large document. This screen will update when detection is complete."
-            icon={
-              <CircleNotch
-                className="animate-spin"
-                size={28}
-                aria-hidden="true"
-              />
-            }
-          />
-        </div>
-      </ReviewDeskShell>
+      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
+        <EmptyState
+          title="Detection in progress"
+          body="Rampart is reading the document. This screen updates when detection finishes; you can leave the page and come back."
+          icon={
+            <CircleNotch
+              className="animate-spin"
+              size={28}
+              aria-hidden="true"
+            />
+          }
+        />
+      </PageScaffold>
     )
   }
 
-  // Zero-span runs: still show finalize / finalized output (do not trap in the
-  // empty EmptyState after a successful finalize).
-  if (run.spans.length === 0) {
+  if (run.status === 'failed') {
     return (
-      <ReviewDeskShell
-        title={
-          run.status === 'finalized'
-            ? 'Redaction review'
-            : 'No sensitive data detected'
-        }
-        meta={eyebrow}
-        actions={
-          run.status === 'finalized' ? null : run.replacementRunId ? (
-            <Badge tone="neutral">Replaced</Badge>
-          ) : (
-            <FinalizeDialog run={run} />
-          )
-        }
-      >
-        <div className="flex flex-col gap-4 overflow-y-auto p-5 sm:p-6">
-          <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
-          {run.status === 'finalized' ? (
-            <FinalizedOutput
-              run={run}
-              outputQuery={outputQuery}
-              onOpenDocument={onOpenDocument}
-            />
-          ) : (
-            <EmptyState
-              title="No sensitive data was detected in this document"
-              body={zeroSpanBody(run)}
-              icon={<ShieldCheck size={28} aria-hidden="true" />}
-            />
-          )}
-        </div>
-      </ReviewDeskShell>
+      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
+        <EmptyState
+          title="Detection failed"
+          body={
+            run.summary.failureReason ??
+            'The detector stopped before it finished, so this run found nothing. Start a new run before you rely on this document.'
+          }
+          icon={<Warning size={28} aria-hidden="true" />}
+        />
+      </PageScaffold>
     )
   }
 
+  const counts = decisionCounts(run.spans, run.decisions)
+  // A filter change drops the selection: the decision bar must always describe
+  // a span the reviewer can see, not one that the filter just hid.
+  const changeFilter = (apply: () => void) => {
+    apply()
+    setSelectedId(null)
+  }
   const filtered = run.spans.filter(
     (span) =>
+      (filter === 'all' ||
+        spanDecisionState(run.decisions[span.id]?.decision) === filter) &&
       (categoryFilter === 'all' || span.category === categoryFilter) &&
       (sourceFilter === 'all' || span.source === sourceFilter),
   )
   const selected =
     run.spans.find((span) => span.id === selectedId) ?? filtered[0]
+  const position = selected
+    ? run.spans.findIndex((span) => span.id === selected.id) + 1
+    : 0
+  const pageCount = layoutQuery.data?.pages.length ?? null
+  const pageFor = (span: RedactionSpan): number | null => {
+    const layout = layoutQuery.data
+    if (!layout) return null
+    const segment = layout.segments.find(
+      (candidate) =>
+        candidate.start <= span.start && candidate.end > span.start,
+    )
+    return segment ? segment.pageIndex + 1 : null
+  }
+
+  const decide = (decisionValue: SpanDecision) => {
+    if (!selected || decision.isPending) return
+    decision.mutate({ spanId: selected.id, decision: decisionValue })
+  }
+
+  const move = (delta: number) => {
+    if (!filtered.length || !selected) return
+    const index = filtered.findIndex((span) => span.id === selected.id)
+    const next =
+      filtered[(index + delta + filtered.length) % filtered.length] ?? null
+    if (next) setSelectedId(next.id)
+  }
 
   const onListKeys = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!filtered.length) return
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
-      const index = selected
-        ? filtered.findIndex((span) => span.id === selected.id)
-        : 0
-      setSelectedId(
-        filtered[
-          (index + (event.key === 'ArrowDown' ? 1 : -1) + filtered.length) %
-            filtered.length
-        ]?.id ?? null,
-      )
+      move(event.key === 'ArrowDown' ? 1 : -1)
       return
     }
-    if (!selected || run.status === 'finalized' || run.replacementRunId) return
+    if (!selected || decision.isPending || run.replacementRunId) return
     // A modified chord belongs to the browser or the app shell, not to a legal
     // decision: Ctrl+K opens app search and Ctrl+R reloads the page. Recording
     // a decision on those chords mutated review state the user did not intend,
-    // so a modifier leaves every decision unchanged. Control, Meta and Alt are
-    // all covered; the unmodified letters below stay list-scoped.
+    // so a modifier leaves every decision unchanged.
     if (event.ctrlKey || event.metaKey || event.altKey) return
     // A decision shortcut is list-scoped: it belongs to the listbox only while
     // the listbox itself owns focus. A key event that bubbled from a focused
-    // row button (or any child) belongs to that row: acting on the separately
-    // selected span would record a legal decision against a span the reviewer
-    // was not looking at. The row keeps its normal activation and selection.
+    // row button belongs to that row: acting on the separately selected span
+    // would record a legal decision against a span the reviewer was not looking
+    // at.
     if (event.target !== event.currentTarget) return
     const key = event.key.toLowerCase()
-    const shortcutDecision =
+    const shortcut: SpanDecision | null =
       event.key === 'Enter'
         ? 'accept'
         : key === 'r'
@@ -670,195 +343,190 @@ export function RedactionReviewView({
           : key === 'p'
             ? 'pseudonymise'
             : null
-    if (!shortcutDecision) return
+    if (!shortcut) return
     event.preventDefault()
-    decision.mutate({ spanId: selected.id, decision: shortcutDecision })
+    decision.mutate({ spanId: selected.id, decision: shortcut })
   }
 
-  const pending = run.summary.unreviewedCount
+  const remaining = counts.pending
+  const decidedCount = run.summary.totalSpans - remaining
+  const progress =
+    run.summary.totalSpans === 0
+      ? 100
+      : (decidedCount / run.summary.totalSpans) * 100
+  const categories = Array.from(new Set(run.spans.map((span) => span.category)))
 
   return (
-    <ReviewDeskShell
-      title="Redaction review"
-      meta={eyebrow}
-      actions={
-        run.status === 'finalized' ? null : run.replacementRunId ? (
-          <Badge tone="neutral">Replaced</Badge>
-        ) : (
-          <FinalizeDialog run={run} />
-        )
-      }
-    >
-      <div className="shrink-0">
-        <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
-      </div>
-      <div className="shrink-0">
-        <ReviewSummary run={run} />
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] xl:overflow-y-hidden">
-        <section
-          className="shrink-0 border-b border-line xl:min-h-0 xl:overflow-y-auto xl:border-b-0 xl:border-r"
-          aria-label="Document"
-        >
-          {run.status === 'finalized' ? (
-            <FinalizedOutput
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-surface px-12 py-4 max-compact:px-8">
+        <div className="flex min-w-0 items-start gap-3">
+          {onBack ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Back to Redact"
+              onClick={onBack}
+              iconStart={<ArrowLeft size={16} aria-hidden="true" />}
+            />
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="text-section break-words text-ink">
+              {run.sourceFilename}
+            </h1>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-muted">
+              <span>{run.matterName ?? 'Standalone run'}</span>
+              <span aria-hidden="true">·</span>
+              <span>Redaction review</span>
+              {run.replacementRunId ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <Badge tone="neutral">Replaced</Badge>
+                </>
+              ) : null}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {run.replacementRunId ? null : (
+            <FinalizeDialog
               run={run}
-              outputQuery={outputQuery}
-              onOpenDocument={onOpenDocument}
+              onShowUndecided={() => {
+                setFilter('pending')
+                const first = run.spans.find((span) => !run.decisions[span.id])
+                if (first) setSelectedId(first.id)
+                listRef.current?.focus()
+              }}
             />
-          ) : pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data ? (
-            <PdfReviewDocument
-              file={sourceFileQuery.data}
-              layout={layoutQuery.data}
-              spans={run.spans}
-              selectedId={selected?.id ?? null}
-              onSelect={setSelectedId}
-              categoryClassName={categoryClasses}
-            />
-          ) : (
-            <div className="px-4 py-4 sm:px-5">
-              <div className="w-full rounded-lg border border-line-strong bg-raised p-8 text-ink shadow-lg md:p-10">
-                <header className="mb-6 border-b border-line pb-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
-                    Source document
-                  </p>
-                  <h2 className="mt-2 text-lg font-semibold leading-snug text-ink">
-                    {run.sourceFilename}
-                  </h2>
-                </header>
-                <HighlightedText
-                  text={textQuery.data.text}
-                  run={run}
+          )}
+        </div>
+      </header>
+
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-12 py-3 max-compact:px-8">
+        <p className="text-meta text-muted">
+          <span className="text-ink">
+            {`${String(decidedCount)} of ${String(run.summary.totalSpans)} detected spans decided`}
+          </span>
+        </p>
+        <ProgressBar
+          value={progress}
+          className="max-w-[200px] min-w-[120px] flex-1"
+        />
+        <p className="text-caption text-subtle">
+          {remaining > 0 ? `${remaining} left · ` : ''}
+          {DETECTION_COVERAGE_CAVEAT}
+        </p>
+        <div className="ml-auto flex items-center gap-4">
+          <span className="flex items-center gap-4 text-caption text-muted">
+            <StatusDot tone="success">
+              {`Redacted ${String(counts.accepted)}`}
+            </StatusDot>
+            <StatusDot tone="neutral">
+              {`Kept visible ${String(counts.rejected)}`}
+            </StatusDot>
+            <StatusDot tone="warning">
+              {`Needs review ${String(counts.pending)}`}
+            </StatusDot>
+          </span>
+          {pageCount === null ? null : (
+            <span className="text-caption text-subtle">
+              {pageCount} {pageCount === 1 ? 'page' : 'pages'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {run.replacementRunId || run.detectionMode !== 'model+supplement' ? (
+        <div className="shrink-0">
+          <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
+        </div>
+      ) : null}
+
+      {run.spans.length === 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-12 py-8 max-compact:px-8">
+          <EmptyState
+            title="No sensitive data was detected in this document"
+            body={zeroSpanBody(run)}
+            icon={<ShieldCheck size={28} aria-hidden="true" />}
+          />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-canvas">
+              {pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data ? (
+                <PdfReviewDocument
+                  file={sourceFileQuery.data}
+                  layout={layoutQuery.data}
+                  spans={run.spans}
+                  decisions={run.decisions}
                   selectedId={selected?.id ?? null}
                   onSelect={setSelectedId}
+                  categoryClassName={categoryClasses}
                 />
-              </div>
+              ) : (
+                <Paper>
+                  <HighlightedText
+                    text={textQuery.data.text}
+                    run={run}
+                    selectedId={selected?.id ?? null}
+                    onSelect={setSelectedId}
+                  />
+                </Paper>
+              )}
             </div>
-          )}
-        </section>
-        <aside
-          className="flex flex-col xl:min-h-0 xl:max-h-none"
-          aria-label="Review queue"
-        >
-          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-            <div>
-              <p className="text-[11px] font-medium tracking-wide text-muted">
-                Review queue
+            {run.replacementRunId ? (
+              <p className="border-t border-line bg-surface px-12 py-3 text-meta text-muted max-compact:px-8">
+                A newer model-detected run is available, so this run can no
+                longer take decisions or be finalised. Open the replacement run
+                above to continue.
               </p>
-              <h2 className="text-sm font-semibold text-ink">Detected spans</h2>
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-muted">
-              <Funnel size={14} aria-hidden="true" />
-              {run.summary.totalSpans} spans
-              {pending > 0 ? ` · ${pending} pending` : ' · queue clear'}
-            </div>
+            ) : (
+              <DecisionBar
+                span={selected}
+                position={position}
+                total={run.spans.length}
+                decisions={run.decisions}
+                currentUserId={currentUserId}
+                page={selected ? pageFor(selected) : null}
+                pageCount={pageCount}
+                pending={decision.isPending}
+                error={
+                  decision.error
+                    ? `The decision was not saved. ${decision.error.message}`
+                    : null
+                }
+                canPrevious={filtered.length > 1}
+                canNext={filtered.length > 1}
+                onPrevious={() => move(-1)}
+                onNext={() => move(1)}
+                onDecide={decide}
+              />
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-2 border-b border-line px-4 py-3">
-            <Select
-              value={categoryFilter}
-              onValueChange={(value) => setCategoryFilter(value ?? 'all')}
-              options={[
-                { value: 'all', label: 'All categories' },
-                ...Array.from(
-                  new Set(run.spans.map((span) => span.category)),
-                ).map((value) => ({
-                  value,
-                  label: value.replaceAll('_', ' '),
-                })),
-              ]}
-            />
-            <Select
-              value={sourceFilter}
-              onValueChange={(value) => setSourceFilter(value ?? 'all')}
-              options={[
-                { value: 'all', label: 'All sources' },
-                ...Object.entries(sourceLabel).map(([value, label]) => ({
-                  value,
-                  label,
-                })),
-              ]}
-            />
-          </div>
-          <div
-            className="min-h-0 flex-1 overflow-y-auto"
-            role="listbox"
-            tabIndex={0}
+          <ReviewPanel
+            spans={filtered}
+            decisions={run.decisions}
+            counts={counts}
+            currentUserId={currentUserId}
+            bySource={run.summary.bySource}
+            filter={filter}
+            onFilterChange={(next) => changeFilter(() => setFilter(next))}
+            category={categoryFilter}
+            onCategoryChange={(next) =>
+              changeFilter(() => setCategoryFilter(next))
+            }
+            source={sourceFilter}
+            onSourceChange={(next) => changeFilter(() => setSourceFilter(next))}
+            categories={categories}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelectedId}
             onKeyDown={onListKeys}
-          >
-            {filtered.map((span) => (
-              <button
-                type="button"
-                key={span.id}
-                onClick={() => setSelectedId(span.id)}
-                className={cn(
-                  'flex w-full flex-col gap-1 border-b border-line px-4 py-3 text-left text-sm transition-colors hover:bg-raised',
-                  selected?.id === span.id && 'bg-raised',
-                )}
-                role="option"
-                aria-selected={selected?.id === span.id}
-              >
-                <span className="truncate font-mono text-ink">{span.text}</span>
-                <span className="flex flex-wrap gap-1">
-                  <Badge tone="neutral">
-                    {span.category.replaceAll('_', ' ')}
-                  </Badge>
-                  <Badge tone="info">{span.confidence}</Badge>
-                  {run.decisions[span.id] ? (
-                    <Badge tone="success">
-                      {run.decisions[span.id].decision.replaceAll('_', ' ')}
-                    </Badge>
-                  ) : (
-                    <Badge tone="neutral">Unreviewed</Badge>
-                  )}
-                </span>
-              </button>
-            ))}
-          </div>
-          {selected && run.status !== 'finalized' && !run.replacementRunId ? (
-            <div className="border-t border-line px-4 py-3">
-              <p className="mb-2 text-xs text-muted">
-                Decision for{' '}
-                <span className="font-mono text-ink">{selected.text}</span>
-              </p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {decisions.map((action) => (
-                  <Button
-                    key={action.value}
-                    size="sm"
-                    variant={
-                      action.value === 'override_redact'
-                        ? 'danger'
-                        : 'secondary'
-                    }
-                    loading={
-                      decision.isPending &&
-                      decision.variables?.spanId === selected.id
-                    }
-                    onClick={() =>
-                      decision.mutate({
-                        spanId: selected.id,
-                        decision: action.value,
-                      })
-                    }
-                  >
-                    {action.label}{' '}
-                    {action.shortcut ? (
-                      <span className="ml-auto text-subtle">
-                        {action.shortcut}
-                      </span>
-                    ) : null}
-                  </Button>
-                ))}
-              </div>
-              {decision.error ? (
-                <p className="mt-2 text-sm text-danger">
-                  {decision.error.message}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </aside>
-      </div>
-    </ReviewDeskShell>
+            listRef={listRef}
+            pageFor={pageFor}
+            pageCount={pageCount}
+          />
+        </div>
+      )}
+    </div>
   )
 }

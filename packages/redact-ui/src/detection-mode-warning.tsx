@@ -9,15 +9,20 @@ const warningCopy = {
   'heuristics+supplement': {
     title: 'Model detection did not run',
     description:
-      'Names, addresses and dates of birth were not automatically detected. Check the document manually for these categories before finalising.',
+      'Names, addresses and dates of birth were not automatically detected. Check the document yourself for these categories before finalising.',
   },
   unknown: {
     title: 'Detection mode was not recorded',
     description:
-      'We cannot confirm whether model detection ran. Check the document manually for names, addresses and dates of birth before relying on this output.',
+      'Obiter cannot confirm whether model detection ran. Check the document yourself for names, addresses and dates of birth before relying on this output.',
   },
 } satisfies Record<LimitedDetectionMode, { title: string; description: string }>
 
+/**
+ * What the run could not see. Stated as a warning note and repeated in the
+ * finalise gates, because a run whose model never ran must not read like a run
+ * that found nothing.
+ */
 export function DetectionModeWarning({
   detectionMode,
   role = 'note',
@@ -31,23 +36,23 @@ export function DetectionModeWarning({
   const copy = warningCopy[detectionMode]
 
   return (
-    <section
-      className="flex flex-wrap items-start gap-3 border-b border-warning/40 bg-raised/40 px-5 py-3 text-sm text-ink sm:px-6"
+    <div
+      className="flex flex-wrap items-start gap-3 rounded-lg bg-warning-soft p-4 text-meta text-ink"
       role={role}
       aria-labelledby={titleId}
     >
       <Warning
         className="mt-0.5 shrink-0 text-warning"
-        size={18}
+        size={16}
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1">
-        <p id={titleId} className="font-semibold">
+        <p id={titleId} className="text-item">
           {copy.title}
         </p>
         <p className="mt-1 text-muted">{copy.description}</p>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
-    </section>
+    </div>
   )
 }

@@ -28,11 +28,6 @@ import {
   prefetchInviteAcceptData,
   resolveCaseDocumentIdFromSlug,
 } from '@obiter/app-shell'
-import {
-  RedactionReviewView,
-  RedactionRunsRegion,
-  RedactionRunsView,
-} from '@obiter/redact-ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -44,6 +39,34 @@ import {
   useNavigate,
 } from '@tanstack/react-router'
 import { DesktopSearchPage } from '../../pages/search'
+import { Suspense, lazy } from 'react'
+
+/**
+ * Redact is a whole module with its own review desk, PDF preview and output
+ * screens. Loading it lazily keeps it out of the renderer's initial bundle:
+ * the desktop app boots on the dashboard, and a redaction screen is one chunk
+ * fetched on the first visit to /redact.
+ */
+import { RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
+
+// The review desk pulls the span panel, the decision bar, the output screens
+// and the PDF preview. It is a chunk of its own, fetched on the first visit to
+// /redact/:runId; the runs list and the document page's runs region stay in the
+// entry because the document page renders them.
+const RedactionReviewView = lazy(async () => ({
+  default: (await import('@obiter/redact-ui/review')).RedactionReviewView,
+}))
+
+function RedactLoading() {
+  return (
+    <p
+      className="px-12 py-14 text-meta text-muted max-compact:px-8"
+      role="status"
+    >
+      Loading redaction…
+    </p>
+  )
+}
 
 /**
  * Shared-view paths the web app exposes that desktop must also register.
@@ -310,22 +333,25 @@ function DesktopRedactionReviewRoute() {
   const { runId } = redactReviewRoute.useParams()
   const navigate = useNavigate()
   return (
-    <RedactionReviewView
-      runId={runId}
-      onOpenRun={(replacementRunId) =>
-        navigate({
-          to: '/redact/$runId',
-          params: { runId: replacementRunId },
-        })
-      }
-      onOpenDocument={(run) => {
-        if (!run.documentId || !run.matterId) return
-        void navigate({
-          to: '/matters/$matterId/documents/$documentId',
-          params: { matterId: run.matterId, documentId: run.documentId },
-        })
-      }}
-    />
+    <Suspense fallback={<RedactLoading />}>
+      <RedactionReviewView
+        runId={runId}
+        onOpenRun={(replacementRunId) =>
+          navigate({
+            to: '/redact/$runId',
+            params: { runId: replacementRunId },
+          })
+        }
+        onBack={() => void navigate({ to: '/redact' })}
+        onOpenDocument={(run) => {
+          if (!run.documentId || !run.matterId) return
+          void navigate({
+            to: '/matters/$matterId/documents/$documentId',
+            params: { matterId: run.matterId, documentId: run.documentId },
+          })
+        }}
+      />
+    </Suspense>
   )
 }
 

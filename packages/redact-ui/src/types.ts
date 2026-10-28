@@ -1,7 +1,6 @@
 import type {
   DetectionMode,
   DocumentTextLayout,
-  DocumentTextLayoutSegment,
   RedactionFinalizeInput,
   RedactionOutputResponse,
   RedactionPolicyMode,
@@ -45,7 +44,7 @@ export interface RedactionRun {
   updatedAt: string
 }
 
-export type { DocumentTextLayout, DocumentTextLayoutSegment }
+export type { DocumentTextLayout }
 
 export interface RedetectResponse {
   run: RedactionRun
