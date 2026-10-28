@@ -38,11 +38,13 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
-const toneAccent = {
-  info: 'before:bg-info',
-  success: 'before:bg-success',
-  warning: 'before:bg-warning',
-  danger: 'before:bg-danger',
+/* A tone dot, like StatusDot: the title carries the meaning, so the dot is
+ * decoration and no icon font weight rides on it. */
+const toneDot = {
+  info: 'bg-info',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
 } satisfies Record<ToastTone, string>
 
 const DEFAULT_TIMEOUT = 5000
@@ -152,26 +154,29 @@ function ToastItem({
       role={isDanger ? 'alert' : 'status'}
       aria-live={isDanger ? 'assertive' : 'polite'}
       className={cn(
-        'pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-md border border-line bg-raised p-3 pr-9 shadow-md',
-        'before:absolute before:bottom-0 before:left-0 before:top-0 before:w-1',
-        toneAccent[record.tone],
+        'pointer-events-auto relative flex items-start gap-3 rounded-lg border border-line bg-raised p-4 pr-10 shadow-md',
       )}
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="text-sm font-semibold text-ink">{record.title}</p>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'mt-2 size-1.5 shrink-0 rounded-pill',
+          toneDot[record.tone],
+        )}
+      />
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="text-meta text-ink">{record.title}</p>
         {record.description ? (
-          <p className="text-xs leading-relaxed text-muted">
-            {record.description}
-          </p>
+          <p className="text-caption text-muted">{record.description}</p>
         ) : null}
       </div>
       <button
         type="button"
         aria-label="Dismiss notification"
         onClick={() => onDismiss(record.id)}
-        className="absolute right-2 top-2 rounded p-1 text-subtle hover:bg-surface hover:text-ink"
+        className="absolute right-2 top-2 rounded-sm p-1 text-subtle hover:bg-hover hover:text-ink"
       >
-        <X size={14} aria-hidden="true" />
+        <X size={16} aria-hidden="true" />
       </button>
     </div>
   )

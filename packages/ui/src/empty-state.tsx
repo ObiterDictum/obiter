@@ -20,20 +20,24 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-start gap-3 rounded-lg border border-dashed border-line-strong bg-surface/60 p-6',
+        'flex flex-col items-start gap-3 rounded-lg bg-surface p-8',
         className,
       )}
     >
-      {icon ? <div className="text-subtle">{icon}</div> : null}
-      <div className="flex flex-col gap-1.5">
-        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      {icon ? (
+        <div className="grid size-9 place-items-center rounded-md bg-fill text-subtle">
+          {icon}
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-2">
+        <h2 className="text-section text-ink">{title}</h2>
         {body ? (
-          <p className="max-w-prose text-sm leading-relaxed text-muted">
-            {body}
-          </p>
+          <p className="max-w-prose text-meta text-muted">{body}</p>
         ) : null}
       </div>
-      {action ? <div className="mt-1">{action}</div> : null}
+      {action ? (
+        <div className="mt-1 flex items-center gap-2">{action}</div>
+      ) : null}
     </div>
   )
 }

@@ -38,9 +38,9 @@ function extractBlock(source: string, selector: string): string {
   }
 }
 
-/* Dark is the product default (:root); light is the secondary preference. */
-const darkBlock = extractBlock(tokensCss, ':root')
-const lightBlock = extractBlock(tokensCss, '[data-theme="light"]')
+/* Verify the shipped defaults and the explicit dark override. */
+const darkBlock = extractBlock(tokensCss, '[data-theme="dark"]')
+const lightBlock = extractBlock(tokensCss, ':root')
 
 function declarations(block: string): Map<string, string> {
   const map = new Map<string, string>()

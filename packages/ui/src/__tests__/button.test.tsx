@@ -19,13 +19,19 @@ describe('Button', () => {
     )
     const button = screen.getByRole('button')
     expect(button.className).toContain('mt-4')
-    expect(button.className).toContain('border-line')
+    expect(button.className).toContain('bg-fill')
   })
 
-  it('disables the button while loading', () => {
+  it('disables the button while loading and reports it as busy', () => {
     render(<Button loading>Save</Button>)
     const button = screen.getByRole('button') as HTMLButtonElement
     expect(button.disabled).toBe(true)
+    expect(button.getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('is not busy when it is not loading', () => {
+    render(<Button>Save</Button>)
+    expect(screen.getByRole('button').getAttribute('aria-busy')).toBeNull()
   })
 
   it('defaults to type="button" so it never accidentally submits a form', () => {
@@ -40,7 +46,7 @@ describe('Badge', () => {
   it('renders children and the neutral tone by default', () => {
     render(<Badge>Live</Badge>)
     const badge = screen.getByText('Live')
-    expect(badge.className).toContain('bg-surface')
+    expect(badge.className).toContain('bg-fill')
   })
 
   it('applies the danger tone', () => {

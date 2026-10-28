@@ -13,12 +13,12 @@ import favicon from '@obiter/ui/brand/logo/mark-32-ink-transparent.png'
 
 ## What is here
 
-| Path                               | Use                                      |
-| ---------------------------------- | ---------------------------------------- |
-| `obiter-mark.svg`                  | The mark. Canonical vector source.       |
-| `obiter-wordmark.svg`              | Mark plus OBITER type.                   |
-| `obiter-app-icon-1024.png`         | Source for the desktop `.ico` / `.icns`. |
-| `logo/mark-<size>-<colourway>.png` | Raster ladder, 16px to 1024px.           |
+| Path                               | Use                                                  |
+| ---------------------------------- | ---------------------------------------------------- |
+| `obiter-mark.svg`                  | Approved `ob` monogram (`final/icons.svg#i-obiter`). |
+| `obiter-wordmark.svg`              | Mark plus OBITER type.                               |
+| `obiter-app-icon-1024.png`         | Source for the desktop `.ico` / `.icns`.             |
+| `logo/mark-<size>-<colourway>.png` | Raster ladder, 16px to 1024px.                       |
 
 Colourways are `ink` (dark mark, light surfaces), `cream` (light mark, dark
 surfaces), each as `-transparent`, plus `-on-sand` and `-on-night` where a baked
@@ -28,8 +28,8 @@ background is needed (favicons render badly on transparency in some clients).
 
 The mark rendered _in the app_ is markup, not a file:
 `packages/app-shell/src/wordmark.tsx` draws it as inline JSX so it inherits
-`currentColor` and tracks the theme. Change the shape in both places or they
-drift.
+`currentColor` and tracks the theme. The shell retains its legacy Wordmark until redesign Stage 2. Raster favicons,
+desktop icons and the legacy lockup remain in use and are not regenerated here.
 
 `docs/brand/` keeps only the README lockups. The generated presentation kit
 (guideline boards, application mockups, social renders) is gitignored: it was

@@ -130,6 +130,8 @@ Phase 2 covers four areas:
 
 The review UI lives in its own package, `@obiter/redact-ui`, owned entirely by the Redact track (decided July 2026 — package-level separation keeps the parallel shell-rebuild and Redact tracks from editing the same package). It imports `@obiter/ui` components, design tokens, and `@obiter/app-shell` public helpers per the component contract; the web app's route files import the review screens from `@obiter/redact-ui`.
 
+The redesign foundation updates contract §§1–2 in the same change: light-default tokens with an explicit dark override, warm surfaces, near-white paper and a charcoal inset surround in dark; six text levels and the 0/4/8/12/16/24/32/40/48/56 spacing scale. The shell still seeds and persists dark, and auth still forces dark, until redesign Stage 2. Span-category names and their AA guarantees are unchanged. Shared presentation now includes `ListRow`, `SidePanel` (structural; the owner supplies drawer and dismissal behaviour), `StatusDot` (a status word plus a decorative dot), `KeyboardHint` (hidden inside a disabled control) and `DialogFooter`. Table and list rows are at least 52px, skeletons are static, and disabled controls promise no shortcut. Exact tokens and props are in the [canonical contract](../../specs/app-shell/contract.md).
+
 - Document text view with highlighted spans (color by category)
 - Visual distinction between Rampart model spans, Rampart deterministic spans, and UK supplement spans (border style or icon)
 - Span list panel: sortable by category, confidence, source, review status
