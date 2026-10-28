@@ -25,6 +25,9 @@ export interface LegislationActContentsNode {
   /** Heading text for container rows; never set for provision rows (the
    * Act page never serves provision body text). */
   text?: string
+  /** A provision's own published heading, so the contents read
+   * "s. 13 Direct discrimination". Absent when the source carries none. */
+  heading?: string
   children: LegislationActContentsNode[]
 }
 
@@ -38,6 +41,8 @@ export interface LegislationActPage {
     extent: string
     officialUrl: string
     sourceUrl: string
+    /** When this corpus read the Act's data.xml; absent when not recorded. */
+    acquiredAt?: string
     canonicalUrl: string
     /** P1 content rows: sections plus schedule paragraphs, the withheld-
      * eligible entries. Containers (Part, Chapter, Schedule, crossheading)
@@ -96,6 +101,9 @@ function buildContentsTree(
       // "Part 2 — Equality: key concepts". Provision body text is never
       // served here (the provision page carries that gate).
       text: isContainerKind(row.kind) ? row.text : undefined,
+      ...(isContainerKind(row.kind) || !row.heading
+        ? {}
+        : { heading: row.heading }),
       children: [],
     })
   }
@@ -170,6 +178,7 @@ export async function resolveLegislationActPage(
         extent: document.extent,
         officialUrl,
         sourceUrl: document.sourceUrl,
+        ...(document.acquiredAt ? { acquiredAt: document.acquiredAt } : {}),
         canonicalUrl: createCanonicalActPath(document.identity),
         totalCount,
         withheldCount,

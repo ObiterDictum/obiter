@@ -36,6 +36,7 @@ import { createDocumentModelRoutes } from './routes/document-model'
 import { createDocumentPdfViewRoutes } from './routes/document-pdf-view'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
+import { createMatterSavedSourcesRoutes } from './routes/matter-saved-sources'
 import { createOrganisationsRoutes } from './routes/organisations'
 import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRunCreationRoutes } from './routes/redact-run-creation'
@@ -327,6 +328,7 @@ export function createApiApp(
   })
 
   app.route('/', createMattersRoutes(pool))
+  app.route('/', createMatterSavedSourcesRoutes(pool))
   app.route('/', createCommentsRoutes(pool, storage))
   app.route('/', createDocumentAccessRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool, env))

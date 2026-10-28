@@ -20,6 +20,7 @@ export * from './legislation-paths'
 export * from './neutral-citation'
 // Organisation, membership and the authenticated-user view.
 export * from './organisation'
+export * from './saved-sources'
 export * from './xml-text'
 export * from './verification'
 
