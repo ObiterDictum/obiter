@@ -51,7 +51,9 @@ describe('breadcrumbTrail', () => {
     ])
   })
 
-  it('shows nothing beyond the organisation on an unknown path', () => {
-    expect(breadcrumbTrail('/no-such-page', null)).toEqual([])
+  it('names the page itself on an unknown path, so no crumb ends in a chevron', () => {
+    expect(breadcrumbTrail('/no-such-page', null)).toEqual([
+      { label: 'Page not found' },
+    ])
   })
 })

@@ -88,7 +88,7 @@ mock.module('@tanstack/react-router', () => ({
 // Loaded after the registrations above: bun does not hoist mock.module the
 // way vi.mock was hoisted, and these modules capture mocked imports at
 // module scope, so they must evaluate once the mocks are in place.
-const { ORGLESS_ME, OWNER_ME, idleMutation, renderSettings } =
+const { OWNER_ME, idleMutation, renderSettings } =
   await import('./settings-test-support')
 
 function signedIn(user: MeResponse = OWNER_ME) {
@@ -111,13 +111,16 @@ afterEach(() => {
 })
 
 describe('SettingsRouteView — account', () => {
-  it('shows the account identity with email and role read-only', async () => {
+  it('shows the account identity with email read-only', async () => {
     renderSettings()
     const account = await screen.findByRole('region', { name: 'Account' })
 
     expect(within(account).getByLabelText('Name')).toBeTruthy()
     expect(within(account).getByText('owner@obiter.dev')).toBeTruthy()
-    expect(within(account).getByText('Owner')).toBeTruthy()
+    // The role belongs to Organisation, where it can change: Account states it
+    // once and nowhere else.
+    expect(within(account).queryByText('Your role')).toBeNull()
+    expect(within(account).queryByText('Owner')).toBeNull()
     expect(
       within(account).getByText(/change the email you sign in with/i),
     ).toBeTruthy()
@@ -186,14 +189,5 @@ describe('SettingsRouteView — account', () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(name)
     })
-  })
-
-  it('says a user with no organisation has none yet instead of inventing a role', async () => {
-    signedIn(ORGLESS_ME)
-    renderSettings()
-    const account = await screen.findByRole('region', { name: 'Account' })
-
-    expect(within(account).getByText(/no organisation yet/i)).toBeTruthy()
-    expect(within(account).queryByText('Owner')).toBeNull()
   })
 })

@@ -13,8 +13,8 @@ import {
 } from '@obiter/ui'
 import { formatDateTime } from '../format'
 import type { MatterRecord } from '../matters'
-import { matterTileLabel } from '../sidebar-rows'
-import type { MatterRow } from './matters-rows'
+import { matterInitials } from '../matters'
+import { openWorkParts, type MatterRow } from './matters-rows'
 
 /**
  * The matter's initials tile: the client reference's letters where there is a
@@ -25,9 +25,9 @@ export function MatterTile({ matter }: { matter: MatterRecord }) {
   return (
     <span
       aria-hidden="true"
-      className="grid size-6 shrink-0 place-items-center rounded-sm bg-fill text-caption text-muted"
+      className="grid size-7 shrink-0 place-items-center rounded-sm bg-fill text-caption tracking-tight text-muted"
     >
-      {matterTileLabel(matter)}
+      {matterInitials(matter)}
     </span>
   )
 }
@@ -154,29 +154,7 @@ function OpenWorkCell({
   if (row.openWork.total === 0) {
     return <span className="text-meta text-subtle">No open work</span>
   }
-  const parts: Array<{ label: string; tone: 'danger' | 'warning' | 'info' }> =
-    []
-  if (row.openWork.flaggedFindings > 0) {
-    parts.push({
-      label: `${row.openWork.flaggedFindings} flagged`,
-      tone: 'danger',
-    })
-  }
-  if (row.openWork.reviewFindings > 0) {
-    parts.push({
-      label: `${row.openWork.reviewFindings} need review`,
-      tone: 'warning',
-    })
-  }
-  if (row.openWork.redactionDecisions > 0) {
-    parts.push({
-      label: `${row.openWork.redactionDecisions} redaction ${row.openWork.redactionDecisions === 1 ? 'decision' : 'decisions'}`,
-      tone: 'info',
-    })
-  }
-  if (row.openWork.failed > 0) {
-    parts.push({ label: `${row.openWork.failed} failed`, tone: 'danger' })
-  }
+  const parts = openWorkParts(row.openWork)
   return (
     <span className="flex flex-wrap items-center gap-3">
       {parts.map((part) => (

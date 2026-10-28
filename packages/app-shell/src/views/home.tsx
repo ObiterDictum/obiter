@@ -6,8 +6,11 @@ import { PERSONAL_WORKSPACE_NAME } from '@obiter/contracts'
 import { Skeleton, buttonClassName } from '@obiter/ui'
 import { useEffect, useRef } from 'react'
 import { useCurrentUser } from '../current-user'
-import { matterDocumentsQueryOptions } from '../documents'
-import { formatDate } from '../format'
+import {
+  matterDocumentsQueryOptions,
+  useRecentlyOpenedDocument,
+} from '../documents'
+import { formatDate, formatRelativeTime } from '../format'
 import { useMattersList, type MatterRecord } from '../matters'
 import { useRedactionRunsList } from '../redaction-runs'
 import {
@@ -185,6 +188,7 @@ function HomeDashboard({ me }: { me: MeResponse }) {
       }
       description={
         <span className="flex flex-col gap-1">
+          <ContinueLine />
           {empty ? (
             `${organisationName ?? 'Your workspace'} is ready. Start with a matter, or search the law first.`
           ) : attentionError ? (
@@ -259,6 +263,39 @@ function HomeDashboard({ me }: { me: MeResponse }) {
         </div>
       )}
     </PageScaffold>
+  )
+}
+
+/**
+ * "Continue where you left off" — the last document this person opened, named
+ * with its matter and when. It comes from the open the document page records,
+ * so it is a fact about this reader rather than a guess from the newest file.
+ */
+function ContinueLine() {
+  const recentlyOpened = useRecentlyOpenedDocument()
+  const document = recentlyOpened.data
+  if (!document) return null
+  return (
+    <span
+      className="block max-w-full truncate text-meta text-muted"
+      /* One line, as the mock-up has it: the full sentence is the tooltip. */
+      title={`Continue where you left off: ${document.filename} · ${document.matterName}`}
+    >
+      Continue where you left off:{' '}
+      <Link
+        to="/matters/$matterId/documents/$documentId"
+        params={{
+          matterId: document.matterId,
+          documentId: document.documentId,
+        }}
+        className="text-ink hover:text-brand"
+      >
+        {document.filename}
+      </Link>{' '}
+      <span className="text-subtle">
+        · {document.matterName} · {formatRelativeTime(document.openedAt)}
+      </span>
+    </span>
   )
 }
 

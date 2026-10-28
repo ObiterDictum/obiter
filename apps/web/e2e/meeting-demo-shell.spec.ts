@@ -102,14 +102,17 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
   await page.goto('/verify')
   await expect(workspaceNav(page)).toBeVisible()
 
-  // The nav no longer calls a working capability "Soon": only Research is
-  // marked as coming later, and it is not a link.
+  // The nav calls no working capability "Soon" any more: Agent is a real row
+  // that opens a panel, and nothing is marked as coming later.
   const verifyMode = workspaceNav(page).getByRole('link', {
     name: /^Verify/,
   })
   await expect(verifyMode).toBeVisible()
   await expect(verifyMode).toHaveAttribute('aria-current', 'page')
-  await expect(workspaceNav(page).getByText('Soon')).toHaveCount(1)
+  await expect(workspaceNav(page).getByText('Soon')).toHaveCount(0)
+  await expect(
+    workspaceNav(page).getByRole('button', { name: 'Agent' }),
+  ).toBeVisible()
 
   // Identity is the document and matter, not the run or version UUID. The
   // sidebar also lists the matter, so the page's own copy is what is read here.

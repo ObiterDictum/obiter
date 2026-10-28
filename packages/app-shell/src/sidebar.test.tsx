@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-router'
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
 import type { MatterRecord } from './matters'
-import { matterTileLabel } from './sidebar-rows'
+import { matterInitials } from './matters'
 import type { RedactionRunListItem } from './redaction-runs'
 import { buildAttentionItems } from './views/home-attention'
 import {
@@ -105,7 +105,13 @@ function redactionRun(
 
 function renderSidebar(path = '/') {
   const rootRoute = createRootRoute()
-  const sidebar = () => <Sidebar orgName="Harrington Vale LLP" />
+  const sidebar = () => (
+    <Sidebar
+      orgName="Harrington Vale LLP"
+      agentOpen={false}
+      onToggleAgent={() => {}}
+    />
+  )
   const routes = [
     createRoute({
       getParentRoute: () => rootRoute,
@@ -212,8 +218,8 @@ describe('sidebar data helpers', () => {
   })
 
   it('labels a matter tile from its client reference, else its initials', () => {
-    expect(matterTileLabel(matter())).toBe('NGF')
-    expect(matterTileLabel(matter({ clientReference: '' }))).toBe('NF')
+    expect(matterInitials(matter())).toBe('NGF')
+    expect(matterInitials(matter({ clientReference: '' }))).toBe('NF')
   })
 
   it('lists the most recently updated matters, newest first', () => {
@@ -253,11 +259,24 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Redact, 1 waiting' })).toBeTruthy()
   })
 
-  it('offers Research as a disabled entry, not a route', async () => {
+  it('offers Agent as a panel toggle, second in the list, not a route', async () => {
     renderSidebar('/')
-    const research = await screen.findByText('Research')
-    expect(research.closest('[aria-disabled]')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: /Research/ })).toBeNull()
+    const agent = await screen.findByRole('button', { name: 'Agent' })
+    expect(agent.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('link', { name: /Agent/ })).toBeNull()
+
+    const nav = screen.getByRole('navigation', { name: 'Workspace' })
+    const rows = Array.from(nav.querySelectorAll('ul:first-of-type > li')).map(
+      (item) => item.querySelector('a, button')?.getAttribute('aria-label'),
+    )
+    expect(rows).toEqual([
+      'Home',
+      'Agent',
+      'Search',
+      'Matters',
+      expect.stringMatching(/^Verify/),
+      expect.stringMatching(/^Redact/),
+    ])
   })
 
   it('collapses to the icon rail and remembers the choice', async () => {

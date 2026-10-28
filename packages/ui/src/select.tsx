@@ -10,6 +10,8 @@ export interface SelectOption {
 
 export interface SelectProps {
   options: SelectOption[]
+  /** The control's name when no visible label is shown beside it. */
+  ariaLabel?: string
   value?: string
   defaultValue?: string
   onValueChange?: (value: string | null) => void
@@ -31,6 +33,7 @@ function optionLabel(options: SelectOption[], value: string) {
  */
 export function Select({
   options,
+  ariaLabel,
   value,
   defaultValue,
   onValueChange,
@@ -59,7 +62,7 @@ export function Select({
       >
         <BaseSelect.Trigger
           aria-labelledby={label ? labelId : undefined}
-          aria-label={label ? undefined : placeholder}
+          aria-label={label ? undefined : (ariaLabel ?? placeholder)}
           aria-invalid={invalid || undefined}
           className={cn(
             'inline-flex h-control w-full items-center justify-between gap-2 rounded-md border bg-raised px-3 text-meta text-ink',
