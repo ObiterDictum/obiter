@@ -18,12 +18,16 @@ export function Tabs(props: ComponentPropsWithoutRef<typeof BaseTabs.Root>) {
   return <BaseTabs.Root {...props} />
 }
 
-export function TabsList(
-  props: ComponentPropsWithoutRef<typeof BaseTabs.List>,
-) {
+export function TabsList({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<typeof BaseTabs.List>) {
   return (
     <BaseTabs.List
-      className="inline-flex items-center gap-1 rounded-md bg-canvas p-1"
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md bg-fill p-1',
+        className,
+      )}
       {...props}
     />
   )
@@ -36,11 +40,12 @@ export function TabsTrigger({
   return (
     <BaseTabs.Tab
       className={cn(
-        'relative rounded-md px-3 py-1.5 text-sm font-medium text-muted',
-        'transition-[color,background-color] duration-200',
+        'relative h-7 rounded-sm px-2 text-caption text-subtle',
+        'transition-[color,background-color] duration-150',
         'hover:text-ink',
-        'data-[selected]:bg-raised data-[selected]:text-ink',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
+        'data-[selected]:bg-raised data-[selected]:text-ink data-[selected]:shadow-sm',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        'disabled:cursor-not-allowed disabled:opacity-45',
         className,
       )}
       {...props}

@@ -1,5 +1,5 @@
 import { Select as BaseSelect } from '@base-ui-components/react/select'
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { CaretDown } from '@phosphor-icons/react'
 import { cn } from './lib/cn'
 
@@ -41,10 +41,13 @@ export function Select({
   disabled,
   className,
 }: SelectProps) {
+  const labelId = useId()
   return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       {label ? (
-        <span className="text-sm font-medium text-ink">{label}</span>
+        <span id={labelId} className="text-meta text-ink">
+          {label}
+        </span>
       ) : null}
       <BaseSelect.Root
         name={name}
@@ -55,11 +58,14 @@ export function Select({
         items={options}
       >
         <BaseSelect.Trigger
+          aria-labelledby={label ? labelId : undefined}
+          aria-label={label ? undefined : placeholder}
+          aria-invalid={invalid || undefined}
           className={cn(
-            'inline-flex h-10 w-full items-center justify-between gap-2 rounded-md border bg-surface px-3 text-sm text-ink',
+            'inline-flex h-control w-full items-center justify-between gap-2 rounded-md border bg-raised px-3 text-meta text-ink',
             'transition-[border-color,box-shadow] duration-150',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
-            'disabled:cursor-not-allowed disabled:opacity-60 data-[popup-open]:border-brand',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'disabled:cursor-not-allowed disabled:opacity-45 data-[popup-open]:border-brand',
             invalid ? 'border-danger' : 'border-line hover:border-line-strong',
           )}
         >
@@ -73,14 +79,14 @@ export function Select({
             }
           </BaseSelect.Value>
           <BaseSelect.Icon className="text-muted">
-            <CaretDown size={16} weight="bold" aria-hidden="true" />
+            <CaretDown size={16} weight="regular" aria-hidden="true" />
           </BaseSelect.Icon>
         </BaseSelect.Trigger>
         <BaseSelect.Portal>
-          <BaseSelect.Positioner sideOffset={6} className="z-50 outline-none">
+          <BaseSelect.Positioner sideOffset={8} className="z-50 outline-none">
             <BaseSelect.Popup
               className={cn(
-                'max-h-72 w-[var(--select-anchor-width)] overflow-auto rounded-md border border-line bg-raised p-1 shadow-lg',
+                'max-h-72 w-[var(--select-anchor-width)] overflow-auto rounded-lg border border-line bg-raised p-2 shadow-lg',
                 'outline-none',
               )}
             >
@@ -89,9 +95,9 @@ export function Select({
                   key={option.value}
                   value={option.value}
                   className={cn(
-                    'flex cursor-pointer items-center justify-between rounded px-2.5 py-1.5 text-sm text-ink',
-                    'data-[selected]:bg-brand data-[selected]:text-brand-fg',
-                    'data-[highlighted]:bg-surface',
+                    'flex cursor-pointer items-center justify-between rounded-sm px-3 py-1.5 text-meta text-ink',
+                    'data-[selected]:bg-brand-soft data-[selected]:text-ink',
+                    'data-[highlighted]:bg-hover',
                   )}
                 >
                   <BaseSelect.ItemText>{option.label}</BaseSelect.ItemText>
