@@ -1,10 +1,5 @@
-import type { DocumentPresence } from '@obiter/contracts'
-import { Button, Tabs, TabsContent, TabsList } from '@obiter/ui'
-import {
-  DownloadSimple,
-  FileArrowDown,
-  FloppyDisk,
-} from '@phosphor-icons/react'
+import { Tabs, TabsContent, TabsList } from '@obiter/ui'
+import { DownloadSimple, FileArrowDown } from '@phosphor-icons/react'
 import { HomeRibbon } from './ribbon-home'
 import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
@@ -84,9 +79,6 @@ export function PdfWorkspaceToolbar({
 }
 
 export function DocumentWorkspaceToolbar({
-  dirty,
-  saving,
-  blocked,
   trackChanges,
   zoom,
   commentsOpen,
@@ -94,8 +86,6 @@ export function DocumentWorkspaceToolbar({
   authoritiesOpen,
   commentCount,
   changeCount,
-  presence,
-  currentUserId,
   onToggleComments,
   onToggleChanges,
   onToggleAuthorities,
@@ -108,7 +98,6 @@ export function DocumentWorkspaceToolbar({
   onExportText,
   onExportShareSafe,
   onPrint,
-  onSave,
   onUndo,
   onRedo,
   onInsertParagraph,
@@ -135,10 +124,6 @@ export function DocumentWorkspaceToolbar({
   spelling,
   onToggleSpelling,
 }: {
-  dirty: boolean
-  saving: boolean
-  /** The committed save's history could not be reconciled; saving is refused. */
-  blocked?: boolean
   trackChanges: boolean
   zoom: number
   commentsOpen: boolean
@@ -146,8 +131,6 @@ export function DocumentWorkspaceToolbar({
   authoritiesOpen: boolean
   commentCount: number
   changeCount: number
-  presence: DocumentPresence[]
-  currentUserId?: string
   onToggleComments: () => void
   onToggleChanges: () => void
   onToggleAuthorities: () => void
@@ -167,7 +150,6 @@ export function DocumentWorkspaceToolbar({
   onExportText: () => void
   onExportShareSafe?: () => void
   onPrint?: () => void
-  onSave: () => void
   onUndo?: () => void
   onRedo?: () => void
   onInsertParagraph: () => void
@@ -202,39 +184,20 @@ export function DocumentWorkspaceToolbar({
   spelling?: boolean
   onToggleSpelling?: () => void
 }) {
-  const others = presence.filter((item) => item.userId !== currentUserId)
-
   return (
     <Tabs defaultValue="home">
-      <div className="flex min-w-0 items-end justify-between gap-3 px-3">
-        <TabsList
-          aria-label="Ribbon"
-          className="inline-flex flex-wrap items-end gap-0 rounded-none bg-transparent p-0"
-        >
-          <RibbonTab value="home">Home</RibbonTab>
-          <RibbonTab value="insert">Insert</RibbonTab>
-          <RibbonTab value="layout">Layout</RibbonTab>
-          <RibbonTab value="references">References</RibbonTab>
-          <RibbonTab value="review">Review</RibbonTab>
-          <RibbonTab value="view">View</RibbonTab>
-        </TabsList>
-        {others.length > 0 ? (
-          <div
-            className="flex flex-wrap items-center gap-1 pb-1.5"
-            aria-label="Editors present"
-          >
-            {others.map((item) => (
-              <span
-                key={item.clientId ?? item.userId}
-                className="inline-flex h-6 min-w-6 items-center justify-center rounded-pill bg-raised px-1.5 text-[10px] font-medium text-muted ring-1 ring-line"
-              >
-                {shortUserLabel(item.userId)}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
-      <div className="flex min-w-0 items-stretch gap-2 overflow-x-auto border-t border-line px-2 py-1.5">
+      <TabsList
+        aria-label="Ribbon"
+        className="flex h-[34px] flex-wrap items-stretch gap-1 rounded-none border-b border-line bg-transparent px-12 max-compact:px-8"
+      >
+        <RibbonTab value="home">Home</RibbonTab>
+        <RibbonTab value="insert">Insert</RibbonTab>
+        <RibbonTab value="layout">Layout</RibbonTab>
+        <RibbonTab value="references">References</RibbonTab>
+        <RibbonTab value="review">Review</RibbonTab>
+        <RibbonTab value="view">View</RibbonTab>
+      </TabsList>
+      <div className="flex min-h-12 min-w-0 flex-wrap items-stretch gap-x-2 px-0">
         <TabsContent value="home" className="min-w-0 flex-1 pt-0">
           <HomeRibbon
             canEdit={canEdit}
@@ -306,30 +269,7 @@ export function DocumentWorkspaceToolbar({
             onToggleNavPane={onToggleNavPane}
           />
         </TabsContent>
-        <div className="ml-auto flex shrink-0 items-center self-center pr-1">
-          {/* preventDefault keeps the caret in the editor while the save
-              flight runs, so keystrokes typed during it still land. Keyboard
-              activation instead leaves focus on the button; the save path
-              hands it back before `saving` disables the control and the
-              browser drops focus to document.body. */}
-          <span onMouseDown={(event) => event.preventDefault()}>
-            <Button
-              size="sm"
-              aria-label="Save"
-              disabled={!dirty || saving || blocked}
-              loading={saving}
-              onClick={onSave}
-              iconStart={<FloppyDisk size={16} aria-hidden />}
-            >
-              Save
-            </Button>
-          </span>
-        </div>
       </div>
     </Tabs>
   )
-}
-
-function shortUserLabel(userId: string) {
-  return userId.length <= 10 ? userId : userId.slice(-8)
 }

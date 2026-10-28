@@ -9,23 +9,19 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
   // the reasons and the controls point at them with aria-describedby.
   const barrierNoteId = 'changes-review-unavailable'
   return (
-    <aside
-      className="flex w-full flex-col gap-5 lg:max-w-sm"
-      aria-label="Tracked changes"
-    >
+    <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-ink">Tracked changes</h3>
+          <p className="text-caption text-muted">
+            Accept or reject a change to write a new immutable version.
+          </p>
           {changes.length > 0 ? (
-            <p className="font-mono text-[11px] text-subtle">
+            <p className="text-caption text-subtle">
               {review.activeIndex >= 0 ? review.activeIndex + 1 : '—'} of{' '}
               {changes.length}
             </p>
           ) : null}
         </div>
-        <p className="text-xs leading-relaxed text-muted">
-          Accept or reject a change to write a new immutable version.
-        </p>
         {changes.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <Button
@@ -180,6 +176,6 @@ export function DocumentChangesPanel({ review }: { review: ChangeReview }) {
           })}
         </ul>
       )}
-    </aside>
+    </div>
   )
 }

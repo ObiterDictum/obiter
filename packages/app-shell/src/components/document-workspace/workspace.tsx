@@ -11,7 +11,10 @@ import {
   useDocumentPdfView,
   useDocumentText,
 } from '../../document-workspace-api'
-import type { DocumentVersionRecord } from '../../documents'
+import type {
+  DocumentVersionRecord,
+  MatterDocumentRecord,
+} from '../../documents'
 import { DocumentDraftStatusProvider } from './document-draft-status'
 import { VerificationWorkspaceProvider } from '../verification/verification-context'
 import { VerificationDock } from '../verification/verification-dock'
@@ -32,6 +35,12 @@ type DocumentWorkspaceProps = {
   documentId: string
   version: DocumentVersionRecord | null | undefined
   layout?: DocumentWorkspaceLayout
+  /** The route's document detail, for the header's `?` panel and Verify chip. */
+  document?: MatterDocumentRecord
+  versions?: DocumentVersionRecord[]
+  headerLinks?: { back?: ReactNode; matter?: ReactNode }
+  headerActions?: ReactNode
+  onViewVersion?: (versionId: string) => void
 }
 
 /**
@@ -64,6 +73,11 @@ function DocumentWorkspaceBody({
   documentId,
   version,
   layout = 'page',
+  document,
+  versions = [],
+  headerLinks,
+  headerActions,
+  onViewVersion,
 }: DocumentWorkspaceProps) {
   const kind = workspaceKind(version?.fileType)
   const ready = version?.documentStatus === 'ready'
@@ -137,13 +151,19 @@ function DocumentWorkspaceBody({
     )
   }
   return (
-    <VerifiedViewer>
+    <VerifiedViewer dock={false}>
       <DocxWorkspace
         documentId={documentId}
         versionId={version.id}
+        versionNumber={version.versionNumber}
         matterId={version.matterId}
         filename={version.filename}
         layout={layout}
+        document={document}
+        versions={versions}
+        headerLinks={headerLinks}
+        headerActions={headerActions}
+        onViewVersion={onViewVersion}
       />
     </VerifiedViewer>
   )
@@ -155,10 +175,17 @@ function DocumentWorkspaceBody({
  * surface that opens a document gets the same interaction and none can quietly
  * lose it.
  */
-function VerifiedViewer({ children }: { children: ReactNode }) {
+function VerifiedViewer({
+  children,
+  /** The DOCX editor renders its own dock under its header. */
+  dock = true,
+}: {
+  children: ReactNode
+  dock?: boolean
+}) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <VerificationDock />
+      {dock ? <VerificationDock /> : null}
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   )

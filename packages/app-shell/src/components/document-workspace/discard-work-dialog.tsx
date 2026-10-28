@@ -6,6 +6,7 @@ import {
   DialogCloseButton,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
   DialogTrigger,
 } from '@obiter/ui'
@@ -79,7 +80,7 @@ export function DiscardWorkDialog({
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{body}</DialogDescription>
         {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
-        <div className="flex justify-end gap-2">
+        <DialogFooter>
           <DialogClose render={<Button variant="ghost">Cancel</Button>} />
           <Button
             variant="danger"
@@ -89,7 +90,7 @@ export function DiscardWorkDialog({
           >
             {confirmLabel}
           </Button>
-        </div>
+        </DialogFooter>
         <DialogCloseButton />
       </DialogContent>
     </Dialog>

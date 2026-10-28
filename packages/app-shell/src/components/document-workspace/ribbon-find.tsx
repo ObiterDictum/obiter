@@ -20,7 +20,7 @@ export function ZoomControls({
         onClick={() => onZoom(zoom - 10)}
         icon={<MagnifyingGlassMinus size={16} aria-hidden />}
       />
-      <span className="min-w-12 text-center font-mono text-[11px] text-muted">
+      <span className="min-w-12 text-center text-caption text-muted tabular-nums">
         {zoom}%
       </span>
       <IconButton
@@ -47,11 +47,11 @@ export function FindControls({ find }: { find: DocumentFindToolbar }) {
           onChange={(event) => find.onQuery(event.target.value)}
           placeholder="Find"
           aria-label="Find in document"
-          className="h-7 w-32 rounded border border-line bg-canvas px-1.5 text-[12px] text-ink placeholder:text-subtle pointer-coarse:h-11"
+          className="h-7 w-32 rounded-md bg-fill px-2 text-caption text-ink placeholder:text-subtle focus:outline-2 focus:outline-offset-1 focus:outline-ring pointer-coarse:h-11"
         />
         <span
           role="status"
-          className="min-w-12 text-center font-mono text-[11px] text-muted"
+          className="min-w-12 text-center text-caption text-muted tabular-nums"
         >
           {find.matchLabel}
         </span>
@@ -76,7 +76,7 @@ export function FindControls({ find }: { find: DocumentFindToolbar }) {
             onChange={(event) => find.onReplace?.(event.target.value)}
             placeholder="Replace with"
             aria-label="Replace in document"
-            className="h-7 w-32 rounded border border-line bg-canvas px-1.5 text-[12px] text-ink placeholder:text-subtle pointer-coarse:h-11"
+            className="h-7 w-32 rounded-md bg-fill px-2 text-caption text-ink placeholder:text-subtle focus:outline-2 focus:outline-offset-1 focus:outline-ring pointer-coarse:h-11"
           />
           <CaptionButton
             label="Replace"

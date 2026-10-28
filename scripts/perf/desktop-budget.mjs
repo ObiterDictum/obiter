@@ -60,7 +60,15 @@ export const BUDGETS = {
   // the CSS entry below: the previous ceiling carried 0.04%, 1,345 B, so any
   // addition larger than that would have failed the build for a reason
   // unrelated to its own change.
-  rendererInitialJsBytes: 3_510_000,
+  // 3,520,470 B, re-measured when the editor frame landed (stage 6a, 29 Oct
+  // 2026). The header, the `?` information panel, the docked-panel primitive
+  // and the version-bound Verify chip are all in the entry because the document
+  // route is. 1.9% headroom, matching the previous record: the old ceiling
+  // carried 543 B, so any addition at all would have failed the build for a
+  // reason unrelated to its own change. Stage 6b (review panel, decision bar)
+  // is expected to trim the panel chrome it replaces; if it does not, it needs
+  // its own decision rather than another squeeze.
+  rendererInitialJsBytes: 3_580_000,
   // 90,525 B, re-recorded after the editor programme grew it from the recorded
   // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
   // entry above settled on for the same reason: the previous ceiling carried

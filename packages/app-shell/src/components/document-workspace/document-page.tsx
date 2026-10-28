@@ -9,7 +9,7 @@ export function DocumentDesk({ children }: { children: ReactNode }) {
   return (
     <div
       data-document-desk
-      className="relative min-h-0 flex-1 overflow-auto px-4 py-8"
+      className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset px-8 pt-8 pb-14"
     >
       {children}
     </div>

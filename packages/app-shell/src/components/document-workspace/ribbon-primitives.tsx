@@ -19,7 +19,7 @@ export function RibbonTab({
     <TabsTrigger
       value={value}
       className={cn(
-        'rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] font-medium tracking-wide text-muted pointer-coarse:min-h-11 pointer-coarse:items-center',
+        'relative -mb-px h-[34px] rounded-none border-b-2 border-transparent px-3 text-caption text-subtle pointer-coarse:min-h-11',
         'hover:text-ink',
         'data-[selected]:border-brand data-[selected]:bg-transparent data-[selected]:text-ink',
       )}
@@ -37,12 +37,12 @@ export function ToolbarGroup({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-[3.25rem] shrink-0 items-stretch">
-      <div className="flex flex-col items-center justify-between gap-1 px-2.5 py-0.5">
-        <div className="flex flex-col items-center justify-center gap-0.5">
+    <div className="flex shrink-0 items-stretch">
+      <div className="flex min-h-12 flex-col items-center justify-between gap-1 px-3 py-1 first:ps-12 max-compact:first:ps-8">
+        <div className="flex min-h-6 flex-wrap items-center justify-center gap-1">
           {children}
         </div>
-        <span className="text-[10px] leading-none font-medium tracking-wide text-subtle">
+        <span className="text-caption leading-none whitespace-nowrap text-subtle">
           {label}
         </span>
       </div>
@@ -107,7 +107,7 @@ export function IconButton({
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
       size="sm"
-      className="h-7 w-7 px-0 pointer-coarse:h-11 pointer-coarse:w-11"
+      className="h-7 w-7 rounded-sm px-0 text-muted pointer-coarse:h-11 pointer-coarse:w-11"
       aria-label={caption}
       aria-pressed={pressed}
       disabled={disabled || unavailable}
@@ -158,7 +158,7 @@ export function CaptionButton({
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
       size="sm"
-      className="h-7 max-w-32 px-2 text-[11px] pointer-coarse:h-11"
+      className="h-7 max-w-32 rounded-sm px-2 text-caption pointer-coarse:h-11"
       aria-label={caption}
       aria-pressed={pressed}
       disabled={disabled || unavailable}
@@ -207,7 +207,7 @@ export function RibbonSelect({
       aria-label={caption}
       disabled={disabled || unavailable}
       className={cn(
-        'h-7 rounded-md border border-line bg-canvas px-1.5 text-[12px] text-ink pointer-coarse:h-11',
+        'h-6 rounded-sm border-0 bg-fill px-1.5 text-caption text-muted pointer-coarse:h-11',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,
       )}

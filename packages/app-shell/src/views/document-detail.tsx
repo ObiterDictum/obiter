@@ -1,32 +1,39 @@
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, CaretRight, FileText, Trash } from '@phosphor-icons/react'
+import { ArrowLeft, DotsThree, Trash } from '@phosphor-icons/react'
 import {
-  Badge,
   Button,
   Dialog,
   DialogClose,
-  DialogCloseButton,
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
   EmptyState,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   Skeleton,
+  buttonClassName,
   useToast,
 } from '@obiter/ui'
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
+import { useMatter } from '../matters'
+import { ContentFrame } from '../content-frame'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
-import { DocumentVersionCompare } from '../components/document-workspace/version-compare'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
 
 /**
  * Document detail — the contract route (PRD FR4). Receives route params as
- * props, renders real document metadata from GET /api/documents/:id (filename,
- * hash, size, status, versions), a redaction-runs region slot, and a child
- * <Outlet/> so feature sub-routes such as redact/$runId nest beneath it.
+ * props and renders the editor, which owns its own header, then the
+ * redaction-runs region and a child <Outlet/> so feature sub-routes such as
+ * redact/$runId nest beneath it.
+ *
+ * The editor is the page: it fills the frame below the top bar so the paper
+ * and its docked panels scroll independently. The redaction-runs region keeps
+ * its place below the editor, where the contract puts it.
  */
 export function DocumentDetailLayoutView({
   matterId,
@@ -37,12 +44,9 @@ export function DocumentDetailLayoutView({
   documentId: string
   redactionRunsRegion?: ReactNode
 }) {
-  const deleteDocument = useDeleteDocument()
   const navigate = useNavigate()
-  const { toast } = useToast()
-  const { data: me } = useCurrentUser()
   const document = useDocument(documentId)
-  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
+  const matter = useMatter(matterId)
   // Naming a version the detail query did not return selects nothing — a
   // viewer sees only the current version's row, so historical ids are never
   // selectable from this surface in the first place.
@@ -64,97 +68,19 @@ export function DocumentDetailLayoutView({
     !document.isError &&
     loaded !== undefined &&
     loaded.document.matterId !== matterId
+  const matterLink = (
+    <Link
+      to="/matters/$matterId"
+      params={{ matterId: String(matterId) }}
+      className="truncate text-subtle hover:text-ink"
+    >
+      {matter.data?.name ?? 'Matter'}
+    </Link>
+  )
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Link
-          to="/matters/$matterId"
-          params={{ matterId: String(matterId) }}
-          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
-        >
-          <ArrowLeft size={16} aria-hidden="true" />
-          Back to matter
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-subtle">
-              Document
-            </p>
-            {document.isLoading ? (
-              <Skeleton className="h-7 w-64" />
-            ) : document.isError || !loaded ? (
-              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
-                <FileText size={24} aria-hidden="true" />
-                Document
-              </h1>
-            ) : (
-              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
-                <FileText size={24} aria-hidden="true" />
-                {loaded.document.currentVersion?.filename ??
-                  loaded.document.logicalKey}
-              </h1>
-            )}
-            <p className="text-sm text-muted">
-              Matter <span className="font-mono text-ink">{matterId}</span>
-              {loaded?.document.currentVersion ? (
-                <DocumentStatusLine version={loaded.document.currentVersion} />
-              ) : null}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge tone="neutral">Immutable versions</Badge>
-            {canManage ? (
-              <Dialog>
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Delete document"
-                    >
-                      <Trash aria-hidden /> Delete
-                    </Button>
-                  }
-                />
-                <DialogContent size="md">
-                  <DialogTitle>Delete document</DialogTitle>
-                  <DialogDescription>
-                    Deleting this document also removes its redaction runs.
-                    Removals are soft — rows persist for audit and can be
-                    restored by an operator.
-                  </DialogDescription>
-                  <div className="flex justify-end gap-2">
-                    <DialogClose
-                      render={<Button variant="ghost">Cancel</Button>}
-                    />
-                    <Button
-                      variant="danger"
-                      loading={deleteDocument.isPending}
-                      onClick={async () => {
-                        await deleteDocument.mutateAsync({
-                          documentId,
-                          matterId,
-                        })
-                        toast({ title: 'Document deleted' })
-                        navigate({
-                          to: '/matters/$matterId',
-                          params: { matterId: String(matterId) },
-                        })
-                      }}
-                    >
-                      Delete document
-                    </Button>
-                  </div>
-                  <DialogCloseButton />
-                </DialogContent>
-              </Dialog>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      {matterMismatch && loaded ? (
+  if (matterMismatch && loaded) {
+    return (
+      <ContentFrame className="py-14">
         <EmptyState
           title="This document belongs to a different matter"
           body="The document exists, but it is not part of the matter in this URL. Open it from its own matter to see it in the right context."
@@ -168,254 +94,176 @@ export function DocumentDetailLayoutView({
             </Link>
           }
         />
-      ) : document.isError ? (
+      </ContentFrame>
+    )
+  }
+  if (document.isError) {
+    return (
+      <ContentFrame className="py-14">
         <EmptyState
           title="Document not found"
           body="This document does not exist in your organisation, or your session may have expired."
         />
-      ) : document.isLoading ? (
+      </ContentFrame>
+    )
+  }
+  if (document.isLoading || !loaded) {
+    return (
+      <ContentFrame className="py-14">
         <div
           className="flex flex-col gap-3"
           aria-busy="true"
           aria-label="Loading document"
         >
+          <Skeleton className="h-10 w-full" />
           <Skeleton className="h-24 w-full rounded-lg" />
           <Skeleton className="h-24 w-full rounded-lg" />
         </div>
-      ) : loaded ? (
-        <>
-          <DocumentMetadata
-            document={loaded.document}
-            versions={loaded.versions}
-            documentId={documentId}
-            onViewVersion={setSelectedVersionId}
-          />
-          {/* Selecting a historical version swaps the editor for the
-              read-only view. The editor unmounts; its drafts are persisted
-              per tab (E45), so Back to current restores the live work rather
-              than losing it. */}
-          {viewingHistorical && selectedVersion ? (
+      </ContentFrame>
+    )
+  }
+
+  return (
+    <div className="flex flex-col">
+      <div className="h-[calc(100dvh-3rem)] min-h-[34rem] shrink-0">
+        {viewingHistorical && selectedVersion ? (
+          <ContentFrame className="flex h-full flex-col py-8">
             <DocumentVersionView
               documentId={documentId}
               version={selectedVersion}
               onExit={() => setSelectedVersionId(undefined)}
             />
-          ) : (
-            <DocumentWorkspace
-              documentId={documentId}
-              version={loaded.document.currentVersion}
-            />
-          )}
-        </>
-      ) : null}
+          </ContentFrame>
+        ) : (
+          <DocumentWorkspace
+            documentId={documentId}
+            version={loaded.document.currentVersion}
+            document={loaded.document}
+            versions={loaded.versions}
+            onViewVersion={setSelectedVersionId}
+            headerLinks={{
+              back: (
+                <Link
+                  to="/matters/$matterId"
+                  params={{ matterId: String(matterId) }}
+                  aria-label="Back to matter"
+                  className={buttonClassName({
+                    variant: 'ghost',
+                    size: 'sm',
+                    className: 'size-7 px-0',
+                  })}
+                >
+                  <ArrowLeft size={16} aria-hidden />
+                </Link>
+              ),
+              matter: matterLink,
+            }}
+            headerActions={
+              <DocumentActionsMenu
+                documentId={documentId}
+                matterId={matterId}
+                onDeleted={() =>
+                  navigate({
+                    to: '/matters/$matterId',
+                    params: { matterId: String(matterId) },
+                  })
+                }
+              />
+            }
+          />
+        )}
+      </div>
 
-      <section
-        id={documentRedactionRunsId}
-        tabIndex={-1}
-        aria-label="Redaction runs"
-        className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <h2 className="text-base font-semibold text-ink">Redaction runs</h2>
-            <p className="text-sm text-muted">
+      <ContentFrame className="flex flex-col gap-4 py-8">
+        <section
+          id={documentRedactionRunsId}
+          tabIndex={-1}
+          aria-label="Redaction runs"
+          className="flex flex-col gap-3 rounded-lg bg-surface p-6 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
+        >
+          <div className="flex flex-col gap-1">
+            <h2 className="text-section text-ink">Redaction runs</h2>
+            <p className="text-meta text-muted">
               Create a run to detect and review sensitive information before
               this document enters AI-assisted workflows.
             </p>
           </div>
-        </div>
-        {redactionRunsRegion ?? (
-          <EmptyState
-            title="No redaction runs yet"
-            body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
-          />
-        )}
-      </section>
+          {redactionRunsRegion ?? (
+            <EmptyState
+              title="No redaction runs yet"
+              body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
+            />
+          )}
+        </section>
 
-      {/* Feature sub-routes (e.g. redact/$runId) render here. */}
-      <Outlet />
+        {/* Feature sub-routes (e.g. redact/$runId) render here. */}
+        <Outlet />
+      </ContentFrame>
     </div>
   )
 }
 
-function DocumentMetadata({
-  document,
-  versions,
+/** The document's overflow actions: Delete, behind a confirmation step. */
+function DocumentActionsMenu({
   documentId,
-  onViewVersion,
+  matterId,
+  onDeleted,
 }: {
-  document: import('../documents').MatterDocumentRecord
-  versions: import('../documents').DocumentVersionRecord[]
   documentId: string
-  onViewVersion: (versionId: string) => void
+  matterId: string
+  onDeleted: () => void
 }) {
-  const current = document.currentVersion
-  const sizeLabel = current ? formatBytes(Number(current.sizeBytes)) : '—'
-
-  // Collapsed by default so the document opens above the fold; the status
-  // line in the header keeps the version id and status visible meanwhile.
-  return (
-    <details className="group rounded-lg border border-line bg-surface">
-      <summary className="flex cursor-pointer items-center gap-2 rounded-lg px-5 py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-        <CaretRight
-          size={14}
-          aria-hidden="true"
-          className="text-muted transition-transform group-open:rotate-90"
-        />
-        <span className="font-semibold text-ink">Details</span>
-        <span className="text-muted">
-          File information · {versions.length}{' '}
-          {versions.length === 1 ? 'version' : 'versions'}
-          {versions.length > 1 ? ' · Compare versions' : ''}
-        </span>
-      </summary>
-      <section className="flex flex-col gap-4 border-t border-line p-5">
-        <h2 className="text-base font-semibold text-ink">Document details</h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-          <DetailRow
-            label="Filename"
-            value={current?.filename ?? document.logicalKey}
-            mono
-          />
-          <DetailRow label="Status" value={current?.documentStatus ?? '—'} />
-          <DetailRow label="File type" value={current?.fileType ?? '—'} />
-          <DetailRow label="Size" value={sizeLabel} />
-          <DetailRow
-            label="SHA-256"
-            value={truncateSha(current?.contentSha256)}
-            mono
-          />
-          <DetailRow label="Sync state" value={current?.syncState ?? '—'} />
-          <DetailRow
-            label="Created"
-            value={formatTimestamp(current?.createdAt)}
-          />
-          <DetailRow
-            label="Updated"
-            value={formatTimestamp(current?.updatedAt)}
-          />
-        </dl>
-      </section>
-
-      {versions.length > 0 ? (
-        <section className="flex flex-col gap-3 border-t border-line p-5">
-          <h2 className="text-base font-semibold text-ink">Versions</h2>
-          <ul className="flex flex-col divide-y divide-line">
-            {versions.map((version) => (
-              <li
-                key={version.id}
-                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-              >
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="truncate text-sm font-medium text-ink">
-                    v{version.versionNumber} · {version.filename}
-                  </span>
-                  <span className="truncate text-xs text-muted">
-                    {version.fileType} ·{' '}
-                    {formatBytes(Number(version.sizeBytes))}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge
-                    tone={
-                      version.documentStatus === 'ready'
-                        ? 'success'
-                        : version.documentStatus === 'failed'
-                          ? 'danger'
-                          : 'info'
-                    }
-                  >
-                    {version.documentStatus}
-                  </Badge>
-                  {version.id === document.currentVersionId ? (
-                    <a
-                      href="#document-workspace"
-                      className="text-sm font-medium text-brand hover:text-brand-pressed"
-                    >
-                      View
-                    </a>
-                  ) : version.documentStatus === 'ready' ? (
-                    <button
-                      type="button"
-                      onClick={() => onViewVersion(version.id)}
-                      className="text-sm font-medium text-brand hover:text-brand-pressed"
-                    >
-                      View
-                    </button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-          <DocumentVersionCompare documentId={documentId} versions={versions} />
-        </section>
-      ) : null}
-    </details>
-  )
-}
-
-function DocumentStatusLine({
-  version,
-}: {
-  version: import('../documents').DocumentVersionRecord
-}) {
+  const { data: me } = useCurrentUser()
+  const { toast } = useToast()
+  const deleteDocument = useDeleteDocument()
+  const [confirming, setConfirming] = useState(false)
+  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
+  if (!canManage) return null
   return (
     <>
-      {' '}
-      · v{version.versionNumber} · {version.documentStatus} · {version.fileType}{' '}
-      · {formatBytes(Number(version.sizeBytes))} · Version{' '}
-      <span className="font-mono text-ink">{version.id}</span>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-7 px-0"
+              aria-label="More document actions"
+              iconStart={<DotsThree size={16} aria-hidden />}
+            />
+          }
+        />
+        <MenuContent aria-label="Document actions">
+          <MenuItem onClick={() => setConfirming(true)}>
+            <Trash size={16} aria-hidden />
+            Delete document
+          </MenuItem>
+        </MenuContent>
+      </Menu>
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent size="md">
+          <DialogTitle>Delete document</DialogTitle>
+          <DialogDescription>
+            Deleting this document also removes its redaction runs. Removals are
+            soft — rows persist for audit and can be restored by an operator.
+          </DialogDescription>
+          <div className="flex justify-end gap-2">
+            <DialogClose render={<Button variant="ghost">Cancel</Button>} />
+            <Button
+              variant="danger"
+              loading={deleteDocument.isPending}
+              onClick={async () => {
+                await deleteDocument.mutateAsync({ documentId, matterId })
+                toast({ title: 'Document deleted' })
+                setConfirming(false)
+                onDeleted()
+              }}
+            >
+              Delete document
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
-}
-
-function DetailRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-xs font-medium uppercase tracking-wider text-subtle">
-        {label}
-      </dt>
-      <dd
-        className={
-          'text-sm text-ink ' +
-          (mono ? 'break-all font-mono text-xs' : 'truncate')
-        }
-      >
-        {value}
-      </dd>
-    </div>
-  )
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  const units = ['KB', 'MB', 'GB']
-  let value = bytes / 1024
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-  return `${value.toFixed(1)} ${units[unitIndex]}`
-}
-
-function formatTimestamp(iso: string | undefined): string {
-  if (!iso) return '—'
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return iso
-  return date.toLocaleString()
-}
-
-function truncateSha(sha: string | undefined): string {
-  if (!sha) return '—'
-  return sha.length <= 16 ? sha : `${sha.slice(0, 16)}…`
 }
