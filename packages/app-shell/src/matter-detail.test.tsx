@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import {
   cleanup,
@@ -10,13 +10,12 @@ import {
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
+  RouterProvider,
   createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
-  RouterProvider,
 } from '@tanstack/react-router'
-
 import type { MatterRecord } from './matters'
 import type { MatterDocumentRecord } from './documents'
 
@@ -31,9 +30,6 @@ const mocks = vi.hoisted(() => ({
   blankDocumentFile: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const mattersModule = { ...(await import('./matters')) }
 mock.module('./matters', () => ({
   ...mattersModule,
@@ -41,9 +37,6 @@ mock.module('./matters', () => ({
   useDeleteMatter: mocks.useDeleteMatter,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('./documents')) }
 mock.module('./documents', () => ({
   ...documentsModule,
@@ -51,9 +44,6 @@ mock.module('./documents', () => ({
   useUploadMatterDocument: mocks.useUploadMatterDocument,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('./current-user')) }
 mock.module('./current-user', () => ({
   ...currentUserModule,
@@ -61,42 +51,19 @@ mock.module('./current-user', () => ({
 }))
 
 // The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
+// statically and rejects a mock that omits one.
 const documentBlankModuleKeys = Object.fromEntries(
   Object.keys(await import('./document-blank')).map((key) => [key, undefined]),
 )
 mock.module('./document-blank', () =>
   Object.assign(
     { ...documentBlankModuleKeys },
-    (() => ({
+    {
       blankDocumentFile: mocks.blankDocumentFile,
-    }))(),
+    },
   ),
 )
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
-const componentsDocumentWorkspaceWorkspaceModuleKeys = Object.fromEntries(
-  Object.keys(await import('./components/document-workspace/workspace')).map(
-    (key) => [key, undefined],
-  ),
-)
-mock.module('./components/document-workspace/workspace', () =>
-  Object.assign(
-    { ...componentsDocumentWorkspaceWorkspaceModuleKeys },
-    (() => ({
-      DocumentWorkspace: ({ documentId }: { documentId: string }) => (
-        <div>Workspace for {documentId}</div>
-      ),
-    }))(),
-  ),
-)
-
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const tanstackReactRouterModule = {
   ...(await import('@tanstack/react-router')),
 }
@@ -105,17 +72,13 @@ mock.module('@tanstack/react-router', () => ({
   useNavigate: mocks.useNavigate,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const obiterUiModule = { ...(await import('@obiter/ui')) }
 mock.module('@obiter/ui', () => ({
   ...obiterUiModule,
   useToast: mocks.useToast,
 }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
+// Loaded after the registrations above: these modules capture mocked imports at
 // module scope, so they must evaluate once the mocks are in place.
 const { MatterRouteView } = await import('./views/matter-detail')
 
@@ -134,31 +97,25 @@ const MEMBER = {
   organisation: { id: 'org_1', name: 'Obiter', plan: 'private_beta' },
 }
 
-function sampleMatter(): MatterRecord {
+const at = '2026-01-01T00:00:00.000Z'
+
+function sampleMatter(overrides: Partial<MatterRecord> = {}): MatterRecord {
   return {
     id: 'mtr_1',
     organisationId: 'org_1',
     name: 'Share purchase',
-    description: null,
-    primaryJurisdiction: 'england_and_wales',
+    description: 'Share acquisition of a packaging business.',
+    primaryJurisdiction: 'England & Wales',
     secondaryJurisdictions: [],
-    legalDomains: [],
+    legalDomains: ['Corporate'],
     clientReference: 'REF-1',
     status: 'active',
     createdBy: 'usr_1',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
+    createdAt: at,
+    updatedAt: '2026-10-26T09:00:00.000Z',
     deletedAt: null,
     deletedBy: null,
-  }
-}
-
-function successMatter() {
-  return {
-    isLoading: false,
-    isError: false,
-    isSuccess: true,
-    data: sampleMatter(),
+    ...overrides,
   }
 }
 
@@ -170,8 +127,8 @@ function sampleDocument(): MatterDocumentRecord {
     currentVersionId: 'ver_1',
     logicalKey: 'brief.pdf',
     createdBy: 'usr_1',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
+    createdAt: at,
+    updatedAt: at,
     deletedAt: null,
     deletedBy: null,
     currentVersion: {
@@ -187,27 +144,23 @@ function sampleDocument(): MatterDocumentRecord {
       textObjectKey: null,
       documentStatus: 'ready',
       failureReason: null,
-      versionNumber: 1,
+      versionNumber: 2,
       contentSha256: 'a'.repeat(64),
       syncState: 'synced',
       createdBy: 'usr_1',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
+      createdAt: at,
+      updatedAt: at,
     },
   }
 }
 
 function noDocuments() {
-  return { isLoading: false, isError: false, data: [] }
+  return { isLoading: false, isPending: false, isError: false, data: [] }
 }
 
 function uploadMutationSpy() {
   const mutate = vi.fn()
   return { mutate, isPending: false, error: null }
-}
-
-function loadingDocuments() {
-  return { isLoading: true, isError: false, data: undefined }
 }
 
 function deleteMutationSpy() {
@@ -217,33 +170,38 @@ function deleteMutationSpy() {
 
 function buildRouter(matterId: string) {
   const rootRoute = createRootRoute()
-  const matterRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/matters/$matterId',
-    component: () => (
-      <QueryClientProvider client={new QueryClient()}>
-        <MatterRouteView matterId={matterId} platform="web" />
-      </QueryClientProvider>
-    ),
-  })
   return createRouter({
-    routeTree: rootRoute.addChildren([matterRoute]),
-    history: createMemoryHistory({
-      initialEntries: [`/matters/${matterId}`],
-    }),
+    routeTree: rootRoute.addChildren([
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/matters/$matterId',
+        component: () => (
+          <QueryClientProvider client={new QueryClient()}>
+            <MatterRouteView matterId={matterId} platform="web" />
+          </QueryClientProvider>
+        ),
+      }),
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/matters',
+        component: () => <div>Matters list</div>,
+      }),
+    ]),
+    history: createMemoryHistory({ initialEntries: [`/matters/${matterId}`] }),
   })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // The overview reads Verify and redaction runs; these tests cover the page
-  // chrome, so every run list is empty.
+  // Verify and redaction run lists are empty: this file covers the page shell,
+  // the document table and the actions.
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ runs: [] })),
   )
   mocks.useMatterDocuments.mockReturnValue(noDocuments())
   mocks.useUploadMatterDocument.mockReturnValue(uploadMutationSpy())
+  mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
   mocks.blankDocumentFile.mockResolvedValue(
     new File(['x'], 'Untitled.docx', {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -251,6 +209,13 @@ beforeEach(() => {
   )
   mocks.useNavigate.mockReturnValue(vi.fn())
   mocks.useToast.mockReturnValue({ toast: vi.fn() })
+  mocks.useCurrentUser.mockReturnValue({ data: OWNER })
+  mocks.useMatter.mockReturnValue({
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+    data: sampleMatter(),
+  })
 })
 
 afterEach(() => {
@@ -258,127 +223,142 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('MatterRouteView delete affordance', () => {
-  it('renders a delete control for an owner and fires the delete mutation', async () => {
-    mocks.useMatter.mockReturnValue(successMatter())
-    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
-    const deleteSpy = deleteMutationSpy()
-    mocks.useDeleteMatter.mockReturnValue(deleteSpy)
-
+describe('matter page header', () => {
+  it('shows the matter, its reference, domain and status', async () => {
     render(<RouterProvider router={buildRouter('mtr_1')} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Share purchase')).toBeTruthy()
-    })
-    const deleteButtons = screen.getAllByRole('button', {
-      name: 'Delete matter',
-    })
-    expect(deleteButtons.length).toBe(1)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Share purchase' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByText('Share acquisition of a packaging business.'),
+    ).toBeTruthy()
+    expect(screen.getAllByText('REF-1').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Corporate').length).toBeGreaterThan(0)
+    expect(screen.getByText('Active')).toBeTruthy()
+  })
 
-    // Open the dialog; the confirmation copy states the cascade.
-    deleteButtons[0].click()
-    await waitFor(() => {
-      expect(screen.getByText(/removes 0 documents/i)).toBeTruthy()
-    })
+  it('offers the real actions: upload, new document, share and more', async () => {
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
 
-    // Confirm (the destructive button) fires the mutation.
+    expect(await screen.findByLabelText('Upload document')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New document' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'More matter actions' }),
+    ).toBeTruthy()
+  })
+
+  it('offers Share only to the matter owner and More only to a manager', async () => {
+    mocks.useCurrentUser.mockReturnValue({ data: MEMBER })
+    mocks.useMatterDocuments.mockReturnValue(noDocuments())
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    await screen.findByRole('heading', { level: 1, name: 'Share purchase' })
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'More matter actions' }),
+    ).toBeNull()
+  })
+
+  it('starts a blank document through the upload path', async () => {
+    const upload = uploadMutationSpy()
+    mocks.useUploadMatterDocument.mockReturnValue(upload)
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New document' }))
+    await waitFor(() => {
+      expect(mocks.blankDocumentFile).toHaveBeenCalled()
+      expect(upload.mutate).toHaveBeenCalled()
+    })
+  })
+})
+
+describe('matter documents', () => {
+  it('lists a document with its version and opens the document route', async () => {
+    mocks.useMatterDocuments.mockReturnValue({
+      isLoading: false,
+      isPending: false,
+      isError: false,
+      data: [sampleDocument()],
+    })
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    const link = await screen.findByRole('link', { name: /^brief\.pdf/ })
+    expect(link.getAttribute('href')).toBe('/matters/mtr_1/documents/doc_1')
+    expect(screen.getByText('Version 2 · PDF')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open brief.pdf' })).toBeTruthy()
+  })
+
+  it('accepts DOCX, PDF and TXT uploads', async () => {
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+    const input = await screen.findByLabelText('Upload document')
+    expect(input).toHaveProperty('accept', expect.stringContaining('.pdf'))
+    expect(input).toHaveProperty('accept', expect.stringContaining('.docx'))
+  })
+
+  it('says there are no documents rather than showing an empty table', async () => {
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+    expect(
+      await screen.findByText(/No documents yet\. Upload a DOCX/),
+    ).toBeTruthy()
+  })
+
+  it('reports a documents failure instead of an empty list', async () => {
+    mocks.useMatterDocuments.mockReturnValue({
+      isLoading: false,
+      isPending: false,
+      isError: true,
+      data: undefined,
+    })
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+    expect(
+      await screen.findByText(/The documents could not be loaded/),
+    ).toBeTruthy()
+  })
+})
+
+describe('delete matter', () => {
+  it('confirms through the overflow menu and states the cascade', async () => {
+    const deleteSpy = deleteMutationSpy()
+    mocks.useDeleteMatter.mockReturnValue(deleteSpy)
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'More matter actions' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Delete matter' }),
+    )
+
+    expect(await screen.findByText(/removes 0 documents/i)).toBeTruthy()
     const confirm = screen.getByRole('button', { name: 'Delete matter' })
-    confirm.click()
+    fireEvent.click(confirm)
     await waitFor(() => {
       expect(deleteSpy.mutateAsync).toHaveBeenCalledWith('mtr_1')
     })
   })
 
   it('waits for the document count before enabling confirmation', async () => {
-    mocks.useMatter.mockReturnValue(successMatter())
-    mocks.useMatterDocuments.mockReturnValue(loadingDocuments())
-    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
-    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
-
+    mocks.useMatterDocuments.mockReturnValue({
+      isLoading: true,
+      isPending: true,
+      isError: false,
+      data: undefined,
+    })
     render(<RouterProvider router={buildRouter('mtr_1')} />)
 
-    await waitFor(() => {
-      expect(screen.getByText('Share purchase')).toBeTruthy()
-    })
-    screen.getByRole('button', { name: 'Delete matter' }).click()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'More matter actions' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Delete matter' }),
+    )
 
-    await waitFor(() => {
-      expect(
-        screen.getByText('Loading the document count before deletion.'),
-      ).toBeTruthy()
-    })
+    expect(
+      await screen.findByText('Loading the document count before deletion.'),
+    ).toBeTruthy()
     const confirm = screen.getByRole('button', { name: 'Delete matter' })
     expect((confirm as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('accepts DOCX, PDF, and TXT documents for text extraction', async () => {
-    mocks.useMatter.mockReturnValue(successMatter())
-    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
-    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
-
-    render(<RouterProvider router={buildRouter('mtr_1')} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('DOCX, PDF, and TXT, up to 25 MB')).toBeTruthy()
-    })
-    const input = screen.getByLabelText('Upload document')
-    expect(input).toHaveProperty('accept', expect.stringContaining('.pdf'))
-  })
-
-  it('hides the delete control for a member', async () => {
-    mocks.useMatter.mockReturnValue(successMatter())
-    mocks.useCurrentUser.mockReturnValue({ data: MEMBER })
-    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
-
-    render(<RouterProvider router={buildRouter('mtr_1')} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Share purchase')).toBeTruthy()
-    })
-    expect(screen.queryByRole('button', { name: 'Delete matter' })).toBeNull()
-  })
-})
-
-describe('MatterRouteView document pane', () => {
-  it('opens the selected document in the workspace instead of a separate page', async () => {
-    mocks.useMatter.mockReturnValue(successMatter())
-    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
-    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
-    mocks.useMatterDocuments.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: [sampleDocument()],
-    })
-
-    render(<RouterProvider router={buildRouter('mtr_1')} />)
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /brief\.pdf/ })).toBeTruthy()
-    })
-    expect(screen.queryByRole('button', { name: 'Open document' })).toBeNull()
-    expect(screen.queryByText('Workspace for doc_1')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /brief\.pdf/ }))
-    expect(screen.getByText('Workspace for doc_1')).toBeTruthy()
-  })
-
-  it('uploads a blank Word document from New', async () => {
-    mocks.useMatter.mockReturnValue(successMatter())
-    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
-    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
-    const upload = uploadMutationSpy()
-    mocks.useUploadMatterDocument.mockReturnValue(upload)
-
-    render(<RouterProvider router={buildRouter('mtr_1')} />)
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'New' })).toBeTruthy()
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'New' }))
-
-    await waitFor(() => {
-      expect(mocks.blankDocumentFile).toHaveBeenCalled()
-      expect(upload.mutate).toHaveBeenCalled()
-    })
   })
 })

@@ -43,7 +43,10 @@ async function seedDocument(page: Page, request: APIRequestContext) {
   await page.waitForLoadState('networkidle')
 
   await page.goto('/matters', { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: 'Create matter' }).first().click()
+  await page
+    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
+    .first()
+    .click()
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
   await page.getByLabel('Matter name').click()
   await page.getByLabel('Matter name').pressSequentially(matterName, {

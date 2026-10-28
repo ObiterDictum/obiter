@@ -214,6 +214,7 @@ export function MatterRow({
               'block truncate text-meta',
               current ? 'text-ink' : 'text-muted',
             )}
+            title={matter.name}
           >
             {matter.name}
           </span>
