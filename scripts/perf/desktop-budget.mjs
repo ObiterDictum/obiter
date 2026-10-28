@@ -52,12 +52,15 @@ import { classifyManifest } from './desktop-manifest.mjs'
  * ratchet.
  */
 export const BUDGETS = {
-  // 3,330,189 B, re-measured at the indent-paint fix (the recorded baseline was
-  // 3,026,290 B, so growth had consumed the last ceiling's 10% headroom). Every
-  // route view is statically imported into the one entry chunk, so an added
-  // screen lands here; the headroom is 2.1% rather than the usual 10%, which
-  // still fails a return to a larger shape.
-  rendererInitialJsBytes: 3_400_000,
+  // 3,444,435 B, re-measured when the shell's account menu and rail labels
+  // moved to Base UI Menu and Tooltip (decided 27 Oct 2026). The floating/menu
+  // code Base UI already shipped for Dialog and Select moves from the lazy
+  // graph into the entry, so every page load pays for it; the menu and tooltip
+  // themselves are the rest. 1.9% headroom rather than the usual 10%, matching
+  // the CSS entry below: the previous ceiling carried 0.04%, 1,345 B, so any
+  // addition larger than that would have failed the build for a reason
+  // unrelated to its own change.
+  rendererInitialJsBytes: 3_510_000,
   // 90,525 B, re-recorded after the editor programme grew it from the recorded
   // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
   // entry above settled on for the same reason: the previous ceiling carried

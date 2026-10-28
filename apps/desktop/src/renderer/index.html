@@ -1,9 +1,19 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en-GB" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Obiter Desktop</title>
+    <script>
+      // Applies a saved dark choice before first paint. The storage key is
+      // shared with packages/app-shell/src/use-app-theme.ts.
+      try {
+        var theme = localStorage.getItem('obiter.theme.v2')
+        if (theme === 'dark' || theme === 'light') {
+          document.documentElement.dataset.theme = theme
+        }
+      } catch (error) {}
+    </script>
     <style>
       html,
       body,

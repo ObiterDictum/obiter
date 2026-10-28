@@ -26,10 +26,13 @@ background is needed (favicons render badly on transparency in some clients).
 
 ## Not here
 
-The mark rendered _in the app_ is markup, not a file:
-`packages/app-shell/src/wordmark.tsx` draws it as inline JSX so it inherits
-`currentColor` and tracks the theme. The shell retains its legacy Wordmark until redesign Stage 2. Raster favicons,
-desktop icons and the legacy lockup remain in use and are not regenerated here.
+The mark rendered _in the app_ is markup, not a file: `src/brand/obiter-mark.tsx`
+exports `ObiterMark`, inline JSX so it inherits `currentColor` and tracks the
+theme. The shell, the auth screens and the loading state all use it; the old
+`Wordmark` lockup was deleted in redesign Stage 2 because the design sets the
+name in the interface font beside the mark, not as letter-spaced brand type.
+Raster favicons, desktop icons and the legacy lockup remain in use and are not
+regenerated here.
 
 `docs/brand/` keeps only the README lockups. The generated presentation kit
 (guideline boards, application mockups, social renders) is gitignored: it was

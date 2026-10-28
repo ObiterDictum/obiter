@@ -1,0 +1,108 @@
+import {
+  Newspaper,
+  Folders,
+  House,
+  MagnifyingGlass,
+  PencilSimple,
+  ShieldCheck,
+} from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
+
+export type ModuleId = 'home' | 'search' | 'matters' | 'verify' | 'redact'
+export type ShellSection = ModuleId | 'settings' | 'other'
+
+export interface ModuleItem {
+  id: ModuleId
+  label: string
+  to: string
+  icon: (props: {
+    size?: number
+    weight?: 'regular' | 'fill'
+    className?: string
+    'aria-hidden'?: boolean
+  }) => ReactNode
+}
+
+/**
+ * The workspace modules, in the sidebar's order. Research is not a module yet:
+ * it renders as a disabled entry beside these (see `Sidebar`), so the shell
+ * never offers a route that does not exist.
+ */
+export const MODULES: ModuleItem[] = [
+  { id: 'home', label: 'Home', to: '/', icon: House },
+  { id: 'search', label: 'Search', to: '/search', icon: MagnifyingGlass },
+  { id: 'matters', label: 'Matters', to: '/matters', icon: Folders },
+  { id: 'verify', label: 'Verify', to: '/verify', icon: ShieldCheck },
+  { id: 'redact', label: 'Redact', to: '/redact', icon: PencilSimple },
+]
+
+export const RESEARCH_ICON = Newspaper
+
+export function resolveSection(path: string): ShellSection {
+  if (path === '/' || path === '/workspace') return 'home'
+  if (
+    path === '/search' ||
+    path.startsWith('/case/') ||
+    path.startsWith('/cases/') ||
+    path.startsWith('/ln/')
+  )
+    return 'search'
+  if (path === '/matters' || path.startsWith('/matters/')) return 'matters'
+  if (path === '/verify' || path.startsWith('/verify/')) return 'verify'
+  if (path === '/redact' || path.startsWith('/redact/')) return 'redact'
+  if (path === '/settings' || path.startsWith('/settings/')) return 'settings'
+  return 'other'
+}
+
+const SECTION_LABELS = {
+  home: 'Home',
+  search: 'Search',
+  matters: 'Matters',
+  verify: 'Verify',
+  redact: 'Redact',
+  settings: 'Settings',
+  other: 'Obiter',
+} satisfies Record<ShellSection, string>
+
+function sectionLabel(section: ShellSection): string {
+  return SECTION_LABELS[section]
+}
+
+/** The link a module crumb points at, or null when the section has no index. */
+function sectionPath(section: ShellSection): string | null {
+  return MODULES.find((module) => module.id === section)?.to ?? null
+}
+
+export function matterIdFromPath(path: string): string | null {
+  return path.match(/^\/matters\/([^/]+)/)?.[1] ?? null
+}
+
+export interface Crumb {
+  label: string
+  to?: string
+}
+
+/**
+ * The breadcrumb trail below the organisation, which is the top bar's first
+ * crumb and always links home. A matter page names the matter once the matters
+ * list (already loaded for the sidebar) knows it; until then it falls back to
+ * the module name rather than showing an id.
+ */
+export function breadcrumbTrail(
+  path: string,
+  matterName: string | null,
+): Crumb[] {
+  const section = resolveSection(path)
+  if (section === 'home') return [{ label: 'Home' }]
+
+  const modulePath = sectionPath(section)
+  const sectionCrumb: Crumb = modulePath
+    ? { label: sectionLabel(section), to: modulePath }
+    : { label: sectionLabel(section) }
+
+  if (section === 'matters' && path !== '/matters') {
+    return [sectionCrumb, { label: matterName ?? 'Matter' }]
+  }
+  if (section === 'other') return []
+  return [{ ...sectionCrumb, to: undefined }]
+}

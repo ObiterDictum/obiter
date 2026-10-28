@@ -13,7 +13,7 @@ import {
   PencilSimple,
   X,
 } from '@phosphor-icons/react'
-import { cn } from '@obiter/ui'
+import { KeyboardHint, cn } from '@obiter/ui'
 import { useMattersList } from './matters'
 import { useRedactionRunsList } from './redaction-runs'
 
@@ -94,8 +94,18 @@ export function AppSearchField() {
     function onKey(event: globalThis.KeyboardEvent) {
       if (!(event.metaKey || event.ctrlKey) || event.key !== 'k') return
       event.preventDefault()
-      if (expanded) floatInputRef.current?.focus()
-      else inputRef.current?.focus()
+      if (expanded) {
+        floatInputRef.current?.focus()
+        return
+      }
+      // The compact field has no box at narrow widths, so the shortcut opens the
+      // composer there instead of focusing an invisible input.
+      if (!inputRef.current || inputRef.current.offsetParent === null) {
+        setFocused(true)
+        setOpenedExpanded(true)
+        return
+      }
+      inputRef.current.focus()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -192,24 +202,37 @@ export function AppSearchField() {
   return (
     <div
       ref={shellRef}
-      className="relative hidden w-full min-w-0 max-w-[14rem] sm:block xl:max-w-sm"
+      className="relative w-[min(300px,32vw)] shrink-0 max-compact:w-8"
     >
       <form
         className={cn(
-          'flex h-8 items-center gap-2 rounded-pill border bg-surface px-3 transition-[border-color,box-shadow,background-color] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          'flex h-[30px] items-center gap-2 rounded-md border border-line bg-surface pr-1 pl-3',
+          'transition-[border-color,box-shadow] duration-150 ease-out',
+          'hover:border-line-strong',
           // Keyboard focus must be visible on the field itself, not only as a
           // border colour change. `has-[:focus-visible]` keeps the ring on the
-          // pill that is the field's visual box and matches the Button/Input
-          // convention (`outline-2 outline-offset-2 outline-brand`).
-          'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand',
-          focused
-            ? 'border-line-strong bg-raised shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_16%,transparent)]'
-            : 'border-line hover:border-line-strong',
+          // box that is the field's visual, matching the Button convention.
+          'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
+          // At 1024 and below search is an icon: a 240px field would squeeze the
+          // breadcrumb into an ellipsis.
+          'max-compact:w-8 max-compact:justify-center max-compact:border-0 max-compact:bg-transparent max-compact:pr-0 max-compact:pl-0',
+          focused && 'border-line-strong',
         )}
         onSubmit={onCompactSubmit}
       >
+        {/* Narrow widths have no room for a field, so a real button opens the
+            same composer the field would. */}
+        <button
+          type="button"
+          aria-label="Search Obiter"
+          onClick={() => {
+            setFocused(true)
+            setOpenedExpanded(true)
+          }}
+          className="absolute inset-0 hidden rounded-md hover:bg-hover max-compact:block"
+        />
         <MagnifyingGlass
-          size={14}
+          size={16}
           className="shrink-0 text-subtle"
           aria-hidden
         />
@@ -219,19 +242,19 @@ export function AppSearchField() {
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => setFocused(true)}
           onKeyDown={onCompactKeyDown}
-          placeholder="Search Obiter…"
+          placeholder="Search Obiter"
           aria-label="Search Obiter"
           readOnly={expanded}
           onClick={() => {
             if (expanded) floatInputRef.current?.focus()
           }}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-muted"
+          className="min-w-0 flex-1 bg-transparent text-meta text-ink outline-none placeholder:text-subtle max-compact:hidden"
         />
         {query ? (
           <button
             type="button"
             aria-label="Clear search"
-            className="rounded p-0.5 text-subtle hover:text-ink"
+            className="rounded-sm p-1 text-subtle hover:text-ink max-compact:hidden"
             onClick={() => {
               setQuery('')
               setOpenedExpanded(false)
@@ -241,9 +264,9 @@ export function AppSearchField() {
             <X size={12} aria-hidden />
           </button>
         ) : (
-          <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-subtle">
+          <KeyboardHint className="max-compact:hidden">
             {modKeyLabel()}K
-          </kbd>
+          </KeyboardHint>
         )}
       </form>
 
@@ -258,14 +281,13 @@ export function AppSearchField() {
         >
           <div
             className={cn(
-              'overflow-hidden rounded-2xl border border-line-strong bg-raised/95 shadow-[0_24px_64px_-24px_rgba(15,23,42,0.45)] backdrop-blur-xl',
-              'ring-1 ring-black/[0.04] dark:ring-white/10',
-              'origin-top transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+              'overflow-hidden rounded-lg border border-line bg-raised shadow-lg',
+              'origin-top transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
             )}
           >
-            <div className="flex items-start gap-3 border-b border-line px-4 py-3.5">
+            <div className="flex items-start gap-3 border-b border-line px-4 py-3">
               <MagnifyingGlass
-                size={18}
+                size={16}
                 className="mt-1 shrink-0 text-subtle"
                 aria-hidden
               />
@@ -275,14 +297,14 @@ export function AppSearchField() {
                 rows={2}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={onFloatKeyDown}
-                placeholder="Search matters, redactions, judgments, or jump to a mode…"
+                placeholder="Search matters, redactions and judgments"
                 aria-label="Expanded search"
-                className="max-h-40 min-h-[3rem] flex-1 resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted"
+                className="max-h-40 min-h-[3rem] flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-subtle"
               />
               <button
                 type="button"
                 aria-label="Close expanded search"
-                className="mt-0.5 rounded-md p-1 text-subtle hover:bg-surface hover:text-ink"
+                className="mt-0.5 rounded-md p-1 text-subtle hover:bg-hover hover:text-ink"
                 onClick={() => {
                   setFocused(false)
                   setOpenedExpanded(false)
@@ -294,7 +316,7 @@ export function AppSearchField() {
 
             <div className="max-h-72 overflow-y-auto p-2">
               {hits.length === 0 ? (
-                <p className="px-3 py-4 text-sm text-muted">
+                <p className="px-3 py-4 text-meta text-muted">
                   Type to search the app, or press Enter to search judgments.
                 </p>
               ) : (
@@ -306,26 +328,24 @@ export function AppSearchField() {
                         role="option"
                         aria-selected={index === 0}
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-150',
+                          'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors duration-150',
                           index === 0
-                            ? 'bg-brand/10 text-ink'
-                            : 'text-ink hover:bg-surface',
+                            ? 'bg-brand-soft text-ink'
+                            : 'text-ink hover:bg-hover',
                         )}
                         onClick={() => activateHit(hit)}
                       >
                         <HitIcon kind={hit.kind} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
+                          <span className="block truncate text-item">
                             {hit.label}
                           </span>
-                          <span className="block truncate text-xs text-muted">
+                          <span className="block truncate text-caption text-muted">
                             {hit.hint}
                           </span>
                         </span>
                         {index === 0 ? (
-                          <span className="text-[10px] tracking-wide text-subtle uppercase">
-                            Enter
-                          </span>
+                          <KeyboardHint>Enter</KeyboardHint>
                         ) : null}
                       </button>
                     </li>

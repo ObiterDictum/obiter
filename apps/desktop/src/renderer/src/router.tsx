@@ -12,6 +12,8 @@ import {
   SignUpRouteView,
   AcceptInviteRouteView,
   SettingsRouteView,
+  ShellError,
+  ShellNotFound,
   VerifyRouteView,
   caseLawDocumentQueryOptions,
   legislationProvisionQueryOptions,
@@ -31,7 +33,6 @@ import {
   RedactionRunsRegion,
   RedactionRunsView,
 } from '@obiter/redact-ui'
-import { EmptyState } from '@obiter/ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -75,7 +76,8 @@ interface RouterContext {
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: RootLayout,
-  notFoundComponent: DesktopNotFound,
+  notFoundComponent: ShellNotFound,
+  errorComponent: ShellError,
 })
 
 function RootLayout() {
@@ -83,15 +85,6 @@ function RootLayout() {
     <AppShellLayout platform="desktop">
       <Outlet />
     </AppShellLayout>
-  )
-}
-
-function DesktopNotFound() {
-  return (
-    <EmptyState
-      title="Page not found"
-      body="That route is not registered in the desktop shell. Check the URL or return Home from the top bar."
-    />
   )
 }
 
