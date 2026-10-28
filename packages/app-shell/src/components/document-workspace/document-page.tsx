@@ -2,16 +2,28 @@ import type { ReactNode } from 'react'
 import { documentPrintPageRule } from '../../document-print'
 import { A4_HEIGHT_PX, A4_WIDTH_PX } from '../../document-page-units'
 
-export function DocumentDesk({ children }: { children: ReactNode }) {
-  // Relative so a feature can layer over the page without joining its flow: the
-  // verification marker layer is positioned against the scrolling content and
-  // therefore scrolls with the document instead of tracking it.
+export function DocumentDesk({
+  children,
+  overlay,
+}: {
+  children: ReactNode
+  /** Painted against the scroll box itself, not the centred content column. */
+  overlay?: ReactNode
+}) {
+  // The inner column is `w-max`: when the paper is wider than the canvas the
+  // column grows to the paper instead of centring an over-wide box, so the
+  // page keeps its gutter and shadow and the canvas scrolls to it. When it
+  // fits, `min-w-full` plus `items-center` centres it. The overlay stays a
+  // direct child so the marker layer's measured offsets keep the desk origin.
   return (
     <div
       data-document-desk
-      className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset px-8 pt-8 pb-14"
+      className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
     >
-      {children}
+      <div className="mx-auto flex w-max min-w-full flex-col items-center px-8 pt-8 pb-14">
+        {children}
+      </div>
+      {overlay}
     </div>
   )
 }

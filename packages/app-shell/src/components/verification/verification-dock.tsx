@@ -34,21 +34,21 @@ function statusTone(status: 'queued' | 'running' | 'completed' | 'failed') {
  * findings" as an index. Running stays disabled while the editor holds
  * unsaved work, and the stored version is always named.
  */
-export function VerificationDock() {
+export function VerificationDock({ panel = false }: { panel?: boolean }) {
   const verification = useVerificationWorkspace()
   const statusRef = useRef<HTMLParagraphElement>(null)
 
   if (!verification) return null
   if (verification.runsPending) {
     return (
-      <VerificationStrip>
+      <VerificationStrip panel={panel}>
         <Skeleton className="h-5 w-64" aria-label="Loading verification" />
       </VerificationStrip>
     )
   }
   if (verification.documentLost) {
     return (
-      <VerificationStrip>
+      <VerificationStrip panel={panel}>
         <p className="text-sm text-muted">
           Verification is unavailable: you no longer have access to this
           document, or your session has expired.
@@ -58,7 +58,7 @@ export function VerificationDock() {
   }
   if (verification.runsError) {
     return (
-      <VerificationStrip>
+      <VerificationStrip panel={panel}>
         <p className="text-sm text-danger">
           Verification runs are unavailable: {verification.runsError.message}
         </p>
@@ -115,7 +115,7 @@ export function VerificationDock() {
           : verificationRunStatusLabel(run.status)
 
   return (
-    <VerificationStrip>
+    <VerificationStrip panel={panel}>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           {run ? (
@@ -279,13 +279,23 @@ export function VerificationDock() {
   )
 }
 
-function VerificationStrip({ children }: { children: ReactNode }) {
+function VerificationStrip({
+  children,
+  panel,
+}: {
+  children: ReactNode
+  panel: boolean
+}) {
   return (
     <section
       id={verificationDockId}
       tabIndex={-1}
       aria-label="Verification"
-      className="flex items-center gap-x-3 overflow-x-auto border-b border-line bg-surface px-12 py-1.5 whitespace-nowrap focus:outline-2 focus:outline-offset-2 focus:outline-brand max-compact:px-8"
+      className={
+        panel
+          ? 'flex min-w-0 flex-col gap-3 focus:outline-none'
+          : 'flex items-center gap-x-3 overflow-x-auto border-b border-line bg-surface px-12 py-1.5 whitespace-nowrap focus:outline-2 focus:outline-offset-2 focus:outline-brand max-compact:px-8'
+      }
     >
       {children}
     </section>

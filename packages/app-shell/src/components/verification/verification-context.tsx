@@ -163,6 +163,7 @@ export function VerificationWorkspaceProvider({
   const [indexOpen, setIndexOpen] = useState(false)
   const [dockAnchor, setDockAnchor] = useState<HTMLElement | null>(null)
   const [startAnchor, setStartAnchor] = useState<HTMLElement | null>(null)
+  const [revealPending, setRevealPending] = useState(false)
   const [rendered, setRendered] = useState<RenderedFindings | null>(null)
   const markers = useRef(new Map<string, HTMLElement>())
   const pendingStep = useRef<number | null>(null)
@@ -247,6 +248,16 @@ export function VerificationWorkspaceProvider({
                 ? { available: false, reason: 'save before verification' }
                 : { available: true }
 
+  // Focus moved after the panel mounts is a DOM boundary the render cannot
+  // express: `revealStart` can be called in the same gesture that opens the
+  // panel, before its Run control is in the tree.
+  useEffect(() => {
+    if (!revealPending || !startAnchor) return
+    setRevealPending(false)
+    startAnchor.scrollIntoView?.({ block: 'nearest' })
+    startAnchor.focus({ preventScroll: true })
+  }, [revealPending, startAnchor])
+
   // A Next/Previous that lands on a page that is not loaded yet is remembered
   // and applied when the page arrives, so navigation is never silently bounded
   // by whichever pages happen to be resident.
@@ -319,16 +330,15 @@ export function VerificationWorkspaceProvider({
     setDockAnchor,
     setStartAnchor,
     revealStart: () => {
-      // The ribbon entry is enabled only while this control is, but a missing
-      // anchor must still not turn the click into a silent no-op: fall back to
-      // the document-level Verify strip, which exists in every dock state.
-      const target =
-        startAnchor ??
-        globalThis.document?.getElementById(verificationDockId) ??
-        null
-      if (!target) return
-      target.scrollIntoView?.({ block: 'nearest' })
-      target.focus({ preventScroll: true })
+      // The Run control lives in the docked panel. A caller that opens the
+      // panel in the same gesture finds no anchor yet, so remember the request
+      // and let the mount effect below hand it focus once it exists.
+      if (!startAnchor) {
+        setRevealPending(true)
+        return
+      }
+      startAnchor.scrollIntoView?.({ block: 'nearest' })
+      startAnchor.focus({ preventScroll: true })
     },
     rendered,
     setRendered,

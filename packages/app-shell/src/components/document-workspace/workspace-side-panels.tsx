@@ -11,6 +11,7 @@ import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
 import { DocumentInfoPanel } from './document-info-panel'
 import { LegalChecksPanel } from './legal-checks-panel'
+import { VerificationDock } from '../verification/verification-dock'
 import type { ChangeReview } from './use-change-review'
 import type { WorkspacePanel } from './use-workspace-panels'
 import type { AuthorityHit } from '../../document-authorities'
@@ -98,6 +99,13 @@ export function WorkspaceSidePanels({
         matterLink={info.matterLink}
         onViewVersion={info.onViewVersion}
       />
+    )
+  }
+  if (panel === 'verify') {
+    return (
+      <DockedPanel title="Verify" onClose={onClose}>
+        <VerificationDock panel />
+      </DockedPanel>
     )
   }
   if (panel === 'comments') {

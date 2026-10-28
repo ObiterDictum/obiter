@@ -88,6 +88,7 @@ type DocxRibbonToolbarProps = InsertRibbonProps & {
     open: LegalChecksFocus | null
     onOpen: (focus: LegalChecksFocus) => void
   }
+  onOpenVerify?: () => void
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
@@ -111,6 +112,7 @@ type DocxRibbonToolbarProps = InsertRibbonProps & {
   onToggleNavPane: () => void
   spelling: boolean
   onToggleSpelling: () => void
+  versionMeta?: { number: number; editedAt: string }
 }
 
 /**
@@ -159,6 +161,8 @@ export function docxWorkspaceRibbon({
   onToggleNavPane,
   spelling,
   onToggleSpelling,
+  versionMeta,
+  onOpenVerify,
 }: {
   save: DocumentSave
   drafts: WorkspaceDrafts
@@ -199,6 +203,8 @@ export function docxWorkspaceRibbon({
   onToggleNavPane: () => void
   spelling: boolean
   onToggleSpelling: () => void
+  versionMeta?: { number: number; editedAt: string }
+  onOpenVerify: () => void
 }) {
   return (
     <DocxWorkspaceRibbon
@@ -224,6 +230,7 @@ export function docxWorkspaceRibbon({
         onToggleChanges: () => panels.toggle('changes'),
         onToggleAuthorities: () => panels.toggle('authorities'),
         onInsertAuthority,
+        onOpenVerify,
         citationStyle,
         onCitationStyle,
         legalChecks: {
@@ -266,6 +273,7 @@ export function docxWorkspaceRibbon({
         onToggleNavPane,
         spelling,
         onToggleSpelling,
+        versionMeta,
       }}
     />
   )

@@ -187,8 +187,9 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 }) => {
   await seedDocument(page, request)
 
-  // Start verification from the document-level control and wait for the run.
-  await page.getByRole('button', { name: 'Run verification' }).click()
+  // Start verification from the header's Run control, which opens the Verify
+  // panel so the run's progress and findings are visible.
+  await page.getByRole('button', { name: 'Run', exact: true }).click()
   await expect(page.getByText('Review required (2)')).toBeVisible({
     timeout: 30_000,
   })

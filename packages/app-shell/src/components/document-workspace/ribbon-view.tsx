@@ -36,7 +36,7 @@ export function ViewRibbon({
 }) {
   return (
     <div
-      className="flex min-w-0 flex-wrap items-stretch"
+      className="flex min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto"
       role="toolbar"
       aria-label="View"
     >

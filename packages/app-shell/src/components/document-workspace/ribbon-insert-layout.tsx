@@ -17,6 +17,7 @@ import {
   CaptionButton,
   IconButton,
   RibbonSelect,
+  RibbonSecondary,
   ToolbarGroup,
   ToolbarRow,
 } from './ribbon-primitives'
@@ -94,7 +95,7 @@ export function InsertRibbon({
   const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
   return (
     <div
-      className="flex min-w-0 flex-wrap items-stretch"
+      className="flex min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto"
       role="toolbar"
       aria-label="Insert"
     >
@@ -155,93 +156,95 @@ export function InsertRibbon({
           />
         </ToolbarRow>
       </ToolbarGroup>
-      <ToolbarGroup label="Notes">
-        <IconButton
-          label={
-            structure?.editingStoryKind === 'footnotes'
-              ? 'Close footnotes'
-              : 'Footnote'
-          }
-          pressed={structure?.editingStoryKind === 'footnotes'}
-          disabled={
-            !structure ||
-            (structure.editingStoryKind !== 'footnotes' &&
-              Boolean(structure.footnoteUnavailable))
-          }
-          disabledReason={structure?.footnoteUnavailable}
-          onClick={() => {
-            if (structure?.editingStoryKind === 'footnotes') {
-              structure.onCloseStory()
-            } else {
-              structure?.onInsertFootnote()
-            }
-          }}
-          icon={<Note size={16} aria-hidden />}
-        />
-      </ToolbarGroup>
-      <ToolbarGroup label="Header and footer">
-        <ToolbarRow>
+      <RibbonSecondary label="More Insert tools">
+        <ToolbarGroup label="Notes">
           <IconButton
             label={
-              structure?.editingStoryKind === 'header'
-                ? 'Close header'
-                : 'Header'
+              structure?.editingStoryKind === 'footnotes'
+                ? 'Close footnotes'
+                : 'Footnote'
             }
-            pressed={structure?.editingStoryKind === 'header'}
+            pressed={structure?.editingStoryKind === 'footnotes'}
             disabled={
               !structure ||
-              (structure.editingStoryKind !== 'header' &&
-                Boolean(structure.headerUnavailable))
+              (structure.editingStoryKind !== 'footnotes' &&
+                Boolean(structure.footnoteUnavailable))
             }
-            disabledReason={structure?.headerUnavailable}
+            disabledReason={structure?.footnoteUnavailable}
             onClick={() => {
-              if (structure?.editingStoryKind === 'header') {
+              if (structure?.editingStoryKind === 'footnotes') {
                 structure.onCloseStory()
               } else {
-                structure?.onOpenStory('header')
+                structure?.onInsertFootnote()
               }
             }}
-            icon={<AlignTop size={16} aria-hidden />}
+            icon={<Note size={16} aria-hidden />}
           />
-          <IconButton
-            label={
-              structure?.editingStoryKind === 'footer'
-                ? 'Close footer'
-                : 'Footer'
-            }
-            pressed={structure?.editingStoryKind === 'footer'}
-            disabled={
-              !structure ||
-              (structure.editingStoryKind !== 'footer' &&
-                Boolean(structure.footerUnavailable))
-            }
-            disabledReason={structure?.footerUnavailable}
-            onClick={() => {
-              if (structure?.editingStoryKind === 'footer') {
-                structure.onCloseStory()
-              } else {
-                structure?.onOpenStory('footer')
+        </ToolbarGroup>
+        <ToolbarGroup label="Header and footer">
+          <ToolbarRow>
+            <IconButton
+              label={
+                structure?.editingStoryKind === 'header'
+                  ? 'Close header'
+                  : 'Header'
               }
-            }}
-            icon={<AlignBottom size={16} aria-hidden />}
-          />
+              pressed={structure?.editingStoryKind === 'header'}
+              disabled={
+                !structure ||
+                (structure.editingStoryKind !== 'header' &&
+                  Boolean(structure.headerUnavailable))
+              }
+              disabledReason={structure?.headerUnavailable}
+              onClick={() => {
+                if (structure?.editingStoryKind === 'header') {
+                  structure.onCloseStory()
+                } else {
+                  structure?.onOpenStory('header')
+                }
+              }}
+              icon={<AlignTop size={16} aria-hidden />}
+            />
+            <IconButton
+              label={
+                structure?.editingStoryKind === 'footer'
+                  ? 'Close footer'
+                  : 'Footer'
+              }
+              pressed={structure?.editingStoryKind === 'footer'}
+              disabled={
+                !structure ||
+                (structure.editingStoryKind !== 'footer' &&
+                  Boolean(structure.footerUnavailable))
+              }
+              disabledReason={structure?.footerUnavailable}
+              onClick={() => {
+                if (structure?.editingStoryKind === 'footer') {
+                  structure.onCloseStory()
+                } else {
+                  structure?.onOpenStory('footer')
+                }
+              }}
+              icon={<AlignBottom size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Page number"
+              disabled={!structure || Boolean(structure.pageNumberUnavailable)}
+              disabledReason={structure?.pageNumberUnavailable}
+              onClick={structure?.onInsertPageNumber}
+              icon={<Hash size={16} aria-hidden />}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+        <ToolbarGroup label="Comments">
           <IconButton
-            label="Page number"
-            disabled={!structure || Boolean(structure.pageNumberUnavailable)}
-            disabledReason={structure?.pageNumberUnavailable}
-            onClick={structure?.onInsertPageNumber}
-            icon={<Hash size={16} aria-hidden />}
+            label={commentCount > 0 ? `Comments (${commentCount})` : 'Comments'}
+            pressed={commentsOpen}
+            onClick={onToggleComments}
+            icon={<ChatText size={16} aria-hidden />}
           />
-        </ToolbarRow>
-      </ToolbarGroup>
-      <ToolbarGroup label="Comments">
-        <IconButton
-          label={commentCount > 0 ? `Comments (${commentCount})` : 'Comments'}
-          pressed={commentsOpen}
-          onClick={onToggleComments}
-          icon={<ChatText size={16} aria-hidden />}
-        />
-      </ToolbarGroup>
+        </ToolbarGroup>
+      </RibbonSecondary>
       <InsertTableDialog
         open={tableOpen}
         onOpenChange={setTableOpen}
@@ -281,7 +284,7 @@ export function LayoutRibbon({
 }) {
   return (
     <div
-      className="flex min-w-0 flex-wrap items-stretch"
+      className="flex min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto"
       role="toolbar"
       aria-label="Layout"
     >
@@ -325,52 +328,6 @@ export function LayoutRibbon({
           />
         </ToolbarRow>
       </ToolbarGroup>
-      <ToolbarGroup label="Document">
-        <RibbonSelect
-          label="Document type"
-          className="w-[11rem]"
-          value={markings?.markings.documentKind ?? ''}
-          options={documentKindOptions(markings?.markings.documentKind ?? null)}
-          disabled={
-            !markings || markings.pending || Boolean(markings.unavailable)
-          }
-          disabledReason={markings?.unavailable}
-          onChange={(value) =>
-            markings?.onDocumentKind(value === '' ? null : value)
-          }
-        />
-      </ToolbarGroup>
-      <ToolbarGroup label="Marking">
-        <ToolbarRow>
-          <CaptionButton
-            label="Draft"
-            pressed={markings?.markings.draft}
-            disabled={
-              !markings || markings.pending || Boolean(markings.unavailable)
-            }
-            disabledReason={markings?.unavailable}
-            onClick={markings?.onToggleDraft}
-          />
-          <CaptionButton
-            label="Privileged"
-            pressed={markings?.markings.privileged}
-            disabled={
-              !markings || markings.pending || Boolean(markings.unavailable)
-            }
-            disabledReason={markings?.unavailable}
-            onClick={markings?.onTogglePrivileged}
-          />
-          <CaptionButton
-            label="Without prejudice"
-            pressed={markings?.markings.withoutPrejudice}
-            disabled={
-              !markings || markings.pending || Boolean(markings.unavailable)
-            }
-            disabledReason={markings?.unavailable}
-            onClick={markings?.onToggleWithoutPrejudice}
-          />
-        </ToolbarRow>
-      </ToolbarGroup>
       <ToolbarGroup label="Paragraph">
         <RibbonSelect
           label="Indent"
@@ -384,6 +341,56 @@ export function LayoutRibbon({
           }}
         />
       </ToolbarGroup>
+      <RibbonSecondary label="More Layout tools">
+        <ToolbarGroup label="Document">
+          <RibbonSelect
+            label="Document type"
+            className="w-[11rem]"
+            value={markings?.markings.documentKind ?? ''}
+            options={documentKindOptions(
+              markings?.markings.documentKind ?? null,
+            )}
+            disabled={
+              !markings || markings.pending || Boolean(markings.unavailable)
+            }
+            disabledReason={markings?.unavailable}
+            onChange={(value) =>
+              markings?.onDocumentKind(value === '' ? null : value)
+            }
+          />
+        </ToolbarGroup>
+        <ToolbarGroup label="Marking">
+          <ToolbarRow>
+            <CaptionButton
+              label="Draft"
+              pressed={markings?.markings.draft}
+              disabled={
+                !markings || markings.pending || Boolean(markings.unavailable)
+              }
+              disabledReason={markings?.unavailable}
+              onClick={markings?.onToggleDraft}
+            />
+            <CaptionButton
+              label="Privileged"
+              pressed={markings?.markings.privileged}
+              disabled={
+                !markings || markings.pending || Boolean(markings.unavailable)
+              }
+              disabledReason={markings?.unavailable}
+              onClick={markings?.onTogglePrivileged}
+            />
+            <CaptionButton
+              label="Without prejudice"
+              pressed={markings?.markings.withoutPrejudice}
+              disabled={
+                !markings || markings.pending || Boolean(markings.unavailable)
+              }
+              disabledReason={markings?.unavailable}
+              onClick={markings?.onToggleWithoutPrejudice}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+      </RibbonSecondary>
     </div>
   )
 }

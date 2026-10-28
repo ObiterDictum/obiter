@@ -5,6 +5,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@obiter/ui'
+import { ArrowClockwise } from '@phosphor-icons/react'
 import type { DocumentVersionRecord } from '../../documents'
 import {
   useVerificationWorkspace,
@@ -110,8 +111,11 @@ export function verifyChipState(
  */
 export function DocumentVerifyChip({
   versions,
+  onOpen,
 }: {
   versions: DocumentVersionRecord[]
+  /** Opens the docked Verify panel, which holds the findings and Run. */
+  onOpen: () => void
 }) {
   const verification = useVerificationWorkspace()
   if (!verification) return null
@@ -134,11 +138,7 @@ export function DocumentVerifyChip({
           size="sm"
           className="h-7 px-2"
           aria-label={`Verify: ${chip.label}. ${chip.detail}`}
-          onClick={() =>
-            verification.run
-              ? verification.openIndex()
-              : verification.revealStart()
-          }
+          onClick={onOpen}
         >
           <StatusDot tone={chip.tone} className="text-caption text-ink">
             {chip.label}
@@ -147,5 +147,51 @@ export function DocumentVerifyChip({
       </TooltipTrigger>
       <TooltipContent>{chip.detail}</TooltipContent>
     </Tooltip>
+  )
+}
+
+/**
+ * The header's Run control. It starts the same run the panel's control does,
+ * through the same availability gate, and opens the panel so the run's
+ * progress, failure or result is never hidden behind a closed panel.
+ */
+export function VerifyRunButton({ onOpen }: { onOpen: () => void }) {
+  const verification = useVerificationWorkspace()
+  if (!verification) return null
+  if (verification.runsPending) return null
+  const running = verification.startPending
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      disabled={!verification.startAvailability.available && !running}
+      loading={running}
+      aria-label="Run"
+      onClick={() => {
+        onOpen()
+        verification.startRun()
+      }}
+      iconStart={<ArrowClockwise size={14} aria-hidden />}
+    >
+      <span className="max-compact:sr-only">Run</span>
+    </Button>
+  )
+}
+
+/**
+ * Why the header's Run control is unavailable, in the same words the panel
+ * uses. It is the one state the chip cannot carry: unsaved edits, a loading
+ * status, or a document that is not ready.
+ */
+export function VerifyRunReason() {
+  const verification = useVerificationWorkspace()
+  if (!verification || verification.runsPending) return null
+  const availability = verification.startAvailability
+  if (availability.available) return null
+  return (
+    <span className="text-caption text-warning" role="note">
+      {availability.reason.charAt(0).toUpperCase() +
+        availability.reason.slice(1)}
+    </span>
   )
 }
