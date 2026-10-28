@@ -54,11 +54,18 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   await page.keyboard.press('End')
   await page.keyboard.type(' DRAFTX')
 
-  // The Versions section, collapsed under Details so the document opens
-  // first, now lists v2 as current and v1 as history.
-  await page.locator('summary', { hasText: 'Details' }).click()
-  const historicalRow = page.locator('li', { hasText: 'v1 ·' }).first()
+  // Version history lives in the header's `?` panel (stage 6a), and it now
+  // lists v2 as current and v1 as history.
+  await page.getByRole('button', { name: 'Document information' }).click()
+  const history = page.getByRole('complementary', {
+    name: 'Document information',
+  })
+  const historicalRow = history.locator('li', { hasText: 'Version 1' }).first()
   await expect(historicalRow).toBeVisible({ timeout: 15_000 })
+  await expect(historicalRow.getByText('Original upload')).toBeVisible()
+  await expect(
+    history.getByText('Version 2', { exact: true }).first(),
+  ).toBeVisible()
 
   // Open the historical version: it is read-only — painted pages, no
   // paragraph editor, no Save control — and it shows the pre-edit text.
@@ -75,17 +82,32 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   expect(await editor(page).count()).toBe(0)
   expect(await saveButton.count()).toBe(0)
 
-  // Compare v1 (base) against v2 (target): the picker defaults to exactly
-  // that pair, so Compare alone proves the entries render.
-  await page.getByRole('button', { name: 'Compare', exact: true }).click()
+  // Compare v1 (base) against v2 (target) from the current version's panel:
+  // the picker defaults to exactly that pair, so Compare alone proves the
+  // entries render, and its heading states the direction in words.
+  await page.getByRole('button', { name: 'Back to current version' }).click()
+  await page.getByRole('button', { name: 'Document information' }).click()
+  const comparePanel = page.getByRole('complementary', {
+    name: 'Document information',
+  })
+  await expect(
+    comparePanel.getByText('Changes from version 1 to version 2'),
+  ).toBeVisible({ timeout: 15_000 })
+  await comparePanel
+    .getByRole('button', { name: 'Compare', exact: true })
+    .click()
   const comparison = page.locator('[data-version-comparison]')
   await expect(comparison).toBeVisible({ timeout: 30_000 })
   await expect(comparison.getByText('Paragraph modified')).toBeVisible()
   await expect(comparison.getByText(MARKER)).toBeVisible()
+  // Close the panel before returning to the live editor.
+  await page
+    .getByRole('complementary', { name: 'Document information' })
+    .getByRole('button', { name: 'Close Document information' })
+    .click()
 
-  // Back to current returns to the live editor: the saved edit is painted
-  // and the unsaved draft came back with the remounted workspace.
-  await page.getByRole('button', { name: 'Back to current version' }).click()
+  // Back on the current version, the saved edit is painted and the unsaved
+  // draft came back with the remounted workspace.
   await expect(
     page.locator('[data-paragraph-id]', { hasText: MARKER }).first(),
   ).toBeVisible({ timeout: 30_000 })

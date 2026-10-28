@@ -33,7 +33,9 @@ const runColumns = `
   document.current_version_id as document_current_version_id,
   coalesce(stats.finding_count, 0) as finding_count,
   coalesce(stats.flagged_count, 0) as flagged_count,
-  coalesce(stats.review_required_count, 0) as review_required_count
+  coalesce(stats.review_required_count, 0) as review_required_count,
+  coalesce(stats.not_checked_count, 0) as not_checked_count,
+  coalesce(stats.dismissed_count, 0) as dismissed_count
 `
 
 type RunCursorRow = VerificationRunRow & { cursor_created_at: string }
@@ -55,12 +57,23 @@ const runFrom = `
    and document.organisation_id = run.organisation_id
   left join lateral (
     select count(*)::int as finding_count,
-      count(*) filter (where finding.status_state = 'flagged')::int
-        as flagged_count,
       count(*) filter (
-        where finding.status_state in ('review_required', 'not_checked')
-      )::int as review_required_count
+        where finding.status_state = 'flagged' and dismissal.run_id is null
+      )::int as flagged_count,
+      count(*) filter (
+        where finding.status_state = 'review_required'
+          and dismissal.run_id is null
+      )::int as review_required_count,
+      count(*) filter (
+        where finding.status_state = 'not_checked'
+          and dismissal.run_id is null
+      )::int as not_checked_count,
+      count(*) filter (where dismissal.run_id is not null)::int
+        as dismissed_count
     from verification_findings finding
+    left join verification_finding_dismissals dismissal
+      on dismissal.run_id = finding.run_id
+     and dismissal.finding_id = finding.finding_id
     where finding.run_id = run.id
       and finding.organisation_id = run.organisation_id
   ) stats on true
@@ -143,8 +156,16 @@ export async function listVerificationRuns(
   }
 }
 
+export type StoredFindingDismissal = {
+  reason: string | null
+  dismissedBy: string
+  dismissedAt: string
+}
+
 export type VerificationFindingPage = {
   findings: VerificationFinding[]
+  /** Dismissals keyed by finding id, for the findings on this page only. */
+  dismissals: Map<string, StoredFindingDismissal>
   nextCursor: string | null
 }
 
@@ -169,12 +190,23 @@ export async function listVerificationFindings(
     payload_json: unknown
     finding_id: string
     cursor_created_at: string
+    dismissal_reason: string | null
+    dismissed_by: string | null
+    dismissed_at: string | null
   }>(
     `select finding.payload_json, finding.finding_id,
             to_char(
               finding.created_at at time zone 'utc',
               'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-            ) as cursor_created_at
+            ) as cursor_created_at,
+            dismissal.reason as dismissal_reason,
+            dismissal.dismissed_by,
+            case when dismissal.dismissed_at is null then null else
+              to_char(
+                dismissal.dismissed_at at time zone 'utc',
+                'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+              )
+            end as dismissed_at
      from verification_findings finding
      join verification_runs run
        on run.id = finding.run_id
@@ -186,6 +218,9 @@ export async function listVerificationFindings(
        on document.id = run.document_id
       and document.matter_id = run.matter_id
       and document.organisation_id = run.organisation_id
+     left join verification_finding_dismissals dismissal
+       on dismissal.run_id = finding.run_id
+      and dismissal.finding_id = finding.finding_id
      where finding.run_id = $1
        and finding.organisation_id = $2
        and run.deleted_at is null
@@ -200,10 +235,20 @@ export async function listVerificationFindings(
   const hasNext = result.rows.length > input.limit
   const rows = hasNext ? result.rows.slice(0, input.limit) : result.rows
   const last = rows.at(-1)
+  const dismissals = new Map<string, StoredFindingDismissal>()
+  for (const row of rows) {
+    if (!row.dismissed_by || !row.dismissed_at) continue
+    dismissals.set(row.finding_id, {
+      reason: row.dismissal_reason,
+      dismissedBy: row.dismissed_by,
+      dismissedAt: row.dismissed_at,
+    })
+  }
   return {
     findings: rows.map((row) =>
       verificationFindingSchema.parse(row.payload_json),
     ),
+    dismissals,
     nextCursor:
       hasNext && last
         ? encodeVerificationCursor(findingCursorFromRow(last))

@@ -1,10 +1,10 @@
 import type {
   VerificationFailureCode,
+  VerificationFindingDismissal,
   VerificationFindingState,
   VerificationFindingType,
-  VerificationReviewReason,
+  VerificationFindingView,
   VerificationRun,
-  VerificationRunStatus,
   VerificationRunSummary,
 } from '@obiter/contracts'
 import type { DocumentStoryKind } from '@obiter/contracts'
@@ -29,51 +29,14 @@ export function verificationStoryLabel(kind: DocumentStoryKind | undefined) {
   }
 }
 
-/**
- * The finding outcome, kept separate from run completion so a completed run
- * with a proven mismatch is not presented as a plain success. Flagged is the
- * most serious outcome and is never less prominent than review-required.
- */
-export function verificationOutcomeTone(
-  summary: VerificationRunSummary,
-): 'danger' | 'warning' | 'success' {
-  if (summary.flaggedCount > 0) return 'danger'
-  if (summary.reviewRequiredCount > 0) return 'warning'
-  return 'success'
-}
-
-export function verificationOutcomeLabel(summary: VerificationRunSummary) {
-  if (summary.flaggedCount > 0) {
-    return `Flagged findings (${summary.flaggedCount})`
-  }
-  if (summary.reviewRequiredCount > 0) {
-    return `Review required (${summary.reviewRequiredCount})`
-  }
-  return 'No findings need attention'
-}
-
-/** The screen-reader wording for the same outcome, so the result is never
- * carried by colour alone. */
-export function verificationOutcomeAnnouncement(
-  summary: VerificationRunSummary,
-) {
-  if (summary.flaggedCount > 0) {
-    return 'Attention required: flagged findings were found.'
-  }
-  if (summary.reviewRequiredCount > 0) {
-    return 'Some findings require review.'
-  }
-  return 'No findings require attention.'
-}
-
 export function verificationTypeLabel(type: VerificationFindingType) {
   switch (type) {
     case 'authority_existence':
-      return 'Authority existence'
+      return 'Authority'
     case 'citation_resolution':
-      return 'Citation resolution'
+      return 'Citation'
     case 'quote_fidelity':
-      return 'Quote fidelity'
+      return 'Quotation'
     default: {
       const unhandled: never = type
       return unhandled
@@ -81,129 +44,103 @@ export function verificationTypeLabel(type: VerificationFindingType) {
   }
 }
 
-export function verificationStateLabel(state: VerificationFindingState) {
-  switch (state) {
+/**
+ * The finding's outcome in the words the reviewer needs. "Citation matches
+ * checked source" is only ever said for a citation check that ran and found the
+ * authority, and a quotation's match is its own claim: a check that confirmed
+ * nothing must never read as approval.
+ */
+export function verificationStateLabel(
+  finding: Pick<VerificationFindingView, 'type' | 'state'>,
+) {
+  switch (finding.state) {
     case 'clear':
-      return 'Clear'
+      switch (finding.type) {
+        case 'citation_resolution':
+          return 'Citation matches checked source'
+        case 'authority_existence':
+          return 'Authority is held in the stored sources'
+        case 'quote_fidelity':
+          return 'Quotation matches checked source'
+        default: {
+          const unhandled: never = finding.type
+          return unhandled
+        }
+      }
     case 'flagged':
       return 'Flagged'
-    case 'not_checked':
-      return 'Not checked'
     case 'review_required':
       return 'Needs review'
+    case 'not_checked':
+      return 'Not checked'
     default: {
-      const unhandled: never = state
+      const unhandled: never = finding.state
       return unhandled
     }
   }
 }
 
-export function verificationReasonLabel(reason: VerificationReviewReason) {
-  switch (reason) {
-    case 'citation_ambiguous':
-      return 'This text could be associated with more than one authority, so no single one was chosen.'
-    case 'citation_unresolved':
-      return 'The citation could not be matched to a stored source.'
-    case 'authority_not_held':
-      return 'The stored sources do not hold this authority.'
-    case 'evidence_unavailable':
-      return 'Source evidence is not available.'
-    case 'check_inconclusive':
-      return 'The check could not reach a conclusion.'
-    default: {
-      const unhandled: never = reason
-      return unhandled
-    }
-  }
-}
-
-export function verificationRunStatusLabel(status: VerificationRunStatus) {
-  switch (status) {
-    case 'queued':
-      return 'Queued'
-    case 'running':
-      return 'Running'
-    case 'completed':
-      return 'Completed'
-    case 'failed':
-      return 'Failed'
-    default: {
-      const unhandled: never = status
-      return unhandled
-    }
-  }
-}
-
-/**
- * The time label for a run, paired with the timestamp it actually describes.
- * `completed_at` is written for both a completed and a failed run (the moment
- * the terminal transition was recorded), so it describes a failure truthfully
- * rather than showing when the run was requested. A live run has no completion
- * time: it is placed by when it started, or when it was created if no executor
- * has picked it up.
- */
-export function verificationRunTime(run: VerificationRun) {
-  const format = (at: string) =>
-    new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(at))
-  switch (run.status) {
-    case 'completed':
-      return run.completedAt
-        ? `Completed ${format(run.completedAt)}`
-        : `Created ${format(run.createdAt)}`
-    case 'failed':
-      return run.completedAt
-        ? `Failed ${format(run.completedAt)}`
-        : `Created ${format(run.createdAt)}`
-    case 'running':
-    case 'queued':
-      return run.startedAt
-        ? `Started ${format(run.startedAt)}`
-        : `Created ${format(run.createdAt)}`
-    default: {
-      const unhandled: never = run.status
-      return unhandled
-    }
-  }
-}
-
-export function verificationFailureLabel(code: VerificationFailureCode) {
-  switch (code) {
-    case 'model_unavailable':
-      return 'The stored document could not be read for verification.'
-    case 'version_not_ready':
-      return 'This document version is not ready to verify.'
-    case 'execution_failed':
-      return 'Verification could not finish. No successful result was recorded.'
-    case 'interrupted':
-      return 'Verification was interrupted before it finished. Start a new run to check this version.'
-    default: {
-      const unhandled: never = code
-      return unhandled
-    }
-  }
-}
-
-/**
- * The tone for a finding outcome, defined once so the findings index, the
- * markers and the evidence panel cannot disagree.
- */
-export function verificationStateTone(
-  state: VerificationFindingState,
-): 'success' | 'danger' | 'warning' | 'neutral' {
+export function verificationStateTone(state: VerificationFindingState) {
   switch (state) {
     case 'clear':
-      return 'success'
+      return 'success' as const
     case 'flagged':
-      return 'danger'
-    case 'not_checked':
-      return 'neutral'
+      return 'danger' as const
     case 'review_required':
-      return 'warning'
+      return 'warning' as const
+    case 'not_checked':
+      return 'neutral' as const
     default: {
       const unhandled: never = state
+      return unhandled
+    }
+  }
+}
+
+/** What the check compared, stated before its result so a reader can see the
+ * scope of the claim rather than inferring it from the outcome. */
+export function verificationWhatCompared(type: VerificationFindingType) {
+  switch (type) {
+    case 'citation_resolution':
+      return 'Compared the citation as written with the citation of the stored source it names.'
+    case 'authority_existence':
+      return 'Compared the cited authority with the sources Obiter stores.'
+    case 'quote_fidelity':
+      return 'Compared the quoted words with the text of the stored source.'
+    default: {
+      const unhandled: never = type
+      return unhandled
+    }
+  }
+}
+
+/**
+ * Exactly what is uncertain, and nothing more. Each reason names a limit of the
+ * check, never an outcome: an unresolved citation is not a wrong one, and a
+ * source Obiter does not hold is not a source that does not exist.
+ */
+export function verificationUncertainty(
+  finding: Pick<VerificationFindingView, 'type' | 'state' | 'reviewReason'>,
+) {
+  if (finding.state === 'not_checked') {
+    return 'This check did not run, so nothing was compared.'
+  }
+  if (finding.state !== 'review_required') return null
+  switch (finding.reviewReason) {
+    case 'citation_ambiguous':
+      return 'More than one stored source could answer this text, so no single authority was chosen.'
+    case 'citation_unresolved':
+      return 'The citation did not match a stored source. It may be wrong, or it may name a source Obiter does not hold.'
+    case 'authority_not_held':
+      return 'Obiter does not hold this authority. That is not a finding that it does not exist.'
+    case 'evidence_unavailable':
+      return 'The source exists, but its stored text could not be read, so nothing was compared.'
+    case 'check_inconclusive':
+      return 'The check could not reach a conclusion. It confirmed nothing and refuted nothing.'
+    case null:
+      return 'This finding needs a person to decide what it means.'
+    default: {
+      const unhandled: never = finding.reviewReason
       return unhandled
     }
   }
@@ -239,6 +176,174 @@ export function verificationUnmappedLabel(reason: UnmappedReason) {
   }
 }
 
+export type VerificationFindingCounts = {
+  flagged: number
+  needsReview: number
+  notChecked: number
+  matched: number
+  dismissed: number
+  total: number
+}
+
+/** Counts per outcome, computed from the findings themselves so the page, the
+ * filters and the editor panel cannot disagree about the same run. */
+export function verificationFindingCounts(
+  findings: readonly VerificationFindingView[],
+): VerificationFindingCounts {
+  const counts: VerificationFindingCounts = {
+    flagged: 0,
+    needsReview: 0,
+    notChecked: 0,
+    matched: 0,
+    dismissed: 0,
+    total: findings.length,
+  }
+  for (const finding of findings) {
+    if (finding.dismissal) counts.dismissed += 1
+    if (finding.state === 'flagged') counts.flagged += 1
+    else if (finding.state === 'review_required') counts.needsReview += 1
+    else if (finding.state === 'not_checked') counts.notChecked += 1
+    else counts.matched += 1
+  }
+  return counts
+}
+
+/** The run summary as the separate parts a reviewer reads. A dismissed finding
+ * is still listed under its outcome; it is counted apart because a person has
+ * already decided it, and the outcome counts never double as a to-do list. */
+export function verificationSummaryCounts(
+  summary: VerificationRunSummary,
+): VerificationFindingCounts {
+  return {
+    flagged: summary.flaggedCount,
+    needsReview: summary.reviewRequiredCount,
+    notChecked: summary.notCheckedCount,
+    matched:
+      summary.findingCount -
+      summary.flaggedCount -
+      summary.reviewRequiredCount -
+      summary.notCheckedCount -
+      summary.dismissedCount,
+    dismissed: summary.dismissedCount,
+    total: summary.findingCount,
+  }
+}
+
+/** "1 flagged · 2 need review · 1 not checked · 7 match", each part present
+ * only when it is non-zero. */
+export function verificationCountsLabel(counts: VerificationFindingCounts) {
+  const parts: string[] = []
+  if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
+  if (counts.needsReview > 0)
+    parts.push(
+      `${counts.needsReview} ${counts.needsReview === 1 ? 'needs' : 'need'} review`,
+    )
+  if (counts.notChecked > 0) parts.push(`${counts.notChecked} not checked`)
+  if (counts.matched > 0)
+    parts.push(
+      `${counts.matched} ${counts.matched === 1 ? 'matches' : 'match'} the checked source`,
+    )
+  if (counts.dismissed > 0) parts.push(`${counts.dismissed} dismissed`)
+  return parts.length > 0 ? parts.join(' · ') : 'No findings'
+}
+
+/**
+ * The time label for a run, paired with the timestamp it actually describes.
+ * `completed_at` is written for both a completed and a failed run (the moment
+ * the terminal transition was recorded), so it describes a failure truthfully
+ * rather than showing when the run was requested. A live run has no completion
+ * time: it is placed by when it started, or when it was created if no executor
+ * has picked it up.
+ */
+export function verificationRunTime(run: VerificationRun) {
+  switch (run.status) {
+    case 'completed':
+      return run.completedAt
+        ? `Completed ${formatRunTime(run.completedAt)}`
+        : `Created ${formatRunTime(run.createdAt)}`
+    case 'failed':
+      return run.completedAt
+        ? `Stopped ${formatRunTime(run.completedAt)}`
+        : `Created ${formatRunTime(run.createdAt)}`
+    case 'running':
+    case 'queued':
+      return run.startedAt
+        ? `Started ${formatRunTime(run.startedAt)}`
+        : `Created ${formatRunTime(run.createdAt)}`
+    default: {
+      const unhandled: never = run.status
+      return unhandled
+    }
+  }
+}
+
+/** One date and time format across the product: 26 Oct 2026, 14:32. */
+export function formatRunTime(value: string) {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+}
+
+/** The short headline of a failure. The reason itself is
+ * `verificationFailureLabel`, which says what was and was not recorded. */
+export function verificationFailureTitle(code: VerificationFailureCode) {
+  switch (code) {
+    case 'model_unavailable':
+      return 'The stored document could not be read'
+    case 'version_not_ready':
+      return 'The version is not ready to be checked'
+    case 'execution_failed':
+      return 'The run stopped before it finished'
+    case 'interrupted':
+      return 'The run was interrupted'
+    default: {
+      const unhandled: never = code
+      return unhandled
+    }
+  }
+}
+
+export function verificationFailureLabel(code: VerificationFailureCode) {
+  switch (code) {
+    case 'model_unavailable':
+      return 'Nothing was checked for this version, and the document was not changed.'
+    case 'version_not_ready':
+      return 'Nothing was checked, and the document was not changed.'
+    case 'execution_failed':
+      return 'No successful result was recorded, and the document was not changed.'
+    case 'interrupted':
+      return 'No result was recorded. A new run starts from the same version rather than reusing a partial one.'
+    default: {
+      const unhandled: never = code
+      return unhandled
+    }
+  }
+}
+
+/**
+ * Which version a result is about, and whether that is the version stored now.
+ * Named in one place so the list, the panel and the chip cannot disagree about
+ * whether the check still covers the document.
+ */
+export function verificationVersionNote(
+  checkedVersion: number | undefined,
+  currentVersion: number | undefined,
+) {
+  const checked =
+    checkedVersion === undefined
+      ? 'an earlier version'
+      : `version ${String(checkedVersion)}`
+  if (currentVersion === undefined || checkedVersion === currentVersion) {
+    return `Checked ${checked}.`
+  }
+  return `Checked ${checked}. Version ${String(currentVersion)} is stored now, so this result covers the earlier text, not the current one.`
+}
+
 /**
  * The stored-version boundary, stated wherever evidence is shown. A reader must
  * never take a checked result as covering work that has not been saved.
@@ -257,4 +362,24 @@ export function verificationStoredVersionNote(
     )
   }
   return parts.join(' ')
+}
+
+/**
+ * The decisions table stores the dismissing user's id, not their name. Naming
+ * the user we can identify and saying "another reviewer" otherwise is the
+ * honest option: an internal id is not a name, and inventing one would falsify
+ * a record of who decided.
+ */
+export function verificationDismissalRecord(
+  dismissal: VerificationFindingDismissal,
+  currentUserId: string | undefined,
+) {
+  const time = formatRunTime(dismissal.dismissedAt)
+  // Without the signed-in id the person cannot be named truthfully, so the
+  // record states only what it knows rather than calling everyone "another
+  // reviewer".
+  if (!currentUserId) return `Dismissed · ${time}`
+  const who =
+    dismissal.dismissedBy === currentUserId ? 'you' : 'another reviewer'
+  return `Dismissed by ${who} · ${time}`
 }

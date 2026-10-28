@@ -1,17 +1,22 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { getVerificationEvidence } from '../verification-evidence'
-import { verificationRunCreateRequestSchema } from '@obiter/contracts'
+import {
+  verificationFindingDismissRequestSchema,
+  verificationRunCreateRequestSchema,
+} from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
 import { ensureOrgUser } from '../authz'
 import { readLimitedJsonBody } from '../limited-request-body'
 import { DEFAULT_JSON_BODY_MAX_BYTES } from '../request-limit-defaults'
 import type { StorageService } from '../storage'
+import { dismissVerificationFinding } from '../verification-dismissals'
 import {
   getVerificationRun,
   listVerificationFindings,
   listVerificationRuns,
 } from '../verification-database'
+import { loadFindingSources } from '../verification-finding-sources'
 import { createAndExecuteVerificationRun } from '../verification-execution'
 import {
   decodeVerificationCursor,
@@ -219,12 +224,61 @@ export function createVerificationRunRoutes(
         cursor: query.cursor,
       },
     )
+    // One batched read per source family for the page, so naming a finding's
+    // stored source and building its pinpoint costs two queries, not two per
+    // finding. Sources live in the corpus store, which is a different database
+    // from the organisation's matters.
+    const sources = await loadFindingSources(corpusPool, page.findings)
     return c.json({
       run,
-      findings: page.findings.map(toPublicFinding),
+      findings: page.findings.map((finding) =>
+        toPublicFinding(finding, {
+          dismissal: page.dismissals.get(finding.id) ?? null,
+          sources,
+        }),
+      ),
       nextCursor: page.nextCursor,
     })
   })
+
+  routes.post(
+    '/api/verification-runs/:runId/findings/:findingId/dismiss',
+    async (c) => {
+      const user = await ensureOrgUser(c, pool)
+      if (user instanceof Response) return user
+      const body = await readLimitedJsonBody(c, DEFAULT_JSON_BODY_MAX_BYTES)
+      if (body instanceof Response) return body
+      const parsed = verificationFindingDismissRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        return errorResponse(
+          c,
+          'validation_failed',
+          'A dismissal reason is optional, and at most 2000 characters.',
+          400,
+        )
+      }
+      const outcome = await dismissVerificationFinding(pool, user, {
+        runId: c.req.param('runId'),
+        findingId: c.req.param('findingId'),
+        reason: parsed.data.reason ?? null,
+      })
+      if (outcome.ok) return c.json({ dismissal: outcome.dismissal }, 201)
+      if (outcome.reason === 'finding_not_dismissable') {
+        return errorResponse(
+          c,
+          'verification_finding_not_dismissable',
+          'This finding matched its checked source, so there is nothing to dismiss.',
+          409,
+        )
+      }
+      return errorResponse(
+        c,
+        'verification_finding_not_found',
+        'Verification finding not found.',
+        404,
+      )
+    },
+  )
 
   return routes
 }

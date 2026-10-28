@@ -226,7 +226,13 @@ function verificationRun(id: string, documentId: string) {
     createdAt: '2026-09-14T00:00:00.000Z',
     startedAt: '2026-09-14T00:00:01.000Z',
     completedAt: '2026-09-14T00:00:02.000Z',
-    summary: { findingCount: 0, flaggedCount: 0, reviewRequiredCount: 0 },
+    summary: {
+      findingCount: 0,
+      flaggedCount: 0,
+      reviewRequiredCount: 0,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
   }

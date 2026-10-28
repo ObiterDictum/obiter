@@ -1,23 +1,163 @@
 import { describe, expect, it } from 'bun:test'
-import type { VerificationRun } from '@obiter/contracts'
+import type {
+  VerificationFindingView,
+  VerificationRun,
+} from '@obiter/contracts'
 import {
-  verificationReasonLabel,
+  formatRunTime,
+  verificationCountsLabel,
+  verificationDismissalRecord,
+  verificationFindingCounts,
   verificationRunTime,
   verificationStateLabel,
+  verificationSummaryCounts,
   verificationTypeLabel,
+  verificationUncertainty,
 } from './verification-copy'
 
-describe('verification copy', () => {
-  it('does not use internal discriminant names as user copy', () => {
-    expect(verificationTypeLabel('authority_existence')).toBe(
-      'Authority existence',
+function finding(
+  overrides: Partial<VerificationFindingView> = {},
+): VerificationFindingView {
+  return {
+    id: 'vf:1',
+    type: 'citation_resolution',
+    state: 'clear',
+    dismissal: null,
+    reviewReason: null,
+    severity: null,
+    confidence: null,
+    requiresReview: false,
+    explanation: 'The citation resolved to one stored authority.',
+    excerpt: '[2017] UKSC 24',
+    location: { paragraphId: 'p1', start: 0, end: 13 },
+    authorityLabel: '[2017] UKSC 24',
+    evidence: [],
+    ...overrides,
+  }
+}
+
+describe('finding state wording', () => {
+  it('never uses internal discriminant names as user copy', () => {
+    expect(verificationTypeLabel('authority_existence')).toBe('Authority')
+    expect(verificationStateLabel(finding())).toBe(
+      'Citation matches checked source',
     )
-    expect(verificationStateLabel('review_required')).toBe('Needs review')
-    expect(verificationReasonLabel('authority_not_held')).toBe(
-      'The stored sources do not hold this authority.',
+    expect(verificationUncertainty(finding())).toBeNull()
+    expect(verificationUncertainty(finding()) ?? '').not.toContain(
+      'review_required',
     )
-    expect(verificationReasonLabel('authority_not_held')).not.toContain(
-      'authority_not_held',
+  })
+
+  it('claims a match for a quotation only when the quotation check ran', () => {
+    expect(
+      verificationStateLabel(
+        finding({ type: 'quote_fidelity', state: 'clear' }),
+      ),
+    ).toBe('Quotation matches checked source')
+    expect(
+      verificationStateLabel(
+        finding({ type: 'authority_existence', state: 'clear' }),
+      ),
+    ).toBe('Authority is held in the stored sources')
+  })
+
+  it('states what a review reason does and does not establish', () => {
+    expect(
+      verificationUncertainty(
+        finding({
+          state: 'review_required',
+          reviewReason: 'citation_unresolved',
+        }),
+      ),
+    ).toContain('may be wrong')
+    expect(
+      verificationUncertainty(
+        finding({
+          state: 'review_required',
+          reviewReason: 'authority_not_held',
+        }),
+      ),
+    ).toContain('not a finding that it does not exist')
+    expect(
+      verificationUncertainty(
+        finding({
+          state: 'review_required',
+          reviewReason: 'evidence_unavailable',
+        }),
+      ),
+    ).toContain('nothing was compared')
+  })
+
+  it('says a check that did not run compared nothing', () => {
+    expect(
+      verificationUncertainty(
+        finding({ state: 'not_checked', reviewReason: null }),
+      ),
+    ).toBe('This check did not run, so nothing was compared.')
+  })
+
+  it('keeps the counts apart, including dismissed findings', () => {
+    const counts = verificationFindingCounts([
+      finding({ id: 'a', state: 'flagged' }),
+      finding({
+        id: 'b',
+        state: 'review_required',
+        reviewReason: 'check_inconclusive',
+      }),
+      finding({ id: 'c', state: 'not_checked' }),
+      finding({ id: 'd' }),
+      finding({
+        id: 'e',
+        state: 'flagged',
+        dismissal: {
+          reason: 'Quoted directly from the judgment.',
+          dismissedBy: 'usr_1',
+          dismissedAt: '2026-10-26T14:52:00.000Z',
+        },
+      }),
+    ])
+    expect(counts).toEqual({
+      flagged: 2,
+      needsReview: 1,
+      notChecked: 1,
+      matched: 1,
+      dismissed: 1,
+      total: 5,
+    })
+    expect(verificationCountsLabel(counts)).toBe(
+      '2 flagged · 1 needs review · 1 not checked · 1 matches the checked source · 1 dismissed',
+    )
+  })
+
+  it('counts a run summary the same way it counts findings', () => {
+    expect(
+      verificationSummaryCounts({
+        findingCount: 11,
+        flaggedCount: 1,
+        reviewRequiredCount: 2,
+        notCheckedCount: 1,
+        dismissedCount: 1,
+      }),
+    ).toMatchObject({
+      flagged: 1,
+      needsReview: 2,
+      notChecked: 1,
+      matched: 6,
+      dismissed: 1,
+    })
+  })
+
+  it('records who dismissed a finding and when, without inventing a name', () => {
+    const dismissal = {
+      reason: null,
+      dismissedBy: 'usr_1',
+      dismissedAt: '2026-10-26T14:52:00.000Z',
+    }
+    expect(verificationDismissalRecord(dismissal, 'usr_1')).toBe(
+      `Dismissed by you · ${formatRunTime(dismissal.dismissedAt)}`,
+    )
+    expect(verificationDismissalRecord(dismissal, 'usr_2')).toBe(
+      `Dismissed by another reviewer · ${formatRunTime(dismissal.dismissedAt)}`,
     )
   })
 })
@@ -35,23 +175,23 @@ function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
     createdAt: '2026-09-14T00:00:00.000Z',
     startedAt: '2026-09-14T01:00:00.000Z',
     completedAt: '2026-09-14T02:00:00.000Z',
-    summary: { findingCount: 0, flaggedCount: 0, reviewRequiredCount: 0 },
+    summary: {
+      findingCount: 0,
+      flaggedCount: 0,
+      reviewRequiredCount: 0,
+      notCheckedCount: 0,
+      dismissedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
     ...overrides,
   }
 }
 
-const formatted = (at: string) =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(at))
-
 describe('verificationRunTime', () => {
   it('labels a completed run with its completion time', () => {
     expect(verificationRunTime(run())).toBe(
-      `Completed ${formatted('2026-09-14T02:00:00.000Z')}`,
+      `Completed ${formatRunTime('2026-09-14T02:00:00.000Z')}`,
     )
   })
 
@@ -59,25 +199,25 @@ describe('verificationRunTime', () => {
     const label = verificationRunTime(
       run({ status: 'failed', failureCode: 'execution_failed' }),
     )
-    expect(label).toBe(`Failed ${formatted('2026-09-14T02:00:00.000Z')}`)
-    expect(label).not.toContain(formatted('2026-09-14T00:00:00.000Z'))
+    expect(label).toBe(`Stopped ${formatRunTime('2026-09-14T02:00:00.000Z')}`)
+    expect(label).not.toContain(formatRunTime('2026-09-14T00:00:00.000Z'))
   })
 
   it('labels a running run with when it started', () => {
     expect(verificationRunTime(run({ status: 'running' }))).toBe(
-      `Started ${formatted('2026-09-14T01:00:00.000Z')}`,
+      `Started ${formatRunTime('2026-09-14T01:00:00.000Z')}`,
     )
   })
 
   it('labels a queued run with when it was created', () => {
     expect(
       verificationRunTime(run({ status: 'queued', startedAt: null })),
-    ).toBe(`Created ${formatted('2026-09-14T00:00:00.000Z')}`)
+    ).toBe(`Created ${formatRunTime('2026-09-14T00:00:00.000Z')}`)
   })
 
   it('falls back to the creation time when a terminal run has no completion time', () => {
     expect(
       verificationRunTime(run({ status: 'failed', completedAt: null })),
-    ).toBe(`Created ${formatted('2026-09-14T00:00:00.000Z')}`)
+    ).toBe(`Created ${formatRunTime('2026-09-14T00:00:00.000Z')}`)
   })
 })

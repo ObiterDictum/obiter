@@ -266,11 +266,13 @@ export function finding(
     excerpt: '[2012] UKSC 7',
     location: location('p1', CITATION_PARAGRAPH, '[2012] UKSC 7'),
     authorityLabel: '[2012] UKSC 7',
+    dismissal: null,
     evidence: [
       {
         id: 'ev_1',
         sourceId: 'uksc-2012-7',
         label: 'Judgment uksc-2012-7',
+        source: { url: null, canonicalUrl: null, pinpoint: null, anchor: null },
       },
     ],
     ...overrides,
@@ -292,6 +294,7 @@ export function quoteFinding(): VerificationFindingView {
       'the court must give the claimant a fair opportunity',
     ),
     authorityLabel: '[2012] UKSC 40',
+    dismissal: null,
     evidence: [],
   })
 }
@@ -307,6 +310,7 @@ export function unmappableFinding(): VerificationFindingView {
     excerpt: '[2099] EWHC 999 (Ch)',
     location: location('p-gone', CITATION_PARAGRAPH, '[2012] UKSC 7'),
     authorityLabel: 'Unresolved citation',
+    dismissal: null,
     evidence: [],
   })
 }
@@ -325,6 +329,7 @@ export function hardBreakFinding(): VerificationFindingView {
     excerpt: HARD_BREAK_TEXT,
     location: location('p3', HARD_BREAK_TEXT, HARD_BREAK_TEXT),
     authorityLabel: '[2012] UKSC 41',
+    dismissal: null,
     evidence: [],
   })
 }
@@ -342,7 +347,13 @@ function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
     createdAt: '2026-09-14T00:00:00.000Z',
     startedAt: '2026-09-14T00:00:01.000Z',
     completedAt: '2026-09-14T00:00:02.000Z',
-    summary: { findingCount: 3, flaggedCount: 1, reviewRequiredCount: 1 },
+    summary: {
+      findingCount: 3,
+      flaggedCount: 1,
+      reviewRequiredCount: 1,
+      dismissedCount: 0,
+      notCheckedCount: 0,
+    },
     documentCurrentVersionId: 'ver_1',
     stale: false,
     ...overrides,
@@ -467,6 +478,8 @@ export function mount(
             findingCount: 3,
             flaggedCount: 1,
             reviewRequiredCount: 1,
+            notCheckedCount: 0,
+            dismissedCount: 0,
             ...options.summary,
           },
         }

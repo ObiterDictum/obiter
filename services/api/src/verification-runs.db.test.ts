@@ -3,6 +3,7 @@ import { Pool } from 'pg'
 import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import {
+  apiErrorResponseSchema,
   verificationFindingsResponseSchema,
   verificationRunResponseSchema,
 } from '@obiter/contracts'
@@ -383,6 +384,8 @@ describe('verification run persistence', () => {
       findingCount: 2,
       flaggedCount: 0,
       reviewRequiredCount: 1,
+      notCheckedCount: 0,
+      dismissedCount: 0,
     })
 
     const findingsResponse = await userA.request(
@@ -399,6 +402,14 @@ describe('verification run persistence', () => {
         id: 'uksc-1:judgment_document',
         sourceId: 'uksc-1',
         label: 'Judgment uksc-1',
+        // The fixture names a source the store does not hold, so there is no
+        // stored URL to name it from and no page to link: both stay null.
+        source: {
+          url: null,
+          canonicalUrl: null,
+          pinpoint: null,
+          anchor: null,
+        },
       },
     ])
     const review = findings.findings.find(
@@ -407,5 +418,118 @@ describe('verification run persistence', () => {
     expect(review?.reviewReason).toBe('citation_unresolved')
     expect(review?.requiresReview).toBe(true)
     expect(review?.evidence).toEqual([])
+  })
+
+  it('records who dismissed a finding, when and why, and still counts the run honestly', async () => {
+    const version = `ver_iso_${seed.suffix}_a5`
+    await insertReadyVersion(pool, seed, version, 5)
+    extraVersions.push(version)
+    const runId = `vrun_${seed.suffix}_dismiss`
+    await pool.query(
+      `insert into verification_runs (
+         id, organisation_id, matter_id, document_id, document_version_id,
+         status, failure_code, created_by, created_at, started_at, completed_at
+       ) values ($1, $2, $3, $4, $5, 'completed', null, $6, now(), now(), now())`,
+      [runId, seed.orgA, seed.matterA, seed.documentA, version, seed.userA],
+    )
+    const subject: Subject = { documentId: seed.documentA, versionId: version }
+    const clear = clearCaseLawFinding(subject)
+    const review = reviewRequiredFinding(subject)
+    await insertFinding(pool, seed.orgA, runId, clear)
+    await insertFinding(pool, seed.orgA, runId, review)
+
+    const userA = app(pool, seed.userA, seed.orgA)
+    const dismissal = await userA.request(
+      `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          reason: 'The paragraph quotes the judgment directly.',
+        }),
+      },
+    )
+    expect(dismissal.status).toBe(201)
+    expect(await dismissal.json()).toMatchObject({
+      dismissal: {
+        reason: 'The paragraph quotes the judgment directly.',
+        dismissedBy: seed.userA,
+      },
+    })
+
+    // The check's own outcome is untouched: the finding is still review
+    // required, and the dismissal is a separate, attributable decision.
+    const findings = verificationFindingsResponseSchema.parse(
+      await (
+        await userA.request(`/api/verification-runs/${runId}/findings`)
+      ).json(),
+    )
+    const dismissed = findings.findings.find(
+      (finding) => finding.id === review.id,
+    )
+    expect(dismissed?.state).toBe('review_required')
+    expect(dismissed?.dismissal?.reason).toBe(
+      'The paragraph quotes the judgment directly.',
+    )
+    const stillClear = findings.findings.find(
+      (finding) => finding.id === clear.id,
+    )
+    expect(stillClear?.dismissal).toBeNull()
+
+    // A dismissed finding is a decision, not attention outstanding.
+    const run = verificationRunResponseSchema.parse(
+      await (await userA.request(`/api/verification-runs/${runId}`)).json(),
+    )
+    expect(run.run.summary).toEqual({
+      findingCount: 2,
+      flaggedCount: 0,
+      reviewRequiredCount: 0,
+      notCheckedCount: 0,
+      dismissedCount: 1,
+    })
+
+    // A check that found nothing has no decision for a person to record.
+    const clearDismissal = await userA.request(
+      `/api/verification-runs/${runId}/findings/${encodeURIComponent(clear.id)}/dismiss`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+    expect(clearDismissal.status).toBe(409)
+    expect(
+      apiErrorResponseSchema.parse(await clearDismissal.json()).error.code,
+    ).toBe('verification_finding_not_dismissable')
+
+    // Another tenant cannot dismiss this organisation's finding, and the
+    // refusal names nothing about the run.
+    const userB = app(pool, seed.userB, seed.orgB)
+    const foreign = await userB.request(
+      `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+    const foreignBody = await foreign.text()
+    expect(foreign.status).toBe(404)
+    for (const needle of [runId, review.id, seed.orgA, seed.documentA]) {
+      expect(foreignBody).not.toContain(needle)
+    }
+
+    const unknown = await userA.request(
+      `/api/verification-runs/${runId}/findings/${encodeURIComponent('vf:unknown')}/dismiss`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    )
+    expect(unknown.status).toBe(404)
+    expect(apiErrorResponseSchema.parse(await unknown.json()).error.code).toBe(
+      'verification_finding_not_found',
+    )
   })
 })

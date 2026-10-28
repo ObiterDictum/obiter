@@ -28,7 +28,13 @@ describe('verification contracts', () => {
       createdAt: '2026-09-14T00:00:00.000Z',
       startedAt: '2026-09-14T00:00:01.000Z',
       completedAt: '2026-09-14T00:00:02.000Z',
-      summary: { findingCount: 0, flaggedCount: 0, reviewRequiredCount: 0 },
+      summary: {
+        findingCount: 0,
+        flaggedCount: 0,
+        reviewRequiredCount: 0,
+        notCheckedCount: 0,
+        dismissedCount: 0,
+      },
       documentCurrentVersionId: 'ver_2',
       stale: true,
     })
@@ -51,6 +57,31 @@ describe('verification contracts', () => {
         location: { paragraphId: 'p1', start: 0, end: 23 },
         authorityLabel: '[2024] UKSC 1',
         evidence: [{ id: 'src:judgment_paragraph:1', sourceId: 'src' }],
+      }).success,
+    ).toBe(false)
+    // The view also refuses evidence with no source location block: a finding
+    // whose evidence cannot be opened is not a complete evidence view.
+    expect(
+      verificationFindingViewSchema.safeParse({
+        id: 'vf:1',
+        type: 'quote_fidelity',
+        state: 'clear',
+        dismissal: null,
+        reviewReason: null,
+        severity: null,
+        confidence: 'high',
+        requiresReview: false,
+        explanation: 'Matched.',
+        excerpt: 'the court must consider',
+        location: { paragraphId: 'p1', start: 0, end: 23 },
+        authorityLabel: '[2024] UKSC 1',
+        evidence: [
+          {
+            id: 'src:judgment_paragraph:1',
+            sourceId: 'src',
+            label: 'Judgment src, paragraph 1',
+          },
+        ],
       }).success,
     ).toBe(false)
   })
@@ -80,6 +111,7 @@ describe('verification contracts', () => {
         end: 23,
       },
       authorityLabel: 'Unresolved citation',
+      dismissal: null,
       evidence: [],
     })
     expect(parsed.location.storyKind).toBe('footnotes')
@@ -87,6 +119,37 @@ describe('verification contracts', () => {
       verificationFindingViewSchema.safeParse({
         ...parsed,
         location: { ...parsed.location, storyKind: 'not-a-story' },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('carries a dismissal as a decision beside the finding outcome', () => {
+    const parsed = verificationFindingViewSchema.parse({
+      id: 'vf:1',
+      type: 'citation_resolution',
+      state: 'review_required',
+      dismissal: {
+        reason: 'The paragraph quotes the judgment directly.',
+        dismissedBy: 'usr_1',
+        dismissedAt: '2026-10-26T14:52:00.000Z',
+      },
+      reviewReason: 'citation_unresolved',
+      severity: null,
+      confidence: null,
+      requiresReview: true,
+      explanation: 'The citation did not resolve.',
+      excerpt: '[2099] UKSC 9',
+      location: { paragraphId: 'p1', start: 0, end: 13 },
+      authorityLabel: 'Unmatched citation',
+      evidence: [],
+    })
+    expect(parsed.dismissal?.dismissedBy).toBe('usr_1')
+    // A dismissal never rewrites what the check found.
+    expect(parsed.state).toBe('review_required')
+    expect(
+      verificationFindingViewSchema.safeParse({
+        ...parsed,
+        dismissal: undefined,
       }).success,
     ).toBe(false)
   })

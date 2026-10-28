@@ -16,12 +16,12 @@ import {
 } from './verification-context'
 import type { UnmappedReason } from './verification-mapping'
 import {
-  verificationReasonLabel,
   verificationStateLabel,
   verificationStateTone,
   verificationStoredVersionNote,
   verificationStoryLabel,
   verificationTypeLabel,
+  verificationUncertainty,
   verificationUnmappedLabel,
 } from '../../verification-copy'
 
@@ -230,7 +230,7 @@ function PanelBody({
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge tone="neutral">{verificationTypeLabel(finding.type)}</Badge>
             <Badge tone={verificationStateTone(finding.state)}>
-              {verificationStateLabel(finding.state)}
+              {verificationStateLabel(finding)}
             </Badge>
             {verificationStoryLabel(finding.location.storyKind) ? (
               <Badge tone="neutral">
@@ -262,10 +262,8 @@ function PanelBody({
           {verificationUnmappedLabel(unmappedReason)}
         </p>
       ) : null}
-      {finding.reviewReason ? (
-        <p className="text-xs text-muted">
-          {verificationReasonLabel(finding.reviewReason)}
-        </p>
+      {verificationUncertainty(finding) ? (
+        <p className="text-xs text-muted">{verificationUncertainty(finding)}</p>
       ) : null}
 
       <div className="flex items-center justify-between gap-2 border-t border-line pt-3">

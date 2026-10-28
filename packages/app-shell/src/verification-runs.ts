@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import type {
+  VerificationFindingDismissResponse,
   VerificationFindingsResponse,
   VerificationRun,
   VerificationRunListResponse,
@@ -34,6 +35,14 @@ function pageQuery(cursor: string | null) {
   return cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
 }
 
+/** True while a listed run is still live, so the caller can poll it. */
+function runsAreLive(runs: readonly VerificationRun[] | undefined) {
+  return (
+    runs?.some((run) => run.status === 'queued' || run.status === 'running') ??
+    false
+  )
+}
+
 function documentVerificationRunsQueryOptions(documentId: string) {
   return queryOptions({
     queryKey: documentVerificationRunsQueryKey(documentId),
@@ -42,11 +51,7 @@ function documentVerificationRunsQueryOptions(documentId: string) {
         `/api/documents/${documentId}/verification-runs`,
       ),
     refetchInterval: (query) =>
-      query.state.data?.runs.some(
-        (run) => run.status === 'queued' || run.status === 'running',
-      )
-        ? 1500
-        : false,
+      runsAreLive(query.state.data?.runs) ? 1500 : false,
   })
 }
 
@@ -100,6 +105,12 @@ export function useOrganisationVerificationRuns(enabled: boolean) {
     getNextPageParam: (last) => last.nextCursor,
     enabled,
     staleTime: 15_000,
+    // A live run's progress is the page's whole point, so the list re-reads
+    // while one is queued or running and stops as soon as none is.
+    refetchInterval: (query) =>
+      runsAreLive(query.state.data?.pages.flatMap((page) => page.runs))
+        ? 2500
+        : false,
   })
   // Flattened once per page state: a new array every render would make every
   // consumer of the list look like it changed, and measurement effects keyed on
@@ -156,6 +167,29 @@ export function useCreateVerificationRun(documentId: string) {
   })
 }
 
+/**
+ * Dismiss one finding, or replace the reason on an existing dismissal. The
+ * dismissal is stored server-side with the signed-in user and the time; nothing
+ * about it is kept client-side. Every verification read is invalidated, so the
+ * run's counts, the page and the editor panel agree on the next render.
+ */
+export function useDismissVerificationFinding(runId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { findingId: string; reason: string | null }) =>
+      apiFetch<VerificationFindingDismissResponse>(
+        `/api/verification-runs/${runId}/findings/${encodeURIComponent(input.findingId)}/dismiss`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input.reason ? { reason: input.reason } : {}),
+        },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: verificationRunsQueryKey }),
+  })
+}
+
 export function latestVerificationRun(runs: VerificationRun[]) {
   return runs[0] ?? null
 }
@@ -167,7 +201,17 @@ export function latestVerificationRun(runs: VerificationRun[]) {
  */
 export type RunDocumentIdentity =
   | { status: 'pending' }
-  | { status: 'available'; filename: string }
+  | {
+      status: 'available'
+      filename: string
+      /** The version a person would check now, to say which is current. */
+      currentVersionId: string | null
+      currentVersionNumber: number | undefined
+      /** Version id to stored version number, for naming a checked version. */
+      versionNumbers: ReadonlyMap<string, number>
+      /** True only when the current version can be checked at all. */
+      ready: boolean
+    }
   | { status: 'unavailable' }
 
 /**
@@ -202,9 +246,20 @@ export function useVerificationRunDocuments(
       identities.set(documentId, { status: 'unavailable' })
       return
     }
+    const currentVersionId =
+      document.currentVersionId ?? document.currentVersion?.id ?? null
+    const versions = query.data?.versions ?? []
     identities.set(documentId, {
       status: 'available',
       filename: document.currentVersion?.filename ?? document.logicalKey,
+      currentVersionId,
+      currentVersionNumber: versions.find(
+        (version) => version.id === currentVersionId,
+      )?.versionNumber,
+      versionNumbers: new Map(
+        versions.map((version) => [version.id, version.versionNumber]),
+      ),
+      ready: document.currentVersion?.documentStatus === 'ready',
     })
   })
   return identities

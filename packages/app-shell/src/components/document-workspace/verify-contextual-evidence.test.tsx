@@ -10,20 +10,20 @@ describe('contextual verification evidence', () => {
   it('opens contextual evidence from a mapped citation', async () => {
     mount([finding()])
     const marker = await screen.findByRole('button', {
-      name: /Citation resolution, Clear/,
+      name: /Citation, Citation matches checked source/,
     })
     expect(marker.tagName).toBe('BUTTON')
     fireEvent.click(marker)
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('[2012] UKSC 7')
-    expect(panel.textContent).toContain('Clear')
+    expect(panel.textContent).toContain('Citation matches checked source')
     expect(panel.textContent).toContain('stored version ver_1')
   })
 
   it('opens a quotation finding from the document', async () => {
     mount([quoteFinding()])
     const marker = await screen.findByRole('button', {
-      name: /Quote fidelity, Flagged/,
+      name: /Quotation, Flagged/,
     })
     fireEvent.click(marker)
     const panel = await screen.findByRole('dialog')
@@ -36,7 +36,9 @@ describe('contextual verification evidence', () => {
     const desk = document.querySelector('[data-document-desk]')
     const flowBefore = desk?.children.length ?? 0
     fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+      await screen.findByRole('button', {
+        name: /Citation, Citation matches checked source/,
+      }),
     )
     const panel = await screen.findByRole('dialog')
     expect(panel.closest('[data-document-desk]')).toBeNull()
@@ -52,10 +54,12 @@ describe('contextual verification evidence', () => {
     await screen.findByRole('region', { name: 'Verification' })
     await waitFor(() => {
       expect(
-        screen.queryByRole('button', { name: /Citation resolution, Clear/ }),
+        screen.queryByRole('button', {
+          name: /Citation, Citation matches checked source/,
+        }),
       ).toBeNull()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'All findings' })[0]!)
     const index = await screen.findByRole('dialog')
     expect(index.textContent).toContain('Not shown in the document')
   })
@@ -71,7 +75,7 @@ describe('contextual verification evidence', () => {
       }),
     ])
     const markers = await screen.findAllByRole('button', {
-      name: /Citation resolution|Authority existence/,
+      name: /^(Citation|Authority), /,
     })
     expect(markers).toHaveLength(1)
     expect(markers[0]!.getAttribute('aria-label')).toContain('Flagged')
@@ -81,7 +85,7 @@ describe('contextual verification evidence', () => {
     fireEvent.click(markers[0]!)
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('Flagged')
-    expect(panel.textContent).toContain('Authority existence')
-    expect(panel.textContent).not.toContain('Clear')
+    expect(panel.textContent).toContain('Authority')
+    expect(panel.textContent).not.toContain('Citation matches checked source')
   })
 })

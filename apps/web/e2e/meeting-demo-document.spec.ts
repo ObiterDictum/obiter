@@ -90,9 +90,7 @@ test('the ribbon entries reveal the one real document action', async ({
   })
   await expect(verifyCitations).toBeEnabled({ timeout: 15_000 })
   await verifyCitations.click()
-  await expect(
-    page.getByRole('button', { name: 'Run verification' }),
-  ).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
 
   // Review ▸ Redact this document reveals the real document-level action.
   await page.getByRole('tab', { name: 'Review' }).click()
@@ -134,7 +132,7 @@ test('a modified chord cannot record a redaction decision', async ({
   // Select the first span so a decision would land on it.
   const firstOption = listbox.getByRole('option').first()
   await firstOption.click()
-  await expect(firstOption.getByText('Unreviewed')).toBeVisible()
+  await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   // Dispatch the chords as real keydown events on the focused list. A synthetic
   // event proves the handler, without the browser's own reload on Ctrl+R.
@@ -156,8 +154,8 @@ test('a modified chord cannot record a redaction decision', async ({
     }
   })
 
-  // The decision is unchanged: the row still reads Unreviewed.
-  await expect(firstOption.getByText('Unreviewed')).toBeVisible()
+  // The decision is unchanged: the row still reads Needs review.
+  await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   // Ctrl+K still opens app search, so the fix did not disable it.
   await listbox.focus()
@@ -174,11 +172,13 @@ test('a modified chord cannot record a redaction decision', async ({
   await expect(
     page.getByRole('textbox', { name: 'Search Obiter' }),
   ).toBeFocused()
-  await expect(firstOption.getByText('Unreviewed')).toBeVisible()
+  await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   // The unmodified shortcut still records a decision, so the fix is scoped.
   await listbox.press('r')
-  await expect(firstOption.getByText('reject')).toBeVisible({ timeout: 10_000 })
+  await expect(firstOption.getByText('Kept visible').first()).toBeVisible({
+    timeout: 10_000,
+  })
 })
 
 test('opening a finding brings its marker inside a 390px viewport', async ({
@@ -190,13 +190,13 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
   // Start verification from the header's Run control, which opens the Verify
   // panel so the run's progress and findings are visible.
   await page.getByRole('button', { name: 'Run', exact: true }).click()
-  await expect(page.getByText('Review required (2)')).toBeVisible({
+  await expect(page.getByText('2 need review').first()).toBeVisible({
     timeout: 30_000,
   })
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(300)
-  await page.getByRole('button', { name: 'Go to next finding' }).click()
+  await page.getByRole('button', { name: 'Go to finding' }).click()
 
   // The marker layer scrolls the active marker into view, horizontally too, so
   // a finding is reachable on a narrow viewport even though the A4 page is wider.

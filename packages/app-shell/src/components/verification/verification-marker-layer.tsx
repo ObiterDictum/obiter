@@ -270,8 +270,8 @@ export function VerificationMarkerLayer({
         )
         const label =
           item.findings.length > 1
-            ? `${verificationTypeLabel(item.finding.type)}, ${verificationStateLabel(item.finding.state)}: ${item.finding.authorityLabel} (${item.findings.length} findings here)`
-            : `${verificationTypeLabel(item.finding.type)}, ${verificationStateLabel(item.finding.state)}: ${item.finding.authorityLabel}`
+            ? `${verificationTypeLabel(item.finding.type)}, ${verificationStateLabel(item.finding)}: ${item.finding.authorityLabel} (${item.findings.length} findings here)`
+            : `${verificationTypeLabel(item.finding.type)}, ${verificationStateLabel(item.finding)}: ${item.finding.authorityLabel}`
         return [
           ...item.boxes.map((box, index) => (
             <span
@@ -307,7 +307,7 @@ export function VerificationMarkerLayer({
             aria-label={label}
             aria-haspopup="dialog"
             aria-expanded={active && verification.panelOpen}
-            title={`${verificationTypeLabel(item.finding.type)}: ${verificationStateLabel(item.finding.state)}`}
+            title={`${verificationTypeLabel(item.finding.type)}: ${verificationStateLabel(item.finding)}`}
             onClick={() => verification.openFinding(item.finding.id)}
             onKeyDown={(event) => {
               if (event.key !== 'Escape' || !active) return
