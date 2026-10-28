@@ -85,7 +85,7 @@ export function readOnlyValue(scope: HTMLElement, label: string) {
 }
 
 export async function openSection(
-  name: 'Account' | 'Security' | 'Organisation',
+  name: 'Account' | 'Security' | 'Organisation' | 'Preferences',
 ) {
   fireEvent.click(await screen.findByRole('button', { name }))
   return screen.findByRole('region', { name })

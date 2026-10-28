@@ -39,7 +39,7 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
   await page.getByLabel('Password').click()
   await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
     timeout: 15_000,
   })

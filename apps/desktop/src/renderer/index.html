@@ -5,12 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Obiter Desktop</title>
     <script>
-      // Applies a saved dark choice before first paint. The storage key is
-      // shared with packages/app-shell/src/use-app-theme.ts.
+      // Applies a saved dark choice before first paint. "system" follows the
+      // OS setting, so it is resolved here too rather than flashing light. The
+      // storage key is shared with packages/app-shell/src/use-app-theme.ts.
       try {
         var theme = localStorage.getItem('obiter.theme.v2')
         if (theme === 'dark' || theme === 'light') {
           document.documentElement.dataset.theme = theme
+        } else if (
+          theme === 'system' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches
+        ) {
+          document.documentElement.dataset.theme = 'dark'
         }
       } catch (error) {}
     </script>

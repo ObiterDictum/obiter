@@ -49,58 +49,74 @@ export function AccountSection({
     <section
       hidden={!active}
       aria-labelledby="settings-account-heading"
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-8"
     >
-      <div>
+      <div className="flex flex-col gap-6">
         <SectionHeading
           id="settings-account-heading"
           title="Account"
-          description="Your name and the email you sign in with. Your name is shown to your organisation."
+          description="Your name is shown on comments, tracked changes and every matter you share."
         />
+
+        <form
+          className="flex max-w-[420px] flex-col gap-4"
+          onSubmit={field.submit}
+          noValidate
+        >
+          <Input
+            ref={nameRef}
+            label="Name"
+            type="text"
+            autoComplete="name"
+            required
+            maxLength={USER_NAME_MAX_LENGTH}
+            value={field.value}
+            helperText="Use the name your colleagues know you by."
+            error={field.error ?? field.blankError ?? undefined}
+            onChange={(event) => field.setValue(event.target.value)}
+          />
+          <div className="flex items-center gap-3">
+            <Button
+              type="submit"
+              loading={field.submitting}
+              disabled={!field.canSave}
+            >
+              Save changes
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={!field.dirty || field.submitting}
+              onClick={field.reset}
+            >
+              Reset
+            </Button>
+            <SavedNotice message="All changes saved" show={field.saved} />
+          </div>
+          {field.error ? <ErrorNotice message={field.error} /> : null}
+        </form>
       </div>
 
-      <form
-        className="flex max-w-lg flex-col gap-4"
-        onSubmit={field.submit}
-        noValidate
-      >
-        <Input
-          ref={nameRef}
-          label="Name"
-          type="text"
-          autoComplete="name"
-          required
-          maxLength={USER_NAME_MAX_LENGTH}
-          value={field.value}
-          error={field.error ?? field.blankError ?? undefined}
-          onChange={(event) => field.setValue(event.target.value)}
+      <div className="flex flex-col gap-6 border-t border-line pt-8">
+        <SectionHeading
+          id="settings-email-heading"
+          level="h3"
+          title="Sign-in email"
+          description="The address used for sign-in, invitations and Verify notifications."
         />
-        <div className="flex items-center gap-3">
-          <Button
-            type="submit"
-            loading={field.submitting}
-            disabled={!field.canSave}
-          >
-            Save changes
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={!field.dirty || field.submitting}
-            onClick={field.reset}
-          >
-            Reset
-          </Button>
-          <SavedNotice message="Name saved." show={field.saved} />
-        </div>
-        {field.error ? <ErrorNotice message={field.error} /> : null}
-      </form>
-
-      <dl className="flex max-w-lg flex-col gap-4">
         <ReadOnlyField
           label="Email"
           value={user.email}
-          helper="Email changes are not supported yet."
+          helper="Ask your firm administrator to change the email you sign in with."
+        />
+      </div>
+
+      <div className="flex flex-col gap-6 border-t border-line pt-8">
+        <SectionHeading
+          id="settings-role-heading"
+          level="h3"
+          title="Your role"
+          description="Roles decide who can invite people, change the organisation and remove members."
         />
         {organisation && user.role ? (
           <ReadOnlyField
@@ -115,7 +131,7 @@ export function AccountSection({
             helper="Create one in Organisation settings when you are ready to share work."
           />
         )}
-      </dl>
+      </div>
     </section>
   )
 }

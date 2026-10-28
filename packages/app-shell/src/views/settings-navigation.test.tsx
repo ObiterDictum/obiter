@@ -105,7 +105,7 @@ afterEach(() => {
 })
 
 describe('SettingsRouteView — information architecture', () => {
-  it('offers the three sections through section navigation and starts on Account', async () => {
+  it('offers every section through section navigation and starts on Account', async () => {
     renderSettings()
 
     const nav = await screen.findByRole('navigation', {
@@ -115,7 +115,7 @@ describe('SettingsRouteView — information architecture', () => {
       within(nav)
         .getAllByRole('button')
         .map((button) => button.textContent),
-    ).toEqual(['Account', 'Security', 'Organisation'])
+    ).toEqual(['Account', 'Security', 'Organisation', 'Preferences'])
 
     expect(
       within(nav)
@@ -125,6 +125,7 @@ describe('SettingsRouteView — information architecture', () => {
     expect(await screen.findByRole('region', { name: 'Account' })).toBeTruthy()
     expect(screen.queryByRole('region', { name: 'Security' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Organisation' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Preferences' })).toBeNull()
   })
 
   it('retains an unsaved draft when the user switches section and returns', async () => {
@@ -156,5 +157,50 @@ describe('SettingsRouteView — information architecture', () => {
     expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe(
       'Imogen Hartley-Clarke',
     )
+  })
+})
+
+describe('SettingsRouteView — preferences', () => {
+  afterEach(() => {
+    cleanup()
+    window.localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('offers Light, Dark and Match system, and shows which one is in use', async () => {
+    renderSettings()
+    await openSection('Preferences')
+
+    const theme = screen.getByRole('group', { name: 'Theme' })
+    expect(
+      within(theme)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Light (default)', 'Dark', 'Match system'])
+    expect(
+      within(theme)
+        .getByRole('button', { name: 'Light (default)' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+  })
+
+  it('keeps the choice and repaints the document to it', async () => {
+    renderSettings()
+    await openSection('Preferences')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dark' }))
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(window.localStorage.getItem('obiter.theme.v2')).toBe('dark')
+    expect(
+      screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Match system' }))
+
+    // The stub reports that this machine does not ask for dark, so matching the
+    // system renders light while the stored choice stays "system".
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    expect(window.localStorage.getItem('obiter.theme.v2')).toBe('system')
   })
 })

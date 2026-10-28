@@ -66,7 +66,7 @@ async function signIn(page: Page) {
       await page.reload({ waitUntil: 'networkidle' })
       continue
     }
-    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     const signedIn = await page
       .waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
         timeout: 15_000,

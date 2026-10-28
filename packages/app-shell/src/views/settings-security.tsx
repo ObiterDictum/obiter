@@ -82,7 +82,7 @@ export function SecuritySection({ active }: { active: boolean }) {
     <section
       hidden={!active}
       aria-labelledby="settings-security-heading"
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-6"
     >
       <div>
         <SectionHeading
@@ -93,7 +93,7 @@ export function SecuritySection({ active }: { active: boolean }) {
       </div>
 
       <form
-        className="flex max-w-lg flex-col gap-4"
+        className="flex max-w-[420px] flex-col gap-4"
         onSubmit={handleSubmit}
         noValidate
       >

@@ -119,7 +119,7 @@ describe('SettingsRouteView — account', () => {
     expect(within(account).getByText('owner@obiter.dev')).toBeTruthy()
     expect(within(account).getByText('Owner')).toBeTruthy()
     expect(
-      within(account).getByText(/email changes are not supported/i),
+      within(account).getByText(/change the email you sign in with/i),
     ).toBeTruthy()
   })
 
