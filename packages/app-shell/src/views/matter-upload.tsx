@@ -1,5 +1,6 @@
-import { Plus, Upload } from '@phosphor-icons/react'
-import { buttonClassName, useToast } from '@obiter/ui'
+import { FileArrowUp, Plus, Upload } from '@phosphor-icons/react'
+import { buttonClassName, cn, useToast } from '@obiter/ui'
+import { useState, type DragEvent, type ReactNode } from 'react'
 import { blankDocumentFile } from '../document-blank'
 import { useUploadMatterDocument } from '../documents'
 
@@ -31,6 +32,74 @@ function useMatterDocumentUpload(matterId: string) {
   }
 
   return { pending: upload.isPending, send }
+}
+
+/**
+ * Uploading by dropping a file on the matter. It is the same path as the
+ * buttons (same mutation, same toast, same invalidation), because a second
+ * upload path is a second set of failures to keep correct.
+ */
+export function MatterDropZone({
+  matterId,
+  children,
+}: {
+  matterId: string
+  children: ReactNode
+}) {
+  const { pending, send } = useMatterDocumentUpload(matterId)
+  const [dragging, setDragging] = useState(false)
+
+  function carriesFiles(event: DragEvent) {
+    return event.dataTransfer.types.includes('Files')
+  }
+
+  return (
+    <div
+      className="relative"
+      aria-busy={pending || undefined}
+      onDragEnter={(event) => {
+        if (!carriesFiles(event)) return
+        event.preventDefault()
+        setDragging(true)
+      }}
+      onDragOver={(event) => {
+        if (!carriesFiles(event)) return
+        // Without this the browser navigates to the dropped file instead.
+        event.preventDefault()
+      }}
+      onDragLeave={(event) => {
+        // Leaving for a child element is not leaving the page. relatedTarget is
+        // null when the pointer leaves the window entirely, which contains()
+        // answers false for.
+        const next = event.relatedTarget
+        if (next instanceof Node && event.currentTarget.contains(next)) return
+        setDragging(false)
+      }}
+      onDrop={(event) => {
+        if (!carriesFiles(event)) return
+        event.preventDefault()
+        setDragging(false)
+        const file = event.dataTransfer.files?.[0]
+        if (file) send(file)
+      }}
+    >
+      {children}
+      {dragging ? (
+        <div
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-0 z-10 grid place-items-center',
+            'rounded-lg border-2 border-dashed border-brand bg-brand-soft',
+          )}
+        >
+          <span className="flex items-center gap-2 rounded-md bg-surface px-4 py-2 text-item text-ink shadow-sm">
+            <FileArrowUp size={16} aria-hidden />
+            Drop to upload to this matter
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export function MatterUploadButton({

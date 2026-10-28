@@ -8,6 +8,10 @@ import type {
   UserRole,
 } from '@obiter/contracts'
 import {
+  documentOpenResponseSchema,
+  recentlyOpenedDocumentResponseSchema,
+} from '@obiter/contracts'
+import {
   appendAuditLog,
   createDocument,
   getDocument,
@@ -23,6 +27,10 @@ import {
   normaliseFileType,
   type ExtractedDocumentContent,
 } from '../document-extraction'
+import {
+  getRecentlyOpenedDocument,
+  recordDocumentOpen,
+} from '../document-opens'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import {
   readLimitedFormData,
@@ -349,6 +357,39 @@ export function createDocumentsRoutes(
       includeDeleted,
     })
     return c.json({ documents })
+  })
+
+  // Registered before the `:id` read: otherwise "recently-opened" would be read
+  // as a document id.
+  routes.get('/api/documents/recently-opened', async (c) => {
+    const user = await ensureOrgUser(c, pool)
+    if (user instanceof Response) return user
+    const document = await getRecentlyOpenedDocument(pool, user)
+    return c.json(recentlyOpenedDocumentResponseSchema.parse({ document }))
+  })
+
+  routes.post('/api/documents/:id/opened', async (c) => {
+    const user = await ensureOrgUser(c, pool)
+    if (user instanceof Response) return user
+
+    // The open is recorded against the document behind the access check, so a
+    // guessed id from another matter or organisation records nothing.
+    const result = await getDocument(pool, user, c.req.param('id'), 'view')
+    if (!result) {
+      return errorResponse(c, 'document_not_found', 'Document not found.', 404)
+    }
+    const openedAt = await recordDocumentOpen(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      documentId: result.document.id,
+      matterId: result.document.matterId,
+    })
+    return c.json(
+      documentOpenResponseSchema.parse({
+        documentId: result.document.id,
+        openedAt,
+      }),
+    )
   })
 
   routes.get('/api/documents/:id', async (c) => {

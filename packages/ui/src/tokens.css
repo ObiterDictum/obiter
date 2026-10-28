@@ -152,11 +152,14 @@
   --obiter-text: #f1efe8;
   --obiter-text-muted: #a7aaaf;
   --obiter-text-subtle: #8b8f95;
-  --obiter-brand: #5c7391;
+  /* Deeper than the first pass (#5c7391): a primary button read as a washed
+     grey on the night surface. 5.58:1 against its white label and 3.25:1
+     against the page, so the fill still reads as a control boundary. */
+  --obiter-brand: #54698a;
   --obiter-brand-fg: #ffffff;
-  --obiter-brand-hover: #6a81a0;
-  --obiter-brand-pressed: #4f6480;
-  --obiter-brand-soft: rgba(92, 115, 145, 0.18);
+  --obiter-brand-hover: #5f7596;
+  --obiter-brand-pressed: #47597a;
+  --obiter-brand-soft: rgba(84, 105, 138, 0.22);
   --obiter-ring: #8fa6c4;
   --obiter-overlay: rgba(4, 5, 6, 0.48);
   --obiter-hover: rgba(241, 239, 232, 0.05);

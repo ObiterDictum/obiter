@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { render, screen } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { Badge } from '../badge'
 import { Button } from '../button'
@@ -32,6 +32,14 @@ describe('Button', () => {
   it('is not busy when it is not loading', () => {
     render(<Button>Save</Button>)
     expect(screen.getByRole('button').getAttribute('aria-busy')).toBeNull()
+  })
+
+  it('keeps its own colour while loading and mutes only when disabled', () => {
+    render(<Button loading>Save</Button>)
+    expect(screen.getByRole('button').className).not.toContain('opacity-45')
+    cleanup()
+    render(<Button disabled>Save</Button>)
+    expect(screen.getByRole('button').className).toContain('opacity-45')
   })
 
   it('defaults to type="button" so it never accidentally submits a form', () => {
