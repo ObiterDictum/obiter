@@ -11,6 +11,7 @@ import type { ChangeReview } from './use-change-review'
 import type { WorkspacePanel } from './use-workspace-panels'
 import type { LegalChecksFocus } from './ribbon-types'
 import type { AuthorityHit } from '../../document-authorities'
+import { commentThreadCount } from './use-workspace-comments'
 import { DocxDesk } from './docx-desk'
 import { DocxModelPages } from './docx-model-pages'
 import { WorkspaceSidePanels } from './workspace-side-panels'
@@ -117,6 +118,7 @@ export function DocxWorkspaceDesk({
           }
           {...comments}
           changeReview={changeReview}
+          threadCount={commentThreadCount(comments)}
           authorities={authorities}
           legalChecks={legalChecks}
           onSelectAuthority={onSelectAuthority}

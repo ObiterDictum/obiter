@@ -14,7 +14,7 @@ function Harness() {
   return (
     <div>
       {(
-        ['info', 'comments', 'changes', 'authorities', 'legal-checks'] as const
+        ['info', 'comments', 'review', 'authorities', 'legal-checks'] as const
       ).map((panel: WorkspacePanel) => (
         <button
           key={panel}
@@ -44,9 +44,9 @@ describe('useWorkspacePanels', () => {
     render(<Harness />)
     fireEvent.click(screen.getByRole('button', { name: 'Open comments' }))
     expect(screen.getByRole('complementary', { name: 'comments' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Open changes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open review' }))
     expect(screen.queryByRole('complementary', { name: 'comments' })).toBeNull()
-    expect(screen.getByRole('complementary', { name: 'changes' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: 'review' })).toBeTruthy()
   })
 
   it('returns focus to the control that opened the panel when it closes', () => {
