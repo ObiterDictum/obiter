@@ -34,21 +34,21 @@ function statusTone(status: 'queued' | 'running' | 'completed' | 'failed') {
  * findings" as an index. Running stays disabled while the editor holds
  * unsaved work, and the stored version is always named.
  */
-export function VerificationDock() {
+export function VerificationDock({ panel = false }: { panel?: boolean }) {
   const verification = useVerificationWorkspace()
   const statusRef = useRef<HTMLParagraphElement>(null)
 
   if (!verification) return null
   if (verification.runsPending) {
     return (
-      <VerificationStrip>
+      <VerificationStrip panel={panel}>
         <Skeleton className="h-5 w-64" aria-label="Loading verification" />
       </VerificationStrip>
     )
   }
   if (verification.documentLost) {
     return (
-      <VerificationStrip>
+      <VerificationStrip panel={panel}>
         <p className="text-sm text-muted">
           Verification is unavailable: you no longer have access to this
           document, or your session has expired.
@@ -58,7 +58,7 @@ export function VerificationDock() {
   }
   if (verification.runsError) {
     return (
-      <VerificationStrip>
+      <VerificationStrip panel={panel}>
         <p className="text-sm text-danger">
           Verification runs are unavailable: {verification.runsError.message}
         </p>
@@ -115,12 +115,9 @@ export function VerificationDock() {
           : verificationRunStatusLabel(run.status)
 
   return (
-    <VerificationStrip>
+    <VerificationStrip panel={panel}>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <h2 className="text-xs font-semibold tracking-wide text-ink uppercase">
-            Verify
-          </h2>
           {run ? (
             <Badge tone={statusTone(run.status)}>
               {verificationRunStatusLabel(run.status)}
@@ -149,7 +146,7 @@ export function VerificationDock() {
             </span>
           ) : null}
           {nextFinding ? (
-            <span className="text-xs text-subtle">
+            <span className="text-xs text-subtle max-compact:hidden">
               · Next actionable: {nextFinding.authorityLabel} -{' '}
               {verificationStateLabel(nextFinding.state)}
             </span>
@@ -172,7 +169,7 @@ export function VerificationDock() {
           tabIndex={-1}
           role="status"
           aria-live="polite"
-          className="text-sm text-muted outline-none"
+          className="sr-only"
         >
           {statusMessage}
           {verification.checkedVersionId ? (
@@ -282,13 +279,23 @@ export function VerificationDock() {
   )
 }
 
-function VerificationStrip({ children }: { children: ReactNode }) {
+function VerificationStrip({
+  children,
+  panel,
+}: {
+  children: ReactNode
+  panel: boolean
+}) {
   return (
     <section
       id={verificationDockId}
       tabIndex={-1}
       aria-label="Verification"
-      className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-3 py-2 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
+      className={
+        panel
+          ? 'flex min-w-0 flex-col gap-3 focus:outline-none'
+          : 'flex items-center gap-x-3 overflow-x-auto border-b border-line bg-surface px-12 py-1.5 whitespace-nowrap focus:outline-2 focus:outline-offset-2 focus:outline-brand max-compact:px-8'
+      }
     >
       {children}
     </section>

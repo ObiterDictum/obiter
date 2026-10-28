@@ -4,6 +4,10 @@ import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
 import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
+import type {
+  DocumentVersionRecord,
+  MatterDocumentRecord,
+} from '../../documents'
 import {
   useDocumentComments,
   useDocumentModel,
@@ -12,26 +16,29 @@ import {
   useTrackedChangeDecision,
 } from '../../document-workspace-api'
 import { revealParagraph, withCaretRefocus } from './document-actions'
-import { DocxDesk } from './docx-desk'
-import { DocxModelPages } from './docx-model-pages'
-import { DocxWorkspaceRibbon } from './docx-workspace-ribbon'
+import { DocxWorkspaceDesk } from './docx-workspace-desk'
+import { docxWorkspaceRibbon } from './docx-workspace-ribbon'
+import { DocxEditorHeader } from './document-editor-header'
+import {
+  closesPanelOnEscape,
+  useWorkspacePanels,
+  type WorkspacePanel,
+} from './use-workspace-panels'
 import { useWorkspaceSurface, useWorkspaceView } from './use-workspace-view'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
-import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useDocumentSave } from './use-document-save'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
 import { useWorkspaceComments } from './use-workspace-comments'
-import { documentClipboardToolbar } from './use-workspace-clipboard'
 import { documentExportHandlers } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
 import { useDocumentMarkings } from './use-document-markings'
 import { useLegalToolsState } from './use-legal-tools-state'
-import type { ParagraphSelectionHandlers } from './paragraph-editor'
+import { paragraphSelectionHandlers } from './paragraph-selection-handlers'
 import { DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import {
@@ -46,13 +53,28 @@ export function DocxWorkspace({
   versionId,
   matterId,
   filename,
+  versionNumber,
   layout = 'page',
+  document: documentRecord,
+  versions = [],
+  headerLinks,
+  headerActions,
+  onViewVersion,
 }: {
   documentId: string
   versionId: string
   matterId: string
   filename: string
+  /** The stored version the workspace opened, for the header's save label. */
+  versionNumber?: number
   layout?: DocumentWorkspaceLayout
+  /** The detail the route already loaded; absent outside the document route. */
+  document?: MatterDocumentRecord
+  versions?: DocumentVersionRecord[]
+  back?: React.ReactNode
+  headerLinks?: { back?: React.ReactNode; matter?: React.ReactNode }
+  headerActions?: React.ReactNode
+  onViewVersion?: (versionId: string) => void
 }) {
   const { data: me } = useCurrentUser()
   const modelQuery = useDocumentModel(documentId)
@@ -80,9 +102,7 @@ export function DocxWorkspace({
   })
 
   const [zoom, setZoom] = useState(100)
-  const [commentsOpen, setCommentsOpen] = useState(false)
-  const [changesOpen, setChangesOpen] = useState(false)
-  const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
+  const panels = useWorkspacePanels()
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
   // The toggle follows the version's `w:trackRevisions`. An unsaved flip is
@@ -135,6 +155,18 @@ export function DocxWorkspace({
   // E45 recovery paths keep it unsaved until the work is actually covered.
   usePublishDocumentDirty(save.saveState.status !== 'saved')
 
+  // The ribbon's quiet meta names the stored version, not the unsaved state.
+  const storedVersionId = modelQuery.data?.versionId ?? versionId
+  const storedVersion = versions.find(
+    (version) => version.id === storedVersionId,
+  )
+  const versionMeta = storedVersion
+    ? {
+        number: modelQuery.data?.versionNumber ?? versionNumber ?? 1,
+        editedAt: storedVersion.createdAt,
+      }
+    : undefined
+  const caret = useWorkspaceCaret({ documentId, model, drafts })
   const {
     selectedParagraphId,
     restoreCaret,
@@ -147,35 +179,23 @@ export function DocxWorkspace({
     openEditingStory,
     closeEditingStory,
     selectionActive,
-    selectionDirection,
     selectionSegments,
     selectionNotice,
-    selectAll,
-    extendSelection,
     commentTarget,
     revealCommentAnchor,
-    collapseSelection,
     focusParagraph,
     moveCaret,
-    rejectSelectionInput,
     reportJoinRefusal,
-    blurParagraph,
-    replaceSelectionRange,
-    splitSelectionRange,
-    copySelection,
-    cutSelection,
     copyToClipboard,
     cutToClipboard,
-    pasteText,
     pasteFromClipboard,
-    clearSelection,
     mirrorSelection,
     find,
     selectParagraph,
     insertAuthority,
     undoDocument,
     redoDocument,
-  } = useWorkspaceCaret({ documentId, model, drafts })
+  } = caret
 
   // One review derivation feeds the ribbon's controls and the Changes panel,
   // so both surfaces share the active target, the barriers and the dispatch.
@@ -239,7 +259,7 @@ export function DocxWorkspace({
     model,
     drafts,
     flow,
-    legalChecksOpen: legalTools.legalChecksOpen !== null,
+    legalChecksOpen: panels.legalChecksFocus !== null,
     insert: {
       caret: formatTarget,
       offset: formatRange?.to ?? null,
@@ -267,23 +287,7 @@ export function DocxWorkspace({
     setView,
     revealParagraph,
   })
-  const selectionHandlers: ParagraphSelectionHandlers = {
-    active: selectionActive,
-    direction: selectionDirection,
-    onExtend: extendSelection,
-    onCollapse: collapseSelection,
-    onSelectAll: selectAll,
-    onReplaceRange: replaceSelectionRange,
-    onDeleteRange: () => replaceSelectionRange(''),
-    onSplitRange: splitSelectionRange,
-    onCopyRange: copySelection,
-    onCutRange: cutSelection,
-    onPasteText: (paragraphId, text, from, to) =>
-      pasteText(text, { paragraphId, from, to }),
-    onClear: clearSelection,
-    onRejectInput: rejectSelectionInput,
-    onEscapeBlur: blurParagraph,
-  }
+  const selectionHandlers = paragraphSelectionHandlers(caret)
   const commentsPanel = useWorkspaceComments({
     documentId,
     listed: commentsQuery.data,
@@ -305,98 +309,80 @@ export function DocxWorkspace({
   const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = withCaretRefocus(save.reload)
   const exports = documentExportHandlers(documentId, filename, setBanner)
-  const ribbon = (
-    <DocxWorkspaceRibbon
-      save={save}
-      drafts={drafts}
-      remoteChange={remoteChange}
-      transientNotice={transientBanner}
-      selectionNotice={
-        selectionNotice ?? selectionAnnouncement(selectionSegments.size)
-      }
-      onReload={reload}
-      toolbar={{
-        trackChanges,
-        zoom,
-        commentsOpen,
-        changesOpen,
-        authoritiesOpen,
-        commentCount: commentsPanel.threadCount,
-        changeCount: changesQuery.data?.changes.length ?? 0,
-        presence,
-        currentUserId: me?.user.id,
-        canEdit: true,
-        ...insert,
-        canUndo: drafts.canUndo,
-        canRedo: drafts.canRedo,
-        onToggleComments: () => setCommentsOpen((value) => !value),
-        onToggleChanges: () => setChangesOpen((value) => !value),
-        onToggleAuthorities: () => setAuthoritiesOpen((value) => !value),
-        onInsertAuthority: () => setInsertAuthorityOpen(true),
-        citationStyle: legalTools.citationStyle,
-        onCitationStyle: legalTools.onCitationStyle,
-        legalChecks: legalTools.legalChecks,
-        onToggleTrackChanges: () => drafts.setTrackChangesFlip(!trackChanges),
-        onZoom: setZoom,
-        onExportText: exports.onExportText,
-        onExportShareSafe: exports.onExportShareSafe,
-        onPrint: print,
-        onSave: save.save,
-        onUndo: undo,
-        onRedo: redo,
-        onInsertParagraph: () => {
-          if (!selectedParagraphId) return
-          selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
-        },
-        onDeleteParagraph: () => {
-          if (!selectedParagraphId) return
-          const { selectId } = drafts.deleteParagraph(selectedParagraphId)
-          if (selectId) selectParagraph(selectId)
-        },
-        deleteParagraphReason,
-        format,
-        clipboard: documentClipboardToolbar({
-          editable: true,
-          selectionActive,
-          onCopy: () => void copyToClipboard(),
-          onCut: () => void cutToClipboard(),
-          onPaste: () => void pasteFromClipboard(),
-        }),
-        find,
-        review: {
-          unavailable: changeReview.unavailable ?? undefined,
-          bulkUnavailable: changeReview.bulkUnavailable,
-          targetUnavailable: changeReview.targetUnavailable,
-          undecidableCount: changeReview.undecidableCount,
-          canPrevious: changeReview.canPrevious,
-          canNext: changeReview.canNext,
-          onPreviousChange: changeReview.goToPrevious,
-          onNextChange: changeReview.goToNext,
-          onAcceptChange: () => changeReview.decideCurrent('accept'),
-          onRejectChange: () => changeReview.decideCurrent('reject'),
-          onAcceptAll: () => changeReview.decideAll('accept'),
-          onRejectAll: () => changeReview.decideAll('reject'),
-        },
-        markings,
-        view,
-        onView,
-        rulerOn,
-        onToggleRuler: toggleRuler,
-        navOpen,
-        onToggleNavPane: toggleNavPane,
-        spelling,
-        onToggleSpelling: () => toggleSpelling(setBanner),
-      }}
-    />
-  )
+  // A panel and the navigation pane both narrow the canvas: opening either
+  // closes the other rather than squeezing the page twice.
+  function togglePanel(panel: WorkspacePanel) {
+    if (navOpen) toggleNavPane()
+    panels.toggle(panel)
+  }
+  function toggleNavigation() {
+    if (!navOpen) panels.dismiss()
+    toggleNavPane()
+  }
+  const ribbon = docxWorkspaceRibbon({
+    save,
+    drafts,
+    remoteChange,
+    transientNotice: transientBanner,
+    selectionNotice:
+      selectionNotice ?? selectionAnnouncement(selectionSegments.size),
+    onReload: reload,
+    trackChanges,
+    zoom,
+    panels,
+    commentCount: commentsPanel.threadCount,
+    changeCount: changesQuery.data?.changes.length ?? 0,
+    insert,
+    onInsertAuthority: () => setInsertAuthorityOpen(true),
+    citationStyle: legalTools.citationStyle,
+    onCitationStyle: legalTools.onCitationStyle,
+    setZoom,
+    exports,
+    print,
+    undo,
+    redo,
+    selectedParagraphId,
+    selectParagraph,
+    deleteParagraphReason,
+    format,
+    selectionActive,
+    onCopy: () => void copyToClipboard(),
+    onCut: () => void cutToClipboard(),
+    onPaste: () => void pasteFromClipboard(),
+    find,
+    changeReview,
+    markings,
+    view,
+    onView,
+    rulerOn,
+    onToggleRuler: toggleRuler,
+    navOpen,
+    onToggleNavPane: toggleNavigation,
+    spelling,
+    onToggleSpelling: () => toggleSpelling(setBanner),
+    versionMeta,
+    onOpenVerify: () => panels.open('verify'),
+  })
 
   return (
     <InlineChangeReview
-      value={inlineReviewOf(changeReview, () => setChangesOpen(true))}
+      value={inlineReviewOf(changeReview, () => togglePanel('changes'))}
     >
       <WorkspaceShell
         layout={layout}
-        onKeyDown={(event) =>
+        onKeyDown={(event) => {
+          // Escape closes the docked panel and hands focus back to the control
+          // that opened it. It never claims the key from a dialog, the
+          // document text or a field outside the panel.
+          if (
+            event.key === 'Escape' &&
+            panels.active !== null &&
+            closesPanelOnEscape(event.target)
+          ) {
+            event.preventDefault()
+            panels.close()
+            return
+          }
           documentWorkspaceKeyDown(event, {
             save: save.save,
             undo,
@@ -404,8 +390,25 @@ export function DocxWorkspace({
             print,
             format,
           })
-        }
+        }}
       >
+        <DocxEditorHeader
+          filename={filename}
+          versionNumber={modelQuery.data?.versionNumber ?? versionNumber}
+          save={save}
+          remoteChange={remoteChange}
+          presence={presence}
+          currentUserId={me?.user.id}
+          trackChanges={trackChanges}
+          onToggleTrackChanges={() => drafts.setTrackChangesFlip(!trackChanges)}
+          versions={versions}
+          onOpenVerify={() => panels.toggle('verify')}
+          infoOpen={panels.active === 'info'}
+          onToggleInfo={documentRecord ? () => togglePanel('info') : undefined}
+          back={headerLinks?.back}
+          matterLink={headerLinks?.matter}
+          actions={headerActions}
+        />
         {modelQuery.isLoading ? (
           <LoadingBlock label="Loading document model" />
         ) : modelQuery.isError && !model ? (
@@ -417,68 +420,65 @@ export function DocxWorkspace({
           <>
             <DocumentPrintStyle box={printBox} />
             {ribbon}
-            <DocxDesk
-              model={model}
+            <DocxWorkspaceDesk
+              pages={{
+                view,
+                model,
+                painted,
+                pendingRedlines,
+                pages,
+                zoom,
+                editingKind,
+                selectedParagraphId,
+                restoreCaret,
+                verticalCaret,
+                drafts,
+                presence,
+                currentUserId: me?.user.id,
+                imageUrls,
+                selectionSegments,
+                linkOverlays,
+                selectionHandlers,
+                selectParagraph,
+                setFormatRange,
+                mirrorSelection,
+                focusParagraph,
+                moveCaret,
+                reportJoinRefusal,
+              }}
+              zoom={zoom}
               navOpen={navOpen}
               outline={outline}
               activeParagraphId={selectedParagraphId}
               onSelectOutline={onSelectOutline}
+              onCloseNav={toggleNavigation}
               columnRef={columnRef}
               spelling={spelling}
               rulerOn={rulerOn}
               ruler={ruler}
-              zoom={zoom}
-              pages={
-                <DocxModelPages
-                  view={view}
-                  model={model}
-                  painted={painted}
-                  pendingRedlines={pendingRedlines}
-                  pages={pages}
-                  zoom={zoom}
-                  editingKind={editingKind}
-                  selectedParagraphId={selectedParagraphId}
-                  restoreCaret={restoreCaret}
-                  verticalCaret={verticalCaret}
-                  drafts={drafts}
-                  presence={presence}
-                  currentUserId={me?.user.id}
-                  imageUrls={imageUrls}
-                  selectionSegments={selectionSegments}
-                  linkOverlays={linkOverlays}
-                  selectionHandlers={selectionHandlers}
-                  selectParagraph={selectParagraph}
-                  setFormatRange={setFormatRange}
-                  mirrorSelection={mirrorSelection}
-                  focusParagraph={focusParagraph}
-                  moveCaret={moveCaret}
-                  reportJoinRefusal={reportJoinRefusal}
-                  onExitMarginEditing={closeEditingStory}
-                  onOpenNoteEditing={(paragraphId) =>
-                    openEditingStory('footnotes', paragraphId)
-                  }
-                />
+              onExitMarginEditing={closeEditingStory}
+              onOpenNoteEditing={(paragraphId) =>
+                openEditingStory('footnotes', paragraphId)
               }
-              sidePanels={
-                <WorkspaceSidePanels
-                  commentsOpen={commentsOpen}
-                  changesOpen={changesOpen}
-                  authoritiesOpen={authoritiesOpen}
-                  legalChecksOpen={legalTools.legalChecksOpen}
-                  legalChecks={legalChecks}
-                  {...commentsPanel.props}
-                  changeReview={changeReview}
-                  authorities={authorities}
-                  // An authority always names a body paragraph, so selecting
-                  // one leaves margin editing the way a body click does before
-                  // the caret lands — otherwise the caret parks on an inert
-                  // body paragraph the format controls still target.
-                  onSelectAuthority={(paragraphId) => {
-                    closeEditingStory()
-                    selectParagraph(paragraphId)
-                  }}
-                />
-              }
+              panel={panels.active}
+              onClosePanel={panels.close}
+              legalChecksFocus={panels.legalChecksFocus}
+              documentRecord={documentRecord}
+              versions={versions}
+              matterLink={headerLinks?.matter}
+              onViewVersion={onViewVersion}
+              comments={commentsPanel.props}
+              changeReview={changeReview}
+              authorities={authorities}
+              legalChecks={legalChecks}
+              // An authority always names a body paragraph, so selecting one
+              // leaves margin editing the way a body click does before the
+              // caret lands — otherwise the caret parks on an inert body
+              // paragraph the format controls still target.
+              onSelectAuthority={(paragraphId) => {
+                closeEditingStory()
+                selectParagraph(paragraphId)
+              }}
             />
             <InsertAuthorityDialog
               open={insertAuthorityOpen}

@@ -6,6 +6,7 @@ import type {
 } from '@obiter/contracts'
 import { Button, EmptyState, Input } from '@obiter/ui'
 import { useState } from 'react'
+import { formatDateTime } from '../../format'
 
 export function DocumentCommentsPanel({
   comments,
@@ -44,23 +45,17 @@ export function DocumentCommentsPanel({
   const resolved = comments.filter((comment) => comment.resolvedAt !== null)
 
   return (
-    <aside
-      className="flex w-full flex-col gap-5 lg:max-w-sm"
-      aria-label="Comments"
-    >
-      <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold text-ink">Comments</h3>
-        <p className="text-xs leading-relaxed text-muted">
-          {commentTarget === null
-            ? 'Select text or place the caret in a paragraph to comment.'
-            : commentTarget.startOffset === commentTarget.endOffset &&
-                !commentTarget.endParagraphId
-              ? 'The comment anchors at the caret.'
-              : commentTarget.endParagraphId
-                ? 'The comment anchors to the selected text across paragraphs.'
-                : 'The comment anchors to the selected text.'}
-        </p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <p className="text-caption text-subtle">
+        {commentTarget === null
+          ? 'Select text or place the caret in a paragraph to comment.'
+          : commentTarget.startOffset === commentTarget.endOffset &&
+              !commentTarget.endParagraphId
+            ? 'The comment anchors at the caret.'
+            : commentTarget.endParagraphId
+              ? 'The comment anchors to the selected text across paragraphs.'
+              : 'The comment anchors to the selected text.'}
+      </p>
 
       {canEdit ? (
         <form
@@ -94,7 +89,7 @@ export function DocumentCommentsPanel({
           </Button>
         </form>
       ) : (
-        <p className="text-xs text-muted">
+        <p className="text-caption text-muted">
           You can read comments on this matter. Editing requires edit access.
         </p>
       )}
@@ -153,9 +148,7 @@ export function DocumentCommentsPanel({
 
           {importedComments.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <h4 className="text-[11px] font-medium uppercase tracking-[0.14em] text-subtle">
-                From the Word file
-              </h4>
+              <h4 className="text-item text-ink">From the Word file</h4>
               <ul
                 className="flex flex-col gap-3"
                 aria-label="Imported comments"
@@ -176,7 +169,7 @@ export function DocumentCommentsPanel({
 
           {orphanedReplies.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <h4 className="text-[11px] font-medium uppercase tracking-[0.14em] text-subtle">
+              <h4 className="text-item text-ink">
                 Replies to comments no longer in this file
               </h4>
               <ul
@@ -196,7 +189,7 @@ export function DocumentCommentsPanel({
           ) : null}
         </>
       )}
-    </aside>
+    </div>
   )
 }
 
@@ -224,15 +217,15 @@ function CommentCard({
     <li className="flex flex-col gap-2 border-t border-line pt-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-ink">{comment.author.name}</p>
-        <p className="font-mono text-[11px] text-subtle">
-          {formatDate(comment.createdAt)}
+        <p className="text-caption text-subtle">
+          {formatDateTime(comment.createdAt)}
         </p>
       </div>
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
         {comment.body}
       </p>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">
+        <p className="text-caption text-subtle">
           {resolved ? 'Resolved' : 'Open'}
           {comment.anchorResolved ? '' : ' · anchor no longer resolves'}
         </p>
@@ -298,8 +291,8 @@ function ImportedCommentCard({
           {comment.author ?? 'Unknown author'}
         </p>
         {comment.createdAt ? (
-          <p className="font-mono text-[11px] text-subtle">
-            {formatDate(comment.createdAt)}
+          <p className="text-caption text-subtle">
+            {formatDateTime(comment.createdAt)}
           </p>
         ) : null}
       </div>
@@ -308,7 +301,7 @@ function ImportedCommentCard({
         {comment.bodyTruncated ? '…' : ''}
       </p>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] uppercase tracking-[0.14em] text-subtle">
+        <p className="text-caption text-subtle">
           Imported
           {comment.resolved ? ' · resolved in file' : ''}
           {comment.anchor === null ? ' · anchor no longer resolves' : ''}
@@ -353,8 +346,8 @@ function ReplyBody({ reply }: { reply: DocumentCommentReply }) {
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-xs font-medium text-ink">{name}</p>
         {reply.createdAt ? (
-          <p className="font-mono text-[11px] text-subtle">
-            {formatDate(reply.createdAt)}
+          <p className="text-caption text-subtle">
+            {formatDateTime(reply.createdAt)}
           </p>
         ) : null}
       </div>
@@ -403,9 +396,4 @@ function ReplyForm({
       </Button>
     </form>
   )
-}
-
-function formatDate(value: string) {
-  const time = Date.parse(value)
-  return Number.isNaN(time) ? value : new Date(time).toLocaleString()
 }

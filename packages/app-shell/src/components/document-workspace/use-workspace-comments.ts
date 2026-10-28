@@ -26,6 +26,10 @@ type CommentIntent =
  * focus back to the caret first because a control disabled mid-flight would
  * drop focus to the body.
  */
+export type WorkspaceCommentsPanelProps = ReturnType<
+  typeof useWorkspaceComments
+>['props']
+
 export function useWorkspaceComments({
   documentId,
   listed,

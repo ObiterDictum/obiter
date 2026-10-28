@@ -83,9 +83,8 @@ function mountGate(options: {
 }
 
 function verifyButton() {
-  return screen.getByRole('button', {
-    name: 'Run verification',
-  }) as HTMLButtonElement
+  // The header's Run control; the panel's own control is inside the dock.
+  return screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement
 }
 
 function saveButton() {
@@ -266,9 +265,14 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(ribbonVerify).toHaveProperty('disabled', false)
 
     fireEvent.click(ribbonVerify)
-    // The one real control owns the action; the ribbon entry reveals it rather
-    // than starting a second run.
-    expect(document.activeElement).toBe(verifyButton())
+    // The one real control owns the action; the ribbon entry opens the dock
+    // that holds it and hands it focus rather than starting a second run.
+    expect(
+      await screen.findByRole('region', { name: 'Verification' }),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Run verification' })).toBe(
+      document.activeElement,
+    )
   })
 
   it('carries the unsaved gate and its reason onto the ribbon entry', async () => {

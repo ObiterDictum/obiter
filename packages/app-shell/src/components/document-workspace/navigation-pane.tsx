@@ -1,37 +1,50 @@
+import { X } from '@phosphor-icons/react'
+import { Button } from '@obiter/ui'
 import type { DocumentOutlineEntry } from '../../document-outline'
 
 /**
  * The navigation pane: the document's heading outline. Selecting an entry
  * places the caret at that heading — the same navigation the authority and
- * comment panels perform — so an outline row is a real document action, not
- * a link that only scrolls. A document without headings says so rather than
+ * comment panels perform — so an outline row is a real document action, not a
+ * link that only scrolls. A document without headings says so rather than
  * painting an empty frame.
  */
 export function DocumentNavigationPane({
   entries,
   activeParagraphId,
   onSelect,
+  onClose,
 }: {
   entries: readonly DocumentOutlineEntry[]
   activeParagraphId: string | null
   onSelect: (paragraphId: string) => void
+  onClose: () => void
 }) {
   return (
     <nav
       aria-label="Document outline"
       data-navigation-pane
-      className="sticky top-0 max-h-[80vh] w-56 shrink-0 self-start overflow-y-auto rounded-md bg-surface ring-1 ring-line"
+      data-docked-panel
+      className="flex max-h-[80vh] w-64 shrink-0 flex-col self-start overflow-hidden rounded-lg bg-surface ring-1 ring-line"
     >
-      <p className="border-b border-line px-3 py-2 text-xs font-semibold tracking-wide text-muted uppercase">
-        Navigation
-      </p>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
+        <p className="text-item text-ink">Navigation</p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="size-7 px-0"
+          aria-label="Close navigation"
+          onClick={onClose}
+          iconStart={<X size={14} aria-hidden />}
+        />
+      </div>
       {entries.length === 0 ? (
-        <p className="px-3 py-3 text-sm text-muted">
+        <p className="px-4 py-3 text-caption text-muted">
           No headings in this document. The outline lists paragraphs whose style
           carries a heading level.
         </p>
       ) : (
-        <ul className="flex flex-col py-1">
+        <ul className="flex flex-col overflow-y-auto py-1">
           {entries.map((entry) => (
             <li key={entry.paragraphId}>
               <button
@@ -40,9 +53,9 @@ export function DocumentNavigationPane({
                 aria-current={
                   entry.paragraphId === activeParagraphId ? 'true' : undefined
                 }
-                className="min-h-8 w-full truncate px-3 py-1.5 text-left text-sm text-ink hover:bg-raised aria-current:bg-raised aria-current:font-medium pointer-coarse:min-h-11"
+                className="min-h-8 w-full truncate px-3 py-1.5 text-left text-meta text-ink hover:bg-hover aria-current:bg-raised aria-current:font-medium pointer-coarse:min-h-11"
                 style={{
-                  paddingLeft: `${12 + (Math.min(entry.level, 9) - 1) * 12}px`,
+                  paddingLeft: `${String(12 + (Math.min(entry.level, 9) - 1) * 12)}px`,
                 }}
                 onClick={() => onSelect(entry.paragraphId)}
               >

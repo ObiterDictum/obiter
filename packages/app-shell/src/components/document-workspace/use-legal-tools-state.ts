@@ -5,15 +5,12 @@ import {
   writeCitationStyle,
   type CitationStyle,
 } from '../../document-preferences'
-import type { LegalChecksFocus } from './ribbon-types'
 
 /**
- * The References ribbon's legal-tool state: the persisted citation style and
- * which legal-checks section the panel is focused on (its open state is the
- * focus itself — the same control toggles a section open and closed).
+ * The References ribbon's legal-tool state: the persisted citation style. The
+ * legal-checks panel's own open state lives with the other docked panels.
  */
 export function useLegalToolsState(documentId: string) {
-  const [focus, setFocus] = useState<LegalChecksFocus | null>(null)
   const [citationStyle, setCitationStyle] = useState<CitationStyle>(() =>
     readCitationStyle(window.localStorage, documentId),
   )
@@ -22,12 +19,6 @@ export function useLegalToolsState(documentId: string) {
     onCitationStyle: (style: CitationStyle) => {
       writeCitationStyle(window.localStorage, documentId, style)
       setCitationStyle(style)
-    },
-    legalChecksOpen: focus,
-    legalChecks: {
-      open: focus,
-      onOpen: (next: LegalChecksFocus) =>
-        setFocus((current) => (current === next ? null : next)),
     },
   }
 }

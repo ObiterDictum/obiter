@@ -7,8 +7,10 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogCloseButton,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
   Input,
 } from '@obiter/ui'
@@ -36,6 +38,7 @@ export function InsertTableDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="sm">
+        <DialogCloseButton />
         <DialogTitle>Insert table</DialogTitle>
         <DialogDescription>
           Inserts an empty bordered table after the current paragraph.
@@ -67,7 +70,7 @@ export function InsertTableDialog({
               onChange={(event) => setColumns(event.target.value)}
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <DialogClose
               render={<Button type="button" variant="ghost" size="sm" />}
             >
@@ -76,7 +79,7 @@ export function InsertTableDialog({
             <Button type="submit" size="sm" disabled={!valid}>
               Insert
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

@@ -1,10 +1,6 @@
-import type { DocumentPresence } from '@obiter/contracts'
-import { Button, Tabs, TabsContent, TabsList } from '@obiter/ui'
-import {
-  DownloadSimple,
-  FileArrowDown,
-  FloppyDisk,
-} from '@phosphor-icons/react'
+import { Tabs, TabsContent, TabsList } from '@obiter/ui'
+import { DownloadSimple, FileArrowDown } from '@phosphor-icons/react'
+import { formatDateTime } from '../../format'
 import { HomeRibbon } from './ribbon-home'
 import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
@@ -84,9 +80,6 @@ export function PdfWorkspaceToolbar({
 }
 
 export function DocumentWorkspaceToolbar({
-  dirty,
-  saving,
-  blocked,
   trackChanges,
   zoom,
   commentsOpen,
@@ -94,8 +87,6 @@ export function DocumentWorkspaceToolbar({
   authoritiesOpen,
   commentCount,
   changeCount,
-  presence,
-  currentUserId,
   onToggleComments,
   onToggleChanges,
   onToggleAuthorities,
@@ -103,12 +94,12 @@ export function DocumentWorkspaceToolbar({
   citationStyle,
   onCitationStyle,
   legalChecks,
+  onOpenVerify,
   onToggleTrackChanges,
   onZoom,
   onExportText,
   onExportShareSafe,
   onPrint,
-  onSave,
   onUndo,
   onRedo,
   onInsertParagraph,
@@ -134,11 +125,8 @@ export function DocumentWorkspaceToolbar({
   onToggleNavPane,
   spelling,
   onToggleSpelling,
+  versionMeta,
 }: {
-  dirty: boolean
-  saving: boolean
-  /** The committed save's history could not be reconciled; saving is refused. */
-  blocked?: boolean
   trackChanges: boolean
   zoom: number
   commentsOpen: boolean
@@ -146,8 +134,6 @@ export function DocumentWorkspaceToolbar({
   authoritiesOpen: boolean
   commentCount: number
   changeCount: number
-  presence: DocumentPresence[]
-  currentUserId?: string
   onToggleComments: () => void
   onToggleChanges: () => void
   onToggleAuthorities: () => void
@@ -162,12 +148,12 @@ export function DocumentWorkspaceToolbar({
     open: LegalChecksFocus | null
     onOpen: (focus: LegalChecksFocus) => void
   }
+  onOpenVerify?: () => void
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
   onExportShareSafe?: () => void
   onPrint?: () => void
-  onSave: () => void
   onUndo?: () => void
   onRedo?: () => void
   onInsertParagraph: () => void
@@ -201,15 +187,15 @@ export function DocumentWorkspaceToolbar({
   /** Browser-dictionary spell-checking; absent where not offered. */
   spelling?: boolean
   onToggleSpelling?: () => void
+  /** The stored version the tab row names, as the mock-up's quiet meta. */
+  versionMeta?: { number: number; editedAt: string }
 }) {
-  const others = presence.filter((item) => item.userId !== currentUserId)
-
   return (
     <Tabs defaultValue="home">
-      <div className="flex min-w-0 items-end justify-between gap-3 px-3">
+      <div className="flex h-[34px] items-stretch justify-between gap-3 border-b border-line px-12 max-compact:px-8">
         <TabsList
           aria-label="Ribbon"
-          className="inline-flex flex-wrap items-end gap-0 rounded-none bg-transparent p-0"
+          className="flex items-stretch gap-1 rounded-none bg-transparent p-0"
         >
           <RibbonTab value="home">Home</RibbonTab>
           <RibbonTab value="insert">Insert</RibbonTab>
@@ -218,23 +204,15 @@ export function DocumentWorkspaceToolbar({
           <RibbonTab value="review">Review</RibbonTab>
           <RibbonTab value="view">View</RibbonTab>
         </TabsList>
-        {others.length > 0 ? (
-          <div
-            className="flex flex-wrap items-center gap-1 pb-1.5"
-            aria-label="Editors present"
-          >
-            {others.map((item) => (
-              <span
-                key={item.clientId ?? item.userId}
-                className="inline-flex h-6 min-w-6 items-center justify-center rounded-pill bg-raised px-1.5 text-[10px] font-medium text-muted ring-1 ring-line"
-              >
-                {shortUserLabel(item.userId)}
-              </span>
-            ))}
-          </div>
+        {versionMeta ? (
+          <span className="flex shrink-0 items-center gap-2 text-caption whitespace-nowrap text-subtle tabular-nums">
+            <span>Version {versionMeta.number}</span>
+            <span aria-hidden>·</span>
+            <span>Edited {formatDateTime(versionMeta.editedAt)}</span>
+          </span>
         ) : null}
       </div>
-      <div className="flex min-w-0 items-stretch gap-2 overflow-x-auto border-t border-line px-2 py-1.5">
+      <div className="flex min-h-12 min-w-0 items-stretch gap-x-2">
         <TabsContent value="home" className="min-w-0 flex-1 pt-0">
           <HomeRibbon
             canEdit={canEdit}
@@ -272,6 +250,7 @@ export function DocumentWorkspaceToolbar({
             onCitationStyle={onCitationStyle}
             legalChecks={legalChecks}
             structure={structure}
+            onOpenVerify={onOpenVerify}
           />
         </TabsContent>
         <TabsContent value="review" className="min-w-0 flex-1 pt-0">
@@ -306,30 +285,7 @@ export function DocumentWorkspaceToolbar({
             onToggleNavPane={onToggleNavPane}
           />
         </TabsContent>
-        <div className="ml-auto flex shrink-0 items-center self-center pr-1">
-          {/* preventDefault keeps the caret in the editor while the save
-              flight runs, so keystrokes typed during it still land. Keyboard
-              activation instead leaves focus on the button; the save path
-              hands it back before `saving` disables the control and the
-              browser drops focus to document.body. */}
-          <span onMouseDown={(event) => event.preventDefault()}>
-            <Button
-              size="sm"
-              aria-label="Save"
-              disabled={!dirty || saving || blocked}
-              loading={saving}
-              onClick={onSave}
-              iconStart={<FloppyDisk size={16} aria-hidden />}
-            >
-              Save
-            </Button>
-          </span>
-        </div>
       </div>
     </Tabs>
   )
-}
-
-function shortUserLabel(userId: string) {
-  return userId.length <= 10 ? userId : userId.slice(-8)
 }

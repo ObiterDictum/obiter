@@ -22,7 +22,7 @@ function subscribeOffline(callback: () => void) {
 
 /** Reachability is browser state, so it is read from the platform rather than
  * stored: an effect that polls or mirrors it would only lag the truth. */
-function useOffline(): boolean {
+export function useOffline(): boolean {
   return useSyncExternalStore(
     subscribeOffline,
     () => !window.navigator.onLine,
