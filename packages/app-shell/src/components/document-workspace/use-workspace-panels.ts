@@ -3,7 +3,7 @@ import type { LegalChecksFocus } from './ribbon-types'
 
 /** The docked panels beside the paper. One is open at a time. */
 export type WorkspacePanel =
-  'info' | 'verify' | 'comments' | 'changes' | 'authorities' | 'legal-checks'
+  'info' | 'verify' | 'comments' | 'review' | 'authorities' | 'legal-checks'
 
 export type WorkspacePanelState =
   | { panel: Exclude<WorkspacePanel, 'legal-checks'> }

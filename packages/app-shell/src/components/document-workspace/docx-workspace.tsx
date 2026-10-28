@@ -366,7 +366,7 @@ export function DocxWorkspace({
 
   return (
     <InlineChangeReview
-      value={inlineReviewOf(changeReview, () => togglePanel('changes'))}
+      value={inlineReviewOf(changeReview, () => togglePanel('review'))}
     >
       <WorkspaceShell
         layout={layout}

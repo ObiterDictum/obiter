@@ -142,7 +142,7 @@ const editor = (page: Page) =>
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 const panel = (page: Page) =>
-  page.getByRole('complementary', { name: 'Tracked changes' })
+  page.getByRole('complementary', { name: 'Changes and comments' })
 
 async function focusParagraph(page: Page, text: string) {
   const target = paragraph(page, text)
@@ -166,13 +166,40 @@ async function selectFirst(page: Page, text: string, units: number) {
   }
 }
 
+/**
+ * Select every decidable row, then decide them in one request. The bulk bar
+ * names the exact number of changes it affects; a rejection asks once more.
+ */
+async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
+  const boxes = panel(page).getByRole('checkbox')
+  const count = await boxes.count()
+  const label = `${String(count)} ${count === 1 ? 'change' : 'changes'}`
+  for (let index = 0; index < count; index += 1) await boxes.nth(index).check()
+  await panel(page)
+    .getByRole('button', { name: `${action} ${label}`, exact: true })
+    .click()
+  if (action === 'Reject') {
+    await panel(page)
+      .getByRole('button', { name: `Reject ${label}`, exact: true })
+      .click()
+  }
+}
+
 async function openChangesPanel(page: Page) {
   // The ribbon mounts its tabs once the document model arrives, so a click
   // that lands during that transition can revert to Home. Retry the whole
   // selection instead of assuming the first click stuck.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await page.getByRole('tab', { name: 'Review' }).click()
-    const button = page.getByRole('button', { name: /^Changes/u }).last()
+    // The ribbon's own control, named with its count. The panel's filter
+    // segment is also called "Changes N", and clicking that would filter the
+    // list the test is about to count.
+    // The ribbon's own control, with its count when it has one. The panel's
+    // filter segment is called "Changes 5" without parentheses, and clicking
+    // that would filter the list the test is about to count.
+    const button = page
+      .getByRole('button', { name: /^Changes( \(\d+\))?$/u })
+      .last()
     const clicked = await button
       .click({ timeout: 5_000 })
       .then(() => true)
@@ -229,16 +256,19 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
 
   await openChangesPanel(page)
 
-  // The imported revisions render with author, kind and covered text — six
-  // changes: ins, del, the move pair and the two property markers.
+  // The imported revisions render with author, kind and covered text — five
+  // rows: ins, del, the move (one row for both halves) and the two property
+  // markers.
   const list = panel(page).getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
+  await expect(list.getByRole('listitem')).toHaveCount(5, { timeout: 15_000 })
   await expect(list).toContainText('Alice Example')
   await expect(list).toContainText('Jane Example')
-  await expect(list).toContainText('insert · ins')
-  await expect(list).toContainText('delete · del')
-  await expect(list).toContainText('move · moveFrom')
-  await expect(list).toContainText('property · rPrChange')
+  await expect(list).toContainText('Insertion')
+  await expect(list).toContainText('Deletion')
+  await expect(list).toContainText('Move')
+  await expect(list).toContainText('Formatting')
+  // The counts name what is there, and the move is counted once.
+  await expect(panel(page)).toContainText('4 changes · 1 comment · 1 move')
 
   // No change is active yet; the ribbon's single Accept/Reject publish why.
   await expect(
@@ -249,9 +279,9 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
 
   // Panel navigation marks the active row and reveals it in the document.
   await list.getByRole('button', { name: 'Show this change' }).first().click()
-  await expect(panel(page)).toContainText('1 of 6')
+  await expect(panel(page)).toContainText('1 of 5')
   await panel(page).getByRole('button', { name: 'Next' }).click()
-  await expect(panel(page)).toContainText('2 of 6')
+  await expect(panel(page)).toContainText('2 of 5')
   await expect(list.locator('li[aria-current="true"]')).toHaveCount(1)
 
   // Rejecting the active change from the ribbon writes one immutable
@@ -268,17 +298,20 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
     .click()
   const rejected = await rejectResponse
   expect(rejected.status(), await rejected.text()).toBe(201)
-  await expect(list.getByRole('listitem')).toHaveCount(5, { timeout: 15_000 })
-  await expect(panel(page)).toContainText('2 of 5')
+  await expect(list.getByRole('listitem')).toHaveCount(4, { timeout: 15_000 })
+  // The rejected row left, and the review slot it held now names the change
+  // after it — the second row of the four that remain.
+  await expect(panel(page)).toContainText('2 of 4')
 
-  // Bulk accept lands the remaining five in one atomic version.
+  // Selecting every remaining row and accepting it lands them in one atomic
+  // version; the bar named exactly how many changes that would be.
   const acceptAllResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/tracked-changes\/decision$/u.test(
         incoming.url(),
       ) && incoming.request().method() === 'POST',
   )
-  await panel(page).getByRole('button', { name: 'Accept all' }).click()
+  await decideSelection(page, 'Accept')
   const accepted = await acceptAllResponse
   expect(accepted.status(), await accepted.text()).toBe(201)
   await expect(
@@ -345,10 +378,11 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
 
   await openChangesPanel(page)
 
-  // Seven changes: the six supported revisions plus the stranded move, which
-  // renders marked and disabled while the row still navigates to it.
+  // Six rows: the supported revisions (the move pair is one row) plus the
+  // stranded move, which renders marked and disabled while the row still
+  // navigates to it.
   const list = panel(page).getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
+  await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
   const undecidableRow = list.locator('li', { hasText: 'Stranded move' })
   await expect(undecidableRow).toContainText('This move cannot be decided here')
   await expect(
@@ -358,30 +392,24 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
     undecidableRow.getByRole('button', { name: 'Reject' }),
   ).toBeDisabled()
   await undecidableRow.getByRole('button', { name: 'Show this change' }).click()
-  await expect(panel(page)).toContainText('7 of 7')
+  // The undecidable move is pinned at the top of the list, so it is row 1.
+  await expect(panel(page)).toContainText('1 of 6')
   await expect(
     page.getByRole('button', {
       name: 'Accept change: This move cannot be decided here; it stays listed and unchanged in the document.',
     }),
   ).toBeDisabled()
 
-  // Bulk names its real scope; the request carries the supported ids only,
-  // so the undecidable change is never offered to the engine.
-  await expect(
-    page.getByRole('button', {
-      name: 'Accept all supported changes',
-      exact: true,
-    }),
-  ).toBeEnabled()
+  // The undecidable row offers no checkbox, so a selection can only ever name
+  // supported changes; the request carries their ids with the move's pair.
+  await expect(undecidableRow.getByRole('checkbox')).toHaveCount(0)
   const bulkResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/tracked-changes\/decision$/u.test(
         incoming.url(),
       ) && incoming.request().method() === 'POST',
   )
-  await panel(page)
-    .getByRole('button', { name: 'Accept all supported' })
-    .click()
+  await decideSelection(page, 'Accept')
   const accepted = await bulkResponse
   expect(accepted.status(), await accepted.text()).toBe(201)
   const payload = accepted.request().postDataJSON() as {
@@ -460,13 +488,13 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   expect(saved.status(), await saved.text()).toBe(201)
 
   // The saved version lists the new property change under this session's
-  // author alongside the six imported revisions.
+  // author alongside the imported revisions.
   await openChangesPanel(page)
   const list = panel(page).getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
+  await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
   const recorded = list.locator('li', { hasText: USER_NAME }).first()
   await expect(recorded).toBeVisible()
-  await expect(recorded).toContainText('property · rPrChange')
+  await expect(recorded).toContainText('Formatting')
 
   // The export carries a real w:rPrChange whose covered run is split off,
   // leaving the untouched tail intact in its own run.
@@ -489,7 +517,7 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
         incoming.url(),
       ) && incoming.request().method() === 'POST',
   )
-  await panel(page).getByRole('button', { name: 'Reject all' }).click()
+  await decideSelection(page, 'Reject')
   const decided = await decisionResponse
   expect(decided.status(), await decided.text()).toBe(201)
   await expect(

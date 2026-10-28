@@ -291,6 +291,8 @@ export function mountWorkspace(
     mergeAsync?: ReturnType<typeof vi.fn>
     /** Drives the tracked-change decision path a saved tracked undo uses. */
     decideAsync?: ReturnType<typeof vi.fn>
+    /** The decision mutation's failed-write state, as a rejected request leaves it. */
+    decideError?: Error | null
     /** Drives the markings commit; default is an idle mutation. */
     markingsAsync?: ReturnType<typeof vi.fn>
     /** The changes the tracked-changes query returns. */
@@ -373,6 +375,7 @@ export function mountWorkspace(
   )
   hooks.useTrackedChangeDecision.mockReturnValue(
     idleMutation({
+      error: options.decideError ?? null,
       // The review hook dispatches through `mutate` with result callbacks;
       // the tracked-undo save path uses `mutateAsync`. One mock serves both.
       mutate: (input: unknown, callbacks?: unknown) =>

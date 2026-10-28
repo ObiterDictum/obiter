@@ -332,6 +332,18 @@ export function useChangeReview({
         action,
         supported.map((change) => change.id),
       ),
+    /** A decision over the reviewer's own selection. The ids are narrowed to
+     * the supported set here, so a surface cannot put an undecidable change on
+     * the wire even if it offers one. */
+    decideSelected: (action: 'accept' | 'reject', changeIds: string[]) => {
+      const chosen = new Set(changeIds)
+      decide(
+        action,
+        supported
+          .filter((change) => chosen.has(change.id))
+          .map((change) => change.id),
+      )
+    },
   }
 }
 

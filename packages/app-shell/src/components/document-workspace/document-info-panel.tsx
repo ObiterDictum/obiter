@@ -101,14 +101,21 @@ export function DocumentInfoPanel({
                 key={version.id}
                 className="flex items-center gap-3 border-t border-line py-3 first:border-t-0 first:pt-0"
               >
-                <span className="w-6 shrink-0 font-mono text-caption text-muted">
+                <span className="w-6 shrink-0 text-caption tabular-nums text-subtle">
                   v{version.versionNumber}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-meta text-ink">
-                    {version.id === document.currentVersionId
-                      ? 'Current version'
-                      : `Version ${String(version.versionNumber)}`}
+                  <span className="flex items-baseline gap-2">
+                    <span className="truncate text-item text-ink">
+                      Version {String(version.versionNumber)}
+                    </span>
+                    <span className="shrink-0 text-caption text-subtle">
+                      {version.id === document.currentVersionId
+                        ? 'Current version'
+                        : version.versionNumber === 1
+                          ? 'Original upload'
+                          : null}
+                    </span>
                   </span>
                   <span className="truncate text-caption text-subtle">
                     {formatDateTime(version.createdAt)} ·{' '}
