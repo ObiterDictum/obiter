@@ -1,0 +1,8092 @@
+/* ==========================================================================
+   Obiter — shared interface stylesheet
+   Final polish pass, 26 Oct 2026.
+
+   This is the only stylesheet the final screens use. Do not restyle a
+   component locally: add a modifier here first, or use a layout utility.
+
+   Conventions
+   -----------
+   .ob-btn                 block
+   .ob-btn--primary        variant (structure or emphasis)
+   .is-active              state or tone (is-active, is-open, is-danger …)
+   .ob-btn--sm             size
+   .ob-attn-title          flat part of a block (no BEM nesting)
+   .ob-hide-md             responsive utility
+
+   Themes
+   ------
+   Dark is the default (:root). Light is [data-theme="light"] on <html>.
+   Never use a raw colour in a page. Use a token.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Fonts
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/inter-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/inter-latin-wght-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+
+/* --------------------------------------------------------------------------
+   2. Tokens
+   -------------------------------------------------------------------------- */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* Warm off-white, not cream paper */
+  --ob-bg: #f4f0e7;
+  --ob-bg-inset: #e4ddd0;
+  --ob-surface: #fbf8f2;
+  --ob-surface-2: #fffdf9;
+  --ob-surface-3: #efe9dd;
+  --ob-surface-3-hover: #e7e0d3;
+  --ob-seg-track: #efe9dd;
+  --ob-seg-thumb: #fffdf9;
+  --ob-paper: #fffdf8;
+  --ob-paper-ink: #241e17;
+  --ob-paper-muted: #6b6157;
+
+  --ob-line: rgba(35, 30, 24, 0.1);
+  --ob-line-strong: rgba(35, 30, 24, 0.17);
+
+  --ob-ink: #211c17;
+  --ob-muted: #5b534a;
+  --ob-subtle: #6b6258;
+
+  --ob-brand: #33475f;
+  --ob-brand-hover: #3c526c;
+  --ob-brand-press: #283a50;
+  --ob-on-brand: #fbf8f2;
+  --ob-brand-soft: rgba(51, 71, 95, 0.1);
+  --ob-brand-line: rgba(51, 71, 95, 0.26);
+  --ob-link: #2f4258;
+  --ob-ring: #33475f;
+
+  --ob-hover: rgba(35, 30, 24, 0.04);
+  --ob-active: rgba(35, 30, 24, 0.065);
+
+  --ob-danger: #98452e;
+  --ob-danger-soft: #f6e6de;
+  --ob-danger-line: #e3c6b8;
+  --ob-on-danger: #fffdf9;
+
+  --ob-warning: #74500f;
+  --ob-warning-soft: #f5ebd7;
+  --ob-warning-line: #e2d2b0;
+  --ob-on-warning: #fffdf9;
+
+  --ob-success: #2c6240;
+  --ob-success-soft: #e4eee5;
+  --ob-success-line: #c4d9c8;
+  --ob-on-success: #fffdf9;
+
+  --ob-info: #2c5c88;
+  --ob-info-soft: #e4ecf4;
+  --ob-info-line: #c4d5e4;
+  --ob-on-info: #fffdf9;
+
+  --ob-overlay: rgba(24, 19, 14, 0.34);
+  --ob-selection: rgba(51, 71, 95, 0.18);
+
+  --ob-shadow-1: 0 1px 2px rgba(38, 30, 20, 0.08);
+  --ob-shadow-2:
+    0 18px 44px -14px rgba(38, 30, 20, 0.3), 0 3px 10px rgba(38, 30, 20, 0.09);
+  --ob-shadow-page:
+    0 1px 2px rgba(38, 30, 20, 0.1), 0 18px 30px -18px rgba(38, 30, 20, 0.22);
+}
+
+/* Dark is a choice, not the first-use state. The canvas around paper is a
+   lifted charcoal (#20242a) so a near-white page reads as paper on a desk
+   rather than as a light box on a black field. */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces — layered charcoal, warmed by the ink, never pure black */
+  --ob-bg: #14161a;
+  --ob-bg-inset: #20242a;
+  --ob-surface: #191b1f;
+  --ob-surface-2: #1e2126;
+  --ob-surface-3: #262a31;
+  --ob-surface-3-hover: #2d323a;
+  --ob-seg-track: #191b1f;
+  --ob-seg-thumb: #262a31;
+  --ob-paper: #fffdf8;
+  --ob-paper-ink: #241e17;
+  --ob-paper-muted: #6b6157;
+
+  /* One hairline, used sparingly */
+  --ob-line: rgba(241, 239, 232, 0.1);
+  --ob-line-strong: rgba(241, 239, 232, 0.18);
+
+  /* Ink — warm night ink */
+  --ob-ink: #f1efe8;
+  --ob-muted: #a7aaaf;
+  --ob-subtle: #8b8f95;
+
+  /* The one accent: refined Obiter slate-blue */
+  --ob-brand: #5c7391;
+  --ob-brand-hover: #6a81a0;
+  --ob-brand-press: #4f6480;
+  --ob-on-brand: #ffffff;
+  --ob-brand-soft: rgba(92, 115, 145, 0.18);
+  --ob-brand-line: rgba(122, 146, 174, 0.34);
+  --ob-link: #a9bcd2;
+  --ob-ring: #8fa6c4;
+
+  /* Quiet interaction washes */
+  --ob-hover: rgba(241, 239, 232, 0.05);
+  --ob-active: rgba(241, 239, 232, 0.075);
+
+  /* Semantic colour — status only, desaturated */
+  --ob-danger: #d99880;
+  --ob-danger-soft: rgba(217, 152, 128, 0.12);
+  --ob-danger-line: rgba(217, 152, 128, 0.28);
+  --ob-on-danger: #1b0f0b;
+
+  --ob-warning: #d3b072;
+  --ob-warning-soft: rgba(211, 176, 114, 0.14);
+  --ob-warning-line: rgba(211, 176, 114, 0.28);
+  --ob-on-warning: #1b1408;
+
+  --ob-success: #86b894;
+  --ob-success-soft: rgba(134, 184, 148, 0.12);
+  --ob-success-line: rgba(134, 184, 148, 0.28);
+  --ob-on-success: #0c160f;
+
+  --ob-info: #8faecf;
+  --ob-info-soft: rgba(143, 174, 207, 0.12);
+  --ob-info-line: rgba(143, 174, 207, 0.28);
+  --ob-on-info: #0b1219;
+
+  --ob-overlay: rgba(4, 5, 6, 0.48);
+  --ob-selection: rgba(92, 115, 145, 0.42);
+
+  /* Elevation: one level for anything that floats above the page. The page
+     shadow is quieter than on light, because the surround already separates. */
+  --ob-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.34);
+  --ob-shadow-2:
+    0 18px 44px -10px rgba(0, 0, 0, 0.66), 0 3px 10px rgba(0, 0, 0, 0.4);
+  --ob-shadow-page:
+    0 1px 2px rgba(0, 0, 0, 0.26), 0 14px 28px -16px rgba(0, 0, 0, 0.46);
+}
+
+:root {
+  /* Type — six levels, nothing else outside the document paper.
+     28/600 page title · 18/600 section title · 14/500 item title
+     14/400 body · 13/400 meta · 12/400 caption */
+  --ob-font-sans:
+    'Inter', 'Inter Variable', system-ui, -apple-system, 'Segoe UI Variable',
+    'Segoe UI', sans-serif;
+  --ob-font-mono:
+    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ob-font-serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+
+  --ob-fs-caption: 12px;
+  --ob-fs-meta: 13px;
+  --ob-fs-body: 14px;
+  --ob-fs-item: 14px;
+  --ob-fs-section: 18px;
+  --ob-fs-page: 28px;
+
+  /* Legacy aliases kept for the screen-local style blocks. They resolve to
+     the six levels, so a page cannot introduce a seventh size. */
+  --ob-fs-12: var(--ob-fs-caption);
+  --ob-fs-13: var(--ob-fs-meta);
+  --ob-fs-14: var(--ob-fs-body);
+  --ob-fs-16: var(--ob-fs-section);
+  --ob-fs-20: var(--ob-fs-page);
+  --ob-fs-28: var(--ob-fs-page);
+
+  --ob-lh-page: 1.2;
+  --ob-lh-section: 1.3;
+  --ob-lh-item: 1.4;
+  --ob-lh-body: 1.55;
+  --ob-lh-meta: 1.45;
+  --ob-lh-caption: 1.4;
+
+  /* Legacy aliases for line height. */
+  --ob-lh-tight: var(--ob-lh-page);
+  --ob-lh-snug: var(--ob-lh-section);
+  --ob-lh-ui: var(--ob-lh-meta);
+
+  /* Space — the only values allowed anywhere: 4 8 12 16 24 32 40 48 56 */
+  --ob-space-1: 4px;
+  --ob-space-2: 8px;
+  --ob-space-3: 12px;
+  --ob-space-4: 16px;
+  --ob-space-5: 24px;
+  --ob-space-6: 32px;
+  --ob-space-7: 40px;
+  --ob-space-8: 48px;
+  --ob-space-9: 56px;
+
+  /* The frame: 48 at 1440, 32 at 1024. Content stops at 1120; reading
+     text stops at 68 characters. */
+  --ob-gutter: 48px;
+  --ob-page-max: 1120px;
+  --ob-measure: 68ch;
+  --ob-row-h: 52px;
+  --ob-side-w: 252px;
+  --ob-top-h: 48px;
+
+  /* Radius — 6 for controls, 10 for panels */
+  --ob-r-xs: 4px;
+  --ob-r-sm: 6px;
+  --ob-r-md: 8px;
+  --ob-r-lg: 10px;
+  --ob-r-xl: 14px;
+  --ob-r-pill: 999px;
+
+  /* Motion — 120–180ms, ease-out */
+  --ob-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ob-fast: 120ms;
+  --ob-slow: 180ms;
+}
+
+/* --------------------------------------------------------------------------
+   3. Reset and base
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ob-bg);
+  color: var(--ob-ink);
+  font-family: var(--ob-font-sans);
+  font-size: var(--ob-fs-14);
+  line-height: var(--ob-lh-body);
+  font-feature-settings:
+    'cv05' 1,
+    'ss01' 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+p,
+figure,
+dl,
+dd {
+  margin: 0;
+}
+
+b,
+strong {
+  font-weight: 500;
+}
+
+/* Emphasis inside 12–13px meta text uses ink, never a heavier weight. */
+.ob-meta b,
+.ob-meta strong,
+.ob-caption b,
+.ob-caption strong,
+.ob-table-sub b,
+.ob-table-sub strong,
+.ob-row-sub b,
+.ob-row-sub strong,
+.ob-card-meta b,
+.ob-card-meta strong,
+.ob-section-meta b,
+.ob-section-meta strong {
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+img,
+svg {
+  display: block;
+}
+
+::selection {
+  background: var(--ob-selection);
+  color: var(--ob-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ob-ring);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* The icon set: 16px, 1.5px stroke, currentColor. */
+svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+svg.is-12 {
+  width: 12px;
+  height: 12px;
+}
+
+svg.is-14 {
+  width: 14px;
+  height: 14px;
+}
+
+svg.is-18 {
+  width: 18px;
+  height: 18px;
+}
+
+svg.is-20 {
+  width: 20px;
+  height: 20px;
+}
+
+/* --------------------------------------------------------------------------
+   4. Typography
+   -------------------------------------------------------------------------- */
+
+/* The six text levels. Every class below resolves to one of the six
+   (size, weight) pairs in the brief; nothing else is allowed outside
+   .ob-paper. Page title and section title are the only tracked text. */
+
+.ob-page-title,
+.ob-display {
+  font-size: var(--ob-fs-page);
+  line-height: var(--ob-lh-page);
+  font-weight: 600;
+}
+
+.ob-section-title,
+.ob-h1,
+.ob-h2,
+.ob-dialog-title,
+.ob-empty-title,
+.ob-settings-title {
+  font-size: var(--ob-fs-section);
+  line-height: var(--ob-lh-section);
+  font-weight: 600;
+}
+
+.ob-h3,
+.ob-item-title,
+.ob-card-title,
+.ob-panel-title,
+.ob-doc-title,
+.ob-result-title,
+.ob-peek-title,
+.ob-attn-title,
+.ob-artefact-title,
+.ob-brand-name {
+  font-size: var(--ob-fs-item);
+  line-height: var(--ob-lh-item);
+  font-weight: 500;
+}
+
+.ob-body {
+  font-size: var(--ob-fs-body);
+  line-height: var(--ob-lh-body);
+  font-weight: 400;
+}
+
+.ob-ui,
+.ob-meta {
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  font-weight: 400;
+}
+
+.ob-meta {
+  color: var(--ob-muted);
+}
+
+.ob-label,
+.ob-eyebrow,
+.ob-caption {
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  font-weight: 400;
+  color: var(--ob-subtle);
+}
+
+.ob-eyebrow {
+  text-transform: none;
+  color: var(--ob-muted);
+}
+
+.ob-mono {
+  font-family: var(--ob-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* A search match. One quiet, token-based highlight in results and previews. */
+mark {
+  background: var(--ob-warning-soft);
+  color: var(--ob-ink);
+  border-radius: 2px;
+  padding: 0 4px;
+}
+
+/* Explicit numeric and date semantics. A date may live outside a table, so
+   .is-date and .is-num work anywhere; alignment stays a table concern. */
+.ob-num,
+.is-num,
+.is-date {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Figures are not tabular by default. Inter's tabular figures widen hyphens
+   and letters, which spaces out filenames, references and prose. Numbers and
+   dates opt in via .is-num / .is-date / .ob-num / .ob-count (see §Figures). */
+.ob-count,
+.ob-nav-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-muted {
+  color: var(--ob-muted);
+}
+
+.ob-subtle {
+  color: var(--ob-subtle);
+}
+
+.ob-ink {
+  color: var(--ob-ink);
+}
+
+.ob-nowrap {
+  white-space: nowrap;
+}
+
+.ob-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-link {
+  color: var(--ob-link);
+  text-underline-offset: 3px;
+}
+
+.ob-link:hover {
+  text-decoration: underline;
+}
+
+.ob-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   5. Layout utilities
+   -------------------------------------------------------------------------- */
+
+.ob-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ob-space-4);
+}
+
+.ob-stack--tight {
+  gap: var(--ob-space-2);
+}
+
+.ob-stack--loose {
+  gap: var(--ob-space-6);
+}
+
+.ob-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+}
+
+.ob-spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+}
+
+.ob-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ob-divider {
+  height: 1px;
+  background: var(--ob-line);
+  border: 0;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   6. App frame
+   -------------------------------------------------------------------------- */
+
+.ob-app {
+  display: grid;
+  grid-template-columns: var(--ob-side-w) minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--ob-bg);
+  transition: grid-template-columns var(--ob-slow) var(--ob-ease);
+}
+
+.ob-app.is-collapsed {
+  --ob-side-w: 64px;
+}
+
+/* Sidebar ---------------------------------------------------------------- */
+
+.ob-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ob-surface);
+}
+
+.ob-side-head {
+  height: var(--ob-top-h);
+  flex: 0 0 var(--ob-top-h);
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-3);
+  padding: 0 var(--ob-space-4);
+  min-width: 0;
+}
+
+/* The Obiter monogram: a lowercase “ob”, drawn as the mark itself. One
+   colour, no tile, no gradient. The wordmark is the mark plus the name.
+   Keep the 26px footprint; the sidebar and the auth screens share it. */
+.ob-logo {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  color: var(--ob-ink);
+  /* A page that has not moved to the mark yet still centres its letter. */
+  font-family: var(--ob-font-serif);
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ob-logo svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+.ob-logo:hover {
+  color: var(--ob-muted);
+}
+
+.ob-brand-text {
+  min-width: 0;
+}
+
+.ob-brand-name {
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  line-height: var(--ob-lh-page);
+}
+
+.ob-brand-firm {
+  font-size: var(--ob-fs-caption);
+  color: var(--ob-subtle);
+  line-height: var(--ob-lh-caption);
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--ob-space-3) var(--ob-space-2) var(--ob-space-4);
+}
+
+.ob-nav::-webkit-scrollbar,
+.ob-content::-webkit-scrollbar,
+.ob-panel-body::-webkit-scrollbar,
+.ob-drawer-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ob-nav::-webkit-scrollbar-thumb,
+.ob-content::-webkit-scrollbar-thumb,
+.ob-panel-body::-webkit-scrollbar-thumb,
+.ob-drawer-body::-webkit-scrollbar-thumb {
+  background: var(--ob-line-strong);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.ob-nav::-webkit-scrollbar-track,
+.ob-content::-webkit-scrollbar-track,
+.ob-panel-body::-webkit-scrollbar-track,
+.ob-drawer-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ob-nav-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-2);
+  padding: var(--ob-space-5) var(--ob-space-2) var(--ob-space-2);
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-nav-label:first-child {
+  padding-top: 0;
+}
+
+.ob-nav-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--ob-r-xs);
+  color: var(--ob-subtle);
+}
+
+.ob-nav-add:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-3);
+  height: 36px;
+  padding: 0 var(--ob-space-3);
+  border-radius: var(--ob-r-sm);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-item);
+  font-weight: 400;
+  line-height: var(--ob-lh-item);
+  white-space: nowrap;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-nav-item svg {
+  opacity: 0.85;
+}
+
+.ob-nav-item:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-nav-item.is-active {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+  font-weight: 500;
+}
+
+.ob-nav-item.is-active svg {
+  opacity: 1;
+}
+
+.ob-nav-item.is-quiet {
+  color: var(--ob-subtle);
+}
+
+.ob-nav-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ob-nav-empty {
+  padding: var(--ob-space-1) var(--ob-space-2);
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-subtle);
+}
+
+.ob-nav-count {
+  margin-left: auto;
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-nav-count.is-danger {
+  color: var(--ob-danger);
+}
+
+.ob-nav-count.is-info {
+  color: var(--ob-info);
+}
+
+.ob-nav-soon {
+  margin-left: auto;
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  color: var(--ob-subtle);
+}
+
+.ob-nav-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ob-nav-dot.is-danger {
+  background: var(--ob-danger);
+}
+
+.ob-nav-dot.is-info {
+  background: var(--ob-info);
+}
+
+.ob-pin {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  min-height: 36px;
+  padding: var(--ob-space-2);
+  border-radius: var(--ob-r-sm);
+  min-width: 0;
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-pin:hover {
+  background: var(--ob-hover);
+}
+
+.ob-pin.is-current {
+  background: var(--ob-hover);
+}
+
+.ob-pin-tile {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+  display: grid;
+  place-items: center;
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.ob-pin.is-current .ob-pin-tile {
+  background: var(--ob-brand-soft);
+  color: var(--ob-link);
+}
+
+.ob-pin-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-pin-name {
+  display: block;
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--ob-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-pin.is-current .ob-pin-name {
+  color: var(--ob-ink);
+}
+
+.ob-pin-sub {
+  display: block;
+  font-size: var(--ob-fs-12);
+  line-height: 1.3;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-pin-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--ob-subtle);
+}
+
+.ob-pin-dot.is-danger {
+  background: var(--ob-danger);
+}
+
+.ob-pin-dot.is-info {
+  background: var(--ob-info);
+}
+
+.ob-pin-dot.is-warning {
+  background: var(--ob-warning);
+}
+
+.ob-side-foot {
+  flex: 0 0 auto;
+  padding: 8px 12px 12px;
+}
+
+.ob-side-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--ob-r-sm);
+  color: var(--ob-subtle);
+  font-size: var(--ob-fs-13);
+  white-space: nowrap;
+}
+
+.ob-side-toggle:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-side-toggle svg {
+  transition: transform var(--ob-slow) var(--ob-ease);
+}
+
+/* Theme toggle icon: the default (light) offers dark, so it shows the moon;
+   dark offers light and shows the sun. */
+.ob-theme-sun {
+  display: none;
+}
+.ob-theme-moon {
+  display: block;
+}
+
+[data-theme='dark'] .ob-theme-sun {
+  display: block;
+}
+[data-theme='dark'] .ob-theme-moon {
+  display: none;
+}
+
+/* Collapsed state -------------------------------------------------------- */
+
+.ob-app.is-collapsed .ob-brand-text,
+.ob-app.is-collapsed .ob-nav-label span,
+.ob-app.is-collapsed .ob-nav-add,
+.ob-app.is-collapsed .ob-nav-text,
+.ob-app.is-collapsed .ob-nav-count,
+.ob-app.is-collapsed .ob-nav-soon,
+.ob-app.is-collapsed .ob-pin-main,
+.ob-app.is-collapsed .ob-pin-dot,
+.ob-app.is-collapsed .ob-side-toggle span {
+  display: none;
+}
+
+.ob-app.is-collapsed .ob-side-head {
+  justify-content: center;
+  padding: 0;
+}
+
+.ob-app.is-collapsed .ob-nav {
+  padding: 12px 0 8px;
+  overflow: visible;
+}
+
+.ob-app.is-collapsed .ob-nav-label {
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+.ob-app.is-collapsed .ob-nav-label::after {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 1px;
+  background: var(--ob-line);
+}
+
+.ob-app.is-collapsed .ob-nav-item {
+  width: 40px;
+  height: 36px;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: center;
+}
+
+.ob-app.is-collapsed .ob-nav-item.has-alert .ob-nav-dot {
+  display: block;
+  position: absolute;
+  top: 6px;
+  right: 7px;
+}
+
+.ob-app.is-collapsed .ob-pin {
+  width: 40px;
+  margin: 4px auto;
+  padding: 4px 0;
+  justify-content: center;
+  position: relative;
+}
+
+.ob-app.is-collapsed .ob-pin-dot {
+  display: block;
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 5px;
+  height: 5px;
+}
+
+.ob-app.is-collapsed .ob-side-foot {
+  padding: 8px 0 12px;
+}
+
+.ob-app.is-collapsed .ob-side-toggle {
+  width: 40px;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: center;
+}
+
+.ob-app.is-collapsed .ob-side-toggle svg {
+  transform: rotate(180deg);
+}
+
+/* Main column ------------------------------------------------------------ */
+
+.ob-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The bar and the scrolling column share one maximum width, so the
+   breadcrumb, the page title and the right-hand actions all finish on the
+   same edges even when the sidebar is collapsed. The cap is content + two
+   gutters; when the window is narrower, both fill it. */
+.ob-top,
+.ob-content {
+  width: 100%;
+  max-width: calc(var(--ob-page-max) + 2 * var(--ob-gutter));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ob-top {
+  height: var(--ob-top-h);
+  flex: 0 0 var(--ob-top-h);
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-3);
+  padding: 0 var(--ob-gutter);
+  background: var(--ob-bg);
+  position: relative;
+  z-index: 20;
+}
+
+.ob-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 56 from the top bar to the page title; 56 below the last block. */
+  padding: var(--ob-space-9) var(--ob-gutter);
+}
+
+.ob-wrap {
+  width: 100%;
+  max-width: var(--ob-page-max);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Breadcrumb ------------------------------------------------------------- */
+
+.ob-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--ob-fs-13);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-crumbs a,
+.ob-crumb-link {
+  color: var(--ob-subtle);
+  transition: color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-crumbs a:hover,
+.ob-crumb-link:hover {
+  color: var(--ob-ink);
+}
+
+.ob-crumbs b,
+.ob-crumb-current {
+  color: var(--ob-ink);
+  font-weight: 400;
+}
+
+.ob-crumbs svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+}
+
+.ob-crumb-ref {
+  font-family: var(--ob-font-mono);
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+/* Global search ---------------------------------------------------------- */
+
+.ob-searchbar {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  width: min(300px, 32vw);
+  min-width: 140px;
+  padding: 0 8px 0 12px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  color: var(--ob-subtle);
+  font-size: var(--ob-fs-13);
+  cursor: text;
+  transition: box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-searchbar:hover {
+  box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+}
+
+.ob-searchbar:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--ob-brand),
+    0 0 0 3px var(--ob-brand-soft);
+}
+
+.ob-searchbar > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-searchbar .ob-kbd {
+  margin-left: auto;
+}
+
+/* Account --------------------------------------------------------------- */
+
+.ob-account {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ob-avatar-button {
+  display: inline-flex;
+  border-radius: 50%;
+}
+
+.ob-avatar-button:hover {
+  box-shadow: 0 0 0 2px var(--ob-line-strong);
+}
+
+/* --------------------------------------------------------------------------
+   7. Page scaffolding
+   -------------------------------------------------------------------------- */
+
+.ob-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-5);
+  /* The last block above the first section title gets 40. */
+  margin-bottom: var(--ob-space-7);
+}
+
+.ob-page-head-main {
+  min-width: 0;
+}
+
+.ob-page-date {
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-subtle);
+  margin-bottom: var(--ob-space-1);
+}
+
+.ob-page-title {
+  font-size: var(--ob-fs-page);
+  line-height: var(--ob-lh-page);
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.ob-page-sub {
+  font-size: var(--ob-fs-body);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  margin-top: var(--ob-space-2);
+  max-width: var(--ob-measure);
+}
+
+.ob-page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-self: center;
+}
+
+.ob-section {
+  margin-top: var(--ob-space-7);
+}
+
+.ob-section:first-child {
+  margin-top: 0;
+}
+
+.ob-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+  margin-bottom: var(--ob-space-4);
+}
+
+.ob-section-title {
+  font-size: var(--ob-fs-section);
+  line-height: var(--ob-lh-section);
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+.ob-section-meta {
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-subtle);
+}
+
+.ob-section-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ob-space-1);
+  font-size: var(--ob-fs-meta);
+  font-weight: 400;
+  color: var(--ob-muted);
+  white-space: nowrap;
+}
+
+.ob-section-action:hover {
+  color: var(--ob-ink);
+}
+
+.ob-section-action svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   8. Buttons
+   -------------------------------------------------------------------------- */
+
+.ob-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ob-space-2);
+  height: 32px;
+  padding: 0 var(--ob-space-3);
+  border-radius: var(--ob-r-sm);
+  background: transparent;
+  color: var(--ob-ink);
+  font-size: var(--ob-fs-item);
+  line-height: var(--ob-lh-item);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease),
+    box-shadow var(--ob-fast) var(--ob-ease),
+    transform var(--ob-fast) var(--ob-ease);
+}
+
+.ob-btn:active {
+  transform: translateY(0.5px);
+}
+
+.ob-btn svg {
+  opacity: 0.9;
+}
+
+.ob-btn--primary {
+  background: var(--ob-brand);
+  color: var(--ob-on-brand);
+}
+
+.ob-btn--primary:hover {
+  background: var(--ob-brand-hover);
+}
+
+.ob-btn--primary:active {
+  background: var(--ob-brand-press);
+}
+
+.ob-btn--secondary {
+  background: var(--ob-surface-3);
+  color: var(--ob-ink);
+}
+
+.ob-btn--secondary:hover {
+  background: var(--ob-surface-3-hover);
+}
+
+.ob-btn--ghost {
+  background: transparent;
+  color: var(--ob-muted);
+}
+
+.ob-btn--ghost:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+/* Destructive fill: only inside a confirmation step. */
+.ob-btn--danger {
+  background: var(--ob-danger);
+  color: var(--ob-on-danger);
+}
+
+.ob-btn--danger:hover {
+  filter: brightness(1.05);
+}
+
+.ob-btn--sm {
+  height: 28px;
+  padding: 0 var(--ob-space-2);
+  font-size: var(--ob-fs-item);
+  gap: var(--ob-space-1);
+}
+
+.ob-btn--lg {
+  height: 40px;
+  padding: 0 var(--ob-space-4);
+  font-size: var(--ob-fs-body);
+}
+
+.ob-btn--icon {
+  width: 32px;
+  padding: 0;
+}
+
+.ob-btn--icon.ob-btn--sm {
+  width: 28px;
+}
+
+.ob-btn[disabled],
+.ob-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* A shortcut hint on a disabled control promises something that cannot happen. */
+.ob-btn[disabled] .ob-kbd,
+.ob-btn[aria-disabled='true'] .ob-kbd {
+  display: none;
+}
+
+.ob-btn.is-loading {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.ob-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ob-r-sm);
+  color: var(--ob-muted);
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-icon-btn:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-icon-btn.is-active {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+}
+
+/* --------------------------------------------------------------------------
+   9. Form controls
+   -------------------------------------------------------------------------- */
+
+.ob-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ob-field-label {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-field-hint {
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+}
+
+.ob-field-hint.is-danger {
+  color: var(--ob-danger);
+}
+
+.ob-input,
+.ob-textarea,
+.ob-select {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface-2);
+  color: var(--ob-ink);
+  font-size: var(--ob-fs-13);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  transition: box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-input::placeholder,
+.ob-textarea::placeholder {
+  color: var(--ob-subtle);
+}
+
+.ob-input:hover,
+.ob-textarea:hover,
+.ob-select:hover {
+  box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+}
+
+.ob-input:focus,
+.ob-textarea:focus,
+.ob-select:focus {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--ob-brand),
+    0 0 0 3px var(--ob-brand-soft);
+}
+
+.ob-input.is-invalid,
+.ob-textarea.is-invalid {
+  box-shadow: inset 0 0 0 1px var(--ob-danger);
+}
+
+.ob-input[disabled],
+.ob-textarea[disabled],
+.ob-select[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ob-input--sm {
+  height: 28px;
+  font-size: var(--ob-fs-12);
+}
+
+.ob-textarea {
+  height: auto;
+  min-height: 88px;
+  padding: 12px 12px;
+  line-height: var(--ob-lh-body);
+  resize: vertical;
+}
+
+.ob-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.ob-select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.ob-select-caret {
+  position: absolute;
+  right: 9px;
+  pointer-events: none;
+  color: var(--ob-subtle);
+}
+
+.ob-select--sm {
+  height: 28px;
+  font-size: var(--ob-fs-12);
+}
+
+/* Checkbox and radio */
+
+.ob-check,
+.ob-radio {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  border-radius: var(--ob-r-xs);
+  background: var(--ob-surface-2);
+  box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-check:hover,
+.ob-radio:hover {
+  box-shadow: inset 0 0 0 1px var(--ob-muted);
+}
+
+.ob-check:checked,
+.ob-radio:checked {
+  background: var(--ob-brand);
+  box-shadow: none;
+}
+
+.ob-check:checked::after {
+  content: '';
+  width: 8px;
+  height: 4px;
+  border-left: 1.5px solid var(--ob-on-brand);
+  border-bottom: 1.5px solid var(--ob-on-brand);
+  transform: rotate(-45deg) translate(0.5px, -1px);
+}
+
+.ob-radio {
+  border-radius: 50%;
+}
+
+.ob-radio:checked::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ob-on-brand);
+}
+
+.ob-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: var(--ob-fs-13);
+  line-height: 1.45;
+  color: var(--ob-ink);
+  cursor: pointer;
+}
+
+.ob-choice .ob-check,
+.ob-choice .ob-radio {
+  margin-top: 4px;
+}
+
+.ob-choice-sub {
+  display: block;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+/* Switch */
+
+.ob-switch {
+  appearance: none;
+  position: relative;
+  width: 30px;
+  height: 18px;
+  flex: 0 0 30px;
+  margin: 0;
+  border-radius: var(--ob-r-pill);
+  background: var(--ob-surface-3);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  cursor: pointer;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ob-subtle);
+  transition:
+    transform var(--ob-fast) var(--ob-ease),
+    background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-switch:checked {
+  background: var(--ob-brand);
+  box-shadow: none;
+}
+
+.ob-switch:checked::after {
+  transform: translateX(12px);
+  background: var(--ob-on-brand);
+}
+
+.ob-switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--ob-fs-13);
+  color: var(--ob-ink);
+  cursor: pointer;
+}
+
+.ob-switch-row--sm {
+  font-size: var(--ob-fs-12);
+}
+
+/* Search field with icon */
+
+.ob-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface-2);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  color: var(--ob-subtle);
+  transition: box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-search:hover {
+  box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+}
+
+.ob-search:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--ob-brand),
+    0 0 0 3px var(--ob-brand-soft);
+}
+
+.ob-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-size: var(--ob-fs-meta);
+  color: var(--ob-ink);
+}
+
+.ob-search input::placeholder {
+  color: var(--ob-subtle);
+}
+
+/* Segmented control */
+
+.ob-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-seg-track);
+}
+
+.ob-seg-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ob-space-1);
+  height: 28px;
+  min-width: 0;
+  padding: 0 var(--ob-space-2);
+  border-radius: var(--ob-r-xs);
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  color: var(--ob-subtle);
+  white-space: nowrap;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-seg-item:hover {
+  color: var(--ob-ink);
+}
+
+.ob-seg-item.is-active {
+  background: var(--ob-seg-thumb);
+  color: var(--ob-ink);
+  box-shadow: var(--ob-shadow-1);
+}
+
+/* Tabs */
+
+.ob-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.ob-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  height: 36px;
+  padding: 0;
+  font-size: var(--ob-fs-item);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-tab:hover {
+  color: var(--ob-ink);
+}
+
+.ob-tab.is-active {
+  color: var(--ob-ink);
+  font-weight: 500;
+}
+
+.ob-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ob-brand);
+}
+
+/* --------------------------------------------------------------------------
+   10. Status, counts and labels
+   -------------------------------------------------------------------------- */
+
+.ob-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ob-space-1);
+  font-size: var(--ob-fs-meta);
+  font-weight: 400;
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-ink);
+  white-space: nowrap;
+}
+
+.ob-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ob-status .ob-dot {
+  background: var(--ob-subtle);
+}
+
+.ob-dot.is-danger {
+  background: var(--ob-danger);
+}
+
+.ob-dot.is-warning {
+  background: var(--ob-warning);
+}
+
+.ob-dot.is-success {
+  background: var(--ob-success);
+}
+
+.ob-dot.is-info {
+  background: var(--ob-info);
+}
+
+.ob-status.is-danger .ob-dot {
+  background: var(--ob-danger);
+}
+
+.ob-status.is-warning .ob-dot {
+  background: var(--ob-warning);
+}
+
+.ob-status.is-success .ob-dot {
+  background: var(--ob-success);
+}
+
+.ob-status.is-info .ob-dot {
+  background: var(--ob-info);
+}
+
+.ob-status--quiet {
+  color: var(--ob-muted);
+  font-weight: 400;
+}
+
+/* The one loud pill on a screen. Use for a flagged finding only. */
+.ob-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ob-space-1);
+  height: 24px;
+  padding: 0 var(--ob-space-2);
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-danger);
+  color: var(--ob-on-danger);
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  line-height: var(--ob-lh-caption);
+  white-space: nowrap;
+}
+
+.ob-flag .ob-dot {
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.ob-flag svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* A quiet type label, not a status. */
+.ob-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ob-space-1);
+  height: 24px;
+  padding: 0 var(--ob-space-2);
+  border-radius: var(--ob-r-xs);
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  line-height: var(--ob-lh-caption);
+  white-space: nowrap;
+}
+
+.ob-tag svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ob-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: var(--ob-r-xs);
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ob-subtle);
+  background: var(--ob-surface-3);
+}
+
+.ob-count.is-danger {
+  color: var(--ob-danger);
+  background: var(--ob-danger-soft);
+}
+
+.ob-count.is-warning {
+  color: var(--ob-warning);
+  background: var(--ob-warning-soft);
+}
+
+.ob-count.is-info {
+  color: var(--ob-info);
+  background: var(--ob-info-soft);
+}
+
+/* --------------------------------------------------------------------------
+   11. Avatars
+   -------------------------------------------------------------------------- */
+
+.ob-avatar {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: var(--ob-brand);
+  color: var(--ob-on-brand);
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  user-select: none;
+}
+
+.ob-avatar--sm {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+  font-size: var(--ob-fs-12);
+}
+
+.ob-avatar--lg {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  font-size: var(--ob-fs-13);
+}
+
+.ob-avatar.is-quiet {
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+}
+
+.ob-avatar.is-author-2 {
+  background: var(--ob-warning);
+  color: var(--ob-on-warning);
+}
+
+.ob-avatars {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ob-avatars {
+  gap: var(--ob-space-1);
+}
+
+.ob-avatars .ob-avatar + .ob-avatar {
+  box-shadow: 0 0 0 2px var(--ob-surface);
+}
+
+.ob-avatars--on-bg .ob-avatar + .ob-avatar {
+  box-shadow: 0 0 0 2px var(--ob-bg);
+}
+
+/* --------------------------------------------------------------------------
+   12. Cards, panels and rows
+   -------------------------------------------------------------------------- */
+
+.ob-card {
+  background: var(--ob-surface);
+  border-radius: var(--ob-r-lg);
+  min-width: 0;
+}
+
+.ob-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+  padding: var(--ob-space-6) var(--ob-space-6) var(--ob-space-4);
+}
+
+.ob-card-title {
+  font-size: var(--ob-fs-item);
+  line-height: var(--ob-lh-item);
+  font-weight: 500;
+}
+
+.ob-card-meta {
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-subtle);
+}
+
+.ob-card-body {
+  padding: 0 var(--ob-space-6) var(--ob-space-6);
+}
+
+.ob-card-body--flush {
+  padding: 0;
+}
+
+.ob-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+  padding: var(--ob-space-4) var(--ob-space-6) var(--ob-space-6);
+  border-top: 1px solid var(--ob-line);
+  font-size: var(--ob-fs-meta);
+  color: var(--ob-subtle);
+}
+
+/* Panel: an inline side surface, not a floating card. */
+.ob-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--ob-surface);
+  min-width: 0;
+}
+
+.ob-panel--divided {
+  border-left: 1px solid var(--ob-line);
+}
+
+.ob-panel-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+  padding: var(--ob-space-4) var(--ob-space-5);
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.ob-panel-title {
+  font-size: var(--ob-fs-item);
+  line-height: var(--ob-lh-item);
+  font-weight: 500;
+}
+
+.ob-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--ob-space-5);
+}
+
+.ob-panel-foot {
+  flex: 0 0 auto;
+  padding: var(--ob-space-4) var(--ob-space-5);
+  border-top: 1px solid var(--ob-line);
+}
+
+/* Generic list */
+
+.ob-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ob-list--divided .ob-row + .ob-row {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-3);
+  min-width: 0;
+  width: 100%;
+  min-height: var(--ob-row-h);
+  padding: var(--ob-space-4) var(--ob-space-5);
+  text-align: left;
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-row:hover {
+  background: var(--ob-hover);
+}
+
+.ob-row.is-selected {
+  background: var(--ob-brand-soft);
+}
+
+.ob-row-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+  display: grid;
+  place-items: center;
+}
+
+.ob-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-row-title {
+  display: block;
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  line-height: var(--ob-lh-item);
+  color: var(--ob-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-row-title.is-wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.ob-row-sub {
+  display: block;
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-muted);
+  margin-top: var(--ob-space-1);
+  overflow-wrap: break-word;
+}
+
+.ob-row-end {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-3);
+  margin-left: auto;
+  font-size: var(--ob-fs-meta);
+  color: var(--ob-subtle);
+}
+
+/* A rail row is 232px of content at most. When a matter name and a date do
+   not fit on one secondary line, the date gets its own quiet line rather
+   than truncating or splitting "26 Oct 2026" across two lines. */
+.ob-row-date {
+  display: block;
+  font-size: var(--ob-fs-12);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-subtle);
+  margin-top: var(--ob-space-1);
+}
+
+/* Attention row: the dashboard queue and the shell preview both use it. */
+.ob-card .ob-attn + .ob-attn {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-attn {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--ob-space-4);
+  padding: var(--ob-space-5);
+  min-width: 0;
+}
+
+.ob-attn--ranked {
+  grid-template-columns: 16px 32px minmax(0, 1fr);
+}
+
+.ob-attn-rank {
+  padding-top: var(--ob-space-2);
+  text-align: right;
+  font-size: var(--ob-fs-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--ob-subtle);
+}
+
+.ob-attn-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ob-r-sm);
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+}
+
+.ob-attn-mark.is-danger {
+  background: var(--ob-danger-soft);
+  color: var(--ob-danger);
+}
+
+.ob-attn-mark.is-warning {
+  background: var(--ob-warning-soft);
+  color: var(--ob-warning);
+}
+
+.ob-attn-mark.is-info {
+  background: var(--ob-info-soft);
+  color: var(--ob-info);
+}
+
+.ob-attn-mark.is-success {
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-attn-body {
+  min-width: 0;
+}
+
+.ob-attn-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+}
+
+.ob-attn-title {
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  line-height: var(--ob-lh-item);
+}
+
+.ob-attn-ctx {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--ob-space-1);
+  font-size: var(--ob-fs-meta);
+  color: var(--ob-subtle);
+}
+
+.ob-attn-ctx .ob-attn-file {
+  color: var(--ob-muted);
+}
+
+.ob-attn-ctx .ob-attn-matter {
+  color: var(--ob-muted);
+}
+
+.ob-attn-ctx .ob-attn-matter:hover {
+  color: var(--ob-ink);
+}
+
+.ob-attn-ctx .ob-sep {
+  opacity: 0.55;
+}
+
+.ob-attn-why {
+  font-size: var(--ob-fs-body);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  margin-top: var(--ob-space-2);
+  max-width: var(--ob-measure);
+}
+
+.ob-attn-why em {
+  font-style: italic;
+  color: var(--ob-ink);
+}
+
+.ob-attn-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+  flex-wrap: wrap;
+  margin-top: var(--ob-space-4);
+}
+
+.ob-attn-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-meta);
+  color: var(--ob-subtle);
+}
+
+.ob-attn-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------------------
+   13. Table
+   -------------------------------------------------------------------------- */
+
+.ob-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-ink);
+}
+
+.ob-table th {
+  text-align: left;
+  padding: 0 var(--ob-space-4) var(--ob-space-3);
+  font-size: var(--ob-fs-caption);
+  font-weight: 400;
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.ob-table tbody tr {
+  height: var(--ob-row-h);
+}
+
+.ob-table td {
+  padding: var(--ob-space-4);
+  border-bottom: 1px solid var(--ob-line);
+  vertical-align: middle;
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ob-table tbody tr:hover td {
+  background: var(--ob-hover);
+}
+
+.ob-table tbody tr.is-selected td {
+  background: var(--ob-brand-soft);
+}
+
+.ob-table th:first-child,
+.ob-table td:first-child {
+  padding-left: var(--ob-space-5);
+}
+
+.ob-table th:last-child,
+.ob-table td:last-child {
+  padding-right: var(--ob-space-5);
+}
+
+/* Numbers and dates finish on one right edge. Headers align but are words, so
+   they never take tabular figures; only the value cells do. */
+.ob-table .is-end,
+.ob-table .is-num,
+.ob-table .is-date {
+  text-align: right;
+}
+
+.ob-table td.is-num,
+.ob-table td.is-date {
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-table--fixed {
+  table-layout: fixed;
+}
+
+.ob-table-title {
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  color: var(--ob-ink);
+  line-height: var(--ob-lh-item);
+}
+
+.ob-table-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--ob-space-1);
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-subtle);
+}
+
+.ob-table-sub .ob-sep {
+  opacity: 0.55;
+}
+
+/* --------------------------------------------------------------------------
+   14. Menus, popovers, tooltips
+   -------------------------------------------------------------------------- */
+
+.ob-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 228px;
+  padding: 8px;
+  border-radius: var(--ob-r-lg);
+  background: var(--ob-surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--ob-line),
+    var(--ob-shadow-2);
+  z-index: 80;
+  animation: ob-pop var(--ob-fast) var(--ob-ease);
+}
+
+.ob-menu.is-left {
+  right: auto;
+  left: 0;
+}
+
+/* Specimen state for the design-system page. */
+.ob-menu.is-static {
+  position: static;
+  animation: none;
+  display: inline-block;
+  vertical-align: top;
+}
+
+.ob-menu-head {
+  padding: 8px 12px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.ob-menu-name {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+}
+
+.ob-menu-sub {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-menu-label {
+  padding: 8px 12px 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--ob-r-sm);
+  font-size: var(--ob-fs-13);
+  color: var(--ob-muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ob-menu-item svg {
+  opacity: 0.85;
+}
+
+.ob-menu-item:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-menu-item.is-danger {
+  color: var(--ob-danger);
+}
+
+.ob-menu-item.is-danger:hover {
+  background: var(--ob-danger-soft);
+  color: var(--ob-danger);
+}
+
+.ob-menu-item .ob-menu-hint {
+  margin-left: auto;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-menu-sep {
+  height: 1px;
+  background: var(--ob-line);
+  margin: 8px 4px;
+}
+
+.ob-menu-foot {
+  padding: 8px 12px 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+/* Tooltip: add data-tip to any element. */
+[data-tip] {
+  position: relative;
+}
+
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(2px);
+  padding: 8px 8px;
+  border-radius: 5px;
+  background: var(--ob-surface-2);
+  color: var(--ob-ink);
+  box-shadow: var(--ob-shadow-2);
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--ob-fast) var(--ob-ease),
+    transform var(--ob-fast) var(--ob-ease);
+  z-index: 90;
+}
+
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after,
+[data-tip].is-tip-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+[data-tip-right]::after {
+  left: calc(100% + 8px);
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%) translateX(-2px);
+}
+
+[data-tip-right]:hover::after,
+[data-tip-right]:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+[data-tip-right].is-tip-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+[data-tip-bottom]::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+[data-tip-bottom]:hover::after,
+[data-tip-bottom]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* A tip anchored to the right edge of its control, so it cannot push the
+   page sideways when the control sits against the viewport edge. */
+[data-tip-align='end']::after {
+  left: auto;
+  right: 0;
+  transform: translateY(2px);
+}
+
+[data-tip-align='end']:hover::after,
+[data-tip-align='end']:focus-visible::after {
+  transform: translateY(0);
+}
+
+[data-tip-align='end'][data-tip-bottom]::after {
+  transform: translateY(-2px);
+}
+
+[data-tip-align='end'][data-tip-bottom]:hover::after,
+[data-tip-align='end'][data-tip-bottom]:focus-visible::after {
+  transform: translateY(0);
+}
+
+/* --------------------------------------------------------------------------
+   15. Dialog and drawer
+   -------------------------------------------------------------------------- */
+
+.ob-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--ob-overlay);
+  animation: ob-fade var(--ob-slow) var(--ob-ease);
+}
+
+.ob-backdrop--drawer {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.ob-backdrop--drawer .ob-drawer {
+  position: relative;
+}
+
+.ob-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--ob-r-lg);
+  background: var(--ob-surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--ob-line),
+    var(--ob-shadow-2);
+  animation: ob-pop var(--ob-slow) var(--ob-ease);
+}
+
+.ob-dialog--wide {
+  width: min(640px, 100%);
+}
+
+.ob-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ob-space-4);
+  margin-bottom: 8px;
+}
+
+.ob-dialog-title {
+  font-size: var(--ob-fs-16);
+  line-height: var(--ob-lh-snug);
+  font-weight: 600;
+}
+
+.ob-dialog-body {
+  font-size: var(--ob-fs-body);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+}
+
+.ob-dialog-body b,
+.ob-dialog-body strong {
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-dialog-body p + p {
+  margin-top: 12px;
+}
+
+.ob-dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.ob-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--ob-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--ob-line),
+    var(--ob-shadow-2);
+  z-index: 100;
+  animation: ob-slide-in var(--ob-slow) var(--ob-ease);
+}
+
+.ob-drawer-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-3);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.ob-drawer-title {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+}
+
+.ob-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.ob-drawer-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--ob-line);
+}
+
+/* --------------------------------------------------------------------------
+   16. Toast and inline banner
+   -------------------------------------------------------------------------- */
+
+.ob-toast-region {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 48px));
+  pointer-events: none;
+}
+
+.ob-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--ob-r-lg);
+  background: var(--ob-surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--ob-line),
+    var(--ob-shadow-2);
+  pointer-events: auto;
+  animation: ob-rise var(--ob-slow) var(--ob-ease);
+}
+
+.ob-toast-icon {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--ob-brand);
+}
+
+.ob-toast-icon.is-success {
+  color: var(--ob-success);
+}
+
+.ob-toast-icon.is-danger {
+  color: var(--ob-danger);
+}
+
+.ob-toast-icon.is-warning {
+  color: var(--ob-warning);
+}
+
+.ob-toast-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-toast-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.ob-toast-text {
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-muted);
+  margin-top: 4px;
+}
+
+.ob-toast-close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--ob-subtle);
+}
+
+.ob-toast-close:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-toast.is-leaving {
+  animation: ob-fade var(--ob-fast) var(--ob-ease) reverse forwards;
+}
+
+/* Specimen state for the design-system page. */
+.ob-toast-region.is-static {
+  position: static;
+  width: 100%;
+  max-width: 360px;
+  pointer-events: auto;
+}
+
+.ob-toast-region.is-static .ob-toast {
+  animation: none;
+}
+
+.ob-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface);
+  font-size: var(--ob-fs-13);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-ink);
+}
+
+.ob-banner > svg {
+  margin-top: 4px;
+  flex: 0 0 auto;
+  color: var(--ob-brand);
+}
+
+.ob-banner.is-danger {
+  background: var(--ob-danger-soft);
+}
+
+.ob-banner.is-danger > svg {
+  color: var(--ob-danger);
+}
+
+.ob-banner.is-warning {
+  background: var(--ob-warning-soft);
+}
+
+.ob-banner.is-warning > svg {
+  color: var(--ob-warning);
+}
+
+.ob-banner.is-success {
+  background: var(--ob-success-soft);
+}
+
+.ob-banner.is-success > svg {
+  color: var(--ob-success);
+}
+
+.ob-banner.is-info {
+  background: var(--ob-info-soft);
+}
+
+.ob-banner.is-info > svg {
+  color: var(--ob-info);
+}
+
+.ob-banner-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-banner-title {
+  font-size: var(--ob-fs-item);
+  line-height: var(--ob-lh-item);
+  font-weight: 500;
+}
+
+.ob-banner-text {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+  margin-top: 4px;
+}
+
+.ob-banner-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  /* A taller banner (two lines of copy) keeps its action on the centre line. */
+  align-self: center;
+}
+
+.ob-banner-close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--ob-subtle);
+}
+
+.ob-banner-close:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+/* --------------------------------------------------------------------------
+   17. Empty, skeleton and progress
+   -------------------------------------------------------------------------- */
+
+.ob-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 32px;
+}
+
+.ob-empty--centred {
+  align-items: center;
+  text-align: center;
+}
+
+.ob-empty-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ob-r-md);
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+}
+
+.ob-empty-title {
+  font-size: var(--ob-fs-section);
+  line-height: var(--ob-lh-section);
+  font-weight: 600;
+}
+
+.ob-empty-text {
+  font-size: var(--ob-fs-13);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  max-width: 52ch;
+}
+
+.ob-empty-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.ob-skeleton {
+  border-radius: var(--ob-r-xs);
+  background: linear-gradient(
+    100deg,
+    var(--ob-surface-3) 30%,
+    var(--ob-surface-2) 50%,
+    var(--ob-surface-3) 70%
+  );
+  background-size: 220% 100%;
+  animation: ob-shimmer 1.6s linear infinite;
+}
+
+.ob-skeleton--line {
+  height: 10px;
+}
+
+.ob-skeleton--title {
+  height: 14px;
+}
+
+.ob-skeleton--circle {
+  border-radius: 50%;
+}
+
+.ob-progress {
+  height: 4px;
+  border-radius: var(--ob-r-pill);
+  background: var(--ob-surface-3);
+  overflow: hidden;
+}
+
+.ob-progress-bar {
+  height: 100%;
+  border-radius: var(--ob-r-pill);
+  background: var(--ob-brand);
+  transition: width var(--ob-slow) var(--ob-ease);
+}
+
+.ob-progress.is-success .ob-progress-bar {
+  background: var(--ob-success);
+}
+
+.ob-progress.is-info .ob-progress-bar {
+  background: var(--ob-info);
+}
+
+.ob-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ob-space-3);
+  min-height: var(--ob-row-h);
+  margin-bottom: var(--ob-space-2);
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-subtle);
+}
+
+.ob-progress-row b {
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.ob-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-step-num {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+  font-size: var(--ob-fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-step.is-active {
+  color: var(--ob-ink);
+}
+
+.ob-step.is-active .ob-step-num {
+  background: var(--ob-brand);
+  color: var(--ob-on-brand);
+}
+
+.ob-step.is-done {
+  color: var(--ob-muted);
+}
+
+.ob-step.is-done .ob-step-num {
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-step-line {
+  flex: 1 1 24px;
+  min-width: 16px;
+  height: 1px;
+  background: var(--ob-line);
+  margin: 0 12px;
+}
+
+/* --------------------------------------------------------------------------
+   18. Drop zone, keyboard hint, citation
+   -------------------------------------------------------------------------- */
+
+.ob-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 24px;
+  border-radius: var(--ob-r-lg);
+  background: var(--ob-surface);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  text-align: center;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-drop:hover,
+.ob-drop.is-over {
+  background: var(--ob-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--ob-brand-line);
+}
+
+.ob-drop-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ob-r-md);
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+}
+
+.ob-drop-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+}
+
+.ob-drop-text {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+  max-width: 44ch;
+}
+
+.ob-drop-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ob-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--ob-r-xs);
+  background: var(--ob-surface-3);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  font-family: var(--ob-font-sans);
+  font-size: var(--ob-fs-12);
+  line-height: 1;
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-cite {
+  /* Citations read as legal text: body font, never monospace, never tabular. */
+  font-family: inherit;
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.ob-cite--meta {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+}
+
+/* --------------------------------------------------------------------------
+   19. Document page
+   -------------------------------------------------------------------------- */
+
+.ob-doc {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.ob-doc-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  min-width: 0;
+}
+
+.ob-doc-back {
+  flex: 0 0 auto;
+}
+
+.ob-doc-title {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.ob-doc-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-doc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.ob-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-save-state svg {
+  color: var(--ob-success);
+}
+
+/* Ribbon */
+
+.ob-ribbon {
+  flex: 0 0 auto;
+  background: var(--ob-surface);
+}
+
+.ob-ribbon-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.ob-ribbon-tab {
+  height: 34px;
+  padding: 0 12px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.ob-ribbon-tab:hover {
+  color: var(--ob-ink);
+}
+
+.ob-ribbon-tab.is-active {
+  color: var(--ob-ink);
+}
+
+.ob-ribbon-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ob-brand);
+}
+
+.ob-ribbon-meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-ribbon-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: 48px;
+  padding: 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ob-ribbon-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+}
+
+.ob-ribbon-group + .ob-ribbon-group {
+  border-left: 1px solid var(--ob-line);
+}
+
+.ob-ribbon-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+}
+
+.ob-ribbon-label {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ob-rbtn {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-12);
+}
+
+.ob-rbtn:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-rbtn.is-active {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+}
+
+.ob-rsel {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ob-surface-2);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-12);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+}
+
+.ob-rsel:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--ob-brand);
+}
+
+.ob-rsep {
+  width: 1px;
+  height: 16px;
+  background: var(--ob-line);
+  margin: 0 4px;
+}
+
+/* Document body */
+
+.ob-doc-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.ob-doc-body.is-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ob-canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--ob-bg-inset);
+  padding: 32px 32px 56px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.ob-paper {
+  position: relative;
+  width: 680px;
+  max-width: 100%;
+  min-height: 880px;
+  padding: 64px 76px 80px;
+  border-radius: 2px;
+  background: var(--ob-paper);
+  color: var(--ob-paper-ink);
+  box-shadow: var(--ob-shadow-page);
+  font-family: var(--ob-font-serif);
+  font-size: var(--ob-fs-item);
+  line-height: 1.7;
+}
+
+.ob-paper-title {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+
+/* A paper specimen for the system page; never used in the product. */
+.ob-paper--specimen {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  min-height: 0;
+  padding: 36px 44px 40px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.ob-paper h2 {
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 600;
+  margin: 26px 0 8px;
+}
+
+.ob-paper p {
+  margin: 0 0 10px;
+}
+
+.ob-paper .ob-paper-intro {
+  color: #4f463c;
+}
+
+.ob-paper-mark {
+  font-family: var(--ob-font-sans);
+  font-size: 12px;
+  color: var(--ob-paper-muted);
+  letter-spacing: 0;
+}
+
+.ob-ins {
+  background: #e3f0e6;
+  border-bottom: 1px solid #2c6240;
+  color: #1f4a30;
+  text-decoration: none;
+  padding: 0;
+}
+
+.ob-del {
+  background: #f8e5dc;
+  border-bottom: 1px solid #98452e;
+  color: #7d3722;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  padding: 0;
+}
+
+.ob-changebar {
+  position: relative;
+}
+
+.ob-changebar::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: #c9a567;
+}
+
+.ob-cmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: #e7ddd0;
+  color: #5c5044;
+  font-family: var(--ob-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  vertical-align: 1px;
+  cursor: pointer;
+}
+
+.ob-cmark.is-brand {
+  background: #d9e4ef;
+  color: #2c4a66;
+}
+
+.ob-cmark.is-warning {
+  background: #f2e4c8;
+  color: #6b4d14;
+}
+
+.ob-comment-anchor {
+  position: absolute;
+  right: -46px;
+  width: 30px;
+  font-family: var(--ob-font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ob-paper-muted);
+  border-left: 2px solid #c9a567;
+  padding-left: 5px;
+}
+
+/* Inline document side panel uses .ob-panel, plus these helpers. */
+
+.ob-doc-meta-list {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px 12px;
+  font-size: var(--ob-fs-12);
+}
+
+.ob-doc-meta-list dt {
+  color: var(--ob-subtle);
+}
+
+.ob-doc-meta-list dd {
+  color: var(--ob-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ob-doc-meta-list dd span {
+  display: block;
+  margin-top: var(--ob-space-1);
+  color: var(--ob-subtle);
+}
+
+.ob-version {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.ob-version + .ob-version {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-version-num {
+  width: 26px;
+  flex: 0 0 26px;
+  font-family: var(--ob-font-mono);
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-muted);
+}
+
+.ob-version-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-version-main b {
+  display: block;
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+}
+
+.ob-version-main span {
+  display: block;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+/* Review list: the document editor's changes and comments panel. */
+
+.ob-rev-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ob-rev {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 16px;
+  min-width: 0;
+  border-top: 1px solid var(--ob-line);
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-rev:first-child {
+  border-top: 0;
+}
+
+.ob-rev:hover {
+  background: var(--ob-hover);
+}
+
+.ob-rev.is-focused {
+  background: var(--ob-brand-soft);
+}
+
+.ob-rev.is-pinned {
+  background: var(--ob-warning-soft);
+}
+
+.ob-rev--select {
+  grid-template-columns: 16px 20px minmax(0, 1fr);
+}
+
+.ob-rev--select > .ob-check {
+  margin-top: 4px;
+}
+
+.ob-rev-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+.ob-rev-num.is-comment {
+  background: var(--ob-info-soft);
+  color: var(--ob-info);
+}
+
+.ob-rev-num.is-move {
+  background: var(--ob-warning-soft);
+  color: var(--ob-warning);
+}
+
+.ob-rev-main {
+  min-width: 0;
+}
+
+.ob-rev-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+}
+
+.ob-rev-author {
+  color: var(--ob-ink);
+}
+
+.ob-rev-time {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-rev-kind {
+  color: var(--ob-muted);
+}
+
+.ob-rev-where {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.ob-rev-diff,
+.ob-rev-text {
+  font-size: var(--ob-fs-12);
+  line-height: 1.55;
+  color: var(--ob-muted);
+  margin-top: 4px;
+}
+
+.ob-rev-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.ob-rev-pin-note {
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-warning);
+  margin-top: 4px;
+}
+
+/* In-panel diffs use theme tints; the paper keeps its own fixed ink. */
+.ob-diff-ins {
+  background: var(--ob-success-soft);
+  border-bottom: 1px solid var(--ob-success);
+  color: var(--ob-ink);
+  padding: 0 4px;
+}
+
+.ob-diff-del {
+  background: var(--ob-danger-soft);
+  border-bottom: 1px solid var(--ob-danger);
+  color: var(--ob-danger);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  padding: 0 4px;
+}
+
+.ob-decision-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ob-line);
+  background: var(--ob-surface);
+}
+
+.ob-decision-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-decision-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ob-decision-acts .ob-btn {
+  flex: 1 1 auto;
+}
+
+/* Filter chip: a selectable control, not a status badge. */
+
+.ob-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-13);
+  white-space: nowrap;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-chip:hover {
+  background: var(--ob-surface-3-hover);
+  color: var(--ob-ink);
+}
+
+.ob-chip.is-active {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+}
+
+.ob-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ob-chip .ob-count {
+  margin-left: 4px;
+}
+
+/* Larger search field for Search and the command palette entry. */
+
+.ob-search--lg {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--ob-r-md);
+}
+
+.ob-search--lg input {
+  font-size: var(--ob-fs-14);
+}
+
+/* Long-form reading: judgment, legislation and research notes. */
+
+.ob-prose {
+  max-width: var(--ob-measure);
+  font-size: var(--ob-fs-body);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-ink);
+}
+
+.ob-prose p {
+  margin: 0 0 12px;
+}
+
+.ob-prose h2 {
+  font-size: var(--ob-fs-section);
+  line-height: var(--ob-lh-section);
+  font-weight: 600;
+  margin: var(--ob-space-6) 0 var(--ob-space-2);
+}
+
+.ob-prose h3 {
+  font-size: var(--ob-fs-14);
+  line-height: 1.4;
+  font-weight: 500;
+  margin: 24px 0 8px;
+}
+
+.ob-prose ul,
+.ob-prose ol {
+  margin: 0 0 12px;
+  padding-left: 24px;
+  list-style: disc;
+}
+
+.ob-prose ol {
+  list-style: decimal;
+}
+
+.ob-prose li + li {
+  margin-top: 8px;
+}
+
+.ob-prose blockquote {
+  margin: 0 0 12px;
+  padding-left: 16px;
+  border-left: 2px solid var(--ob-line-strong);
+  color: var(--ob-muted);
+}
+
+.ob-prose .ob-cite {
+  color: var(--ob-ink);
+}
+
+/* Metadata list */
+
+.ob-dl {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
+  gap: 8px 12px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+}
+
+.ob-dl dt {
+  color: var(--ob-subtle);
+}
+
+.ob-dl dd {
+  color: var(--ob-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ob-dl dd span {
+  display: block;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+/* Activity timeline */
+
+.ob-activity {
+  display: flex;
+  flex-direction: column;
+}
+
+.ob-activity-item {
+  position: relative;
+  padding: 0 0 16px 16px;
+}
+
+.ob-activity-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ob-line-strong);
+}
+
+.ob-activity-item::after {
+  content: '';
+  position: absolute;
+  left: 2.5px;
+  top: 15px;
+  bottom: 0;
+  width: 1px;
+  background: var(--ob-line);
+}
+
+.ob-activity-item:last-child {
+  padding-bottom: 0;
+}
+
+.ob-activity-item:last-child::after {
+  display: none;
+}
+
+.ob-activity-item.is-danger::before {
+  background: var(--ob-danger);
+}
+
+.ob-activity-item.is-warning::before {
+  background: var(--ob-warning);
+}
+
+.ob-activity-item.is-success::before {
+  background: var(--ob-success);
+}
+
+.ob-activity-item.is-info::before {
+  background: var(--ob-info);
+}
+
+.ob-activity-title {
+  font-size: var(--ob-fs-13);
+  line-height: 1.4;
+}
+
+.ob-activity-meta {
+  display: block;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+/* Artefact row: a judgment, provision, link or note attached to a matter. */
+
+.ob-artefact {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px 24px;
+  align-items: start;
+}
+
+.ob-artefact + .ob-artefact {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-artefact-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+  display: grid;
+  place-items: center;
+  margin-top: 4px;
+}
+
+.ob-artefact-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-artefact-title:hover {
+  color: var(--ob-link);
+}
+
+.ob-artefact-meta {
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-artefact-text {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-muted);
+  margin-top: 4px;
+  max-width: var(--ob-measure);
+}
+
+.ob-artefact-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Search result */
+
+.ob-result {
+  padding: 16px 24px;
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-result:first-child {
+  border-top: 0;
+}
+
+.ob-result:hover {
+  background: var(--ob-hover);
+}
+
+.ob-result-title {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ob-result-title a:hover {
+  color: var(--ob-link);
+}
+
+.ob-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-result-snippet {
+  font-size: var(--ob-fs-13);
+  line-height: 1.6;
+  color: var(--ob-muted);
+  margin-top: 8px;
+  max-width: var(--ob-measure);
+}
+
+.ob-result-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+/* Redaction spans: the state is the meaning, not the category colour. */
+
+.ob-span {
+  border-radius: 3px;
+  padding: 0 4px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.ob-span.is-pending {
+  background: var(--ob-warning-soft);
+  border-bottom: 1px solid var(--ob-warning);
+}
+
+.ob-span.is-accepted {
+  background: var(--ob-success-soft);
+  border-bottom: 1px solid var(--ob-success);
+}
+
+.ob-span.is-rejected {
+  background: transparent;
+  border-bottom: 1px dashed var(--ob-danger);
+  color: inherit;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* --------------------------------------------------------------------------
+   20. Command palette
+   -------------------------------------------------------------------------- */
+
+.ob-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 56px 24px 24px;
+  background: var(--ob-overlay);
+  animation: ob-fade var(--ob-fast) var(--ob-ease);
+}
+
+.ob-palette {
+  width: min(620px, 100%);
+  max-height: 68vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--ob-r-xl);
+  background: var(--ob-surface-2);
+  box-shadow:
+    inset 0 0 0 1px var(--ob-line),
+    var(--ob-shadow-2);
+  overflow: hidden;
+  animation: ob-pop var(--ob-slow) var(--ob-ease);
+}
+
+/* Specimen state for the design-system page. */
+.ob-palette-backdrop.is-static {
+  position: static;
+  display: block;
+  padding: 0;
+  background: transparent;
+  animation: none;
+}
+
+.ob-palette.is-static {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  max-height: none;
+  animation: none;
+  box-shadow:
+    inset 0 0 0 1px var(--ob-line),
+    var(--ob-shadow-1);
+}
+
+.ob-palette-input {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--ob-line);
+  color: var(--ob-subtle);
+}
+
+.ob-palette-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-size: var(--ob-fs-body);
+  color: var(--ob-ink);
+}
+
+.ob-palette-input input::placeholder {
+  color: var(--ob-subtle);
+}
+
+.ob-palette-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.ob-palette-group {
+  padding: 12px 12px 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 4px 12px;
+  border-radius: var(--ob-r-sm);
+  font-size: var(--ob-fs-13);
+  line-height: 1.35;
+  color: var(--ob-muted);
+  text-align: left;
+}
+
+.ob-palette-item svg {
+  color: var(--ob-subtle);
+}
+
+.ob-palette-item:hover,
+.ob-palette-item.is-selected {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+}
+
+.ob-palette-item.is-selected svg {
+  color: var(--ob-link);
+}
+
+.ob-palette-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-palette-item-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-palette-item-sub {
+  display: block;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-palette-item .ob-kbd {
+  margin-left: auto;
+}
+
+.ob-palette-empty {
+  padding: 32px 24px;
+  text-align: center;
+  font-size: var(--ob-fs-13);
+  color: var(--ob-subtle);
+}
+
+.ob-palette-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 36px;
+  padding: 0 16px;
+  border-top: 1px solid var(--ob-line);
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-palette-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   21. Layout patterns used by the final screens
+   -------------------------------------------------------------------------- */
+
+.ob-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--ob-space-5);
+  align-items: start;
+}
+
+/* The right rail begins on the same line as the first section title. */
+.ob-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ob-space-5);
+  min-width: 0;
+}
+
+.ob-inbox-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--ob-line);
+  font-size: var(--ob-fs-12);
+}
+
+.ob-inbox-foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ob-muted);
+}
+
+.ob-inbox-foot a:hover {
+  color: var(--ob-ink);
+}
+
+.ob-inbox-foot svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ob-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Onboarding rows, used by the first-run dashboard. */
+.ob-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 24px;
+}
+
+.ob-step-row + .ob-step-row {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-step-row-num {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+.ob-step-row.is-done .ob-step-row-num {
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-step-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-step-row-title {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ob-step-row-text {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-muted);
+  margin-top: 4px;
+  max-width: 60ch;
+}
+
+.ob-step-row-end {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   22. Motion and responsive
+   -------------------------------------------------------------------------- */
+
+@keyframes ob-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ob-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ob-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ob-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ob-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@media (max-width: 1240px) {
+  .ob-cols {
+    grid-template-columns: minmax(0, 1fr) 316px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .ob-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ob-rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .ob-doc-body {
+    grid-template-columns: minmax(0, 1fr) 312px;
+  }
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --ob-gutter: 32px;
+  }
+
+  .ob-content {
+    padding-top: var(--ob-space-9);
+    padding-bottom: var(--ob-space-9);
+  }
+
+  .ob-page-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--ob-space-4);
+  }
+
+  .ob-page-actions {
+    justify-content: flex-start;
+    /* The base rule centres the group against the title. Once the head is a
+       column, that would centre it in the page: align it to the content edge. */
+    align-self: stretch;
+    padding-top: 0;
+  }
+
+  .ob-searchbar {
+    /* The bar is tight at 1024. Keep search available as an icon rather than
+       letting a 240px field squeeze the breadcrumb into an ellipsis. */
+    width: 32px;
+    min-width: 0;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .ob-searchbar > span {
+    display: none;
+  }
+
+  .ob-paper {
+    padding: 48px 56px 56px;
+  }
+
+  .ob-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ob-ribbon-row {
+    height: 46px;
+  }
+
+  .ob-hide-md {
+    display: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .ob-side {
+    display: none;
+  }
+
+  .ob-app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ob-top {
+    padding: 0 16px;
+  }
+
+  .ob-crumbs {
+    overflow: hidden;
+  }
+
+  .ob-searchbar {
+    display: none;
+  }
+
+  .ob-doc-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ob-doc-body .ob-panel {
+    display: none;
+  }
+
+  .ob-hide-sm {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .ob-side,
+  .ob-top,
+  .ob-ribbon,
+  .ob-doc-head,
+  .ob-panel,
+  .ob-toast-region {
+    display: none !important;
+  }
+
+  .ob-app,
+  .ob-doc-body {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .ob-canvas {
+    padding: 0;
+    background: #fff;
+    overflow: visible;
+  }
+
+  .ob-paper {
+    width: auto;
+    box-shadow: none;
+    padding: 0;
+  }
+}
+
+/* ==========================================================================
+   PART II — STAGE 2 SCREENS
+   Merged from obiter-d1.css (entry screens, matters, settings, Verify) and
+   obiter-d2.css (documents, search and sources, Redact) on 26 Oct 2026.
+   The two files were loaded after this one; their rules now live here in
+   source order, so a page sees exactly the cascade it saw before. The one
+   genuine collision, the Verify finding, is unified in section 23 and
+   marked in the markup with .ob-finding--verify.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   23. Verify findings — one component, two contexts
+
+   The Verify page (a roomy row inside a document group) and the editor's
+   findings panel and All findings dialog (a dense panel row) share one
+   structure. The base is the panel row; the Verify page adds --verify where
+   the layout genuinely differs. Markup:
+
+     article.ob-finding[.ob-finding--verify][.ob-finding--flush]
+       span.ob-finding-mark.is-danger
+       div.ob-finding-body
+         div.ob-finding-head  (status, .ob-finding-title or .ob-finding-kind,
+                               .ob-finding-where, optional .ob-finding-review)
+         p.ob-finding-quote   (optional cite)
+         p.ob-finding-why
+         .ob-finding-compare  (Verify page only)
+         .ob-finding-acts
+         .ob-finding-source   (Verify page only)
+   -------------------------------------------------------------------------- */
+
+.ob-finding {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 16px;
+  min-width: 0;
+}
+
+.ob-finding + .ob-finding {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-finding.is-open {
+  background: var(--ob-surface-2);
+}
+
+.ob-finding--flush {
+  padding: 16px 0;
+}
+
+/* The Verify page sets each finding under a document-group header, so the
+   first row carries its own rule, and there is more air around it. */
+.ob-finding--verify {
+  padding: 16px 24px;
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-finding-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  margin-top: 4px;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+}
+
+.ob-finding-mark.is-danger {
+  background: var(--ob-danger-soft);
+  color: var(--ob-danger);
+}
+
+.ob-finding-mark.is-warning {
+  background: var(--ob-warning-soft);
+  color: var(--ob-warning);
+}
+
+.ob-finding-mark.is-success {
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-finding-body {
+  min-width: 0;
+}
+
+.ob-finding-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ob-finding--verify .ob-finding-head {
+  gap: 12px;
+  min-height: 26px;
+}
+
+.ob-finding-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-finding-kind {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-finding-where {
+  margin-left: auto;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-finding-quote {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ob-line-strong);
+  font-size: var(--ob-fs-13);
+  line-height: 1.55;
+  color: var(--ob-ink);
+  max-width: var(--ob-measure);
+}
+
+/* On the Verify page the quote is the document text itself, not a cited
+   aside, so it runs full width without the annotation rule. */
+.ob-finding--verify .ob-finding-quote {
+  margin-top: 12px;
+  padding-left: 0;
+  border-left: 0;
+  font-size: var(--ob-fs-14);
+  line-height: 1.6;
+}
+
+.ob-finding-quote cite {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-finding-wrong {
+  background: var(--ob-danger-soft);
+  box-shadow: inset 0 -1px 0 var(--ob-danger);
+  border-radius: 2px;
+  padding: 0 4px;
+}
+
+.ob-finding-why {
+  margin-top: 8px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-muted);
+  max-width: var(--ob-measure);
+}
+
+.ob-finding--verify .ob-finding-why {
+  margin-top: 8px;
+  font-size: var(--ob-fs-13);
+  line-height: var(--ob-lh-body);
+}
+
+.ob-finding-why em {
+  font-style: italic;
+  color: var(--ob-ink);
+}
+
+.ob-finding-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.ob-finding--verify .ob-finding-acts {
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ob-finding-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+  max-width: 560px;
+}
+
+.ob-compare-arrow {
+  color: var(--ob-subtle);
+  display: grid;
+  place-items: center;
+}
+
+.ob-compare-box {
+  padding: 12px 12px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-3);
+  min-width: 0;
+}
+
+.ob-compare-box.is-wrong {
+  background: var(--ob-danger-soft);
+}
+
+.ob-compare-box.is-right {
+  background: var(--ob-success-soft);
+}
+
+.ob-compare-label {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-compare-box.is-wrong .ob-compare-label {
+  color: var(--ob-danger);
+}
+
+.ob-compare-box.is-right .ob-compare-label {
+  color: var(--ob-success);
+}
+
+.ob-compare-value {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.ob-compare-note {
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-muted);
+  margin-top: 4px;
+}
+
+.ob-finding-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ob-line);
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-subtle);
+  max-width: var(--ob-measure);
+}
+
+.ob-finding-source svg {
+  color: var(--ob-success);
+  margin-top: 4px;
+}
+
+.ob-finding-source b {
+  color: var(--ob-muted);
+  font-weight: 500;
+}
+
+.ob-finding-review {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+/* The document a group of findings belongs to, in the All findings dialog. */
+.ob-finding-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 16px 0 8px;
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-finding-doc > svg {
+  color: var(--ob-subtle);
+}
+
+.ob-finding-doc-meta {
+  margin-left: auto;
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-subtle);
+}
+
+.ob-finding-doc + .ob-finding {
+  border-top: 1px solid var(--ob-line);
+  padding-top: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   24. Entry screens: inputs and buttons
+   -------------------------------------------------------------------------- */
+
+.ob-input--lg {
+  height: 36px;
+  font-size: var(--ob-fs-14);
+}
+
+.ob-btn--block {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   25. Auth: a quiet gate, not a marketing page
+   -------------------------------------------------------------------------- */
+
+.ob-auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+  background: var(--ob-bg);
+}
+
+.ob-auth-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 24px 32px 32px;
+}
+
+.ob-auth-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ob-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ob-auth-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0 32px;
+}
+
+.ob-auth-col {
+  width: 100%;
+  max-width: 360px;
+}
+
+.ob-auth-title {
+  font-size: var(--ob-fs-page);
+  line-height: var(--ob-lh-page);
+  font-weight: 600;
+}
+
+.ob-auth-sub {
+  font-size: var(--ob-fs-14);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  margin-top: 8px;
+  max-width: 38ch;
+}
+
+.ob-auth-mode {
+  margin-top: 24px;
+}
+
+.ob-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.ob-auth-form .ob-field-hint a,
+.ob-auth-foot a {
+  color: var(--ob-link);
+}
+
+.ob-auth-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ob-auth-row a {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+}
+
+.ob-auth-row a:hover {
+  color: var(--ob-ink);
+}
+
+.ob-auth-foot {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-subtle);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* The "new here / remembered it" line closes the form block on every auth
+   screen with the same 24px rhythm. */
+.ob-auth-col .ob-auth-foot {
+  margin-top: 24px;
+}
+
+.ob-auth-foot a {
+  color: var(--ob-ink);
+}
+
+.ob-auth-terms {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-subtle);
+  max-width: 36ch;
+}
+
+.ob-auth-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-subtle);
+}
+
+.ob-auth-note svg {
+  margin-top: 4px;
+  color: var(--ob-subtle);
+}
+
+/* A completed step replaces the form, rather than sitting beside it. */
+.ob-auth-done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.ob-auth-done-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ob-r-lg);
+  display: grid;
+  place-items: center;
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-auth-done-title {
+  font-size: var(--ob-fs-page);
+  line-height: var(--ob-lh-page);
+  font-weight: 600;
+}
+
+.ob-auth-done-text {
+  font-size: var(--ob-fs-14);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  max-width: 42ch;
+}
+
+.ob-auth-done-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* The right-hand panel holds a real excerpt, not a product tour. */
+.ob-auth-aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 40px;
+  overflow: hidden;
+  background: var(--ob-surface);
+  box-shadow: inset 1px 0 0 var(--ob-line);
+}
+
+.ob-auth-aside-caption {
+  position: relative;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-bottom: 12px;
+}
+
+.ob-auth-aside-stage {
+  position: relative;
+  margin: auto 0;
+}
+
+.ob-auth-sheet {
+  position: relative;
+  width: min(348px, 100%);
+  margin: 0 auto;
+  padding: 32px 32px 32px;
+  border-radius: 2px;
+  background: var(--ob-paper);
+  color: var(--ob-paper-ink);
+  box-shadow: var(--ob-shadow-page);
+  font-family: var(--ob-font-serif);
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-body);
+}
+
+.ob-auth-sheet-mark {
+  font-family: var(--ob-font-sans);
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-paper-muted);
+  margin-bottom: 12px;
+}
+
+.ob-auth-sheet h2 {
+  font-size: var(--ob-fs-item);
+  line-height: var(--ob-lh-item);
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+.ob-auth-sheet p {
+  margin: 0 0 8px;
+}
+
+.ob-auth-sheet-note {
+  font-family: var(--ob-font-sans);
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-paper-muted);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(36, 30, 23, 0.12);
+}
+
+.ob-auth-aside-foot {
+  position: relative;
+  max-width: 42ch;
+}
+
+/* The auth panel states a summary, so it is labelled as one: no quotation
+   marks around words the judgment does not contain. */
+.ob-auth-quote-label {
+  margin-bottom: var(--ob-space-1);
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-subtle);
+}
+
+.ob-auth-quote {
+  font-family: var(--ob-font-serif);
+  font-size: var(--ob-fs-body);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-ink);
+}
+
+.ob-auth-quote-by {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-subtle);
+  margin-top: 12px;
+}
+
+.ob-auth-aside-meta {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+@media (max-width: 1100px) {
+  .ob-auth {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ob-auth-aside {
+    display: none;
+  }
+
+  .ob-auth-main {
+    padding: 24px 24px 32px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   26. State pages: 404, error, no access, ended session
+   -------------------------------------------------------------------------- */
+
+.ob-statepage {
+  min-height: calc(100vh - 128px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 0 48px;
+}
+
+.ob-statepage-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--ob-r-lg);
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-muted);
+}
+
+.ob-statepage-mark.is-warning {
+  background: var(--ob-warning-soft);
+  color: var(--ob-warning);
+}
+
+.ob-statepage-mark.is-danger {
+  background: var(--ob-danger-soft);
+  color: var(--ob-danger);
+}
+
+.ob-statepage-mark.is-info {
+  background: var(--ob-info-soft);
+  color: var(--ob-info);
+}
+
+.ob-statepage-title {
+  font-size: var(--ob-fs-28);
+  line-height: var(--ob-lh-tight);
+  font-weight: 600;
+  margin-top: 24px;
+  max-width: 30ch;
+}
+
+.ob-statepage-text {
+  font-size: var(--ob-fs-14);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  max-width: 48ch;
+  margin-top: 12px;
+}
+
+.ob-statepage-text b {
+  color: var(--ob-ink);
+  font-weight: 500;
+}
+
+.ob-statepage-acts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+
+.ob-statepage-foot {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 24px;
+  max-width: 44ch;
+}
+
+.ob-statepage-panel {
+  width: min(520px, 100%);
+  margin-top: 32px;
+  text-align: left;
+}
+
+/* The panel is a normal card: same 24/16 head rhythm as everywhere else. */
+.ob-statepage-panel .ob-card-head {
+  padding: var(--ob-space-6) var(--ob-space-6) var(--ob-space-4);
+}
+
+/* --------------------------------------------------------------------------
+   27. Settings: navigation column, section blocks, forms
+   -------------------------------------------------------------------------- */
+
+.ob-settings {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+
+/* The section nav is a column that sticks while the body scrolls. */
+.ob-settings-nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ob-settings-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--ob-r-sm);
+  font-size: var(--ob-fs-13);
+  color: var(--ob-muted);
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-settings-link:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-settings-link.is-active {
+  background: var(--ob-surface-3);
+  color: var(--ob-ink);
+}
+
+.ob-settings-link svg {
+  opacity: 0.85;
+}
+
+.ob-settings-body {
+  min-width: 0;
+  max-width: 660px;
+}
+
+.ob-settings-section + .ob-settings-section {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ob-settings-title {
+  font-size: var(--ob-fs-section);
+  line-height: var(--ob-lh-section);
+  font-weight: 600;
+}
+
+.ob-settings-desc {
+  font-size: var(--ob-fs-13);
+  line-height: var(--ob-lh-body);
+  color: var(--ob-muted);
+  margin-top: 4px;
+  max-width: 62ch;
+}
+
+.ob-settings-head .ob-settings-desc {
+  margin-top: 4px;
+}
+
+.ob-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+  max-width: 420px;
+}
+
+.ob-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.ob-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-success);
+}
+
+.ob-saved svg {
+  width: 12px;
+  height: 12px;
+}
+
+.ob-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ob-readonly-label {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-readonly-value {
+  font-size: var(--ob-fs-13);
+  line-height: 1.45;
+  color: var(--ob-muted);
+  overflow-wrap: anywhere;
+}
+
+.ob-readonly-hint {
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+}
+
+.ob-session {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 16px 0;
+}
+
+.ob-session + .ob-session {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-session-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ob-r-sm);
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-session-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.ob-session-meta {
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-session-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.ob-pref-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 16px 0;
+}
+
+.ob-pref-row + .ob-pref-row {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-pref-main {
+  min-width: 0;
+  max-width: 46ch;
+}
+
+.ob-pref-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.ob-pref-desc {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-pref-control {
+  flex: 0 0 auto;
+  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* --------------------------------------------------------------------------
+   28. Matters and documents in tables
+   -------------------------------------------------------------------------- */
+
+.ob-table.is-rows tbody tr {
+  cursor: pointer;
+}
+
+.ob-mcell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ob-mcell-main {
+  min-width: 0;
+}
+
+.ob-vcell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* In a dense table row the row actions sit closer together than in a
+   document header. */
+.ob-table .ob-doc-actions {
+  gap: var(--ob-space-1);
+}
+
+.ob-table .ob-icon-btn {
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   29. Verify: document groups and run detail
+   -------------------------------------------------------------------------- */
+
+.ob-card-head.is-ruled {
+  border-bottom: 1px solid var(--ob-line);
+}
+
+.verify-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 32px;
+  align-items: start;
+}
+
+.verify-matter + .verify-matter {
+  margin-top: 24px;
+}
+
+.verify-head-main {
+  min-width: 0;
+}
+
+.verify-head-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 24px 24px;
+}
+
+.legend-row {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.legend-text {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-muted);
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  font-size: var(--ob-fs-13);
+  color: var(--ob-ink);
+}
+
+.source-row + .source-row {
+  border-top: 1px solid var(--ob-line);
+}
+
+.source-row svg {
+  color: var(--ob-subtle);
+}
+
+.source-row .ob-status {
+  margin-left: auto;
+}
+
+.verify-rail-card .ob-card-body {
+  padding-bottom: 8px;
+}
+
+@media (max-width: 1180px) {
+  .verify-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ob-docgroup + .ob-docgroup {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-docgroup-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  min-width: 0;
+}
+
+.ob-docgroup-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-docgroup-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ob-ink);
+}
+
+.ob-docgroup-title:hover {
+  color: var(--ob-link);
+}
+
+.ob-docgroup-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-docgroup-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.ob-clearstrip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--ob-line);
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-clearstrip svg {
+  color: var(--ob-success);
+}
+
+.ob-clearstrip span:last-child {
+  margin-left: auto;
+}
+
+.ob-run-progress {
+  padding: 24px;
+}
+
+.ob-run-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.ob-run-progress-title {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+}
+
+.ob-run-progress-meta {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-run-progress-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-checkrow {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 0;
+}
+
+.ob-checkrow + .ob-checkrow {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-checkrow-icon {
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-checkrow-icon.is-success {
+  color: var(--ob-success);
+}
+
+.ob-checkrow-icon.is-danger {
+  color: var(--ob-danger);
+}
+
+.ob-checkrow-icon.is-warning {
+  color: var(--ob-warning);
+}
+
+.ob-checkrow-icon.is-info {
+  color: var(--ob-info);
+}
+
+.ob-checkrow-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.ob-checkrow-meta {
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-checkrow-end {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   30. Artefacts: a source that has been withdrawn
+   -------------------------------------------------------------------------- */
+
+.ob-artefact.is-withdrawn .ob-artefact-icon {
+  background: var(--ob-warning-soft);
+  color: var(--ob-warning);
+}
+
+.ob-artefact-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-warning);
+  margin-top: 8px;
+  max-width: var(--ob-measure);
+}
+
+.ob-artefact-warning svg {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   31. Dialog forms
+   -------------------------------------------------------------------------- */
+
+.ob-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.ob-dialog-form .ob-form {
+  margin-top: 0;
+  max-width: none;
+}
+
+.ob-dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ob-dialog-section-title {
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-subtle);
+}
+
+.ob-dialog-note {
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-subtle);
+}
+
+.ob-dialog-foot--split {
+  justify-content: space-between;
+}
+
+.ob-dialog-foot--split .ob-dialog-foot-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ob-dialog-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ob-dialog-list .ob-row {
+  padding: 8px 12px;
+  border-radius: var(--ob-r-sm);
+}
+
+/* --------------------------------------------------------------------------
+   32. Matters: a selected row and its context panel
+   -------------------------------------------------------------------------- */
+
+.ob-peek-head {
+  padding: 16px 24px 16px;
+}
+
+.ob-peek-title {
+  font-size: var(--ob-fs-14);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.ob-peek-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-peek-sec {
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-peek-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-subtle);
+  margin-bottom: 8px;
+}
+
+.ob-peek-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  min-width: 0;
+}
+
+.ob-peek-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-peek-row-title {
+  display: block;
+  font-size: var(--ob-fs-13);
+  line-height: 1.4;
+  color: var(--ob-ink);
+  overflow-wrap: break-word;
+}
+
+.ob-peek-row-sub {
+  display: block;
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-peek-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-peek-foot .ob-btn--secondary {
+  flex: 1;
+}
+
+@media (max-width: 1240px) {
+  .ob-settings {
+    grid-template-columns: 184px minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .ob-auth-sheet {
+    width: min(320px, 100%);
+  }
+
+  .ob-statepage {
+    min-height: calc(100vh - 116px);
+  }
+
+  .ob-finding-compare {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 100%;
+  }
+
+  .ob-compare-arrow {
+    display: none;
+  }
+
+  .ob-finding-where {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Below 1100 the two-column settings frame leaves too little for the
+     members and invites tables, so the nav becomes a row above the body. */
+  .ob-settings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .ob-settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .ob-settings-link {
+    padding: 0 12px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   33. Fitting chrome and the loading frame
+   -------------------------------------------------------------------------- */
+
+/* Long matter names shrink in the top bar instead of running under search. */
+.ob-crumbs--fit {
+  overflow: hidden;
+}
+
+.ob-crumbs--fit .ob-crumb-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Skeleton on a canvas or card needs more contrast than the inline specimen. */
+.ob-skeleton--strong {
+  background: linear-gradient(
+    100deg,
+    var(--ob-surface-3-hover) 30%,
+    var(--ob-line-strong) 50%,
+    var(--ob-surface-3-hover) 70%
+  );
+  background-size: 220% 100%;
+}
+
+/* --------------------------------------------------------------------------
+   34. First-run workspace: the shell has nothing to pin yet
+   -------------------------------------------------------------------------- */
+
+.ob-app.is-empty .ob-nav-count,
+.ob-app.is-empty .ob-nav-label,
+.ob-app.is-empty .ob-pin {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   35. Editor chrome
+   -------------------------------------------------------------------------- */
+
+/* A keyboard hint inside a filled button reads as part of the label. */
+.ob-btn--primary .ob-kbd {
+  background: rgba(0, 0, 0, 0.18);
+  box-shadow: none;
+  color: var(--ob-on-brand);
+}
+
+/* Saving: one state at a time. */
+.ob-save-state.is-dirty {
+  color: var(--ob-warning);
+}
+
+.ob-save-state.is-dirty svg {
+  color: var(--ob-warning);
+}
+
+.ob-save-state.is-error {
+  color: var(--ob-danger);
+}
+
+.ob-save-state.is-error svg {
+  color: var(--ob-danger);
+}
+
+/* Who else is here. Presence is a state, not a status, so it stays quiet. */
+.ob-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+.ob-presence .ob-dot {
+  background: var(--ob-success);
+}
+
+/* Track changes: a mode, so it reads as a switch inside a quiet pill. */
+.ob-trackpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px 0 12px;
+  border-radius: var(--ob-r-pill);
+  background: var(--ob-surface-2);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-12);
+  white-space: nowrap;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease),
+    box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-trackpill:hover {
+  color: var(--ob-ink);
+  box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+}
+
+.ob-trackpill.is-on {
+  background: var(--ob-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--ob-brand-line);
+  color: var(--ob-ink);
+  font-weight: 500;
+}
+
+.ob-trackpill .ob-switch {
+  width: 26px;
+  height: 16px;
+  flex-basis: 26px;
+}
+
+.ob-trackpill .ob-switch::after {
+  width: 12px;
+  height: 12px;
+}
+
+.ob-trackpill .ob-switch:checked::after {
+  transform: translateX(10px);
+}
+
+/* Same control, ribbon height. */
+.ob-trackpill--sm {
+  height: 24px;
+  padding: 0 8px;
+  gap: 8px;
+}
+
+/* The information panel's quiet asides. */
+.ob-infonote {
+  display: flex;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-2);
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-muted);
+}
+
+.ob-infonote > svg {
+  margin-top: 4px;
+  color: var(--ob-subtle);
+}
+
+.ob-infonote b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ob-ink);
+  font-weight: 500;
+}
+
+/* Find and replace: one quiet bar under the ribbon. */
+.ob-findbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--ob-surface);
+  box-shadow: inset 0 -1px 0 var(--ob-line);
+}
+
+.ob-findbar-field {
+  flex: 1 1 180px;
+  max-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-surface-2);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  color: var(--ob-subtle);
+}
+
+.ob-findbar-field:focus-within {
+  box-shadow:
+    inset 0 0 0 1px var(--ob-brand),
+    0 0 0 3px var(--ob-brand-soft);
+}
+
+.ob-findbar-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ob-ink);
+  font-size: var(--ob-fs-13);
+}
+
+.ob-findbar-field input::placeholder {
+  color: var(--ob-subtle);
+}
+
+.ob-findbar-count {
+  min-width: 52px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ob-findbar-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ob-findbar-opt .ob-check {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
+.ob-findbar-opt .ob-check:checked::after {
+  width: 7px;
+  height: 3px;
+}
+
+/* Ribbon widths. Selects carry their own size; there is no local CSS. */
+.ob-rsel--font {
+  width: 118px;
+}
+
+.ob-rsel--size {
+  width: 58px;
+}
+
+.ob-rsel--style {
+  width: 108px;
+}
+
+.ob-rsel--spacing {
+  width: 54px;
+}
+
+.ob-rsel--markup {
+  width: 120px;
+}
+
+.ob-rsel--margins {
+  width: 104px;
+}
+
+.ob-rsel--zoom {
+  width: 58px;
+}
+
+.ob-rsel--orientation {
+  width: 96px;
+}
+
+/* An icon plus a word, where the ribbon has room for both. */
+.ob-rbtn--wide {
+  padding: 0 8px;
+}
+
+/* A ribbon on an older version: present, visibly inert. */
+.ob-ribbon.is-locked .ob-ribbon-row {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.ob-ribbon.is-locked .ob-ribbon-tab {
+  color: var(--ob-subtle);
+}
+
+.ob-ribbon.is-locked .ob-ribbon-tab.is-active {
+  color: var(--ob-muted);
+}
+
+/* --------------------------------------------------------------------------
+   36. Comments
+   -------------------------------------------------------------------------- */
+
+.ob-thread {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ob-thread-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px 0;
+  min-width: 0;
+}
+
+.ob-thread-item + .ob-thread-item {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-thread-item.is-reply {
+  grid-template-columns: 22px minmax(0, 1fr);
+  padding-left: 16px;
+}
+
+.ob-thread-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+}
+
+.ob-thread-who {
+  color: var(--ob-ink);
+  font-weight: 500;
+}
+
+.ob-thread-text {
+  margin-top: 4px;
+  font-size: var(--ob-fs-13);
+  line-height: 1.55;
+  color: var(--ob-ink);
+}
+
+.ob-thread-text p + p {
+  margin-top: 8px;
+}
+
+.ob-thread-acts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: var(--ob-fs-12);
+}
+
+.ob-thread-act {
+  color: var(--ob-muted);
+  font-size: var(--ob-fs-12);
+}
+
+.ob-thread-act:hover {
+  color: var(--ob-ink);
+}
+
+.ob-thread-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 12px 32px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+}
+
+.ob-thread-more:hover {
+  color: var(--ob-ink);
+}
+
+.ob-thread-compose {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-2);
+}
+
+.ob-thread-compose .ob-textarea {
+  min-height: 56px;
+  padding: 4px 0;
+  background: none;
+  box-shadow: none;
+  font-size: var(--ob-fs-13);
+}
+
+.ob-thread-compose .ob-textarea:focus {
+  box-shadow: none;
+}
+
+.ob-thread-send {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   37. Review: legend and bulk selection
+   -------------------------------------------------------------------------- */
+
+.ob-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  min-width: 0;
+}
+
+.ob-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.ob-legend-swatch {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 2px;
+  background: var(--ob-subtle);
+}
+
+.ob-legend-swatch.is-brand {
+  background: var(--ob-brand);
+}
+
+.ob-legend-swatch.is-warning {
+  background: var(--ob-warning);
+}
+
+.ob-legend-swatch.is-success {
+  background: var(--ob-success);
+}
+
+.ob-legend-swatch.is-danger {
+  background: var(--ob-danger);
+}
+
+.ob-legend-swatch.is-info {
+  background: var(--ob-info);
+}
+
+.ob-legend-swatch.is-kept {
+  background: transparent;
+  border: 1px dashed var(--ob-muted);
+}
+
+/* The ink bar used for a redaction, on any surface. */
+.ob-legend-swatch.is-ink {
+  background: #241e17;
+  box-shadow: 0 0 0 1px var(--ob-line-strong);
+}
+
+.ob-bulkbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 12px;
+  background: var(--ob-brand-soft);
+  box-shadow: inset 0 1px 0 var(--ob-brand-line);
+}
+
+.ob-bulkbar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ob-bulkbar-count {
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-bulkbar-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-bulkbar-acts .ob-btn {
+  flex: 1 1 auto;
+}
+
+/* --------------------------------------------------------------------------
+   38. Versions and compare
+   -------------------------------------------------------------------------- */
+
+.ob-version-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.ob-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ob-space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.ob-compare-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--ob-r-lg);
+  background: var(--ob-surface);
+  overflow: hidden;
+}
+
+.ob-compare-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  min-width: 0;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-compare-head b {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-compare-head span {
+  white-space: nowrap;
+}
+
+/* The paper inside a compare pane. Same paper palette, smaller margins. */
+.ob-compare-doc {
+  min-height: 460px;
+  padding: 32px 32px 40px;
+  background: var(--ob-paper);
+  color: var(--ob-paper-ink);
+  font-family: var(--ob-font-serif);
+  font-size: var(--ob-fs-13);
+  line-height: 1.7;
+}
+
+.ob-compare-doc h4 {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  margin: 24px 0 4px;
+  color: var(--ob-paper-ink);
+}
+
+.ob-compare-doc h4:first-child {
+  margin-top: 0;
+}
+
+.ob-compare-doc p {
+  margin: 0 0 8px;
+}
+
+/* --------------------------------------------------------------------------
+   39. Upload
+   -------------------------------------------------------------------------- */
+
+.ob-uplist {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ob-uprow {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 16px 0;
+  min-width: 0;
+}
+
+.ob-uprow + .ob-uprow {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-uprow-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--ob-surface-3);
+  color: var(--ob-subtle);
+  margin-top: 4px;
+}
+
+.ob-uprow.is-done .ob-uprow-icon {
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-uprow.is-error .ob-uprow-icon {
+  background: var(--ob-danger-soft);
+  color: var(--ob-danger);
+}
+
+.ob-uprow-main {
+  min-width: 0;
+}
+
+.ob-uprow-name {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-uprow-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-uprow .ob-progress {
+  height: 3px;
+  margin-top: 8px;
+}
+
+.ob-uprow-error {
+  margin-top: 8px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-danger);
+}
+
+.ob-uprow-acts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.ob-uprow.is-error .ob-uprow-name {
+  color: var(--ob-ink);
+}
+
+/* --------------------------------------------------------------------------
+   40. Menus, pickers and dialogs
+   -------------------------------------------------------------------------- */
+
+.ob-menu--panel {
+  width: 328px;
+  min-width: 328px;
+  padding: 8px;
+}
+
+/* Open upwards when the trigger sits near the bottom of the window. */
+.ob-menu.is-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.ob-menu-item--stack {
+  height: auto;
+  min-height: 34px;
+  padding: 8px 12px;
+  align-items: flex-start;
+  white-space: normal;
+}
+
+.ob-menu-item--stack > svg {
+  margin-top: 4px;
+}
+
+.ob-menu-item-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-subtle);
+  white-space: normal;
+}
+
+.ob-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--ob-r-sm);
+  min-width: 0;
+}
+
+.ob-person-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-person-name {
+  display: block;
+  font-size: var(--ob-fs-13);
+  line-height: 1.35;
+  color: var(--ob-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-person-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-person-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+  white-space: nowrap;
+}
+
+.ob-person-role:hover {
+  color: var(--ob-ink);
+}
+
+/* A single-choice list inside a dialog. */
+.ob-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ob-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: var(--ob-r-sm);
+  text-align: left;
+  font-size: var(--ob-fs-13);
+  color: var(--ob-muted);
+  min-width: 0;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    color var(--ob-fast) var(--ob-ease);
+}
+
+.ob-pick:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-pick.is-active {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+}
+
+.ob-pick-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-pick-title {
+  display: block;
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ob-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-pick-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A picker row with long names: wrap instead of truncating. */
+.ob-pick--wrap .ob-pick-title,
+.ob-pick--wrap .ob-pick-sub {
+  white-space: normal;
+}
+
+.ob-pick-end {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+/* Table size picker. */
+.ob-gridpick {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 4px;
+}
+
+.ob-gridpick-cell {
+  width: 22px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--ob-surface-3);
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-gridpick-cell.is-on {
+  background: var(--ob-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--ob-brand-line);
+}
+
+.ob-gridpick-label {
+  margin-top: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A quoted span or clause inside a dialog. */
+.ob-quote {
+  padding: 12px 12px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-2);
+  font-size: var(--ob-fs-13);
+  line-height: 1.55;
+  color: var(--ob-ink);
+}
+
+.ob-quote-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+/* Weighted choice: two options that are not equal in consequence. */
+.ob-choicecard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 16px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-2);
+  box-shadow: inset 0 0 0 1px var(--ob-line);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--ob-fast) var(--ob-ease),
+    box-shadow var(--ob-fast) var(--ob-ease);
+}
+
+.ob-choicecard:hover {
+  box-shadow: inset 0 0 0 1px var(--ob-line-strong);
+}
+
+.ob-choicecard.is-active {
+  background: var(--ob-brand-soft);
+  box-shadow: inset 0 0 0 1px var(--ob-brand-line);
+}
+
+.ob-choicecard .ob-radio {
+  margin-top: 4px;
+}
+
+.ob-choicecard-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-choicecard-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-choicecard-text {
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.5;
+  color: var(--ob-muted);
+}
+
+/* A long dialog keeps its head and footer in place and scrolls the middle. */
+.ob-dialog--fixed {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+.ob-dialog--fixed .ob-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ob-dialog--fixed .ob-dialog-foot {
+  flex: 0 0 auto;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ob-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   41. Search
+   -------------------------------------------------------------------------- */
+
+.ob-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ob-shortcut {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 16px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface);
+  text-align: left;
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-shortcut:hover {
+  background: var(--ob-surface-2);
+}
+
+.ob-shortcut-title {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-shortcut-meta {
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+/* The result whose preview is showing. */
+.ob-result.is-current {
+  background: var(--ob-hover);
+  box-shadow: inset 2px 0 0 var(--ob-brand);
+}
+
+.ob-facet-group {
+  padding: 16px 0;
+}
+
+.ob-facet-group:first-child {
+  padding-top: 0;
+}
+
+.ob-facet-group + .ob-facet-group {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-facet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  color: var(--ob-ink);
+}
+
+.ob-facet {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: var(--ob-fs-13);
+  line-height: 1.45;
+  color: var(--ob-muted);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.ob-facet:hover {
+  color: var(--ob-ink);
+}
+
+.ob-facet .ob-check {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+  margin-top: 4px;
+}
+
+.ob-facet .ob-check:checked::after {
+  width: 7px;
+  height: 3px;
+}
+
+.ob-facet-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.ob-facet-n {
+  flex: 0 0 auto;
+  padding-left: 4px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.55;
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-facet-more {
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-muted);
+}
+
+.ob-facet-more:hover {
+  color: var(--ob-ink);
+}
+
+/* A summary block, e.g. the held point of a judgment. */
+.ob-held {
+  padding: 12px 16px;
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-2);
+}
+
+.ob-held-title {
+  margin-bottom: 4px;
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-subtle);
+}
+
+.ob-held p {
+  font-size: var(--ob-fs-13);
+  line-height: 1.6;
+  color: var(--ob-ink);
+}
+
+.ob-case {
+  font-style: italic;
+}
+
+/* The Add to matter popover anchors to the button that opens it. */
+.ob-add-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* --------------------------------------------------------------------------
+   42. Judgment
+   -------------------------------------------------------------------------- */
+
+.ob-para {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  min-width: 0;
+}
+
+.ob-para-n {
+  padding-top: 4px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.55;
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-para-body {
+  min-width: 0;
+}
+
+.ob-para-body p + p {
+  margin-top: 12px;
+}
+
+.ob-jump {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ob-jump-item {
+  display: block;
+  padding: 8px 8px;
+  border-radius: var(--ob-r-xs);
+  font-size: var(--ob-fs-13);
+  line-height: 1.45;
+  color: var(--ob-muted);
+}
+
+.ob-jump-item:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-jump-item.is-active {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+/* --------------------------------------------------------------------------
+   43. Legislation
+   -------------------------------------------------------------------------- */
+
+.ob-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ob-toc-part {
+  padding: 16px 8px 4px;
+  font-size: var(--ob-fs-12);
+  font-weight: 400;
+  color: var(--ob-muted);
+}
+
+.ob-toc-part:first-child {
+  padding-top: 0;
+}
+
+.ob-toc-chapter {
+  padding: 8px 8px 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+.ob-toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 8px;
+  border-radius: var(--ob-r-xs);
+  font-size: var(--ob-fs-13);
+  line-height: 1.4;
+  color: var(--ob-muted);
+  min-width: 0;
+}
+
+.ob-toc-row:hover {
+  background: var(--ob-hover);
+  color: var(--ob-ink);
+}
+
+.ob-toc-row.is-active {
+  background: var(--ob-brand-soft);
+  color: var(--ob-ink);
+}
+
+.ob-toc-num {
+  flex: 0 0 50px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-toc-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-statute {
+  max-width: 68ch;
+  font-size: var(--ob-fs-14);
+  line-height: 1.75;
+  color: var(--ob-ink);
+}
+
+.ob-statute p {
+  margin: 0 0 8px;
+}
+
+.ob-statute .is-indent {
+  padding-left: 24px;
+}
+
+.ob-statute .is-sub {
+  margin-top: 12px;
+}
+
+/* A later or earlier case in a source's rail. */
+.ob-related {
+  display: block;
+  padding: 12px 0;
+}
+
+.ob-related + .ob-related {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-related-case {
+  display: block;
+  font-size: var(--ob-fs-13);
+  line-height: 1.45;
+  color: var(--ob-ink);
+}
+
+.ob-related:hover .ob-related-case {
+  color: var(--ob-link);
+}
+
+.ob-related-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  color: var(--ob-subtle);
+}
+
+.ob-cite-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: var(--ob-fs-13);
+  color: var(--ob-muted);
+}
+
+.ob-cite-row:hover {
+  color: var(--ob-ink);
+}
+
+.ob-cite-row span {
+  flex: 0 0 auto;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   44. Redact
+   -------------------------------------------------------------------------- */
+
+.ob-run {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 16px 0;
+  min-width: 0;
+}
+
+.ob-run + .ob-run {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-run-main {
+  min-width: 0;
+}
+
+.ob-run-name {
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-run-meta {
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-run-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-run-state .ob-btn {
+  margin-left: auto;
+}
+
+.ob-run .ob-progress {
+  height: 3px;
+  margin-top: 8px;
+}
+
+/* A detected span in the review panel. */
+.ob-spanrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  min-width: 0;
+  transition: background var(--ob-fast) var(--ob-ease);
+}
+
+.ob-spanrow + .ob-spanrow {
+  border-top: 1px solid var(--ob-line);
+}
+
+.ob-spanrow:hover {
+  background: var(--ob-hover);
+}
+
+.ob-spanrow.is-active {
+  background: var(--ob-brand-soft);
+}
+
+.ob-spanrow-cat {
+  font-size: var(--ob-fs-12);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+}
+
+.ob-spanrow-state {
+  justify-self: end;
+}
+
+.ob-spanrow-text {
+  grid-column: 1 / -1;
+  font-size: var(--ob-fs-13);
+  line-height: 1.45;
+  color: var(--ob-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-spanrow-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Paper-scoped redaction marks. The paper palette is fixed in both themes,
+   so these cannot use the theme's status washes. */
+.ob-paper .ob-span {
+  border-radius: 2px;
+  padding: 0;
+}
+
+.ob-paper .ob-span.is-pending {
+  background: #f6e9cf;
+  border-bottom: 1px solid #b58529;
+  color: #3f2f0d;
+}
+
+/* Accepted: the text is replaced by a solid bar, exactly as it will print.
+   This must not look like a tracked insertion, so no green. */
+.ob-paper .ob-span.is-accepted {
+  background: linear-gradient(#241e17, #241e17) 0 50% / 100% 0.92em no-repeat;
+  border-bottom: 0;
+  color: transparent;
+}
+
+/* Kept visible: the text stays, marked with a quiet dashed rule. */
+.ob-paper .ob-span.is-rejected {
+  background: transparent;
+  border-bottom: 1px dashed #8a7f72;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ob-paper .ob-span.is-current {
+  background: #f9efd9;
+  box-shadow: inset 0 0 0 1px #8a6d1d;
+  border-bottom: 1px solid #8a6d1d;
+  color: #3f2f0d;
+}
+
+/* A flagged authority in the document. */
+.ob-paper .ob-cite.is-flagged {
+  text-decoration: underline wavy #b4482c;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Paper annotations for moves and the active change. */
+.ob-movetag {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #f5ebd7;
+  color: #6b4d14;
+  font-family: var(--ob-font-sans);
+  font-size: var(--ob-fs-12);
+  line-height: 1.45;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.ob-paper .is-focus {
+  background: #fbf3e2;
+  border-radius: 2px;
+  box-shadow: 0 0 0 4px #fbf3e2;
+}
+
+/* The result of a decision, in place of its buttons. */
+.ob-rev-result {
+  margin-top: var(--ob-space-2);
+}
+
+/* Another person's caret, on the paper. Fixed palette, like the page. */
+.ob-caret {
+  position: relative;
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  margin: 0 1px;
+  vertical-align: -0.22em;
+  border-radius: 1px;
+  background: #a9803a;
+}
+
+.ob-caret::after {
+  content: attr(data-name);
+  position: absolute;
+  left: -2px;
+  bottom: calc(100% + 3px);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #a9803a;
+  color: #fffdf8;
+  font-family: var(--ob-font-sans);
+  font-size: var(--ob-fs-12);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+/* A paper-scoped success mark for a completed run. */
+.ob-empty-icon.is-success {
+  background: var(--ob-success-soft);
+  color: var(--ob-success);
+}
+
+.ob-empty-icon.is-danger {
+  background: var(--ob-danger-soft);
+  color: var(--ob-danger);
+}
+
+/* A horizontal decision bar under a page, not in a panel. */
+.ob-decision-bar--row {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+}
+
+.ob-decision-bar--row .ob-decision-acts {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.ob-decision-context {
+  min-width: 0;
+}
+
+.ob-decision-context b {
+  display: block;
+  font-size: var(--ob-fs-13);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-decision-context span {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--ob-fs-12);
+  color: var(--ob-subtle);
+}
+
+/* A sample redaction bar, for dialogs that preview the output. */
+.ob-inkbar {
+  display: inline-block;
+  min-width: 132px;
+  height: 14px;
+  border-radius: 1px;
+  background: #241e17;
+  vertical-align: -2px;
+}
+
+/* A small sheet thumbnail, for a redacted or exported copy. */
+.ob-sheet {
+  position: relative;
+  width: 156px;
+  height: 204px;
+  padding: 24px 16px;
+  border-radius: 3px;
+  background: var(--ob-paper);
+  box-shadow: var(--ob-shadow-1);
+  overflow: hidden;
+}
+
+.ob-sheet-line {
+  height: 3px;
+  border-radius: 2px;
+  background: #ddd4c5;
+  margin-bottom: 8px;
+}
+
+.ob-sheet-line.is-title {
+  height: 6px;
+  width: 60%;
+  margin-bottom: 16px;
+  background: #cfc5b4;
+}
+
+.ob-sheet-line.is-short {
+  width: 72%;
+}
+
+.ob-sheet-bar {
+  height: 9px;
+  border-radius: 1px;
+  background: #241e17;
+  margin-bottom: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   45. Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 1024px) {
+  .ob-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ob-toc-row {
+    gap: 8px;
+  }
+
+  .ob-toc-num {
+    flex-basis: 44px;
+  }
+
+  .ob-toc-text {
+    font-size: var(--ob-fs-12);
+    line-height: 1.45;
+  }
+
+  .ob-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ob-menu--panel {
+    width: 300px;
+    min-width: 300px;
+  }
+
+  .ob-compare {
+    gap: var(--ob-space-3);
+  }
+
+  .ob-compare-doc {
+    padding: 24px 24px 32px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Figures: tabular only where numbers must line up
+   Inter's tabular figures also widen hyphens, which spaces out filenames and
+   references. Text keeps proportional figures; only numeric cells, dates,
+   counts and the explicit .ob-num utility use tabular figures.
+   -------------------------------------------------------------------------- */
+
+.ob-table td,
+.ob-table th,
+.ob-table-title,
+.ob-row-title,
+.ob-item-title,
+.ob-card-title,
+.ob-doc-title,
+.ob-attn-title,
+.ob-result-title,
+.ob-artefact-title,
+.ob-mono {
+  font-variant-numeric: normal;
+}
+
+.ob-table td.is-num,
+.ob-table td.is-date,
+.ob-num,
+.ob-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A flex table cell stops being part of its row: its height and divider drift.
+   Action cells stay table cells and right-align their buttons instead. */
+.ob-table td.ob-doc-actions,
+.ob-table th.ob-doc-actions {
+  display: table-cell;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ob-table td.ob-doc-actions > * + * {
+  margin-left: var(--ob-space-1);
+}
+
+/* ==========================================================================
+   PART IV — SET B REFINEMENTS (27 Oct 2026)
+
+   Light is the default theme (tokens above). The components here make
+   provenance, review counts and failure states explicit.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   39. Attention: a stated reason, then the item
+   -------------------------------------------------------------------------- */
+
+/* One quiet line above the title saying why the item is in the queue. It is
+   not a status: the status sits in the head beside the title. */
+.ob-attn-reason {
+  margin-bottom: var(--ob-space-1);
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-muted);
+}
+
+/* --------------------------------------------------------------------------
+   40. Review: counts, the undecidable move and bulk confirmation
+   -------------------------------------------------------------------------- */
+
+/* The three kinds are counted separately, so “open” is never one ambiguous
+   number. */
+.ob-rev-counts {
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-muted);
+  text-wrap: pretty;
+}
+
+.ob-rev-pin-extra {
+  margin-top: var(--ob-space-1);
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-muted);
+}
+
+/* Shown from 1025px up; its short counterpart appears at 1024 and below. */
+.ob-only-md {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .ob-only-md {
+    display: inline;
+  }
+}
+
+/* The destructive step inside the bulk bar: the count, the consequence, and
+   a way back. */
+.ob-bulkbar-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ob-space-2);
+  padding: var(--ob-space-2);
+  border-radius: var(--ob-r-sm);
+  background: var(--ob-danger-soft);
+  box-shadow: inset 0 0 0 1px var(--ob-danger-line);
+}
+
+.ob-bulkbar-confirm-text {
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-ink);
+}
+
+.ob-bulkbar-note {
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-warning);
+}
+
+/* --------------------------------------------------------------------------
+   41. Stated states that have stopped
+   -------------------------------------------------------------------------- */
+
+/* A failure never keeps shimmering: a skeleton that describes work becomes a
+   still placeholder the moment the work has stopped. */
+.ob-skeleton.is-failed,
+.is-failed .ob-skeleton,
+[data-state='failed'] .ob-skeleton,
+[data-state='error'] .ob-skeleton {
+  animation: none;
+  background: var(--ob-surface-3);
+}
+
+/* A person's role beside their name, in share lists: a value, not a badge. */
+.ob-role-label {
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-muted);
+}
+
+/* A first-use explainer directly under a section title. */
+.ob-section-hint {
+  margin-top: var(--ob-space-1);
+  font-size: var(--ob-fs-caption);
+  line-height: var(--ob-lh-caption);
+  color: var(--ob-subtle);
+  text-wrap: pretty;
+}
+
+/* Activity log columns: a date that holds its width, actions that wrap. */
+.act-grid td:nth-child(2) {
+  white-space: normal;
+}
+
+/* ==========================================================================
+   Professional-review pass: provenance, Verify, Redact export, search drawer.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Provenance
+   An editorial summary names its source and pinpoint. A link opens the
+   paragraph in the source, not in a copy of the judgment.
+   -------------------------------------------------------------------------- */
+
+.ob-provenance {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--ob-space-2);
+  font-size: var(--ob-fs-caption);
+  line-height: 1.4;
+  color: var(--ob-subtle);
+}
+
+.ob-provenance svg {
+  flex: 0 0 auto;
+  color: var(--ob-subtle);
+}
+
+.ob-provenance a,
+.ob-sourcelink {
+  color: var(--ob-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ob-provenance a:hover,
+.ob-sourcelink:hover {
+  color: var(--ob-ink);
+}
+
+.ob-provenance-sep {
+  color: var(--ob-line-strong);
+}
+
+/* The note above text that is a reconstruction, not the certified source.
+   The page sets the gap to the first section; the note adds none. */
+.ob-extract-note {
+  margin-bottom: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Sensitive material
+   A warning note for anything that can leave the firm: the redaction
+   schedule, and the reviewer-only original text in the span rail.
+   -------------------------------------------------------------------------- */
+
+.ob-infonote.is-warning {
+  background: var(--ob-warning-soft);
+  color: var(--ob-warning);
+}
+
+.ob-infonote.is-warning > svg,
+.ob-infonote.is-warning b {
+  color: var(--ob-warning);
+}
+
+/* 12/500 is not one of the six levels; the note's lead-in keeps its emphasis
+   through colour and a line break, not weight. */
+.ob-infonote b,
+.ob-finding-notice b {
+  font-weight: 400;
+}
+
+.ob-sensitive-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ob-space-2);
+  padding: var(--ob-space-3) var(--ob-space-5);
+  border-bottom: 1px solid var(--ob-line);
+  background: var(--ob-warning-soft);
+  font-size: var(--ob-fs-caption);
+  line-height: 1.45;
+  color: var(--ob-warning);
+}
+
+.ob-sensitive-note svg {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--ob-warning);
+}
+
+/* What an export does, and does not do. */
+.ob-export-list {
+  display: grid;
+  gap: var(--ob-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ob-export-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ob-space-2);
+  font-size: var(--ob-fs-caption);
+  line-height: 1.45;
+  color: var(--ob-subtle);
+}
+
+.ob-export-list svg {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--ob-success);
+}
+
+/* --------------------------------------------------------------------------
+   Verify source line
+   The exact source, paragraph and retrieval time under each finding.
+   -------------------------------------------------------------------------- */
+
+.ob-finding-source a {
+  color: var(--ob-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.ob-finding-source a:hover {
+  color: var(--ob-ink);
+}
+
+.ob-finding-source.is-warning svg {
+  color: var(--ob-warning);
+}
+
+.ob-finding-source .ob-source-meta {
+  display: block;
+  margin-top: var(--ob-space-1);
+}
+
+/* A finding that has been corrected is no longer flagged, but it is still
+   not a legal conclusion. */
+.ob-finding-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ob-space-2);
+  margin-top: var(--ob-space-3);
+  padding: var(--ob-space-3);
+  border-radius: var(--ob-r-md);
+  background: var(--ob-info-soft);
+  font-size: var(--ob-fs-caption);
+  line-height: 1.45;
+  color: var(--ob-muted);
+}
+
+.ob-finding-notice svg {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  color: var(--ob-info);
+}
+
+.ob-finding-notice b {
+  display: block;
+  margin-bottom: var(--ob-space-1);
+  color: var(--ob-ink);
+}
+
+/* --------------------------------------------------------------------------
+   Search at 1024
+   The selected result's preview becomes a dismissible drawer over the
+   results, opened from the result itself.
+   -------------------------------------------------------------------------- */
+
+.ob-preview-btn {
+  display: none;
+}
+
+@media (max-width: 1279px) {
+  .ob-preview-btn {
+    display: inline-flex;
+  }
+}
+
+.ob-preview-drawer .ob-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ob-space-3);
+}
+
+.ob-preview-drawer .ob-drawer-body > .ob-held,
+.ob-preview-drawer .ob-drawer-body > .ob-provenance {
+  margin-top: 0;
+}
+
+.ob-preview-drawer .ob-result-snippet {
+  max-width: none;
+}
+
+.ob-preview-drawer .ob-drawer-foot {
+  gap: var(--ob-space-2);
+}
+
+/* --------------------------------------------------------------------------
+   Loading and offline states
+   Informative, not theatrical: say what is loading, what is saved, and what
+   the reader can do next.
+   -------------------------------------------------------------------------- */
+
+.ob-loading-status {
+  display: flex;
+  align-items: center;
+  gap: var(--ob-space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--ob-space-5);
+  font-size: var(--ob-fs-meta);
+  line-height: var(--ob-lh-meta);
+  color: var(--ob-muted);
+}
+
+.ob-loading-status svg {
+  flex: 0 0 auto;
+  color: var(--ob-subtle);
+}
+
+.ob-loading-status .ob-status {
+  margin-left: auto;
+}
+
+.ob-slow-banner {
+  margin-bottom: var(--ob-space-5);
+}
+
+/* A long span value wraps instead of being clipped: the reviewer must see
+   every character before deciding. */
+.ob-spanrow-text--wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* --------------------------------------------------------------------------
+   Page review
+   The manual check that the exporter cannot make for the reviewer.
+   -------------------------------------------------------------------------- */
+
+.ob-review-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ob-space-3);
+  padding: var(--ob-space-3) var(--ob-space-4);
+  border-radius: var(--ob-r-md);
+  background: var(--ob-surface-3);
+}
+
+.ob-review-check .ob-check {
+  margin-top: 4px;
+}
+
+.ob-review-check-main {
+  min-width: 0;
+}
+
+.ob-review-check .ob-btn {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.ob-review-check-title {
+  display: block;
+  font-size: var(--ob-fs-item);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ob-ink);
+}
+
+.ob-review-check-text {
+  display: block;
+  margin-top: var(--ob-space-1);
+  font-size: var(--ob-fs-caption);
+  line-height: 1.45;
+  color: var(--ob-subtle);
+}
+
+/* A long confirmation dialog keeps its actions visible while the body
+   scrolls; the reader should never have to hunt for the primary button. */
+.ob-dialog--sticky-foot {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ob-dialog--sticky-foot .ob-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ob-dialog--sticky-foot .ob-dialog-foot {
+  flex: 0 0 auto;
+  margin-top: var(--ob-space-4);
+  padding-top: var(--ob-space-4);
+  border-top: 1px solid var(--ob-line);
+}
+
+/* A disclosure-page preview at dialog size, not a thumbnail. */
+.ob-paper--preview {
+  width: 100%;
+  min-height: 0;
+  padding: var(--ob-space-6);
+  font-size: var(--ob-fs-meta);
+  line-height: 1.6;
+}
+
+/* A menu opened from a drawer must sit above the drawer (z-index 100). */
+.ob-menu.is-portal {
+  z-index: 120;
+}
+
+/* Small layout helpers for new blocks, so pages add no inline styles.
+   Values are on the 4px scale. */
+.ob-mt-2 {
+  margin-top: var(--ob-space-2);
+}
+
+.ob-mt-3 {
+  margin-top: var(--ob-space-3);
+}
+
+.ob-mt-4 {
+  margin-top: var(--ob-space-4);
+}
+
+.ob-mt-5 {
+  margin-top: var(--ob-space-5);
+}

@@ -1,0 +1,2484 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obiter — Northgate Foods v Brightwater Packaging</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="obiter.css" />
+    <style>
+      .matters-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 0 0 24px;
+      }
+      .matters-toolbar .ob-search {
+        width: 288px;
+      }
+      .matters-toolbar-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .matters-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 24px;
+        align-items: start;
+      }
+      .matters-peek {
+        position: sticky;
+        top: 0;
+      }
+      .matters-table {
+        overflow: hidden;
+      }
+      .matters-table .ob-table th:nth-child(1) {
+        width: 45%;
+      }
+      .matters-table .ob-table th:nth-child(2) {
+        width: 11%;
+      }
+      .matters-table .ob-table th:nth-child(3) {
+        width: 26%;
+      }
+      .matters-table .ob-table th:nth-child(4) {
+        width: 18%;
+      }
+      .matters-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 24px;
+        border-top: 1px solid var(--ob-line);
+        font-size: 13px;
+        color: var(--ob-subtle);
+      }
+      .matters-foot b {
+        color: var(--ob-ink);
+        font-weight: 400;
+      }
+      .dialog-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+      }
+      .matter-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 24px;
+        align-items: start;
+      }
+      .matter-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        min-width: 0;
+      }
+      .matter-docs th:nth-child(1) {
+        width: 48%;
+      }
+      .matter-docs th:nth-child(2) {
+        width: 30%;
+      }
+      .matter-docs th:nth-child(3) {
+        width: 16%;
+      }
+      .matter-docs th:nth-child(4) {
+        width: 6%;
+      }
+      .matter-docs {
+        overflow: hidden;
+        table-layout: fixed;
+      }
+      .matter-empty {
+        padding: 8px 0 0;
+      }
+      .artefact-card .ob-artefact {
+        padding: 24px;
+      }
+      .artefact-card .ob-artefact-title {
+        display: block;
+      }
+      .rail-verify {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 24px;
+      }
+      .rail-verify p {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--ob-muted);
+      }
+      .rail-verify .ob-btn {
+        align-self: flex-start;
+      }
+      .share-role {
+        width: 116px;
+      }
+      .share-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 4px;
+      }
+      .share-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .share-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) 116px;
+        gap: 12px;
+        align-items: center;
+        min-height: 52px;
+        padding: 16px 0;
+      }
+      .share-row + .share-row {
+        border-top: 1px solid var(--ob-line);
+      }
+      .share-row-main {
+        min-width: 0;
+      }
+      .share-name {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+      .share-email {
+        font-size: 12px;
+        color: var(--ob-subtle);
+        margin-top: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .share-add {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 116px auto;
+        gap: 8px;
+        align-items: center;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--ob-line);
+      }
+      .artefact-tabs {
+        margin-top: 16px;
+      }
+      .artefact-search {
+        margin: 16px 0 8px;
+      }
+      .dialog-foot-note {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .overlay-menu {
+        position: relative;
+      }
+      .overlay-menu .ob-menu {
+        top: calc(100% + 8px);
+      }
+      @media (max-width: 1180px) {
+        .matters-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .matters-peek {
+          display: none;
+        }
+        .matter-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      @media (max-width: 1024px) {
+        .matters-toolbar .ob-search {
+          width: 240px;
+        }
+        .matters-table .ob-table th:nth-child(2),
+        .matters-table .ob-table td:nth-child(2) {
+          display: none;
+        }
+      }
+
+      #matterMore.is-active {
+        background: var(--ob-hover);
+        color: var(--ob-ink);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Canonical sprite: icons.svg. This inline copy keeps the page
+     self-contained and lets it work over file:// without a server. -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      style="
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+        pointer-events: none;
+      "
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <defs>
+        <!-- Brand: the Obiter monogram. One weight, one colour, no tile. -->
+        <symbol id="i-obiter" viewBox="0 0 26 26">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="7.75" cy="14.6" r="4.9" />
+            <path d="M18.25 3.4v16.1" />
+            <path d="M18.25 9.7a4.9 4.9 0 0 1 0 9.8" />
+          </g>
+        </symbol>
+
+        <!-- Navigation -->
+        <symbol id="i-home" viewBox="0 0 16 16">
+          <path
+            d="M2.4 7.1 8 2.6l5.6 4.5V13a.6.6 0 0 1-.6.6h-3.3V9.4H6.3v4.2H3a.6.6 0 0 1-.6-.6z"
+          />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 16 16">
+          <circle cx="7" cy="7" r="4.2" />
+          <path d="m10.1 10.1 3.5 3.5" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 16 16">
+          <path
+            d="M2.2 5.1a1.5 1.5 0 0 1 1.5-1.5h2.4l1.3 1.6h4.9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H3.7a1.5 1.5 0 0 1-1.5-1.5z"
+          />
+        </symbol>
+        <symbol id="i-document" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 9h5.2M5.4 11.2h3.4" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6" />
+        </symbol>
+        <symbol id="i-verify" viewBox="0 0 16 16">
+          <path
+            d="M8 2.1 12.9 4v3.5c0 2.9-2.1 4.9-4.9 6.2-2.8-1.3-4.9-3.3-4.9-6.2V4z"
+          />
+          <path d="m5.9 7.8 1.4 1.4 3-3.4" />
+        </symbol>
+        <symbol id="i-redact" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 6.6h2.2M5.4 11.4h5.2" />
+          <rect
+            x="5.4"
+            y="8.4"
+            width="5.2"
+            height="1.9"
+            rx=".4"
+            fill="currentColor"
+            stroke="none"
+          />
+        </symbol>
+        <symbol id="i-research" viewBox="0 0 16 16">
+          <path
+            d="M6.5 2.4h3M7.1 2.4v3.8l-3 6.2a1.1 1.1 0 0 0 1 1.6h5.8a1.1 1.1 0 0 0 1-1.6l-3-6.2V2.4"
+          />
+          <path d="M5.4 10.6h5.2" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 16 16">
+          <path d="M2.4 5h4.2M10.2 5h3.4M2.4 11h3.2M8.2 11h5.4" />
+          <circle cx="8" cy="5" r="1.6" />
+          <circle cx="6.4" cy="11" r="1.6" />
+        </symbol>
+
+        <!-- Common actions -->
+        <symbol id="i-plus" viewBox="0 0 16 16">
+          <path d="M8 3v10M3 8h10" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16">
+          <path d="M3 8h10" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 16 16">
+          <path d="M8 10.4V2.6M5.2 5.4 8 2.6l2.8 2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 16 16">
+          <path d="M8 2.6v7.8M5.2 7.6 8 10.4l2.8-2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-share" viewBox="0 0 16 16">
+          <circle cx="3.9" cy="8" r="1.7" />
+          <circle cx="12.1" cy="3.9" r="1.7" />
+          <circle cx="12.1" cy="12.1" r="1.7" />
+          <path d="m5.4 7.2 5.2-2.5M5.4 8.8l5.2 2.5" />
+        </symbol>
+        <symbol id="i-more" viewBox="0 0 16 16">
+          <circle cx="3.4" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="12.6" cy="8" r="1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 16 16">
+          <path d="M2.6 4.2h10.8M6 4.2V2.8h4v1.4" />
+          <path d="M4.4 4.2l.6 9h6l.6-9" />
+          <path d="M6.6 6.6v4.2M9.4 6.6v4.2" />
+        </symbol>
+        <symbol id="i-edit" viewBox="0 0 16 16">
+          <path d="M2.6 13.4h2.8L13 5.8 10.2 3 2.6 10.6z" />
+          <path d="m9.3 3.9 2.8 2.8" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 16 16">
+          <rect x="5.4" y="5.4" width="8" height="8" rx="1.2" />
+          <path
+            d="M10.6 5.4V3.8a1.2 1.2 0 0 0-1.2-1.2H3.8a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.6"
+          />
+        </symbol>
+        <symbol id="i-print" viewBox="0 0 16 16">
+          <path d="M4.6 5.6V2.4h6.8v3.2" />
+          <rect x="2.4" y="5.6" width="11.2" height="5.4" rx="1.1" />
+          <path d="M4.6 9.4h6.8v4.2H4.6z" />
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 16 16">
+          <path d="M9.4 2.6h4v4M13.4 2.6 7.6 8.4" />
+          <path
+            d="M11.4 9.4v3.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V5.6a1 1 0 0 1 1-1h3.2"
+          />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 16 16">
+          <path
+            d="M6.4 9.6a2.6 2.6 0 0 0 3.7 0l1.8-1.8a2.6 2.6 0 0 0-3.7-3.7l-.7.7"
+          />
+          <path
+            d="M9.6 6.4a2.6 2.6 0 0 0-3.7 0L4.1 8.2a2.6 2.6 0 0 0 3.7 3.7l.7-.7"
+          />
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 16 16">
+          <path d="M6.2 2.4h3.6l-.5 3.4 2.3 1.8v1.3H4.4V7.6l2.3-1.8z" />
+          <path d="M8 8.9v4.7" />
+        </symbol>
+        <symbol id="i-filter" viewBox="0 0 16 16">
+          <path d="M2.6 4h10.8M4.6 8h6.8M6.6 12h2.8" />
+        </symbol>
+        <symbol id="i-sort" viewBox="0 0 16 16">
+          <path d="M4.4 3.2v9.6M2.4 10.8l2 2 2-2" />
+          <path d="M11.6 12.8V3.2M9.6 5.2l2-2 2 2" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 16 16">
+          <path
+            d="M1.7 8S3.9 3.9 8 3.9 14.3 8 14.3 8 12.1 12.1 8 12.1 1.7 8 1.7 8z"
+          />
+          <circle cx="8" cy="8" r="2" />
+        </symbol>
+        <symbol id="i-eye-off" viewBox="0 0 16 16">
+          <path d="M2.2 2.2 13.8 13.8" />
+          <path
+            d="M6.3 4.3A6.5 6.5 0 0 1 8 4.1c4.1 0 6.3 3.9 6.3 3.9a10 10 0 0 1-2.2 2.6"
+          />
+          <path
+            d="M10.1 12A6.7 6.7 0 0 1 8 12.1C3.9 12.1 1.7 8 1.7 8a10.5 10.5 0 0 1 2.3-2.7"
+          />
+        </symbol>
+        <symbol id="i-history" viewBox="0 0 16 16">
+          <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+          <path d="M2.4 2.6v3.6h3.6" />
+          <path d="M8 5.4V8l2 1.3" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 16 16">
+          <path d="M13.2 8A5.3 5.3 0 1 1 11.3 3.8" />
+          <path d="M13.2 2.6v4h-4" />
+        </symbol>
+        <symbol id="i-undo" viewBox="0 0 16 16">
+          <path d="M6.4 4 3.4 7l3 3" />
+          <path d="M3.6 7h5.6a3.4 3.4 0 0 1 0 6.8H6.6" />
+        </symbol>
+        <symbol id="i-redo" viewBox="0 0 16 16">
+          <path d="M9.6 4l3 3-3 3" />
+          <path d="M12.4 7H6.8a3.4 3.4 0 0 0 0 6.8h2.6" />
+        </symbol>
+        <symbol id="i-bold" viewBox="0 0 16 16">
+          <path
+            d="M4.8 3h3.7a2.4 2.4 0 0 1 0 4.8H4.8zM4.8 7.8h4.4a2.6 2.6 0 0 1 0 5.2H4.8z"
+          />
+        </symbol>
+        <symbol id="i-italic" viewBox="0 0 16 16">
+          <path d="M9.8 3H6.6M9.4 13H6.2M9.2 3 6.8 13" />
+        </symbol>
+        <symbol id="i-underline" viewBox="0 0 16 16">
+          <path d="M5 3v4.2a3 3 0 0 0 6 0V3M4 13.5h8" />
+        </symbol>
+        <symbol id="i-align-left" viewBox="0 0 16 16">
+          <path d="M2.8 4h10.4M2.8 8h6.4M2.8 12h9" />
+        </symbol>
+        <symbol id="i-list-ordered" viewBox="0 0 16 16">
+          <path d="M6.4 4h6.8M6.4 8h6.8M6.4 12h6.8" />
+          <path d="M2.6 2.8h1v3M2.6 10.4h1.8l-1.8 2.1h1.8" />
+        </symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16">
+          <rect x="2.4" y="3" width="11.2" height="10" rx="1.2" />
+          <path d="M8 3v10" />
+        </symbol>
+        <symbol id="i-bell" viewBox="0 0 16 16">
+          <path
+            d="M12.2 6.4a4.2 4.2 0 0 0-8.4 0c0 3.2-1.2 4-1.2 4h10.8s-1.2-.8-1.2-4z"
+          />
+          <path d="M6.7 12.8a1.5 1.5 0 0 0 2.6 0" />
+        </symbol>
+        <symbol id="i-keyboard" viewBox="0 0 16 16">
+          <rect x="1.8" y="4" width="12.4" height="8" rx="1.4" />
+          <path
+            d="M4.2 6.6h.1M6.8 6.6h.1M9.4 6.6h.1M12 6.6h.1M4.2 9.4h.1M6.4 9.4h3M11.8 9.4h.1"
+          />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 16 16">
+          <path d="m4 4 8 8M12 4l-8 8" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 16 16">
+          <path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 16 16">
+          <path d="m3.2 8.4 3 3 6.6-7" />
+        </symbol>
+        <symbol id="i-minus-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M5.2 8h5.6" />
+        </symbol>
+        <symbol id="i-check-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+
+        <!-- Chevrons and arrows -->
+        <symbol id="i-chevron-down" viewBox="0 0 16 16">
+          <path d="m4.5 6.4 3.5 3.5 3.5-3.5" />
+        </symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 16 16">
+          <path d="m4.5 9.6 3.5-3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 16 16">
+          <path d="m6.4 4.5 3.5 3.5-3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 16 16">
+          <path d="m9.6 4.5-3.5 3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevrons-left" viewBox="0 0 16 16">
+          <path d="m7.8 4.6-3.4 3.4 3.4 3.4M11.8 4.6 8.4 8l3.4 3.4" />
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 16 16">
+          <path d="M13 8H3M6.5 4.5 3 8l3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 16 16">
+          <path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 16 16">
+          <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" />
+        </symbol>
+
+        <!-- Status and meaning -->
+        <symbol id="i-flag" viewBox="0 0 16 16">
+          <path d="M3.8 14V2.4M3.8 2.6h8.1l-1.3 2.9 1.3 2.9H3.8" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 16 16">
+          <path d="M8 2.4 14 13.2H2z" />
+          <path d="M8 6.4v3.1M8 11.5v.1" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M8 7.3v3.9M8 5.2v.1" />
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path
+            d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.75c-.5.3-.8.75-.8 1.3v.45M8 11.9v.1"
+          />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.6" />
+          <path d="M8 4.7V8l2.2 1.4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" />
+        </symbol>
+        <symbol id="i-lock-open" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.6-.8" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 16 16">
+          <circle cx="8" cy="5.4" r="2.6" />
+          <path d="M3.4 13.6a4.6 4.6 0 0 1 9.2 0" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 16 16">
+          <circle cx="6" cy="5.6" r="2.3" />
+          <path d="M2.4 13.2a3.8 3.8 0 0 1 7.2 0" />
+          <path
+            d="M10.6 3.6a2.3 2.3 0 0 1 0 4.2M11.4 9.7a3.6 3.6 0 0 1 2.2 3.3"
+          />
+        </symbol>
+
+        <!-- Sources and documents -->
+        <symbol id="i-scale" viewBox="0 0 16 16">
+          <path d="M8 2v11M4.6 13h6.8M2.6 4.4h10.8" />
+          <path d="M4.2 4.4 2.6 8.2h3.2zM11.8 4.4 10.2 8.2h3.2z" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 16 16">
+          <path
+            d="M2.6 3.4A1.4 1.4 0 0 1 4 2h9.4v11.6H4a1.4 1.4 0 0 0-1.4 1.4z"
+          />
+          <path d="M2.6 12.6h10.8" />
+        </symbol>
+        <symbol id="i-note" viewBox="0 0 16 16">
+          <path d="M3 3.4h10v6.6L9.4 13H3z" />
+          <path d="M9.4 13V10h3.6" />
+          <path d="M5.4 6h5.2" />
+        </symbol>
+        <symbol id="i-comment" viewBox="0 0 16 16">
+          <path
+            d="M13.2 8.1v.6a4.6 4.6 0 0 1-4.6 4.6H6.1L3 15.2v-3.1a4.6 4.6 0 0 1-.8-2.6V8.1a4.6 4.6 0 0 1 4.6-4.6h1.8a4.6 4.6 0 0 1 4.6 4.6z"
+          />
+        </symbol>
+        <symbol id="i-track-changes" viewBox="0 0 16 16">
+          <path d="M2.6 3.4v9.2" />
+          <path d="M5.2 5h7.2M5.2 8h4.4M5.2 11h7.2" />
+          <path d="M11.6 7.2v3.6M9.8 9h3.6" />
+        </symbol>
+        <symbol id="i-accept" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+        <symbol id="i-reject" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.8 5.8 4.4 4.4M10.2 5.8 5.8 10.2" />
+        </symbol>
+
+        <!-- Theme and chrome -->
+        <symbol id="i-sun" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="2.4" />
+          <path
+            d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1"
+          />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 16 16">
+          <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.8 5.8 0 1 0 6.8 6.8z" />
+        </symbol>
+        <symbol id="i-sidebar-collapse" viewBox="0 0 16 16">
+          <rect x="2" y="3" width="12" height="10" rx="1.4" />
+          <path d="M6.4 3v10M9.9 6.4 8.3 8l1.6 1.6" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 16 16">
+          <path d="M2.6 4.5h10.8M2.6 8h10.8M2.6 11.5h10.8" />
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 16 16">
+          <path d="M5.6 4h8M5.6 8h8M5.6 12h8" />
+          <circle cx="2.9" cy="4" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="8" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="12" r=".8" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 16 16">
+          <rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1" />
+        </symbol>
+        <symbol id="i-paperclip" viewBox="0 0 16 16">
+          <path
+            d="M12.6 7.4 7.8 12.2a3 3 0 0 1-4.2-4.2l5.2-5.2a2 2 0 0 1 2.8 2.8l-5.1 5.1a1 1 0 0 1-1.4-1.4l4.6-4.6"
+          />
+        </symbol>
+        <symbol id="i-calendar" viewBox="0 0 16 16">
+          <rect x="2.4" y="3.4" width="11.2" height="10.2" rx="1.4" />
+          <path d="M2.4 6.6h11.2M5.6 2.2v2.4M10.4 2.2v2.4" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 16 16">
+          <path
+            d="M2.6 7V3.4a.8.8 0 0 1 .8-.8H7l6.4 6.4a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0z"
+          />
+          <circle cx="5.4" cy="5.4" r=".9" />
+        </symbol>
+        <symbol id="i-sparkle" viewBox="0 0 16 16">
+          <path d="M8 2.2 9.2 6l3.8 1.2L9.2 8.4 8 12.2 6.8 8.4 3 7.2 6.8 6z" />
+          <path d="M12.6 11.6v2M11.6 12.6h2" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="ob-app" id="app">
+      <aside class="ob-side" aria-label="Sidebar">
+        <div class="ob-side-head">
+          <a class="ob-logo" href="dashboard.html" aria-label="Obiter home"
+            ><svg aria-hidden="true"><use href="#i-obiter" /></svg
+          ></a>
+          <div class="ob-brand-text">
+            <div class="ob-brand-name">Obiter</div>
+            <div class="ob-brand-firm">Harrington Vale LLP</div>
+          </div>
+        </div>
+
+        <nav class="ob-nav" aria-label="Workspace">
+          <a class="ob-nav-item" href="dashboard.html" title="Home">
+            <svg aria-hidden="true"><use href="#i-home" /></svg
+            ><span class="ob-nav-text">Home</span>
+          </a>
+          <a class="ob-nav-item" href="search.html" title="Search">
+            <svg aria-hidden="true"><use href="#i-search" /></svg
+            ><span class="ob-nav-text">Search</span>
+          </a>
+          <a
+            class="ob-nav-item is-active"
+            href="matters.html"
+            title="Matters"
+            aria-current="page"
+          >
+            <svg aria-hidden="true"><use href="#i-folder" /></svg
+            ><span class="ob-nav-text">Matters</span
+            ><span class="ob-nav-count">4</span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="verify.html"
+            title="Verify — 1 flagged finding"
+          >
+            <svg aria-hidden="true"><use href="#i-verify" /></svg
+            ><span class="ob-nav-text">Verify</span
+            ><span class="ob-nav-count is-danger">1</span
+            ><span class="ob-nav-dot is-danger"></span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="redact-start.html"
+            title="Redact — 1 run in review"
+          >
+            <svg aria-hidden="true"><use href="#i-redact" /></svg
+            ><span class="ob-nav-text">Redact</span
+            ><span class="ob-nav-count is-info">1</span
+            ><span class="ob-nav-dot is-info"></span>
+          </a>
+          <a
+            class="ob-nav-item is-quiet"
+            href="#"
+            title="Research — coming soon"
+            aria-disabled="true"
+          >
+            <svg aria-hidden="true"><use href="#i-research" /></svg
+            ><span class="ob-nav-text">Research</span
+            ><span class="ob-nav-soon">Soon</span>
+          </a>
+
+          <div class="ob-nav-label">
+            <span>Pinned matters</span
+            ><button
+              class="ob-nav-add"
+              type="button"
+              title="Pin a matter"
+              aria-label="Pin a matter"
+            >
+              <svg class="is-12" aria-hidden="true"><use href="#i-plus" /></svg>
+            </button>
+          </div>
+
+          <a
+            class="ob-pin is-current"
+            href="matter.html"
+            title="Northgate Foods v Brightwater Packaging — NGF-0418"
+          >
+            <span class="ob-pin-tile">NG</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">Northgate Foods v Brightwater</span>
+              <span class="ob-pin-sub">NGF-0418 · 3 documents</span>
+            </span>
+            <span
+              class="ob-pin-dot is-danger"
+              title="1 flagged citation"
+            ></span>
+          </a>
+          <a
+            class="ob-pin"
+            href="matter-redaction.html"
+            title="FOI request: Cheshire Council 2026/114 — redaction matter"
+          >
+            <span class="ob-pin-tile">FOI</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">FOI request: Cheshire Council</span>
+              <span class="ob-pin-sub">FOI-2026-114 · in review</span>
+            </span>
+            <span class="ob-pin-dot is-info" title="Redaction in review"></span>
+          </a>
+        </nav>
+
+        <div class="ob-side-foot">
+          <button
+            class="ob-side-toggle"
+            id="sidebarToggle"
+            type="button"
+            aria-expanded="true"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <svg aria-hidden="true"><use href="#i-sidebar-collapse" /></svg
+            ><span>Collapse sidebar</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="ob-main">
+        <header class="ob-top">
+          <nav class="ob-crumbs ob-crumbs--fit" aria-label="Breadcrumb">
+            <a href="dashboard.html">Harrington Vale LLP</a>
+            <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            <a href="matters.html">Matters</a>
+            <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            <span class="ob-crumb-current"
+              >Northgate Foods v Brightwater Packaging</span
+            >
+          </nav>
+
+          <div
+            class="ob-searchbar"
+            role="button"
+            tabindex="0"
+            aria-label="Search Obiter"
+          >
+            <svg aria-hidden="true"><use href="#i-search" /></svg>
+            <span>Search Obiter</span>
+            <span class="ob-kbd">⌘K</span>
+          </div>
+
+          <button
+            class="ob-icon-btn"
+            id="themeButton"
+            type="button"
+            aria-label="Switch to dark theme"
+            data-tip="Switch theme"
+            data-tip-bottom
+            data-tip-align="end"
+          >
+            <svg class="ob-theme-sun" aria-hidden="true">
+              <use href="#i-sun" />
+            </svg>
+            <svg class="ob-theme-moon" aria-hidden="true">
+              <use href="#i-moon" />
+            </svg>
+          </button>
+
+          <div class="ob-account">
+            <button
+              class="ob-avatar-button"
+              id="accountButton"
+              type="button"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              <span class="ob-avatar">AM</span>
+            </button>
+            <div class="ob-menu" id="accountMenu" role="menu" hidden>
+              <div class="ob-menu-head">
+                <div class="ob-menu-name">Alex Morgan</div>
+                <div class="ob-menu-sub">Owner · Harrington Vale LLP</div>
+              </div>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-account.html"
+              >
+                <svg aria-hidden="true"><use href="#i-user" /></svg>Account
+                settings
+              </a>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-preferences.html"
+              >
+                <svg aria-hidden="true"><use href="#i-settings" /></svg
+                >Preferences
+              </a>
+              <button
+                class="ob-menu-item"
+                role="menuitem"
+                type="button"
+                id="menuTheme"
+              >
+                <svg class="ob-theme-sun" aria-hidden="true">
+                  <use href="#i-sun" />
+                </svg>
+                <svg class="ob-theme-moon" aria-hidden="true">
+                  <use href="#i-moon" />
+                </svg>
+                <span id="menuThemeLabel">Switch to dark theme</span>
+              </button>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                <svg aria-hidden="true"><use href="#i-keyboard" /></svg>Keyboard
+                shortcuts
+              </button>
+              <div class="ob-menu-sep"></div>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                Sign out
+              </button>
+              <div class="ob-menu-foot">Obiter · Firm workspace</div>
+            </div>
+          </div>
+        </header>
+
+        <div class="ob-content">
+          <div class="ob-wrap">
+            <div data-hide-state="new">
+              <div class="ob-page-head">
+                <div class="ob-page-head-main">
+                  <div class="ob-cluster" style="gap: 8px; margin-bottom: 8px">
+                    <span class="ob-tag">Commercial contracts</span>
+                    <span class="ob-mono ob-meta">NGF-0418</span>
+                    <span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Active</span
+                    >
+                  </div>
+                  <h1 class="ob-page-title">
+                    Northgate Foods v Brightwater Packaging
+                  </h1>
+                  <p class="ob-page-sub">
+                    Supply agreement dispute: minimum volumes and an alleged
+                    oral variation.
+                  </p>
+                </div>
+                <div class="ob-page-actions">
+                  <button class="ob-btn ob-btn--secondary" type="button">
+                    <svg aria-hidden="true"><use href="#i-upload" /></svg>Upload
+                  </button>
+                  <a class="ob-btn ob-btn--primary" href="document.html"
+                    ><svg aria-hidden="true"><use href="#i-plus" /></svg>New
+                    document</a
+                  >
+                  <a class="ob-btn ob-btn--ghost" href="#share"
+                    ><svg aria-hidden="true"><use href="#i-share" /></svg
+                    >Share</a
+                  >
+                  <div class="overlay-menu">
+                    <button
+                      class="ob-icon-btn"
+                      id="matterMore"
+                      type="button"
+                      aria-label="More matter actions"
+                      aria-haspopup="menu"
+                      aria-expanded="false"
+                    >
+                      <svg aria-hidden="true"><use href="#i-more" /></svg>
+                    </button>
+                    <div class="ob-menu" id="matterMenu" role="menu" hidden>
+                      <a class="ob-menu-item" role="menuitem" href="#edit"
+                        ><svg aria-hidden="true"><use href="#i-edit" /></svg
+                        >Edit matter details</a
+                      >
+                      <a class="ob-menu-item" role="menuitem" href="#share"
+                        ><svg aria-hidden="true"><use href="#i-users" /></svg
+                        >Manage access</a
+                      >
+                      <button
+                        class="ob-menu-item"
+                        role="menuitem"
+                        type="button"
+                      >
+                        <svg aria-hidden="true"><use href="#i-download" /></svg
+                        >Export matter
+                      </button>
+                      <div class="ob-menu-sep"></div>
+                      <button
+                        class="ob-menu-item"
+                        role="menuitem"
+                        type="button"
+                      >
+                        <svg aria-hidden="true"><use href="#i-folder" /></svg
+                        >Archive matter
+                      </button>
+                      <a
+                        class="ob-menu-item is-danger"
+                        role="menuitem"
+                        href="#delete"
+                        ><svg aria-hidden="true"><use href="#i-trash" /></svg
+                        >Delete matter</a
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="matter-grid">
+                <div>
+                  <section aria-labelledby="docs-heading">
+                    <div class="ob-section-head">
+                      <h2 class="ob-section-title" id="docs-heading">
+                        Documents
+                      </h2>
+                      <span class="ob-section-meta"
+                        >3 files · 1 needs attention</span
+                      >
+                    </div>
+                    <div class="ob-card matter-docs">
+                      <table class="ob-table is-rows">
+                        <colgroup>
+                          <col />
+                          <col />
+                          <col />
+                          <col />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Document</th>
+                            <th>Verify</th>
+                            <th class="is-date">Updated</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>
+                              <div class="ob-mcell">
+                                <span class="ob-row-icon"
+                                  ><svg aria-hidden="true">
+                                    <use href="#i-document" /></svg
+                                ></span>
+                                <div class="ob-mcell-main">
+                                  <a class="ob-table-title" href="document.html"
+                                    >advice-note-northgate.docx</a
+                                  >
+                                  <div class="ob-table-sub">
+                                    <span>Advice note</span
+                                    ><span class="ob-sep">·</span
+                                    ><span>Version 3</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div class="ob-vcell">
+                                <span class="ob-status is-danger"
+                                  ><span class="ob-dot"></span>1 flagged</span
+                                ><span class="ob-status is-warning"
+                                  ><span class="ob-dot"></span>2 need
+                                  review</span
+                                >
+                              </div>
+                            </td>
+                            <td class="ob-subtle ob-nowrap is-date">
+                              26 Oct 2026
+                            </td>
+                            <td class="ob-doc-actions">
+                              <a
+                                class="ob-icon-btn"
+                                href="document.html"
+                                aria-label="Open advice-note-northgate.docx"
+                                ><svg aria-hidden="true">
+                                  <use href="#i-chevron-right" /></svg
+                              ></a>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <div class="ob-mcell">
+                                <span class="ob-row-icon"
+                                  ><svg aria-hidden="true">
+                                    <use href="#i-document" /></svg
+                                ></span>
+                                <div class="ob-mcell-main">
+                                  <a class="ob-table-title" href="document.html"
+                                    >supply-agreement-northgate.docx</a
+                                  >
+                                  <div class="ob-table-sub">
+                                    <span>Supply agreement</span
+                                    ><span class="ob-sep">·</span
+                                    ><span>Version 2</span
+                                    ><span class="ob-tag">3 changes</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div class="ob-vcell">
+                                <span class="ob-muted">Not run</span>
+                              </div>
+                            </td>
+                            <td class="ob-subtle ob-nowrap is-date">
+                              26 Oct 2026
+                            </td>
+                            <td class="ob-doc-actions">
+                              <a
+                                class="ob-icon-btn"
+                                href="document.html"
+                                aria-label="Open supply-agreement-northgate.docx"
+                                ><svg aria-hidden="true">
+                                  <use href="#i-chevron-right" /></svg
+                              ></a>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <div class="ob-mcell">
+                                <span class="ob-row-icon"
+                                  ><svg aria-hidden="true">
+                                    <use href="#i-document" /></svg
+                                ></span>
+                                <div class="ob-mcell-main">
+                                  <a class="ob-table-title" href="document.html"
+                                    >board-minutes-northgate.docx</a
+                                  >
+                                  <div class="ob-table-sub">
+                                    <span>Board minutes</span
+                                    ><span class="ob-sep">·</span
+                                    ><span>Version 1</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div class="ob-vcell">
+                                <span class="ob-muted">Not run</span>
+                              </div>
+                            </td>
+                            <td class="ob-subtle ob-nowrap is-date">
+                              22 Oct 2026
+                            </td>
+                            <td class="ob-doc-actions">
+                              <a
+                                class="ob-icon-btn"
+                                href="document.html"
+                                aria-label="Open board-minutes-northgate.docx"
+                                ><svg aria-hidden="true">
+                                  <use href="#i-chevron-right" /></svg
+                              ></a>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <section
+                    class="ob-section"
+                    aria-labelledby="artefacts-heading"
+                  >
+                    <div class="ob-section-head">
+                      <div>
+                        <h2 class="ob-section-title" id="artefacts-heading">
+                          Artefacts
+                        </h2>
+                        <p class="ob-section-hint">
+                          Authorities, notes and other saved material. The
+                          judgments, legislation and links among them are the
+                          matter's sources.
+                        </p>
+                      </div>
+                      <div class="ob-cluster" style="gap: 12px">
+                        <span
+                          class="ob-section-meta"
+                          data-hide-state="withdrawn"
+                          >5 artefacts · 4 sources</span
+                        >
+                        <span
+                          class="ob-section-meta"
+                          data-state="withdrawn"
+                          hidden
+                          >6 artefacts · 5 sources</span
+                        >
+                        <a class="ob-section-action" href="#add-artefact"
+                          ><svg aria-hidden="true"><use href="#i-plus" /></svg
+                          >Add artefact</a
+                        >
+                      </div>
+                    </div>
+
+                    <div
+                      class="ob-banner is-warning"
+                      data-state="withdrawn"
+                      style="margin-bottom: 12px"
+                      hidden
+                    >
+                      <svg aria-hidden="true"><use href="#i-alert" /></svg>
+                      <div class="ob-banner-main">
+                        <div class="ob-banner-title">
+                          One source has been withdrawn
+                        </div>
+                        <div class="ob-banner-text">
+                          The Data Protection Act 1998 was repealed on 25 May
+                          2018. Paragraph 4 of the advice note still cites
+                          section 7.
+                        </div>
+                      </div>
+                      <div class="ob-banner-acts">
+                        <button
+                          class="ob-btn ob-btn--secondary ob-btn--sm"
+                          type="button"
+                        >
+                          Review citation
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="ob-card artefact-card">
+                      <div
+                        class="ob-artefact is-withdrawn"
+                        data-state="withdrawn"
+                        hidden
+                      >
+                        <span class="ob-artefact-icon"
+                          ><svg aria-hidden="true"><use href="#i-book" /></svg
+                        ></span>
+                        <div>
+                          <a class="ob-artefact-title" href="#"
+                            >Data Protection Act 1998, s. 7</a
+                          >
+                          <div class="ob-artefact-meta">
+                            Act provision · withdrawn 25 May 2018 · replaced by
+                            Data Protection Act 2018, s. 45
+                          </div>
+                          <div class="ob-artefact-warning">
+                            <svg aria-hidden="true"><use href="#i-alert" /></svg
+                            ><span
+                              >The source is no longer available. The advice
+                              note cites this provision in paragraph 4.</span
+                            >
+                          </div>
+                        </div>
+                        <div class="ob-artefact-actions">
+                          <button
+                            class="ob-icon-btn"
+                            type="button"
+                            data-tip="Replace source"
+                            aria-label="Replace source"
+                          >
+                            <svg aria-hidden="true">
+                              <use href="#i-refresh" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="ob-artefact">
+                        <span class="ob-artefact-icon"
+                          ><svg aria-hidden="true"><use href="#i-scale" /></svg
+                        ></span>
+                        <div>
+                          <a class="ob-artefact-title" href="judgment.html"
+                            ><em
+                              >Rock Advertising Ltd v MWB Business Exchange
+                              Centres Ltd</em
+                            >
+                            <span class="ob-cite">[2018] UKSC 24</span></a
+                          >
+                          <div class="ob-artefact-meta">
+                            Judgment · UK Supreme Court · added 22 Oct 2026 ·
+                            cited in the advice note
+                          </div>
+                          <div class="ob-artefact-text">
+                            A clause requiring variations to be in writing is
+                            effective; an oral variation does not displace it.
+                          </div>
+                        </div>
+                        <div class="ob-artefact-actions">
+                          <button
+                            class="ob-icon-btn"
+                            type="button"
+                            data-tip="Open source"
+                            aria-label="Open source"
+                          >
+                            <svg aria-hidden="true">
+                              <use href="#i-external" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="ob-artefact">
+                        <span class="ob-artefact-icon"
+                          ><svg aria-hidden="true"><use href="#i-scale" /></svg
+                        ></span>
+                        <div>
+                          <a class="ob-artefact-title" href="#"
+                            ><em>Wood v Capita Insurance Services Ltd</em>
+                            <span class="ob-cite">[2017] UKSC 24</span></a
+                          >
+                          <div class="ob-artefact-meta">
+                            Judgment · UK Supreme Court · added 22 Oct 2026 ·
+                            cited in the advice note
+                          </div>
+                          <div class="ob-artefact-text">
+                            Contractual interpretation is a unitary exercise:
+                            language, context and commercial purpose are read
+                            together.
+                          </div>
+                        </div>
+                        <div class="ob-artefact-actions">
+                          <button
+                            class="ob-icon-btn"
+                            type="button"
+                            data-tip="Open source"
+                            aria-label="Open source"
+                          >
+                            <svg aria-hidden="true">
+                              <use href="#i-external" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="ob-artefact">
+                        <span class="ob-artefact-icon"
+                          ><svg aria-hidden="true"><use href="#i-book" /></svg
+                        ></span>
+                        <div>
+                          <a class="ob-artefact-title" href="#"
+                            >Limitation Act 1980, s. 5</a
+                          >
+                          <div class="ob-artefact-meta">
+                            Act provision · England &amp; Wales · added 21 Oct
+                            2026
+                          </div>
+                          <div class="ob-artefact-text">
+                            Time limit for actions founded on simple contract.
+                          </div>
+                        </div>
+                        <div class="ob-artefact-actions">
+                          <button
+                            class="ob-icon-btn"
+                            type="button"
+                            data-tip="Open source"
+                            aria-label="Open source"
+                          >
+                            <svg aria-hidden="true">
+                              <use href="#i-external" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="ob-artefact">
+                        <span class="ob-artefact-icon"
+                          ><svg aria-hidden="true"><use href="#i-link" /></svg
+                        ></span>
+                        <div>
+                          <a class="ob-artefact-title" href="#"
+                            >Brightwater Packaging — standard terms of trade</a
+                          >
+                          <div class="ob-artefact-meta">
+                            Link · brightwater-packaging.example/terms · added
+                            20 Oct 2026
+                          </div>
+                        </div>
+                        <div class="ob-artefact-actions">
+                          <button
+                            class="ob-icon-btn"
+                            type="button"
+                            data-tip="Open source"
+                            aria-label="Open source"
+                          >
+                            <svg aria-hidden="true">
+                              <use href="#i-external" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="ob-artefact">
+                        <span class="ob-artefact-icon"
+                          ><svg aria-hidden="true"><use href="#i-note" /></svg
+                        ></span>
+                        <div>
+                          <a class="ob-artefact-title" href="#"
+                            >Call with Daniel Reyes — 3 March volume</a
+                          >
+                          <div class="ob-artefact-meta">
+                            Note · Alex Morgan · 22 Oct 2026
+                          </div>
+                          <div class="ob-artefact-text">
+                            Daniel confirmed the call took place, but could not
+                            recall whether 40,000 or 60,000 units was discussed.
+                            He will check his notes.
+                          </div>
+                        </div>
+                        <div class="ob-artefact-actions">
+                          <button
+                            class="ob-icon-btn"
+                            type="button"
+                            data-tip="Open source"
+                            aria-label="Open source"
+                          >
+                            <svg aria-hidden="true">
+                              <use href="#i-external" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <aside
+                  class="matter-rail"
+                  aria-label="Matter details and activity"
+                >
+                  <section class="ob-card">
+                    <div class="ob-card-head">
+                      <h2 class="ob-card-title">Matter details</h2>
+                    </div>
+                    <div class="ob-card-body">
+                      <dl class="ob-dl">
+                        <dt>Client</dt>
+                        <dd>Northgate Foods Limited</dd>
+                        <dt>Contact</dt>
+                        <dd>Daniel Reyes<span>General Counsel</span></dd>
+                        <dt>Jurisdiction</dt>
+                        <dd>England &amp; Wales</dd>
+                        <dt>Domains</dt>
+                        <dd>Commercial contracts<br />Dispute resolution</dd>
+                        <dt>Fee earner</dt>
+                        <dd>Alex Morgan</dd>
+                        <dt>Opened</dt>
+                        <dd>12 Jan 2026</dd>
+                        <dt>Updated</dt>
+                        <dd>26 Oct 2026</dd>
+                      </dl>
+                      <a
+                        class="ob-btn ob-btn--ghost ob-btn--sm"
+                        href="#edit"
+                        style="margin-top: 12px; padding-left: 0"
+                        >Edit matter details</a
+                      >
+                    </div>
+                  </section>
+
+                  <section class="ob-card">
+                    <div class="ob-card-head">
+                      <h2 class="ob-card-title">Recent activity</h2>
+                      <a class="ob-section-action" href="#activity"
+                        >View activity<svg aria-hidden="true">
+                          <use href="#i-arrow-right" /></svg
+                      ></a>
+                    </div>
+                    <div class="ob-card-body">
+                      <div class="ob-activity">
+                        <div class="ob-activity-item is-danger">
+                          <div class="ob-activity-title">
+                            Advice note verified — 1 finding
+                          </div>
+                          <span class="ob-activity-meta"
+                            >Alex Morgan · 26 Oct 2026, 09:02 · advice note,
+                            v3</span
+                          >
+                        </div>
+                        <div class="ob-activity-item is-warning">
+                          <div class="ob-activity-title">
+                            Brightwater markup received
+                          </div>
+                          <span class="ob-activity-meta"
+                            >Brightwater (Legal) · 24 Oct 2026, 16:20 · supply
+                            agreement, v2</span
+                          >
+                        </div>
+                        <div class="ob-activity-item">
+                          <div class="ob-activity-title">
+                            Witness statement moved to the FOI matter
+                          </div>
+                          <span class="ob-activity-meta"
+                            >Alex Morgan · 24 Oct 2026, 11:05 · witness
+                            statement, v1</span
+                          >
+                        </div>
+                        <div class="ob-activity-item">
+                          <div class="ob-activity-title">
+                            Two authorities added from Search
+                          </div>
+                          <span class="ob-activity-meta"
+                            >Priya Shah · 22 Oct 2026, 15:48 · no document
+                            version</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="ob-card">
+                    <div class="rail-verify">
+                      <span class="ob-status is-danger"
+                        ><span class="ob-dot"></span>1 flagged citation</span
+                      >
+                      <p>
+                        <span class="ob-cite">[2018] UKSC 24</span> in paragraph
+                        8 of the advice note may belong to
+                        <em>Rock Advertising v MWB</em>.
+                      </p>
+                      <a
+                        class="ob-btn ob-btn--secondary ob-btn--sm"
+                        href="verify.html"
+                        >Review finding</a
+                      >
+                    </div>
+                  </section>
+                </aside>
+              </div>
+            </div>
+
+            <!-- New matter / empty --------------------------------------------- -->
+            <div data-state="new" hidden>
+              <div class="ob-banner is-success" style="margin-bottom: 24px">
+                <svg aria-hidden="true"><use href="#i-check-circle" /></svg>
+                <div class="ob-banner-main">
+                  <div class="ob-banner-title">Matter created</div>
+                  <div class="ob-banner-text">
+                    Alderley Park Holdings v Kestrel Facilities is ready. Add
+                    the first document or source.
+                  </div>
+                </div>
+              </div>
+
+              <div class="ob-page-head">
+                <div class="ob-page-head-main">
+                  <div class="ob-cluster" style="gap: 8px; margin-bottom: 8px">
+                    <span class="ob-tag">Commercial contracts</span>
+                    <span class="ob-mono ob-meta">ALD-0521</span>
+                    <span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Active</span
+                    >
+                  </div>
+                  <h1 class="ob-page-title">
+                    Alderley Park Holdings v Kestrel Facilities
+                  </h1>
+                  <p class="ob-page-sub">
+                    No description yet. Add one from Edit matter details.
+                  </p>
+                </div>
+                <div class="ob-page-actions">
+                  <a class="ob-btn ob-btn--secondary" href="document.html"
+                    ><svg aria-hidden="true"><use href="#i-plus" /></svg>New
+                    document</a
+                  >
+                  <a class="ob-btn ob-btn--ghost" href="#edit"
+                    ><svg aria-hidden="true"><use href="#i-edit" /></svg>Edit
+                    details</a
+                  >
+                </div>
+              </div>
+
+              <div class="matter-grid">
+                <div>
+                  <section aria-labelledby="empty-docs">
+                    <div class="ob-section-head">
+                      <h2 class="ob-section-title" id="empty-docs">
+                        Documents
+                      </h2>
+                      <span class="ob-section-meta">No documents</span>
+                    </div>
+                    <div class="ob-card">
+                      <div class="ob-empty">
+                        <span class="ob-empty-icon"
+                          ><svg class="is-20" aria-hidden="true">
+                            <use href="#i-document" /></svg
+                        ></span>
+                        <h3 class="ob-empty-title">Add the first document</h3>
+                        <p class="ob-empty-text">
+                          Upload a Word document or PDF from the client, or
+                          start from one of Harrington Vale's templates.
+                        </p>
+                        <div class="ob-empty-acts">
+                          <button class="ob-btn ob-btn--primary" type="button">
+                            <svg aria-hidden="true">
+                              <use href="#i-upload" /></svg
+                            >Upload document
+                          </button>
+                          <button class="ob-btn ob-btn--ghost" type="button">
+                            Start from a template
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="ob-section" aria-labelledby="empty-artefacts">
+                    <div class="ob-section-head">
+                      <h2 class="ob-section-title" id="empty-artefacts">
+                        Artefacts
+                      </h2>
+                      <a class="ob-section-action" href="#add-artefact"
+                        ><svg aria-hidden="true"><use href="#i-plus" /></svg>Add
+                        artefact</a
+                      >
+                    </div>
+                    <div class="ob-card">
+                      <div class="ob-empty">
+                        <span class="ob-empty-icon"
+                          ><svg class="is-20" aria-hidden="true">
+                            <use href="#i-scale" /></svg
+                        ></span>
+                        <h3 class="ob-empty-title">No artefacts yet</h3>
+                        <p class="ob-empty-text">
+                          Attach the judgments, legislation, links and notes
+                          this matter relies on. Verify checks citations against
+                          the sources among them.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <aside class="matter-rail" aria-label="Matter details">
+                  <section class="ob-card">
+                    <div class="ob-card-head">
+                      <h2 class="ob-card-title">Matter details</h2>
+                    </div>
+                    <div class="ob-card-body">
+                      <dl class="ob-dl">
+                        <dt>Client</dt>
+                        <dd>Alderley Park Holdings Ltd</dd>
+                        <dt>Jurisdiction</dt>
+                        <dd>England &amp; Wales</dd>
+                        <dt>Domains</dt>
+                        <dd>Commercial contracts</dd>
+                        <dt>Fee earner</dt>
+                        <dd>Alex Morgan</dd>
+                        <dt>Opened</dt>
+                        <dd>26 Oct 2026</dd>
+                        <dt>Updated</dt>
+                        <dd>26 Oct 2026</dd>
+                      </dl>
+                      <a
+                        class="ob-btn ob-btn--ghost ob-btn--sm"
+                        href="#edit"
+                        style="margin-top: 12px; padding-left: 0"
+                        >Edit matter details</a
+                      >
+                    </div>
+                  </section>
+                  <section class="ob-card">
+                    <div class="ob-card-head">
+                      <h2 class="ob-card-title">Recent activity</h2>
+                    </div>
+                    <div class="ob-card-body">
+                      <div class="ob-activity">
+                        <div class="ob-activity-item is-success">
+                          <div class="ob-activity-title">Matter created</div>
+                          <span class="ob-activity-meta"
+                            >26 Oct 2026, 14:36 · Alex Morgan</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </aside>
+              </div>
+            </div>
+
+            <!-- Edit details ---------------------------------------------------- -->
+            <div class="ob-backdrop" data-state="edit" hidden>
+              <div
+                class="ob-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="edit-title"
+              >
+                <div class="ob-dialog-head">
+                  <div>
+                    <h2 class="ob-dialog-title" id="edit-title">
+                      Edit matter details
+                    </h2>
+                    <p class="ob-dialog-body" style="margin-top: 4px">
+                      These details appear on the matter page and in exports.
+                    </p>
+                  </div>
+                  <a class="ob-icon-btn" href="#" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-close" /></svg
+                  ></a>
+                </div>
+                <form
+                  class="ob-dialog-form"
+                  novalidate
+                  onsubmit="event.preventDefault()"
+                >
+                  <div class="ob-field">
+                    <label class="ob-field-label" for="ed-name"
+                      >Matter name</label
+                    >
+                    <input
+                      class="ob-input"
+                      id="ed-name"
+                      type="text"
+                      value="Northgate Foods v Brightwater Packaging"
+                    />
+                  </div>
+                  <div class="dialog-grid">
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="ed-client"
+                        >Client</label
+                      >
+                      <input
+                        class="ob-input"
+                        id="ed-client"
+                        type="text"
+                        value="Northgate Foods Limited"
+                      />
+                    </div>
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="ed-ref"
+                        >Client reference</label
+                      >
+                      <input
+                        class="ob-input ob-mono"
+                        id="ed-ref"
+                        type="text"
+                        value="NGF-0418"
+                      />
+                    </div>
+                  </div>
+                  <div class="dialog-grid">
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="ed-jur"
+                        >Primary jurisdiction</label
+                      >
+                      <div class="ob-select-wrap">
+                        <select class="ob-select" id="ed-jur">
+                          <option>England &amp; Wales</option>
+                          <option>Scotland</option>
+                          <option>Northern Ireland</option>
+                        </select>
+                        <svg class="ob-select-caret" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="ed-type"
+                        >Matter type</label
+                      >
+                      <div class="ob-select-wrap">
+                        <select class="ob-select" id="ed-type">
+                          <option>Commercial contracts</option>
+                          <option>Employment</option>
+                          <option>Private client</option>
+                          <option>Freedom of information</option>
+                        </select>
+                        <svg class="ob-select-caret" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ob-field">
+                    <label class="ob-field-label" for="ed-desc"
+                      >Description</label
+                    >
+                    <textarea
+                      class="ob-textarea"
+                      id="ed-desc"
+                      style="min-height: 76px"
+                    >
+Supply agreement dispute: minimum volumes and an alleged oral variation.</textarea>
+                  </div>
+                  <div class="ob-field">
+                    <label class="ob-choice"
+                      ><input class="ob-check" type="checkbox" /><span
+                        >This is a redaction matter<span class="ob-choice-sub"
+                          >Turning this on adds redaction runs and secure export
+                          to the matter.</span
+                        ></span
+                      ></label
+                    >
+                  </div>
+                  <div class="ob-dialog-foot">
+                    <a class="ob-btn ob-btn--ghost" href="#">Cancel</a>
+                    <a class="ob-btn ob-btn--primary" href="#">Save changes</a>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Share ----------------------------------------------------------- -->
+            <div class="ob-backdrop" data-state="share" hidden>
+              <div
+                class="ob-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="share-title"
+              >
+                <div class="ob-dialog-head">
+                  <div>
+                    <h2 class="ob-dialog-title" id="share-title">
+                      Share this matter
+                    </h2>
+                    <p class="ob-dialog-body" style="margin-top: 4px">
+                      Only the people listed here can open Northgate Foods v
+                      Brightwater Packaging.
+                    </p>
+                  </div>
+                  <a class="ob-icon-btn" href="#" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-close" /></svg
+                  ></a>
+                </div>
+                <div class="ob-dialog-form">
+                  <div class="share-head">
+                    <span class="ob-field-label">Access: 4 named people</span>
+                    <a class="ob-section-action" href="#share"
+                      >Manage access<svg aria-hidden="true">
+                        <use href="#i-arrow-right" /></svg
+                    ></a>
+                  </div>
+                  <div class="share-list">
+                    <div class="share-row">
+                      <span class="ob-avatar">AM</span>
+                      <div class="share-row-main">
+                        <div class="share-name">
+                          Alex Morgan <span class="ob-muted">(you)</span>
+                        </div>
+                        <div class="share-email">
+                          alex.morgan@harringtonvale.example
+                        </div>
+                      </div>
+                      <span class="ob-role-label">Owner</span>
+                    </div>
+                    <div class="share-row">
+                      <span class="ob-avatar is-quiet">PS</span>
+                      <div class="share-row-main">
+                        <div class="share-name">Priya Shah</div>
+                        <div class="share-email">
+                          priya.shah@harringtonvale.example
+                        </div>
+                      </div>
+                      <div class="ob-select-wrap">
+                        <select
+                          class="ob-select ob-select--sm"
+                          aria-label="Priya Shah access"
+                        >
+                          <option>Can edit</option>
+                          <option>Can view</option>
+                          <option>Remove</option>
+                        </select>
+                        <svg class="ob-select-caret" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="share-row">
+                      <span class="ob-avatar is-quiet">TF</span>
+                      <div class="share-row-main">
+                        <div class="share-name">Tomás Ferreira</div>
+                        <div class="share-email">
+                          tomas.ferreira@harringtonvale.example
+                        </div>
+                      </div>
+                      <div class="ob-select-wrap">
+                        <select
+                          class="ob-select ob-select--sm"
+                          aria-label="Tomás Ferreira access"
+                        >
+                          <option>Can view</option>
+                          <option>Can edit</option>
+                          <option>Remove</option>
+                        </select>
+                        <svg class="ob-select-caret" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="share-row">
+                      <span class="ob-avatar is-quiet">HO</span>
+                      <div class="share-row-main">
+                        <div class="share-name">Hannah Osei</div>
+                        <div class="share-email">
+                          hannah.osei@harringtonvale.example
+                        </div>
+                      </div>
+                      <div class="ob-select-wrap">
+                        <select
+                          class="ob-select ob-select--sm"
+                          aria-label="Hannah Osei access"
+                        >
+                          <option>Can view</option>
+                          <option>Can edit</option>
+                          <option>Remove</option>
+                        </select>
+                        <svg class="ob-select-caret" aria-hidden="true">
+                          <use href="#i-chevron-down" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="share-add">
+                    <input
+                      class="ob-input"
+                      type="email"
+                      placeholder="Email a colleague"
+                      aria-label="Email a colleague"
+                    />
+                    <div class="ob-select-wrap">
+                      <select class="ob-select" aria-label="Access level">
+                        <option>Can view</option>
+                        <option>Can edit</option>
+                      </select>
+                      <svg class="ob-select-caret" aria-hidden="true">
+                        <use href="#i-chevron-down" />
+                      </svg>
+                    </div>
+                    <button class="ob-btn ob-btn--secondary" type="button">
+                      Add
+                    </button>
+                  </div>
+                  <p class="ob-dialog-note">
+                    People can be added from Harrington Vale LLP only. They will
+                    see every document and version in this matter.
+                  </p>
+
+                  <div class="ob-dialog-foot">
+                    <button class="ob-btn ob-btn--ghost" type="button">
+                      Copy link
+                    </button>
+                    <a class="ob-btn ob-btn--primary" href="#">Done</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Activity ------------------------------------------------------- -->
+            <div class="ob-backdrop" data-state="activity" hidden>
+              <div
+                class="ob-dialog ob-dialog--wide"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="activity-title"
+              >
+                <div class="ob-dialog-head">
+                  <div>
+                    <h2 class="ob-dialog-title" id="activity-title">
+                      Matter activity
+                    </h2>
+                    <p class="ob-dialog-body" style="margin-top: 4px">
+                      Everything recorded in Northgate Foods v Brightwater
+                      Packaging, newest first.
+                    </p>
+                  </div>
+                  <a class="ob-icon-btn" href="#" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-close" /></svg
+                  ></a>
+                </div>
+                <div class="ob-card" style="margin-top: 16px">
+                  <table class="ob-table act-grid">
+                    <thead>
+                      <tr>
+                        <th>Actor</th>
+                        <th>Action</th>
+                        <th>Version</th>
+                        <th class="is-date">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Alex Morgan</td>
+                        <td>Accepted change 4.2</td>
+                        <td>v2</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          26 Oct 2026, 16:12
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Alex Morgan</td>
+                        <td>Ran Verify on the advice note</td>
+                        <td>v3</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          26 Oct 2026, 09:02
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Brightwater (Legal)</td>
+                        <td>Uploaded markup</td>
+                        <td>v2</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          24 Oct 2026, 16:20
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Priya Shah</td>
+                        <td>Commented on clause 12.2</td>
+                        <td>v2</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          24 Oct 2026, 16:14
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Alex Morgan</td>
+                        <td>Moved the witness statement to the FOI matter</td>
+                        <td>v1</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          24 Oct 2026, 11:05
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Priya Shah</td>
+                        <td>
+                          Added artefact:
+                          <em>Wood v Capita Insurance Services Ltd</em>
+                        </td>
+                        <td>—</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          22 Oct 2026, 15:48
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Alex Morgan</td>
+                        <td>
+                          Added artefact: <em>Rock Advertising Ltd v MWB</em>
+                        </td>
+                        <td>—</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          22 Oct 2026, 15:44
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Alex Morgan</td>
+                        <td>Opened the matter</td>
+                        <td>—</td>
+                        <td class="ob-subtle ob-nowrap is-date">
+                          12 Jan 2026, 09:30
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="ob-dialog-note">
+                  Each entry records the person, what they did, the document
+                  version it applied to and the time. Entries cannot be edited
+                  or deleted.
+                </p>
+                <div class="ob-dialog-foot">
+                  <a
+                    class="ob-btn ob-btn--secondary"
+                    href="document-versions.html"
+                    >Open version history</a
+                  >
+                  <a class="ob-btn ob-btn--ghost" href="#">Close</a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Delete --------------------------------------------------------- -->
+            <div class="ob-backdrop" data-state="delete" hidden>
+              <div
+                class="ob-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-title"
+              >
+                <div class="ob-dialog-head">
+                  <div>
+                    <h2 class="ob-dialog-title" id="delete-title">
+                      Delete this matter?
+                    </h2>
+                    <p class="ob-dialog-body" style="margin-top: 4px">
+                      This cannot be undone.
+                    </p>
+                  </div>
+                  <a class="ob-icon-btn" href="#" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-close" /></svg
+                  ></a>
+                </div>
+                <div class="ob-dialog-form">
+                  <p class="ob-dialog-body">
+                    <b>Northgate Foods v Brightwater Packaging</b> and its three
+                    documents and five artefacts will be removed for everyone at
+                    Harrington Vale LLP. Earlier versions, comments and Verify
+                    runs are deleted with it.
+                  </p>
+                  <p class="ob-dialog-note">
+                    If the matter is closed, archive it instead. Archiving keeps
+                    the record and makes it read-only.
+                  </p>
+                  <div class="ob-dialog-foot">
+                    <a class="ob-btn ob-btn--ghost" href="#">Cancel</a>
+                    <a class="ob-btn ob-btn--danger" href="#">Delete matter</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Add artefact --------------------------------------------------- -->
+            <div class="ob-backdrop" data-state="add-artefact" hidden>
+              <div
+                class="ob-dialog ob-dialog--wide"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="art-title"
+              >
+                <div class="ob-dialog-head">
+                  <div>
+                    <h2 class="ob-dialog-title" id="art-title">
+                      Add an artefact
+                    </h2>
+                    <p class="ob-dialog-body" style="margin-top: 4px">
+                      Attach a source this matter relies on.
+                    </p>
+                  </div>
+                  <a class="ob-icon-btn" href="#" aria-label="Close"
+                    ><svg aria-hidden="true"><use href="#i-close" /></svg
+                  ></a>
+                </div>
+
+                <div
+                  class="ob-tabs artefact-tabs"
+                  role="tablist"
+                  aria-label="Artefact type"
+                >
+                  <button
+                    class="ob-tab is-active"
+                    role="tab"
+                    aria-selected="true"
+                    type="button"
+                    data-artefact-tab="corpus"
+                  >
+                    Search the corpus
+                  </button>
+                  <button
+                    class="ob-tab"
+                    role="tab"
+                    aria-selected="false"
+                    type="button"
+                    data-artefact-tab="link"
+                  >
+                    Paste a link
+                  </button>
+                  <button
+                    class="ob-tab"
+                    role="tab"
+                    aria-selected="false"
+                    type="button"
+                    data-artefact-tab="note"
+                  >
+                    Write a note
+                  </button>
+                  <button
+                    class="ob-tab"
+                    role="tab"
+                    aria-selected="false"
+                    type="button"
+                    data-artefact-tab="document"
+                  >
+                    Matter document
+                  </button>
+                </div>
+
+                <div data-artefact-panel="corpus">
+                  <div class="ob-search artefact-search">
+                    <svg aria-hidden="true"><use href="#i-search" /></svg>
+                    <input
+                      type="search"
+                      value="Wood v Capita"
+                      aria-label="Search UK case law and legislation"
+                    />
+                  </div>
+
+                  <div class="ob-dialog-list">
+                    <div class="ob-row is-selected">
+                      <span class="ob-row-icon"
+                        ><svg aria-hidden="true"><use href="#i-scale" /></svg
+                      ></span>
+                      <span class="ob-row-main">
+                        <span class="ob-row-title is-wrap"
+                          ><em>Wood v Capita Insurance Services Ltd</em>
+                          <span class="ob-cite">[2017] UKSC 24</span></span
+                        >
+                        <span class="ob-row-sub"
+                          >Judgment · UK Supreme Court · 22 Mar 2017</span
+                        >
+                      </span>
+                      <span class="ob-status"
+                        ><span class="ob-dot"></span>Selected</span
+                      >
+                    </div>
+                    <div class="ob-row">
+                      <span class="ob-row-icon"
+                        ><svg aria-hidden="true"><use href="#i-scale" /></svg
+                      ></span>
+                      <span class="ob-row-main">
+                        <span class="ob-row-title is-wrap"
+                          ><em
+                            >Rock Advertising Ltd v MWB Business Exchange
+                            Centres Ltd</em
+                          >
+                          <span class="ob-cite">[2018] UKSC 24</span></span
+                        >
+                        <span class="ob-row-sub"
+                          >Judgment · UK Supreme Court · 16 May 2018</span
+                        >
+                      </span>
+                      <button
+                        class="ob-btn ob-btn--ghost ob-btn--sm"
+                        type="button"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div class="ob-row">
+                      <span class="ob-row-icon"
+                        ><svg aria-hidden="true"><use href="#i-book" /></svg
+                      ></span>
+                      <span class="ob-row-main">
+                        <span class="ob-row-title"
+                          >Limitation Act 1980, s. 5</span
+                        >
+                        <span class="ob-row-sub"
+                          >Act provision · England &amp; Wales · in force</span
+                        >
+                      </span>
+                      <button
+                        class="ob-btn ob-btn--ghost ob-btn--sm"
+                        type="button"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div data-artefact-panel="link" hidden>
+                  <div class="ob-dialog-form">
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="art-url"
+                        >Web address</label
+                      >
+                      <input
+                        class="ob-input"
+                        id="art-url"
+                        type="url"
+                        value="https://brightwater-packaging.example/terms"
+                      />
+                    </div>
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="art-link-title"
+                        >Title</label
+                      >
+                      <input
+                        class="ob-input"
+                        id="art-link-title"
+                        type="text"
+                        value="Brightwater Packaging — standard terms of trade"
+                      />
+                    </div>
+                    <p class="ob-dialog-note">
+                      Obiter keeps a copy of the page as it is today. If it
+                      changes, the artefact shows the saved version.
+                    </p>
+                  </div>
+                </div>
+
+                <div data-artefact-panel="note" hidden>
+                  <div class="ob-dialog-form">
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="art-note-title"
+                        >Title</label
+                      >
+                      <input
+                        class="ob-input"
+                        id="art-note-title"
+                        type="text"
+                        value="Call with Daniel Reyes — 3 March volume"
+                      />
+                    </div>
+                    <div class="ob-field">
+                      <label class="ob-field-label" for="art-note">Note</label>
+                      <textarea class="ob-textarea" id="art-note">
+Daniel confirmed the call took place, but could not recall whether 40,000 or 60,000 units was discussed. He will check his notes.</textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <div data-artefact-panel="document" hidden>
+                  <div class="ob-dialog-form">
+                    <div class="ob-dialog-list">
+                      <label class="ob-row" style="cursor: pointer">
+                        <input
+                          class="ob-radio"
+                          type="radio"
+                          name="art-doc"
+                          checked
+                          aria-label="Attach supply-agreement-northgate.docx"
+                        />
+                        <span class="ob-row-main">
+                          <span class="ob-row-title"
+                            >supply-agreement-northgate.docx</span
+                          >
+                          <span class="ob-row-sub"
+                            >Version 2 · 38 KB · edited 25 Oct 2026</span
+                          >
+                        </span>
+                      </label>
+                      <label class="ob-row" style="cursor: pointer">
+                        <input
+                          class="ob-radio"
+                          type="radio"
+                          name="art-doc"
+                          aria-label="Attach advice-note-northgate.docx"
+                        />
+                        <span class="ob-row-main">
+                          <span class="ob-row-title"
+                            >advice-note-northgate.docx</span
+                          >
+                          <span class="ob-row-sub"
+                            >Version 3 · 42 KB · edited 26 Oct 2026</span
+                          >
+                        </span>
+                      </label>
+                      <label class="ob-row" style="cursor: pointer">
+                        <input
+                          class="ob-radio"
+                          type="radio"
+                          name="art-doc"
+                          aria-label="Attach board-minutes-northgate.docx"
+                        />
+                        <span class="ob-row-main">
+                          <span class="ob-row-title"
+                            >board-minutes-northgate.docx</span
+                          >
+                          <span class="ob-row-sub"
+                            >Version 1 · 31 KB · edited 22 Oct 2026</span
+                          >
+                        </span>
+                      </label>
+                    </div>
+                    <p class="ob-dialog-note">
+                      Attaching a matter document links the artefact to the
+                      version you choose. It does not move or copy the document.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="ob-dialog-foot ob-dialog-foot--split">
+                  <span class="dialog-foot-note"
+                    >Adds one artefact to Northgate Foods v Brightwater
+                    Packaging.</span
+                  >
+                  <span class="ob-dialog-foot-acts">
+                    <a class="ob-btn ob-btn--ghost" href="#">Cancel</a>
+                    <a class="ob-btn ob-btn--primary" href="#">Add to matter</a>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      ;(function () {
+        'use strict'
+        var root = document.documentElement
+        var app = document.getElementById('app')
+        var themeButton = document.getElementById('themeButton')
+        var accountButton = document.getElementById('accountButton')
+        var accountMenu = document.getElementById('accountMenu')
+        var sidebarToggle = document.getElementById('sidebarToggle')
+
+        function setTheme(theme) {
+          root.dataset.theme = theme
+          if (!themeButton) return
+          var toLight = theme === 'dark'
+          themeButton.setAttribute(
+            'aria-label',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+          themeButton.setAttribute(
+            'data-tip',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+        }
+        if (themeButton) {
+          themeButton.addEventListener('click', function () {
+            setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark')
+          })
+        }
+
+        if (accountButton && accountMenu) {
+          accountButton.addEventListener('click', function (e) {
+            e.stopPropagation()
+            accountMenu.hidden = !accountMenu.hidden
+            accountButton.setAttribute(
+              'aria-expanded',
+              String(!accountMenu.hidden),
+            )
+          })
+          accountMenu.addEventListener('click', function (e) {
+            e.stopPropagation()
+          })
+          document.addEventListener('click', function () {
+            accountMenu.hidden = true
+            accountButton.setAttribute('aria-expanded', 'false')
+          })
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+              accountMenu.hidden = true
+              accountButton.setAttribute('aria-expanded', 'false')
+            }
+          })
+        }
+
+        if (sidebarToggle && app) {
+          sidebarToggle.addEventListener('click', function () {
+            var collapsed = !app.classList.contains('is-collapsed')
+            app.classList.toggle('is-collapsed', collapsed)
+            sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
+            sidebarToggle.setAttribute(
+              'aria-label',
+              collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+            )
+            sidebarToggle.title = collapsed
+              ? 'Expand sidebar'
+              : 'Collapse sidebar'
+            sidebarToggle.querySelector('span').textContent = collapsed
+              ? 'Expand sidebar'
+              : 'Collapse sidebar'
+          })
+          if (location.hash === '#collapsed') {
+            app.classList.add('is-collapsed')
+            sidebarToggle.querySelector('span').textContent = 'Expand sidebar'
+          }
+        }
+
+        function states() {
+          return (location.hash || '')
+            .replace(/^#/, '')
+            .split(/[,+]/)
+            .filter(Boolean)
+        }
+        function has(keys, h) {
+          return keys.some(function (k) {
+            return h.indexOf(k) >= 0
+          })
+        }
+        function applyStates() {
+          var h = states()
+          document
+            .querySelectorAll('[data-state],[data-hide-state]')
+            .forEach(function (el) {
+              var show = el.hasAttribute('data-state')
+                ? has(el.getAttribute('data-state').split(/\s+/), h)
+                : true
+              if (
+                el.hasAttribute('data-hide-state') &&
+                has(el.getAttribute('data-hide-state').split(/\s+/), h)
+              ) {
+                show = false
+              }
+              el.hidden = !show
+            })
+          document.querySelectorAll('[data-active-on]').forEach(function (el) {
+            var on = h.length
+              ? has(el.getAttribute('data-active-on').split(/\s+/), h)
+              : el.hasAttribute('data-active-default')
+            el.classList.toggle('is-active', on)
+          })
+        }
+        window.addEventListener('hashchange', applyStates)
+        applyStates()
+      })()
+    </script>
+    <script>
+      ;(function () {
+        var more = document.getElementById('matterMore')
+        var menu = document.getElementById('matterMenu')
+        if (!more || !menu) return
+        more.addEventListener('click', function (e) {
+          e.stopPropagation()
+          menu.hidden = !menu.hidden
+          more.setAttribute('aria-expanded', String(!menu.hidden))
+          more.classList.toggle('is-active', !menu.hidden)
+        })
+        menu.addEventListener('click', function (e) {
+          e.stopPropagation()
+        })
+        document.addEventListener('click', function () {
+          menu.hidden = true
+          more.setAttribute('aria-expanded', 'false')
+          more.classList.remove('is-active')
+        })
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') {
+            menu.hidden = true
+            more.setAttribute('aria-expanded', 'false')
+            more.classList.remove('is-active')
+          }
+        })
+
+        var currentPin = document.querySelector('.ob-pin.is-current')
+        var crumb = document.querySelector('.ob-crumb-current')
+        var crumbText = crumb ? crumb.textContent : ''
+        var mattersCount = document.querySelector(
+          '.ob-nav-item[href="matters.html"] .ob-nav-count',
+        )
+        var mattersCountText = mattersCount ? mattersCount.textContent : ''
+        function syncState() {
+          var isNew = location.hash === '#new'
+          if (currentPin) currentPin.classList.toggle('is-current', !isNew)
+          if (crumb)
+            crumb.textContent = isNew
+              ? 'Alderley Park Holdings v Kestrel Facilities'
+              : crumbText
+          if (mattersCount)
+            mattersCount.textContent = isNew ? '5' : mattersCountText
+        }
+        syncState()
+        window.addEventListener('hashchange', syncState)
+
+        var artefactTabs = document.querySelectorAll('[data-artefact-tab]')
+        var artefactPanels = document.querySelectorAll('[data-artefact-panel]')
+        artefactTabs.forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            var name = tab.getAttribute('data-artefact-tab')
+            artefactTabs.forEach(function (other) {
+              var on = other === tab
+              other.classList.toggle('is-active', on)
+              other.setAttribute('aria-selected', String(on))
+            })
+            artefactPanels.forEach(function (panel) {
+              panel.hidden = panel.getAttribute('data-artefact-panel') !== name
+            })
+          })
+        })
+      })()
+    </script>
+
+    <script>
+      /* One account menu and one theme switch across every screen. Pages that
+   predate the shared menu get the same handler here. */
+      ;(function () {
+        var button = document.getElementById('menuTheme')
+        if (!button || button.dataset.bound === 'true') return
+        button.dataset.bound = 'true'
+        button.addEventListener('click', function () {
+          var root = document.documentElement
+          var next = root.dataset.theme === 'dark' ? 'light' : 'dark'
+          root.dataset.theme = next
+          var toLight = next === 'dark'
+          var themeButton = document.getElementById('themeButton')
+          var label = document.getElementById('menuThemeLabel')
+          if (themeButton) {
+            themeButton.setAttribute(
+              'aria-label',
+              toLight ? 'Switch to light theme' : 'Switch to dark theme',
+            )
+            themeButton.setAttribute(
+              'data-tip',
+              toLight ? 'Switch to light theme' : 'Switch to dark theme',
+            )
+          }
+          if (label)
+            label.textContent = toLight
+              ? 'Switch to light theme'
+              : 'Switch to dark theme'
+        })
+      })()
+    </script>
+  </body>
+</html>

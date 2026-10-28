@@ -1,0 +1,1647 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obiter — Review redaction</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="obiter.css" />
+    <style>
+      /* Page layout only. Components live in obiter.css. */
+
+      /* The same chrome gutter as the editor. */
+      .ob-doc-head {
+        padding-left: var(--ob-gutter);
+        padding-right: var(--ob-gutter);
+      }
+      .rr-head-main {
+        min-width: 0;
+      }
+      .rr-head-sub {
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      /* Progress and legend are one quiet band under the header. */
+      .rr-band {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 12px var(--ob-gutter);
+        background: var(--ob-surface);
+        box-shadow: inset 0 -1px 0 var(--ob-line);
+      }
+      .rr-progress-label {
+        font-size: var(--ob-fs-caption);
+        color: var(--ob-muted);
+        white-space: nowrap;
+      }
+      .rr-progressbar {
+        flex: 0 0 200px;
+        height: 3px;
+      }
+      .rr-band-note {
+        font-size: var(--ob-fs-caption);
+        color: var(--ob-subtle);
+      }
+      .rr-band-end {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+
+      .rr-panel-filter {
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--ob-line);
+      }
+      .rr-main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+      .rr-decide-context {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        min-width: 0;
+      }
+      .ob-decision-bar--row {
+        padding-left: var(--ob-gutter);
+        padding-right: var(--ob-gutter);
+      }
+
+      /* The decision bar is the review page's decision bar, moved into the panel. */
+      .rr-decide-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        min-width: 0;
+      }
+      .rr-decide-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .rr-decide-pos {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      @media (max-width: 1024px) {
+        .rr-progressbar {
+          flex: 1 1 160px;
+        }
+      }
+
+      /* Shared-component corrections, to lift into obiter.css. */
+      .ob-kbd {
+        font-weight: 400;
+      }
+      .ob-spanrow-meta {
+        font-variant-numeric: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Canonical sprite: icons.svg. This inline copy keeps the page
+     self-contained and lets it work over file:// without a server. -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      style="position: absolute; overflow: hidden"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <defs>
+        <!-- Navigation -->
+        <symbol id="i-obiter" viewBox="0 0 26 26">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="7.75" cy="14.6" r="4.9" />
+            <path d="M18.25 3.4v16.1" />
+            <path d="M18.25 9.7a4.9 4.9 0 0 1 0 9.8" />
+          </g>
+        </symbol>
+        <symbol id="i-home" viewBox="0 0 16 16">
+          <path
+            d="M2.4 7.1 8 2.6l5.6 4.5V13a.6.6 0 0 1-.6.6h-3.3V9.4H6.3v4.2H3a.6.6 0 0 1-.6-.6z"
+          />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 16 16">
+          <circle cx="7" cy="7" r="4.2" />
+          <path d="m10.1 10.1 3.5 3.5" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 16 16">
+          <path
+            d="M2.2 5.1a1.5 1.5 0 0 1 1.5-1.5h2.4l1.3 1.6h4.9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H3.7a1.5 1.5 0 0 1-1.5-1.5z"
+          />
+        </symbol>
+        <symbol id="i-document" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 9h5.2M5.4 11.2h3.4" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6" />
+        </symbol>
+        <symbol id="i-verify" viewBox="0 0 16 16">
+          <path
+            d="M8 2.1 12.9 4v3.5c0 2.9-2.1 4.9-4.9 6.2-2.8-1.3-4.9-3.3-4.9-6.2V4z"
+          />
+          <path d="m5.9 7.8 1.4 1.4 3-3.4" />
+        </symbol>
+        <symbol id="i-redact" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 6.6h2.2M5.4 11.4h5.2" />
+          <rect
+            x="5.4"
+            y="8.4"
+            width="5.2"
+            height="1.9"
+            rx=".4"
+            fill="currentColor"
+            stroke="none"
+          />
+        </symbol>
+        <symbol id="i-research" viewBox="0 0 16 16">
+          <path
+            d="M6.5 2.4h3M7.1 2.4v3.8l-3 6.2a1.1 1.1 0 0 0 1 1.6h5.8a1.1 1.1 0 0 0 1-1.6l-3-6.2V2.4"
+          />
+          <path d="M5.4 10.6h5.2" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 16 16">
+          <path d="M2.4 5h4.2M10.2 5h3.4M2.4 11h3.2M8.2 11h5.4" />
+          <circle cx="8" cy="5" r="1.6" />
+          <circle cx="6.4" cy="11" r="1.6" />
+        </symbol>
+
+        <!-- Common actions -->
+        <symbol id="i-plus" viewBox="0 0 16 16">
+          <path d="M8 3v10M3 8h10" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16">
+          <path d="M3 8h10" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 16 16">
+          <path d="M8 10.4V2.6M5.2 5.4 8 2.6l2.8 2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 16 16">
+          <path d="M8 2.6v7.8M5.2 7.6 8 10.4l2.8-2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-share" viewBox="0 0 16 16">
+          <circle cx="3.9" cy="8" r="1.7" />
+          <circle cx="12.1" cy="3.9" r="1.7" />
+          <circle cx="12.1" cy="12.1" r="1.7" />
+          <path d="m5.4 7.2 5.2-2.5M5.4 8.8l5.2 2.5" />
+        </symbol>
+        <symbol id="i-more" viewBox="0 0 16 16">
+          <circle cx="3.4" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="12.6" cy="8" r="1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 16 16">
+          <path d="M2.6 4.2h10.8M6 4.2V2.8h4v1.4" />
+          <path d="M4.4 4.2l.6 9h6l.6-9" />
+          <path d="M6.6 6.6v4.2M9.4 6.6v4.2" />
+        </symbol>
+        <symbol id="i-edit" viewBox="0 0 16 16">
+          <path d="M2.6 13.4h2.8L13 5.8 10.2 3 2.6 10.6z" />
+          <path d="m9.3 3.9 2.8 2.8" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 16 16">
+          <rect x="5.4" y="5.4" width="8" height="8" rx="1.2" />
+          <path
+            d="M10.6 5.4V3.8a1.2 1.2 0 0 0-1.2-1.2H3.8a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.6"
+          />
+        </symbol>
+        <symbol id="i-print" viewBox="0 0 16 16">
+          <path d="M4.6 5.6V2.4h6.8v3.2" />
+          <rect x="2.4" y="5.6" width="11.2" height="5.4" rx="1.1" />
+          <path d="M4.6 9.4h6.8v4.2H4.6z" />
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 16 16">
+          <path d="M9.4 2.6h4v4M13.4 2.6 7.6 8.4" />
+          <path
+            d="M11.4 9.4v3.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V5.6a1 1 0 0 1 1-1h3.2"
+          />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 16 16">
+          <path
+            d="M6.4 9.6a2.6 2.6 0 0 0 3.7 0l1.8-1.8a2.6 2.6 0 0 0-3.7-3.7l-.7.7"
+          />
+          <path
+            d="M9.6 6.4a2.6 2.6 0 0 0-3.7 0L4.1 8.2a2.6 2.6 0 0 0 3.7 3.7l.7-.7"
+          />
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 16 16">
+          <path d="M6.2 2.4h3.6l-.5 3.4 2.3 1.8v1.3H4.4V7.6l2.3-1.8z" />
+          <path d="M8 8.9v4.7" />
+        </symbol>
+        <symbol id="i-filter" viewBox="0 0 16 16">
+          <path d="M2.6 4h10.8M4.6 8h6.8M6.6 12h2.8" />
+        </symbol>
+        <symbol id="i-sort" viewBox="0 0 16 16">
+          <path d="M4.4 3.2v9.6M2.4 10.8l2 2 2-2" />
+          <path d="M11.6 12.8V3.2M9.6 5.2l2-2 2 2" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 16 16">
+          <path
+            d="M1.7 8S3.9 3.9 8 3.9 14.3 8 14.3 8 12.1 12.1 8 12.1 1.7 8 1.7 8z"
+          />
+          <circle cx="8" cy="8" r="2" />
+        </symbol>
+        <symbol id="i-eye-off" viewBox="0 0 16 16">
+          <path d="M2.2 2.2 13.8 13.8" />
+          <path
+            d="M6.3 4.3A6.5 6.5 0 0 1 8 4.1c4.1 0 6.3 3.9 6.3 3.9a10 10 0 0 1-2.2 2.6"
+          />
+          <path
+            d="M10.1 12A6.7 6.7 0 0 1 8 12.1C3.9 12.1 1.7 8 1.7 8a10.5 10.5 0 0 1 2.3-2.7"
+          />
+        </symbol>
+        <symbol id="i-history" viewBox="0 0 16 16">
+          <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+          <path d="M2.4 2.6v3.6h3.6" />
+          <path d="M8 5.4V8l2 1.3" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 16 16">
+          <path d="M13.2 8A5.3 5.3 0 1 1 11.3 3.8" />
+          <path d="M13.2 2.6v4h-4" />
+        </symbol>
+        <symbol id="i-undo" viewBox="0 0 16 16">
+          <path d="M6.4 4 3.4 7l3 3" />
+          <path d="M3.6 7h5.6a3.4 3.4 0 0 1 0 6.8H6.6" />
+        </symbol>
+        <symbol id="i-redo" viewBox="0 0 16 16">
+          <path d="M9.6 4l3 3-3 3" />
+          <path d="M12.4 7H6.8a3.4 3.4 0 0 0 0 6.8h2.6" />
+        </symbol>
+        <symbol id="i-bold" viewBox="0 0 16 16">
+          <path
+            d="M4.8 3h3.7a2.4 2.4 0 0 1 0 4.8H4.8zM4.8 7.8h4.4a2.6 2.6 0 0 1 0 5.2H4.8z"
+          />
+        </symbol>
+        <symbol id="i-italic" viewBox="0 0 16 16">
+          <path d="M9.8 3H6.6M9.4 13H6.2M9.2 3 6.8 13" />
+        </symbol>
+        <symbol id="i-underline" viewBox="0 0 16 16">
+          <path d="M5 3v4.2a3 3 0 0 0 6 0V3M4 13.5h8" />
+        </symbol>
+        <symbol id="i-align-left" viewBox="0 0 16 16">
+          <path d="M2.8 4h10.4M2.8 8h6.4M2.8 12h9" />
+        </symbol>
+        <symbol id="i-list-ordered" viewBox="0 0 16 16">
+          <path d="M6.4 4h6.8M6.4 8h6.8M6.4 12h6.8" />
+          <path d="M2.6 2.8h1v3M2.6 10.4h1.8l-1.8 2.1h1.8" />
+        </symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16">
+          <rect x="2.4" y="3" width="11.2" height="10" rx="1.2" />
+          <path d="M8 3v10" />
+        </symbol>
+        <symbol id="i-bell" viewBox="0 0 16 16">
+          <path
+            d="M12.2 6.4a4.2 4.2 0 0 0-8.4 0c0 3.2-1.2 4-1.2 4h10.8s-1.2-.8-1.2-4z"
+          />
+          <path d="M6.7 12.8a1.5 1.5 0 0 0 2.6 0" />
+        </symbol>
+        <symbol id="i-keyboard" viewBox="0 0 16 16">
+          <rect x="1.8" y="4" width="12.4" height="8" rx="1.4" />
+          <path
+            d="M4.2 6.6h.1M6.8 6.6h.1M9.4 6.6h.1M12 6.6h.1M4.2 9.4h.1M6.4 9.4h3M11.8 9.4h.1"
+          />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 16 16">
+          <path d="m4 4 8 8M12 4l-8 8" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 16 16">
+          <path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 16 16">
+          <path d="m3.2 8.4 3 3 6.6-7" />
+        </symbol>
+        <symbol id="i-minus-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M5.2 8h5.6" />
+        </symbol>
+        <symbol id="i-check-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+
+        <!-- Chevrons and arrows -->
+        <symbol id="i-chevron-down" viewBox="0 0 16 16">
+          <path d="m4.5 6.4 3.5 3.5 3.5-3.5" />
+        </symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 16 16">
+          <path d="m4.5 9.6 3.5-3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 16 16">
+          <path d="m6.4 4.5 3.5 3.5-3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 16 16">
+          <path d="m9.6 4.5-3.5 3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevrons-left" viewBox="0 0 16 16">
+          <path d="m7.8 4.6-3.4 3.4 3.4 3.4M11.8 4.6 8.4 8l3.4 3.4" />
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 16 16">
+          <path d="M13 8H3M6.5 4.5 3 8l3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 16 16">
+          <path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 16 16">
+          <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" />
+        </symbol>
+
+        <!-- Status and meaning -->
+        <symbol id="i-flag" viewBox="0 0 16 16">
+          <path d="M3.8 14V2.4M3.8 2.6h8.1l-1.3 2.9 1.3 2.9H3.8" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 16 16">
+          <path d="M8 2.4 14 13.2H2z" />
+          <path d="M8 6.4v3.1M8 11.5v.1" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M8 7.3v3.9M8 5.2v.1" />
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path
+            d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.75c-.5.3-.8.75-.8 1.3v.45M8 11.9v.1"
+          />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.6" />
+          <path d="M8 4.7V8l2.2 1.4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" />
+        </symbol>
+        <symbol id="i-lock-open" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.6-.8" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 16 16">
+          <circle cx="8" cy="5.4" r="2.6" />
+          <path d="M3.4 13.6a4.6 4.6 0 0 1 9.2 0" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 16 16">
+          <circle cx="6" cy="5.6" r="2.3" />
+          <path d="M2.4 13.2a3.8 3.8 0 0 1 7.2 0" />
+          <path
+            d="M10.6 3.6a2.3 2.3 0 0 1 0 4.2M11.4 9.7a3.6 3.6 0 0 1 2.2 3.3"
+          />
+        </symbol>
+
+        <!-- Sources and documents -->
+        <symbol id="i-scale" viewBox="0 0 16 16">
+          <path d="M8 2v11M4.6 13h6.8M2.6 4.4h10.8" />
+          <path d="M4.2 4.4 2.6 8.2h3.2zM11.8 4.4 10.2 8.2h3.2z" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 16 16">
+          <path
+            d="M2.6 3.4A1.4 1.4 0 0 1 4 2h9.4v11.6H4a1.4 1.4 0 0 0-1.4 1.4z"
+          />
+          <path d="M2.6 12.6h10.8" />
+        </symbol>
+        <symbol id="i-note" viewBox="0 0 16 16">
+          <path d="M3 3.4h10v6.6L9.4 13H3z" />
+          <path d="M9.4 13V10h3.6" />
+          <path d="M5.4 6h5.2" />
+        </symbol>
+        <symbol id="i-comment" viewBox="0 0 16 16">
+          <path
+            d="M13.2 8.1v.6a4.6 4.6 0 0 1-4.6 4.6H6.1L3 15.2v-3.1a4.6 4.6 0 0 1-.8-2.6V8.1a4.6 4.6 0 0 1 4.6-4.6h1.8a4.6 4.6 0 0 1 4.6 4.6z"
+          />
+        </symbol>
+        <symbol id="i-track-changes" viewBox="0 0 16 16">
+          <path d="M2.6 3.4v9.2" />
+          <path d="M5.2 5h7.2M5.2 8h4.4M5.2 11h7.2" />
+          <path d="M11.6 7.2v3.6M9.8 9h3.6" />
+        </symbol>
+        <symbol id="i-accept" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+        <symbol id="i-reject" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.8 5.8 4.4 4.4M10.2 5.8 5.8 10.2" />
+        </symbol>
+
+        <!-- Theme and chrome -->
+        <symbol id="i-sun" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="2.4" />
+          <path
+            d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1"
+          />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 16 16">
+          <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.8 5.8 0 1 0 6.8 6.8z" />
+        </symbol>
+        <symbol id="i-sidebar-collapse" viewBox="0 0 16 16">
+          <rect x="2" y="3" width="12" height="10" rx="1.4" />
+          <path d="M6.4 3v10M9.9 6.4 8.3 8l1.6 1.6" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 16 16">
+          <path d="M2.6 4.5h10.8M2.6 8h10.8M2.6 11.5h10.8" />
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 16 16">
+          <path d="M5.6 4h8M5.6 8h8M5.6 12h8" />
+          <circle cx="2.9" cy="4" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="8" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="12" r=".8" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 16 16">
+          <rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1" />
+        </symbol>
+        <symbol id="i-paperclip" viewBox="0 0 16 16">
+          <path
+            d="M12.6 7.4 7.8 12.2a3 3 0 0 1-4.2-4.2l5.2-5.2a2 2 0 0 1 2.8 2.8l-5.1 5.1a1 1 0 0 1-1.4-1.4l4.6-4.6"
+          />
+        </symbol>
+        <symbol id="i-calendar" viewBox="0 0 16 16">
+          <rect x="2.4" y="3.4" width="11.2" height="10.2" rx="1.4" />
+          <path d="M2.4 6.6h11.2M5.6 2.2v2.4M10.4 2.2v2.4" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 16 16">
+          <path
+            d="M2.6 7V3.4a.8.8 0 0 1 .8-.8H7l6.4 6.4a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0z"
+          />
+          <circle cx="5.4" cy="5.4" r=".9" />
+        </symbol>
+        <symbol id="i-sparkle" viewBox="0 0 16 16">
+          <path d="M8 2.2 9.2 6l3.8 1.2L9.2 8.4 8 12.2 6.8 8.4 3 7.2 6.8 6z" />
+          <path d="M12.6 11.6v2M11.6 12.6h2" />
+        </symbol>
+      </defs>
+    </svg>
+    <div class="ob-app" id="app" data-auto-collapse="true">
+      <aside class="ob-side" aria-label="Sidebar">
+        <div class="ob-side-head">
+          <a class="ob-logo" href="dashboard.html" aria-label="Obiter home"
+            ><svg aria-hidden="true"><use href="#i-obiter" /></svg
+          ></a>
+          <div class="ob-brand-text">
+            <div class="ob-brand-name">Obiter</div>
+            <div class="ob-brand-firm">Harrington Vale LLP</div>
+          </div>
+        </div>
+
+        <nav class="ob-nav" aria-label="Workspace">
+          <a class="ob-nav-item" href="dashboard.html" title="Home">
+            <svg aria-hidden="true"><use href="#i-home" /></svg
+            ><span class="ob-nav-text">Home</span>
+          </a>
+          <a class="ob-nav-item" href="search.html" title="Search">
+            <svg aria-hidden="true"><use href="#i-search" /></svg
+            ><span class="ob-nav-text">Search</span>
+          </a>
+          <a class="ob-nav-item" href="matters.html" title="Matters">
+            <svg aria-hidden="true"><use href="#i-folder" /></svg
+            ><span class="ob-nav-text">Matters</span
+            ><span class="ob-nav-count">4</span>
+          </a>
+          <a
+            class="ob-nav-item has-alert"
+            href="verify.html"
+            title="Verify — 1 flagged finding"
+          >
+            <svg aria-hidden="true"><use href="#i-verify" /></svg
+            ><span class="ob-nav-text">Verify</span
+            ><span class="ob-nav-count is-danger">1</span
+            ><span class="ob-nav-dot is-danger"></span>
+          </a>
+          <a
+            class="ob-nav-item has-alert is-active"
+            href="redact-start.html"
+            title="Redact — 1 run in review"
+            aria-current="page"
+          >
+            <svg aria-hidden="true"><use href="#i-redact" /></svg
+            ><span class="ob-nav-text">Redact</span
+            ><span class="ob-nav-count is-info">1</span
+            ><span class="ob-nav-dot is-info"></span>
+          </a>
+          <a
+            class="ob-nav-item is-quiet"
+            href="#"
+            title="Research — coming soon"
+            aria-disabled="true"
+          >
+            <svg aria-hidden="true"><use href="#i-research" /></svg
+            ><span class="ob-nav-text">Research</span
+            ><span class="ob-nav-soon">Soon</span>
+          </a>
+
+          <div class="ob-nav-label">
+            <span>Pinned matters</span
+            ><button
+              class="ob-nav-add"
+              type="button"
+              title="Pin a matter"
+              aria-label="Pin a matter"
+            >
+              <svg class="is-12" aria-hidden="true"><use href="#i-plus" /></svg>
+            </button>
+          </div>
+
+          <a
+            class="ob-pin"
+            href="matter.html"
+            title="Northgate Foods v Brightwater Packaging — NGF-0418"
+          >
+            <span class="ob-pin-tile">NG</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">Northgate Foods v Brightwater</span>
+              <span class="ob-pin-sub">NGF-0418 · 3 documents</span>
+            </span>
+            <span
+              class="ob-pin-dot is-danger"
+              title="1 flagged citation"
+            ></span>
+          </a>
+          <a
+            class="ob-pin is-current"
+            href="matter-redaction.html"
+            title="FOI request: Cheshire Council 2026/114 — redaction matter"
+          >
+            <span class="ob-pin-tile">FOI</span>
+            <span class="ob-pin-main">
+              <span class="ob-pin-name">FOI request: Cheshire Council</span>
+              <span class="ob-pin-sub">FOI-2026-114 · in review</span>
+            </span>
+            <span class="ob-pin-dot is-info" title="Redaction in review"></span>
+          </a>
+        </nav>
+
+        <div class="ob-side-foot">
+          <button
+            class="ob-side-toggle"
+            id="sidebarToggle"
+            type="button"
+            aria-expanded="true"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <svg aria-hidden="true"><use href="#i-sidebar-collapse" /></svg
+            ><span>Collapse sidebar</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="ob-main">
+        <header class="ob-top">
+          <nav class="ob-crumbs ob-crumbs--fit" aria-label="Breadcrumb">
+            <a href="redact-start.html">Redact</a>
+            <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+            <span class="ob-crumb-current">Review</span>
+          </nav>
+
+          <div
+            class="ob-searchbar"
+            role="button"
+            tabindex="0"
+            aria-label="Search Obiter"
+          >
+            <svg aria-hidden="true"><use href="#i-search" /></svg>
+            <span>Search Obiter</span>
+            <span class="ob-kbd">⌘K</span>
+          </div>
+
+          <button
+            class="ob-icon-btn"
+            id="themeButton"
+            type="button"
+            aria-label="Switch to light theme"
+            data-tip="Switch theme"
+            data-tip-bottom
+            data-tip-align="end"
+          >
+            <svg class="ob-theme-sun" aria-hidden="true">
+              <use href="#i-sun" />
+            </svg>
+            <svg class="ob-theme-moon" aria-hidden="true">
+              <use href="#i-moon" />
+            </svg>
+          </button>
+
+          <div class="ob-account">
+            <button
+              class="ob-avatar-button"
+              id="accountButton"
+              type="button"
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              <span class="ob-avatar">AM</span>
+            </button>
+            <div class="ob-menu" id="accountMenu" role="menu" hidden>
+              <div class="ob-menu-head">
+                <div class="ob-menu-name">Alex Morgan</div>
+                <div class="ob-menu-sub">Owner · Harrington Vale LLP</div>
+              </div>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-account.html"
+              >
+                <svg aria-hidden="true"><use href="#i-user" /></svg>Account
+                settings
+              </a>
+              <a
+                class="ob-menu-item"
+                role="menuitem"
+                href="settings-preferences.html"
+              >
+                <svg aria-hidden="true"><use href="#i-settings" /></svg
+                >Preferences
+              </a>
+              <button
+                class="ob-menu-item"
+                role="menuitem"
+                type="button"
+                id="menuTheme"
+              >
+                <svg class="ob-theme-sun" aria-hidden="true">
+                  <use href="#i-sun" />
+                </svg>
+                <svg class="ob-theme-moon" aria-hidden="true">
+                  <use href="#i-moon" />
+                </svg>
+                <span id="menuThemeLabel">Switch to light theme</span>
+              </button>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                <svg aria-hidden="true"><use href="#i-keyboard" /></svg>Keyboard
+                shortcuts
+              </button>
+              <div class="ob-menu-sep"></div>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                Sign out
+              </button>
+              <div class="ob-menu-foot">Obiter · Firm workspace</div>
+            </div>
+          </div>
+        </header>
+
+        <main class="ob-doc">
+          <header class="ob-doc-head">
+            <a
+              class="ob-icon-btn ob-doc-back"
+              href="redact-start.html"
+              aria-label="Back to Redact"
+              data-tip="Back to Redact"
+              data-tip-bottom
+            >
+              <svg aria-hidden="true"><use href="#i-arrow-left" /></svg>
+            </a>
+            <div class="rr-head-main">
+              <h1
+                class="ob-doc-title"
+                title="witness-statement-shah.docx"
+                data-audit-long-title
+              >
+                witness-statement-shah.docx
+              </h1>
+              <div class="ob-doc-sub rr-head-sub">
+                <span class="ob-save-state"
+                  ><svg aria-hidden="true"><use href="#i-check-circle" /></svg
+                  >Autosaved 14:42</span
+                >
+                <span class="ob-sep">·</span>
+                <span>FOI request: Cheshire Council 2026/114</span>
+                <span class="ob-sep ob-hide-md">·</span>
+                <span class="ob-hide-md">Redaction review</span>
+              </div>
+            </div>
+
+            <div class="ob-doc-actions">
+              <button class="ob-btn ob-btn--secondary ob-btn--sm" type="button">
+                Save and exit
+              </button>
+              <button
+                class="ob-btn ob-btn--primary ob-btn--sm"
+                type="button"
+                disabled
+                data-tip="Decide all 21 detected spans, then review every page"
+                data-tip-bottom
+              >
+                <svg class="is-12" aria-hidden="true">
+                  <use href="#i-lock" /></svg
+                >Finalise
+              </button>
+              <button
+                class="ob-icon-btn"
+                type="button"
+                aria-label="More review actions"
+                data-tip="More actions"
+                data-tip-bottom
+              >
+                <svg aria-hidden="true"><use href="#i-more" /></svg>
+              </button>
+            </div>
+          </header>
+
+          <div class="rr-band">
+            <span class="rr-progress-label"
+              ><span class="ob-ink">18 of 21</span> detected spans decided</span
+            >
+            <div class="ob-progress rr-progressbar">
+              <div class="ob-progress-bar" style="width: 86%"></div>
+            </div>
+            <span class="rr-band-note"
+              >3 left · detection finds candidates, not every sensitive
+              thing</span
+            >
+            <div class="rr-band-end">
+              <div class="ob-legend">
+                <span class="ob-legend-item"
+                  ><span class="ob-legend-swatch is-ink"></span>Redacted</span
+                >
+                <span class="ob-legend-item"
+                  ><span class="ob-legend-swatch is-kept"></span>Kept
+                  visible</span
+                >
+                <span class="ob-legend-item"
+                  ><span class="ob-legend-swatch is-warning"></span>Needs
+                  review</span
+                >
+              </div>
+              <span class="ob-caption">Page 1 of 1</span>
+            </div>
+          </div>
+
+          <div class="ob-doc-body">
+            <div class="rr-main">
+              <div class="ob-canvas">
+                <article class="ob-paper">
+                  <p class="ob-paper-mark" style="text-align: center">
+                    In the County Court at Leicester · Claim no.
+                    <span class="ob-span is-pending" title="Needs review"
+                      >LS26C00418</span
+                    >
+                  </p>
+                  <h1 class="ob-paper-title" style="text-align: center">
+                    Witness statement of
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >Priya Shah</span
+                    >
+                  </h1>
+                  <p class="ob-paper-intro" style="text-align: center">
+                    Between <b>Northgate Foods Limited</b> (Claimant) and
+                    <b>Brightwater Packaging Limited</b> (Defendant)
+                  </p>
+
+                  <p>
+                    I,
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >Priya Shah</span
+                    >, of
+                    <span class="ob-span is-current" title="Selected span"
+                      >14 Elmfield Avenue, Leicester LE2 1RB</span
+                    >, date of birth
+                    <span class="ob-span is-rejected" title="Kept visible"
+                      >9 May 1988</span
+                    >, will say as follows.
+                  </p>
+
+                  <p>
+                    I am the Procurement Manager at Northgate Foods Limited. My
+                    work email is
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >priya.shah@northgatefoods.example</span
+                    >
+                    and my mobile number is
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >07700 900 482</span
+                    >.
+                  </p>
+
+                  <p>
+                    On
+                    <span class="ob-span is-pending" title="Needs review"
+                      >3 March 2026</span
+                    >
+                    I received a call from
+                    <span class="ob-span is-rejected" title="Kept visible"
+                      >Tom Adebayo</span
+                    >
+                    of
+                    <span class="ob-span is-rejected" title="Kept visible"
+                      >Brightwater Packaging Limited</span
+                    >. Mr Adebayo called from
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >0116 496 0731</span
+                    >
+                    and said that Brightwater would only supply
+                    <span class="ob-span is-pending" title="Needs review"
+                      >40,000 units</span
+                    >
+                    a month from April.
+                  </p>
+
+                  <p>
+                    On
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >4 March 2026</span
+                    >
+                    I emailed our finance manager,
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >Daniel Okonjo</span
+                    >, at
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >daniel.okonjo@northgatefoods.example</span
+                    >.
+                  </p>
+
+                  <p>
+                    The delivery address was
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >Unit 7, Troon Way Business Centre, Leicester LE4
+                      9HA</span
+                    >, and the depot telephone is
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >0116 496 0744</span
+                    >.
+                  </p>
+
+                  <p>
+                    On
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >11 April 2026</span
+                    >
+                    I wrote to Brightwater’s solicitors,
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >Harlow &amp; Vance</span
+                    >, about invoice
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >BW-4471</span
+                    >.
+                  </p>
+
+                  <p>
+                    I did not agree to any change. I told Mr Adebayo that any
+                    variation would have to be in writing and signed, as clause
+                    21 of the Supply Agreement requires. I made a note of the
+                    call the same day, which I exhibit as PS1.
+                  </p>
+
+                  <p>
+                    On 10 March 2026 Northgate paid invoice BW-2291 in full by
+                    bank transfer from account
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >41029384</span
+                    >, sort code
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >20-45-77</span
+                    >, at the original contract volume.
+                  </p>
+
+                  <p>
+                    I exhibit at PS2 a copy of the email chain with Mr Adebayo
+                    dated 3 and 4 March 2026, and at PS3 the purchase order for
+                    April 2026.
+                  </p>
+
+                  <p>
+                    I believe that the facts stated in this witness statement
+                    are true. I understand that proceedings for contempt of
+                    court may be brought against anyone who makes, or causes to
+                    be made, a false statement in a document verified by a
+                    statement of truth without an honest belief in its truth.
+                  </p>
+
+                  <p>
+                    Signed:
+                    <span class="ob-span is-accepted" title="Redacted"
+                      >Priya Shah</span
+                    ><br />Dated: 12 March 2026
+                  </p>
+                  <p
+                    class="ob-paper-mark"
+                    style="text-align: center; margin-top: 24px"
+                  >
+                    1
+                  </p>
+                </article>
+              </div>
+
+              <div
+                class="ob-decision-bar ob-decision-bar--row"
+                aria-label="Decide the selected span"
+              >
+                <div class="rr-decide-context">
+                  <span class="ob-rev-num">2</span>
+                  <div>
+                    <div class="rr-decide-head">
+                      <span class="ob-item-title ob-ink"
+                        >14 Elmfield Avenue, Leicester LE2 1RB</span
+                      >
+                      <span class="ob-meta">Address</span>
+                      <span class="ob-status is-success"
+                        ><span class="ob-dot"></span>Redacted</span
+                      >
+                    </div>
+                    <div class="ob-caption">
+                      Redacted by Alex Morgan · 26 Oct 2026, 14:42
+                    </div>
+                    <div class="ob-caption">
+                      Detection confidence: high · the street number and
+                      postcode match an address. Detection is not a disclosure
+                      decision.
+                    </div>
+                  </div>
+                </div>
+                <div class="rr-decide-nav">
+                  <button
+                    class="ob-icon-btn"
+                    type="button"
+                    aria-label="Previous span"
+                    data-tip="Previous span"
+                  >
+                    <svg aria-hidden="true"><use href="#i-chevron-left" /></svg>
+                  </button>
+                  <span class="ob-meta">2 of 21</span>
+                  <button
+                    class="ob-icon-btn"
+                    type="button"
+                    aria-label="Next span"
+                    data-tip="Next span"
+                  >
+                    <svg aria-hidden="true">
+                      <use href="#i-chevron-right" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="ob-decision-acts">
+                  <button
+                    class="ob-btn ob-btn--ghost ob-btn--sm"
+                    type="button"
+                    data-edit
+                  >
+                    Edit span<span class="ob-kbd">E</span>
+                  </button>
+                  <button
+                    class="ob-btn ob-btn--secondary ob-btn--sm"
+                    type="button"
+                  >
+                    Keep visible<span class="ob-kbd">K</span>
+                  </button>
+                  <button
+                    class="ob-btn ob-btn--primary ob-btn--sm"
+                    type="button"
+                  >
+                    <svg class="is-12" aria-hidden="true">
+                      <use href="#i-redact" /></svg
+                    >Redact<span class="ob-kbd">A</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <aside
+              class="ob-panel ob-panel--divided"
+              aria-label="Detected spans"
+            >
+              <div class="ob-panel-head">
+                <div class="ob-cluster">
+                  <span class="ob-panel-title">Detected spans</span>
+                  <span class="ob-meta">21</span>
+                </div>
+                <button
+                  class="ob-icon-btn"
+                  type="button"
+                  aria-label="Hide detected spans"
+                  data-tip="Hide"
+                  id="hideSpans"
+                >
+                  <svg aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+
+              <div class="ob-sensitive-note">
+                <svg class="is-12" aria-hidden="true">
+                  <use href="#i-lock" />
+                </svg>
+                <span
+                  ><span class="ob-ink"
+                    >Original text is visible to reviewers only.</span
+                  >
+                  Do not share this screen or export the schedule outside the
+                  matter.</span
+                >
+              </div>
+
+              <div class="rr-panel-filter">
+                <div class="ob-seg" role="tablist" aria-label="Filter spans">
+                  <button
+                    class="ob-seg-item is-active"
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    data-span-filter="all"
+                  >
+                    All 21
+                  </button>
+                  <button
+                    class="ob-seg-item"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-span-filter="pending"
+                  >
+                    Unreviewed 3
+                  </button>
+                  <button
+                    class="ob-seg-item"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-span-filter="rejected"
+                  >
+                    Kept 3
+                  </button>
+                  <button
+                    class="ob-seg-item"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-span-filter="accepted"
+                  >
+                    Redacted 15
+                  </button>
+                </div>
+              </div>
+
+              <div class="ob-panel-body" style="padding: 0" id="spanList">
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Person name</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">Priya Shah</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button
+                  class="ob-spanrow is-active"
+                  type="button"
+                  data-state="accepted"
+                >
+                  <span class="ob-spanrow-cat">Address</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text"
+                    >14 Elmfield Avenue, Leicester LE2 1RB</span
+                  >
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high<span class="ob-ink"
+                      >Redacted · Alex Morgan · 26 Oct 2026, 14:42</span
+                    ></span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="rejected">
+                  <span class="ob-spanrow-cat">Date of birth</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status"
+                      ><span class="ob-dot"></span>Kept visible</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">9 May 1988</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="rejected">
+                  <span class="ob-spanrow-cat">Person name</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status"
+                      ><span class="ob-dot"></span>Kept visible</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">Tom Adebayo</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="rejected">
+                  <span class="ob-spanrow-cat">Organisation name</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status"
+                      ><span class="ob-dot"></span>Kept visible</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text"
+                    >Brightwater Packaging Limited</span
+                  >
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: medium</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="pending">
+                  <span class="ob-spanrow-cat">Date</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-warning"
+                      ><span class="ob-dot"></span>Needs review</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">3 March 2026</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: medium</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Phone number</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">0116 496 0731</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="pending">
+                  <span class="ob-spanrow-cat">Financial figure</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-warning"
+                      ><span class="ob-dot"></span>Needs review</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">40,000 units</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: medium</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Date</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">4 March 2026</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Person name</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">Daniel Okonjo</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Email address</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text"
+                    >daniel.okonjo@northgatefoods.example</span
+                  >
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Address</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text ob-spanrow-text--wrap"
+                    >Unit 7, Troon Way Business Centre, Leicester LE4 9HA</span
+                  >
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: medium</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Phone number</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">0116 496 0744</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Date</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">11 April 2026</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Organisation name</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">Harlow &amp; Vance</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: medium</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Reference</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">BW-4471</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: medium</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Email address</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text"
+                    >priya.shah@northgatefoods.example</span
+                  >
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Phone number</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">07700 900 482</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Account number</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">41029384</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="accepted">
+                  <span class="ob-spanrow-cat">Sort code</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-success"
+                      ><span class="ob-dot"></span>Redacted</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">20-45-77</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: high</span
+                  >
+                </button>
+                <button class="ob-spanrow" type="button" data-state="pending">
+                  <span class="ob-spanrow-cat">Case reference</span>
+                  <span class="ob-spanrow-state"
+                    ><span class="ob-status is-warning"
+                      ><span class="ob-dot"></span>Needs review</span
+                    ></span
+                  >
+                  <span class="ob-spanrow-text">LS26C00418</span>
+                  <span class="ob-spanrow-meta"
+                    >Page 1 · detection confidence: low</span
+                  >
+                </button>
+              </div>
+
+              <div class="ob-panel-foot">
+                <p class="ob-caption">
+                  Kept visible spans stay in the document. Every decision is
+                  recorded with the reviewer and the time.
+                </p>
+                <div class="ob-infonote is-warning ob-mt-3">
+                  <svg class="is-12" aria-hidden="true">
+                    <use href="#i-alert" />
+                  </svg>
+                  <div>
+                    <b>Schedule contains the original redacted text</b>Keep it
+                    inside the matter. Export only to people cleared for this
+                    matter.
+                  </div>
+                </div>
+                <div class="ob-cluster ob-mt-3">
+                  <a
+                    class="ob-btn ob-btn--ghost ob-btn--sm"
+                    href="redact-start.html"
+                    >Back to Redact</a
+                  >
+                  <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+                    <svg class="is-12" aria-hidden="true">
+                      <use href="#i-download" /></svg
+                    >Export schedule
+                  </button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Edit span ------------------------------------------------------------ -->
+    <div class="ob-backdrop" id="editDialog" hidden>
+      <div
+        class="ob-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="editTitle"
+      >
+        <div class="ob-dialog-head">
+          <div>
+            <h2 class="ob-dialog-title" id="editTitle">Edit span</h2>
+            <p class="ob-meta" style="margin-top: 4px">
+              Page 1 · detected as a person name
+            </p>
+          </div>
+          <button
+            class="ob-icon-btn"
+            type="button"
+            aria-label="Close"
+            data-close
+          >
+            <svg aria-hidden="true"><use href="#i-x" /></svg>
+          </button>
+        </div>
+        <div class="ob-dialog-body">
+          <div class="ob-form-stack">
+            <label class="ob-field">
+              <span class="ob-field-label">Category</span>
+              <span class="ob-select-wrap">
+                <select class="ob-select" aria-label="Category">
+                  <option selected>Person name</option>
+                  <option>Organisation name</option>
+                  <option>Address</option>
+                  <option>Phone number</option>
+                  <option>Email address</option>
+                  <option>Account number</option>
+                  <option>Date of birth</option>
+                  <option>Case reference</option>
+                </select>
+                <svg class="ob-select-caret is-12" aria-hidden="true">
+                  <use href="#i-chevron-down" />
+                </svg>
+              </span>
+            </label>
+            <label class="ob-field">
+              <span class="ob-field-label">Text</span>
+              <input class="ob-input" type="text" value="Priya Shah" />
+              <span class="ob-field-hint"
+                >Extend or shorten the span by editing the exact text to
+                redact.</span
+              >
+            </label>
+            <label class="ob-field">
+              <span class="ob-field-label">Replacement (optional)</span>
+              <input
+                class="ob-input"
+                type="text"
+                placeholder="Leave blank for a solid bar"
+              />
+              <span class="ob-field-hint"
+                >A pseudonym is used only in a pseudonymised Word copy.</span
+              >
+            </label>
+
+            <div class="ob-quote">
+              <span class="ob-quote-label"
+                >How this will appear in the disclosure copy</span
+              >
+              <span class="ob-inkbar"></span>
+            </div>
+          </div>
+        </div>
+        <div class="ob-dialog-foot">
+          <button class="ob-btn ob-btn--ghost" type="button" data-close>
+            Cancel
+          </button>
+          <span class="ob-grow"></span>
+          <button class="ob-btn ob-btn--primary" type="button" data-close>
+            Save span
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      ;(function () {
+        'use strict'
+        var root = document.documentElement
+        var app = document.getElementById('app')
+        var accountButton = document.getElementById('accountButton')
+        var accountMenu = document.getElementById('accountMenu')
+        var themeButton = document.getElementById('themeButton')
+        var menuTheme = document.getElementById('menuTheme')
+        var menuThemeLabel = document.getElementById('menuThemeLabel')
+
+        function setTheme(theme) {
+          root.dataset.theme = theme
+          var toLight = theme === 'dark'
+          themeButton.setAttribute(
+            'aria-label',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+          themeButton.setAttribute(
+            'data-tip',
+            toLight ? 'Switch to light theme' : 'Switch to dark theme',
+          )
+          menuThemeLabel.textContent = toLight
+            ? 'Switch to light theme'
+            : 'Switch to dark theme'
+        }
+        themeButton.addEventListener('click', function () {
+          setTheme(root.dataset.theme === 'light' ? 'dark' : 'light')
+        })
+
+        function closeMenu() {
+          accountMenu.hidden = true
+          accountButton.setAttribute('aria-expanded', 'false')
+        }
+        accountButton.addEventListener('click', function (e) {
+          e.stopPropagation()
+          accountMenu.hidden = !accountMenu.hidden
+          accountButton.setAttribute(
+            'aria-expanded',
+            String(!accountMenu.hidden),
+          )
+        })
+        accountMenu.addEventListener('click', function (e) {
+          e.stopPropagation()
+        })
+        document.addEventListener('click', closeMenu)
+        menuTheme.addEventListener('click', function () {
+          setTheme(root.dataset.theme === 'light' ? 'dark' : 'light')
+          closeMenu()
+        })
+
+        var sidebarToggle = document.getElementById('sidebarToggle')
+        function setCollapsed(collapsed) {
+          app.classList.toggle('is-collapsed', collapsed)
+          sidebarToggle.setAttribute('aria-expanded', String(!collapsed))
+          sidebarToggle.setAttribute(
+            'aria-label',
+            collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+          )
+          sidebarToggle.title = collapsed
+            ? 'Expand sidebar'
+            : 'Collapse sidebar'
+          sidebarToggle.querySelector('span').textContent = collapsed
+            ? 'Expand sidebar'
+            : 'Collapse sidebar'
+        }
+        sidebarToggle.addEventListener('click', function () {
+          setCollapsed(!app.classList.contains('is-collapsed'))
+        })
+
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') closeMenu()
+        })
+
+        if (app.dataset.autoCollapse === 'true' && window.innerWidth < 1240)
+          setCollapsed(true)
+        if (location.hash === '#collapsed') setCollapsed(true)
+        if (location.hash === '#expanded') setCollapsed(false)
+        if (location.hash === '#account') {
+          accountMenu.hidden = false
+          accountButton.setAttribute('aria-expanded', 'true')
+        }
+      })()
+    </script>
+
+    <script>
+      ;(function () {
+        'use strict'
+        var edit = document.getElementById('editDialog')
+
+        function closeAll() {
+          edit.hidden = true
+        }
+
+        function applyHash() {
+          var hash = location.hash.replace('#', '')
+          closeAll()
+          if (hash === 'edit') edit.hidden = false
+        }
+
+        document.addEventListener('click', function (e) {
+          if (e.target.closest('[data-edit]')) {
+            edit.hidden = false
+            return
+          }
+          if (e.target.closest('[data-close]')) closeAll()
+          if (e.target.classList.contains('ob-backdrop')) closeAll()
+        })
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') closeAll()
+        })
+
+        document
+          .getElementById('hideSpans')
+          .addEventListener('click', function () {
+            var panel = document.querySelector('.ob-doc-body .ob-panel')
+            var body = document.querySelector('.ob-doc-body')
+            panel.hidden = true
+            body.style.gridTemplateColumns = 'minmax(0, 1fr)'
+          })
+
+        var filters = document.querySelectorAll('[data-span-filter]')
+        var rows = document.querySelectorAll('.ob-spanrow')
+        for (var i = 0; i < filters.length; i++) {
+          filters[i].addEventListener('click', function () {
+            var kind = this.getAttribute('data-span-filter')
+            for (var j = 0; j < filters.length; j++) {
+              var on = filters[j] === this
+              filters[j].classList.toggle('is-active', on)
+              filters[j].setAttribute('aria-selected', String(on))
+            }
+            for (var k = 0; k < rows.length; k++) {
+              rows[k].hidden =
+                kind !== 'all' && rows[k].getAttribute('data-state') !== kind
+            }
+          })
+        }
+
+        window.addEventListener('hashchange', applyHash)
+        applyHash()
+
+        window.addEventListener('load', function () {
+          var active = document.querySelector('#spanList .ob-spanrow.is-active')
+          if (active) active.scrollIntoView({ block: 'nearest' })
+        })
+      })()
+    </script>
+  </body>
+</html>

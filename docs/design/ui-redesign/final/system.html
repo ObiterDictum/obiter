@@ -1,0 +1,4291 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Obiter design system</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="obiter.css" />
+    <style>
+      /* Page scaffolding only. Every component below is from obiter.css.
+     Every value here is on the 4px scale, so this page audits clean. */
+      body {
+        background: var(--ob-bg);
+      }
+
+      .sys-top {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 48px;
+        background: var(--ob-bg);
+        border-bottom: 1px solid var(--ob-line);
+      }
+      .sys-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .sys-mark {
+        display: flex;
+        align-items: center;
+      }
+      .sys-brand-text {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        min-width: 0;
+      }
+      .sys-brand-name {
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .sys-brand-sub {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .sys-top-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .sys-version {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+
+      .sys-shell {
+        display: grid;
+        grid-template-columns: 196px minmax(0, 860px);
+        gap: 56px;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 56px 48px;
+        justify-content: center;
+      }
+      .sys-nav {
+        position: sticky;
+        top: 96px;
+        align-self: start;
+      }
+      .sys-nav-title {
+        font-size: 12px;
+        color: var(--ob-subtle);
+        padding: 0 8px 8px;
+      }
+      .sys-nav a {
+        display: flex;
+        align-items: center;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        color: var(--ob-subtle);
+      }
+      .sys-nav a:hover {
+        background: var(--ob-hover);
+        color: var(--ob-ink);
+      }
+
+      .sys-intro {
+        max-width: 68ch;
+      }
+      .sys-intro h1 {
+        margin-bottom: 8px;
+      }
+      .sys-intro p {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--ob-muted);
+      }
+      .sys-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 16px;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+
+      .sys-sec {
+        padding-top: 40px;
+        margin-top: 40px;
+        border-top: 1px solid var(--ob-line);
+        scroll-margin-top: 96px;
+      }
+      .sys-sec:first-of-type {
+        border-top: 0;
+        margin-top: 56px;
+        padding-top: 0;
+      }
+      .sys-sec > h2 {
+        font-size: 18px;
+        line-height: 1.3;
+        letter-spacing: -0.01em;
+        font-weight: 600;
+      }
+      .sys-lede {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--ob-muted);
+        max-width: 68ch;
+        margin-top: 8px;
+      }
+      .sys-h3 {
+        font-size: 14px;
+        font-weight: 500;
+        margin: 24px 0 8px;
+      }
+      .sys-note {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--ob-subtle);
+        margin-top: 8px;
+        max-width: 68ch;
+      }
+      .sys-note b {
+        color: var(--ob-ink);
+        font-weight: 400;
+      }
+
+      .spec {
+        background: var(--ob-surface);
+        border-radius: var(--ob-r-lg);
+        padding: 24px;
+      }
+      .spec + .spec {
+        margin-top: 16px;
+      }
+      .spec--plain {
+        background: transparent;
+        padding: 0;
+      }
+      .spec--inset {
+        background: var(--ob-bg-inset);
+      }
+      .demo-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .demo-row--start {
+        align-items: flex-start;
+      }
+      .demo-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .demo-label {
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .demo-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .demo-grid--3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .swgrid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 24px 16px;
+        margin-top: 16px;
+      }
+      .sw {
+        min-width: 0;
+      }
+      .sw-chip {
+        display: block;
+        height: 48px;
+        border-radius: 6px;
+        background: var(--ob-surface-3);
+      }
+      .sw-name {
+        display: block;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .sw-use {
+        display: block;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .sw-val {
+        display: block;
+        font-family: var(--ob-font-mono);
+        font-size: 12px;
+        color: var(--ob-subtle);
+        margin-top: 4px;
+      }
+
+      .type-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 200px;
+        gap: 24px;
+        align-items: baseline;
+        padding: 16px 0;
+        border-top: 1px solid var(--ob-line);
+      }
+      .type-row:first-of-type {
+        border-top: 0;
+      }
+      .type-sample {
+        min-width: 0;
+      }
+      .type-spec {
+        text-align: right;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .type-spec b {
+        display: block;
+        font-weight: 400;
+        color: var(--ob-ink);
+      }
+
+      .space-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .space-item {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .space-block {
+        background: var(--ob-brand-soft);
+        box-shadow: inset 0 0 0 1px var(--ob-brand-line);
+        border-radius: 2px;
+        width: 24px;
+      }
+      .space-label {
+        font-size: 12px;
+        color: var(--ob-subtle);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .radius-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .radius-box {
+        width: 56px;
+        height: 56px;
+        background: var(--ob-surface-3);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+
+      .shadow-row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .shadow-box {
+        width: 120px;
+        height: 64px;
+        border-radius: var(--ob-r-md);
+        background: var(--ob-surface-2);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+
+      .status-list {
+        display: flex;
+        flex-direction: column;
+      }
+      .status-line {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        padding: 12px 0;
+        border-top: 1px solid var(--ob-line);
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .status-line:first-child {
+        border-top: 0;
+      }
+
+      .icon-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 4px;
+        margin-top: 12px;
+      }
+      .icon-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 4px;
+        border-radius: 6px;
+      }
+      .icon-cell:hover {
+        background: var(--ob-hover);
+      }
+      .icon-cell span {
+        font-size: 12px;
+        color: var(--ob-subtle);
+        text-align: center;
+      }
+
+      .token-table th:first-child,
+      .token-table td:first-child {
+        width: 210px;
+      }
+      .token-table code {
+        font-family: var(--ob-font-mono);
+        font-size: 12px;
+        color: var(--ob-muted);
+      }
+
+      /* Layout diagram: a scale model of the page frame. */
+      .grid-demo {
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) 320px 48px;
+        grid-template-rows: auto auto;
+        row-gap: 40px;
+        background: var(--ob-bg);
+        border-radius: 6px;
+        box-shadow: inset 0 0 0 1px var(--ob-line);
+        overflow: hidden;
+      }
+      .grid-gutter {
+        grid-row: 1 / span 2;
+        background: repeating-linear-gradient(
+          135deg,
+          var(--ob-brand-soft) 0 4px,
+          transparent 4px 8px
+        );
+      }
+      .grid-gutter--end {
+        grid-column: 4;
+      }
+      .grid-head {
+        grid-column: 2;
+        grid-row: 1;
+        padding-top: 48px;
+        min-width: 0;
+      }
+      .grid-main {
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+      }
+      .grid-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+      }
+      .grid-rule {
+        height: 1px;
+        background: var(--ob-line);
+        margin: 0;
+      }
+      .grid-section-title {
+        font-size: 18px;
+        line-height: 1.3;
+        letter-spacing: -0.01em;
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
+      .grid-card {
+        background: var(--ob-surface);
+        border-radius: var(--ob-r-lg);
+        padding: 24px;
+      }
+      .grid-line {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--ob-surface-3);
+      }
+      .grid-line + .grid-line {
+        margin-top: 8px;
+      }
+      .grid-rail {
+        grid-column: 3;
+        grid-row: 2;
+      }
+      .grid-rail-card {
+        background: var(--ob-surface);
+        border-radius: var(--ob-r-lg);
+        padding: 24px;
+      }
+      .grid-mark {
+        font-size: 12px;
+        color: var(--ob-subtle);
+        font-variant-numeric: tabular-nums;
+      }
+      .grid-legend {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+        font-size: 12px;
+        color: var(--ob-subtle);
+      }
+      .grid-swatch {
+        display: inline-block;
+        width: 16px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--ob-brand-soft);
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+
+      @media (max-width: 1080px) {
+        .sys-shell {
+          grid-template-columns: minmax(0, 1fr);
+          padding: 40px 32px;
+        }
+        .sys-nav {
+          display: none;
+        }
+        .swgrid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .demo-grid,
+        .demo-grid--3 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .icon-grid {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+        .grid-demo {
+          grid-template-columns: 32px minmax(0, 1fr) 240px 32px;
+        }
+        .grid-head {
+          padding-top: 32px;
+        }
+      }
+      @media (max-width: 720px) {
+        .sys-top {
+          padding: 0 16px;
+        }
+        .sys-version {
+          display: none;
+        }
+        .sys-shell {
+          padding: 32px 16px 56px;
+        }
+        .type-row {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 4px;
+        }
+        .type-spec {
+          text-align: left;
+        }
+        .status-line {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body id="top">
+    <!-- Canonical sprite: icons.svg. This inline copy keeps the page
+     self-contained and lets it work over file:// without a server. -->
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="0"
+      height="0"
+      style="
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+        pointer-events: none;
+      "
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <defs>
+        <!-- Brand: the Obiter monogram. One weight, one colour, no tile. -->
+        <symbol id="i-obiter" viewBox="0 0 26 26">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <circle cx="7.75" cy="14.6" r="4.9" />
+            <path d="M18.25 3.4v16.1" />
+            <path d="M18.25 9.7a4.9 4.9 0 0 1 0 9.8" />
+          </g>
+        </symbol>
+
+        <!-- Navigation -->
+        <symbol id="i-home" viewBox="0 0 16 16">
+          <path
+            d="M2.4 7.1 8 2.6l5.6 4.5V13a.6.6 0 0 1-.6.6h-3.3V9.4H6.3v4.2H3a.6.6 0 0 1-.6-.6z"
+          />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 16 16">
+          <circle cx="7" cy="7" r="4.2" />
+          <path d="m10.1 10.1 3.5 3.5" />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 16 16">
+          <path
+            d="M2.2 5.1a1.5 1.5 0 0 1 1.5-1.5h2.4l1.3 1.6h4.9a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H3.7a1.5 1.5 0 0 1-1.5-1.5z"
+          />
+        </symbol>
+        <symbol id="i-document" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 9h5.2M5.4 11.2h3.4" />
+        </symbol>
+        <symbol id="i-file" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6" />
+        </symbol>
+        <symbol id="i-verify" viewBox="0 0 16 16">
+          <path
+            d="M8 2.1 12.9 4v3.5c0 2.9-2.1 4.9-4.9 6.2-2.8-1.3-4.9-3.3-4.9-6.2V4z"
+          />
+          <path d="m5.9 7.8 1.4 1.4 3-3.4" />
+        </symbol>
+        <symbol id="i-redact" viewBox="0 0 16 16">
+          <path
+            d="M3.6 2.4h5.2l3.6 3.6v7a.8.8 0 0 1-.8.8H3.6a.8.8 0 0 1-.8-.8V3.2a.8.8 0 0 1 .8-.8z"
+          />
+          <path d="M8.8 2.4v3.6h3.6M5.4 6.6h2.2M5.4 11.4h5.2" />
+          <rect
+            x="5.4"
+            y="8.4"
+            width="5.2"
+            height="1.9"
+            rx=".4"
+            fill="currentColor"
+            stroke="none"
+          />
+        </symbol>
+        <symbol id="i-research" viewBox="0 0 16 16">
+          <path
+            d="M6.5 2.4h3M7.1 2.4v3.8l-3 6.2a1.1 1.1 0 0 0 1 1.6h5.8a1.1 1.1 0 0 0 1-1.6l-3-6.2V2.4"
+          />
+          <path d="M5.4 10.6h5.2" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 16 16">
+          <path d="M2.4 5h4.2M10.2 5h3.4M2.4 11h3.2M8.2 11h5.4" />
+          <circle cx="8" cy="5" r="1.6" />
+          <circle cx="6.4" cy="11" r="1.6" />
+        </symbol>
+
+        <!-- Common actions -->
+        <symbol id="i-plus" viewBox="0 0 16 16">
+          <path d="M8 3v10M3 8h10" />
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 16 16">
+          <path d="M3 8h10" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 16 16">
+          <path d="M8 10.4V2.6M5.2 5.4 8 2.6l2.8 2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 16 16">
+          <path d="M8 2.6v7.8M5.2 7.6 8 10.4l2.8-2.8" />
+          <path
+            d="M2.8 10.2v2.2a1.2 1.2 0 0 0 1.2 1.2h8a1.2 1.2 0 0 0 1.2-1.2v-2.2"
+          />
+        </symbol>
+        <symbol id="i-share" viewBox="0 0 16 16">
+          <circle cx="3.9" cy="8" r="1.7" />
+          <circle cx="12.1" cy="3.9" r="1.7" />
+          <circle cx="12.1" cy="12.1" r="1.7" />
+          <path d="m5.4 7.2 5.2-2.5M5.4 8.8l5.2 2.5" />
+        </symbol>
+        <symbol id="i-more" viewBox="0 0 16 16">
+          <circle cx="3.4" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
+          <circle cx="12.6" cy="8" r="1" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 16 16">
+          <path d="M2.6 4.2h10.8M6 4.2V2.8h4v1.4" />
+          <path d="M4.4 4.2l.6 9h6l.6-9" />
+          <path d="M6.6 6.6v4.2M9.4 6.6v4.2" />
+        </symbol>
+        <symbol id="i-edit" viewBox="0 0 16 16">
+          <path d="M2.6 13.4h2.8L13 5.8 10.2 3 2.6 10.6z" />
+          <path d="m9.3 3.9 2.8 2.8" />
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 16 16">
+          <rect x="5.4" y="5.4" width="8" height="8" rx="1.2" />
+          <path
+            d="M10.6 5.4V3.8a1.2 1.2 0 0 0-1.2-1.2H3.8a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.6"
+          />
+        </symbol>
+        <symbol id="i-print" viewBox="0 0 16 16">
+          <path d="M4.6 5.6V2.4h6.8v3.2" />
+          <rect x="2.4" y="5.6" width="11.2" height="5.4" rx="1.1" />
+          <path d="M4.6 9.4h6.8v4.2H4.6z" />
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 16 16">
+          <path d="M9.4 2.6h4v4M13.4 2.6 7.6 8.4" />
+          <path
+            d="M11.4 9.4v3.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V5.6a1 1 0 0 1 1-1h3.2"
+          />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 16 16">
+          <path
+            d="M6.4 9.6a2.6 2.6 0 0 0 3.7 0l1.8-1.8a2.6 2.6 0 0 0-3.7-3.7l-.7.7"
+          />
+          <path
+            d="M9.6 6.4a2.6 2.6 0 0 0-3.7 0L4.1 8.2a2.6 2.6 0 0 0 3.7 3.7l.7-.7"
+          />
+        </symbol>
+        <symbol id="i-pin" viewBox="0 0 16 16">
+          <path d="M6.2 2.4h3.6l-.5 3.4 2.3 1.8v1.3H4.4V7.6l2.3-1.8z" />
+          <path d="M8 8.9v4.7" />
+        </symbol>
+        <symbol id="i-filter" viewBox="0 0 16 16">
+          <path d="M2.6 4h10.8M4.6 8h6.8M6.6 12h2.8" />
+        </symbol>
+        <symbol id="i-sort" viewBox="0 0 16 16">
+          <path d="M4.4 3.2v9.6M2.4 10.8l2 2 2-2" />
+          <path d="M11.6 12.8V3.2M9.6 5.2l2-2 2 2" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 16 16">
+          <path
+            d="M1.7 8S3.9 3.9 8 3.9 14.3 8 14.3 8 12.1 12.1 8 12.1 1.7 8 1.7 8z"
+          />
+          <circle cx="8" cy="8" r="2" />
+        </symbol>
+        <symbol id="i-eye-off" viewBox="0 0 16 16">
+          <path d="M2.2 2.2 13.8 13.8" />
+          <path
+            d="M6.3 4.3A6.5 6.5 0 0 1 8 4.1c4.1 0 6.3 3.9 6.3 3.9a10 10 0 0 1-2.2 2.6"
+          />
+          <path
+            d="M10.1 12A6.7 6.7 0 0 1 8 12.1C3.9 12.1 1.7 8 1.7 8a10.5 10.5 0 0 1 2.3-2.7"
+          />
+        </symbol>
+        <symbol id="i-history" viewBox="0 0 16 16">
+          <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9" />
+          <path d="M2.4 2.6v3.6h3.6" />
+          <path d="M8 5.4V8l2 1.3" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 16 16">
+          <path d="M13.2 8A5.3 5.3 0 1 1 11.3 3.8" />
+          <path d="M13.2 2.6v4h-4" />
+        </symbol>
+        <symbol id="i-undo" viewBox="0 0 16 16">
+          <path d="M6.4 4 3.4 7l3 3" />
+          <path d="M3.6 7h5.6a3.4 3.4 0 0 1 0 6.8H6.6" />
+        </symbol>
+        <symbol id="i-redo" viewBox="0 0 16 16">
+          <path d="M9.6 4l3 3-3 3" />
+          <path d="M12.4 7H6.8a3.4 3.4 0 0 0 0 6.8h2.6" />
+        </symbol>
+        <symbol id="i-bold" viewBox="0 0 16 16">
+          <path
+            d="M4.8 3h3.7a2.4 2.4 0 0 1 0 4.8H4.8zM4.8 7.8h4.4a2.6 2.6 0 0 1 0 5.2H4.8z"
+          />
+        </symbol>
+        <symbol id="i-italic" viewBox="0 0 16 16">
+          <path d="M9.8 3H6.6M9.4 13H6.2M9.2 3 6.8 13" />
+        </symbol>
+        <symbol id="i-underline" viewBox="0 0 16 16">
+          <path d="M5 3v4.2a3 3 0 0 0 6 0V3M4 13.5h8" />
+        </symbol>
+        <symbol id="i-align-left" viewBox="0 0 16 16">
+          <path d="M2.8 4h10.4M2.8 8h6.4M2.8 12h9" />
+        </symbol>
+        <symbol id="i-list-ordered" viewBox="0 0 16 16">
+          <path d="M6.4 4h6.8M6.4 8h6.8M6.4 12h6.8" />
+          <path d="M2.6 2.8h1v3M2.6 10.4h1.8l-1.8 2.1h1.8" />
+        </symbol>
+        <symbol id="i-compare" viewBox="0 0 16 16">
+          <rect x="2.4" y="3" width="11.2" height="10" rx="1.2" />
+          <path d="M8 3v10" />
+        </symbol>
+        <symbol id="i-bell" viewBox="0 0 16 16">
+          <path
+            d="M12.2 6.4a4.2 4.2 0 0 0-8.4 0c0 3.2-1.2 4-1.2 4h10.8s-1.2-.8-1.2-4z"
+          />
+          <path d="M6.7 12.8a1.5 1.5 0 0 0 2.6 0" />
+        </symbol>
+        <symbol id="i-keyboard" viewBox="0 0 16 16">
+          <rect x="1.8" y="4" width="12.4" height="8" rx="1.4" />
+          <path
+            d="M4.2 6.6h.1M6.8 6.6h.1M9.4 6.6h.1M12 6.6h.1M4.2 9.4h.1M6.4 9.4h3M11.8 9.4h.1"
+          />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 16 16">
+          <path d="m4 4 8 8M12 4l-8 8" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 16 16">
+          <path d="M4.2 4.2 11.8 11.8M11.8 4.2 4.2 11.8" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 16 16">
+          <path d="m3.2 8.4 3 3 6.6-7" />
+        </symbol>
+        <symbol id="i-minus-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M5.2 8h5.6" />
+        </symbol>
+        <symbol id="i-check-circle" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+
+        <!-- Chevrons and arrows -->
+        <symbol id="i-chevron-down" viewBox="0 0 16 16">
+          <path d="m4.5 6.4 3.5 3.5 3.5-3.5" />
+        </symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 16 16">
+          <path d="m4.5 9.6 3.5-3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 16 16">
+          <path d="m6.4 4.5 3.5 3.5-3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 16 16">
+          <path d="m9.6 4.5-3.5 3.5 3.5 3.5" />
+        </symbol>
+        <symbol id="i-chevrons-left" viewBox="0 0 16 16">
+          <path d="m7.8 4.6-3.4 3.4 3.4 3.4M11.8 4.6 8.4 8l3.4 3.4" />
+        </symbol>
+        <symbol id="i-arrow-left" viewBox="0 0 16 16">
+          <path d="M13 8H3M6.5 4.5 3 8l3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 16 16">
+          <path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 16 16">
+          <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" />
+        </symbol>
+
+        <!-- Status and meaning -->
+        <symbol id="i-flag" viewBox="0 0 16 16">
+          <path d="M3.8 14V2.4M3.8 2.6h8.1l-1.3 2.9 1.3 2.9H3.8" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 16 16">
+          <path d="M8 2.4 14 13.2H2z" />
+          <path d="M8 6.4v3.1M8 11.5v.1" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="M8 7.3v3.9M8 5.2v.1" />
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path
+            d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.75c-.5.3-.8.75-.8 1.3v.45M8 11.9v.1"
+          />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.6" />
+          <path d="M8 4.7V8l2.2 1.4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7" />
+        </symbol>
+        <symbol id="i-lock-open" viewBox="0 0 16 16">
+          <rect x="3.4" y="7" width="9.2" height="6" rx="1.4" />
+          <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.6-.8" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 16 16">
+          <circle cx="8" cy="5.4" r="2.6" />
+          <path d="M3.4 13.6a4.6 4.6 0 0 1 9.2 0" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 16 16">
+          <circle cx="6" cy="5.6" r="2.3" />
+          <path d="M2.4 13.2a3.8 3.8 0 0 1 7.2 0" />
+          <path
+            d="M10.6 3.6a2.3 2.3 0 0 1 0 4.2M11.4 9.7a3.6 3.6 0 0 1 2.2 3.3"
+          />
+        </symbol>
+
+        <!-- Sources and documents -->
+        <symbol id="i-scale" viewBox="0 0 16 16">
+          <path d="M8 2v11M4.6 13h6.8M2.6 4.4h10.8" />
+          <path d="M4.2 4.4 2.6 8.2h3.2zM11.8 4.4 10.2 8.2h3.2z" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 16 16">
+          <path
+            d="M2.6 3.4A1.4 1.4 0 0 1 4 2h9.4v11.6H4a1.4 1.4 0 0 0-1.4 1.4z"
+          />
+          <path d="M2.6 12.6h10.8" />
+        </symbol>
+        <symbol id="i-note" viewBox="0 0 16 16">
+          <path d="M3 3.4h10v6.6L9.4 13H3z" />
+          <path d="M9.4 13V10h3.6" />
+          <path d="M5.4 6h5.2" />
+        </symbol>
+        <symbol id="i-comment" viewBox="0 0 16 16">
+          <path
+            d="M13.2 8.1v.6a4.6 4.6 0 0 1-4.6 4.6H6.1L3 15.2v-3.1a4.6 4.6 0 0 1-.8-2.6V8.1a4.6 4.6 0 0 1 4.6-4.6h1.8a4.6 4.6 0 0 1 4.6 4.6z"
+          />
+        </symbol>
+        <symbol id="i-track-changes" viewBox="0 0 16 16">
+          <path d="M2.6 3.4v9.2" />
+          <path d="M5.2 5h7.2M5.2 8h4.4M5.2 11h7.2" />
+          <path d="M11.6 7.2v3.6M9.8 9h3.6" />
+        </symbol>
+        <symbol id="i-accept" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.2 8.1 1.9 1.9 3.7-4.2" />
+        </symbol>
+        <symbol id="i-reject" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="5.8" />
+          <path d="m5.8 5.8 4.4 4.4M10.2 5.8 5.8 10.2" />
+        </symbol>
+
+        <!-- Theme and chrome -->
+        <symbol id="i-sun" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="2.4" />
+          <path
+            d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1"
+          />
+        </symbol>
+        <symbol id="i-moon" viewBox="0 0 16 16">
+          <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.8 5.8 0 1 0 6.8 6.8z" />
+        </symbol>
+        <symbol id="i-sidebar-collapse" viewBox="0 0 16 16">
+          <rect x="2" y="3" width="12" height="10" rx="1.4" />
+          <path d="M6.4 3v10M9.9 6.4 8.3 8l1.6 1.6" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 16 16">
+          <path d="M2.6 4.5h10.8M2.6 8h10.8M2.6 11.5h10.8" />
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 16 16">
+          <path d="M5.6 4h8M5.6 8h8M5.6 12h8" />
+          <circle cx="2.9" cy="4" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="8" r=".8" fill="currentColor" stroke="none" />
+          <circle cx="2.9" cy="12" r=".8" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-grid" viewBox="0 0 16 16">
+          <rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1" />
+          <rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1" />
+          <rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1" />
+        </symbol>
+        <symbol id="i-paperclip" viewBox="0 0 16 16">
+          <path
+            d="M12.6 7.4 7.8 12.2a3 3 0 0 1-4.2-4.2l5.2-5.2a2 2 0 0 1 2.8 2.8l-5.1 5.1a1 1 0 0 1-1.4-1.4l4.6-4.6"
+          />
+        </symbol>
+        <symbol id="i-calendar" viewBox="0 0 16 16">
+          <rect x="2.4" y="3.4" width="11.2" height="10.2" rx="1.4" />
+          <path d="M2.4 6.6h11.2M5.6 2.2v2.4M10.4 2.2v2.4" />
+        </symbol>
+        <symbol id="i-tag" viewBox="0 0 16 16">
+          <path
+            d="M2.6 7V3.4a.8.8 0 0 1 .8-.8H7l6.4 6.4a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0z"
+          />
+          <circle cx="5.4" cy="5.4" r=".9" />
+        </symbol>
+        <symbol id="i-sparkle" viewBox="0 0 16 16">
+          <path d="M8 2.2 9.2 6l3.8 1.2L9.2 8.4 8 12.2 6.8 8.4 3 7.2 6.8 6z" />
+          <path d="M12.6 11.6v2M11.6 12.6h2" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <header class="sys-top">
+      <a class="sys-brand" href="#top" aria-label="Obiter design system, top">
+        <span class="sys-mark ob-logo" aria-hidden="true"
+          ><svg aria-hidden="true"><use href="#i-obiter" /></svg
+        ></span>
+        <span class="sys-brand-text">
+          <span class="sys-brand-name">Obiter</span>
+          <span class="sys-brand-sub">Design system</span>
+        </span>
+      </a>
+      <div class="sys-top-right">
+        <span class="sys-version">Final · 26 Oct 2026</span>
+        <div class="ob-seg" role="group" aria-label="Theme">
+          <button
+            class="ob-seg-item is-active"
+            type="button"
+            data-set-theme="light"
+            aria-pressed="true"
+          >
+            <svg class="is-12" aria-hidden="true"><use href="#i-sun" /></svg
+            >Light
+          </button>
+          <button
+            class="ob-seg-item"
+            type="button"
+            data-set-theme="dark"
+            aria-pressed="false"
+          >
+            <svg class="is-12" aria-hidden="true"><use href="#i-moon" /></svg
+            >Dark
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="sys-shell">
+      <nav class="sys-nav" aria-label="Contents">
+        <div class="sys-nav-title">Contents</div>
+        <a href="#layout">Layout</a>
+        <a href="#colour">Colour</a>
+        <a href="#type">Type</a>
+        <a href="#space">Space and shape</a>
+        <a href="#buttons">Buttons</a>
+        <a href="#fields">Fields</a>
+        <a href="#selection">Selection</a>
+        <a href="#status">Status</a>
+        <a href="#people">People</a>
+        <a href="#rows">Cards and rows</a>
+        <a href="#tables">Tables</a>
+        <a href="#floating">Floating surfaces</a>
+        <a href="#feedback">Feedback</a>
+        <a href="#states">Empty and loading</a>
+        <a href="#document">Document page</a>
+        <a href="#palette">Command palette</a>
+        <a href="#icons">Icons</a>
+        <a href="#tokens">Tokens</a>
+      </nav>
+
+      <main>
+        <div class="sys-intro" id="intro">
+          <h1 class="ob-display">The Obiter system</h1>
+          <p>
+            One calm language for legal work: warm paper by default, layered
+            charcoal by choice, a single slate-blue accent, and status that
+            never relies on colour alone. Built for long days and dense
+            documents, not for a demo.
+          </p>
+          <div class="sys-meta">
+            <span class="ob-status is-success"
+              ><span class="ob-dot"></span>Light (default) and dark pass
+              AA</span
+            >
+            <span class="ob-subtle">·</span>
+            <span>Inter and IBM Plex Mono, self-hosted</span>
+          </div>
+        </div>
+
+        <div class="spec" style="margin-top: 24px">
+          <div
+            style="
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 24px;
+            "
+          >
+            <div>
+              <div class="ob-label" style="color: var(--ob-ink)">Names</div>
+              <p class="sys-note" style="margin-top: 4px">
+                Blocks use <span class="ob-mono">.ob-</span>, variants use
+                <span class="ob-mono">--</span>, states and tones use
+                <span class="ob-mono">.is-</span>.
+              </p>
+              <div class="ob-cluster" style="margin-top: 8px">
+                <span
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  style="pointer-events: none"
+                  >.ob-btn</span
+                ><span
+                  class="ob-btn ob-btn--primary ob-btn--sm"
+                  style="pointer-events: none"
+                  >.ob-btn--primary</span
+                ><span class="ob-tag">.is-active</span>
+              </div>
+            </div>
+            <div>
+              <div class="ob-label" style="color: var(--ob-ink)">Rules</div>
+              <p class="sys-note" style="margin-top: 4px">
+                One stylesheet, one sprite, one theme attribute. Add a modifier
+                to <span class="ob-mono">obiter.css</span>; never restyle a
+                component on a page.
+              </p>
+              <div class="ob-cluster" style="margin-top: 8px">
+                <span class="ob-kbd">data-theme</span
+                ><span class="ob-kbd">#i-name</span
+                ><span class="ob-kbd">.ob-hide-md</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Colour ------------------------------------------------------------ -->
+        <section class="sys-sec" id="colour">
+          <h2 class="ob-section-title">Colour</h2>
+          <p class="sys-lede">
+            Four steps of surface, three inks, one accent. Semantic colour
+            appears only where something actually needs a decision.
+          </p>
+
+          <h3 class="sys-h3">Surfaces and ink</h3>
+          <div class="swgrid">
+            <div class="sw">
+              <span
+                class="sw-chip"
+                style="
+                  background: var(--ob-bg);
+                  box-shadow: inset 0 0 0 1px var(--ob-line);
+                "
+              ></span
+              ><span class="sw-name">Canvas</span
+              ><span class="sw-use">Page behind everything</span
+              ><span class="sw-val">--ob-bg</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-surface)"></span
+              ><span class="sw-name">Surface</span
+              ><span class="sw-use">Sidebar, cards, panels</span
+              ><span class="sw-val">--ob-surface</span>
+            </div>
+            <div class="sw">
+              <span
+                class="sw-chip"
+                style="background: var(--ob-surface-2)"
+              ></span
+              ><span class="sw-name">Raised</span
+              ><span class="sw-use">Menus, dialogs, fields</span
+              ><span class="sw-val">--ob-surface-2</span>
+            </div>
+            <div class="sw">
+              <span
+                class="sw-chip"
+                style="background: var(--ob-surface-3)"
+              ></span
+              ><span class="sw-name">Quiet fill</span
+              ><span class="sw-use">Tiles, switches, tags</span
+              ><span class="sw-val">--ob-surface-3</span>
+            </div>
+          </div>
+          <div class="swgrid">
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-ink)"></span
+              ><span class="sw-name">Ink</span
+              ><span class="sw-use">Primary text</span
+              ><span class="sw-val">--ob-ink</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-muted)"></span
+              ><span class="sw-name">Muted</span
+              ><span class="sw-use">Body copy, secondary</span
+              ><span class="sw-val">--ob-muted</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-subtle)"></span
+              ><span class="sw-name">Subtle</span
+              ><span class="sw-use">Metadata, never essential state</span
+              ><span class="sw-val">--ob-subtle</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-brand)"></span
+              ><span class="sw-name">Brand</span
+              ><span class="sw-use">One primary action</span
+              ><span class="sw-val">--ob-brand</span>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Status</h3>
+          <div class="swgrid">
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-danger)"></span
+              ><span class="sw-name">Flagged</span
+              ><span class="sw-use">A finding needs a legal decision</span
+              ><span class="sw-val">--ob-danger</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-warning)"></span
+              ><span class="sw-name">Needs review</span
+              ><span class="sw-use">A person must read it</span
+              ><span class="sw-val">--ob-warning</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-success)"></span
+              ><span class="sw-name">Done</span
+              ><span class="sw-use">Verified, finalised, saved</span
+              ><span class="sw-val">--ob-success</span>
+            </div>
+            <div class="sw">
+              <span class="sw-chip" style="background: var(--ob-info)"></span
+              ><span class="sw-name">In progress</span
+              ><span class="sw-use">A run is open, not an error</span
+              ><span class="sw-val">--ob-info</span>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Hairlines and washes</h3>
+          <div class="spec spec--plain" style="padding: 16px 0">
+            <div class="ob-stack ob-stack--tight">
+              <div style="height: 1px; background: var(--ob-line)"></div>
+              <div style="height: 1px; background: var(--ob-line-strong)"></div>
+              <div style="display: flex; gap: 8px; margin-top: 8px">
+                <span
+                  style="
+                    height: 32px;
+                    flex: 1;
+                    background: var(--ob-hover);
+                    border-radius: 4px;
+                  "
+                ></span>
+                <span
+                  style="
+                    height: 32px;
+                    flex: 1;
+                    background: var(--ob-brand-soft);
+                    border-radius: 4px;
+                  "
+                ></span>
+                <span
+                  style="
+                    height: 32px;
+                    flex: 1;
+                    background: var(--ob-danger-soft);
+                    border-radius: 4px;
+                  "
+                ></span>
+                <span
+                  style="
+                    height: 32px;
+                    flex: 1;
+                    background: var(--ob-warning-soft);
+                    border-radius: 4px;
+                  "
+                ></span>
+                <span
+                  style="
+                    height: 32px;
+                    flex: 1;
+                    background: var(--ob-success-soft);
+                    border-radius: 4px;
+                  "
+                ></span>
+                <span
+                  style="
+                    height: 32px;
+                    flex: 1;
+                    background: var(--ob-info-soft);
+                    border-radius: 4px;
+                  "
+                ></span>
+              </div>
+            </div>
+          </div>
+          <p class="sys-note">
+            <b>Borders are not decoration.</b> Buttons, cards, rows and pills do
+            not carry one. A hairline separates a table head or a list where
+            space alone cannot. Status tints are used for the icon tile and the
+            one flag, never for a whole row.
+          </p>
+        </section>
+
+        <!-- Type -------------------------------------------------------------- -->
+        <section class="sys-sec" id="type">
+          <h2 class="ob-section-title">Type</h2>
+          <p class="sys-lede">
+            Exactly six levels, three weights. The interface is Inter; IBM Plex
+            Mono is reserved for client references and code-like strings.
+            Nothing is smaller than 12px, and only the page title and section
+            title carry tracking.
+          </p>
+
+          <div class="type-row">
+            <div class="type-sample ob-page-title">Good afternoon, Alex</div>
+            <div class="type-spec">
+              <b>Page title</b><span>28 / 600 / 1.2 / −0.02em</span>
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-sample ob-section-title">Needs your attention</div>
+            <div class="type-spec">
+              <b>Section title</b><span>18 / 600 / 1.3 / −0.01em</span>
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-sample ob-item-title">
+              advice-note-northgate.docx
+            </div>
+            <div class="type-spec">
+              <b>Item title</b><span>14 / 500 / 1.4 / —</span>
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-sample ob-body">
+              The starting point remains the iterative approach restated in
+              <em>Wood v Capita Insurance Services Ltd</em>.
+            </div>
+            <div class="type-spec">
+              <b>Body</b><span>14 / 400 / 1.55 / —</span>
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-sample ob-ui">
+              advice-note-northgate.docx · edited 26 Oct 2026, 09:14
+            </div>
+            <div class="type-spec">
+              <b>Secondary (meta)</b><span>13 / 400 / 1.45 / —</span>
+            </div>
+          </div>
+          <div class="type-row">
+            <div class="type-sample ob-caption">
+              Version 3 · 42 KB · saved 26 Oct 2026, 09:14
+            </div>
+            <div class="type-spec">
+              <b>Caption</b><span>12 / 400 / 1.4 / —</span>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Weights and emphasis</h3>
+          <div class="spec">
+            <div class="ob-stack ob-stack--tight">
+              <div style="font-size: 14px; font-weight: 400">
+                Regular 400 — body, meta, captions and navigation.
+              </div>
+              <div style="font-size: 14px; font-weight: 500">
+                Medium 500 — buttons, item titles and the active item.
+              </div>
+              <div style="font-size: 28px; font-weight: 600">
+                Semibold 600 — page titles and section titles only.
+              </div>
+            </div>
+            <p class="sys-note">
+              No 700. No letter-spaced uppercase labels. A page may use one
+              small label if it genuinely needs a category; most do not.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Citations, references and figures</h3>
+          <div class="spec">
+            <p class="ob-body">
+              Paragraph 8 cites <span class="ob-cite">[2018] UKSC 24</span> for
+              <em>Wood v Capita Insurance Services Ltd</em>.
+            </p>
+            <div class="ob-cluster" style="margin-top: 16px">
+              <span class="ob-mono">NGF-0418</span>
+              <span class="ob-subtle">·</span>
+              <span class="is-date">26 Oct 2026, 14:32</span>
+              <span class="ob-subtle">·</span>
+              <span>3 of 21 spans</span>
+            </div>
+            <p class="sys-note">
+              Mono for a case citation or a human reference. Tabular figures for
+              dates, counts and money. Never a system ID.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Reading</h3>
+          <div class="spec">
+            <div class="ob-prose">
+              <p>
+                The Supreme Court restated the approach to contractual
+                interpretation in <em>Wood v Capita Insurance Services Ltd</em>
+                <span class="ob-cite">[2017] UKSC 24</span>. Construction is a
+                unitary exercise: the court reads the instrument as a whole and
+                gives weight to both language and commercial context.
+              </p>
+              <p>
+                The question is not what the parties intended, but what the
+                words they used would convey to a reasonable person with the
+                relevant background knowledge.
+              </p>
+              <blockquote>
+                “The court must consider the quality of the drafting, the
+                commercial consequences of one reading over another, and the
+                purpose of the clause.”
+              </blockquote>
+            </div>
+            <p class="sys-note">
+              68 characters per line. Reading surfaces never stretch to the full
+              width of a wide monitor.
+            </p>
+          </div>
+        </section>
+
+        <!-- Space and shape --------------------------------------------------- -->
+        <!-- Layout ------------------------------------------------------------ -->
+        <section class="sys-sec" id="layout">
+          <h2 class="ob-section-title">Layout</h2>
+          <p class="sys-lede">
+            One left edge, one right edge, one rhythm. Every page is the same
+            frame: a 48px gutter at 1440 and 32px at 1024, a content column that
+            stops at 1120px, and an optional 320px rail whose top aligns with
+            the first section title.
+          </p>
+
+          <div class="spec">
+            <div
+              class="grid-demo"
+              data-audit-ignore
+              aria-label="Page frame diagram"
+            >
+              <div class="grid-gutter"></div>
+              <div class="grid-head">
+                <div class="grid-title">Page title</div>
+                <div class="grid-line" style="width: 40%"></div>
+              </div>
+              <div class="grid-gutter grid-gutter--end"></div>
+              <div class="grid-main">
+                <div class="grid-section-title">Section title</div>
+                <div class="grid-card">
+                  <div class="grid-line" style="width: 72%"></div>
+                  <div class="grid-line" style="width: 56%"></div>
+                  <div class="grid-line" style="width: 64%"></div>
+                </div>
+              </div>
+              <div class="grid-rail">
+                <div class="grid-rail-card">
+                  <div class="grid-line" style="width: 64%"></div>
+                  <div class="grid-line" style="width: 80%"></div>
+                  <div class="grid-line" style="width: 48%"></div>
+                </div>
+              </div>
+            </div>
+            <div class="grid-legend">
+              <span><span class="grid-swatch"></span>48 / 32px gutter</span>
+              <span>Content max 1120px</span>
+              <span>Breadcrumb starts on the content edge</span>
+              <span>Rail top = first section title</span>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">The spacing scale</h3>
+          <div class="spec">
+            <div class="space-row">
+              <div class="space-item">
+                <span class="space-block" style="height: 4px"></span
+                ><span class="space-label">4</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 8px"></span
+                ><span class="space-label">8</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 12px"></span
+                ><span class="space-label">12</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 16px"></span
+                ><span class="space-label">16</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 24px"></span
+                ><span class="space-label">24</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 32px"></span
+                ><span class="space-label">32</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 40px"></span
+                ><span class="space-label">40</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 48px"></span
+                ><span class="space-label">48</span>
+              </div>
+              <div class="space-item">
+                <span class="space-block" style="height: 56px"></span
+                ><span class="space-label">56</span>
+              </div>
+            </div>
+            <p class="sys-note">
+              <b>4 and 8</b> inside a component. <b>12 and 16</b> between
+              related items. <b>24</b> card padding and the gap between cards.
+              <b>40</b> between sections. <b>56</b> page top padding. Nothing
+              else.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">How to align a page</h3>
+          <div class="spec">
+            <ol
+              class="ob-stack ob-stack--tight"
+              style="
+                font-size: 14px;
+                line-height: 1.55;
+                color: var(--ob-muted);
+                max-width: 68ch;
+                counter-reset: step;
+              "
+            >
+              <li>
+                <b class="ob-ink">Frame.</b>
+                <span class="ob-mono">.ob-content</span> &gt;
+                <span class="ob-mono">.ob-wrap</span>. The wrapper is the only
+                left edge: breadcrumb, page title, section titles and the first
+                content of each section all start on it.
+              </li>
+              <li>
+                <b class="ob-ink">Head.</b>
+                <span class="ob-mono">.ob-page-head</span> holds the page title
+                and the actions. It ends 40px above the first section title, and
+                the actions are vertically centred on the title.
+              </li>
+              <li>
+                <b class="ob-ink">Sections.</b>
+                <span class="ob-mono">.ob-section</span> &gt;
+                <span class="ob-mono">.ob-section-head</span> (16px below) &gt;
+                content. Between sections, 40px above the next title.
+              </li>
+              <li>
+                <b class="ob-ink">Rail.</b>
+                <span class="ob-mono">.ob-cols</span> with a 320px second
+                column. Its first card starts on the first section title's line,
+                not below it.
+              </li>
+              <li>
+                <b class="ob-ink">Inside a card.</b> 24px padding everywhere;
+                list rows and table rows are at least 52px tall with 16px
+                vertical padding.
+              </li>
+            </ol>
+            <div class="ob-card" style="margin-top: 24px; overflow: hidden">
+              <div
+                class="ob-section-head"
+                style="padding: 24px 24px 16px; margin: 0"
+              >
+                <span class="ob-card-title">An aligned example</span>
+                <span class="ob-section-meta">Item title · meta · caption</span>
+              </div>
+              <div class="ob-row" style="border-top: 1px solid var(--ob-line)">
+                <span class="ob-row-main"
+                  ><span class="ob-row-title"
+                    >Row title starts on the card's inner edge</span
+                  ><span class="ob-row-sub"
+                    >Secondary line · 26 Oct 2026, 14:32</span
+                  ></span
+                >
+                <span class="ob-row-end">52px minimum</span>
+              </div>
+              <div class="ob-row" style="border-top: 1px solid var(--ob-line)">
+                <span class="ob-row-main"
+                  ><span class="ob-row-title"
+                    >Dividers run the full row width</span
+                  ><span class="ob-row-sub"
+                    >Including the action and chevron column</span
+                  ></span
+                >
+                <span class="ob-row-end">16px padding</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Radius</h3>
+          <div class="spec">
+            <div class="radius-row">
+              <div class="radius-box" style="border-radius: 4px">4</div>
+              <div class="radius-box" style="border-radius: 6px">6</div>
+              <div class="radius-box" style="border-radius: 8px">8</div>
+              <div class="radius-box" style="border-radius: 10px">10</div>
+              <div class="radius-box" style="border-radius: 14px">14</div>
+              <div class="radius-box" style="border-radius: 999px">pill</div>
+            </div>
+            <p class="sys-note">
+              6 for every control. 10 for cards, menus and dialogs. 4 for
+              keyboard hints and tiny marks. 14 only for the command palette.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Elevation</h3>
+          <div class="spec">
+            <div class="shadow-row">
+              <div class="shadow-box" style="box-shadow: var(--ob-shadow-1)">
+                Control
+              </div>
+              <div class="shadow-box" style="box-shadow: var(--ob-shadow-2)">
+                Menu, dialog
+              </div>
+              <div class="shadow-box" style="box-shadow: var(--ob-shadow-page)">
+                Paper
+              </div>
+            </div>
+            <p class="sys-note">
+              One floating level. Cards do not have shadows; the surface step
+              and space do the work. The paper shadow is the only exception,
+              because paper should sit above the desk.
+            </p>
+          </div>
+        </section>
+
+        <!-- Buttons ----------------------------------------------------------- -->
+        <section class="sys-sec" id="buttons">
+          <h2 class="ob-section-title">Buttons</h2>
+          <p class="sys-lede">
+            One primary per view. 32px by default, 28px in rows. Labels are 500
+            weight and sentence case.
+          </p>
+
+          <div class="spec">
+            <div class="demo-row">
+              <div class="demo-cell">
+                <button class="ob-btn ob-btn--primary" type="button">
+                  Review finding</button
+                ><span class="demo-label">Primary</span>
+              </div>
+              <div class="demo-cell">
+                <button class="ob-btn ob-btn--secondary" type="button">
+                  Open document</button
+                ><span class="demo-label">Secondary</span>
+              </div>
+              <div class="demo-cell">
+                <button class="ob-btn ob-btn--ghost" type="button">
+                  Dismiss</button
+                ><span class="demo-label">Ghost</span>
+              </div>
+              <div class="demo-cell">
+                <button class="ob-btn ob-btn--secondary" type="button" disabled>
+                  Unavailable</button
+                ><span class="demo-label">Disabled</span>
+              </div>
+            </div>
+            <div class="demo-row" style="margin-top: 24px">
+              <div class="demo-cell">
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  type="button"
+                >
+                  Compact 28</button
+                ><span class="demo-label">In a row</span>
+              </div>
+              <div class="demo-cell">
+                <button class="ob-btn ob-btn--primary" type="button">
+                  <svg aria-hidden="true"><use href="#i-upload" /></svg>Upload
+                  document</button
+                ><span class="demo-label">With icon</span>
+              </div>
+              <div class="demo-cell">
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--icon"
+                  type="button"
+                  aria-label="More actions"
+                >
+                  <svg aria-hidden="true"><use href="#i-more" /></svg></button
+                ><span class="demo-label">Icon button</span>
+              </div>
+              <div class="demo-cell">
+                <button
+                  class="ob-icon-btn"
+                  type="button"
+                  aria-label="Document information"
+                >
+                  <svg aria-hidden="true"><use href="#i-help" /></svg></button
+                ><span class="demo-label">Quiet icon</span>
+              </div>
+              <div class="demo-cell">
+                <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+                  <svg aria-hidden="true"><use href="#i-check" /></svg
+                  >Accept</button
+                ><span class="demo-label">Row action</span>
+              </div>
+            </div>
+            <p class="sys-note">
+              Destructive red is never a header action. It appears only inside
+              the confirmation step, filled, once the consequence is named.
+            </p>
+          </div>
+        </section>
+
+        <!-- Fields ------------------------------------------------------------ -->
+        <section class="sys-sec" id="fields">
+          <h2 class="ob-section-title">Fields</h2>
+          <p class="sys-lede">
+            A label above, a hint or error below. Inputs are filled surfaces
+            with one quiet inset line; focus uses the brand and a soft halo.
+          </p>
+
+          <div class="spec">
+            <div class="demo-grid">
+              <div class="ob-field">
+                <label class="ob-field-label" for="demo-matter"
+                  >Matter name</label
+                >
+                <input
+                  class="ob-input"
+                  id="demo-matter"
+                  type="text"
+                  value="Northgate Foods v Brightwater Packaging"
+                />
+                <span class="ob-field-hint"
+                  >This is the name your team will see.</span
+                >
+              </div>
+              <div class="ob-field">
+                <label class="ob-field-label" for="demo-ref"
+                  >Client reference</label
+                >
+                <input
+                  class="ob-input is-invalid"
+                  id="demo-ref"
+                  type="text"
+                  value="NGF-418"
+                  aria-invalid="true"
+                />
+                <span class="ob-field-hint is-danger"
+                  >Use the reference from the engagement letter: NGF-0418.</span
+                >
+              </div>
+              <div class="ob-field">
+                <label class="ob-field-label" for="demo-type"
+                  >Matter type</label
+                >
+                <div class="ob-select-wrap">
+                  <select class="ob-select" id="demo-type">
+                    <option>Commercial contracts</option>
+                    <option>Employment</option>
+                    <option>Private client</option>
+                    <option>Freedom of information</option>
+                  </select>
+                  <svg class="ob-select-caret" aria-hidden="true">
+                    <use href="#i-chevron-down" />
+                  </svg>
+                </div>
+              </div>
+              <div class="ob-field">
+                <label class="ob-field-label" for="demo-note"
+                  >Note to the team</label
+                >
+                <input
+                  class="ob-input"
+                  id="demo-note"
+                  type="text"
+                  placeholder="Optional"
+                />
+                <span class="ob-field-hint">Visible on the matter page.</span>
+              </div>
+            </div>
+
+            <div class="ob-field" style="margin-top: 24px">
+              <label class="ob-field-label" for="demo-textarea"
+                >Matter description</label
+              >
+              <textarea class="ob-textarea" id="demo-textarea">
+Supply agreement dispute: minimum volumes and an alleged oral variation.</textarea>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Search</h3>
+          <div class="spec">
+            <div
+              class="ob-search ob-search--lg"
+              style="width: 100%; max-width: 560px; margin-bottom: 16px"
+            >
+              <svg aria-hidden="true"><use href="#i-search" /></svg>
+              <input
+                type="text"
+                placeholder="Search UK case law and legislation"
+                aria-label="Search UK case law and legislation"
+              />
+              <span class="ob-kbd">⌘K</span>
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap">
+              <div class="ob-search" style="width: 300px">
+                <svg aria-hidden="true"><use href="#i-search" /></svg>
+                <input
+                  type="text"
+                  placeholder="Search matters, references or clients"
+                  aria-label="Search matters"
+                />
+                <span class="ob-kbd">⌘K</span>
+              </div>
+              <div class="ob-search" style="width: 240px">
+                <svg aria-hidden="true"><use href="#i-search" /></svg>
+                <input
+                  type="text"
+                  value="Wood v Capita"
+                  aria-label="Search Obiter"
+                />
+              </div>
+            </div>
+            <p class="sys-note">
+              ⌘K on macOS, Ctrl K on Windows. The hint appears inside the field,
+              not as a separate badge.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Checks and switches</h3>
+          <div class="spec">
+            <div class="demo-grid">
+              <div class="ob-stack ob-stack--tight">
+                <label class="ob-choice"
+                  ><input class="ob-check" type="checkbox" checked /><span
+                    >Include archived matters<span class="ob-choice-sub"
+                      >Archived matters stay read-only.</span
+                    ></span
+                  ></label
+                >
+                <label class="ob-choice"
+                  ><input class="ob-check" type="checkbox" /><span
+                    >Notify the client when a document is shared</span
+                  ></label
+                >
+              </div>
+              <div class="ob-stack ob-stack--tight">
+                <label class="ob-choice"
+                  ><input
+                    class="ob-radio"
+                    type="radio"
+                    name="demo-owner"
+                    checked
+                  /><span
+                    >Alex Morgan<span class="ob-choice-sub"
+                      >Owner · Harrington Vale LLP</span
+                    ></span
+                  ></label
+                >
+                <label class="ob-choice"
+                  ><input
+                    class="ob-radio"
+                    type="radio"
+                    name="demo-owner"
+                  /><span
+                    >Priya Shah<span class="ob-choice-sub"
+                      >Fee earner</span
+                    ></span
+                  ></label
+                >
+              </div>
+            </div>
+            <div class="ob-cluster" style="margin-top: 24px; gap: 24px">
+              <label class="ob-switch-row"
+                ><input class="ob-switch" type="checkbox" checked />Track
+                changes on</label
+              >
+              <label class="ob-switch-row"
+                ><input class="ob-switch" type="checkbox" />Email digest</label
+              >
+            </div>
+          </div>
+        </section>
+
+        <!-- Selection --------------------------------------------------------- -->
+        <section class="sys-sec" id="selection">
+          <h2 class="ob-section-title">Selection</h2>
+          <p class="sys-lede">
+            Segmented controls switch a view; tabs switch a section; breadcrumbs
+            say where you are. None of them carry a border.
+          </p>
+
+          <div class="spec">
+            <div class="demo-row">
+              <div class="demo-cell">
+                <div class="ob-seg" role="group" aria-label="View">
+                  <button class="ob-seg-item is-active" type="button">
+                    <svg class="is-12" aria-hidden="true">
+                      <use href="#i-list" /></svg
+                    >Table
+                  </button>
+                  <button class="ob-seg-item" type="button">
+                    <svg class="is-12" aria-hidden="true">
+                      <use href="#i-grid" /></svg
+                    >Cards
+                  </button>
+                </div>
+                <span class="demo-label">Segmented control</span>
+              </div>
+              <div class="demo-cell">
+                <div class="ob-seg" role="group" aria-label="Markup view">
+                  <button class="ob-seg-item" type="button">All markup</button>
+                  <button class="ob-seg-item is-active" type="button">
+                    Simple
+                  </button>
+                  <button class="ob-seg-item" type="button">None</button>
+                </div>
+                <span class="demo-label">Three states</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="spec">
+            <div class="ob-tabs" role="tablist" aria-label="Matter sections">
+              <button
+                class="ob-tab is-active"
+                role="tab"
+                aria-selected="true"
+                type="button"
+              >
+                Documents <span class="ob-count">3</span>
+              </button>
+              <button
+                class="ob-tab"
+                role="tab"
+                aria-selected="false"
+                type="button"
+              >
+                Artefacts <span class="ob-count">5</span>
+              </button>
+              <button
+                class="ob-tab"
+                role="tab"
+                aria-selected="false"
+                type="button"
+              >
+                Activity
+              </button>
+            </div>
+            <p class="sys-note">
+              Tabs are for sibling sections on one object. A view switch is
+              segmented; a page switch belongs in the sidebar.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Filters</h3>
+          <div class="spec">
+            <div class="ob-cluster">
+              <button class="ob-chip is-active" type="button">
+                All matters <span class="ob-count">4</span>
+              </button>
+              <button class="ob-chip" type="button">
+                Needs attention <span class="ob-count is-danger">1</span>
+              </button>
+              <button class="ob-chip" type="button">
+                Commercial contracts
+              </button>
+              <button class="ob-chip" type="button">Employment</button>
+              <button class="ob-chip" type="button">Private client</button>
+            </div>
+            <p class="sys-note">
+              A filter is a control, so it may carry a quiet fill. A status
+              badge never looks like this.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Breadcrumb</h3>
+          <div class="spec">
+            <nav class="ob-crumbs ob-crumbs--fit" aria-label="Breadcrumb">
+              <a href="matters.html">Matters</a>
+              <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+              <a href="matter.html">Northgate Foods v Brightwater Packaging</a>
+              <svg aria-hidden="true"><use href="#i-chevron-right" /></svg>
+              <span class="ob-crumb-current">advice-note-northgate.docx</span>
+            </nav>
+            <p class="sys-note">
+              The current page is ink at 500; ancestors are subtle. The matter
+              reference is not repeated here.
+            </p>
+          </div>
+        </section>
+
+        <!-- Status ------------------------------------------------------------ -->
+        <section class="sys-sec" id="status">
+          <h2 class="ob-section-title">Status</h2>
+          <p class="sys-lede">
+            A dot and a word. The same state looks identical in Verify, Redact,
+            Matters and the dashboard. Only one thing on a screen may shout.
+          </p>
+
+          <div class="spec">
+            <div class="status-list">
+              <div class="status-line">
+                <span class="ob-status is-success"
+                  ><span class="ob-dot"></span>Verified</span
+                ><span>Checks passed. Nothing for the lawyer to do.</span>
+              </div>
+              <div class="status-line">
+                <span class="ob-status is-danger"
+                  ><span class="ob-dot"></span>Flagged</span
+                ><span
+                  >A finding needs a legal decision. The highest tier.</span
+                >
+              </div>
+              <div class="status-line">
+                <span class="ob-status is-warning"
+                  ><span class="ob-dot"></span>Needs review</span
+                ><span
+                  >A person must read it: a quotation, a change, a
+                  comment.</span
+                >
+              </div>
+              <div class="status-line">
+                <span class="ob-status is-info"
+                  ><span class="ob-dot"></span>In review</span
+                ><span>A run is open and waiting on you. Not an error.</span>
+              </div>
+              <div class="status-line">
+                <span class="ob-status is-success"
+                  ><span class="ob-dot"></span>Finalised</span
+                ><span
+                  >The output is locked. Quiet, because nothing is at
+                  risk.</span
+                >
+              </div>
+              <div class="status-line">
+                <span class="ob-status is-danger"
+                  ><span class="ob-dot"></span>Failed</span
+                ><span>The run did not complete. Retry is a new run.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="spec">
+            <div class="demo-row demo-row--start">
+              <div class="demo-cell">
+                <span class="ob-flag"><span class="ob-dot"></span>Flagged</span>
+                <span class="demo-label">The one loud pill</span>
+              </div>
+              <div class="demo-cell">
+                <span class="ob-tag"
+                  ><svg aria-hidden="true"><use href="#i-lock" /></svg>Redaction
+                  matter</span
+                >
+                <span class="demo-label">Quiet type label</span>
+              </div>
+              <div class="demo-cell">
+                <span class="ob-count is-danger">1</span>
+                <span class="demo-label">Count</span>
+              </div>
+            </div>
+            <p class="sys-note">
+              <b>One flag per screen.</b> If two findings are flagged, the queue
+              shows one loud pill on the first and quiet status labels on the
+              rest. Never tint a whole row.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Redaction states</h3>
+          <div class="spec">
+            <p class="ob-body" style="line-height: 1.8">
+              The witness statement records that
+              <span class="ob-span is-pending">Daniel Reyes</span> telephoned
+              <span class="ob-span is-accepted">Marion Holt</span> on
+              <span class="ob-span is-accepted">14 Sep 2026</span> from
+              <span class="ob-span is-rejected">14 Oakfield Road</span>.
+            </p>
+            <div class="ob-cluster" style="margin-top: 16px">
+              <span class="ob-status is-warning"
+                ><span class="ob-dot"></span>Pending</span
+              >
+              <span class="ob-status is-success"
+                ><span class="ob-dot"></span>Accepted</span
+              >
+              <span class="ob-status is-danger"
+                ><span class="ob-dot"></span>Rejected</span
+              >
+            </div>
+            <p class="sys-note">
+              Pending is warm, accepted is green, rejected is a dashed red
+              underline with the text readable. A rejected span is never painted
+              as if it had been redacted.
+            </p>
+          </div>
+        </section>
+
+        <!-- People ------------------------------------------------------------ -->
+        <section class="sys-sec" id="people">
+          <h2 class="ob-section-title">People</h2>
+          <p class="sys-lede">
+            Initials only. Author colour appears when more than one person has
+            edited, and nowhere else.
+          </p>
+          <div class="spec">
+            <div class="demo-row">
+              <div class="demo-cell">
+                <span class="ob-avatar">AM</span
+                ><span class="demo-label">Owner</span>
+              </div>
+              <div class="demo-cell">
+                <span class="ob-avatar is-author-2">BW</span
+                ><span class="demo-label">Other author</span>
+              </div>
+              <div class="demo-cell">
+                <span class="ob-avatar is-quiet">PN</span
+                ><span class="demo-label">Quiet</span>
+              </div>
+              <div class="demo-cell">
+                <span class="ob-avatars">
+                  <span class="ob-avatar">AM</span>
+                  <span class="ob-avatar is-author-2">BW</span>
+                  <span class="ob-avatar is-quiet">+2</span>
+                </span>
+                <span class="demo-label">Stack</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Cards and rows ---------------------------------------------------- -->
+        <section class="sys-sec" id="rows">
+          <h2 class="ob-section-title">Cards and rows</h2>
+          <p class="sys-lede">
+            A card groups what belongs together. A row is one object with a
+            title, one line of context and one end action. Space separates;
+            hairlines only between peers.
+          </p>
+
+          <div class="spec spec--plain">
+            <div class="ob-card">
+              <div class="ob-card-head">
+                <span class="ob-card-title">Recent documents</span>
+                <a class="ob-section-action" href="#"
+                  >All documents<svg aria-hidden="true">
+                    <use href="#i-arrow-right" /></svg
+                ></a>
+              </div>
+              <div class="ob-list ob-list--divided">
+                <a class="ob-row" href="#">
+                  <span class="ob-row-icon"
+                    ><svg aria-hidden="true"><use href="#i-document" /></svg
+                  ></span>
+                  <span class="ob-row-main">
+                    <span class="ob-row-title">advice-note-northgate.docx</span>
+                    <span class="ob-row-sub"
+                      >Northgate Foods v Brightwater Packaging</span
+                    >
+                  </span>
+                  <span class="ob-row-end">26 Oct 2026</span>
+                </a>
+                <a class="ob-row" href="#">
+                  <span class="ob-row-icon"
+                    ><svg aria-hidden="true"><use href="#i-document" /></svg
+                  ></span>
+                  <span class="ob-row-main">
+                    <span class="ob-row-title"
+                      >witness-statement-shah.docx</span
+                    >
+                    <span class="ob-row-sub"
+                      >FOI request: Cheshire Council 2026/114</span
+                    >
+                  </span>
+                  <span class="ob-row-end">25 Oct 2026</span>
+                </a>
+                <a class="ob-row" href="#">
+                  <span class="ob-row-icon"
+                    ><svg aria-hidden="true"><use href="#i-document" /></svg
+                  ></span>
+                  <span class="ob-row-main">
+                    <span class="ob-row-title"
+                      >supply-agreement-northgate.docx</span
+                    >
+                    <span class="ob-row-sub"
+                      >Northgate Foods v Brightwater Packaging</span
+                    >
+                  </span>
+                  <span class="ob-row-end">24 Oct 2026</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">An attention row</h3>
+          <div class="spec spec--plain">
+            <div class="ob-card">
+              <div class="ob-attn">
+                <div class="ob-attn-mark is-danger">
+                  <svg aria-hidden="true"><use href="#i-flag" /></svg>
+                </div>
+                <div class="ob-attn-body">
+                  <div class="ob-attn-head">
+                    <h3 class="ob-attn-title">
+                      Citation flagged in the advice note
+                    </h3>
+                    <span class="ob-flag"
+                      ><span class="ob-dot"></span>Flagged</span
+                    >
+                  </div>
+                  <div class="ob-attn-ctx">
+                    <span class="ob-attn-file">advice-note-northgate.docx</span>
+                    <span class="ob-sep">·</span>
+                    <a class="ob-attn-matter" href="#"
+                      >Northgate Foods v Brightwater Packaging</a
+                    >
+                  </div>
+                  <p class="ob-attn-why">
+                    Paragraph 8 cites
+                    <span class="ob-cite">[2018] UKSC 24</span> for
+                    <em>Wood v Capita Insurance Services Ltd</em>. That citation
+                    belongs to <em>Rock Advertising v MWB</em>.
+                  </p>
+                  <div class="ob-attn-foot">
+                    <span class="ob-attn-meta"
+                      >Verify · run 26 Oct 2026, 09:02</span
+                    >
+                    <span class="ob-attn-acts">
+                      <button
+                        class="ob-btn ob-btn--primary ob-btn--sm"
+                        type="button"
+                      >
+                        Review finding
+                      </button>
+                      <button
+                        class="ob-btn ob-btn--ghost ob-btn--sm"
+                        type="button"
+                      >
+                        Open document
+                      </button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="sys-note">
+              The title says what happened, the context says where, the sentence
+              says why. Actions sit at the end of the row, never in the title.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">An artefact</h3>
+          <div class="spec spec--plain">
+            <div class="ob-card">
+              <div class="ob-artefact">
+                <span class="ob-artefact-icon"
+                  ><svg aria-hidden="true"><use href="#i-scale" /></svg
+                ></span>
+                <div>
+                  <a class="ob-artefact-title" href="#"
+                    >Rock Advertising Ltd v MWB Business Exchange Centres Ltd
+                    <span class="ob-cite">[2018] UKSC 24</span></a
+                  >
+                  <div class="ob-artefact-meta">
+                    Judgment · UK Supreme Court · added 22 Oct 2026 · cited in
+                    the advice note
+                  </div>
+                  <div class="ob-artefact-text">
+                    A clause requiring variations to be in writing is effective;
+                    an oral variation does not displace it.
+                  </div>
+                </div>
+                <div class="ob-artefact-actions">
+                  <button
+                    class="ob-icon-btn"
+                    type="button"
+                    data-tip="Open judgment"
+                    aria-label="Open judgment"
+                  >
+                    <svg aria-hidden="true"><use href="#i-external" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="ob-artefact">
+                <span class="ob-artefact-icon"
+                  ><svg aria-hidden="true"><use href="#i-book" /></svg
+                ></span>
+                <div>
+                  <a class="ob-artefact-title" href="#"
+                    >Limitation Act 1980, s. 5</a
+                  >
+                  <div class="ob-artefact-meta">
+                    Act provision · England &amp; Wales · added 21 Oct 2026
+                  </div>
+                  <div class="ob-artefact-text">
+                    Time limit for actions founded on simple contract.
+                  </div>
+                </div>
+                <div class="ob-artefact-actions">
+                  <button
+                    class="ob-icon-btn"
+                    type="button"
+                    data-tip="Open provision"
+                    aria-label="Open provision"
+                  >
+                    <svg aria-hidden="true"><use href="#i-external" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p class="sys-note">
+              The artefact is the source; the document is the work. The excerpt
+              is optional and never replaces the citation.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">A search result</h3>
+          <div class="spec spec--plain">
+            <div class="ob-card">
+              <div class="ob-result">
+                <div class="ob-result-title">
+                  <a href="#">Wood v Capita Insurance Services Ltd</a>
+                </div>
+                <div class="ob-result-meta">
+                  <span class="ob-cite">[2017] UKSC 24</span
+                  ><span class="ob-sep">·</span><span>UK Supreme Court</span
+                  ><span class="ob-sep">·</span><span>22 Mar 2017</span>
+                </div>
+                <p class="ob-result-snippet">
+                  Contractual interpretation is a unitary exercise. The court
+                  reads the instrument as a whole, giving weight to both
+                  <mark>language and commercial context</mark>, and checks each
+                  suggested reading against the others.
+                </p>
+                <div class="ob-result-foot">
+                  <span>Judgment · 24 paragraphs</span
+                  ><span class="ob-muted">Cited in 1 of your matters</span>
+                </div>
+              </div>
+            </div>
+            <p class="sys-note">
+              A result says what it is, who decided it and when. No engine
+              jargon, no “stored index”.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Matter details</h3>
+          <div class="spec" style="max-width: 360px">
+            <dl class="ob-dl">
+              <dt>Client</dt>
+              <dd>Northgate Foods Limited</dd>
+              <dt>Contact</dt>
+              <dd>Daniel Reyes<span>General Counsel</span></dd>
+              <dt>Jurisdiction</dt>
+              <dd>England &amp; Wales</dd>
+              <dt>Fee earner</dt>
+              <dd>Alex Morgan</dd>
+              <dt>Opened</dt>
+              <dd>12 Jan 2026</dd>
+              <dt>Updated</dt>
+              <dd>26 Oct 2026</dd>
+            </dl>
+            <button
+              class="ob-btn ob-btn--ghost ob-btn--sm"
+              type="button"
+              style="margin-top: 12px; padding-left: 0"
+            >
+              Edit matter details
+            </button>
+            <p class="sys-note">
+              A definition list, not a table. The label is quiet; the value is
+              ink.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Activity</h3>
+          <div class="spec">
+            <div class="ob-activity">
+              <div class="ob-activity-item is-danger">
+                <div class="ob-activity-title">
+                  Advice note verified — 1 finding
+                </div>
+                <span class="ob-activity-meta"
+                  >26 Oct 2026, 09:14 · Verify</span
+                >
+              </div>
+              <div class="ob-activity-item is-warning">
+                <div class="ob-activity-title">Brightwater markup received</div>
+                <span class="ob-activity-meta"
+                  >24 Oct 2026, 16:20 · supply agreement, version 2</span
+                >
+              </div>
+              <div class="ob-activity-item is-success">
+                <div class="ob-activity-title">Redaction run finalised</div>
+                <span class="ob-activity-meta"
+                  >24 Oct 2026 · FOI request: Cheshire Council</span
+                >
+              </div>
+            </div>
+            <p class="sys-note">
+              A timeline is for a matter, not for the whole product. The dot is
+              the only colour.
+            </p>
+          </div>
+        </section>
+
+        <!-- Tables ------------------------------------------------------------ -->
+        <section class="sys-sec" id="tables">
+          <h2 class="ob-section-title">Tables</h2>
+          <p class="sys-lede">
+            For dense, comparable objects. No vertical rules, a 12px quiet
+            header, and one line of secondary context under each title.
+          </p>
+
+          <div class="spec spec--plain">
+            <div class="ob-card" style="overflow: hidden">
+              <table class="ob-table">
+                <thead>
+                  <tr>
+                    <th>Matter</th>
+                    <th>Documents</th>
+                    <th>Open work</th>
+                    <th class="is-end">Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="is-selected">
+                    <td>
+                      <div class="ob-table-title">
+                        Northgate Foods v Brightwater Packaging
+                      </div>
+                      <div class="ob-table-sub">
+                        <span class="ob-mono">NGF-0418</span
+                        ><span class="ob-sep">·</span
+                        ><span>Commercial contracts</span>
+                      </div>
+                    </td>
+                    <td class="is-num">3</td>
+                    <td>
+                      <span class="ob-cluster" style="gap: 16px">
+                        <span class="ob-status is-danger"
+                          ><span class="ob-dot"></span>1 flagged</span
+                        >
+                        <span class="ob-status is-warning"
+                          ><span class="ob-dot"></span>2 to review</span
+                        >
+                      </span>
+                    </td>
+                    <td class="is-end ob-subtle ob-nowrap">
+                      26 Oct 2026, 11:30
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div class="ob-table-title">
+                        FOI request: Cheshire Council 2026/114
+                      </div>
+                      <div class="ob-table-sub">
+                        <span class="ob-mono">FOI-2026-114</span
+                        ><span class="ob-sep">·</span
+                        ><span>Cheshire Council</span
+                        ><span class="ob-tag"
+                          ><svg aria-hidden="true"><use href="#i-lock" /></svg
+                          >Redaction</span
+                        >
+                      </div>
+                    </td>
+                    <td class="is-num">1</td>
+                    <td>
+                      <span class="ob-status is-info"
+                        ><span class="ob-dot"></span>In review</span
+                      >
+                    </td>
+                    <td class="is-end ob-subtle ob-nowrap">
+                      26 Oct 2026, 13:55
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div class="ob-table-title">Okafor v Lumen Logistics</div>
+                      <div class="ob-table-sub">
+                        <span class="ob-mono">OKA-0233</span
+                        ><span class="ob-sep">·</span><span>Employment</span>
+                      </div>
+                    </td>
+                    <td class="is-num">2</td>
+                    <td><span class="ob-muted">No open work</span></td>
+                    <td class="is-end ob-subtle ob-nowrap">
+                      21 Oct 2026, 10:05
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div class="ob-table-title">Lindqvist Estate</div>
+                      <div class="ob-table-sub">
+                        <span class="ob-mono">LIN-0107</span
+                        ><span class="ob-sep">·</span
+                        ><span>Private client</span>
+                      </div>
+                    </td>
+                    <td class="is-num">1</td>
+                    <td><span class="ob-muted">No open work</span></td>
+                    <td class="is-end ob-subtle ob-nowrap">
+                      22 Oct 2026, 10:41
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="sys-note">
+              Dates are tabular and stay on one line. “No open work” is text,
+              not a green badge.
+            </p>
+          </div>
+        </section>
+
+        <!-- Floating surfaces ------------------------------------------------- -->
+        <section class="sys-sec" id="floating">
+          <h2 class="ob-section-title">Floating surfaces</h2>
+          <p class="sys-lede">
+            Menus and dialogs sit one step above the page with the same 10px
+            radius and the one shadow. Nothing floats without a way to dismiss
+            it.
+          </p>
+
+          <h3 class="sys-h3">Tooltip</h3>
+          <div class="spec tooltip-stage">
+            <button
+              class="ob-icon-btn is-tip-visible"
+              type="button"
+              data-tip="Open judgment"
+              data-tip-right
+            >
+              <svg aria-hidden="true"><use href="#i-external" /></svg>
+            </button>
+            <span style="display: inline-block; width: 132px"></span>
+            <button
+              class="ob-icon-btn"
+              type="button"
+              data-tip="Run Verify again"
+              data-tip-right
+            >
+              <svg aria-hidden="true"><use href="#i-refresh" /></svg>
+            </button>
+            <p class="sys-note">
+              Supplementary labels only. Never hide the only copy of essential
+              information in a tooltip. Hover either icon to see the label.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Menu</h3>
+          <div class="spec spec--plain">
+            <div class="ob-menu is-static" role="menu">
+              <div class="ob-menu-head">
+                <div class="ob-menu-name">Alex Morgan</div>
+                <div class="ob-menu-sub">Owner · Harrington Vale LLP</div>
+              </div>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                <svg aria-hidden="true"><use href="#i-user" /></svg>Account
+                settings
+              </button>
+              <button class="ob-menu-item" role="menuitem" type="button">
+                <svg aria-hidden="true"><use href="#i-keyboard" /></svg>Keyboard
+                shortcuts
+              </button>
+              <div class="ob-menu-sep"></div>
+              <button
+                class="ob-menu-item is-danger"
+                role="menuitem"
+                type="button"
+              >
+                <svg aria-hidden="true"><use href="#i-trash" /></svg>Delete
+                matter
+              </button>
+              <div class="ob-menu-foot">Obiter · Firm workspace</div>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Dialog</h3>
+          <div
+            class="spec"
+            style="background: var(--ob-bg-inset); padding: 40px 24px"
+          >
+            <div class="ob-dialog" style="margin: 0 auto">
+              <div class="ob-dialog-head">
+                <h3 class="ob-dialog-title">Delete this matter?</h3>
+                <button class="ob-icon-btn" type="button" aria-label="Close">
+                  <svg aria-hidden="true"><use href="#i-close" /></svg>
+                </button>
+              </div>
+              <div class="ob-dialog-body">
+                <p>
+                  “Northgate Foods v Brightwater Packaging” and its three
+                  documents will be removed for everyone at Harrington Vale LLP.
+                  This cannot be undone.
+                </p>
+              </div>
+              <div class="ob-dialog-foot">
+                <button class="ob-btn ob-btn--ghost" type="button">
+                  Cancel
+                </button>
+                <button class="ob-btn ob-btn--danger" type="button">
+                  Delete matter
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="sys-note">
+            The confirmation names the object and the consequence. Destructive
+            is red only here.
+          </p>
+
+          <h3 class="sys-h3">Drawer</h3>
+          <div class="spec">
+            <button
+              class="ob-btn ob-btn--secondary"
+              type="button"
+              data-open-drawer
+            >
+              Open document information
+            </button>
+            <p class="sys-note">
+              The drawer is for reference material beside a document: file
+              details, versions, what “immutable versions” means. It never traps
+              focus over the page.
+            </p>
+          </div>
+        </section>
+
+        <!-- Feedback ---------------------------------------------------------- -->
+        <section class="sys-sec" id="feedback">
+          <h2 class="ob-section-title">Feedback</h2>
+          <p class="sys-lede">
+            A toast confirms something that already happened. A banner explains
+            a state that persists. Neither repeats what the page already says.
+          </p>
+
+          <div class="spec">
+            <div class="ob-toast-region is-static">
+              <div class="ob-toast">
+                <svg class="ob-toast-icon is-success" aria-hidden="true">
+                  <use href="#i-check-circle" />
+                </svg>
+                <div class="ob-toast-main">
+                  <div class="ob-toast-title">Document uploaded</div>
+                  <div class="ob-toast-text">
+                    advice-note-northgate.docx is now in Northgate Foods v
+                    Brightwater Packaging.
+                  </div>
+                </div>
+                <button
+                  class="ob-toast-close"
+                  type="button"
+                  aria-label="Dismiss"
+                >
+                  <svg class="is-12" aria-hidden="true">
+                    <use href="#i-close" />
+                  </svg>
+                </button>
+              </div>
+              <div class="ob-toast">
+                <svg class="ob-toast-icon is-danger" aria-hidden="true">
+                  <use href="#i-alert" />
+                </svg>
+                <div class="ob-toast-main">
+                  <div class="ob-toast-title">Verify did not finish</div>
+                  <div class="ob-toast-text">
+                    Three of four authorities were checked. Retrying does not
+                    alter the document.
+                  </div>
+                </div>
+                <button
+                  class="ob-toast-close"
+                  type="button"
+                  aria-label="Dismiss"
+                >
+                  <svg class="is-12" aria-hidden="true">
+                    <use href="#i-close" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="ob-stack" style="margin-top: 12px">
+            <div class="ob-banner is-danger">
+              <svg aria-hidden="true"><use href="#i-flag" /></svg>
+              <div class="ob-banner-main">
+                <div class="ob-banner-title">One citation needs a decision</div>
+                <div class="ob-banner-text">
+                  <span class="ob-cite">[2018] UKSC 24</span> in paragraph 8 may
+                  belong to Rock Advertising v MWB, not Wood v Capita.
+                </div>
+              </div>
+              <div class="ob-banner-acts">
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  type="button"
+                >
+                  Review
+                </button>
+              </div>
+              <button
+                class="ob-banner-close"
+                type="button"
+                aria-label="Dismiss"
+              >
+                <svg class="is-12" aria-hidden="true">
+                  <use href="#i-close" />
+                </svg>
+              </button>
+            </div>
+            <div class="ob-banner is-warning">
+              <svg aria-hidden="true"><use href="#i-clock" /></svg>
+              <div class="ob-banner-main">
+                <div class="ob-banner-title">3 tracked changes are waiting</div>
+                <div class="ob-banner-text">
+                  Brightwater (Legal) edited clauses 4.2 and 12.2 on 24 Oct
+                  2026.
+                </div>
+              </div>
+            </div>
+            <div class="ob-banner is-info">
+              <svg aria-hidden="true"><use href="#i-info" /></svg>
+              <div class="ob-banner-main">
+                <div class="ob-banner-title">
+                  Reading the other side's markup
+                </div>
+                <div class="ob-banner-text">
+                  Accept or reject each change, or switch the markup view to see
+                  the original.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Empty and loading ------------------------------------------------- -->
+        <section class="sys-sec" id="states">
+          <h2 class="ob-section-title">Empty and loading</h2>
+          <p class="sys-lede">
+            An empty state says what is missing and offers one way forward. A
+            loading state keeps the final layout so nothing jumps.
+          </p>
+
+          <div class="spec spec--plain">
+            <div class="ob-card">
+              <div class="ob-empty">
+                <span class="ob-empty-icon"
+                  ><svg class="is-20" aria-hidden="true">
+                    <use href="#i-document" /></svg
+                ></span>
+                <h3 class="ob-empty-title">No documents in this matter yet</h3>
+                <p class="ob-empty-text">
+                  Upload a document, or start from one of Harrington Vale's
+                  templates.
+                </p>
+                <div class="ob-empty-acts">
+                  <button class="ob-btn ob-btn--primary" type="button">
+                    <svg aria-hidden="true"><use href="#i-upload" /></svg>Upload
+                    document
+                  </button>
+                  <button class="ob-btn ob-btn--ghost" type="button">
+                    Start from a template
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="sys-h3">Loading a list</h3>
+          <div class="spec spec--plain">
+            <div class="ob-card" aria-busy="true" aria-label="Loading matters">
+              <div class="ob-list">
+                <div
+                  class="ob-row"
+                  style="padding-top: 16px; padding-bottom: 16px"
+                >
+                  <span
+                    class="ob-skeleton ob-skeleton--circle"
+                    style="width: 28px; height: 28px; flex: 0 0 28px"
+                  ></span>
+                  <span class="ob-row-main">
+                    <span
+                      class="ob-skeleton ob-skeleton--title"
+                      style="display: block; width: 38%"
+                    ></span>
+                    <span
+                      class="ob-skeleton ob-skeleton--line"
+                      style="display: block; width: 24%; margin-top: 8px"
+                    ></span>
+                  </span>
+                  <span
+                    class="ob-skeleton ob-skeleton--line"
+                    style="width: 64px"
+                  ></span>
+                </div>
+                <div
+                  class="ob-row"
+                  style="padding-top: 16px; padding-bottom: 16px"
+                >
+                  <span
+                    class="ob-skeleton ob-skeleton--circle"
+                    style="width: 28px; height: 28px; flex: 0 0 28px"
+                  ></span>
+                  <span class="ob-row-main">
+                    <span
+                      class="ob-skeleton ob-skeleton--title"
+                      style="display: block; width: 52%"
+                    ></span>
+                    <span
+                      class="ob-skeleton ob-skeleton--line"
+                      style="display: block; width: 31%; margin-top: 8px"
+                    ></span>
+                  </span>
+                  <span
+                    class="ob-skeleton ob-skeleton--line"
+                    style="width: 64px"
+                  ></span>
+                </div>
+                <div
+                  class="ob-row"
+                  style="padding-top: 16px; padding-bottom: 16px"
+                >
+                  <span
+                    class="ob-skeleton ob-skeleton--circle"
+                    style="width: 28px; height: 28px; flex: 0 0 28px"
+                  ></span>
+                  <span class="ob-row-main">
+                    <span
+                      class="ob-skeleton ob-skeleton--title"
+                      style="display: block; width: 44%"
+                    ></span>
+                    <span
+                      class="ob-skeleton ob-skeleton--line"
+                      style="display: block; width: 20%; margin-top: 8px"
+                    ></span>
+                  </span>
+                  <span
+                    class="ob-skeleton ob-skeleton--line"
+                    style="width: 64px"
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="sys-note">
+              Rows hold their loaded height. No spinner over content, no layout
+              shift.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">Progress and steps</h3>
+          <div class="spec">
+            <div class="ob-progress-row">
+              <b>Checking citations</b
+              ><span>3 of 7 · advice-note-northgate.docx</span>
+            </div>
+            <div class="ob-progress">
+              <div class="ob-progress-bar" style="width: 43%"></div>
+            </div>
+            <div class="ob-progress-row" style="margin-top: 8px">
+              <span>Started 26 Oct 2026, 09:02</span
+              ><span>You can leave this page</span>
+            </div>
+
+            <div class="ob-steps" style="margin-top: 24px">
+              <span class="ob-step is-done"
+                ><span class="ob-step-num"
+                  ><svg class="is-12" aria-hidden="true">
+                    <use href="#i-check" /></svg></span
+                >Upload</span
+              >
+              <span class="ob-step-line"></span>
+              <span class="ob-step is-active"
+                ><span class="ob-step-num">2</span>Detect</span
+              >
+              <span class="ob-step-line"></span>
+              <span class="ob-step"
+                ><span class="ob-step-num">3</span>Review</span
+              >
+              <span class="ob-step-line"></span>
+              <span class="ob-step"
+                ><span class="ob-step-num">4</span>Finalise</span
+              >
+            </div>
+            <p class="sys-note">
+              Say progress once, in one place. A run page does not repeat it in
+              the header, the list and a toast.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">File drop</h3>
+          <div class="spec spec--plain">
+            <div class="ob-drop">
+              <span class="ob-drop-icon"
+                ><svg class="is-20" aria-hidden="true">
+                  <use href="#i-upload" /></svg
+              ></span>
+              <div class="ob-drop-title">Drop a document here</div>
+              <div class="ob-drop-text">
+                Word documents, PDFs and images up to 50 MB. We keep every
+                version.
+              </div>
+              <div class="ob-drop-acts">
+                <button
+                  class="ob-btn ob-btn--secondary ob-btn--sm"
+                  type="button"
+                >
+                  Choose a file
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Document ---------------------------------------------------------- -->
+        <section class="sys-sec" id="document">
+          <h2 class="ob-section-title">Document page</h2>
+          <p class="sys-lede">
+            The only serif surface in the product. Paper stays paper in both
+            themes, with a soft shadow and true margins; the chrome around it
+            stays quiet.
+          </p>
+
+          <div class="spec spec--inset" style="padding: 24px">
+            <article class="ob-paper ob-paper--specimen">
+              <p class="ob-paper-mark">
+                In the High Court of Justice · King's Bench Division
+              </p>
+              <h1 class="ob-paper-title">Supply Agreement</h1>
+              <p class="ob-paper-intro">
+                This Agreement is dated 12 January 2025 between
+                <b>Northgate Foods Limited</b> (“the Buyer”) and
+                <b>Brightwater Packaging Limited</b> (“the Supplier”).
+              </p>
+              <h2 class="ob-h2">4. Volumes</h2>
+              <p>
+                4.1 The Supplier shall supply the Products in accordance with
+                each Order.
+              </p>
+              <p class="ob-changebar">
+                4.2 The Buyer shall order, and the Supplier shall supply, not
+                less than <span class="ob-del">60,000</span>
+                <span class="ob-ins">45,000</span> units of the Products in each
+                calendar month during the Term.<span
+                  class="ob-cmark is-warning"
+                  title="Change from Brightwater (Legal)"
+                  >1</span
+                >
+              </p>
+              <h2 class="ob-h2">12. Liability</h2>
+              <p class="ob-changebar">
+                12.2 Subject to clause 12.1, each party's total liability in any
+                Contract Year shall not exceed the Charges
+                <span class="ob-del">paid in that Contract Year</span>
+                <span class="ob-ins">paid in the preceding 12 months</span
+                >.<span
+                  class="ob-cmark is-brand"
+                  title="Comment from Alex Morgan"
+                  >2</span
+                >
+              </p>
+            </article>
+          </div>
+          <div class="demo-grid" style="margin-top: 16px">
+            <p class="sys-note" style="margin: 0">
+              <b>Change bar.</b> A 2px amber rule in the margin marks a
+              paragraph with a revision. One per paragraph, never around the
+              text.
+            </p>
+            <p class="sys-note" style="margin: 0">
+              <b>Insertion and deletion.</b> Green underline for added text, red
+              strikethrough for removed text. Colour is paired with a line so it
+              survives monochrome.
+            </p>
+            <p class="sys-note" style="margin: 0">
+              <b>Markers.</b> A 16px numbered circle ties a change or comment to
+              the side panel. The author colour is a tint, not a fill.
+            </p>
+            <p class="sys-note" style="margin: 0">
+              <b>Comment anchor.</b> Only the number sits beside the text; the
+              comment itself lives in the panel, not in a margin balloon.
+            </p>
+          </div>
+
+          <h3 class="sys-h3">The chrome around the page</h3>
+          <div
+            class="spec"
+            style="padding: 0; overflow: hidden; background: var(--ob-bg)"
+          >
+            <div class="ob-doc" style="height: 600px">
+              <header class="ob-doc-head">
+                <button
+                  class="ob-icon-btn ob-doc-back"
+                  type="button"
+                  aria-label="Back to matter"
+                >
+                  <svg aria-hidden="true"><use href="#i-arrow-left" /></svg>
+                </button>
+                <div style="min-width: 0">
+                  <h3 class="ob-doc-title">supply-agreement-northgate.docx</h3>
+                  <div class="ob-doc-sub">
+                    <span class="ob-save-state"
+                      ><svg aria-hidden="true">
+                        <use href="#i-check-circle" /></svg
+                      >Saved · version 2</span
+                    ><span>·</span
+                    ><span>Northgate Foods v Brightwater Packaging</span>
+                  </div>
+                </div>
+                <div class="ob-doc-actions">
+                  <span class="ob-status is-danger"
+                    ><span class="ob-dot"></span>1 flagged</span
+                  >
+                  <button
+                    class="ob-icon-btn"
+                    type="button"
+                    aria-label="Document information"
+                    data-tip="Document information"
+                  >
+                    <svg aria-hidden="true"><use href="#i-info" /></svg>
+                  </button>
+                  <button
+                    class="ob-btn ob-btn--secondary ob-btn--sm"
+                    type="button"
+                  >
+                    <svg class="is-12" aria-hidden="true">
+                      <use href="#i-share" /></svg
+                    >Share
+                  </button>
+                  <button
+                    class="ob-icon-btn"
+                    type="button"
+                    aria-label="More document actions"
+                  >
+                    <svg aria-hidden="true"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </header>
+
+              <div class="ob-ribbon">
+                <div class="ob-ribbon-tabs">
+                  <button class="ob-ribbon-tab" type="button">Home</button>
+                  <button class="ob-ribbon-tab" type="button">Insert</button>
+                  <button class="ob-ribbon-tab" type="button">Layout</button>
+                  <button class="ob-ribbon-tab is-active" type="button">
+                    Review
+                  </button>
+                  <div class="ob-ribbon-meta">
+                    <span>Version 2</span><span>·</span
+                    ><span>Edited by Alex Morgan</span>
+                  </div>
+                </div>
+                <div class="ob-ribbon-row">
+                  <div class="ob-ribbon-group">
+                    <div class="ob-ribbon-controls">
+                      <button class="ob-rbtn" type="button" aria-label="Undo">
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-undo" />
+                        </svg>
+                      </button>
+                      <button class="ob-rbtn" type="button" aria-label="Redo">
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-redo" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span class="ob-ribbon-label">Editing</span>
+                  </div>
+                  <div class="ob-ribbon-group">
+                    <div class="ob-ribbon-controls">
+                      <select class="ob-rsel" aria-label="Font">
+                        <option>Georgia</option>
+                        <option>Inter</option>
+                      </select>
+                      <button
+                        class="ob-rbtn is-active"
+                        type="button"
+                        aria-label="Bold"
+                      >
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-bold" />
+                        </svg>
+                      </button>
+                      <button class="ob-rbtn" type="button" aria-label="Italic">
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-italic" />
+                        </svg>
+                      </button>
+                      <button
+                        class="ob-rbtn"
+                        type="button"
+                        aria-label="Underline"
+                      >
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-underline" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span class="ob-ribbon-label">Font</span>
+                  </div>
+                  <div class="ob-ribbon-group">
+                    <div class="ob-ribbon-controls">
+                      <button
+                        class="ob-rbtn"
+                        type="button"
+                        aria-label="Align left"
+                      >
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-align-left" />
+                        </svg>
+                      </button>
+                      <button
+                        class="ob-rbtn"
+                        type="button"
+                        aria-label="Bulleted list"
+                      >
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-list" />
+                        </svg>
+                      </button>
+                      <button
+                        class="ob-rbtn"
+                        type="button"
+                        aria-label="Numbered list"
+                      >
+                        <svg class="is-14" aria-hidden="true">
+                          <use href="#i-list-ordered" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span class="ob-ribbon-label">Paragraph</span>
+                  </div>
+                  <div class="ob-ribbon-group">
+                    <div class="ob-ribbon-controls">
+                      <label class="ob-switch-row ob-switch-row--sm"
+                        ><input
+                          class="ob-switch"
+                          type="checkbox"
+                          checked
+                        />Track changes</label
+                      >
+                      <select class="ob-rsel" aria-label="Markup view">
+                        <option>All markup</option>
+                        <option>Simple</option>
+                        <option>None</option>
+                      </select>
+                    </div>
+                    <span class="ob-ribbon-label">Tracking</span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="ob-doc-body"
+                style="grid-template-columns: minmax(0, 1fr) 320px"
+              >
+                <div class="ob-canvas" style="padding: 24px">
+                  <article class="ob-paper ob-paper--specimen">
+                    <p class="ob-paper-mark">Supply Agreement · clause 4</p>
+                    <p class="ob-changebar" style="margin-top: 12px">
+                      4.2 The Buyer shall order, and the Supplier shall supply,
+                      not less than <span class="ob-del">60,000</span>
+                      <span class="ob-ins">45,000</span> units of the Products
+                      in each calendar month.<span class="ob-cmark is-warning"
+                        >1</span
+                      >
+                    </p>
+                    <h2 class="ob-h2">12. Liability</h2>
+                    <p class="ob-changebar">
+                      12.2 Subject to clause 12.1, total liability shall not
+                      exceed the Charges
+                      <span class="ob-del">paid in that Contract Year</span>
+                      <span class="ob-ins">paid in the preceding 12 months</span
+                      >.<span class="ob-cmark is-brand">2</span>
+                    </p>
+                    <p>
+                      12.3 The cap in clause 12.2 does not apply to liability
+                      for breach of clause 18.
+                    </p>
+                    <h2 class="ob-h2">21. Variation</h2>
+                    <p>
+                      21.1 No variation of this Agreement is effective unless it
+                      is in writing and signed by both parties.
+                    </p>
+                  </article>
+                </div>
+                <aside class="ob-panel ob-panel--divided">
+                  <div class="ob-panel-head">
+                    <span class="ob-panel-title">Changes and comments</span
+                    ><span class="ob-status is-warning"
+                      ><span class="ob-dot"></span>6 open</span
+                    >
+                  </div>
+                  <div class="ob-panel-body" style="padding: 0">
+                    <div class="ob-rev-list">
+                      <article class="ob-rev is-pinned">
+                        <span class="ob-rev-num is-move">6</span>
+                        <div class="ob-rev-main">
+                          <div class="ob-rev-head">
+                            <span class="ob-rev-author"
+                              >Brightwater (Legal)</span
+                            ><span class="ob-rev-kind">Move</span>
+                          </div>
+                          <div class="ob-rev-time">24 Oct 2026, 16:20</div>
+                          <div class="ob-rev-where">Clause 18.2 → 19.4</div>
+                          <div class="ob-rev-pin-note">
+                            Cannot be decided automatically: 19.4 also contains
+                            a new insertion.
+                          </div>
+                          <div class="ob-rev-acts">
+                            <button
+                              class="ob-btn ob-btn--secondary ob-btn--sm"
+                              type="button"
+                            >
+                              <svg class="is-12" aria-hidden="true">
+                                <use href="#i-compare" /></svg
+                              >Compare both places
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                      <article class="ob-rev ob-rev--select is-focused">
+                        <input
+                          class="ob-check"
+                          type="checkbox"
+                          checked
+                          aria-label="Select the change at clause 4.2"
+                        />
+                        <span class="ob-rev-num">1</span>
+                        <div class="ob-rev-main">
+                          <div class="ob-rev-head">
+                            <span class="ob-rev-author"
+                              >Brightwater (Legal)</span
+                            ><span class="ob-rev-kind">Change</span>
+                          </div>
+                          <div class="ob-rev-time">24 Oct 2026, 16:08</div>
+                          <div class="ob-rev-where">Clause 4.2 · Volumes</div>
+                          <div class="ob-rev-diff">
+                            Delete <span class="ob-diff-del">60,000</span>,
+                            insert <span class="ob-diff-ins">45,000</span>
+                          </div>
+                          <div class="ob-rev-acts">
+                            <button
+                              class="ob-btn ob-btn--ghost ob-btn--sm"
+                              type="button"
+                            >
+                              Reject</button
+                            ><button
+                              class="ob-btn ob-btn--secondary ob-btn--sm"
+                              type="button"
+                            >
+                              Accept
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                      <article class="ob-rev">
+                        <span class="ob-rev-num is-comment">2</span>
+                        <div class="ob-rev-main">
+                          <div class="ob-rev-head">
+                            <span class="ob-rev-author">Alex Morgan</span
+                            ><span class="ob-rev-kind">Comment</span>
+                          </div>
+                          <div class="ob-rev-time">12 Oct 2026, 16:24</div>
+                          <div class="ob-rev-where">
+                            Clause 12.2 · Liability
+                          </div>
+                          <p class="ob-rev-text">
+                            Should the cap track the Charges paid in the
+                            preceding 12 months? Check the tender clarification.
+                          </p>
+                          <div class="ob-rev-acts">
+                            <button
+                              class="ob-btn ob-btn--secondary ob-btn--sm"
+                              type="button"
+                            >
+                              Reply</button
+                            ><button
+                              class="ob-btn ob-btn--secondary ob-btn--sm"
+                              type="button"
+                            >
+                              Resolve
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                  <div class="ob-decision-bar">
+                    <div class="ob-decision-head">
+                      <span class="ob-status is-warning"
+                        ><span class="ob-dot"></span>6 undecided</span
+                      ><span style="margin-left: auto">1 of 6</span>
+                    </div>
+                    <div class="ob-decision-acts">
+                      <button
+                        class="ob-btn ob-btn--secondary ob-btn--sm"
+                        type="button"
+                      >
+                        <svg class="is-12" aria-hidden="true">
+                          <use href="#i-x" /></svg
+                        >Reject
+                      </button>
+                      <button
+                        class="ob-btn ob-btn--primary ob-btn--sm"
+                        type="button"
+                      >
+                        <svg class="is-12" aria-hidden="true">
+                          <use href="#i-check" /></svg
+                        >Accept
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+          <p class="sys-note">
+            The header holds only the document name, one saving state, a Verify
+            chip, Share and the overflow menu. File details, versions and the
+            meaning of “immutable” live behind the info button.
+          </p>
+        </section>
+
+        <!-- Palette ----------------------------------------------------------- -->
+        <section class="sys-sec" id="palette">
+          <h2 class="ob-section-title">Command palette</h2>
+          <p class="sys-lede">
+            ⌘K reaches every module, matter and open document, plus the few
+            actions that are otherwise buried. Results are ranked and grouped,
+            and each row says what it is.
+          </p>
+
+          <div class="spec spec--plain">
+            <div class="ob-palette-backdrop is-static">
+              <div class="ob-palette is-static">
+                <div class="ob-palette-input">
+                  <svg aria-hidden="true"><use href="#i-search" /></svg>
+                  <input
+                    type="text"
+                    value="north"
+                    aria-label="Command palette example"
+                  />
+                  <span class="ob-kbd">Esc</span>
+                </div>
+                <div class="ob-palette-results">
+                  <div class="ob-palette-group">Matters</div>
+                  <button class="ob-palette-item is-selected" type="button">
+                    <svg aria-hidden="true"><use href="#i-folder" /></svg>
+                    <span class="ob-palette-item-main"
+                      ><span class="ob-palette-item-title"
+                        >Northgate Foods v Brightwater Packaging</span
+                      ><span class="ob-palette-item-sub"
+                        >NGF-0418 · 3 documents</span
+                      ></span
+                    >
+                    <span class="ob-kbd">↵</span>
+                  </button>
+                  <div class="ob-palette-group">Documents</div>
+                  <button class="ob-palette-item" type="button">
+                    <svg aria-hidden="true"><use href="#i-document" /></svg>
+                    <span class="ob-palette-item-main"
+                      ><span class="ob-palette-item-title"
+                        >advice-note-northgate.docx</span
+                      ><span class="ob-palette-item-sub"
+                        >Northgate Foods v Brightwater Packaging</span
+                      ></span
+                    >
+                  </button>
+                  <button class="ob-palette-item" type="button">
+                    <svg aria-hidden="true"><use href="#i-document" /></svg>
+                    <span class="ob-palette-item-main"
+                      ><span class="ob-palette-item-title"
+                        >supply-agreement-northgate.docx</span
+                      ><span class="ob-palette-item-sub"
+                        >Northgate Foods v Brightwater Packaging</span
+                      ></span
+                    >
+                  </button>
+                </div>
+                <div class="ob-palette-foot">
+                  <span
+                    ><span class="ob-kbd">↑</span
+                    ><span class="ob-kbd">↓</span>move</span
+                  >
+                  <span><span class="ob-kbd">↵</span>open</span>
+                  <span><span class="ob-kbd">Esc</span>close</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Icons ------------------------------------------------------------- -->
+        <section class="sys-sec" id="icons">
+          <h2 class="ob-section-title">Icons</h2>
+          <p class="sys-lede">
+            One 16px set on a 1.5px stroke. Always currentColor, always from the
+            shared sprite copy, never redrawn by hand.
+          </p>
+          <div class="spec">
+            <div class="icon-grid">
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-home" /></svg
+                ><span>home</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-search" /></svg
+                ><span>search</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-folder" /></svg
+                ><span>matters</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-document" /></svg
+                ><span>document</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-verify" /></svg
+                ><span>verify</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-redact" /></svg
+                ><span>redact</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-research" /></svg
+                ><span>research</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-settings" /></svg
+                ><span>settings</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-plus" /></svg
+                ><span>plus</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-minus" /></svg
+                ><span>minus</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-file" /></svg
+                ><span>file</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-upload" /></svg
+                ><span>upload</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-download" /></svg
+                ><span>download</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-share" /></svg
+                ><span>share</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-more" /></svg
+                ><span>more</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ><span>down</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-chevron-up" /></svg
+                ><span>up</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-chevron-right" /></svg
+                ><span>right</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-chevron-left" /></svg
+                ><span>left</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-arrow-left" /></svg
+                ><span>arrow left</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-close" /></svg
+                ><span>close</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-x" /></svg
+                ><span>reject</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-check" /></svg
+                ><span>check</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-flag" /></svg
+                ><span>flag</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-alert" /></svg
+                ><span>alert</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-info" /></svg
+                ><span>info</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-help" /></svg
+                ><span>help</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-clock" /></svg
+                ><span>clock</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-comment" /></svg
+                ><span>comment</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-track-changes" /></svg
+                ><span>track changes</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-accept" /></svg
+                ><span>accept</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-reject" /></svg
+                ><span>reject</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-eye" /></svg
+                ><span>eye</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-eye-off" /></svg
+                ><span>eye off</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-filter" /></svg
+                ><span>filter</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-sort" /></svg
+                ><span>sort</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-link" /></svg
+                ><span>link</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-note" /></svg
+                ><span>note</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-scale" /></svg
+                ><span>judgment</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-book" /></svg
+                ><span>legislation</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-user" /></svg
+                ><span>user</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-users" /></svg
+                ><span>users</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-lock" /></svg
+                ><span>lock</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-sun" /></svg
+                ><span>sun</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-moon" /></svg
+                ><span>moon</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-sidebar-collapse" /></svg
+                ><span>collapse</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-chevrons-left" /></svg
+                ><span>chevrons</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-lock-open" /></svg
+                ><span>unlocked</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-external" /></svg
+                ><span>external</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-trash" /></svg
+                ><span>trash</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-edit" /></svg
+                ><span>edit</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-copy" /></svg
+                ><span>copy</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-print" /></svg
+                ><span>print</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-history" /></svg
+                ><span>history</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-refresh" /></svg
+                ><span>refresh</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-minus-circle" /></svg
+                ><span>remove</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-undo" /></svg
+                ><span>undo</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-redo" /></svg
+                ><span>redo</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-bold" /></svg
+                ><span>bold</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-italic" /></svg
+                ><span>italic</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-underline" /></svg
+                ><span>underline</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-align-left" /></svg
+                ><span>align left</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-list-ordered" /></svg
+                ><span>numbered list</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-compare" /></svg
+                ><span>compare</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-bell" /></svg
+                ><span>bell</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-keyboard" /></svg
+                ><span>keyboard</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-pin" /></svg
+                ><span>pin</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-list" /></svg
+                ><span>list</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-grid" /></svg
+                ><span>grid</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-check-circle" /></svg
+                ><span>done</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-arrow-right" /></svg
+                ><span>arrow right</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-arrow-up-right" /></svg
+                ><span>open</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-menu" /></svg
+                ><span>menu</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-paperclip" /></svg
+                ><span>attach</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-calendar" /></svg
+                ><span>calendar</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-tag" /></svg
+                ><span>tag</span>
+              </div>
+              <div class="icon-cell">
+                <svg aria-hidden="true"><use href="#i-sparkle" /></svg
+                ><span>sparkle</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tokens ------------------------------------------------------------ -->
+        <section class="sys-sec" id="tokens">
+          <h2 class="ob-section-title">Tokens</h2>
+          <p class="sys-lede">
+            The contract every screen uses. Values may tune; names do not.
+          </p>
+
+          <h3 class="sys-h3">Colour</h3>
+          <div class="spec" style="padding: 0; overflow: hidden">
+            <table class="ob-table token-table">
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Dark</th>
+                  <th>Light</th>
+                  <th>Use</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--ob-bg</code></td>
+                  <td class="ob-mono">#14161A</td>
+                  <td class="ob-mono">#F4F0E7</td>
+                  <td class="ob-muted">Page canvas</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-bg-inset</code></td>
+                  <td class="ob-mono">#20242A</td>
+                  <td class="ob-mono">#E4DDD0</td>
+                  <td class="ob-muted">Canvas around paper, wells</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-surface</code></td>
+                  <td class="ob-mono">#191B1F</td>
+                  <td class="ob-mono">#FBF8F2</td>
+                  <td class="ob-muted">Sidebar, cards, panels</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-surface-2</code></td>
+                  <td class="ob-mono">#1E2126</td>
+                  <td class="ob-mono">#FFFDF9</td>
+                  <td class="ob-muted">Menus, dialogs, fields</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-surface-3</code></td>
+                  <td class="ob-mono">#262A31</td>
+                  <td class="ob-mono">#EFE9DD</td>
+                  <td class="ob-muted">Tiles, switches, secondary buttons</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-surface-3-hover</code></td>
+                  <td class="ob-mono">#2D323A</td>
+                  <td class="ob-mono">#E7E0D3</td>
+                  <td class="ob-muted">Secondary hover</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-seg-track</code></td>
+                  <td class="ob-mono">#191B1F</td>
+                  <td class="ob-mono">#EFE9DD</td>
+                  <td class="ob-muted">Segmented track</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-seg-thumb</code></td>
+                  <td class="ob-mono">#262A31</td>
+                  <td class="ob-mono">#FFFDF9</td>
+                  <td class="ob-muted">Segmented selected</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-paper</code></td>
+                  <td class="ob-mono">#FFFDF8</td>
+                  <td class="ob-mono">#FFFDF8</td>
+                  <td class="ob-muted">Document paper, both themes</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-paper-ink</code></td>
+                  <td class="ob-mono">#241E17</td>
+                  <td class="ob-mono">#241E17</td>
+                  <td class="ob-muted">Ink on paper</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-paper-muted</code></td>
+                  <td class="ob-mono">#6B6157</td>
+                  <td class="ob-mono">#6B6157</td>
+                  <td class="ob-muted">Paper metadata</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-line</code></td>
+                  <td class="ob-mono">ink 10%</td>
+                  <td class="ob-mono">ink 10%</td>
+                  <td class="ob-muted">The one hairline</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-line-strong</code></td>
+                  <td class="ob-mono">ink 18%</td>
+                  <td class="ob-mono">ink 17%</td>
+                  <td class="ob-muted">Hover, strong divider</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-ink</code></td>
+                  <td class="ob-mono">#F1EFE8</td>
+                  <td class="ob-mono">#211C17</td>
+                  <td class="ob-muted">Primary text</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-muted</code></td>
+                  <td class="ob-mono">#A7AAAF</td>
+                  <td class="ob-mono">#5B534A</td>
+                  <td class="ob-muted">Body copy, secondary</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-subtle</code></td>
+                  <td class="ob-mono">#8B8F95</td>
+                  <td class="ob-mono">#6B6258</td>
+                  <td class="ob-muted">Metadata only</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-brand</code></td>
+                  <td class="ob-mono">#5C7391</td>
+                  <td class="ob-mono">#33475F</td>
+                  <td class="ob-muted">One primary action</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-brand-hover</code></td>
+                  <td class="ob-mono">#6A81A0</td>
+                  <td class="ob-mono">#3C526C</td>
+                  <td class="ob-muted">Primary hover</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-brand-press</code></td>
+                  <td class="ob-mono">#4F6480</td>
+                  <td class="ob-mono">#283A50</td>
+                  <td class="ob-muted">Primary pressed</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-brand-soft</code></td>
+                  <td class="ob-mono">brand 18%</td>
+                  <td class="ob-mono">brand 10%</td>
+                  <td class="ob-muted">Active row, halo</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-brand-line</code></td>
+                  <td class="ob-mono">brand 34%</td>
+                  <td class="ob-mono">brand 26%</td>
+                  <td class="ob-muted">Hover edge, drop zone</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-on-brand</code></td>
+                  <td class="ob-mono">#FFFFFF</td>
+                  <td class="ob-mono">#FBF8F2</td>
+                  <td class="ob-muted">Text on brand</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-link</code></td>
+                  <td class="ob-mono">#A9BCD2</td>
+                  <td class="ob-mono">#2F4258</td>
+                  <td class="ob-muted">Inline links</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-ring</code></td>
+                  <td class="ob-mono">#8FA6C4</td>
+                  <td class="ob-mono">#33475F</td>
+                  <td class="ob-muted">Focus ring</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-hover</code></td>
+                  <td class="ob-mono">ink 5%</td>
+                  <td class="ob-mono">ink 4%</td>
+                  <td class="ob-muted">Row and menu hover</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-active</code></td>
+                  <td class="ob-mono">ink 7.5%</td>
+                  <td class="ob-mono">ink 6.5%</td>
+                  <td class="ob-muted">Pressed wash</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-danger</code></td>
+                  <td class="ob-mono">#D99880</td>
+                  <td class="ob-mono">#98452E</td>
+                  <td class="ob-muted">Flagged, failed</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-danger-soft</code></td>
+                  <td class="ob-mono">danger 12%</td>
+                  <td class="ob-mono">#F6E6DE</td>
+                  <td class="ob-muted">Icon tile, banner</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-danger-line</code></td>
+                  <td class="ob-mono">danger 28%</td>
+                  <td class="ob-mono">#E3C6B8</td>
+                  <td class="ob-muted">Inset edge</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-on-danger</code></td>
+                  <td class="ob-mono">#1B0F0B</td>
+                  <td class="ob-mono">#FFFDF9</td>
+                  <td class="ob-muted">Text on danger</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-warning</code></td>
+                  <td class="ob-mono">#D3B072</td>
+                  <td class="ob-mono">#74500F</td>
+                  <td class="ob-muted">Needs review</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-warning-soft</code></td>
+                  <td class="ob-mono">warning 12%</td>
+                  <td class="ob-mono">#F5EBD7</td>
+                  <td class="ob-muted">Icon tile, pinned move</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-warning-line</code></td>
+                  <td class="ob-mono">warning 28%</td>
+                  <td class="ob-mono">#E2D2B0</td>
+                  <td class="ob-muted">Inset edge</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-on-warning</code></td>
+                  <td class="ob-mono">#1B1408</td>
+                  <td class="ob-mono">#FFFDF9</td>
+                  <td class="ob-muted">Text on warning</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-success</code></td>
+                  <td class="ob-mono">#86B894</td>
+                  <td class="ob-mono">#2C6240</td>
+                  <td class="ob-muted">Verified, finalised</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-success-soft</code></td>
+                  <td class="ob-mono">success 12%</td>
+                  <td class="ob-mono">#E4EEE5</td>
+                  <td class="ob-muted">Icon tile, insertion</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-success-line</code></td>
+                  <td class="ob-mono">success 28%</td>
+                  <td class="ob-mono">#C4D9C8</td>
+                  <td class="ob-muted">Inset edge</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-on-success</code></td>
+                  <td class="ob-mono">#0C160F</td>
+                  <td class="ob-mono">#FFFDF9</td>
+                  <td class="ob-muted">Text on success</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-info</code></td>
+                  <td class="ob-mono">#8FAECF</td>
+                  <td class="ob-mono">#2C5C88</td>
+                  <td class="ob-muted">In review, progress</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-info-soft</code></td>
+                  <td class="ob-mono">info 12%</td>
+                  <td class="ob-mono">#E4ECF4</td>
+                  <td class="ob-muted">Icon tile, comment</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-info-line</code></td>
+                  <td class="ob-mono">info 28%</td>
+                  <td class="ob-mono">#C4D5E4</td>
+                  <td class="ob-muted">Inset edge</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-on-info</code></td>
+                  <td class="ob-mono">#0B1219</td>
+                  <td class="ob-mono">#FFFDF9</td>
+                  <td class="ob-muted">Text on info</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-overlay</code></td>
+                  <td class="ob-mono">black 48%</td>
+                  <td class="ob-mono">ink 34%</td>
+                  <td class="ob-muted">Dialog scrim</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-selection</code></td>
+                  <td class="ob-mono">brand 42%</td>
+                  <td class="ob-mono">brand 18%</td>
+                  <td class="ob-muted">Text selection</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="sys-h3">Type, space, shape and motion</h3>
+          <div class="spec" style="padding: 0; overflow: hidden">
+            <table class="ob-table token-table">
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Value</th>
+                  <th>Use</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>--ob-font-sans</code></td>
+                  <td class="ob-mono">Inter</td>
+                  <td class="ob-muted">Every interface surface</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-font-mono</code></td>
+                  <td class="ob-mono">IBM Plex Mono</td>
+                  <td class="ob-muted">Citations, references, shortcuts</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-font-serif</code></td>
+                  <td class="ob-mono">Georgia</td>
+                  <td class="ob-muted">The document page only</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fs-page</code></td>
+                  <td class="ob-mono">28px / 600</td>
+                  <td class="ob-muted">Page title, once per page</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fs-section</code></td>
+                  <td class="ob-mono">18px / 600</td>
+                  <td class="ob-muted">Section title, dialog title</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fs-item</code></td>
+                  <td class="ob-mono">14px / 500</td>
+                  <td class="ob-muted">Item title, buttons, active nav</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fs-body</code></td>
+                  <td class="ob-mono">14px / 400</td>
+                  <td class="ob-muted">Body copy</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fs-meta</code></td>
+                  <td class="ob-mono">13px / 400</td>
+                  <td class="ob-muted">Secondary and table text</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fs-caption</code></td>
+                  <td class="ob-mono">12px / 400</td>
+                  <td class="ob-muted">Captions, used rarely</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-lh-page</code></td>
+                  <td class="ob-mono">1.2</td>
+                  <td class="ob-muted">Page title</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-lh-section</code></td>
+                  <td class="ob-mono">1.3</td>
+                  <td class="ob-muted">Section title</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-lh-item</code></td>
+                  <td class="ob-mono">1.4</td>
+                  <td class="ob-muted">Item title</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-lh-body</code></td>
+                  <td class="ob-mono">1.55</td>
+                  <td class="ob-muted">Body copy</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-lh-meta</code></td>
+                  <td class="ob-mono">1.45</td>
+                  <td class="ob-muted">Meta</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-lh-caption</code></td>
+                  <td class="ob-mono">1.4</td>
+                  <td class="ob-muted">Caption</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-1</code></td>
+                  <td class="ob-mono">4px</td>
+                  <td class="ob-muted">Icon to label, title to meta</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-2</code></td>
+                  <td class="ob-mono">8px</td>
+                  <td class="ob-muted">Inside a control, between peers</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-3</code></td>
+                  <td class="ob-mono">12px</td>
+                  <td class="ob-muted">Between related items</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-4</code></td>
+                  <td class="ob-mono">16px</td>
+                  <td class="ob-muted">Row padding, field gap</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-5</code></td>
+                  <td class="ob-mono">24px</td>
+                  <td class="ob-muted">Card padding, card gap</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-6</code></td>
+                  <td class="ob-mono">32px</td>
+                  <td class="ob-muted">Large control separation</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-7</code></td>
+                  <td class="ob-mono">40px</td>
+                  <td class="ob-muted">Between sections</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-8</code></td>
+                  <td class="ob-mono">48px</td>
+                  <td class="ob-muted">Page gutter at 1440</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-space-9</code></td>
+                  <td class="ob-mono">56px</td>
+                  <td class="ob-muted">Page top padding</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-row-h</code></td>
+                  <td class="ob-mono">52px</td>
+                  <td class="ob-muted">Minimum list and table row</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-measure</code></td>
+                  <td class="ob-mono">68ch</td>
+                  <td class="ob-muted">Reading measure</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-r-xs</code></td>
+                  <td class="ob-mono">4px</td>
+                  <td class="ob-muted">Checkbox, kbd, tiny marks</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-r-sm</code></td>
+                  <td class="ob-mono">6px</td>
+                  <td class="ob-muted">Controls</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-r-md</code></td>
+                  <td class="ob-mono">8px</td>
+                  <td class="ob-muted">Banners, icon tiles</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-r-lg</code></td>
+                  <td class="ob-mono">10px</td>
+                  <td class="ob-muted">Panels, menus, dialogs</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-r-xl</code></td>
+                  <td class="ob-mono">14px</td>
+                  <td class="ob-muted">Command palette</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-r-pill</code></td>
+                  <td class="ob-mono">999px</td>
+                  <td class="ob-muted">Switch, progress</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-fast</code></td>
+                  <td class="ob-mono">120ms</td>
+                  <td class="ob-muted">Hover, focus</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-slow</code></td>
+                  <td class="ob-mono">180ms</td>
+                  <td class="ob-muted">Menus, collapse, dialogs</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-ease</code></td>
+                  <td class="ob-mono">cubic-bezier(.2,.8,.2,1)</td>
+                  <td class="ob-muted">Ease-out for every transition</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-shadow-1</code></td>
+                  <td class="ob-mono">1px / 2px</td>
+                  <td class="ob-muted">Selected segment</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-shadow-2</code></td>
+                  <td class="ob-mono">18px / 44px</td>
+                  <td class="ob-muted">Menus, dialogs, drawer</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-shadow-page</code></td>
+                  <td class="ob-mono">18px / 44px</td>
+                  <td class="ob-muted">Paper on the desk</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-side-w</code></td>
+                  <td class="ob-mono">252px / 64px</td>
+                  <td class="ob-muted">Sidebar expanded / collapsed</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-top-h</code></td>
+                  <td class="ob-mono">48px</td>
+                  <td class="ob-muted">Top bar</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-page-max</code></td>
+                  <td class="ob-mono">1120px</td>
+                  <td class="ob-muted">Content column</td>
+                </tr>
+                <tr>
+                  <td><code>--ob-gutter</code></td>
+                  <td class="ob-mono">48px / 32px</td>
+                  <td class="ob-muted">Page edge at 1440 / 1024</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="sys-h3">Rules that are not tokens</h3>
+          <ul
+            class="ob-stack ob-stack--tight"
+            style="
+              margin-top: 8px;
+              font-size: 14px;
+              line-height: 1.55;
+              color: var(--ob-muted);
+              max-width: 68ch;
+            "
+          >
+            <li>
+              <b class="ob-ink">One primary button per view.</b> The primary is
+              the next real decision, not “New matter”.
+            </li>
+            <li>
+              <b class="ob-ink">One loud flag per screen.</b> Every other status
+              is a dot and a word.
+            </li>
+            <li>
+              <b class="ob-ink">Never letter-space a filename or citation.</b>
+              Tracking belongs to the page title and section title only.
+            </li>
+            <li>
+              <b class="ob-ink">No uppercase labels.</b> The type scale carries
+              hierarchy.
+            </li>
+            <li>
+              <b class="ob-ink">One date format.</b> 26 Oct 2026, and 26 Oct
+              2026, 14:32 when the time matters.
+            </li>
+            <li>
+              <b class="ob-ink">Never show a system ID.</b> A matter reference
+              is human and goes in mono; a version is “v2”.
+            </li>
+            <li>
+              <b class="ob-ink">Focus is always visible.</b> 2px ring, 2px
+              offset, in the brand hue.
+            </li>
+          </ul>
+        </section>
+
+        <div style="height: 56px"></div>
+      </main>
+    </div>
+
+    <!-- Live drawer --------------------------------------------------------- -->
+    <div class="ob-backdrop ob-backdrop--drawer" id="drawer" hidden>
+      <aside class="ob-drawer" aria-label="Document information">
+        <div class="ob-drawer-head">
+          <h2 class="ob-drawer-title">Document information</h2>
+          <button
+            class="ob-icon-btn"
+            type="button"
+            data-close-drawer
+            aria-label="Close"
+          >
+            <svg aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div class="ob-drawer-body">
+          <dl class="ob-doc-meta-list">
+            <dt>Name</dt>
+            <dd>supply-agreement-northgate.docx</dd>
+            <dt>Type</dt>
+            <dd>Word document (.docx)</dd>
+            <dt>Size</dt>
+            <dd>37.8 KB</dd>
+            <dt>Updated</dt>
+            <dd>25 Oct 2026, 16:12</dd>
+          </dl>
+          <div class="ob-divider" style="margin: 16px 0"></div>
+          <div class="ob-label" style="margin-bottom: 4px">Versions</div>
+          <div class="ob-version">
+            <span class="ob-version-num">v2</span>
+            <span class="ob-version-main"
+              ><b>Current version</b><span>25 Oct 2026 · 37.8 KB</span></span
+            >
+            <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+              View
+            </button>
+          </div>
+          <div class="ob-version">
+            <span class="ob-version-num">v1</span>
+            <span class="ob-version-main"
+              ><b>Version 1</b><span>24 Oct 2026 · 37.3 KB</span></span
+            >
+            <button class="ob-btn ob-btn--ghost ob-btn--sm" type="button">
+              View
+            </button>
+          </div>
+          <div style="margin-top: 12px">
+            <button class="ob-btn ob-btn--secondary ob-btn--sm" type="button">
+              <svg class="is-12" aria-hidden="true">
+                <use href="#i-compare" /></svg
+              >Compare versions
+            </button>
+          </div>
+          <div class="ob-banner is-info" style="margin-top: 24px">
+            <svg class="is-14" aria-hidden="true"><use href="#i-lock" /></svg>
+            <div class="ob-banner-main">
+              <div class="ob-banner-title">What “immutable versions” means</div>
+              <div class="ob-banner-text">
+                A version is a locked copy. Once saved it cannot be changed, by
+                anyone. Editing always creates a new version, so a copy you have
+                shared stays exactly as it was.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ob-drawer-foot">
+          <button
+            class="ob-btn ob-btn--secondary"
+            type="button"
+            data-close-drawer
+          >
+            Close
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      ;(function () {
+        var root = document.documentElement
+        var buttons = document.querySelectorAll('[data-set-theme]')
+        function setTheme(theme) {
+          root.dataset.theme = theme
+          buttons.forEach(function (b) {
+            var on = b.dataset.setTheme === theme
+            b.classList.toggle('is-active', on)
+            b.setAttribute('aria-pressed', on ? 'true' : 'false')
+          })
+        }
+        buttons.forEach(function (b) {
+          b.addEventListener('click', function () {
+            setTheme(b.dataset.setTheme)
+          })
+        })
+        if (location.hash === '#light') setTheme('light')
+      })()
+
+      ;(function () {
+        var drawer = document.getElementById('drawer')
+        document.querySelectorAll('[data-open-drawer]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            drawer.hidden = false
+          })
+        })
+        document.querySelectorAll('[data-close-drawer]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            drawer.hidden = true
+          })
+        })
+        drawer.addEventListener('click', function (e) {
+          if (e.target === drawer) drawer.hidden = true
+        })
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') drawer.hidden = true
+        })
+        if (location.hash === '#drawer') drawer.hidden = false
+      })()
+    </script>
+  </body>
+</html>
