@@ -1,10 +1,9 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
-import { ObiterMark } from '@obiter/ui'
+import { AuthFoot, AuthForm, AuthHeading, AuthLayout } from './auth-layout'
 
 /**
  * Reset-password screen. The reset email links here with ?token=.
@@ -67,81 +66,91 @@ export function ResetPasswordRouteView() {
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
-      <div className="flex w-full max-w-[28rem] flex-col gap-8">
-        <header className="flex flex-col items-center gap-4 text-center">
-          <ObiterMark className="size-8" />
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-lg font-semibold tracking-tight text-ink">
-              Set a new password
-            </h1>
-            <p className="text-sm text-muted">
-              Choose a password for your account.
-            </p>
-          </div>
-        </header>
-
-        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
-          {tokenFailed ? (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm leading-relaxed text-muted">
-                This reset link is invalid or has expired.
-              </p>
-              <Link
-                to="/forgot-password"
-                className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-brand hover:text-brand-pressed"
-              >
-                Request a new reset link
-              </Link>
-            </div>
-          ) : (
-            <form
-              onSubmit={handleSubmit}
-              className="flex flex-col gap-4"
-              noValidate
+    <AuthLayout footnote="Reset links are single use and expire after 30 minutes.">
+      {tokenFailed ? (
+        <>
+          <AuthHeading
+            title="This link has expired"
+            description={
+              <>
+                <span className="block">
+                  This reset link is invalid or has expired.
+                </span>
+                <span className="block">Request a new one to continue.</span>
+              </>
+            }
+          />
+          <div className="mt-6 flex flex-col gap-2">
+            <Button
+              size="lg"
+              nativeButton={false}
+              render={<Link to="/forgot-password" />}
+              className="w-full"
             >
-              <Input
-                label="New password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                maxLength={MAX_PASSWORD_LENGTH}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                error={error ?? undefined}
-              />
-              <Input
-                label="Confirm new password"
-                type="password"
-                autoComplete="new-password"
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                maxLength={MAX_PASSWORD_LENGTH}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-              />
-              <Button
-                type="submit"
-                loading={submitting}
-                iconEnd={<ArrowRight size={16} weight="bold" />}
-                className="w-full"
-              >
-                Reset password
-              </Button>
-            </form>
-          )}
-        </div>
+              Request a new reset link
+            </Button>
+            <Button
+              variant="ghost"
+              size="lg"
+              nativeButton={false}
+              render={<Link to="/sign-in" />}
+              className="w-full"
+            >
+              Back to sign in
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <AuthHeading
+            title="Set a new password"
+            description="Choose a password for your account."
+          />
 
-        <p className="text-center text-xs text-subtle">
-          <Link
-            to="/sign-in"
-            className="font-medium text-brand hover:text-brand-pressed"
-          >
+          <AuthForm onSubmit={handleSubmit}>
+            <Input
+              label="New password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
+              className="h-control-large"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              helperText={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+              error={error ?? undefined}
+            />
+            <Input
+              label="Confirm new password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              maxLength={MAX_PASSWORD_LENGTH}
+              className="h-control-large"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
+            <Button
+              type="submit"
+              size="lg"
+              loading={submitting}
+              className="mt-1 w-full"
+            >
+              Reset password
+            </Button>
+          </AuthForm>
+        </>
+      )}
+
+      {tokenFailed ? null : (
+        <AuthFoot>
+          <Link to="/sign-in" className="text-ink hover:text-brand">
             Back to sign in
           </Link>
-        </p>
-      </div>
-    </main>
+        </AuthFoot>
+      )}
+    </AuthLayout>
   )
 }

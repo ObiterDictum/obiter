@@ -174,7 +174,7 @@ describe('SettingsRouteView — account save refreshes GET /api/me', () => {
     })
     expect(await within(account).findByRole('status')).toHaveProperty(
       'textContent',
-      'Name saved.',
+      'All changes saved',
     )
   })
 

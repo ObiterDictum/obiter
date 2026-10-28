@@ -9,8 +9,8 @@ import {
   invitePreviewQueryOptions,
   type InvitePreviewResult,
 } from '../organisation-membership'
-import { ObiterMark } from '@obiter/ui'
 import { ResendVerificationControl } from './sign-in'
+import { AuthHeading, AuthLayout } from './auth-layout'
 
 function inviteTokenFromSearch(search: { token?: unknown }): string {
   return typeof search.token === 'string' && search.token.length > 0
@@ -73,78 +73,71 @@ export function AcceptInviteRouteView() {
   const showSignUp = !session && canJoin
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
-      <div className="flex w-full max-w-[28rem] flex-col gap-8">
-        <header className="flex flex-col items-center gap-4 text-center">
-          <ObiterMark className="size-8" />
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-lg font-semibold tracking-tight text-ink">
-              Accept organisation invite
-            </h1>
-            <InviteHeading preview={preview} />
-          </div>
-        </header>
+    <AuthLayout footnote="Invitations can be accepted once and expire after 7 days.">
+      <AuthHeading
+        title="Accept organisation invite"
+        description={<InviteHeading preview={preview} />}
+      />
 
-        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
-          {checking ? (
-            <p className="text-sm text-muted">Checking this invite…</p>
-          ) : pageFailure ? (
-            <AcceptFailureMessage failure={pageFailure} />
-          ) : previewQuery.isError ? (
-            <p className="text-sm text-danger">
-              Could not load this invite. Try the link again.
+      <div className="mt-6 flex flex-col gap-4">
+        {checking ? (
+          <p className="text-meta text-muted">Checking this invite…</p>
+        ) : pageFailure ? (
+          <AcceptFailureMessage failure={pageFailure} />
+        ) : previewQuery.isError ? (
+          <p className="text-meta text-danger">
+            Could not load this invite. Try the link again.
+          </p>
+        ) : showSignUp ? (
+          <>
+            <p className="text-body text-muted">
+              You need an Obiter account to accept this invite. Create one with
+              the same email the invite was sent to.
             </p>
-          ) : showSignUp ? (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm leading-relaxed text-muted">
-                You need an Obiter account to accept this invite. Create one
-                with the same email the invite was sent to.
-              </p>
-              <div className="flex flex-col gap-1 text-sm">
-                <Link
-                  to="/sign-up"
-                  search={{ token }}
-                  className="font-medium text-brand hover:text-brand-pressed"
-                >
-                  Create an account
-                </Link>
-                <p className="text-subtle">
-                  Already have an account?{' '}
-                  <Link
-                    to="/sign-in"
-                    search={{ token }}
-                    className="font-medium text-brand hover:text-brand-pressed"
-                  >
-                    Sign in
-                  </Link>
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {error ? <AcceptFailureMessage failure={error} /> : null}
-              {error?.kind === 'unverified' && session?.user.email ? (
-                <ResendVerificationControl
-                  email={session.user.email}
-                  callbackURL={inviteAcceptCallbackURL(token)}
-                  resendVerificationEmail={resendVerificationEmail}
-                />
-              ) : null}
-              {showAccept ? (
-                <Button
-                  type="button"
-                  loading={submitting}
-                  onClick={() => void handleAccept()}
-                  className="w-full"
-                >
-                  Accept invite
-                </Button>
-              ) : null}
-            </div>
-          )}
-        </div>
+            <Button
+              size="lg"
+              nativeButton={false}
+              render={<Link to="/sign-up" search={{ token }} />}
+              className="w-full"
+            >
+              Create an account
+            </Button>
+            <p className="text-center text-caption text-subtle">
+              Already have an account?{' '}
+              <Link
+                to="/sign-in"
+                search={{ token }}
+                className="text-ink hover:text-brand"
+              >
+                Sign in
+              </Link>
+            </p>
+          </>
+        ) : (
+          <>
+            {error ? <AcceptFailureMessage failure={error} /> : null}
+            {error?.kind === 'unverified' && session?.user.email ? (
+              <ResendVerificationControl
+                email={session.user.email}
+                callbackURL={inviteAcceptCallbackURL(token)}
+                resendVerificationEmail={resendVerificationEmail}
+              />
+            ) : null}
+            {showAccept ? (
+              <Button
+                type="button"
+                size="lg"
+                loading={submitting}
+                onClick={() => void handleAccept()}
+                className="w-full"
+              >
+                Accept invite
+              </Button>
+            ) : null}
+          </>
+        )}
       </div>
-    </main>
+    </AuthLayout>
   )
 }
 
@@ -156,10 +149,10 @@ function InviteHeading({
   if (preview?.ok) {
     return (
       <>
-        <p className="text-sm text-muted">Join {preview.organisationName}.</p>
-        <p className="text-sm text-muted">
+        <span className="block">Join {preview.organisationName}.</span>
+        <span className="block">
           {preview.invitedByName} invited you to join this organisation.
-        </p>
+        </span>
       </>
     )
   }
@@ -224,13 +217,13 @@ function AcceptFailureMessage({ failure }: { failure: AcceptFailure }) {
   switch (failure.kind) {
     case 'missing_token':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           This invite link is missing a token.
         </p>
       )
     case 'not_empty':
       return (
-        <div className="flex flex-col gap-2 text-sm text-danger">
+        <div className="flex flex-col gap-2 text-meta text-danger">
           <p>{failure.message}</p>
           <p>
             Revoke your own pending invites first, then try this invite again.
@@ -239,48 +232,48 @@ function AcceptFailureMessage({ failure }: { failure: AcceptFailure }) {
       )
     case 'invite_not_found':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           This invite was not found. Check the link from your email.
         </p>
       )
     case 'invite_expired':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           This invite has expired. Ask the organisation to send a new one.
         </p>
       )
     case 'invite_revoked':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           This invite has been revoked. Ask the organisation to send a new one.
         </p>
       )
     case 'invite_already_accepted':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           This invite has already been accepted.
         </p>
       )
     case 'wrong_email':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           This invite was sent to a different email address. Sign in with the
           address the invite was sent to.
         </p>
       )
     case 'unverified':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           Verify your email before accepting an invite.
         </p>
       )
     case 'already_member':
       return (
-        <p className="text-sm text-danger">
+        <p className="text-meta text-danger">
           You already belong to this organisation.
         </p>
       )
     case 'other':
-      return <p className="text-sm text-danger">{failure.message}</p>
+      return <p className="text-meta text-danger">{failure.message}</p>
   }
 }
