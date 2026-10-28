@@ -297,11 +297,12 @@ describe('matter documents', () => {
     expect(input).toHaveProperty('accept', expect.stringContaining('.docx'))
   })
 
-  it('says there are no documents rather than showing an empty table', async () => {
+  it('offers an empty state with both ways in, not a bare empty table', async () => {
     render(<RouterProvider router={buildRouter('mtr_1')} />)
-    expect(
-      await screen.findByText(/No documents yet\. Upload a DOCX/),
-    ).toBeTruthy()
+    expect(await screen.findByText('No documents yet')).toBeTruthy()
+    expect(screen.getByLabelText('Upload document')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New document' })).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
   })
 
   it('reports a documents failure instead of an empty list', async () => {

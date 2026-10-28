@@ -3,8 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { buttonClassName } from '@obiter/ui'
 import { formatDate } from '../format'
 import type { MatterRecord } from '../matters'
-import { attentionStatus } from './home-attention-copy'
-import type { MatterOpenWork } from './matters-rows'
+import { openWorkParts, type MatterOpenWork } from './matters-rows'
 
 /**
  * The matter's details and what is waiting in it. Facts come from the matter
@@ -52,19 +51,14 @@ export function MatterOverview({
             </p>
           ) : (
             <div className="flex flex-col gap-3">
+              {/* The same words as the document row and the list's preview, so
+                  open work reads the same wherever it is counted. */}
               <ul className="flex flex-col gap-2">
-                {openWork.items.map((item) => {
-                  const status = attentionStatus(item)
-                  return (
-                    <li key={item.id}>
-                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
-                      <span className="text-meta text-muted">
-                        {' '}
-                        · {item.filename ?? 'document'}
-                      </span>
-                    </li>
-                  )
-                })}
+                {openWorkParts(openWork).map((part) => (
+                  <li key={part.label}>
+                    <StatusDot tone={part.tone}>{part.label}</StatusDot>
+                  </li>
+                ))}
               </ul>
               <Link
                 to="/verify"
