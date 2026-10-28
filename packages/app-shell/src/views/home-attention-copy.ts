@@ -37,23 +37,25 @@ function list(parts: string[]) {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
-/** Why this row is here, in the words the reviewer asked for. */
+/**
+ * Why this row is here. It never repeats the filename: the row's meta line
+ * already names the document, and two copies of a filename on one card is the
+ * same fact stated twice.
+ */
 export function attentionReason(item: AttentionItem): string {
-  const file = item.filename ?? 'document'
   const kind = item.kind
   switch (kind) {
     case 'verify_flagged':
-      return `Accuracy risk · ${file}`
+      return 'Accuracy risk'
     case 'verify_review':
-      return `Needs review · ${file}`
+      return 'Needs review'
     case 'redact_decision':
       return item.undecidedCount === null
-        ? `Awaiting a decision · ${file}`
+        ? 'Awaiting a decision'
         : `Awaiting a decision · ${count(item.undecidedCount, 'detected span')}`
     case 'verify_failed':
-      return `Run failed · ${file}`
     case 'redact_failed':
-      return `Run failed · ${file}`
+      return 'Run failed'
     default: {
       const unhandled: never = kind
       return unhandled

@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   useOrganisationVerificationRuns: vi.fn(),
   useVerificationRunDocuments: vi.fn(),
   useVerificationFindings: vi.fn(),
+  useRecentlyOpenedDocument: vi.fn(),
 }))
 
 // Each module is snapshotted before mock.module registers: a factory that
@@ -46,6 +47,12 @@ const redactionRunsModule = { ...(await import('./redaction-runs')) }
 mock.module('./redaction-runs', () => ({
   ...redactionRunsModule,
   useRedactionRunsList: mocks.useRedactionRunsList,
+}))
+
+const documentsModule = { ...(await import('./documents')) }
+mock.module('./documents', () => ({
+  ...documentsModule,
+  useRecentlyOpenedDocument: mocks.useRecentlyOpenedDocument,
 }))
 
 const verificationRunsModule = { ...(await import('./verification-runs')) }
@@ -289,6 +296,7 @@ beforeEach(() => {
     isError: false,
     error: null,
   })
+  mocks.useRecentlyOpenedDocument.mockReturnValue({ data: null })
 })
 
 afterEach(() => {
@@ -410,13 +418,15 @@ describe('HomeRouteView — needs your attention', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText('Accuracy risk · advice-note.docx')).toBeTruthy()
+      expect(screen.getByText('Accuracy risk')).toBeTruthy()
     })
     expect(
       screen.getByText('Awaiting a decision · 3 detected spans'),
     ).toBeTruthy()
-    expect(screen.getByText('Flagged')).toBeTruthy()
-    expect(screen.getByText('In review')).toBeTruthy()
+    // The filename appears once, on the meta line; the state once, as the title.
+    expect(screen.getAllByText(/advice-note\.docx/)).toHaveLength(1)
+    expect(screen.queryByText('Flagged')).toBeNull()
+    expect(screen.queryByText('In review')).toBeNull()
 
     const rows = screen.getAllByRole('listitem')
     const accuracy = rows.findIndex((row) =>
@@ -489,9 +499,40 @@ describe('HomeRouteView — rail', () => {
     })
     expect(screen.getByText('advice-note.docx')).toBeTruthy()
     expect(screen.getByText('1 document · REF-mtr_0')).toBeTruthy()
+    // One initials helper for matters, the same label the sidebar shows.
+    expect(screen.getByText('REF')).toBeTruthy()
     expect(
       screen.getByRole('link', { name: /All 1/ }).getAttribute('href'),
     ).toBe('/matters')
+  })
+})
+
+describe('HomeRouteView — continue where you left off', () => {
+  it('names the last document opened, its matter and when', async () => {
+    mocks.useRecentlyOpenedDocument.mockReturnValue({
+      data: {
+        documentId: 'doc_1',
+        matterId: 'mtr_0',
+        matterName: 'Lindqvist Estate',
+        filename: 'witness-statement.docx',
+        openedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      },
+    })
+    renderHome()
+
+    const line = await screen.findByText(/Continue where you left off:/)
+    expect(line.textContent).toContain('2 hours ago')
+    expect(line.closest('p, span')?.textContent).toContain('Lindqvist Estate')
+    const link = screen.getByRole('link', { name: 'witness-statement.docx' })
+    expect(link.getAttribute('href')).toBe('/matters/mtr_0/documents/doc_1')
+  })
+
+  it('shows nothing extra before a document has been opened', async () => {
+    renderHome()
+    await screen.findByRole('heading', {
+      name: /Good (morning|afternoon|evening)/,
+    })
+    expect(screen.queryByText(/Continue where you left off/)).toBeNull()
   })
 })
 

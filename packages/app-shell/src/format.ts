@@ -47,3 +47,23 @@ export function formatBytes(bytes: number) {
   }
   return `${value.toFixed(1)} ${units[unitIndex]}`
 }
+
+/**
+ * How long ago, in the product's one style: "just now", "24 minutes ago",
+ * "yesterday", then the date. Approximate on purpose — "where you left off"
+ * needs to place the document in your day, not to time it to the second.
+ */
+export function formatRelativeTime(value: string, now: Date = new Date()) {
+  const then = new Date(value)
+  if (Number.isNaN(then.getTime())) return value
+  const minutes = Math.floor((now.getTime() - then.getTime()) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60)
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return formatDate(value)
+}

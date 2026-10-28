@@ -30,9 +30,13 @@ import { useOrganisationVerificationRuns } from '../verification-runs'
 import { buildAttentionItems } from './home-attention'
 import { MatterDocumentsTable } from './matter-documents-table'
 import { MatterOverview } from './matter-overview'
-import { MatterShareDialog } from './matter-share-dialog'
+import { MatterShareControls } from './matter-share-dialog'
 import { openWorkByMatter, openWorkFor } from './matters-rows'
-import { MatterUploadButton, NewDocumentButton } from './matter-upload'
+import {
+  MatterDropZone,
+  MatterUploadButton,
+  NewDocumentButton,
+} from './matter-upload'
 
 /**
  * Matter — the matter's documents, its facts, and what is waiting in it, from
@@ -98,6 +102,7 @@ export function MatterRouteView({
   )
   const openWorkUnavailable = verification.isError || redactionRuns.isError
   const attentionReady = verification.isSuccess && redactionRuns.isSuccess
+  const attentionTotal = attentionReady ? (attention.get(m.id)?.total ?? 0) : 0
   // Only the matter's owner may read or change its access list; only an owner
   // or administrator of the organisation may delete the matter.
   const isOwner = me.user.id === m.createdBy
@@ -107,11 +112,16 @@ export function MatterRouteView({
     <PageScaffold
       eyebrow={
         <span className="flex flex-wrap items-center gap-2">
-          {m.legalDomains[0] ? (
-            <span className="inline-flex h-6 items-center rounded-sm bg-fill px-2 text-caption text-muted">
-              {m.legalDomains[0]}
+          {/* Every domain the matter is filed under, not just the first: a
+              matter spanning two areas was reading as one. */}
+          {m.legalDomains.map((domain) => (
+            <span
+              key={domain}
+              className="inline-flex h-6 items-center rounded-sm bg-fill px-2 text-caption text-muted"
+            >
+              {domain}
             </span>
-          ) : null}
+          ))}
           {m.clientReference ? (
             <span className="font-mono">{m.clientReference}</span>
           ) : null}
@@ -128,10 +138,16 @@ export function MatterRouteView({
       description={m.description ?? undefined}
       actions={
         <>
-          <MatterUploadButton matterId={m.id} />
-          <NewDocumentButton matterId={m.id} />
+          {/* An empty matter shows these in its EmptyState instead, so the same
+              two controls never appear twice on one page. */}
+          {documents.data && documents.data.length === 0 ? null : (
+            <>
+              <MatterUploadButton matterId={m.id} />
+              <NewDocumentButton matterId={m.id} />
+            </>
+          )}
           {isOwner ? (
-            <MatterShareDialog matter={m} organisationId={m.organisationId} />
+            <MatterShareControls matter={m} organisationId={m.organisationId} />
           ) : null}
           {canManage ? (
             <MatterActionsMenu
@@ -142,45 +158,47 @@ export function MatterRouteView({
         </>
       }
     >
-      <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
-        <section aria-labelledby="matter-documents">
-          <div className="mb-4 flex items-baseline justify-between gap-4">
-            <h2 id="matter-documents" className="text-section text-ink">
-              Documents
-            </h2>
-            <span className="text-meta text-subtle">
-              {documents.data
-                ? [
-                    `${documents.data.length} ${documents.data.length === 1 ? 'file' : 'files'}`,
-                    attentionReady && attention.get(m.id)?.total
-                      ? `${attention.get(m.id)?.total} needs attention`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : null}
-            </span>
-          </div>
-          <MatterDocumentsTable
-            matterId={m.id}
-            documents={documents.data}
-            loading={documents.isPending}
-            error={
-              documents.isError
-                ? 'The documents could not be loaded. Check your connection and try again.'
-                : null
-            }
-          />
-        </section>
+      <MatterDropZone matterId={m.id}>
+        <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+          <section aria-labelledby="matter-documents">
+            <div className="mb-4 flex items-baseline justify-between gap-4">
+              <h2 id="matter-documents" className="text-section text-ink">
+                Documents
+              </h2>
+              <span className="text-meta text-subtle">
+                {documents.data
+                  ? [
+                      `${documents.data.length} ${documents.data.length === 1 ? 'file' : 'files'}`,
+                      attentionTotal
+                        ? `${attentionTotal} ${attentionTotal === 1 ? 'needs' : 'need'} attention`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : null}
+              </span>
+            </div>
+            <MatterDocumentsTable
+              matterId={m.id}
+              documents={documents.data}
+              loading={documents.isPending}
+              error={
+                documents.isError
+                  ? 'The documents could not be loaded. Check your connection and try again.'
+                  : null
+              }
+            />
+          </section>
 
-        <aside aria-label="Matter details">
-          <MatterOverview
-            matter={m}
-            openWork={attentionReady ? openWorkFor(attention, m.id) : null}
-            openWorkUnavailable={openWorkUnavailable}
-          />
-        </aside>
-      </div>
+          <aside aria-label="Matter details">
+            <MatterOverview
+              matter={m}
+              openWork={attentionReady ? openWorkFor(attention, m.id) : null}
+              openWorkUnavailable={openWorkUnavailable}
+            />
+          </aside>
+        </div>
+      </MatterDropZone>
     </PageScaffold>
   )
 }

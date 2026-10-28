@@ -41,9 +41,12 @@ export function TabsTrigger({
     <BaseTabs.Tab
       className={cn(
         'relative h-7 rounded-sm px-2 text-caption text-subtle',
-        'transition-[color,background-color] duration-150',
+        'transition-[color,background-color,box-shadow] duration-150',
         'hover:text-ink',
-        'data-[selected]:bg-raised data-[selected]:text-ink data-[selected]:shadow-sm',
+        // Raised and outlined: on the dark surface `bg-raised` sits *below* the
+        // fill, so a fill difference alone left the selected tab invisible.
+        'data-[selected]:bg-raised data-[selected]:text-ink data-[selected]:font-medium',
+        'data-[selected]:shadow-sm data-[selected]:ring-1 data-[selected]:ring-brand/40',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
         'disabled:cursor-not-allowed disabled:opacity-45',
         className,

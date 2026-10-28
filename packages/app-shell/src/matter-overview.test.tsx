@@ -33,27 +33,11 @@ const matter: MatterRecord = {
 
 function openWork(overrides: Partial<MatterOpenWork> = {}): MatterOpenWork {
   return {
-    items: [
-      {
-        id: 'verify:vrun_1',
-        kind: 'verify_flagged',
-        runId: 'vrun_1',
-        matterId: 'mtr_1',
-        matterName: 'Share purchase',
-        matterReference: 'REF-1',
-        documentId: 'doc_1',
-        filename: 'advice-note.docx',
-        waitingSince: at,
-        flaggedCount: 1,
-        reviewRequiredCount: 0,
-        failureCode: null,
-      },
-    ],
     flaggedFindings: 1,
-    reviewFindings: 0,
+    reviewFindings: 2,
     redactionDecisions: 0,
     failed: 0,
-    total: 1,
+    total: 3,
     ...overrides,
   }
 }
@@ -100,14 +84,14 @@ describe('MatterOverview', () => {
     expect(within(details).queryByText(/Fee earner/)).toBeNull()
   })
 
-  it('names the work waiting in the matter with its document', async () => {
+  it('counts flagged and need-review work in the words the document row uses', async () => {
     renderOverview({ openWork: openWork() })
 
     const openWorkRegion = await screen.findByRole('region', {
       name: 'Open work',
     })
-    expect(within(openWorkRegion).getByText('Flagged')).toBeTruthy()
-    expect(within(openWorkRegion).getByText(/advice-note\.docx/)).toBeTruthy()
+    expect(within(openWorkRegion).getByText('1 flagged')).toBeTruthy()
+    expect(within(openWorkRegion).getByText('2 need review')).toBeTruthy()
     expect(
       within(openWorkRegion).getByRole('link', { name: 'Review in Verify' }),
     ).toBeTruthy()
@@ -115,7 +99,7 @@ describe('MatterOverview', () => {
 
   it('says a matter is clear rather than leaving the card empty', async () => {
     renderOverview({
-      openWork: openWork({ items: [], flaggedFindings: 0, total: 0 }),
+      openWork: openWork({ flaggedFindings: 0, reviewFindings: 0, total: 0 }),
     })
     expect(
       await screen.findByText('Nothing is waiting on a person.'),

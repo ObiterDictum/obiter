@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, FileText } from '@phosphor-icons/react'
 import { Card, CardBody, CardHead, Skeleton } from '@obiter/ui'
-import { formatDate, initialsOf } from '../format'
+import { formatDate } from '../format'
+import { matterInitials } from '../matters'
 
 export interface RecentDocument {
   documentId: string
@@ -68,10 +69,13 @@ export function RecentDocumentsCard({
                   >
                     {document.filename}
                   </span>
-                  {/* A rail is 232px of content: the matter name wraps rather
-                      than truncating, because a cut-off matter is a wrong
-                      matter. Only the filename, a long title, may truncate. */}
-                  <span className="mt-1 block text-meta break-words text-muted">
+                  {/* One line, as the mock-up has it: a wrapped matter name
+                      made every row two lines taller and pushed the date out of
+                      sight. The full name stays available as a tooltip. */}
+                  <span
+                    className="mt-1 block truncate text-meta text-muted"
+                    title={document.matterName}
+                  >
                     {document.matterName}
                   </span>
                   <span className="mt-1 block text-caption text-subtle">
@@ -135,10 +139,10 @@ export function YourMattersCard({
                 className="flex min-h-row items-center gap-3 px-6 py-4 hover:bg-hover"
               >
                 <span
-                  className="grid size-6 shrink-0 place-items-center rounded-sm bg-fill text-caption text-muted"
+                  className="grid size-7 shrink-0 place-items-center rounded-sm bg-fill text-caption tracking-tight text-muted"
                   aria-hidden="true"
                 >
-                  {initialsOf(matter.name).slice(0, 2)}
+                  {matterInitials(matter)}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span

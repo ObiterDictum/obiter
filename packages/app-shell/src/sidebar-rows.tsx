@@ -1,19 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import type { MatterRecord } from './matters'
+import { matterInitials, type MatterRecord } from './matters'
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
-import type { ReactElement, ReactNode } from 'react'
-
-/** The tile label: the client reference's letters, else the name's initials. */
-export function matterTileLabel(matter: MatterRecord): string {
-  const reference = matter.clientReference.match(/^[A-Za-z]+/)?.[0]
-  if (reference) return reference.slice(0, 3).toUpperCase()
-  return matter.name
-    .split(/\s+/)
-    .filter((word) => /[A-Za-z]/.test(word[0] ?? ''))
-    .slice(0, 2)
-    .map((word) => word[0].toUpperCase())
-    .join('')
-}
+import type { ReactElement, ReactNode, Ref } from 'react'
 
 /**
  * The sidebar's two row renderers. They live beside the sidebar rather than in
@@ -27,9 +15,11 @@ export function ModuleRow({
   icon: Icon,
   count,
   alertTone,
-  note,
   current,
   collapsed,
+  onClick,
+  expanded,
+  actionRef,
 }: {
   label: string
   to?: string
@@ -42,11 +32,14 @@ export function ModuleRow({
   count?: number
   /** Status tone for a module whose count is work waiting on a person. */
   alertTone?: 'danger' | 'warning' | 'success'
-  note?: string
   current?: boolean
   collapsed: boolean
+  /** An entry that opens something in place (the Agent panel) instead of a route. */
+  onClick?: () => void
+  /** Whether what `onClick` opens is showing, for `aria-expanded`. */
+  expanded?: boolean
+  actionRef?: Ref<HTMLButtonElement>
 }) {
-  const disabled = !to
   const countNote = countToneLabel(label, count)
   const toneClass = countToneClass(label, alertTone)
   const accessibleName = countNote ? `${label}, ${countNote}` : label
@@ -67,32 +60,63 @@ export function ModuleRow({
           {count}
         </span>
       )}
-      {collapsed || !note ? null : (
-        <span className="text-caption text-subtle">{note}</span>
-      )}
     </>
   )
   const rowClass = cn(
     'flex h-9 items-center gap-3 rounded-md text-item',
     'transition-colors duration-150',
     collapsed ? 'relative mx-auto w-10 justify-center' : 'px-3',
-    disabled
-      ? 'text-subtle'
-      : current
-        ? 'bg-brand-soft font-medium text-ink'
-        : 'text-muted hover:bg-hover hover:text-ink',
+    current
+      ? 'bg-brand-soft font-medium text-ink'
+      : 'text-muted hover:bg-hover hover:text-ink',
   )
-
-  if (disabled || !to) {
-    const unavailable = (
-      <span aria-disabled="true" className={rowClass}>
-        {body}
+  // The rail has no room for a count, so it carries a numbered badge pinned to
+  // the icon: a bare coloured dot said "something" without saying what or how
+  // much, and the tooltip is where the sentence lives.
+  const badge =
+    collapsed && count && toneClass !== 'text-subtle' ? (
+      <span
+        aria-hidden
+        className={cn(
+          'absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-pill px-1',
+          'text-[10px] leading-none font-medium tabular-nums',
+          toneClass === 'text-danger'
+            ? 'bg-danger text-danger-fg'
+            : toneClass === 'text-warning'
+              ? 'bg-warning text-warning-fg'
+              : 'bg-info text-info-fg',
+        )}
+      >
+        {count > 99 ? '99+' : count}
       </span>
+    ) : null
+
+  if (onClick) {
+    const button = (
+      <button
+        type="button"
+        ref={actionRef}
+        aria-label={accessibleName}
+        aria-expanded={expanded}
+        onClick={onClick}
+        className={cn(rowClass, 'w-full text-left')}
+      >
+        {body}
+        {badge}
+      </button>
     )
     return collapsed ? (
-      <RailTooltip label={accessibleName}>{unavailable}</RailTooltip>
+      <RailTooltip label={tooltipLabel(label, countNote)}>{button}</RailTooltip>
     ) : (
-      unavailable
+      button
+    )
+  }
+
+  if (!to) {
+    return (
+      <span aria-disabled="true" className={cn(rowClass, 'text-subtle')}>
+        {body}
+      </span>
     )
   }
 
@@ -104,30 +128,19 @@ export function ModuleRow({
       className={rowClass}
     >
       {body}
-      {/* The rail has no count, so it gets the mock-up's alert dot. The
-          expanded row shows the coloured count instead, and its `relative`
-          anchor only exists when collapsed — an absolute dot outside that
-          lands in the corner of the window. */}
-      {collapsed && count && toneClass !== 'text-subtle' ? (
-        <span
-          aria-hidden
-          className={cn(
-            'absolute top-1.5 right-2 size-1.5 rounded-pill',
-            toneClass === 'text-danger'
-              ? 'bg-danger'
-              : toneClass === 'text-warning'
-                ? 'bg-warning'
-                : 'bg-info',
-          )}
-        />
-      ) : null}
+      {badge}
     </Link>
   )
   return collapsed ? (
-    <RailTooltip label={accessibleName}>{row}</RailTooltip>
+    <RailTooltip label={tooltipLabel(label, countNote)}>{row}</RailTooltip>
   ) : (
     row
   )
+}
+
+/** "Verify · 2 unresolved findings": what the row is, and what the number means. */
+function tooltipLabel(label: string, countNote: string | null) {
+  return countNote ? `${label} · ${countNote}` : label
 }
 
 /**
@@ -198,14 +211,16 @@ export function MatterRow({
         current && 'bg-hover',
       )}
     >
+      {/* Three letters (a client reference) need 28px at caption size; the
+          former 24px tile pushed "OKA" against its own edges. */}
       <span
         aria-hidden
         className={cn(
-          'grid size-6 shrink-0 place-items-center rounded-md text-caption',
+          'grid size-7 shrink-0 place-items-center rounded-md text-caption tracking-tight',
           current ? 'bg-brand-soft text-ink' : 'bg-inset text-muted',
         )}
       >
-        {matterTileLabel(matter)}
+        {matterInitials(matter)}
       </span>
       {collapsed ? null : (
         <span className="min-w-0 flex-1">

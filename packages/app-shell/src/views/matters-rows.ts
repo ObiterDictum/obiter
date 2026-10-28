@@ -11,7 +11,6 @@ import { summariseAttention } from './home-attention'
  */
 
 export interface MatterOpenWork {
-  items: AttentionItem[]
   /**
    * Unresolved findings, not queue rows: one Verify run can carry several, and
    * the sidebar counts them the same way. A queue row is one decision.
@@ -22,6 +21,43 @@ export interface MatterOpenWork {
   failed: number
   /** Rows this matter contributes to Home's queue. */
   total: number
+}
+
+/** One count of what is waiting in a matter, in the list's own words. */
+export interface OpenWorkPart {
+  label: string
+  tone: 'danger' | 'warning' | 'info'
+}
+
+/**
+ * Open work as the counts a row shows. Verify's two kinds are separate on
+ * purpose: "1 flagged" is a proved mismatch and "2 need review" is a citation
+ * nobody has decided, and a matter that folds them into one number loses the
+ * difference every other surface keeps.
+ */
+export function openWorkParts(openWork: MatterOpenWork): OpenWorkPart[] {
+  const parts: OpenWorkPart[] = []
+  if (openWork.flaggedFindings > 0) {
+    parts.push({ label: `${openWork.flaggedFindings} flagged`, tone: 'danger' })
+  }
+  if (openWork.reviewFindings > 0) {
+    parts.push({
+      label: `${openWork.reviewFindings} need review`,
+      tone: 'warning',
+    })
+  }
+  if (openWork.redactionDecisions > 0) {
+    parts.push({
+      label: `${openWork.redactionDecisions} redaction ${
+        openWork.redactionDecisions === 1 ? 'decision' : 'decisions'
+      }`,
+      tone: 'info',
+    })
+  }
+  if (openWork.failed > 0) {
+    parts.push({ label: `${openWork.failed} failed`, tone: 'danger' })
+  }
+  return parts
 }
 
 export interface MatterRow {
@@ -64,7 +100,6 @@ export function openWorkByMatter(
       }
     }
     byMatter.set(matterId, {
-      items: forMatter,
       flaggedFindings,
       reviewFindings,
       redactionDecisions: summary.redactDecisions,
@@ -76,7 +111,6 @@ export function openWorkByMatter(
 }
 
 const NO_OPEN_WORK: MatterOpenWork = {
-  items: [],
   flaggedFindings: 0,
   reviewFindings: 0,
   redactionDecisions: 0,

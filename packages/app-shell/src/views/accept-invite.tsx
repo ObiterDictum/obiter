@@ -1,5 +1,6 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { Button } from '@obiter/ui'
+import { Warning } from '@phosphor-icons/react'
+import { Button, buttonClassName } from '@obiter/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError, apiFetch } from '../api'
@@ -83,11 +84,12 @@ export function AcceptInviteRouteView() {
         {checking ? (
           <p className="text-meta text-muted">Checking this invite…</p>
         ) : pageFailure ? (
-          <AcceptFailureMessage failure={pageFailure} />
+          <InviteFailureNotice failure={pageFailure} token={token} />
         ) : previewQuery.isError ? (
-          <p className="text-meta text-danger">
-            Could not load this invite. Try the link again.
-          </p>
+          <InviteFailureNotice
+            failure={{ kind: 'other', message: '' }}
+            token={token}
+          />
         ) : showSignUp ? (
           <>
             <p className="text-body text-muted">
@@ -115,7 +117,9 @@ export function AcceptInviteRouteView() {
           </>
         ) : (
           <>
-            {error ? <AcceptFailureMessage failure={error} /> : null}
+            {error ? (
+              <InviteFailureNotice failure={error} token={token} />
+            ) : null}
             {error?.kind === 'unverified' && session?.user.email ? (
               <ResendVerificationControl
                 email={session.user.email}
@@ -213,67 +217,122 @@ function classifyAcceptFailure(caught: unknown): AcceptFailure {
   return { kind: 'other', message: caught.message }
 }
 
-function AcceptFailureMessage({ failure }: { failure: AcceptFailure }) {
+interface FailureCopy {
+  title: string
+  body: string
+  /** What to do next, when the page knows something useful beyond the body. */
+  next?: string
+  /** Whether a fresh invitation is the way out. */
+  newInvite?: boolean
+}
+
+/**
+ * What happened, in the invite's own terms. A failed invite is not a stack trace
+ * and not one red line: the page says what the link was, what went wrong and
+ * which of the two ways out applies.
+ */
+function failureCopy(failure: AcceptFailure): FailureCopy {
   switch (failure.kind) {
     case 'missing_token':
-      return (
-        <p className="text-meta text-danger">
-          This invite link is missing a token.
-        </p>
-      )
-    case 'not_empty':
-      return (
-        <div className="flex flex-col gap-2 text-meta text-danger">
-          <p>{failure.message}</p>
-          <p>
-            Revoke your own pending invites first, then try this invite again.
-          </p>
-        </div>
-      )
+      return {
+        title: 'This invite link is incomplete',
+        body: 'The link is missing the token that identifies the invitation, so there is nothing here to accept.',
+        newInvite: true,
+      }
     case 'invite_not_found':
-      return (
-        <p className="text-meta text-danger">
-          This invite was not found. Check the link from your email.
-        </p>
-      )
+      return {
+        title: 'We cannot find that invite',
+        body: 'It may have been deleted or replaced, or the link in your email may be out of date.',
+        newInvite: true,
+      }
     case 'invite_expired':
-      return (
-        <p className="text-meta text-danger">
-          This invite has expired. Ask the organisation to send a new one.
-        </p>
-      )
+      return {
+        title: 'This invite has expired',
+        body: 'Invitations can be accepted for seven days after they are sent.',
+        newInvite: true,
+      }
     case 'invite_revoked':
-      return (
-        <p className="text-meta text-danger">
-          This invite has been revoked. Ask the organisation to send a new one.
-        </p>
-      )
+      return {
+        title: 'This invite has been revoked',
+        body: 'The organisation withdrew this invitation, so it can no longer be accepted.',
+        newInvite: true,
+      }
     case 'invite_already_accepted':
-      return (
-        <p className="text-meta text-danger">
-          This invite has already been accepted.
-        </p>
-      )
+      return {
+        title: 'This invite has already been accepted',
+        body: 'An invite can only be used once, and this one has been used.',
+        newInvite: true,
+      }
     case 'wrong_email':
-      return (
-        <p className="text-meta text-danger">
-          This invite was sent to a different email address. Sign in with the
-          address the invite was sent to.
-        </p>
-      )
+      return {
+        title: 'This invite was sent to a different email address',
+        body: 'Sign in with the address the invite was sent to.',
+        newInvite: true,
+      }
     case 'unverified':
-      return (
-        <p className="text-meta text-danger">
-          Verify your email before accepting an invite.
-        </p>
-      )
+      return {
+        title: 'Verify your email before accepting',
+        body: 'An invite can only be accepted by a verified address.',
+      }
     case 'already_member':
-      return (
-        <p className="text-meta text-danger">
-          You already belong to this organisation.
-        </p>
-      )
+      return {
+        title: 'You already belong to this organisation',
+        body: 'There is nothing to accept: your account is already a member.',
+      }
+    case 'not_empty':
+      return {
+        title: 'This invite cannot be accepted yet',
+        body: failure.message,
+        next: 'Revoke your own pending invites first, then open this link again.',
+      }
     case 'other':
-      return <p className="text-meta text-danger">{failure.message}</p>
+      return {
+        title: 'The invite could not be accepted',
+        body:
+          failure.message ||
+          'The invite could not be loaded. Open the link from your email again.',
+      }
   }
+}
+
+function InviteFailureNotice({
+  failure,
+  token,
+}: {
+  failure: AcceptFailure
+  token: string
+}) {
+  const copy = failureCopy(failure)
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-start gap-3 rounded-lg bg-danger-soft p-4"
+    >
+      <span
+        aria-hidden
+        className="grid size-8 place-items-center rounded-md bg-danger text-danger-fg"
+      >
+        <Warning size={16} />
+      </span>
+      <div className="flex flex-col gap-1">
+        <p className="text-item text-ink">{copy.title}</p>
+        <p className="text-meta text-muted">{copy.body}</p>
+        {copy.next ? <p className="text-meta text-muted">{copy.next}</p> : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          to="/sign-in"
+          search={token ? { token } : undefined}
+          className={buttonClassName({ variant: 'secondary', size: 'sm' })}
+        >
+          Back to sign in
+        </Link>
+      </div>
+      {copy.newInvite ? (
+        <p className="text-caption text-subtle">
+          Ask your administrator for a new invite.
+        </p>
+      ) : null}
+    </div>
+  )
 }

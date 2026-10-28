@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     session: { id: string }
   } | null,
   isPending: false,
+  search: { token: 'invite-token' } as { token?: string },
 }))
 
 // The real module, snapshotted before mock.module registers: a factory
@@ -68,7 +69,7 @@ mock.module('@tanstack/react-router', () =>
     { ...tanstackReactRouterModuleKeys },
     (() => ({
       useNavigate: () => mocks.navigate,
-      useSearch: () => ({ token: 'invite-token' }),
+      useSearch: () => mocks.search,
       Link: ({
         children,
         to,
@@ -140,6 +141,7 @@ describe('AcceptInviteRouteView', () => {
     vi.clearAllMocks()
     mocks.session = null
     mocks.isPending = false
+    mocks.search = { token: 'invite-token' }
     mockApi()
   })
 
@@ -229,41 +231,40 @@ describe('AcceptInviteRouteView', () => {
   })
 
   it.each([
-    [
-      'invite_expired',
-      'This invite has expired.',
-      /This invite has expired\. Ask the organisation to send a new one/,
-    ],
-    [
-      'invite_revoked',
-      'This invite has been revoked.',
-      /This invite has been revoked\. Ask the organisation to send a new one/,
-    ],
-    [
-      'invite_already_accepted',
-      'This invite has already been accepted.',
-      /This invite has already been accepted/,
-    ],
-    [
-      'invite_not_found',
-      'This invite was not found.',
-      /This invite was not found\. Check the link from your email/,
-    ],
+    ['invite_expired', 'This invite has expired'],
+    ['invite_revoked', 'This invite has been revoked'],
+    ['invite_already_accepted', 'This invite has already been accepted'],
+    ['invite_not_found', 'We cannot find that invite'],
   ] as const)(
-    'renders a dedicated message for %s',
-    async (code, message, expected) => {
-      mockApi({
-        preview: new ApiError(code, message, 404, 'req_preview'),
-      })
+    'gives a failed invite (%s) a way out, not one red line',
+    async (code, expected) => {
+      mockApi({ preview: new ApiError(code, 'failed', 404, 'req_preview') })
       renderAccept()
       await waitFor(() => {
         expect(screen.getByText(expected)).toBeTruthy()
       })
+      expect(screen.getByRole('alert')).toBeTruthy()
+      expect(
+        screen.getByRole('link', { name: /back to sign in/i }),
+      ).toBeTruthy()
+      expect(
+        screen.getByText(/ask your administrator for a new invite/i),
+      ).toBeTruthy()
       expect(
         screen.queryByRole('link', { name: /create an account/i }),
       ).toBeNull()
     },
   )
+
+  it('explains a link that carries no token and offers the same two ways out', async () => {
+    mocks.search = {}
+    renderAccept()
+    await screen.findByText('This invite link is incomplete')
+    expect(screen.getByRole('link', { name: /back to sign in/i })).toBeTruthy()
+    expect(
+      screen.getByText(/ask your administrator for a new invite/i),
+    ).toBeTruthy()
+  })
 
   it('renders a dedicated message when the invite is for a different email', async () => {
     mocks.session = { user: { id: 'usr_1' }, session: { id: 'ses_1' } }
@@ -316,7 +317,7 @@ describe('AcceptInviteRouteView', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Verify your email before accepting an invite/i),
+        screen.getByText(/Verify your email before accepting/i),
       ).toBeTruthy()
     })
     fireEvent.click(
