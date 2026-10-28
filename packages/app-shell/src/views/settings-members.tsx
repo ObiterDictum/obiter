@@ -1,5 +1,15 @@
 import { Plus } from '@phosphor-icons/react'
-import { Button, Input, Table, TBody, TD, TH, THead, TR } from '@obiter/ui'
+import {
+  Button,
+  Input,
+  Select,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { userRoleSchema, type UserRole } from '@obiter/contracts'
 import { ApiError } from '../api'
@@ -168,21 +178,19 @@ export function OrganisationPeople({
             setActionError(null)
           }}
         />
-        <label className="flex flex-col gap-1.5">
-          <span className="text-item text-ink">Role</span>
-          <select
-            className="h-control rounded-md border border-line bg-raised px-3 text-meta text-ink"
-            value={inviteRole}
-            onChange={(event) => {
-              const parsed = userRoleSchema.safeParse(event.target.value)
-              if (parsed.success) setInviteRole(parsed.data)
-            }}
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-            {role === 'owner' ? <option value="owner">Owner</option> : null}
-          </select>
-        </label>
+        <Select
+          label="Role"
+          options={[
+            { value: 'member', label: 'Member' },
+            { value: 'admin', label: 'Admin' },
+            ...(role === 'owner' ? [{ value: 'owner', label: 'Owner' }] : []),
+          ]}
+          value={inviteRole}
+          onValueChange={(next) => {
+            const parsed = userRoleSchema.safeParse(next)
+            if (parsed.success) setInviteRole(parsed.data)
+          }}
+        />
         <div>
           <Button
             type="submit"

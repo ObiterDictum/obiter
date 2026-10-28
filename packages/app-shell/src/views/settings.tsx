@@ -39,11 +39,7 @@ export function SettingsRouteView() {
       <div className="grid gap-6 compact:grid-cols-[200px_minmax(0,1fr)] compact:gap-12">
         <SettingsSectionNav active={section} onSelect={setSection} />
         <div className="flex min-w-0 max-w-[660px] flex-col gap-10">
-          <AccountSection
-            user={me.user}
-            organisation={me.organisation}
-            active={section === 'account'}
-          />
+          <AccountSection user={me.user} active={section === 'account'} />
           <SecuritySection active={section === 'security'} />
           <OrganisationSection me={me} active={section === 'organisation'} />
           <PreferencesSection active={section === 'preferences'} />
