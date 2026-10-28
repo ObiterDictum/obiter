@@ -105,7 +105,7 @@ describe('prefetchHomeData', () => {
     const prefetchSpy = vi
       .spyOn(queryClient, 'prefetchQuery')
       .mockResolvedValue(undefined)
-    // ensureQueryData resolves from cache (current-user + changelog).
+    // ensureQueryData resolves the current user from the seeded cache.
     vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(undefined)
 
     await prefetchHomeData(queryClient)

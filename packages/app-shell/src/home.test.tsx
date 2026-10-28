@@ -1,8 +1,9 @@
 import '@obiter/test-dom'
-import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ToastProvider } from '@obiter/ui'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -10,53 +11,49 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { VerificationRun } from '@obiter/contracts'
 import { documentsKeys } from './documents'
-import { writeWorkspaceLastPlace } from './workspace-continuity'
+import type { MatterRecord } from './matters'
+import type { RedactionRunListItem } from './redaction-runs'
 import { writeRecentLegalSearch } from './legal-search-recents'
 import { HomeRouteView } from './views/home'
 
-// Control the data hooks independently.
 const mocks = vi.hoisted(() => ({
   useMattersList: vi.fn(),
   useCurrentUser: vi.fn(),
   useRedactionRunsList: vi.fn(),
-  changelogQueryOptions: vi.fn(),
+  useOrganisationVerificationRuns: vi.fn(),
+  useVerificationRunDocuments: vi.fn(),
+  useVerificationFindings: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
+// Each module is snapshotted before mock.module registers: a factory that
+// awaited its own specifier re-entered the in-flight mock and deadlocked under
+// bun's module registry.
 const mattersModule = { ...(await import('./matters')) }
 mock.module('./matters', () => ({
   ...mattersModule,
   useMattersList: mocks.useMattersList,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('./current-user')) }
 mock.module('./current-user', () => ({
   ...currentUserModule,
   useCurrentUser: mocks.useCurrentUser,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const redactionRunsModule = { ...(await import('./redaction-runs')) }
 mock.module('./redaction-runs', () => ({
   ...redactionRunsModule,
   useRedactionRunsList: mocks.useRedactionRunsList,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
-const changelogModule = { ...(await import('./changelog')) }
-mock.module('./changelog', () => ({
-  ...changelogModule,
-  changelogQueryOptions: mocks.changelogQueryOptions,
+const verificationRunsModule = { ...(await import('./verification-runs')) }
+mock.module('./verification-runs', () => ({
+  ...verificationRunsModule,
+  useOrganisationVerificationRuns: mocks.useOrganisationVerificationRuns,
+  useVerificationRunDocuments: mocks.useVerificationRunDocuments,
+  useVerificationFindings: mocks.useVerificationFindings,
 }))
 
 const ME = {
@@ -73,9 +70,10 @@ const ME = {
   },
 }
 
-const CHANGELOG = { entries: [], source: 'github_unavailable' }
-
-function sampleMatter(id: string) {
+function matter(
+  id: string,
+  overrides: Partial<MatterRecord> = {},
+): MatterRecord {
   return {
     id,
     organisationId: 'org_1',
@@ -84,171 +82,187 @@ function sampleMatter(id: string) {
     primaryJurisdiction: 'England & Wales',
     secondaryJurisdictions: [],
     legalDomains: [],
-    clientReference: 'REF',
-    status: 'active' as const,
+    clientReference: `REF-${id}`,
+    status: 'active',
     createdBy: 'usr_1',
     createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-10-26T09:00:00.000Z',
     deletedAt: null,
     deletedBy: null,
+    ...overrides,
   }
 }
 
-function sampleDocument(matterId: string, status: string) {
+function document(matterId: string, id: string, status = 'ready') {
   return {
-    id: `doc_${matterId}_${status}`,
+    id,
     organisationId: 'org_1',
     matterId,
-    currentVersionId: 'ver_1',
-    logicalKey: 'brief.pdf',
+    currentVersionId: `ver_${id}`,
+    logicalKey: `${id}.docx`,
     createdBy: 'usr_1',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-02T00:00:00.000Z',
+    createdAt: '2026-10-20T00:00:00.000Z',
+    updatedAt: '2026-10-26T11:30:00.000Z',
     deletedAt: null,
     deletedBy: null,
     currentVersion: {
-      id: 'ver_1',
+      id: `ver_${id}`,
       organisationId: 'org_1',
       matterId,
-      matterDocumentId: `doc_${matterId}_${status}`,
-      filename: `brief-${status}.pdf`,
-      fileType: 'application/pdf',
+      matterDocumentId: id,
+      filename: `${id}.docx`,
+      fileType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       sizeBytes: '1024',
       objectKey: 'obj',
       textObjectKey: null,
       documentStatus: status,
       failureReason: null,
-      versionNumber: 1,
+      versionNumber: 2,
       contentSha256: 'a'.repeat(64),
       syncState: 'synced',
       createdBy: 'usr_1',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-02T00:00:00.000Z',
+      createdAt: '2026-10-26T11:30:00.000Z',
+      updatedAt: '2026-10-26T11:30:00.000Z',
     },
   }
 }
 
-function mattersLoading() {
-  return { isLoading: true, isError: false, isSuccess: false, data: undefined }
-}
-function mattersError() {
-  return { isLoading: false, isError: true, isSuccess: false, data: undefined }
-}
-function mattersSuccess(count: number) {
-  const data = Array.from({ length: count }, (_, i) => sampleMatter(`mtr_${i}`))
-  return { isLoading: false, isError: false, isSuccess: true, data }
-}
-
-function runsIdle() {
+function verificationRun(
+  overrides: Partial<VerificationRun> & { id: string },
+): VerificationRun {
   return {
-    isLoading: false,
-    isError: false,
-    isSuccess: true,
-    data: { runs: [] },
+    organisationId: 'org_1',
+    matterId: 'mtr_0',
+    documentId: 'doc_1',
+    documentVersionId: 'ver_1',
+    status: 'completed',
+    failureCode: null,
+    createdBy: 'usr_1',
+    createdAt: '2026-10-26T09:02:00.000Z',
+    startedAt: '2026-10-26T09:02:00.000Z',
+    completedAt: '2026-10-26T09:04:00.000Z',
+    summary: { findingCount: 3, flaggedCount: 1, reviewRequiredCount: 2 },
+    documentCurrentVersionId: 'ver_1',
+    stale: false,
+    ...overrides,
   }
 }
 
-function runsWithActivity() {
+function redactionRun(
+  overrides: Partial<RedactionRunListItem> & { id: string },
+): RedactionRunListItem {
   return {
-    isLoading: false,
-    isError: false,
-    isSuccess: true,
-    data: {
-      runs: [
-        {
-          id: 'run_1',
-          organisationId: 'org_1',
-          matterId: 'mtr_0',
-          matterDocumentId: null,
-          matterDocumentVersionId: null,
-          sourceFilename: 'witness.pdf',
-          sourceContentType: 'application/pdf',
-          sourceByteSize: 100,
-          status: 'ready_for_review',
-          detectionMode: 'rules',
-          errorCode: null,
-          errorMessage: null,
-          createdBy: 'usr_1',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-02T00:00:00.000Z',
-          summary: {
-            totalSpans: 12,
-            reviewedCount: 4,
-            unreviewedCount: 3,
-            byDecision: {
-              accept: 4,
-              override_redact: 1,
-              undecided: 3,
-            },
-          },
-        },
-      ],
+    sourceFilename: 'witness-statement.docx',
+    status: 'reviewing',
+    matterId: 'mtr_0',
+    matterName: 'Matter mtr_0',
+    createdAt: '2026-10-25T16:20:00.000Z',
+    updatedAt: '2026-10-25T16:20:00.000Z',
+    summary: {
+      totalSpans: 21,
+      reviewedCount: 18,
+      unreviewedCount: 3,
+      byDecision: { accept: 15, undecided: 3 },
     },
+    ...overrides,
+  }
+}
+
+function mattersState(
+  state: 'loading' | 'error' | 'success',
+  data?: MatterRecord[],
+) {
+  return {
+    isPending: state === 'loading',
+    isLoading: state === 'loading',
+    isError: state === 'error',
+    isSuccess: state === 'success',
+    data,
+  }
+}
+
+function runsState(runs: RedactionRunListItem[] = [], loading = false) {
+  return {
+    isPending: loading,
+    isLoading: loading,
+    isError: false,
+    error: null,
+    data: loading ? undefined : { runs },
+  }
+}
+
+function verificationState(runs: VerificationRun[] = [], loading = false) {
+  return {
+    runs,
+    isPending: loading,
+    isError: false,
+    error: null,
+    hasNextPage: false,
   }
 }
 
 function buildRouter() {
   const rootRoute = createRootRoute()
-  const homeRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: () => <HomeRouteView platform="web" />,
-  })
-  const mattersRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/matters',
-    component: () => null,
-  })
-  const matterDetailRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/matters/$matterId',
-    component: () => null,
-  })
-  const documentDetailRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/matters/$matterId/documents/$documentId',
-    component: () => null,
-  })
-  const redactRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/redact',
-    component: () => null,
-  })
-  const redactRunRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/redact/$runId',
-    component: () => null,
-  })
-  const verifyRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/verify',
-    component: () => null,
-  })
-  const searchRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/search',
-    component: () => null,
-  })
+  const routes = [
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/',
+      component: () => <HomeRouteView platform="web" />,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/matters',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/matters/$matterId',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/matters/$matterId/documents/$documentId',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/redact',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/redact/$runId',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/verify',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/search',
+      component: () => null,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings',
+      component: () => null,
+    }),
+  ]
   return createRouter({
-    routeTree: rootRoute.addChildren([
-      homeRoute,
-      mattersRoute,
-      matterDetailRoute,
-      documentDetailRoute,
-      redactRoute,
-      redactRunRoute,
-      verifyRoute,
-      searchRoute,
-    ]),
+    routeTree: rootRoute.addChildren(routes),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
 }
 
 function renderHome(client = new QueryClient()) {
-  const router = buildRouter()
   return render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={buildRouter()} />
+      </ToastProvider>
     </QueryClientProvider>,
   )
 }
@@ -257,10 +271,17 @@ beforeEach(() => {
   vi.clearAllMocks()
   window.sessionStorage.clear()
   mocks.useCurrentUser.mockReturnValue({ data: ME })
-  mocks.useRedactionRunsList.mockReturnValue(runsIdle())
-  mocks.changelogQueryOptions.mockReturnValue({
-    queryKey: ['github-changelog'],
-    queryFn: async () => CHANGELOG,
+  mocks.useMattersList.mockReturnValue(
+    mattersState('success', [matter('mtr_0')]),
+  )
+  mocks.useRedactionRunsList.mockReturnValue(runsState())
+  mocks.useOrganisationVerificationRuns.mockReturnValue(verificationState())
+  mocks.useVerificationRunDocuments.mockReturnValue(new Map())
+  mocks.useVerificationFindings.mockReturnValue({
+    findings: [],
+    isPending: false,
+    isError: false,
+    error: null,
   })
 })
 
@@ -268,48 +289,203 @@ afterEach(() => {
   cleanup()
 })
 
-describe('HomeRouteView — matters query states', () => {
-  it('shows a loading skeleton while matters are pending (not the empty/create CTA)', async () => {
-    mocks.useMattersList.mockReturnValue(mattersLoading())
+describe('HomeRouteView — matters states', () => {
+  it('shows a loading skeleton, not the empty workspace, while matters load', async () => {
+    mocks.useMattersList.mockReturnValue(mattersState('loading'))
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText('Loading…')).toBeTruthy()
+      expect(screen.getByText('Needs your attention')).toBeTruthy()
     })
-    // Must not show the empty-state CTA while pending.
-    expect(screen.queryByText(/Create your first matter/i)).toBeNull()
+    expect(screen.queryByText(/Set up your workspace/)).toBeNull()
   })
 
-  it('shows an error surface when matters fail to load (not the empty/create CTA)', async () => {
-    mocks.useMattersList.mockReturnValue(mattersError())
+  it('shows the matters error where the matters rail would be', async () => {
+    mocks.useMattersList.mockReturnValue(mattersState('error'))
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText(/could not be loaded/i)).toBeTruthy()
+      expect(screen.getByText(/Your matters could not be loaded/)).toBeTruthy()
     })
-    expect(screen.queryByText(/Create your first matter/i)).toBeNull()
+    expect(screen.queryByText(/Set up your workspace/)).toBeNull()
   })
 
-  it('shows the empty/create CTA only on a confirmed-empty successful response', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
+  it('shows the empty workspace only on a confirmed-empty response with no open work', async () => {
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText(/Create your first matter/i)).toBeTruthy()
+      expect(screen.getByText('Set up your workspace')).toBeTruthy()
     })
+    expect(
+      screen.getByRole('heading', { name: /Welcome to Obiter, Lex/ }),
+    ).toBeTruthy()
+    expect(screen.getByText('Create your first matter')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Search the law/ })).toBeTruthy()
   })
 
-  it('shows the matter count and recent matters on a successful non-empty response', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(3))
+  it('keeps the dashboard, not the empty workspace, when open work exists', async () => {
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
+    mocks.useRedactionRunsList.mockReturnValue(
+      runsState([redactionRun({ id: 'run_1' })]),
+    )
+    renderHome()
+
+    await waitFor(() => {
+      expect(screen.getByText('Needs your attention')).toBeTruthy()
+    })
+    expect(screen.queryByText('Set up your workspace')).toBeNull()
+  })
+})
+
+describe('HomeRouteView — greeting and actions', () => {
+  it('greets by first name with the absolute date and the three real actions', async () => {
     renderHome()
 
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: 'Active matters' }),
+        screen.getByRole('heading', {
+          name: /Good (morning|afternoon|evening), Lex/,
+        }),
       ).toBeTruthy()
-      expect(screen.getByText('Matter mtr_0')).toBeTruthy()
     })
-    expect(screen.getAllByText('3').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'New matter' })).toBeTruthy()
+    expect(
+      screen
+        .getByRole('link', { name: 'Upload document' })
+        .getAttribute('href'),
+    ).toBe('/matters')
+    expect(
+      screen
+        .getByRole('link', { name: 'Start redaction' })
+        .getAttribute('href'),
+    ).toBe('/redact')
+  })
+
+  it('states only the counts that are on the queue', async () => {
+    mocks.useRedactionRunsList.mockReturnValue(
+      runsState([redactionRun({ id: 'run_1' })]),
+    )
+    mocks.useOrganisationVerificationRuns.mockReturnValue(
+      verificationState([
+        verificationRun({ id: 'verify_1' }),
+        verificationRun({
+          id: 'verify_2',
+          status: 'failed',
+          completedAt: '2026-10-26T14:27:00.000Z',
+        }),
+      ]),
+    )
+    renderHome()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          '3 items need your attention: 1 legal-accuracy risk, 1 redaction decision and 1 failed run.',
+        ),
+      ).toBeTruthy()
+    })
+  })
+})
+
+describe('HomeRouteView — needs your attention', () => {
+  it('ranks a flagged finding above a redaction decision and names why each is there', async () => {
+    mocks.useRedactionRunsList.mockReturnValue(
+      runsState([redactionRun({ id: 'run_1' })]),
+    )
+    mocks.useOrganisationVerificationRuns.mockReturnValue(
+      verificationState([verificationRun({ id: 'verify_1' })]),
+    )
+    mocks.useVerificationRunDocuments.mockReturnValue(
+      new Map([
+        ['doc_1', { status: 'available', filename: 'advice-note.docx' }],
+      ]),
+    )
+    renderHome()
+
+    await waitFor(() => {
+      expect(screen.getByText('Accuracy risk · advice-note.docx')).toBeTruthy()
+    })
+    expect(
+      screen.getByText('Awaiting a decision · 3 detected spans'),
+    ).toBeTruthy()
+    expect(screen.getByText('Flagged')).toBeTruthy()
+    expect(screen.getByText('In review')).toBeTruthy()
+
+    const rows = screen.getAllByRole('listitem')
+    const accuracy = rows.findIndex((row) =>
+      row.textContent?.includes('Accuracy risk'),
+    )
+    const decision = rows.findIndex((row) =>
+      row.textContent?.includes('Awaiting a decision'),
+    )
+    expect(accuracy).toBeGreaterThanOrEqual(0)
+    expect(accuracy).toBeLessThan(decision)
+
+    expect(
+      screen.getByRole('link', { name: 'Review finding' }).getAttribute('href'),
+    ).toBe('/matters/mtr_0/documents/doc_1')
+    expect(
+      screen
+        .getByRole('link', { name: 'Continue review' })
+        .getAttribute('href'),
+    ).toBe('/redact/run_1')
+  })
+
+  it('explains a failed Verify run in the words Verify uses for the failure', async () => {
+    mocks.useOrganisationVerificationRuns.mockReturnValue(
+      verificationState([
+        verificationRun({
+          id: 'verify_1',
+          status: 'failed',
+          failureCode: 'execution_failed',
+        }),
+      ]),
+    )
+    renderHome()
+
+    await waitFor(() => {
+      expect(screen.getByText('Verify run did not finish')).toBeTruthy()
+    })
+    expect(
+      screen.getByText(
+        'Verification could not finish. No successful result was recorded.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('says the queue is clear instead of inventing activity', async () => {
+    renderHome()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Nothing needs your attention right now.'),
+      ).toBeTruthy()
+    })
+    expect(
+      screen.getByText(
+        /No Verify findings, redaction decisions or failed runs/,
+      ),
+    ).toBeTruthy()
+  })
+})
+
+describe('HomeRouteView — rail', () => {
+  it('lists recent documents and matters from the queries the shell already runs', async () => {
+    const client = new QueryClient()
+    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
+      document('mtr_0', 'advice-note'),
+    ])
+    renderHome(client)
+
+    await waitFor(() => {
+      expect(screen.getByText('Recent documents')).toBeTruthy()
+    })
+    expect(screen.getByText('advice-note.docx')).toBeTruthy()
+    expect(screen.getByText('1 document · REF-mtr_0')).toBeTruthy()
+    expect(
+      screen.getByRole('link', { name: /All 1/ }).getAttribute('href'),
+    ).toBe('/matters')
   })
 })
 
@@ -324,59 +500,34 @@ describe('HomeRouteView — organisation-less state', () => {
     organisation: null,
   }
 
-  it('renders the home desk without Settings-required gating for Matters/Redact', async () => {
+  it('renders the dashboard without Settings-required gating on a personal workspace', async () => {
     mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
-    mocks.useMattersList.mockReturnValue(mattersLoading())
+    mocks.useMattersList.mockReturnValue(mattersState('loading'))
     renderHome()
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Good (morning|afternoon|evening), New/i),
+        screen.getByRole('heading', {
+          name: /Good (morning|afternoon|evening), New/,
+        }),
       ).toBeTruthy()
     })
-    expect(screen.getByText('No organisation yet')).toBeTruthy()
-    expect(screen.getByText('Loading…')).toBeTruthy()
-    expect(screen.getByText('Start redaction')).toBeTruthy()
-    expect(screen.getByText('Your work')).toBeTruthy()
-    // Quiet queue: no hollow Redaction column.
-    expect(screen.queryByRole('region', { name: 'Redaction' })).toBeNull()
-    expect(screen.queryByText(/Queue clear/i)).toBeNull()
-    expect(screen.queryByText(/Create an organisation in Settings/i)).toBeNull()
+    expect(screen.getByRole('link', { name: 'Start redaction' })).toBeTruthy()
     expect(
       screen.queryByRole('button', { name: /create organisation/i }),
     ).toBeNull()
+    expect(screen.queryByText(/Create an organisation in Settings/i)).toBeNull()
   })
 
   it('enables the matters list query for an org-less user', async () => {
     mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
-    mocks.useMattersList.mockReturnValue(mattersLoading())
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
     renderHome()
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Good (morning|afternoon|evening), New/i),
-      ).toBeTruthy()
+      expect(mocks.useMattersList).toHaveBeenCalled()
     })
-    expect(mocks.useMattersList).toHaveBeenCalled()
     expect(mocks.useMattersList).not.toHaveBeenCalledWith({ enabled: false })
-  })
-
-  it('invalidates current-user once after matters succeed while org is still null', async () => {
-    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
-    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
-    const client = new QueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-    const router = buildRouter()
-    render(
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    )
-
-    await waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
-    })
-    expect(invalidateSpy).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -388,25 +539,23 @@ describe('HomeRouteView — default workspace naming prompt', () => {
         organisation: { ...ME.organisation, name: 'Personal workspace' },
       },
     })
-    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
     renderHome()
 
     await waitFor(() => {
       expect(screen.getByText(/still has its default name/i)).toBeTruthy()
     })
     expect(
-      screen.getByRole('link', { name: /name it in settings/i }),
-    ).toBeTruthy()
+      screen
+        .getByRole('link', { name: /Name it in Settings/ })
+        .getAttribute('href'),
+    ).toBe('/settings')
   })
 
   it('shows no prompt for named workspaces or non-owners', async () => {
-    mocks.useMattersList.mockReturnValue(mattersLoading())
     renderHome()
-
     await waitFor(() => {
-      expect(
-        screen.getByText(/Good (morning|afternoon|evening), Lex/i),
-      ).toBeTruthy()
+      expect(screen.getByText('Needs your attention')).toBeTruthy()
     })
     expect(screen.queryByText(/still has its default name/i)).toBeNull()
     cleanup()
@@ -418,131 +567,28 @@ describe('HomeRouteView — default workspace naming prompt', () => {
       },
     })
     renderHome()
-
     await waitFor(() => {
-      expect(
-        screen.getByText(/Good (morning|afternoon|evening), Lex/i),
-      ).toBeTruthy()
+      expect(screen.getByText('Needs your attention')).toBeTruthy()
     })
     expect(screen.queryByText(/still has its default name/i)).toBeNull()
   })
 })
 
-describe('HomeRouteView — relevant density', () => {
-  it('does not render changelog tips or shortcuts in the desk body', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
-    renderHome()
-
-    await waitFor(() => {
-      expect(screen.getByText('Matter mtr_0')).toBeTruthy()
-    })
-    expect(screen.queryByText('Latest updates')).toBeNull()
-    expect(screen.queryByText('Try searching')).toBeNull()
-    expect(screen.queryByText('Shortcuts')).toBeNull()
-    expect(screen.queryByText(/No recent queries yet/i)).toBeNull()
-  })
-
-  it('shows a full-width resume strip from last place', async () => {
-    writeWorkspaceLastPlace(window.sessionStorage, {
-      path: '/matters/mtr_0',
-      label: 'Matter',
-      kind: 'matter',
-      detail: 'mtr_0',
-    })
-    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
-    renderHome()
-
-    await waitFor(() => {
-      expect(screen.getByText('Continue')).toBeTruthy()
-    })
-    const resume = screen.getByText('Continue').closest('a')
-    expect(resume?.getAttribute('href')).toContain('/matters/mtr_0')
-    expect(resume?.textContent).toMatch(/Matter mtr_0/)
-  })
-
-  it('shows recent search chips under the search field', async () => {
+describe('HomeRouteView — empty workspace search', () => {
+  it('shows stored recent searches instead of the example suggestions', async () => {
     writeRecentLegalSearch(
       window.sessionStorage,
       'beneficial ownership of shares',
     )
-    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
     renderHome()
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', {
-          name: /beneficial ownership of shares/i,
-        }),
+        screen.getByRole('button', { name: /beneficial ownership of shares/ }),
       ).toBeTruthy()
     })
     expect(screen.getByLabelText('Recent searches')).toBeTruthy()
-  })
-
-  it('hides the Redaction column when there are no runs', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
-    mocks.useRedactionRunsList.mockReturnValue(runsIdle())
-    renderHome()
-
-    await waitFor(() => {
-      expect(screen.getByText('Matter mtr_0')).toBeTruthy()
-    })
-    expect(screen.queryByRole('region', { name: 'Redaction' })).toBeNull()
-  })
-
-  it('shows the Redaction column when runs exist', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
-    mocks.useRedactionRunsList.mockReturnValue(runsWithActivity())
-    renderHome()
-
-    await waitFor(() => {
-      expect(screen.getByRole('region', { name: 'Redaction' })).toBeTruthy()
-      expect(screen.getByRole('heading', { name: 'Needs you' })).toBeTruthy()
-    })
-    expect(screen.getAllByText('witness.pdf').length).toBeGreaterThan(0)
-  })
-
-  it('lists documents in play from matter document attention statuses', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
-    const client = new QueryClient()
-    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
-      sampleDocument('mtr_0', 'needs_review'),
-      sampleDocument('mtr_0', 'ready'),
-    ])
-    renderHome(client)
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: 'Documents in play' }),
-      ).toBeTruthy()
-      expect(screen.getByText('brief-needs_review.pdf')).toBeTruthy()
-    })
-    expect(screen.queryByText('brief-ready.pdf')).toBeNull()
-  })
-
-  it('shows workspace usage totals below the work desk', async () => {
-    mocks.useMattersList.mockReturnValue(mattersSuccess(2))
-    mocks.useRedactionRunsList.mockReturnValue(runsWithActivity())
-    const client = new QueryClient()
-    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
-      sampleDocument('mtr_0', 'needs_review'),
-    ])
-    client.setQueryData(documentsKeys.byMatter('mtr_1'), [])
-    renderHome(client)
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('Workspace usage')).toBeTruthy()
-    })
-    const usage = screen.getByLabelText('Workspace usage')
-    expect(usage.textContent).toMatch(/Matters/)
-    expect(usage.textContent).toMatch(/Documents/)
-    expect(usage.textContent).toMatch(/Redaction runs/)
-    expect(usage.textContent).toMatch(/Finalized/)
-    expect(usage.textContent).toMatch(/Spans detected/)
-    expect(usage.textContent).toMatch(/Accepted to redact/)
-    expect(usage.textContent).toMatch(/Unreviewed spans/)
-    expect(usage.textContent).toMatch(/12/)
-    expect(usage.textContent).toMatch(/5/)
-    expect(usage.textContent).not.toMatch(/Searches/)
-    expect(usage.textContent).not.toMatch(/token/i)
+    expect(screen.queryByRole('button', { name: /Wood v Capita/ })).toBeNull()
   })
 })
