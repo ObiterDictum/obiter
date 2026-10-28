@@ -1,3 +1,8 @@
+import {
+  command,
+  commandOrNull,
+  openRibbonTab,
+} from './docx-workspace-harness'
 import '@obiter/test-dom'
 // The E45 recovery save owner and the V5 verification gate meet at one
 // boundary: `DocxWorkspace` publishes its unsaved state, `VerificationRunPanel`
@@ -84,11 +89,11 @@ function mountGate(options: {
 
 function verifyButton() {
   // The header's Run control; the panel's own control is inside the dock.
-  return screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement
+  return command('Run') as HTMLButtonElement
 }
 
 function saveButton() {
-  return screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+  return command('Save') as HTMLButtonElement
 }
 
 function edit(text: string) {
@@ -163,7 +168,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     editor.setSelectionRange(0, 2)
     fireEvent.select(editor)
     fireEvent.mouseUp(editor)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     await waitFor(() => expect(verifyButton().disabled).toBe(true))
 
     fireEvent.click(saveButton())
@@ -205,7 +210,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     mountGate({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     await waitFor(() => expect(verifyButton().disabled).toBe(true))
 
     fireEvent.click(saveButton())
@@ -258,7 +263,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     mountGate({ editAsync: vi.fn() })
     await waitFor(() => expect(verifyButton().disabled).toBe(false))
 
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    openRibbonTab('References')
     const ribbonVerify = screen.getByRole('button', {
       name: 'Verify citations',
     })
@@ -270,7 +275,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(
       await screen.findByRole('region', { name: 'Verification' }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run Verify' })).toBe(
+    expect(command('Run Verify')).toBe(
       document.activeElement,
     )
   })
@@ -278,7 +283,7 @@ describe('V5 verification gate against the E45 save owner', () => {
   it('carries the unsaved gate and its reason onto the ribbon entry', async () => {
     mountGate({ editAsync: vi.fn() })
     await waitFor(() => expect(verifyButton().disabled).toBe(false))
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    openRibbonTab('References')
 
     edit('Hello world')
 
@@ -298,7 +303,7 @@ describe('V5 verification gate against the E45 save owner', () => {
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    openRibbonTab('References')
     expect(
       screen.getByRole('button', {
         name: 'Verify citations: verification status is still loading',
@@ -314,7 +319,7 @@ describe('V5 verification gate against the E45 save owner', () => {
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    openRibbonTab('References')
     expect(
       screen.getByRole('button', {
         name: 'Verify citations: verification runs are unavailable',
@@ -329,7 +334,7 @@ describe('V5 verification gate against the E45 save owner', () => {
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    openRibbonTab('References')
     expect(
       screen.getByRole('button', {
         name: 'Verify citations: this document is unavailable',
@@ -344,7 +349,7 @@ describe('V5 verification gate against the E45 save owner', () => {
       error: null,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    openRibbonTab('References')
     expect(
       screen.getByRole('button', {
         name: 'Verify citations: a verification run is already starting',

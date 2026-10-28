@@ -14,6 +14,8 @@ import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
@@ -63,7 +65,7 @@ function operations(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 async function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   await waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
@@ -91,7 +93,7 @@ describe('the Styles gallery and list restart controls', () => {
     mountWorkspace({ models: { doc_1: styledModel() }, editAsync })
     clickParagraph('p1')
 
-    const quote = screen.getByRole('button', { name: 'Quote' })
+    const quote = command('Quote')
     fireEvent.click(quote)
     expect(quote.getAttribute('aria-pressed')).toBe('true')
     expect(
@@ -113,7 +115,7 @@ describe('the Styles gallery and list restart controls', () => {
     mountWorkspace({ models: { doc_1: numberedModel() }, editAsync })
     clickParagraph('p1')
 
-    const restart = screen.getByRole('button', { name: 'Restart numbering' })
+    const restart = command('Restart numbering')
     if (!(restart instanceof HTMLButtonElement)) {
       throw new Error('expected a restart button')
     }

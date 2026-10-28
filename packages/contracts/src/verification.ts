@@ -163,6 +163,13 @@ export const verificationFindingViewSchema = z
     excerpt: z.string().min(1),
     location: draftLocationSchema,
     authorityLabel: z.string().min(1),
+    /**
+     * The stored source's own short title, when the source carries one. It is
+     * the case name a citation is read with ("Wood v Capita Insurance Services
+     * Ltd [2017] UKSC 24"); null means the store holds no title, and the UI
+     * then shows the citation alone rather than inventing a name.
+     */
+    authorityName: z.string().min(1).nullable(),
     evidence: z.array(verificationEvidenceViewSchema),
   })
   .strict()

@@ -11,10 +11,10 @@ import type { ChangeReview } from './use-change-review'
 import type { WorkspacePanel } from './use-workspace-panels'
 import type { LegalChecksFocus } from './ribbon-types'
 import type { AuthorityHit } from '../../document-authorities'
-import { commentThreadCount } from './use-workspace-comments'
 import { DocxDesk } from './docx-desk'
 import { DocxModelPages } from './docx-model-pages'
 import { WorkspaceSidePanels } from './workspace-side-panels'
+import { DocumentCompareRedline } from './document-compare-redline'
 
 type ModelPagesProps = Omit<
   Parameters<typeof DocxModelPages>[0],
@@ -28,6 +28,9 @@ type ModelPagesProps = Omit<
  * already derived, and nothing in this file decides behaviour.
  */
 export function DocxWorkspaceDesk({
+  compareOpen,
+  onCloseCompare,
+  documentId,
   pages,
   zoom,
   navOpen,
@@ -43,6 +46,7 @@ export function DocxWorkspaceDesk({
   onOpenNoteEditing,
   panel,
   onClosePanel,
+  popout,
   legalChecksFocus,
   documentRecord,
   versions,
@@ -50,10 +54,14 @@ export function DocxWorkspaceDesk({
   onViewVersion,
   comments,
   changeReview,
+  currentVersionNumber,
   authorities,
   legalChecks,
   onSelectAuthority,
 }: {
+  compareOpen: boolean
+  onCloseCompare: () => void
+  documentId: string
   pages: ModelPagesProps
   zoom: number
   navOpen: boolean
@@ -69,6 +77,7 @@ export function DocxWorkspaceDesk({
   onOpenNoteEditing: (paragraphId: string) => void
   panel: WorkspacePanel | null
   onClosePanel: () => void
+  popout: Parameters<typeof WorkspaceSidePanels>[0]['popout']
   legalChecksFocus: LegalChecksFocus | null
   documentRecord?: MatterDocumentRecord
   versions: DocumentVersionRecord[]
@@ -76,11 +85,21 @@ export function DocxWorkspaceDesk({
   onViewVersion?: (versionId: string) => void
   comments: WorkspaceCommentsPanelProps
   changeReview: ChangeReview
+  currentVersionNumber?: number
   authorities: AuthorityHit[]
   legalChecks: Parameters<typeof WorkspaceSidePanels>[0]['legalChecks']
   onSelectAuthority: (paragraphId: string) => void
 }) {
   const model: DocumentModelWire = pages.model
+  if (compareOpen) {
+    return (
+      <DocumentCompareRedline
+        documentId={documentId}
+        versions={versions}
+        onClose={onCloseCompare}
+      />
+    )
+  }
   return (
     <DocxDesk
       model={model}
@@ -105,6 +124,7 @@ export function DocxWorkspaceDesk({
         <WorkspaceSidePanels
           panel={panel}
           onClose={onClosePanel}
+          popout={popout}
           legalChecksFocus={legalChecksFocus}
           info={
             documentRecord
@@ -118,7 +138,15 @@ export function DocxWorkspaceDesk({
           }
           {...comments}
           changeReview={changeReview}
-          threadCount={commentThreadCount(comments)}
+          reviewComments={{
+            comments: comments.comments,
+            importedComments: comments.importedComments,
+          }}
+          model={model}
+          currentVersionNumber={currentVersionNumber}
+          onRevealReviewComment={(comment) =>
+            comments.onRevealCommentAnchor(comment.anchor)
+          }
           authorities={authorities}
           legalChecks={legalChecks}
           onSelectAuthority={onSelectAuthority}

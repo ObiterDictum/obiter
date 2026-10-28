@@ -4,7 +4,7 @@ import type {
   DocumentCommentReply,
   DocumentImportedCommentThread,
 } from '@obiter/contracts'
-import { DockedPanel } from '@obiter/ui'
+import { DockedPanel, type PanelPopout } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { DocumentAuthoritiesPanel } from './authorities-panel'
 import { DocumentReviewPanel } from './changes-panel'
@@ -22,6 +22,7 @@ import type {
   DocumentVersionRecord,
   MatterDocumentRecord,
 } from '../../documents'
+import type { DocumentModelWire } from '@obiter/contracts'
 
 /**
  * The panels docked beside the paper, one at a time. Each is non-modal: the
@@ -31,6 +32,7 @@ import type {
 export function WorkspaceSidePanels({
   panel,
   onClose,
+  popout,
   info,
   comments,
   importedComments,
@@ -46,7 +48,10 @@ export function WorkspaceSidePanels({
   onReopenComment,
   onRevealCommentAnchor,
   changeReview,
-  threadCount,
+  reviewComments,
+  model,
+  currentVersionNumber,
+  onRevealReviewComment,
   authorities,
   onSelectAuthority,
   legalChecks,
@@ -54,6 +59,8 @@ export function WorkspaceSidePanels({
 }: {
   panel: WorkspacePanel | null
   onClose: () => void
+  /** The pop-out state of the panel being rendered. */
+  popout: (panel: WorkspacePanel) => PanelPopout
   /** Absent outside the document route, where no detail was loaded. */
   info?: {
     document: MatterDocumentRecord
@@ -77,10 +84,16 @@ export function WorkspaceSidePanels({
   onResolveComment: (commentId: string) => void
   onReopenComment: (commentId: string) => void
   onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void
-  /** The shared review state the ribbon also uses; required with the panel. */
+  /** The shared review state the chrome also uses; required with the panel. */
   changeReview: ChangeReview
-  /** Comment threads, counted by the review panel but decided in their own. */
-  threadCount: number
+  /** Comment threads, merged into the review list in document order. */
+  reviewComments: {
+    comments: DocumentComment[]
+    importedComments: DocumentImportedCommentThread[]
+  }
+  model?: DocumentModelWire
+  currentVersionNumber?: number
+  onRevealReviewComment: (comment: DocumentComment) => void
   authorities: AuthorityHit[]
   onSelectAuthority: (paragraphId: string) => void
   /** The check derivations, or null while the model loads. */
@@ -97,6 +110,7 @@ export function WorkspaceSidePanels({
       <DocumentInfoPanel
         open
         onClose={onClose}
+        popout={popout('info')}
         document={info.document}
         versions={info.versions}
         matterLink={info.matterLink}
@@ -106,23 +120,14 @@ export function WorkspaceSidePanels({
   }
   if (panel === 'verify') {
     return (
-      <DockedPanel title="Verify" onClose={onClose}>
+      <DockedPanel title="Verify" onClose={onClose} popout={popout('verify')}>
         <VerificationDock panel currentUserId={currentUserId} />
       </DockedPanel>
     )
   }
   if (panel === 'comments') {
     return (
-      <DockedPanel
-        title="Comments"
-        onClose={onClose}
-        footer={
-          <span className="text-caption text-subtle">
-            Comments stay with this document and are written into exported Word
-            files.
-          </span>
-        }
-      >
+      <DockedPanel title="Comments" onClose={onClose} popout={popout('comments')}>
         <DocumentCommentsPanel
           comments={comments}
           importedComments={importedComments}
@@ -146,14 +151,19 @@ export function WorkspaceSidePanels({
     return (
       <DocumentReviewPanel
         review={changeReview}
-        commentCount={threadCount}
+        comments={reviewComments.comments}
+        importedComments={reviewComments.importedComments}
+        model={model}
+        currentVersionNumber={currentVersionNumber}
+        onRevealComment={onRevealReviewComment}
         onClose={onClose}
+        popout={popout('review')}
       />
     )
   }
   if (panel === 'authorities') {
     return (
-      <DockedPanel title="Authorities" onClose={onClose}>
+      <DockedPanel title="Authorities" onClose={onClose} popout={popout('authorities')}>
         <DocumentAuthoritiesPanel
           citations={authorities}
           onSelect={onSelectAuthority}
@@ -162,7 +172,7 @@ export function WorkspaceSidePanels({
     )
   }
   return (
-    <DockedPanel title="Legal checks" onClose={onClose}>
+    <DockedPanel title="Legal checks" onClose={onClose} popout={popout('legal-checks')}>
       <LegalChecksPanel
         checks={legalChecks}
         focus={legalChecksFocus ?? 'terms'}

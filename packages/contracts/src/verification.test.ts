@@ -56,6 +56,7 @@ describe('verification contracts', () => {
         excerpt: 'the court must consider',
         location: { paragraphId: 'p1', start: 0, end: 23 },
         authorityLabel: '[2024] UKSC 1',
+        authorityName: null,
         evidence: [{ id: 'src:judgment_paragraph:1', sourceId: 'src' }],
       }).success,
     ).toBe(false)
@@ -75,6 +76,7 @@ describe('verification contracts', () => {
         excerpt: 'the court must consider',
         location: { paragraphId: 'p1', start: 0, end: 23 },
         authorityLabel: '[2024] UKSC 1',
+        authorityName: null,
         evidence: [
           {
             id: 'src:judgment_paragraph:1',
@@ -111,6 +113,7 @@ describe('verification contracts', () => {
         end: 23,
       },
       authorityLabel: 'Unresolved citation',
+      authorityName: null,
       dismissal: null,
       evidence: [],
     })
@@ -141,6 +144,7 @@ describe('verification contracts', () => {
       excerpt: '[2099] UKSC 9',
       location: { paragraphId: 'p1', start: 0, end: 13 },
       authorityLabel: 'Unmatched citation',
+      authorityName: null,
       evidence: [],
     })
     expect(parsed.dismissal?.dismissedBy).toBe('usr_1')

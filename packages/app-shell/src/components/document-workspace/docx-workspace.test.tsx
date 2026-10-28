@@ -12,6 +12,8 @@ import {
   paragraph,
   selectBodyParagraph,
   staleConflict,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 
 /** The authoritative lineage a text-only save returns: no structural slots. */
@@ -45,21 +47,28 @@ function textEditLineage(baseVersionId: string, versionId: string) {
   }
 }
 
-describe('DocxWorkspace ribbon', () => {
-  it('keeps the ribbon outside the scrolling document desk', () => {
+describe('DocxWorkspace chrome', () => {
+  it('keeps the chrome outside the scrolling document desk', () => {
     mountWorkspace({})
     const desk = document.querySelector('[data-document-desk]')
+    // The ribbon is gone: no tab strip, and none of the chrome is inside the
+    // desk's scroll box, so scrolling the paper never scrolls the commands.
     expect(desk?.querySelector('[role="tab"]')).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Home' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Insert' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Layout' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'References' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Review' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'View' })).toBeTruthy()
+    expect(document.querySelector('[role="tab"]')).toBeNull()
+    const menu = screen.getByRole('navigation', { name: 'Document menu' })
+    for (const name of ['File', 'Edit', 'Insert', 'Format', 'Review', 'View']) {
+      expect(within(menu).getByRole('button', { name })).toBeTruthy()
+    }
+    expect(desk?.contains(menu)).toBe(false)
   })
 
-  it('wires the Home font commands and keeps the rest unavailable', () => {
+  it('wires the font commands and keeps the rest unavailable', () => {
     mountWorkspace({})
+    // The font values live in the formatting panel; opening it is the same
+    // click the toolbar's own control makes.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Font, paragraph and page' }),
+    )
     for (const name of ['Font', 'Font size', 'Font colour']) {
       expect(screen.getByRole('combobox', { name })).toHaveProperty(
         'disabled',
@@ -67,17 +76,17 @@ describe('DocxWorkspace ribbon', () => {
       )
     }
     expect(
-      screen.getByRole('button', { name: 'Clear formatting' }),
+      command('Clear formatting'),
     ).toHaveProperty('disabled', false)
     expect(
       screen.getByRole('combobox', { name: 'Line spacing' }),
     ).toHaveProperty('disabled', false)
-    expect(screen.getByRole('button', { name: 'Bullets' })).toHaveProperty(
+    expect(command('Bullets')).toHaveProperty(
       'disabled',
       true,
     )
     expect(
-      screen.getByRole('button', { name: 'Multilevel numbering' }),
+      command('Multilevel numbering'),
     ).toHaveProperty('disabled', true)
     openRibbonTab('Insert')
     // Table and picture are real controls; with no caret paragraph they
@@ -98,32 +107,32 @@ describe('DocxWorkspace ribbon', () => {
     expect(
       screen.getByRole('combobox', { name: 'Document type' }),
     ).toHaveProperty('disabled', false)
-    expect(screen.getByRole('button', { name: 'Privileged' })).toHaveProperty(
+    expect(command('Privileged')).toHaveProperty(
       'disabled',
       false,
     )
-    expect(screen.getByRole('button', { name: 'Draft' })).toHaveProperty(
+    expect(command('Draft')).toHaveProperty(
       'disabled',
       false,
     )
     expect(
-      screen.getByRole('button', { name: 'Without prejudice' }),
+      command('Without prejudice'),
     ).toHaveProperty('disabled', false)
     openRibbonTab('References')
     expect(
-      screen.getByRole('button', { name: 'Insert authority' }),
+      command('Insert authority'),
     ).toHaveProperty('disabled', false)
     expect(screen.queryByRole('combobox', { name: /Harvard/i })).toBeNull()
     openRibbonTab('Review')
     // The document-level Redact action is real; the ribbon entry reveals it
     // rather than claiming the capability does not exist.
     expect(
-      screen.getByRole('button', { name: 'Redact this document' }),
+      command('Redact this document'),
     ).toHaveProperty('disabled', false)
     // Share-safe export is a live route: refusal comes from the server, not a
     // placeholder control.
     expect(
-      screen.getByRole('button', { name: 'Share-safe export' }),
+      command('Share-safe export'),
     ).toHaveProperty('disabled', false)
   })
 
@@ -138,13 +147,13 @@ describe('DocxWorkspace ribbon', () => {
     field.setSelectionRange(1, 4)
     fireEvent.select(field)
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(command('Track changes off'))
     openRibbonTab('Home')
-    const bold = screen.getByRole('button', { name: 'Bold' })
+    const bold = command('Bold')
     expect(bold).toHaveProperty('disabled', false)
     // The tracked range formats as a pending draft, not a refused control.
     fireEvent.click(bold)
-    expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty(
+    expect(command('Save')).toHaveProperty(
       'disabled',
       false,
     )
@@ -163,14 +172,14 @@ describe('DocxWorkspace ribbon', () => {
     fireEvent.change(screen.getByLabelText('Replace in document'), {
       target: { value: 'Read' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    fireEvent.click(command('Replace'))
     expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
       'value',
       'Read [2024] UKSC 3',
     )
     openRibbonTab('References')
-    fireEvent.click(screen.getByRole('button', { name: 'List of authorities' }))
-    expect(screen.getByRole('button', { name: '[2024] UKSC 3' })).toBeTruthy()
+    fireEvent.click(command('List of authorities'))
+    expect(command('[2024] UKSC 3')).toBeTruthy()
   })
 
   it('closes an open margin story when an authority row is selected', () => {
@@ -194,15 +203,15 @@ describe('DocxWorkspace ribbon', () => {
       },
     })
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Header' }))
+    fireEvent.click(command('Header'))
     const band = screen.getByLabelText('Document header')
     expect(within(band).getByLabelText('Paragraph text')).toHaveProperty(
       'value',
       'Running head',
     )
     openRibbonTab('References')
-    fireEvent.click(screen.getByRole('button', { name: 'List of authorities' }))
-    fireEvent.click(screen.getByRole('button', { name: '[2024] UKSC 3' }))
+    fireEvent.click(command('List of authorities'))
+    fireEvent.click(command('[2024] UKSC 3'))
     // The hit names a body paragraph: selecting it leaves margin editing the
     // way a body click does, and the caret lands where the format controls
     // can actually reach it.
@@ -223,7 +232,7 @@ describe('DocxWorkspace export', () => {
     })
     mountWorkspace({})
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(command('Export'))
 
     await waitFor(() => {
       expect(fetchDocumentExport).toHaveBeenCalledWith('doc_1', {
@@ -250,7 +259,7 @@ describe('DocxWorkspace export', () => {
     )
     mountWorkspace({})
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(command('Export'))
 
     await waitFor(() => {
       expect(
@@ -269,7 +278,7 @@ describe('DocxWorkspace export', () => {
     })
     mountWorkspace({})
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Share-safe export' }))
+    fireEvent.click(command('Share-safe export'))
 
     await waitFor(() => {
       expect(fetchDocumentExport).toHaveBeenCalledWith('doc_1', {
@@ -290,7 +299,7 @@ describe('DocxWorkspace export', () => {
     )
     mountWorkspace({})
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Share-safe export' }))
+    fireEvent.click(command('Share-safe export'))
 
     await waitFor(() => {
       expect(screen.getByText(/cannot be shared safely/u)).toBeTruthy()
@@ -306,7 +315,7 @@ describe('DocxWorkspace export', () => {
     })
     mountWorkspace({})
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(command('Export'))
 
     await waitFor(() => {
       expect(downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
@@ -338,7 +347,7 @@ describe('DocxWorkspace save', () => {
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     await waitFor(() => {
       expect(
@@ -347,7 +356,7 @@ describe('DocxWorkspace save', () => {
         ),
       ).toBeTruthy()
     })
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
     expect(editAsync).toHaveBeenCalled()
     expect(mergeAsync).toHaveBeenCalled()
   })
@@ -362,14 +371,14 @@ describe('DocxWorkspace save', () => {
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     await waitFor(() => {
       expect(
         screen.getByText('The document has changed since editing began.'),
       ).toBeTruthy()
     })
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
+    expect(command('Reload')).toBeTruthy()
   })
 
   it('advances the save base to the version returned by the previous save', async () => {
@@ -397,7 +406,7 @@ describe('DocxWorkspace save', () => {
 
     const input = screen.getByLabelText('Paragraph text')
     fireEvent.change(input, { target: { value: 'Hello world' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => {
       expect(editAsync).toHaveBeenCalledTimes(1)
     })
@@ -408,7 +417,7 @@ describe('DocxWorkspace save', () => {
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello again' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => {
       expect(editAsync).toHaveBeenCalledTimes(2)
     })
@@ -427,11 +436,11 @@ describe('DocxWorkspace find and undo', () => {
       target: { value: 'hello' },
     })
     expect(screen.getByText('1 found')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    fireEvent.click(command('Next match'))
     expect(screen.getByText('1/1')).toBeTruthy()
 
     openRibbonTab('Home')
-    const undo = screen.getByRole('button', { name: 'Undo' })
+    const undo = command('Undo')
     expect(undo).toHaveProperty('disabled', true)
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
@@ -452,7 +461,7 @@ describe('DocxWorkspace find and undo', () => {
     editor.focus()
     fireEvent.keyDown(editor, { key: 'Enter' })
 
-    const undo = screen.getByRole('button', { name: 'Undo' })
+    const undo = command('Undo')
     expect(undo).toHaveProperty('disabled', false)
     fireEvent.click(undo)
 
@@ -483,7 +492,7 @@ describe('DocxWorkspace find and undo', () => {
     const before = insert.value
     fireEvent.change(insert, { target: { value: `${before} extra` } })
 
-    const undo = screen.getByRole('button', { name: 'Undo' })
+    const undo = command('Undo')
     expect(undo).toHaveProperty('disabled', false)
     fireEvent.click(undo)
 
@@ -529,7 +538,7 @@ describe('DocxWorkspace markings', () => {
       }),
     })
     openRibbonTab('Layout')
-    fireEvent.click(screen.getByRole('button', { name: 'Draft' }))
+    fireEvent.click(command('Draft'))
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
     // No flip is pending, so the request leaves the stored setting alone
@@ -571,15 +580,13 @@ describe('DocxWorkspace markings', () => {
         },
       },
     })
-    openRibbonTab('Layout')
-    const select = screen.getByRole('combobox', { name: 'Document type' })
-    // The unknown kind renders as a selectable value rather than vanishing.
+    // The document type is a radio list in the Format menu: the stored kind is
+    // offered as itself, and picking another one commits the markings.
+    fireEvent.click(screen.getByRole('button', { name: /^Format$/ }))
     expect(
-      within(select)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toContain('externally-authored-kind')
-    fireEvent.change(select, { target: { value: 'letter' } })
+      screen.getByRole('button', { name: 'externally-authored-kind' }),
+    ).toBeTruthy()
+    fireEvent.click(command('Letter before action'))
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
     expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
@@ -622,7 +629,7 @@ describe('DocxWorkspace markings', () => {
     )
     mountWorkspace({ markingsAsync })
     openRibbonTab('Layout')
-    fireEvent.click(screen.getByRole('button', { name: 'Privileged' }))
+    fireEvent.click(command('Privileged'))
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
     await waitFor(() =>
@@ -630,7 +637,7 @@ describe('DocxWorkspace markings', () => {
         screen.getByText('The document has changed since editing began.'),
       ).toBeTruthy(),
     )
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
+    expect(command('Reload')).toBeTruthy()
   })
 })
 
@@ -645,7 +652,7 @@ describe('DocxWorkspace track changes toggle', () => {
       },
     })
     openRibbonTab('Review')
-    const toggle = screen.getByRole('button', { name: 'Track changes on' })
+    const toggle = command('Track changes on')
     expect(toggle.getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -657,7 +664,7 @@ describe('DocxWorkspace track changes toggle', () => {
     }))
     mountWorkspace({ editAsync })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(command('Track changes off'))
 
     // A flip with no edits is still unsaved state, and Save persists it.
     await waitFor(() =>
@@ -667,7 +674,7 @@ describe('DocxWorkspace track changes toggle', () => {
           ?.getAttribute('data-save-state'),
       ).toBe('unsaved'),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
     expect(editAsync.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ operations: [], trackChanges: true }),
@@ -681,10 +688,10 @@ describe('DocxWorkspace track changes toggle', () => {
     }
     const view = mountWorkspace({ models: { doc_1: tracked } })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes on' }))
+    fireEvent.click(command('Track changes on'))
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: 'Track changes off' }),
+        commandOrNull('Track changes off'),
       ).toBeTruthy(),
     )
 
@@ -695,7 +702,7 @@ describe('DocxWorkspace track changes toggle', () => {
     openRibbonTab('Review')
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: 'Track changes off' }),
+        commandOrNull('Track changes off'),
       ).toBeTruthy(),
     )
   })

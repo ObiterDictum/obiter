@@ -15,6 +15,8 @@ import {
   multiParagraphModel,
   openRibbonTab,
   paragraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
@@ -70,7 +72,7 @@ function paragraphOperations(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
@@ -156,7 +158,7 @@ describe('the paragraph formatting controls', () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(command('Track changes off'))
     openRibbonTab('Home')
     clickParagraph('p1')
 

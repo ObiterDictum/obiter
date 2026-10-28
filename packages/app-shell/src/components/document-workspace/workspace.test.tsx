@@ -1,3 +1,4 @@
+import { command, commandOrNull } from './docx-workspace-harness'
 import '@obiter/test-dom'
 import { createElement, type PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -230,7 +231,7 @@ describe('DocumentWorkspace', () => {
     )
     expect(screen.getByText('View only, not editable')).toBeTruthy()
     expect(screen.getByText('Judgment text')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+    expect(command('Download')).toBeTruthy()
   })
 
   it('routes the find chord from document-body focus, and only while mounted', () => {
@@ -324,7 +325,7 @@ describe('DocumentWorkspace', () => {
     )
     expect(screen.getByText('Plain retrieval text.')).toBeTruthy()
     expect(screen.getByText('Plain text, not editable')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+    expect(command('Download')).toBeTruthy()
   })
 
   it('surfaces a rejected download as a status message in the text viewer', async () => {
@@ -347,7 +348,7 @@ describe('DocumentWorkspace', () => {
         version={version({ filename: 'notes.txt', fileType: 'txt' })}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    fireEvent.click(command('Download'))
     const status = await screen.findByText('Download failed.')
     expect(status.closest('[role="status"]')).toBeTruthy()
   })
@@ -405,6 +406,6 @@ describe('DocumentWorkspace', () => {
     expect(
       screen.getByText('No in-product viewer for this file type'),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+    expect(command('Download')).toBeTruthy()
   })
 })

@@ -28,11 +28,15 @@ export function MenuTrigger(
 
 export function MenuContent({
   className,
+  align = 'end',
   ...props
-}: ComponentPropsWithoutRef<typeof BaseMenu.Popup>) {
+}: ComponentPropsWithoutRef<typeof BaseMenu.Popup> & {
+  /** Which trigger edge the popup lines up with; a menu bar uses `start`. */
+  align?: 'start' | 'center' | 'end'
+}) {
   return (
     <BaseMenu.Portal>
-      <BaseMenu.Positioner sideOffset={8} align="end" className="z-50">
+      <BaseMenu.Positioner sideOffset={8} align={align} className="z-50">
         <BaseMenu.Popup
           className={cn(
             'w-72 rounded-lg border border-line bg-raised p-2 text-ink shadow-lg outline-none',
@@ -71,6 +75,30 @@ export function MenuSeparator({
   return (
     <BaseMenu.Separator
       className={cn('my-1 h-px bg-line', className)}
+      {...props}
+    />
+  )
+}
+
+/** A group of mutually exclusive menu items, such as the paragraph styles. */
+export function MenuRadioGroup(
+  props: ComponentPropsWithoutRef<typeof BaseMenu.RadioGroup>,
+) {
+  return <BaseMenu.RadioGroup {...props} />
+}
+
+export function MenuRadioItem({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<typeof BaseMenu.RadioItem>) {
+  return (
+    <BaseMenu.RadioItem
+      className={cn(
+        'flex cursor-default items-center gap-3 rounded-md px-3 py-2 text-left text-item text-muted select-none',
+        'data-[highlighted]:bg-hover data-[highlighted]:text-ink',
+        'data-[checked]:text-ink',
+        className,
+      )}
       {...props}
     />
   )

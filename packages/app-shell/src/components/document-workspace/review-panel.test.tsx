@@ -8,6 +8,8 @@ import {
   openRibbonTab,
   selectBodyParagraph,
   staleConflict,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 
 const inserted: DocumentChangeWire = {
@@ -290,7 +292,7 @@ describe('review panel', () => {
     )
     // The reload route stays the banner's, and the panel's rows are disabled
     // rather than offering a decision against a base the server has moved.
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
+    expect(command('Reload')).toBeTruthy()
     for (const accept of within(panel).getAllByRole('button', {
       name: 'Accept',
     })) {

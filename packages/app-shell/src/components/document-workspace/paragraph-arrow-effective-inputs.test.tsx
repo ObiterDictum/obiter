@@ -22,6 +22,8 @@ import {
   multiParagraphModel,
   paragraph,
   rerenderWorkspace,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 
 function field(): HTMLTextAreaElement {
@@ -88,7 +90,7 @@ describe('ArrowLeft into a paragraph whose visible text is an extra run', () => 
     expect(field().selectionStart).toBe(6)
 
     // Undo rewinds the typed text; the join itself is a separate operation.
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(command('Undo'))
     expect(field().value).toBe('world')
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     field().setSelectionRange(0, 0)
@@ -116,7 +118,7 @@ describe('ArrowLeft into a paragraph whose visible text is an extra run', () => 
     focusFirstParagraph()
     joinP2IntoP1()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => {
       expect(editAsync).toHaveBeenCalledTimes(1)
     })
@@ -198,7 +200,7 @@ describe('vertical moves follow the lines the pending format paints', () => {
       throw new Error('expected the first paragraph')
     }
     fireEvent.click(paragraphEl)
-    fireEvent.click(screen.getByRole('button', { name: 'Small' }))
+    fireEvent.click(command('Small'))
 
     // Cross into p2 horizontally first, which places the caret at offset 0
     // and starts a fresh vertical column rather than retaining one.

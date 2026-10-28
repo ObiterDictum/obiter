@@ -76,6 +76,21 @@
   --obiter-span-organisation-name-bg: hsl(280 45% 89%);
   --obiter-span-organisation-name-fg: hsl(282 40% 34%);
 
+  /* Reviewers: one hue per person, so a change's author is readable without
+     relying on colour alone — the list prints their initials too. */
+  --obiter-reviewer-1: hsl(214 70% 34%);
+  --obiter-reviewer-1-surface: hsl(214 65% 93%);
+  --obiter-reviewer-2: hsl(150 55% 26%);
+  --obiter-reviewer-2-surface: hsl(150 45% 91%);
+  --obiter-reviewer-3: hsl(268 55% 40%);
+  --obiter-reviewer-3-surface: hsl(268 50% 94%);
+  --obiter-reviewer-4: hsl(28 70% 31%);
+  --obiter-reviewer-4-surface: hsl(28 70% 92%);
+  --obiter-reviewer-5: hsl(186 70% 24%);
+  --obiter-reviewer-5-surface: hsl(186 50% 91%);
+  --obiter-reviewer-6: hsl(330 55% 37%);
+  --obiter-reviewer-6-surface: hsl(330 55% 94%);
+
   --obiter-span-person-name: var(--obiter-span-person-name-bg);
   --obiter-span-email: var(--obiter-span-email-bg);
   --obiter-span-phone: var(--obiter-span-phone-bg);
@@ -176,6 +191,19 @@
   --obiter-status-danger: #d99880;
   --obiter-status-danger-fg: #1b0f0b;
   --obiter-status-danger-soft: rgba(217, 152, 128, 0.12);
+
+  --obiter-reviewer-1: hsl(214 70% 80%);
+  --obiter-reviewer-1-surface: hsl(214 45% 24%);
+  --obiter-reviewer-2: hsl(150 50% 76%);
+  --obiter-reviewer-2-surface: hsl(150 40% 22%);
+  --obiter-reviewer-3: hsl(268 55% 82%);
+  --obiter-reviewer-3-surface: hsl(268 40% 26%);
+  --obiter-reviewer-4: hsl(28 70% 80%);
+  --obiter-reviewer-4-surface: hsl(28 45% 24%);
+  --obiter-reviewer-5: hsl(186 55% 78%);
+  --obiter-reviewer-5-surface: hsl(186 45% 22%);
+  --obiter-reviewer-6: hsl(330 55% 82%);
+  --obiter-reviewer-6-surface: hsl(330 40% 26%);
 
   --obiter-span-person-name-bg: hsl(352 40% 28%);
   --obiter-span-person-name-fg: hsl(352 60% 82%);

@@ -1,3 +1,8 @@
+import {
+  command,
+  commandOrNull,
+  openRibbonTab,
+} from './docx-workspace-harness'
 import '@obiter/test-dom'
 import { type PropsWithChildren } from 'react'
 import {
@@ -266,7 +271,7 @@ function bodyEditor(): HTMLTextAreaElement {
 }
 
 function openReviewTab() {
-  fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
+  openRibbonTab('Review')
 }
 
 /** Selects the shared first paragraph and types a replacement into it. */
@@ -302,7 +307,7 @@ describe('document-scoped editor state', () => {
   it('does not render document A pending insert in document B', () => {
     const { view } = mount('doc_a')
     fireEvent.click(screen.getByText('Alpha first'))
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Inserted in A' },
     })
@@ -317,7 +322,7 @@ describe('document-scoped editor state', () => {
   it('does not apply document A deleted-paragraph mask to document B', () => {
     const { view } = mount('doc_a')
     fireEvent.click(screen.getByText('Alpha first'))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     expect(screen.queryByText('Alpha first')).toBeNull()
 
     switchTo(view, 'doc_b')
@@ -364,12 +369,12 @@ describe('document-scoped editor state', () => {
     editor.focus()
     editor.setSelectionRange(0, 5)
     fireEvent.select(editor)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     fireEvent.change(bodyEditor(), { target: { value: 'Alpha edited' } })
 
     switchTo(view, 'doc_b')
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     // A leaked draft or emphasis would make B dirty and send A's operations
     // to the API under B's document and base version.
@@ -402,9 +407,9 @@ describe('document-scoped editor state', () => {
   it('does not carry document A redo history into document B', () => {
     const { view } = mount('doc_a')
     editSharedParagraph('Alpha edited')
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(command('Undo'))
     // A now holds a redo branch for the edit it just stepped back from.
-    expect(screen.getByRole('button', { name: 'Redo' })).toHaveProperty(
+    expect(command('Redo')).toHaveProperty(
       'disabled',
       false,
     )
@@ -414,7 +419,7 @@ describe('document-scoped editor state', () => {
     // B is its own document with no branch of A's, and redo must not apply
     // A's undone edit under B.
     expect(screen.getByText('Beta first')).toBeTruthy()
-    const redo = screen.getByRole('button', { name: 'Redo' })
+    const redo = command('Redo')
     expect(redo).toHaveProperty('disabled', true)
     fireEvent.keyDown(redo, { key: 'z', ctrlKey: true, shiftKey: true })
     expect(screen.queryByText('Alpha edited')).toBeNull()
@@ -432,7 +437,7 @@ describe('document-scoped editor state', () => {
     const { view } = mount('doc_a', { editAsync })
     editSharedParagraph('Alpha edited')
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
     // A's save is still in flight when the workspace switches to B.
@@ -449,11 +454,11 @@ describe('document-scoped editor state', () => {
     expect(screen.getByText('Beta first')).toBeTruthy()
     expect(screen.getByText('Beta tail')).toBeTruthy()
     expect(screen.queryByText('Alpha edited')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Undo' })).toHaveProperty(
+    expect(command('Undo')).toHaveProperty(
       'disabled',
       true,
     )
-    expect(screen.getByRole('button', { name: 'Redo' })).toHaveProperty(
+    expect(command('Redo')).toHaveProperty(
       'disabled',
       true,
     )

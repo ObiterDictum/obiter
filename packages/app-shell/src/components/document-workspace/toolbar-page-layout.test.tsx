@@ -15,6 +15,8 @@ import {
   multiParagraphModel,
   openRibbonTab,
   paragraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import { clickParagraph, bodyField } from './paragraph-selection-harness'
 
@@ -35,7 +37,7 @@ function operations(
 }
 
 function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
@@ -77,7 +79,7 @@ describe('the page setup controls', () => {
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
 
     openRibbonTab('Layout')
-    fireEvent.click(screen.getByRole('button', { name: 'Orientation' }))
+    fireEvent.click(command('Orientation'))
     expect(
       screen
         .getByRole('button', { name: 'Orientation' })
@@ -99,7 +101,7 @@ describe('the page setup controls', () => {
     expect(select('Page size').value).toBe('legal')
 
     openRibbonTab('Home')
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(command('Undo'))
     openRibbonTab('Layout')
     expect(select('Page size').value).toBe('')
   })
@@ -121,7 +123,7 @@ describe('the break controls', () => {
     clickParagraph('p1')
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+    fireEvent.click(command('Page break'))
 
     await save(editAsync)
     expect(operations(editAsync, 'insert_break')).toEqual([
@@ -140,7 +142,7 @@ describe('the break controls', () => {
     fireEvent.click(field)
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+    fireEvent.click(command('Page break'))
 
     await save(editAsync)
     expect(operations(editAsync, 'insert_break')).toEqual([
@@ -154,7 +156,7 @@ describe('the break controls', () => {
     clickParagraph('p2')
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Section break' }))
+    fireEvent.click(command('Section break'))
 
     await save(editAsync)
     expect(operations(editAsync, 'insert_section_break')).toEqual([

@@ -457,6 +457,12 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+export function openTab(name: 'Review' | 'Insert' | 'View' | 'Home' | 'Layout') {
+  fireEvent.click(
+    screen.getByRole('button', { name: new RegExp(`^${name}$`) }),
+  )
+}
+
 export function openReviewTab() {
-  fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
+  openTab('Review')
 }

@@ -138,6 +138,7 @@ function finding(
     excerpt: '[2017] UKSC 24',
     location: { paragraphId: 'p1', start: 0, end: 13 },
     authorityLabel: '[2017] UKSC 24',
+    authorityName: null,
     evidence: [
       {
         id: 'd-wood:judgment_paragraph:10',
@@ -159,6 +160,7 @@ const flagged = finding({
   id: 'vf_flagged',
   state: 'flagged',
   authorityLabel: 'Rock Advertising Ltd v MWB [2018] UKSC 24',
+  authorityName: null,
   excerpt: '[2018] UKSC 24',
   explanation: 'The citation names a different authority from the case named.',
 })
@@ -169,6 +171,7 @@ const needsReview = finding({
   state: 'review_required',
   reviewReason: 'citation_unresolved',
   authorityLabel: 'Unmatched citation',
+  authorityName: null,
   excerpt: '[2099] UKSC 9',
   explanation: 'The quotation could not be attributed.',
   evidence: [],

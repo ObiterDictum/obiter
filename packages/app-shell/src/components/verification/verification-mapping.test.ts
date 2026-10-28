@@ -91,6 +91,7 @@ function finding(
       end: start + '[2012] UKSC 7'.length,
     },
     authorityLabel: '[2012] UKSC 7',
+    authorityName: null,
     dismissal: null,
     evidence: [],
     ...overrides,
