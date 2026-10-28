@@ -33,6 +33,12 @@ export function getRecentLegalSearches(
   }
 }
 
+export function clearRecentLegalSearches(
+  storage: Pick<Storage, 'removeItem'> | undefined,
+) {
+  storage?.removeItem(legalSearchRecentSearchesKey)
+}
+
 export function writeRecentLegalSearch(
   storage: Pick<Storage, 'getItem' | 'setItem'> | undefined,
   query: string,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test'
-import { searchResultRows } from './searchResultRows'
+import {
+  filterSearchResultRows,
+  formatResultSummary,
+  searchResultRows,
+} from './searchResultRows'
 import type {
   LegalSearchFetchResponse,
   LegislationSearchResultHit,
@@ -47,5 +51,28 @@ describe('searchResultRows', () => {
     expect(led.map((row) => row.kind)).toEqual(['legislation', 'judgment'])
     const ordinary = searchResultRows(response())
     expect(ordinary.map((row) => row.kind)).toEqual(['judgment', 'legislation'])
+  })
+
+  it('filters only the served answer by the type facet', () => {
+    const rows = searchResultRows(response())
+    expect(
+      filterSearchResultRows(rows, 'judgments').map((row) => row.kind),
+    ).toEqual(['judgment'])
+    expect(
+      filterSearchResultRows(rows, 'legislation').map((row) => row.kind),
+    ).toEqual(['legislation'])
+    expect(filterSearchResultRows(rows, 'all')).toHaveLength(2)
+  })
+
+  it('counts both federated groups and names the source', () => {
+    expect(formatResultSummary(response())).toBe(
+      '1 judgment · 1 provision from stored legal sources',
+    )
+  })
+
+  it('names a court browse from the API data', () => {
+    expect(
+      formatResultSummary(response(), { courtLabel: 'UK Supreme Court' }),
+    ).toBe('1 recent case for UK Supreme Court from stored legal sources')
   })
 })
