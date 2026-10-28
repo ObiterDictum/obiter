@@ -1,20 +1,22 @@
 import {
-  Newspaper,
   Folders,
   House,
   MagnifyingGlass,
   PencilSimple,
+  Robot,
   ShieldCheck,
 } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 
-export type ModuleId = 'home' | 'search' | 'matters' | 'verify' | 'redact'
+export type ModuleId =
+  'home' | 'agent' | 'search' | 'matters' | 'verify' | 'redact'
 export type ShellSection = ModuleId | 'settings' | 'other'
 
 export interface ModuleItem {
   id: ModuleId
   label: string
-  to: string
+  /** Absent for a entry that opens a panel rather than a route. */
+  to?: string
   icon: (props: {
     size?: number
     weight?: 'regular' | 'fill'
@@ -24,19 +26,18 @@ export interface ModuleItem {
 }
 
 /**
- * The workspace modules, in the sidebar's order. Research is not a module yet:
- * it renders as a disabled entry beside these (see `Sidebar`), so the shell
- * never offers a route that does not exist.
+ * The workspace modules, in the sidebar's order. Agent has no route yet: it
+ * opens the panel that says the agent is coming, so the shell never offers a
+ * route that does not exist.
  */
 export const MODULES: ModuleItem[] = [
   { id: 'home', label: 'Home', to: '/', icon: House },
+  { id: 'agent', label: 'Agent', icon: Robot },
   { id: 'search', label: 'Search', to: '/search', icon: MagnifyingGlass },
   { id: 'matters', label: 'Matters', to: '/matters', icon: Folders },
   { id: 'verify', label: 'Verify', to: '/verify', icon: ShieldCheck },
   { id: 'redact', label: 'Redact', to: '/redact', icon: PencilSimple },
 ]
-
-export const RESEARCH_ICON = Newspaper
 
 export function resolveSection(path: string): ShellSection {
   if (path === '/' || path === '/workspace') return 'home'
@@ -56,6 +57,7 @@ export function resolveSection(path: string): ShellSection {
 
 const SECTION_LABELS = {
   home: 'Home',
+  agent: 'Agent',
   search: 'Search',
   matters: 'Matters',
   verify: 'Verify',
@@ -103,6 +105,8 @@ export function breadcrumbTrail(
   if (section === 'matters' && path !== '/matters') {
     return [sectionCrumb, { label: matterName ?? 'Matter' }]
   }
-  if (section === 'other') return []
+  // An address the shell does not know ends at the page itself rather than at a
+  // separator with nothing after it.
+  if (section === 'other') return [{ label: 'Page not found' }]
   return [{ ...sectionCrumb, to: undefined }]
 }

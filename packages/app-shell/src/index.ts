@@ -47,6 +47,9 @@ export {
   matterDocumentsQueryOptions,
   documentQueryOptions,
   documentsKeys,
+  recentlyOpenedDocumentQueryOptions,
+  useRecentlyOpenedDocument,
+  useRecordDocumentOpen,
   useMatterDocuments,
   useDocument,
   useUploadMatterDocument,
@@ -64,9 +67,11 @@ export { setAppTheme, useAppTheme, THEME_STORAGE_KEY } from './use-app-theme'
 export { AppShellLayout } from './frame'
 export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 export {
+  classifyShellFailure,
   ShellError,
   ShellNotFound,
   ShellPermissionDenied,
+  type ShellFailure,
 } from './shell-states'
 
 // Route views

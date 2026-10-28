@@ -12,6 +12,8 @@ import {
   matterShareGrantSchema,
   matterShareListResponseSchema,
   matterShareRevokeResponseSchema,
+  matterShareUpdateRequestSchema,
+  matterShareUpdateResponseSchema,
 } from '@obiter/contracts'
 import { ensureOrgUser, type AuthzVariables } from '../authz'
 import { appendAuditLog, getMatter } from '../database'
@@ -35,6 +37,12 @@ type GrantResult =
 
 type RevokeResult =
   | { status: 'ok'; granteeUserId: string }
+  | { status: 'matter_not_found' }
+  | { status: 'forbidden' }
+  | { status: 'share_not_found' }
+
+type UpdateResult =
+  | { status: 'ok'; share: MatterShareRow }
   | { status: 'matter_not_found' }
   | { status: 'forbidden' }
   | { status: 'share_not_found' }
@@ -160,6 +168,67 @@ async function grantMatterShare(
       metadata: {
         matterId: input.matterId,
         granteeUserId: input.granteeUserId,
+        accessLevel: input.accessLevel,
+      },
+      requestId: input.requestId,
+    })
+    await client.query('commit')
+    return { status: 'ok', share }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Change one grant's access in place. Changing a level is the same authority as
+ * granting it (the matter owner) and leaves the same audit trail, so access is
+ * adjusted without a revoke-and-regrant that would briefly remove it.
+ */
+async function updateMatterShare(
+  pool: Pool,
+  input: {
+    matterId: string
+    shareId: string
+    organisationId: string
+    ownerUserId: string
+    accessLevel: MatterAccessLevel
+    requestId: string
+  },
+): Promise<UpdateResult> {
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    const matter = await lockOwnedMatter(client, input)
+    if (matter === 'matter_not_found' || matter === 'forbidden') {
+      await client.query('rollback')
+      return { status: matter }
+    }
+
+    const updated = await client.query<MatterShareRow>(
+      `update matter_shares
+       set access_level = $1
+       where id = $2 and matter_id = $3 and organisation_id = $4
+       returning id, matter_id, grantee_user_id, access_level, created_by, created_at`,
+      [input.accessLevel, input.shareId, input.matterId, input.organisationId],
+    )
+    const share = updated.rows[0]
+    if (!share) {
+      await client.query('rollback')
+      return { status: 'share_not_found' }
+    }
+
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.ownerUserId,
+      entityType: 'matter_share',
+      entityId: share.id,
+      action: 'matter.share_update',
+      metadata: {
+        matterId: input.matterId,
+        granteeUserId: share.grantee_user_id,
         accessLevel: input.accessLevel,
       },
       requestId: input.requestId,
@@ -317,6 +386,63 @@ export function createDocumentAccessRoutes(pool: Pool) {
       share: mapShare(result.share),
     })
     return c.json(response, 201)
+  })
+
+  routes.patch('/api/matters/:matterId/shares/:shareId', async (c) => {
+    const user = await ensureOrgUser(c, pool)
+    if (user instanceof Response) return user
+
+    const matter = await getMatter(pool, user, c.req.param('matterId'), 'edit')
+    if (!matter)
+      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+    if (matter.createdBy !== user.id)
+      return errorResponse(
+        c,
+        'forbidden',
+        'Only the matter owner may manage shares.',
+        403,
+      )
+
+    const body = matterShareUpdateRequestSchema.safeParse(
+      await c.req.json().catch(() => null),
+    )
+    if (!body.success)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'An access level is required.',
+        400,
+      )
+
+    const result = await updateMatterShare(pool, {
+      matterId: matter.id,
+      shareId: c.req.param('shareId'),
+      organisationId: user.organisationId,
+      ownerUserId: user.id,
+      accessLevel: body.data.accessLevel,
+      requestId: c.get('requestId'),
+    })
+    if (result.status === 'matter_not_found')
+      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+    if (result.status === 'forbidden')
+      return errorResponse(
+        c,
+        'forbidden',
+        'Only the matter owner may manage shares.',
+        403,
+      )
+    if (result.status === 'share_not_found')
+      return errorResponse(
+        c,
+        'matter_share_not_found',
+        'Matter share not found.',
+        404,
+      )
+
+    const response = matterShareUpdateResponseSchema.parse({
+      share: mapShare(result.share),
+    })
+    return c.json(response)
   })
 
   routes.delete('/api/matters/:matterId/shares/:shareId', async (c) => {
