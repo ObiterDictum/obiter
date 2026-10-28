@@ -1,4 +1,4 @@
-import { command, commandOrNull, openRibbonTab } from './editor-test-commands'
+import { command, commandOrNull } from './editor-test-commands'
 
 import '@obiter/test-dom'
 // The E45 recovery save owner and the V5 verification gate meet at one
@@ -322,6 +322,8 @@ describe('V5 verification gate against the E45 save owner', () => {
     })
     mountGate({ editAsync: vi.fn() })
     expect(verifyButton()).toHaveProperty('disabled', true)
-    expect(screen.getByText(/A verification run is already starting/i)).toBeTruthy()
+    expect(
+      screen.getByText(/A verification run is already starting/i),
+    ).toBeTruthy()
   })
 })

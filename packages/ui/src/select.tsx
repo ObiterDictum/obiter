@@ -77,9 +77,7 @@ export function Select({
               : 'transition-[border-color,box-shadow] duration-150',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             'disabled:cursor-not-allowed disabled:opacity-45',
-            compact
-              ? undefined
-              : 'data-[popup-open]:border-brand',
+            compact ? undefined : 'data-[popup-open]:border-brand',
             compact
               ? undefined
               : invalid
@@ -97,7 +95,11 @@ export function Select({
             }
           </BaseSelect.Value>
           <BaseSelect.Icon className="text-muted">
-            <CaretDown size={compact ? 12 : 16} weight="regular" aria-hidden="true" />
+            <CaretDown
+              size={compact ? 12 : 16}
+              weight="regular"
+              aria-hidden="true"
+            />
           </BaseSelect.Icon>
         </BaseSelect.Trigger>
         <BaseSelect.Portal>

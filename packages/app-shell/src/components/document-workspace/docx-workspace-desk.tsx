@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react'
+import { Suspense, lazy, type ReactNode, type RefObject } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import type {
   DocumentVersionRecord,
@@ -14,7 +14,13 @@ import type { AuthorityHit } from '../../document-authorities'
 import { DocxDesk } from './docx-desk'
 import { DocxModelPages } from './docx-model-pages'
 import { WorkspaceSidePanels } from './workspace-side-panels'
-import { DocumentCompareRedline } from './document-compare-redline'
+// Comparison is a rare, read-only surface of its own; keeping it out of the
+// editor's eager graph keeps the desktop renderer's first paint small.
+const DocumentCompareRedline = lazy(() =>
+  import('./document-compare-redline').then((module) => ({
+    default: module.DocumentCompareRedline,
+  })),
+)
 
 type ModelPagesProps = Omit<
   Parameters<typeof DocxModelPages>[0],
@@ -93,11 +99,19 @@ export function DocxWorkspaceDesk({
   const model: DocumentModelWire = pages.model
   if (compareOpen) {
     return (
-      <DocumentCompareRedline
-        documentId={documentId}
-        versions={versions}
-        onClose={onCloseCompare}
-      />
+      <Suspense
+        fallback={
+          <div className="p-6 text-body text-muted" aria-busy="true">
+            Opening the comparison…
+          </div>
+        }
+      >
+        <DocumentCompareRedline
+          documentId={documentId}
+          versions={versions}
+          onClose={onCloseCompare}
+        />
+      </Suspense>
     )
   }
   return (

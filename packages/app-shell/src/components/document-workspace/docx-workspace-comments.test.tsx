@@ -315,9 +315,7 @@ describe('comment cards', () => {
     openCommentsPanel()
 
     expect(screen.getByText(/anchor no longer resolves/)).toBeTruthy()
-    expect(
-      commandOrNull('Show in document'),
-    ).toBeNull()
+    expect(commandOrNull('Show in document')).toBeNull()
   })
 
   it('posts a reply against the product comment', async () => {

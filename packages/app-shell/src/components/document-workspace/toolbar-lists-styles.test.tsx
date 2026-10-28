@@ -15,7 +15,6 @@ import {
   multiParagraphModel,
   paragraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
@@ -70,19 +69,18 @@ async function save(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 describe('the Styles gallery and list restart controls', () => {
-  it('shows one disabled control, not fake chips, when a document has no styles', () => {
+  it('shows one disabled style control, not fake chips, when a document has no styles', () => {
     mountWorkspace({
       models: { doc_1: multiParagraphModel([paragraph('p1', 'Hello')]) },
     })
     clickParagraph('p1')
 
-    const select = screen.getByLabelText(
-      'Paragraph style: This document has no paragraph styles.',
-    )
-    if (!(select instanceof HTMLSelectElement)) {
-      throw new Error('expected a paragraph style select')
-    }
-    expect(select.disabled).toBe(true)
+    // The picker is a Base UI Select now; its disabled state and the reason
+    // are on the combobox trigger, which a name query still reaches.
+    const select = screen.getByRole('combobox', {
+      name: 'Paragraph style: This document has no paragraph styles.',
+    })
+    expect(select).toHaveProperty('disabled', true)
     // The old fallback advertised Normal/Heading 1/Quote as pending UI.
     expect(screen.queryByRole('button', { name: /Heading 1/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Quote/ })).toBeNull()

@@ -25,7 +25,9 @@ describe('E13 review and view controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Spelling' }))
     expect(column()?.getAttribute('spellcheck')).toBe('true')
     // The toggle says what it does — local, not a correctness check.
-    expect(screen.getByText(/not a legal correctness check/i)).toBeTruthy()
+    expect(
+      screen.getAllByText(/not a legal correctness check/i).length,
+    ).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Spelling' }))
     expect(column()?.getAttribute('spellcheck')).toBe('false')
   })

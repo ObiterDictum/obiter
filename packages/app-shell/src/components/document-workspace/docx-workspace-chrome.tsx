@@ -1,12 +1,9 @@
 import { useLayoutEffect, useState } from 'react'
 import type { CitationStyle } from '../../document-preferences'
 import type {
-  DocumentClipboardToolbar,
   DocumentFindToolbar,
   DocumentFormatToolbar,
   DocumentMarkingsToolbar,
-  DocumentReviewToolbar,
-  LegalChecksFocus,
 } from './ribbon-types'
 import type { EditorChromeProps } from './editor-commands'
 import type { InsertRibbonProps } from './use-insert-ribbon'
@@ -24,7 +21,6 @@ import { EditorFindBar } from './editor-find-bar'
 import { EditorCommandPalette } from './editor-command-palette'
 import { EditorFormattingPanel } from './editor-formatting-panel'
 import { EditorSelectionToolbar } from './editor-selection-toolbar'
-import { EditorShortcutHelp } from './editor-shortcut-help'
 import { InsertTableDialog } from './insert-table-dialog'
 import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
@@ -78,7 +74,6 @@ export function DocxWorkspaceChrome({
     setFormattingAnchor(anchor)
     setFormattingOpen(true)
   }
-  const [helpOpen, setHelpOpen] = useState(false)
   // A command from the key handler or the palette has no toolbar button to
   // anchor to; the panel then opens under the toolbar's own control.
   useLayoutEffect(() => {
@@ -106,7 +101,6 @@ export function DocxWorkspaceChrome({
     openTable: () => setTableOpen(true),
     openLink: () => setLinkOpen(true),
     openCrossReference: () => setCrossReferenceOpen(true),
-    openHelp: () => setHelpOpen(true),
     closeStory: props.structure.onCloseStory,
   }
   const menus = editorMenus(props, actions)
@@ -147,7 +141,6 @@ export function DocxWorkspaceChrome({
         onOpenChange={setPaletteOpen}
         menus={menus}
       />
-      <EditorShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
       <EditorSelectionToolbar
         visible={selectionActive && props.canEdit}
         format={props.format}
@@ -158,7 +151,9 @@ export function DocxWorkspaceChrome({
       <InsertTableDialog
         open={tableOpen}
         onOpenChange={setTableOpen}
-        onInsert={(rows, columns) => props.structure.onInsertTable(rows, columns)}
+        onInsert={(rows, columns) =>
+          props.structure.onInsertTable(rows, columns)
+        }
       />
       <InsertLinkDialog
         open={linkOpen}
@@ -201,10 +196,6 @@ export type DocxChromeProps = EditorChromeProps
 export function docxWorkspaceChrome({
   save,
   drafts,
-  remoteChange,
-  transientNotice,
-  selectionNotice,
-  onReload,
   trackChanges,
   zoom,
   panels,
@@ -245,10 +236,6 @@ export function docxWorkspaceChrome({
 }: {
   save: DocumentSave
   drafts: WorkspaceDrafts
-  remoteChange: boolean
-  transientNotice: string | null
-  selectionNotice: string
-  onReload: () => void
   trackChanges: boolean
   zoom: number
   panels: WorkspacePanels

@@ -5,6 +5,7 @@ import {
   DialogDescription,
   DialogTitle,
   Input,
+  KeyboardHint,
   cn,
 } from '@obiter/ui'
 import type { EditorCommand, EditorMenu } from './editor-commands'
@@ -83,7 +84,9 @@ export function EditorCommandPalette({
               onKeyDown={(event) => {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault()
-                  setHighlighted((index) => Math.min(index + 1, hits.length - 1))
+                  setHighlighted((index) =>
+                    Math.min(index + 1, hits.length - 1),
+                  )
                   return
                 }
                 if (event.key === 'ArrowUp') {
@@ -98,10 +101,8 @@ export function EditorCommandPalette({
               }}
             />
           </div>
-          <ul
-            className="max-h-80 overflow-y-auto p-2"
-            aria-label="Commands"
-          >
+          {needle === '' ? <ShortcutHelp /> : null}
+          <ul className="max-h-80 overflow-y-auto p-2" aria-label="Commands">
             {hits.length === 0 ? (
               <li className="px-3 py-2 text-caption text-muted">
                 No command matches “{query.trim()}”.
@@ -142,5 +143,45 @@ export function EditorCommandPalette({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+const SHORTCUTS: ReadonlyArray<{ keys: string[]; action: string }> = [
+  { keys: ['Ctrl', 'S'], action: 'Save' },
+  { keys: ['Ctrl', 'Z'], action: 'Undo' },
+  { keys: ['Ctrl', 'Shift', 'Z'], action: 'Redo' },
+  { keys: ['Ctrl', 'K'], action: 'All commands' },
+  { keys: ['Ctrl', 'F'], action: 'Find and replace' },
+  { keys: ['Ctrl', 'P'], action: 'Print' },
+  { keys: ['A'], action: 'Accept the current change' },
+  { keys: ['R'], action: 'Reject the current change' },
+  { keys: ['J', '↓'], action: 'Next change' },
+  { keys: ['K', '↑'], action: 'Previous change' },
+]
+
+/**
+ * The shortcut help lives in the palette, where a reader already looks for
+ * commands. Review letters only fire outside the document and fields.
+ */
+function ShortcutHelp() {
+  return (
+    <dl
+      className="flex flex-col gap-1 border-b border-line px-4 py-3"
+      aria-label="Keyboard shortcuts"
+    >
+      {SHORTCUTS.map((shortcut) => (
+        <div
+          key={shortcut.action}
+          className="flex items-center justify-between gap-3"
+        >
+          <dt className="flex items-center gap-1">
+            {shortcut.keys.map((key) => (
+              <KeyboardHint key={key}>{key}</KeyboardHint>
+            ))}
+          </dt>
+          <dd className="text-caption text-muted">{shortcut.action}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }

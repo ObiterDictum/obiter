@@ -1,5 +1,4 @@
-import { command, commandOrNull, openRibbonTab } from './editor-test-commands'
-
+import { command, openRibbonTab } from './editor-test-commands'
 
 import '@obiter/test-dom'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -289,9 +288,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
     // The discard affordance drops only the refused slot; the save is clean
     // only once nothing remains pending.
-    fireEvent.click(
-      command('Discard rejected change'),
-    )
+    fireEvent.click(command('Discard rejected change'))
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
@@ -399,9 +396,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.change(bodyEditor(), {
       target: { value: 'Hello doomed plus newer typing' },
     })
-    fireEvent.click(
-      command('Discard rejected change'),
-    )
+    fireEvent.click(command('Discard rejected change'))
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
     // The copy does not promise a deletion: an edited slot is kept.
     expect(
@@ -436,9 +431,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     openReviewTab()
     fireEvent.click(command('Save'))
     await waitFor(() => {
-      expect(
-        command('Reload and discard'),
-      ).toBeTruthy()
+      expect(command('Reload and discard')).toBeTruthy()
     })
 
     fireEvent.click(command('Reload and discard'))
@@ -454,9 +447,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeTruthy()
     })
-    fireEvent.click(
-      command('Discard unsaved work'),
-    )
+    fireEvent.click(command('Discard unsaved work'))
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })

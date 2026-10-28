@@ -9,7 +9,6 @@ import {
   multiParagraphModel,
   paragraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
 
 import { clickParagraph } from './paragraph-selection-harness'

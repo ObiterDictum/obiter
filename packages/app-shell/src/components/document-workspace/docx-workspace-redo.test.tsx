@@ -16,7 +16,6 @@ import {
   paragraph,
   selectBodyParagraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
 import {
   clickParagraph,

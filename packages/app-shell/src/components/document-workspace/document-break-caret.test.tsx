@@ -1,4 +1,5 @@
 import '@obiter/test-dom'
+import { command } from './editor-test-commands'
 /*
  * E5 break placement from the caret. A mouse-placed offset must survive the
  * editor remount that pagination causes, so a page break lands where the
@@ -50,7 +51,7 @@ describe('page break caret placement', () => {
     // Clicking into the body text of an unfocused paragraph mounts its editor;
     // that focus must not drop the offset the pointer carried.
     clickParagraph('p1', 10)
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+    fireEvent.click(command('Page break'))
 
     await save(editAsync)
     expect(insertBreakOperations(editAsync)).toEqual([
@@ -67,8 +68,8 @@ describe('page break caret placement', () => {
     fireEvent.click(field)
     openRibbonTab('Insert')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+    fireEvent.click(command('Page break'))
+    fireEvent.click(command('Page break'))
 
     await save(editAsync)
     const offsets = insertBreakOperations(editAsync).map(

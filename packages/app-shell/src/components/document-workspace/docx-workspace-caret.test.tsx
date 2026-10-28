@@ -8,9 +8,7 @@ import {
   paragraph,
   rerenderWorkspace,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
-
 
 describe('DocxWorkspace vertical caret delivery', () => {
   const marker = 'ZXQMARK'

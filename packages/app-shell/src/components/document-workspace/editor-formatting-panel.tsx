@@ -28,7 +28,11 @@ import type {
   DocumentFormatToolbar,
   DocumentMarkingsToolbar,
 } from './ribbon-types'
-import { EditorIconButton, EditorSelect, EditorTextButton } from './editor-controls'
+import {
+  EditorIconButton,
+  EditorSelect,
+  EditorTextButton,
+} from './editor-controls'
 
 const FONT_FACES = [
   'Calibri',
@@ -70,7 +74,10 @@ export const DEFAULT_FONT = { value: '', label: 'Default font' }
 export const DEFAULT_SIZE = { value: '', label: 'Default' }
 export const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
 
-const MARGIN_OPTIONS = [{ value: '', label: 'Custom' }, ...SECTION_MARGINS_OPTIONS]
+const MARGIN_OPTIONS = [
+  { value: '', label: 'Custom' },
+  ...SECTION_MARGINS_OPTIONS,
+]
 const PAGE_SIZE_SELECT_OPTIONS = [
   { value: '', label: 'Custom' },
   ...PAGE_SIZE_OPTIONS,
@@ -159,7 +166,8 @@ export function EditorFormattingPanel({
                     label="Font size"
                     className="w-20"
                     value={
-                      format?.fontSize === null || format?.fontSize === undefined
+                      format?.fontSize === null ||
+                      format?.fontSize === undefined
                         ? ''
                         : String(format.fontSize)
                     }

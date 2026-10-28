@@ -118,7 +118,10 @@ export function itemChangeIds(item: ReviewItem) {
  */
 export function itemDecidable(item: ReviewItem) {
   if (item.kind === 'change') return item.change.undecidable === undefined
-  if (item.members.length > 1 && item.members.every((m) => m.pairId === undefined))
+  if (
+    item.members.length > 1 &&
+    item.members.every((m) => m.pairId === undefined)
+  )
     return false
   return item.members.every((member) => member.undecidable === undefined)
 }

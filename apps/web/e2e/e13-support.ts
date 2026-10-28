@@ -136,16 +136,30 @@ export async function saveAndWait(page: Page) {
   await expect(saveButton(page)).toBeDisabled({ timeout: 30_000 })
 }
 
+/**
+ * The ribbon's tabs are gone. Home and Layout choices now live in the
+ * formatting panel, and the rest are rows in the menu bar, so opening a tab
+ * means opening the surface that holds its commands.
+ */
 export async function openRibbonTab(page: Page, name: string) {
-  const tab = page.getByRole('tab', { name, exact: true }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await tab.click()
-    const selected = await expect(tab)
-      .toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (selected) return
+  if (name === 'Home' || name === 'Layout') {
+    await page.getByRole('button', { name: 'Font, paragraph and page' }).click()
+    return
   }
+  const menu =
+    name === 'References' ? 'Insert' : name === 'Insert' ? 'Insert' : name
+  const trigger = page.getByRole('button', { name: menu, exact: true }).first()
+  if ((await trigger.getAttribute('aria-expanded')) === 'true') return
+  await trigger.click()
+}
+
+/** Find moved into its own bar; Ctrl+F reveals it the way the product does. */
+export async function openFind(page: Page) {
+  const field = page.getByLabel('Find in document')
+  if (await field.isVisible().catch(() => false)) return field
+  await page.keyboard.press('Control+f')
+  await expect(field).toBeVisible()
+  return field
 }
 
 /** The draft scope a seeded payload must match: tab writer, org, user, doc. */

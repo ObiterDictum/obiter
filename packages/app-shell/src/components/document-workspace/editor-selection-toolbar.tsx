@@ -22,9 +22,10 @@ export function EditorSelectionToolbar({
   onComment: () => void
   onCite: () => void
 }) {
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(
-    null,
-  )
+  const [position, setPosition] = useState<{
+    left: number
+    top: number
+  } | null>(null)
   // The browser's selection rectangle is not React state: it changes on
   // pointer and key movement the document handles itself, so the toolbar reads
   // it from the selection and re-reads it when the selection moves.
@@ -44,7 +45,10 @@ export function EditorSelectionToolbar({
       if (rect.width === 0 && rect.height === 0) return
       const above = rect.top > 56
       setPosition({
-        left: Math.min(Math.max(8, rect.left + rect.width / 2 - 96), innerWidth - 200),
+        left: Math.min(
+          Math.max(8, rect.left + rect.width / 2 - 96),
+          innerWidth - 200,
+        ),
         top: above ? rect.top - 44 : rect.bottom + 8,
       })
     }

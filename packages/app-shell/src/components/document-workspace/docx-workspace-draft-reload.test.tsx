@@ -1,4 +1,4 @@
-import { command, commandOrNull } from './editor-test-commands'
+import { command } from './editor-test-commands'
 
 import '@obiter/test-dom'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'

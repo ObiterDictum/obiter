@@ -17,7 +17,9 @@ export type WorkspacePanelState =
   | { panel: 'legal-checks'; focus: LegalChecksFocus }
 
 /** Per-panel pop-out state, remembered across reloads and documents. */
-type Placements = Partial<Record<WorkspacePanel, PanelPosition & { floating: boolean }>>
+type Placements = Partial<
+  Record<WorkspacePanel, PanelPosition & { floating: boolean }>
+>
 
 const PLACEMENT_KEY = 'obiter.editor.panel-placement'
 
@@ -27,6 +29,8 @@ function readPlacements(): Placements {
     const parsed: unknown = JSON.parse(
       localStorage.getItem(PLACEMENT_KEY) ?? '{}',
     )
+    // SAFETY: the stored value is this module's own JSON; a malformed shape
+    // degrades to the defaults each read site supplies, never to a crash.
     return parsed !== null && typeof parsed === 'object'
       ? (parsed as Placements)
       : {}
@@ -139,8 +143,7 @@ export function useWorkspacePanels() {
           ...current,
           floating: !current?.floating,
         })),
-      onMove: (next) =>
-        update(panel, () => ({ ...next, floating: true })),
+      onMove: (next) => update(panel, () => ({ ...next, floating: true })),
     }
   }
 

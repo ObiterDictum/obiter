@@ -9,9 +9,7 @@ import {
   selectBodyParagraph,
   staleConflict,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
-
 
 const inserted: DocumentChangeWire = {
   id: 'chg_1',
@@ -119,9 +117,7 @@ describe('review panel', () => {
     })
     const panel = openReviewPanel()
 
-    expect(panel.textContent).toContain(
-      '2 changes · 1 move · 1 comment',
-    )
+    expect(panel.textContent).toContain('2 changes · 1 move · 1 comment')
     expect(panel.textContent).toContain(moveNote)
     // Selection reaches tracked changes only: the move has no checkbox, and a
     // comment is never a row in this list at all.
@@ -287,9 +283,7 @@ describe('review panel', () => {
     )
 
     await waitFor(() =>
-      expect(panel.textContent).toContain(
-        'Reload before deciding changes.',
-      ),
+      expect(panel.textContent).toContain('Reload before deciding changes.'),
     )
     // The reload route stays the banner's, and the panel's rows are disabled
     // rather than offering a decision against a base the server has moved.
