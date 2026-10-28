@@ -220,7 +220,7 @@ describe('LegislationActView', () => {
     const labels = screen
       .getAllByRole('link')
       .filter((link) => link.getAttribute('data-legislation-status'))
-      .map((link) => link.querySelector('strong')?.textContent)
+      .map((link) => link.querySelector('span')?.textContent)
     expect(labels).toEqual([
       's. 9',
       's. 10',
@@ -242,8 +242,13 @@ describe('LegislationActView', () => {
       'amended_not_held',
     )
     expect(
-      screen.getByRole('link', { name: 'Official text' }).getAttribute('href'),
+      screen
+        .getAllByRole('link', { name: 'Open original' })[0]
+        ?.getAttribute('href'),
     ).toBe('https://www.legislation.gov.uk/ukpga/2010/15')
+    expect(
+      screen.getAllByText('Point-in-time date not recorded').length,
+    ).toBeGreaterThan(0)
   })
 
   it('omits the withheld summary when nothing is withheld', async () => {
@@ -257,9 +262,23 @@ describe('LegislationActView', () => {
     expect(screen.getByText('s. 1').closest('a')?.getAttribute('href')).toBe(
       '/ln/ukpga/2020/1/section/1',
     )
+    expect(screen.getByText('1 provision in document order')).toBeTruthy()
+  })
+
+  it('shows a source failure with a retry instead of an empty Act', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockRejectedValue(new Error('network down'))
+    renderView('ukpga/2010/15')
     expect(
-      screen.getByText('Contents · 1 provision in document order'),
+      await screen.findByText('Act could not be loaded', undefined, {
+        timeout: 3000,
+      }),
     ).toBeTruthy()
+    fetchMock.mockResolvedValueOnce(jsonResponse(ACT_PAYLOAD))
+    screen.getByRole('button', { name: 'Retry' }).click()
+    await waitFor(() => {
+      expect(screen.getByText('Equality Act 2010')).toBeTruthy()
+    })
   })
 
   it('encodes each identity segment in the request URL', async () => {

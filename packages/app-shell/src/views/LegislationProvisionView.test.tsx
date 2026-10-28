@@ -115,20 +115,47 @@ describe('LegislationProvisionView', () => {
     expect(
       await screen.findByText('Direct discrimination applies here.'),
     ).toBeTruthy()
-    expect(screen.getByText('Equality Act 2010')).toBeTruthy()
-    expect(screen.getByText('2010')).toBeTruthy()
-    expect(screen.getByText('E+W+S')).toBeTruthy()
+    expect(screen.getAllByText('Equality Act 2010').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('E+W+S').length).toBeGreaterThan(0)
     expect(
-      screen.getByRole('link', { name: 'Official text' }).getAttribute('href'),
+      screen.getAllByText('No unapplied amendments').length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText('Point-in-time date not recorded').length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Open original' })[0]
+        ?.getAttribute('href'),
     ).toBe('https://www.legislation.gov.uk/ukpga/2010/15/section/13')
   })
 
   it('withholds text and states why', async () => {
     renderView('ukpga/2010/15/section/80')
     await waitFor(() => {
-      expect(screen.getByText('Amended wording withheld')).toBeTruthy()
+      expect(
+        screen.getAllByText('Amended wording withheld').length,
+      ).toBeGreaterThan(0)
     })
     expect(screen.getByText(/amendments that have been recorded/)).toBeTruthy()
     expect(screen.queryByText('Direct discrimination applies here.')).toBeNull()
+  })
+
+  it('shows a source failure with a retry instead of empty provision text', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockRejectedValue(new Error('network down'))
+    renderView('ukpga/2010/15/section/13')
+    expect(
+      await screen.findByText('Provision could not be loaded', undefined, {
+        timeout: 3000,
+      }),
+    ).toBeTruthy()
+    fetchMock.mockResolvedValueOnce(jsonResponse(CURRENT_PAYLOAD))
+    screen.getByRole('button', { name: 'Retry' }).click()
+    await waitFor(() => {
+      expect(
+        screen.getByText('Direct discrimination applies here.'),
+      ).toBeTruthy()
+    })
   })
 })
