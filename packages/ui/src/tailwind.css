@@ -27,6 +27,10 @@
 @import './fonts.css';
 @import './print.css';
 
+/* `dark:` follows the product's own theme attribute, not the operating
+   system: the shell's choice is a stored preference on <html data-theme>. */
+@custom-variant dark (&:where([data-theme='dark'] *));
+
 @theme inline {
   /* Surfaces + text */
   --color-canvas: var(--obiter-bg);

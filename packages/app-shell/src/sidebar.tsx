@@ -2,11 +2,10 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import type { VerificationRun } from '@obiter/contracts'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { cn, ObiterMark } from '@obiter/ui'
-import { useState } from 'react'
+import { useState, type Ref } from 'react'
 import { useMattersList, type MatterRecord } from './matters'
 import {
   MODULES,
-  RESEARCH_ICON,
   matterIdFromPath,
   resolveSection,
   type ModuleId,
@@ -98,7 +97,17 @@ function readStoredCollapsed(): boolean {
   return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true'
 }
 
-export function Sidebar({ orgName }: { orgName?: string | null }) {
+export function Sidebar({
+  orgName,
+  agentOpen,
+  onToggleAgent,
+  agentTriggerRef,
+}: {
+  orgName?: string | null
+  agentOpen: boolean
+  onToggleAgent: () => void
+  agentTriggerRef?: Ref<HTMLButtonElement>
+}) {
   const narrow = useMediaQuery(NARROW_QUERY)
   const [chosenCollapsed, setChosenCollapsed] = useState(readStoredCollapsed)
   const collapsed = narrow || chosenCollapsed
@@ -178,17 +187,12 @@ export function Sidebar({ orgName }: { orgName?: string | null }) {
                 alertTone={module.id === 'verify' ? verifyTone : undefined}
                 current={section === module.id}
                 collapsed={collapsed}
+                onClick={module.id === 'agent' ? onToggleAgent : undefined}
+                expanded={module.id === 'agent' ? agentOpen : undefined}
+                actionRef={module.id === 'agent' ? agentTriggerRef : undefined}
               />
             </li>
           ))}
-          <li>
-            <ModuleRow
-              label="Research"
-              icon={RESEARCH_ICON}
-              note="Soon"
-              collapsed={collapsed}
-            />
-          </li>
         </ul>
 
         {recent.length > 0 ? (

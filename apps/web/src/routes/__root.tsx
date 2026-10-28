@@ -2,7 +2,9 @@ import {
   AppShellLayout,
   ShellError,
   ShellNotFound,
+  ShellPermissionDenied,
   THEME_STORAGE_KEY,
+  classifyShellFailure,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -10,6 +12,7 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  type ErrorComponentProps,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import appCss from '../styles.css?url'
@@ -41,10 +44,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   }),
   shellComponent: RootDocument,
   component: RootShell,
-  // Unknown paths and failed loaders render inside the same shell chrome, so a
-  // dead end still offers the sidebar and a way back.
+  // Unknown paths and failed loaders keep the workspace chrome when the visitor
+  // is signed in, so a dead end still offers the sidebar and a way back.
   notFoundComponent: ShellNotFound,
-  errorComponent: ShellError,
+  errorComponent: WebShellError,
 })
 
 /**
@@ -68,6 +71,26 @@ function RootDocument({ children }: { children: ReactNode }) {
       </body>
     </html>
   )
+}
+
+/**
+ * A refusal inside a signed-in workspace keeps the chrome: the page is still
+ * Obiter, and the sidebar is the way out. A route error is caught by this
+ * boundary, which replaces the frame, so the frame is added back here (and the
+ * layout sends a signed-out visitor to sign-in). A crash stays bare, because
+ * the frame is the thing most likely to be what failed. A missing page already
+ * renders inside the frame's outlet, so it is not wrapped again.
+ */
+function WebShellError(props: ErrorComponentProps) {
+  const failure = classifyShellFailure(props.error)
+  if (failure === 'not-found') return <ShellNotFound />
+  if (failure === 'forbidden')
+    return (
+      <AppShellLayout platform="web">
+        <ShellPermissionDenied />
+      </AppShellLayout>
+    )
+  return <ShellError {...props} />
 }
 
 function RootShell() {

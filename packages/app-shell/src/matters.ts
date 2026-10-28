@@ -51,6 +51,24 @@ export interface CreateMatterInput {
   clientReference?: string
 }
 
+/**
+ * A matter's tile label: the client reference's letters, else the name's
+ * initials. One helper for every surface that shows a matter, so the sidebar
+ * and the dashboard never disagree about what a matter is called in miniature.
+ */
+export function matterInitials(
+  matter: Pick<MatterRecord, 'name' | 'clientReference'>,
+): string {
+  const reference = matter.clientReference.match(/^[A-Za-z]+/)?.[0]
+  if (reference) return reference.slice(0, 3).toUpperCase()
+  return matter.name
+    .split(/\s+/)
+    .filter((word) => /[A-Za-z]/.test(word[0] ?? ''))
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('')
+}
+
 /** Query key factory — the single source of truth for matters cache keys. */
 export const mattersKeys = {
   all: ['matters'] as const,

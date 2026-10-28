@@ -8,6 +8,8 @@ export const redactionRunsQueryKey = ['redaction-runs'] as const
 /** List payload fields used by shell chrome (home / mode rail). */
 export interface RedactionRunListItem {
   id: string
+  /** Absent for a run started as a standalone job rather than on a document. */
+  documentId?: string | null
   sourceFilename: string
   status: RedactionRunStatus
   matterId: string | null

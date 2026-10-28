@@ -2735,7 +2735,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>34 migrations, 0001 to 0035, 0008 withdrawn</dd>
+                <dd>35 migrations, 0001 to 0036, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3018,10 +3018,14 @@
                 </tr>
                 <tr>
                   <td class="id">
-                    DELETE /api/matters/:matterId/shares/:shareId
+                    PATCH · DELETE /api/matters/:matterId/shares/:shareId
                   </td>
                   <td class="id">document-access.ts</td>
-                  <td>Owner-only revocation of a matter share grant</td>
+                  <td>
+                    Owner-only change of a share grant's access level
+                    (<code>matter.share_update</code>, audited) or its
+                    revocation
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/matters/:matterId/documents</td>
@@ -3040,6 +3044,28 @@
                     <code>anchorVersionId</code>, a redaction run's
                     <code>documentVersionId</code> — but every content route
                     enforces the gate, so the id alone grants nothing.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/recently-opened</td>
+                  <td class="id">documents.ts</td>
+                  <td>
+                    The document this person opened most recently, with its
+                    matter and filename, for the dashboard&apos;s &quot;continue
+                    where you left off&quot; line. Reads
+                    <code>document_opens</code> (migration 0036) through the
+                    matter access predicate, so a document they can no longer
+                    read is skipped rather than named.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/documents/:id/opened</td>
+                  <td class="id">documents.ts</td>
+                  <td>
+                    Records that a person opened a document (one row per
+                    document and person, timestamp moved forward). Requires the
+                    same <code>view</code> access that reading the document
+                    does.
                   </td>
                 </tr>
                 <tr>
