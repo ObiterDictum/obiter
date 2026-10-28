@@ -9,6 +9,7 @@ const hooks = vi.hoisted(() => ({
   useRedactionDocumentText: vi.fn(),
   useRedactionOutput: vi.fn(),
   useRedactionOutputFile: vi.fn(),
+  useRedactionSchedule: vi.fn(),
   useSpanDecision: vi.fn(() => ({})),
   useFinalizeRun: vi.fn(() => ({})),
   useRedetectRun: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
@@ -17,11 +18,7 @@ const hooks = vi.hoisted(() => ({
       mutate: ReturnType<typeof vi.fn>
       isPending: boolean
       error?: { message: string } | null
-      data?: {
-        documentId: string
-        versionId: string
-        versionNumber: number
-      }
+      data?: { documentId: string; versionId: string; versionNumber: number }
     } => ({ mutate: vi.fn(), isPending: false }),
   ),
 }))
@@ -69,6 +66,27 @@ mock.module('./pdf-document-preview', () => ({
     return <div data-testid="pdf-preview" />
   },
 }))
+mock.module('@obiter/app-shell', () => ({
+  useCurrentUser: () => ({ data: { user: { id: 'usr_me' } } }),
+  PageScaffold: ({
+    title,
+    description,
+    actions,
+    children,
+  }: {
+    title: string
+    description?: string
+    actions?: React.ReactNode
+    children: React.ReactNode
+  }) => (
+    <div>
+      <h1>{title}</h1>
+      {description ? <p>{description}</p> : null}
+      {actions}
+      {children}
+    </div>
+  ),
+}))
 
 const { RedactionReviewView } = await import('./review')
 
@@ -114,6 +132,10 @@ const outputFile = new Blob(['%PDF-output-bytes'], {
   type: 'application/pdf',
 })
 
+const scheduleFile = new Blob(['# Obiter Redaction Audit Report'], {
+  type: 'text/markdown',
+})
+
 function renderView() {
   return render(<RedactionReviewView runId="red_1" onOpenRun={onOpenRun} />)
 }
@@ -152,109 +174,197 @@ beforeEach(() => {
     data: outputFile,
     error: null,
   })
+  hooks.useRedactionSchedule.mockReturnValue({
+    isPending: false,
+    data: scheduleFile,
+    error: null,
+  })
+  hooks.useReturnToDocument.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  })
 })
 
-describe('finalized secure redacted PDF output', () => {
-  it('shows the secure heading, filename and preview-before-download copy', () => {
+describe('finalised disclosure copy', () => {
+  it('lists exactly what the download contains', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...baseRun,
+        summary: summary({ totalSpans: 21, reviewedCount: 21 }),
+      },
+    })
     renderView()
-    expect(screen.getByText('Secure redacted PDF')).toBeTruthy()
-    expect(screen.getAllByText('brief-redacted.pdf').length).toBeGreaterThan(0)
+
+    expect(
+      screen.getByRole('heading', { name: 'Redaction finalised' }),
+    ).toBeTruthy()
+    expect(screen.getByText('brief-redacted.pdf')).toBeTruthy()
+    expect(screen.getByText('PDF, image-only pages')).toBeTruthy()
     expect(
       screen.getByText(
-        'Preview the finalized file below. Download and share this PDF only after checking every page.',
+        'Every page is an image: selectable text, fonts, comments, annotations, form fields and attachments are not in the file. Visible text, page layout and the redaction bars are kept.',
       ),
     ).toBeTruthy()
+    expect(screen.getByText('21 of 21')).toBeTruthy()
+    // The size comes from the fetched bytes, not a guess.
+    expect(screen.getByText('17 B')).toBeTruthy()
+    expect(screen.getByText('Last updated')).toBeTruthy()
     expect(
-      screen.getByRole('button', { name: 'Download secure PDF' }),
-    ).toBeTruthy()
-    expect(
-      screen.getByRole('button', { name: 'Share secure PDF' }),
+      screen.getByText(
+        'Check every page of the preview before you download or share this copy.',
+      ),
     ).toBeTruthy()
   })
 
   it('keeps the download disabled until the first page has rendered', () => {
     renderView()
-    const download = screen.getByRole('button', {
-      name: 'Download secure PDF',
-    })
+    const download = screen.getByRole('button', { name: 'Download PDF' })
     expect(download).toHaveProperty('disabled', true)
 
-    setPreview({ kind: 'ready', pageCount: 3 })
-    expect(screen.getByText('Preview ready, 3 pages')).toBeTruthy()
+    setPreview({ kind: 'ready', pageCount: 12 })
+    expect(screen.getByText('Preview ready · 12 pages')).toBeTruthy()
     expect(download).toHaveProperty('disabled', false)
   })
 
-  it('disables the download and shows an inline error when the preview fails', () => {
+  it('disables the download and says why when the preview fails', () => {
     renderView()
-    setPreview({ kind: 'error', message: 'broken pdf' })
-    expect(
-      screen.getByRole('button', { name: 'Download secure PDF' }),
-    ).toHaveProperty('disabled', true)
+    setPreview({ kind: 'error', message: 'bad xref' })
     expect(
       screen.getByText(
-        /The finalized PDF could not be previewed, so the download is disabled/,
+        'The PDF could not be previewed, so the download stays disabled until it loads. This is not the source document.',
       ),
     ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toHaveProperty(
+      'disabled',
+      true,
+    )
   })
 
-  it('uses the exact same Blob for preview and download', () => {
+  it('downloads the exact bytes it previewed, and revokes the URL afterwards', () => {
+    vi.useFakeTimers()
+    const urlApi = URL as unknown as {
+      createObjectURL?: (blob: Blob) => string
+      revokeObjectURL?: (url: string) => void
+    }
+    urlApi.createObjectURL ??= () => 'blob:missing'
+    urlApi.revokeObjectURL ??= () => undefined
     const createObjectURL = vi
       .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:output')
+      .mockReturnValue('blob:download')
     const revokeObjectURL = vi
       .spyOn(URL, 'revokeObjectURL')
       .mockImplementation(() => undefined)
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => undefined)
+
     renderView()
-
-    const previewBlob = preview.file
-    expect(previewBlob).toBe(outputFile)
     setPreview({ kind: 'ready', pageCount: 1 })
-    fireEvent.click(screen.getByRole('button', { name: 'Download secure PDF' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }))
 
-    expect(createObjectURL).toHaveBeenCalledTimes(1)
-    // Identity, not equality: a second fetch would produce a different object.
-    expect(createObjectURL.mock.calls[0]?.[0]).toBe(previewBlob)
+    expect(createObjectURL).toHaveBeenCalledWith(outputFile)
+    expect(click).toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:download')
 
     createObjectURL.mockRestore()
     revokeObjectURL.mockRestore()
     click.mockRestore()
+    vi.useRealTimers()
   })
 
   it('re-locks the download when a new output Blob replaces a rendered one', () => {
     const { rerender } = renderView()
-    setPreview({ kind: 'ready', pageCount: 1 })
-    expect(
-      screen.getByRole('button', { name: 'Download secure PDF' }),
-    ).toHaveProperty('disabled', false)
+    setPreview({ kind: 'ready', pageCount: 3 })
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toHaveProperty(
+      'disabled',
+      false,
+    )
 
-    // A refetch hands the view a different Blob; the ready state belonged to
-    // the old one and must not enable a download of bytes nobody previewed.
-    const replacement = new Blob(['%PDF-replacement'], {
-      type: 'application/pdf',
-    })
     hooks.useRedactionOutputFile.mockReturnValue({
       isPending: false,
-      data: replacement,
+      data: new Blob(['%PDF-second'], { type: 'application/pdf' }),
       error: null,
     })
     rerender(<RedactionReviewView runId="red_1" onOpenRun={onOpenRun} />)
-    expect(
-      screen.getByRole('button', { name: 'Download secure PDF' }),
-    ).toHaveProperty('disabled', true)
-    expect(screen.queryByText('Preview ready, 1 page')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    setPreview({ kind: 'ready', pageCount: 2 })
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toHaveProperty(
+      'disabled',
+      false,
+    )
+  })
 
-    setPreview({ kind: 'ready', pageCount: 1 })
-    expect(
-      screen.getByRole('button', { name: 'Download secure PDF' }),
-    ).toHaveProperty('disabled', false)
+  it('shows a failed export with the reason and a retry that refetches', () => {
+    const refetchOutput = vi.fn()
+    const refetchFile = vi.fn()
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      error: new Error('Redaction output not found.'),
+      refetch: refetchOutput,
+    })
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: undefined,
+      error: null,
+      refetch: refetchFile,
+    })
+    renderView()
+    expect(screen.getByRole('alert').textContent).toContain(
+      'The copy could not be loaded, so it cannot be downloaded or previewed. Redaction output not found.',
+    )
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(refetchOutput).toHaveBeenCalled()
+    expect(refetchFile).toHaveBeenCalled()
+  })
+
+  it('warns when the output was downgraded instead of shipping it quietly', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...baseRun,
+        summary: summary({
+          outputMimeType: 'text/plain',
+          outputFilename: 'brief-redacted.txt',
+          outputDowngrade: { from: 'docx', reason: 'burn_failed' },
+        }),
+      },
+    })
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      data: {
+        mimeType: 'text/plain',
+        filename: 'brief-redacted.txt',
+        text: '[REDACTED]',
+        outputId: 'out_1',
+        sha256: null,
+        securePdf: false,
+      },
+    })
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: undefined,
+      error: null,
+    })
+    renderView()
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Word document unavailable — text file provided instead',
+    )
   })
 })
 
-describe('legacy finalized output', () => {
-  it('keeps the true DOCX filename and labels it as pre-secure-default', () => {
+describe('finalised output variants', () => {
+  it('labels a legacy DOCX as not disclosure-safe instead of calling it secure', () => {
     hooks.useRedactionRun.mockReturnValue({
       isPending: false,
       data: {
@@ -288,18 +398,25 @@ describe('legacy finalized output', () => {
     })
 
     renderView()
-    expect(screen.queryByText('Secure redacted PDF')).toBeNull()
+    expect(screen.queryByText('Redacted PDF')).toBeNull()
+    expect(screen.getByText('Redacted Word document')).toBeTruthy()
     expect(
-      screen.getByText('Created before secure PDF became the default output.'),
+      screen.getByText(
+        'Accepted text is replaced and the document keeps its formatting. Do not treat a Word copy as disclosure-safe: check every page before serving it.',
+      ),
     ).toBeTruthy()
-    expect(screen.getAllByText('brief-redacted.docx').length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: 'Download' })).toHaveProperty(
-      'disabled',
-      false,
-    )
+    // No in-app preview for a Word copy, and the copy says so.
+    expect(
+      screen.getByText(
+        'There is no in-app preview for this format. Open the downloaded file and check every page before you share it.',
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Download Word copy' }),
+    ).toHaveProperty('disabled', false)
   })
 
-  it('shows a pseudonymised run as an editable copy, not a secure PDF', () => {
+  it('describes a pseudonymised run as an editable copy, not a disclosure copy', () => {
     hooks.useRedactionRun.mockReturnValue({
       isPending: false,
       data: {
@@ -335,14 +452,93 @@ describe('legacy finalized output', () => {
 
     renderView()
     expect(screen.getByText('Pseudonymised editable copy')).toBeTruthy()
+    expect(screen.getByText(/It is not a disclosure-safe copy/u)).toBeTruthy()
+  })
+})
+
+describe('redaction schedule', () => {
+  it('is shown as a separate file whose export carries the original text', () => {
+    renderView()
     expect(
-      screen.getByText(
-        'Replaces accepted content with consistent category tokens for continued internal work. Token-map access remains restricted and audited.',
-      ),
+      screen.getByRole('heading', { name: 'Redaction schedule' }),
     ).toBeTruthy()
     expect(
-      screen.getByRole('button', { name: 'Download editable copy' }),
-    ).toHaveProperty('disabled', false)
+      screen.getByText('The schedule contains the original redacted text.'),
+    ).toBeTruthy()
+    expect(screen.getByText('brief-schedule.md')).toBeTruthy()
+    expect(
+      screen.getByText(/it is never part of the disclosure copy/u),
+    ).toBeTruthy()
+  })
+
+  it('downloads the fetched audit report as the schedule', () => {
+    vi.useFakeTimers()
+    const urlApi = URL as unknown as {
+      createObjectURL?: (blob: Blob) => string
+      revokeObjectURL?: (url: string) => void
+    }
+    urlApi.createObjectURL ??= () => 'blob:missing'
+    urlApi.revokeObjectURL ??= () => undefined
+    const createObjectURL = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:schedule')
+    const anchorDownload = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    let downloaded = ''
+    // The anchor's `download` attribute is what names the file.
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLAnchorElement.prototype,
+      'download',
+    )
+    Object.defineProperty(HTMLAnchorElement.prototype, 'download', {
+      configurable: true,
+      set(value: string) {
+        downloaded = value
+      },
+      get() {
+        return downloaded
+      },
+    })
+
+    renderView()
+    fireEvent.click(screen.getByRole('button', { name: 'Export schedule' }))
+    expect(createObjectURL).toHaveBeenCalledWith(scheduleFile)
+    expect(anchorDownload).toHaveBeenCalled()
+    expect(downloaded).toBe('brief-schedule.md')
+
+    if (descriptor)
+      Object.defineProperty(HTMLAnchorElement.prototype, 'download', descriptor)
+    createObjectURL.mockRestore()
+    anchorDownload.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('keeps the export disabled while the schedule is still loading', () => {
+    hooks.useRedactionSchedule.mockReturnValue({
+      isPending: true,
+      data: undefined,
+      error: null,
+    })
+    renderView()
+    expect(
+      screen.getByRole('button', { name: 'Export schedule' }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('reports a schedule that could not be loaded', () => {
+    hooks.useRedactionSchedule.mockReturnValue({
+      isPending: false,
+      data: undefined,
+      error: new Error('Audit report unavailable.'),
+    })
+    renderView()
+    expect(
+      screen.getByRole('button', { name: 'Export schedule' }),
+    ).toHaveProperty('disabled', true)
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Audit report unavailable.',
+    )
   })
 })
 
@@ -424,7 +620,7 @@ describe('return to document', () => {
       />,
     )
     expect(screen.getByText('Returned to document')).toBeTruthy()
-    expect(screen.getByText(/Saved as version 9 of the/)).toBeTruthy()
+    expect(screen.getByText(/Saved as version 9 of the/u)).toBeTruthy()
     expect(
       screen.queryByRole('button', { name: 'Return to document' }),
     ).toBeNull()

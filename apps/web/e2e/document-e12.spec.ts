@@ -318,20 +318,46 @@ test('a document redaction run returns its finalized copy as a new version', asy
   // reviewable state.
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
   await expect(
-    page.getByRole('button', { name: 'Finalize', exact: true }),
+    page.getByRole('button', { name: 'Finalise', exact: true }),
   ).toBeVisible({ timeout: 60_000 })
 
+  // Finalising is blocked until every detected span has a decision. Decide them
+  // from the listbox: Enter accepts the selected span, ArrowDown moves on.
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
+  await listbox.focus()
+  const unreviewed = page.getByRole('tab', { name: /^Unreviewed/u })
+  const total = Number(
+    (await page.getByRole('tab', { name: /^All/u }).textContent())?.replace(
+      /\D+/gu,
+      '',
+    ),
+  )
+  for (let index = 0; index < total; index += 1) {
+    const before = Number(
+      (await unreviewed.textContent())?.replace(/\D+/gu, ''),
+    )
+    if (before === 0) break
+    await page.keyboard.press('Enter')
+    await expect(
+      page.getByRole('tab', { name: `Unreviewed ${before - 1}` }),
+    ).toBeVisible({ timeout: 20_000 })
+    await page.keyboard.press('ArrowDown')
+  }
+  await expect(unreviewed).toHaveText('Unreviewed 0', { timeout: 20_000 })
+
   // A returnable output is the editable DOCX, not the secure PDF.
-  await page.getByRole('button', { name: 'Finalize', exact: true }).click()
+  await page.getByRole('button', { name: 'Finalise', exact: true }).click()
   await expect(
-    page.getByRole('heading', { name: 'Finalize redaction output' }),
+    page.getByRole('heading', { name: 'Finalise this redaction?' }),
   ).toBeVisible()
-  await page.getByRole('radio', { name: /Pseudonymised editable copy/ }).check()
+  await page.getByRole('radio', { name: /Pseudonymised Word/u }).check()
   const acknowledgements = page.getByRole('checkbox')
   for (let index = 0; index < (await acknowledgements.count()); index += 1) {
     await acknowledgements.nth(index).check()
   }
-  await page.getByRole('button', { name: 'Create pseudonymised copy' }).click()
+  await page
+    .getByRole('button', { name: 'Finalise pseudonymised copy' })
+    .click()
 
   // The finalized screen offers the return; committing it reports the new
   // version number against the source document.
@@ -349,11 +375,12 @@ test('a document redaction run returns its finalized copy as a new version', asy
   // version list and the run no longer offers a second return.
   await page.getByRole('button', { name: 'Open document' }).click()
   await expect(page).toHaveURL(/\/documents\/doc_/, { timeout: 20_000 })
-  await page.locator('summary', { hasText: 'Details' }).click()
-  await expect(
-    page.getByRole('heading', { name: 'Versions', exact: true }),
-  ).toBeVisible()
-  await expect(page.getByText('v2 · e12-return.docx').first()).toBeVisible({
+  await page.getByRole('button', { name: 'Document information' }).click()
+  const versionsPanel = page.getByRole('complementary', {
+    name: 'Document information',
+  })
+  await expect(versionsPanel.getByText('Version 2').first()).toBeVisible({
     timeout: 30_000,
   })
+  await expect(versionsPanel.getByText('Current version')).toBeVisible()
 })

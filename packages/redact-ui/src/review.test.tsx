@@ -1,22 +1,34 @@
 import '@obiter/test-dom'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
+import type { RedactionRun } from './types'
 
 const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
   useRedactionDocumentText: vi.fn(),
-  useRedactionOutput: vi.fn(),
-  useRedactionOutputFile: vi.fn(
-    (): { isPending: boolean; data: Blob | undefined; error: null } => ({
-      isPending: false,
-      data: undefined,
-      error: null,
-    }),
+  useRedactionOutput: vi.fn(() => ({ isPending: false })),
+  useRedactionOutputFile: vi.fn(() => ({
+    isPending: false,
+    data: undefined,
+    error: null,
+  })),
+  useRedactionSchedule: vi.fn(() => ({ isPending: false, data: undefined })),
+  useSpanDecision: vi.fn(
+    (): {
+      mutate: ReturnType<typeof vi.fn>
+      isPending: boolean
+      error?: Error | null
+    } => ({ mutate: vi.fn(), isPending: false }),
   ),
-  useSpanDecision: vi.fn(),
-  useFinalizeRun: vi.fn(),
-  useRedetectRun: vi.fn(),
+  useFinalizeRun: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useRedetectRun: vi.fn(
+    (): {
+      mutate: ReturnType<typeof vi.fn>
+      isPending: boolean
+      error?: Error | null
+    } => ({ mutate: vi.fn(), isPending: false }),
+  ),
   useReturnToDocument: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
@@ -28,29 +40,48 @@ const sourcePreviewHooks = vi.hoisted(() => ({
   })),
 }))
 
-// The real module's export names, available as undefined, so bun's
-// static link check accepts imports the mock does not override.
+const appShell = vi.hoisted(() => ({
+  currentUserId: 'usr_me' as string,
+}))
+
 const hooksKeys = Object.fromEntries(
   Object.keys(await import('./hooks')).map((key) => [key, undefined]),
 )
 mock.module('./hooks', () => Object.assign({ ...hooksKeys }, hooks))
-// The real module's export names, available as undefined, so bun's
-// static link check accepts imports the mock does not override.
-const sourcepreviewhooksKeys = Object.fromEntries(
+const sourcePreviewKeys = Object.fromEntries(
   Object.keys(await import('./source-preview-hooks')).map((key) => [
     key,
     undefined,
   ]),
 )
 mock.module('./source-preview-hooks', () =>
-  Object.assign({ ...sourcepreviewhooksKeys }, sourcePreviewHooks),
+  Object.assign({ ...sourcePreviewKeys }, sourcePreviewHooks),
 )
+// The page scaffold and the signed-in user come from the shell. Mocked at the
+// package boundary so the screen renders without booting the shell's auth.
+mock.module('@obiter/app-shell', () => ({
+  useCurrentUser: () => ({ data: { user: { id: appShell.currentUserId } } }),
+  PageScaffold: ({
+    title,
+    description,
+    actions,
+    children,
+  }: {
+    title: string
+    description?: string
+    actions?: React.ReactNode
+    children: React.ReactNode
+  }) => (
+    <div>
+      <h1>{title}</h1>
+      {description ? <p>{description}</p> : null}
+      {actions}
+      {children}
+    </div>
+  ),
+}))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
-const { RedactionReviewView: RedactionReviewViewComponent } =
-  await import('./review')
+const { RedactionReviewView } = await import('./review')
 
 const onOpenRun = vi.fn()
 
@@ -60,136 +91,193 @@ const onOpenRun = vi.fn()
 if (typeof globalThis.CSS === 'undefined') {
   Object.assign(globalThis, { CSS: { escape: (value: string) => value } })
 }
-// jsdom has no layout, so it does not implement scrollIntoView either.
 if (typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = () => undefined
 }
 
-function RedactionReviewView({ runId }: { runId: string }) {
-  return <RedactionReviewViewComponent runId={runId} onOpenRun={onOpenRun} />
-}
+const spans: RedactionRun['spans'] = [
+  {
+    id: 'span_1',
+    start: 0,
+    end: 4,
+    text: 'Jane',
+    category: 'person_name',
+    source: 'rampart_model',
+    confidence: 'high',
+    suggestion: 'redact',
+  },
+  {
+    id: 'span_2',
+    start: 5,
+    end: 15,
+    text: '9 May 1988',
+    category: 'date',
+    source: 'rampart_model',
+    confidence: 'medium',
+    suggestion: 'redact',
+  },
+]
 
-const run = {
+const decidedRun: RedactionRun = {
   id: 'red_1',
-  matterId: 'mtr_1',
-  documentId: 'doc_1',
-  documentVersionId: 'ver_1',
-  sourceFilename: 'source.txt',
-  sourcePreview: { kind: 'text' as const, available: false },
-  status: 'finalized' as const,
-  policyMode: 'internal_ai_minimisation' as const,
-  spans: [
-    {
-      id: 'span_1',
-      start: 0,
-      end: 4,
-      text: 'Jane',
-      category: 'person_name' as const,
-      source: 'rampart_model' as const,
-      confidence: 'high' as const,
-      suggestion: 'redact' as const,
+  matterId: null,
+  matterName: null,
+  documentId: null,
+  documentVersionId: null,
+  sourceFilename: 'statement-of-mrs-hughes.pdf',
+  sourcePreview: { kind: 'text', available: false },
+  status: 'reviewing',
+  policyMode: 'internal_ai_minimisation',
+  spans,
+  decisions: {
+    span_1: {
+      decision: 'accept',
+      decidedBy: 'usr_me',
+      decidedAt: '2026-10-26T14:42:00.000Z',
     },
-  ],
-  decisions: {},
-  outputId: 'out_1',
+    span_2: {
+      decision: 'reject',
+      decidedBy: 'usr_other',
+      decidedAt: '2026-10-26T15:02:00.000Z',
+    },
+  },
+  outputId: null,
   detectorVersion: null,
-  detectionMode: 'model+supplement' as const,
+  detectionMode: 'model+supplement',
   replacesRunId: null,
   replacementRunId: null,
   returnedDocumentVersionId: null,
   summary: {
-    totalSpans: 1,
-    byCategory: { person_name: 1 },
-    bySource: { rampartModel: 1, rampartDeterministic: 0, ukSupplement: 0 },
-    reviewedCount: 0,
-    unreviewedCount: 1,
+    totalSpans: 2,
+    byCategory: {
+      person_name: 1,
+      date: 1,
+    } as RedactionRun['summary']['byCategory'],
+    bySource: { rampartModel: 2, rampartDeterministic: 0, ukSupplement: 0 },
+    reviewedCount: 2,
+    unreviewedCount: 0,
   },
-  createdAt: '2026-07-09T00:00:00.000Z',
-  updatedAt: '2026-07-09T00:00:00.000Z',
+  createdAt: '2026-10-26T14:00:00.000Z',
+  updatedAt: '2026-10-26T14:00:00.000Z',
 }
 
-describe('RedactionReviewView', () => {
-  beforeEach(() => {
-    onOpenRun.mockReset()
-    hooks.useRedactionOutputFile.mockReturnValue({
-      isPending: false,
-      data: undefined,
-      error: null,
+function renderRun(overrides: Partial<RedactionRun> = {}) {
+  const run = { ...decidedRun, ...overrides }
+  hooks.useRedactionRun.mockReturnValue({ isPending: false, data: run })
+  hooks.useRedactionDocumentText.mockReturnValue({
+    isPending: false,
+    data: { text: 'Jane (born 9 May 1988) filed.' },
+  })
+  return render(<RedactionReviewView runId={run.id} onOpenRun={onOpenRun} />)
+}
+
+beforeEach(() => {
+  onOpenRun.mockReset()
+  appShell.currentUserId = 'usr_me'
+  hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  hooks.useRedetectRun.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  })
+  hooks.useRedactionOutput.mockReturnValue({ isPending: false })
+})
+
+describe('redaction review', () => {
+  it('states what the detector found and how sure it is, in plain words', () => {
+    renderRun()
+    expect(
+      screen.getByRole('heading', {
+        name: 'statement-of-mrs-hughes.pdf',
+      }),
+    ).toBeTruthy()
+    expect(screen.getByText('2 of 2 detected spans decided')).toBeTruthy()
+
+    // The document mark names the category and the detector, and the confidence
+    // wording is about detection, not about whether disclosure is safe.
+    const mark = screen.getByRole('button', { name: 'Jane' })
+    expect(mark.className).toContain('bg-span-person-name')
+    expect(mark.title).toBe(
+      'Person name — Rampart model — detection confidence high',
+    )
+
+    const bar = screen.getByRole('region', {
+      name: 'Decide the selected span',
     })
-    hooks.useRedetectRun.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-      error: null,
-    })
+    expect(
+      within(bar).getByText(
+        /Detection confidence is not a disclosure decision/u,
+      ),
+    ).toBeTruthy()
+    expect(
+      within(bar).getByText(/found by the Rampart model reading the text/u),
+    ).toBeTruthy()
+    expect(
+      screen.getAllByText(
+        /Detection finds candidates, not everything sensitive/u,
+      ).length,
+    ).toBeGreaterThan(0)
+    // Nothing in the screen claims undetected text is safe.
+    expect(screen.queryByText(/safe to disclose/iu)).toBeNull()
   })
 
-  it('renders highlighted source-aware spans in the shared review screen', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: { ...run, status: 'ready_for_review' },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({
-      isPending: false,
-      data: {
-        text: '[REDACTED] filed.',
-        mimeType: 'text/plain',
-        filename: 'source-redacted.txt',
+  it('shows the reviewer and the decision time for each decided span', () => {
+    renderRun()
+    const options = screen.getAllByRole('option')
+    expect(options[0]?.textContent).toContain('Redacted by you')
+    expect(options[0]?.textContent).toContain('26 Oct 2026, 14:42')
+    expect(options[1]?.textContent).toContain(
+      'Kept visible by another reviewer',
+    )
+    expect(options[1]?.textContent).toContain('26 Oct 2026, 15:02')
+    // A span with no decision says so rather than borrowing a time.
+    renderRun({
+      ...decidedRun,
+      decisions: {},
+      summary: {
+        ...decidedRun.summary,
+        reviewedCount: 0,
+        unreviewedCount: 2,
       },
     })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView runId="red_1" />)
-    expect(
-      screen.getByRole('heading', { name: 'Redaction review' }),
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Jane' }).className).toContain(
-      'bg-span-person-name',
-    )
-    expect(screen.getByRole('button', { name: 'Jane' }).title).toContain(
-      'Rampart model',
-    )
+    const undecided = screen.getAllByRole('option').slice(-2)
+    expect(undecided[0]?.textContent).toContain('Needs review')
+    expect(undecided[0]?.textContent).not.toContain('by you')
   })
 
-  it('submits the decision shortcuts when the span list has focus', () => {
+  it('counts each decision state and filters the queue by it', () => {
+    renderRun()
+    expect(
+      screen.getByRole('tab', { name: 'All 2' }).getAttribute('aria-selected'),
+    ).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Kept 1' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Unreviewed 0' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Kept 1' }))
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]?.textContent).toContain('9 May 1988')
+    // The decision bar follows the filter rather than keeping a hidden span.
+    const bar = screen.getByRole('region', {
+      name: 'Decide the selected span',
+    })
+    expect(within(bar).getByText('9 May 1988')).toBeTruthy()
+  })
+
+  it('decides the selected span from the listbox and ignores modified chords', () => {
     const mutate = vi.fn()
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: { ...run, status: 'ready_for_review' },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
     hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView runId="red_1" />)
-    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'r' })
+    renderRun()
+    const listbox = screen.getByRole('listbox', { name: 'Detected spans' })
+
+    fireEvent.keyDown(listbox, { key: 'r' })
     expect(mutate).toHaveBeenCalledWith({
       spanId: 'span_1',
       decision: 'reject',
     })
-  })
 
-  it('leaves the decision unchanged for modified chords the shell owns', () => {
-    const mutate = vi.fn()
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: { ...run, status: 'ready_for_review' },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView runId="red_1" />)
-    const listbox = screen.getByRole('listbox')
+    mutate.mockClear()
     // Ctrl+K opens app search and Ctrl+R reloads the browser; Meta is the macOS
     // equivalent. None may record a redaction decision.
     for (const chord of [
@@ -199,82 +287,24 @@ describe('RedactionReviewView', () => {
       { key: 'r', metaKey: true },
       { key: 'r', altKey: true },
       { key: 'Enter', ctrlKey: true },
-    ]) {
+    ])
       fireEvent.keyDown(listbox, chord)
-    }
     expect(mutate).not.toHaveBeenCalled()
   })
 
   it('never decides on the selected span when a different row has focus', () => {
     const mutate = vi.fn()
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        status: 'ready_for_review',
-        spans: [
-          {
-            id: 'span_1',
-            start: 0,
-            end: 4,
-            text: 'Jane',
-            category: 'person_name' as const,
-            source: 'rampart_model' as const,
-            confidence: 'high' as const,
-            suggestion: 'redact' as const,
-          },
-          {
-            id: 'span_2',
-            start: 5,
-            end: 8,
-            text: 'Doe',
-            category: 'person_name' as const,
-            source: 'rampart_model' as const,
-            confidence: 'high' as const,
-            suggestion: 'redact' as const,
-          },
-        ],
-        summary: {
-          totalSpans: 2,
-          byCategory: { person_name: 2 },
-          bySource: {
-            rampartModel: 2,
-            rampartDeterministic: 0,
-            ukSupplement: 0,
-          },
-          reviewedCount: 0,
-          unreviewedCount: 2,
-        },
-      },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane Doe filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
     hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView runId="red_1" />)
+    renderRun()
+    const listbox = screen.getByRole('listbox', { name: 'Detected spans' })
+    const rows = screen.getAllByRole('option')
+    fireEvent.click(rows[0]!)
 
-    const listbox = screen.getByRole('listbox')
-    const rowA = screen.getByRole('option', { name: /Jane/ })
-    const rowB = screen.getByRole('option', { name: /Doe/ })
-    fireEvent.click(rowA)
-    expect(rowA.getAttribute('aria-selected')).toBe('true')
-
-    // Decision shortcuts pressed on row B must not act on the separately
-    // selected row A, and must not swallow the row's own activation.
-    for (const key of ['r', 'p', 'Enter']) {
-      expect(fireEvent.keyDown(rowB, { key })).toBe(true)
-    }
+    for (const key of ['r', 'p', 'Enter'])
+      expect(fireEvent.keyDown(rows[1]!, { key })).toBe(true)
     expect(mutate).not.toHaveBeenCalled()
 
-    // A row's normal activation still selects that row.
-    fireEvent.click(rowB)
-    expect(rowB.getAttribute('aria-selected')).toBe('true')
-    expect(rowA.getAttribute('aria-selected')).toBe('false')
-
-    // A shortcut owned by the listbox still decides the selected row only.
+    fireEvent.click(rows[1]!)
     fireEvent.keyDown(listbox, { key: 'r' })
     expect(mutate).toHaveBeenCalledWith({
       spanId: 'span_2',
@@ -282,510 +312,207 @@ describe('RedactionReviewView', () => {
     })
   })
 
-  it('shows finalized output for a zero-span finalized run', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        spans: [],
-        status: 'finalized',
-        summary: {
-          totalSpans: 0,
-          byCategory: {},
-          bySource: {
-            rampartModel: 0,
-            rampartDeterministic: 0,
-            ukSupplement: 0,
-          },
-          reviewedCount: 0,
-          unreviewedCount: 0,
-        },
-      },
+  it('walks the run with the decision bar without changing a decision', () => {
+    const mutate = vi.fn()
+    hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
+    renderRun()
+    const bar = screen.getByRole('region', {
+      name: 'Decide the selected span',
     })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Clean text.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({
-      isPending: false,
-      data: {
-        text: 'Clean text.',
-        mimeType: 'text/plain',
-        filename: 'source-redacted.txt',
-      },
-    })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView runId="red_1" />)
-    expect(screen.getByText('Finalized')).toBeTruthy()
-    expect(
-      screen.getByRole('region', { name: 'Redaction output' }),
-    ).toBeTruthy()
-    expect(
-      screen.queryByText('No sensitive data was detected in this document'),
-    ).toBeNull()
+    expect(within(bar).getByText('1 of 2')).toBeTruthy()
+    fireEvent.click(within(bar).getByRole('button', { name: 'Next span' }))
+    expect(within(bar).getByText('2 of 2')).toBeTruthy()
+    expect(within(bar).getByText('9 May 1988')).toBeTruthy()
+    expect(mutate).not.toHaveBeenCalled()
   })
 
-  it('renders a successful DOCX output with no downgrade warning', () => {
-    hooks.useRedactionRun.mockReturnValue({
+  it('shows a failed decision instead of pretending it saved', () => {
+    hooks.useSpanDecision.mockReturnValue({
+      mutate: vi.fn(),
       isPending: false,
-      data: {
-        ...run,
-        summary: {
-          ...run.summary,
-          outputMimeType:
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          outputFilename: 'source-redacted.docx',
-          outputDowngrade: null,
-        },
-      },
+      error: new Error('Redaction run not found.'),
     })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({
-      isPending: false,
-      data: {
-        text: null,
-        mimeType:
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        filename: 'source-redacted.docx',
-      },
-    })
-    hooks.useRedactionOutputFile.mockReturnValue({
-      isPending: false,
-      data: new Blob(['docx-bytes'], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      }),
-      error: null,
-    })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-
-    render(<RedactionReviewView runId="red_1" />)
-
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(
-      screen.getByText('Created before secure PDF became the default output.'),
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Download' })).toHaveProperty(
-      'disabled',
-      false,
+    renderRun()
+    expect(screen.getByRole('alert').textContent).toContain(
+      'The decision was not saved. Redaction run not found.',
     )
   })
 
-  it('shows the downgrade warning when the DOCX burn genuinely failed', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        summary: {
-          ...run.summary,
-          outputMimeType: 'text/plain',
-          outputFilename: 'source-redacted.txt',
-          outputDowngrade: { from: 'docx', reason: 'burn_failed' },
+  it('blocks finalising while a detected span has no decision, and offers the way there', () => {
+    renderRun({
+      ...decidedRun,
+      decisions: {
+        span_1: {
+          decision: 'accept' as const,
+          decidedBy: 'usr_me',
+          decidedAt: '2026-10-26T14:42:00.000Z',
         },
       },
+      summary: { ...decidedRun.summary, reviewedCount: 1, unreviewedCount: 1 },
     })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({
-      isPending: false,
-      data: {
-        text: '[REDACTED] filed.',
-        mimeType: 'text/plain',
-        filename: 'source-redacted.txt',
-      },
-    })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-
-    render(<RedactionReviewView runId="red_1" />)
-
-    expect(screen.getByRole('alert')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Finalise' }))
+    expect(screen.getByRole('alert').textContent).toContain(
+      '1 detected span has no decision yet.',
+    )
+    expect(screen.getByRole('alert').textContent).toContain(
+      'an undecided span is not the same as a span you chose to keep',
+    )
     expect(
-      screen.getByText(
-        'Word document unavailable — text file provided instead',
-      ),
-    ).toBeTruthy()
+      screen.getByRole('button', { name: /Finalise redacted PDF/u }),
+    ).toHaveProperty('disabled', true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show them' }))
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]?.textContent).toContain('9 May 1988')
+    expect(options[0]?.getAttribute('aria-selected')).toBe('true')
   })
 
-  it('keeps degraded zero-span copy accurate when the model did not run', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        spans: [],
-        status: 'ready_for_review',
-        detectionMode: 'heuristics+supplement',
-        summary: {
-          totalSpans: 0,
-          byCategory: {},
-          bySource: {
-            rampartModel: 0,
-            rampartDeterministic: 0,
-            ukSupplement: 0,
-          },
-          reviewedCount: 0,
-          unreviewedCount: 0,
-        },
-      },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Clean text.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-
-    render(<RedactionReviewView runId="red_1" />)
-
-    expect(screen.getByText('Model detection did not run')).toBeTruthy()
-    expect(
-      screen.getByText(/The deterministic detectors did not find/),
-    ).toBeTruthy()
-    expect(
-      screen.queryByText(/Rampart and the UK supplement did not find/),
-    ).toBeNull()
-  })
-
-  it('keeps rendering when a background run refetch errors but cached data remains', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      error: new Error('reconcile GET failed'),
-      data: run,
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({
-      isPending: false,
-      data: {
-        text: '[REDACTED] filed.',
-        mimeType: 'text/plain',
-        filename: 'source-redacted.txt',
-      },
-    })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView runId="red_1" />)
-    expect(
-      screen.getByRole('heading', { name: 'Redaction review' }),
-    ).toBeTruthy()
-    expect(screen.queryByText('Could not load this redaction run')).toBeNull()
-  })
-
-  it('warns throughout degraded review and requires acknowledgement before finalizing', () => {
+  it('requires both the detection acknowledgement and the page review to finalise', () => {
     const mutate = vi.fn()
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        status: 'ready_for_review',
-        detectionMode: 'heuristics+supplement',
-        summary: {
-          ...run.summary,
-          reviewedCount: 1,
-          unreviewedCount: 0,
-        },
-      },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
     hooks.useFinalizeRun.mockReturnValue({ mutate, isPending: false })
-
-    render(<RedactionReviewView runId="red_1" />)
+    renderRun({ ...decidedRun, detectionMode: 'heuristics+supplement' })
 
     expect(
       screen.getByRole('note', { name: 'Model detection did not run' }),
     ).toBeTruthy()
-    expect(
-      screen.getByText(
-        /Names, addresses and dates of birth were not automatically detected/,
-      ),
-    ).toBeTruthy()
-    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Finalise' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
-
-    expect(screen.getAllByText('Model detection did not run')).toHaveLength(2)
-    expect(
-      screen.getByRole('alert', { name: 'Model detection did not run' }),
-    ).toBeTruthy()
-    expect(
-      screen.queryAllByRole('button', { name: 'Run model detection again' }),
-    ).toHaveLength(0)
-    const confirm = screen.getByRole('button', { name: 'Create secure PDF' })
+    const confirm = screen.getByRole('button', {
+      name: /Finalise redacted PDF/u,
+    })
     expect(confirm).toHaveProperty('disabled', true)
 
     fireEvent.click(
-      screen.getByLabelText(
-        /I acknowledge that model detection did not run and have manually checked/,
-      ),
+      screen.getByLabelText(/I acknowledge that model detection did not run/u),
     )
+    expect(confirm).toHaveProperty('disabled', true)
+
+    fireEvent.click(screen.getByLabelText(/I have reviewed every page/u))
     expect(confirm).toHaveProperty('disabled', false)
     fireEvent.click(confirm)
-
     expect(mutate).toHaveBeenCalledWith(
-      {
-        outputMode: 'redacted',
-        degradedDetectionAcknowledged: true,
-      },
+      { outputMode: 'redacted', degradedDetectionAcknowledged: true },
       expect.any(Object),
     )
   })
 
-  it('warns truthfully and requires a distinct acknowledgement when detection provenance is unknown', () => {
+  it('acknowledges unknown detection provenance with its own flag', () => {
     const mutate = vi.fn()
+    hooks.useFinalizeRun.mockReturnValue({ mutate, isPending: false })
+    renderRun({ ...decidedRun, detectionMode: 'unknown' })
+    fireEvent.click(screen.getByRole('button', { name: 'Finalise' }))
+    expect(
+      screen.getAllByText(/Obiter cannot confirm whether model detection ran/u)
+        .length,
+    ).toBeGreaterThan(0)
+    fireEvent.click(
+      screen.getByLabelText(/I acknowledge that the detection mode was not/u),
+    )
+    fireEvent.click(screen.getByLabelText(/I have reviewed every page/u))
+    fireEvent.click(
+      screen.getByRole('button', { name: /Finalise redacted PDF/u }),
+    )
+    expect(mutate).toHaveBeenCalledWith(
+      { outputMode: 'redacted', unknownDetectionAcknowledged: true },
+      expect.any(Object),
+    )
+  })
+
+  it('reports a failed detection run with its reason instead of an empty queue', () => {
+    renderRun({
+      ...decidedRun,
+      status: 'failed',
+      spans: [],
+      decisions: {},
+      summary: {
+        ...decidedRun.summary,
+        totalSpans: 0,
+        reviewedCount: 0,
+        unreviewedCount: 0,
+        failureReason: 'Text extraction failed.',
+      },
+    })
+    expect(screen.getByText('Detection failed')).toBeTruthy()
+    expect(screen.getByText('Text extraction failed.')).toBeTruthy()
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('keeps the zero-span copy honest about what detection cannot see', () => {
+    renderRun({
+      ...decidedRun,
+      spans: [],
+      decisions: {},
+      detectionMode: 'heuristics+supplement',
+      summary: {
+        totalSpans: 0,
+        byCategory: {} as RedactionRun['summary']['byCategory'],
+        bySource: { rampartModel: 0, rampartDeterministic: 0, ukSupplement: 0 },
+        reviewedCount: 0,
+        unreviewedCount: 0,
+      },
+    })
+    expect(screen.getByText('Model detection did not run')).toBeTruthy()
+    expect(
+      screen.getByText(/The deterministic detectors did not find/u),
+    ).toBeTruthy()
+    expect(
+      screen.queryByText(/Rampart and the UK supplement did not find/u),
+    ).toBeNull()
+  })
+
+  it('keeps rendering when a background refetch errors but cached data remains', () => {
     hooks.useRedactionRun.mockReturnValue({
       isPending: false,
-      data: {
-        ...run,
-        status: 'ready_for_review',
-        detectionMode: 'unknown',
-        summary: {
-          ...run.summary,
-          reviewedCount: 1,
-          unreviewedCount: 0,
-        },
-      },
+      error: new Error('reconcile GET failed'),
+      data: decidedRun,
     })
     hooks.useRedactionDocumentText.mockReturnValue({
       isPending: false,
-      data: { text: 'Jane filed.' },
+      data: { text: 'Jane (born 9 May 1988) filed.' },
     })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({ mutate, isPending: false })
-
-    render(<RedactionReviewView runId="red_1" />)
-
+    render(<RedactionReviewView runId="red_1" onOpenRun={onOpenRun} />)
     expect(
-      screen.getByRole('note', { name: 'Detection mode was not recorded' }),
+      screen.getByRole('heading', { name: 'statement-of-mrs-hughes.pdf' }),
     ).toBeTruthy()
-    expect(
-      screen.getByText(/We cannot confirm whether model detection ran/),
-    ).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
-    const confirm = screen.getByRole('button', { name: 'Create secure PDF' })
-    expect(confirm).toHaveProperty('disabled', true)
-    fireEvent.click(
-      screen.getByLabelText(
-        /I acknowledge that the detection mode was not recorded/,
-      ),
-    )
-    fireEvent.click(confirm)
-
-    expect(mutate).toHaveBeenCalledWith(
-      {
-        outputMode: 'redacted',
-        unknownDetectionAcknowledged: true,
-      },
-      expect.any(Object),
-    )
   })
 
   it('opens the fresh run returned by model re-detection', () => {
     const redetectMutate = vi.fn()
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: { ...run, detectionMode: 'heuristics+supplement' },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
     hooks.useRedetectRun.mockReturnValue({
       mutate: redetectMutate,
       isPending: false,
       error: null,
     })
-
-    render(<RedactionReviewView runId="red_1" />)
+    renderRun({ ...decidedRun, detectionMode: 'heuristics+supplement' })
     fireEvent.click(
       screen.getByRole('button', { name: 'Run model detection again' }),
     )
-
     expect(redetectMutate).toHaveBeenCalledWith(undefined, expect.any(Object))
-    const mutationOptions = redetectMutate.mock.calls[0][1]
-    mutationOptions.onSuccess({
-      run: { ...run, id: 'red_2', replacesRunId: 'red_1' },
+    redetectMutate.mock.calls[0]![1].onSuccess({
+      run: { ...decidedRun, id: 'red_2', replacesRunId: 'red_1' },
       redetectedFromRunId: 'red_1',
     })
     expect(onOpenRun).toHaveBeenCalledWith('red_2')
   })
 
-  it('links to a model-detected replacement and prevents finalizing the source run', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        status: 'ready_for_review',
-        detectionMode: 'heuristics+supplement',
-        replacementRunId: 'red_2',
-        returnedDocumentVersionId: null,
-      },
+  it('removes every decision surface from a replaced run and links the replacement', () => {
+    renderRun({
+      ...decidedRun,
+      detectionMode: 'heuristics+supplement',
+      replacementRunId: 'red_2',
     })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
-
-    render(<RedactionReviewView runId="red_1" />)
-
     expect(screen.getByText('Replaced')).toBeTruthy()
     expect(
-      screen.getByText(/newer model-detected run is available/),
-    ).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Finalize' })).toBeNull()
+      screen.getAllByText(/newer model-detected run is available/u).length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Finalise' })).toBeNull()
     expect(
-      screen.queryByRole('button', { name: 'Run model detection again' }),
+      screen.queryByRole('region', { name: 'Decide the selected span' }),
     ).toBeNull()
-
     fireEvent.click(
       screen.getByRole('button', { name: 'Open replacement run' }),
     )
     expect(onOpenRun).toHaveBeenCalledWith('red_2')
-  })
-
-  it('does not warn or require degraded acknowledgement for model detection', () => {
-    const mutate = vi.fn()
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        status: 'ready_for_review',
-        summary: {
-          ...run.summary,
-          reviewedCount: 1,
-          unreviewedCount: 0,
-        },
-      },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({ mutate, isPending: false })
-
-    render(<RedactionReviewView runId="red_1" />)
-
-    expect(screen.queryByText('Model detection did not run')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
-    const confirm = screen.getByRole('button', { name: 'Create secure PDF' })
-    expect(confirm).toHaveProperty('disabled', false)
-    fireEvent.click(confirm)
-
-    expect(mutate).toHaveBeenCalledWith(
-      { outputMode: 'redacted' },
-      expect.any(Object),
-    )
-  })
-
-  it('defers object-URL revoke after download click', () => {
-    vi.useFakeTimers()
-    const urlApi = URL as unknown as {
-      createObjectURL?: (blob: Blob) => string
-      revokeObjectURL?: (url: string) => void
-    }
-    urlApi.createObjectURL ??= () => 'blob:missing'
-    urlApi.revokeObjectURL ??= () => undefined
-    const createObjectURL = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:download')
-    const revokeObjectURL = vi
-      .spyOn(URL, 'revokeObjectURL')
-      .mockImplementation(() => undefined)
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(() => undefined)
-
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: run,
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({
-      isPending: false,
-      data: {
-        text: '[REDACTED] filed.',
-        mimeType: 'text/plain',
-        filename: 'source-redacted.txt',
-      },
-    })
-    hooks.useSpanDecision.mockReturnValue({})
-    hooks.useFinalizeRun.mockReturnValue({})
-
-    render(<RedactionReviewView runId="red_1" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
-
-    expect(createObjectURL).toHaveBeenCalled()
-    expect(click).toHaveBeenCalled()
-    expect(revokeObjectURL).not.toHaveBeenCalled()
-    vi.runAllTimers()
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:download')
-
-    createObjectURL.mockRestore()
-    revokeObjectURL.mockRestore()
-    click.mockRestore()
-    vi.useRealTimers()
-  })
-
-  it('describes secure black-bar output in the finalize dialog', () => {
-    hooks.useRedactionRun.mockReturnValue({
-      isPending: false,
-      data: {
-        ...run,
-        status: 'ready_for_review',
-        summary: { ...run.summary, reviewedCount: 1, unreviewedCount: 0 },
-      },
-    })
-    hooks.useRedactionDocumentText.mockReturnValue({
-      isPending: false,
-      data: { text: 'Jane filed.' },
-    })
-    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
-    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
-    hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
-
-    render(<RedactionReviewView runId="red_1" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Finalize' }))
-
-    expect(screen.getByText('Secure redacted PDF')).toBeTruthy()
-    expect(
-      screen.getByText(
-        'Removes accepted content and creates a fixed, share-safe PDF with opaque black bars. The finalized PDF contains no selectable source-text layer.',
-      ),
-    ).toBeTruthy()
-    expect(screen.getByText('Pseudonymised editable copy')).toBeTruthy()
-    expect(
-      screen.getByText(
-        'Replaces accepted content with consistent category tokens for continued internal work. Token-map access remains restricted and audited.',
-      ),
-    ).toBeTruthy()
-    expect(
-      screen.getByRole('button', { name: 'Create secure PDF' }),
-    ).toBeTruthy()
   })
 })

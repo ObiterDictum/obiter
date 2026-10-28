@@ -68,15 +68,21 @@ export const BUDGETS = {
   // for a reason unrelated to its own change. Stage 6b (review panel, decision
   // bar) is expected to trim the panel chrome it replaces; if it does not, it
   // needs its own decision rather than another squeeze.
-  rendererInitialJsBytes: 3_580_000,
+  // 3,500,235 B after the Redact redesign (28 Oct 2026) moved the review desk
+  // into a lazy chunk; lowered to keep the same 2% headroom, so the bytes that
+  // left the entry cannot quietly come back.
+  rendererInitialJsBytes: 3_570_000,
   // 90,525 B, re-recorded after the editor programme grew it from the recorded
   // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
   // entry above settled on for the same reason: the previous ceiling carried
   // 0.5%, 475 B, so any addition larger than that would have failed the build for
   // a reason unrelated to its own change.
   rendererInitialCssBytes: 93_000,
-  // 774,344 B (the PDF viewer chunk).
-  lazyChunksBytes: 850_000,
+  // 877,756 B, re-recorded for the Redact redesign (28 Oct 2026): the PDF
+  // viewer (774,344 B) plus the lazy Redact review desk. The old ceiling left
+  // 75,656 B beside the PDF viewer, less than the unchanged review desk alone
+  // (96,938 B), so moving it out of the entry could never pass. 2% headroom.
+  lazyChunksBytes: 895_000,
   largestLazyChunkBytes: 850_000,
   // 1,046,214 B (pdf.worker.min).
   workerPayloadBytes: 1_150_000,
@@ -93,7 +99,9 @@ export const BUDGETS = {
   // ceiling already sat at 0.04% headroom (5,767,785 B measured, not the
   // recorded 5,655,726 B), so any screen would have failed it. 2.0% headroom,
   // for the same reason as the CSS entry above.
-  applicationPayloadBytes: 5_910_000,
+  // 5,922,329 B after the Redact redesign (28 Oct 2026); its new start,
+  // review and finalise screens net +42 kB. 2% headroom.
+  applicationPayloadBytes: 6_040_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']

@@ -37,7 +37,7 @@ Without Phase 2, the product has detection but no delivery — spans exist but c
 - **Output is irreversible**: redacted output replaces spans with `[REDACTED]` — original text is not recoverable from the output artifact. Pseudonymised output preserves readability but requires the token map for re-identification.
 - **Consistency matters**: pseudonymisation must use the same token for the same entity across the entire document.
 - **Detection source transparency**: the UI must distinguish Rampart model spans, Rampart deterministic spans, and UK supplement spans so reviewers can calibrate trust by source.
-- **Warn, don't block**: reviewers may finalize a run with un-reviewed spans, but the system warns that un-reviewed spans exist.
+- **Warn, don't block**: reviewers may finalize a run with un-reviewed spans, but the system warns that un-reviewed spans exist. _Superseded by the review UI (UI redesign stage 8, below): the UI now blocks finalising while any detected span is undecided, and requires a page-review confirmation. The API is unchanged and still allows it._
 
 ## Goals
 
@@ -436,6 +436,18 @@ The run summary (re-computed on every mutation) includes:
 - Loading state: button shows spinner, disabled
 - On success: redirect to run detail view showing finalized output download link
 - On error: show error message (run not found, wrong state, already finalized)
+
+### Review UI as built (UI redesign stage 8)
+
+The review and output surfaces were rebuilt against `docs/design/ui-redesign/final/`. The API is unchanged; these are the presentation and gating decisions that now differ from the text above.
+
+- **FR5 document view**: spans keep their category fill (contract §2.3 palette) and their detector underline (solid = model, dotted = pattern match, dashed = UK supplement). The decision state is now visible in the document too: an undecided span carries a warning outline, a kept span fades back, so a kept span can no longer look like one that will be removed. The paper keeps the light token set in both themes.
+- **FR6 span list**: one row per span states the category, the decision state in words, the page (where the run has a layout), the detector and `Detection confidence: high|medium|low`, and — for a decided span — who decided it and when. The rows filter by decision state with counts (`All 21 · Unreviewed 3 · Kept 3 · Redacted 15`) as well as by category and detector. Confidence is described as detection confidence, with the meaning of each level and the sentence that it is not a disclosure decision.
+- **FR7 decision actions**: the decisions keep their five values. The bar states the selected span, its state, its reviewer and time, and what detection found and how sure it is, then offers Previous/Next through the ordered list plus Keep visible (R) and Redact (Enter); the remaining decisions (pseudonymise, the two overrides) sit behind a menu. The Ctrl+R/Ctrl+K override chords were already dropped and stay dropped: they collide with browser reload and app search.
+- **FR8 summary bar**: the progress band reads `18 of 21 detected spans decided` with the counts per state, the page count where known, and the statement that detection finds candidates, not everything sensitive.
+- **FR9 finalise**: the dialog states the counts, offers the PDF or the pseudonymised Word copy with what each file contains, and blocks finalising while any detected span is undecided (it offers to show them). A limited detection mode still needs its own acknowledgement. A page-review confirmation is required before the action runs, because a complete list of detected spans does not prove everything sensitive was found. Finalising always renders image-only page PDFs (see [redact/api.md](../api.md)); the disclosure copy is previewed inline and the download stays disabled until the preview has rendered.
+- **Finalised screen**: the disclosure copy and the redaction schedule are two separate sections with different audiences. The copy lists exactly what the download contains, its size from the fetched bytes, and its last-updated time. The schedule is the run's audit report (`GET /api/redaction-runs/:runId/audit?format=markdown`), exported as a separate access-controlled file with a warning that it contains the original redacted text.
+- **Missing fields**: the run payload carries `decidedBy` as an opaque user id and `decidedAt`, so a decided span reads `Redacted by you` for the signed-in user and `another reviewer` otherwise; there is no display name in the payload and no read-accessible member directory for a non-manager. There is no finalised-at field, so the copy shows the run's last-updated time. The page-review confirmation is not recorded anywhere and no reviewer name appears on the finalised copy.
 
 ### FR10: Review UI — TanStack Query Hooks
 

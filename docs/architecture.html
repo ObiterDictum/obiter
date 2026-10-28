@@ -7192,6 +7192,25 @@
                   <td class="id">deployment.md</td>
                 </tr>
                 <tr>
+                  <td>
+                    Redact finalise is blocked by undecided spans in the UI
+                  </td>
+                  <td>
+                    Redact PRD 2 said reviewers may finalise a run with
+                    unreviewed spans after a warning, and the API still allows
+                    it. The review UI (UI redesign stage 8) blocks the action
+                    while any detected span has no decision, and requires a
+                    page-review confirmation, because an undecided span is not a
+                    span somebody chose to keep. The confirmation is not
+                    recorded: no field stores it. See
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/prds/archive/redact-2-review-output.md"
+                      >Redact PRD 2</a
+                    >.
+                  </td>
+                  <td class="id">redact-2-review-output.md</td>
+                </tr>
+                <tr>
                   <td>Search matching is substring-based</td>
                   <td>
                     <code>test</code> matches contested, testimony, testator,
