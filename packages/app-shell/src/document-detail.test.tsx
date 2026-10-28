@@ -17,6 +17,7 @@ const docs = vi.hoisted(() => ({
   useDeleteDocument: vi.fn(),
 }))
 const currentUser = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
+const matters = vi.hoisted(() => ({ useMatter: vi.fn() }))
 const nav = vi.hoisted(() => ({ useNavigate: vi.fn() }))
 const toast = vi.hoisted(() => ({ useToast: vi.fn() }))
 
@@ -42,10 +43,25 @@ mock.module('./components/document-workspace/workspace', () =>
   Object.assign(
     { ...componentsDocumentWorkspaceWorkspaceModuleKeys },
     (() => ({
-      DocumentWorkspace: () => null,
+      // The editor has its own tests; this file checks the route picks the
+      // right surface for the URL's matter.
+      DocumentWorkspace: (props: {
+        version?: { filename?: string } | null
+        document?: { id?: string }
+      }) => (
+        <div data-workspace-stub data-document={props.document?.id}>
+          {props.version?.filename}
+        </div>
+      ),
     }))(),
   ),
 )
+
+const mattersModule = { ...(await import('./matters')) }
+mock.module('./matters', () => ({
+  ...mattersModule,
+  useMatter: matters.useMatter,
+}))
 
 // The former vi.mock('./components/verification-run-panel') is gone: that
 // module does not exist and nothing under src imports it, so vitest tolerated
@@ -170,6 +186,9 @@ beforeEach(() => {
   })
   nav.useNavigate.mockReturnValue(vi.fn())
   toast.useToast.mockReturnValue({ toast: vi.fn() })
+  matters.useMatter.mockReturnValue({
+    data: { id: 'mtr_1', name: 'Northgate Foods v Brightwater Packaging' },
+  })
 })
 
 afterEach(() => {
@@ -177,22 +196,23 @@ afterEach(() => {
 })
 
 describe('DocumentDetailLayoutView — matter mismatch', () => {
-  it('renders the document details region when the document belongs to the URL matter', async () => {
+  it('opens the editor for the document that belongs to the URL matter', async () => {
     docs.useDocument.mockReturnValue(
       successQuery(sampleDocumentDetail('mtr_1')),
     )
-    render(<RouterProvider router={buildRouter('mtr_1', 'doc_1')} />)
-    await waitFor(() => {
-      expect(screen.getByText('Document details')).toBeTruthy()
-    })
-    // The metadata starts collapsed so the document opens first, while the
-    // immutable version id stays readable in the header without expanding.
-    expect(screen.getByText('Document details').closest('details')?.open).toBe(
-      false,
+    const { container } = render(
+      <RouterProvider router={buildRouter('mtr_1', 'doc_1')} />,
     )
-    expect(
-      screen.getByRole('heading', { level: 1 }).nextSibling?.textContent,
-    ).toContain('ver_1')
+    await waitFor(() => {
+      expect(container.querySelector('[data-workspace-stub]')).not.toBeNull()
+    })
+    // The editor owns the filename and version header now, not a page title
+    // above it; the redaction-runs contract region stays below the editor.
+    expect(container.querySelector('[data-workspace-stub]')?.textContent).toBe(
+      'brief.pdf',
+    )
+    expect(screen.queryByText('Document details')).toBeNull()
+    expect(screen.getByRole('region', { name: 'Redaction runs' })).toBeTruthy()
   })
 
   it('renders a mismatch notice instead of the metadata when the document belongs to a different matter', async () => {

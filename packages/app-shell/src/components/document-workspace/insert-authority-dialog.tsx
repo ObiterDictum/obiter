@@ -3,8 +3,10 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogCloseButton,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
   Input,
 } from '@obiter/ui'
@@ -44,6 +46,7 @@ export function InsertAuthorityDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="sm">
+        <DialogCloseButton />
         <DialogTitle>Insert authority</DialogTitle>
         <DialogDescription>
           Inserts the citation at the caret. Inserting does not look the
@@ -86,7 +89,7 @@ export function InsertAuthorityDialog({
               ) : undefined
             }
           />
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <DialogClose
               render={<Button type="button" variant="ghost" size="sm" />}
             >
@@ -99,7 +102,7 @@ export function InsertAuthorityDialog({
             >
               Insert
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

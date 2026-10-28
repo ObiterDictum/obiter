@@ -3,8 +3,10 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogCloseButton,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from '@obiter/ui'
 import type { StructuralInsertOutcome } from '../../document-structure-toolbar'
@@ -36,6 +38,7 @@ export function InsertCrossReferenceDialog({
       }}
     >
       <DialogContent size="sm">
+        <DialogCloseButton />
         <DialogTitle>Insert cross-reference</DialogTitle>
         <DialogDescription>
           Inserts a reference to the chosen paragraph at the cursor.
@@ -43,7 +46,7 @@ export function InsertCrossReferenceDialog({
         <div
           role="listbox"
           aria-label="Reference target"
-          className="flex max-h-64 flex-col overflow-y-auto rounded-md border border-[#d8d4cc]"
+          className="flex max-h-64 flex-col overflow-y-auto rounded-md bg-fill"
         >
           {targets.map((target) => (
             <button
@@ -51,8 +54,8 @@ export function InsertCrossReferenceDialog({
               type="button"
               role="option"
               aria-selected={targetId === target.id}
-              className={`truncate px-3 py-2 text-left text-[13px] hover:bg-[#eef3fb] ${
-                targetId === target.id ? 'bg-[#dbe7f8]' : ''
+              className={`truncate px-3 py-2 text-left text-meta hover:bg-fill-hover ${
+                targetId === target.id ? 'bg-brand-soft' : ''
               }`}
               onClick={() => {
                 setTargetId(target.id)
@@ -63,17 +66,17 @@ export function InsertCrossReferenceDialog({
             </button>
           ))}
           {targets.length === 0 ? (
-            <p className="px-3 py-2 text-[13px] text-[#6b6862]">
+            <p className="px-3 py-2 text-meta text-muted">
               No paragraphs to reference.
             </p>
           ) : null}
         </div>
         {error ? (
-          <p role="alert" className="text-[12px] text-[#9a4f3c]">
+          <p role="alert" className="text-caption text-danger">
             {error}
           </p>
         ) : null}
-        <div className="flex justify-end gap-2">
+        <DialogFooter>
           <DialogClose
             render={<Button type="button" variant="ghost" size="sm" />}
           >
@@ -97,7 +100,7 @@ export function InsertCrossReferenceDialog({
           >
             Insert
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

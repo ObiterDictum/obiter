@@ -1,12 +1,18 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { DotsThree } from '@phosphor-icons/react'
 import {
   Button,
+  Popover,
+  PopoverPopup,
+  PopoverPortal,
+  PopoverPositioner,
   TabsTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
   cn,
 } from '@obiter/ui'
+import { useMediaQuery } from '../../use-media-query'
 
 export function RibbonTab({
   value,
@@ -19,7 +25,7 @@ export function RibbonTab({
     <TabsTrigger
       value={value}
       className={cn(
-        'rounded-none border-b-2 border-transparent px-3 py-2 text-[13px] font-medium tracking-wide text-muted pointer-coarse:min-h-11 pointer-coarse:items-center',
+        'relative -mb-px h-[34px] rounded-none border-b-2 border-transparent px-3 text-caption text-subtle pointer-coarse:min-h-11',
         'hover:text-ink',
         'data-[selected]:border-brand data-[selected]:bg-transparent data-[selected]:text-ink',
       )}
@@ -37,12 +43,12 @@ export function ToolbarGroup({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-[3.25rem] shrink-0 items-stretch">
-      <div className="flex flex-col items-center justify-between gap-1 px-2.5 py-0.5">
-        <div className="flex flex-col items-center justify-center gap-0.5">
+    <div className="flex shrink-0 items-stretch">
+      <div className="flex min-h-12 flex-col items-center justify-between gap-1 px-1 py-1 first:ps-10 max-compact:first:ps-6">
+        <div className="flex flex-col items-center justify-center gap-1">
           {children}
         </div>
-        <span className="text-[10px] leading-none font-medium tracking-wide text-subtle">
+        <span className="text-caption leading-none whitespace-nowrap text-subtle">
           {label}
         </span>
       </div>
@@ -53,7 +59,7 @@ export function ToolbarGroup({
 
 export function ToolbarRow({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center justify-center gap-0.5">{children}</div>
+    <div className="flex items-center justify-center gap-px">{children}</div>
   )
 }
 
@@ -107,7 +113,7 @@ export function IconButton({
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
       size="sm"
-      className="h-7 w-7 px-0 pointer-coarse:h-11 pointer-coarse:w-11"
+      className="h-6 w-6 rounded-sm px-0 text-muted pointer-coarse:h-11 pointer-coarse:w-11"
       aria-label={caption}
       aria-pressed={pressed}
       disabled={disabled || unavailable}
@@ -158,7 +164,7 @@ export function CaptionButton({
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
       size="sm"
-      className="h-7 max-w-32 px-2 text-[11px] pointer-coarse:h-11"
+      className="h-6 max-w-32 rounded-sm px-1.5 text-caption pointer-coarse:h-11"
       aria-label={caption}
       aria-pressed={pressed}
       disabled={disabled || unavailable}
@@ -207,7 +213,7 @@ export function RibbonSelect({
       aria-label={caption}
       disabled={disabled || unavailable}
       className={cn(
-        'h-7 rounded-md border border-line bg-canvas px-1.5 text-[12px] text-ink pointer-coarse:h-11',
+        'h-6 rounded-sm border-0 bg-fill px-1.5 text-caption text-muted pointer-coarse:h-11',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,
       )}
@@ -223,5 +229,62 @@ export function RibbonSelect({
         </option>
       ))}
     </select>
+  )
+}
+
+/**
+ * RibbonSecondary — the groups a narrow window drops from the row.
+ *
+ * At 1440 every group is inline, as the mock-up shows. At 1024 and under the
+ * row would wrap, so the secondary groups move into one "More" popover instead:
+ * the same groups, the same controls, one extra click. The popover is
+ * non-modal, so the document stays visible and editable behind it.
+ */
+export function RibbonSecondary({
+  children,
+  label,
+}: {
+  children: ReactNode
+  label: string
+}) {
+  const compact = useMediaQuery('(max-width: 1024px)')
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  if (!compact) return <>{children}</>
+  return (
+    <div className="ml-auto flex shrink-0 items-stretch">
+      <div className="flex min-h-12 flex-col items-center justify-between gap-1 px-3 py-1">
+        <div className="flex min-h-6 items-center">
+          <Button
+            ref={setAnchor}
+            variant="ghost"
+            size="sm"
+            aria-label={label}
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+            iconStart={<DotsThree size={16} aria-hidden />}
+          >
+            More
+          </Button>
+        </div>
+        <span aria-hidden className="text-caption leading-none text-subtle">
+          More
+        </span>
+      </div>
+      <div className="w-px self-stretch bg-line" aria-hidden />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverPortal>
+          <PopoverPositioner anchor={anchor} side="bottom" align="end">
+            <PopoverPopup
+              aria-label={label}
+              className="flex max-w-[min(100vw-var(--obiter-space-24),42rem)] flex-wrap items-stretch p-1"
+            >
+              {children}
+            </PopoverPopup>
+          </PopoverPositioner>
+        </PopoverPortal>
+      </Popover>
+    </div>
   )
 }

@@ -20,7 +20,12 @@ import {
   X,
 } from '@phosphor-icons/react'
 import type { DocumentFindToolbar, DocumentReviewToolbar } from './ribbon-types'
-import { IconButton, ToolbarGroup, ToolbarRow } from './ribbon-primitives'
+import {
+  IconButton,
+  RibbonSecondary,
+  ToolbarGroup,
+  ToolbarRow,
+} from './ribbon-primitives'
 import { FindControls } from './ribbon-find'
 import { revealDocumentRedactionRuns } from './document-actions'
 
@@ -68,7 +73,7 @@ export function ReviewRibbon({
   const reviewAbsent = 'Change review is not available for this document.'
   return (
     <div
-      className="flex min-w-0 flex-wrap items-stretch"
+      className="flex min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto"
       role="toolbar"
       aria-label="Review"
     >
@@ -166,40 +171,42 @@ export function ReviewRibbon({
           />
         </ToolbarRow>
       </ToolbarGroup>
-      <ToolbarGroup label="Versions">
-        <IconButton
-          label="Compare versions"
-          soon
-          icon={<Files size={16} aria-hidden />}
-        />
-      </ToolbarGroup>
-      <ToolbarGroup label="Redact">
-        <IconButton
-          label="Redact this document"
-          onClick={revealDocumentRedactionRuns}
-          icon={<EyeSlash size={16} aria-hidden />}
-        />
-      </ToolbarGroup>
-      <ToolbarGroup label="Export">
-        <ToolbarRow>
+      <RibbonSecondary label="More Review tools">
+        <ToolbarGroup label="Versions">
           <IconButton
-            label="Export"
-            onClick={onExportText}
-            icon={<DownloadSimple size={16} aria-hidden />}
+            label="Compare versions"
+            soon
+            icon={<Files size={16} aria-hidden />}
           />
+        </ToolbarGroup>
+        <ToolbarGroup label="Redact">
           <IconButton
-            label="Share-safe export"
-            hint="Removes metadata and comments, and unlinks external hyperlinks"
-            onClick={onExportShareSafe}
-            icon={<LockSimple size={16} aria-hidden />}
+            label="Redact this document"
+            onClick={revealDocumentRedactionRuns}
+            icon={<EyeSlash size={16} aria-hidden />}
           />
-          <IconButton
-            label="Print"
-            onClick={onPrint}
-            icon={<Printer size={16} aria-hidden />}
-          />
-        </ToolbarRow>
-      </ToolbarGroup>
+        </ToolbarGroup>
+        <ToolbarGroup label="Export">
+          <ToolbarRow>
+            <IconButton
+              label="Export"
+              onClick={onExportText}
+              icon={<DownloadSimple size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Share-safe export"
+              hint="Removes metadata and comments, and unlinks external hyperlinks"
+              onClick={onExportShareSafe}
+              icon={<LockSimple size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Print"
+              onClick={onPrint}
+              icon={<Printer size={16} aria-hidden />}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+      </RibbonSecondary>
     </div>
   )
 }

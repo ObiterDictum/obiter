@@ -32,18 +32,11 @@ export function LegalChecksPanel({
     target.current?.scrollIntoView({ block: 'nearest' })
   }, [focus])
   return (
-    <aside
-      className="flex w-full flex-col gap-4 lg:max-w-sm"
-      aria-label="Legal checks"
-    >
-      <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold text-ink">Legal checks</h3>
-        <p className="text-xs leading-relaxed text-muted">
-          Stored fields and defined-term marks, including pending edits.
-          Findings name things to review; they are not a verdict on the
-          document.
-        </p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <p className="text-caption text-muted">
+        Stored fields and defined-term marks, including pending edits. Findings
+        name things to review; they are not a verdict on the document.
+      </p>
       {checks === null ? (
         <EmptyState
           title="Checks unavailable"
@@ -52,9 +45,7 @@ export function LegalChecksPanel({
       ) : (
         <>
           <section ref={termsRef} className="flex flex-col gap-1">
-            <h4 className="text-xs font-semibold tracking-wide text-muted uppercase">
-              Defined terms
-            </h4>
+            <h4 className="text-item text-ink">Defined terms</h4>
             {checks.terms.terms.length > 0 ? (
               <p className="text-xs leading-relaxed text-muted">
                 {checks.terms.terms
@@ -69,9 +60,7 @@ export function LegalChecksPanel({
             />
           </section>
           <section ref={referencesRef} className="flex flex-col gap-1">
-            <h4 className="text-xs font-semibold tracking-wide text-muted uppercase">
-              Cross-references
-            </h4>
+            <h4 className="text-item text-ink">Cross-references</h4>
             <p className="text-xs leading-relaxed text-muted">
               {checks.references.fields === 0
                 ? 'No stored reference fields found.'
@@ -88,7 +77,7 @@ export function LegalChecksPanel({
           </section>
         </>
       )}
-    </aside>
+    </div>
   )
 }
 

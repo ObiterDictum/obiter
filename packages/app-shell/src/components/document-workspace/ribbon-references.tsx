@@ -20,6 +20,7 @@ import type { DocumentStructureToolbar, LegalChecksFocus } from './ribbon-types'
 import {
   IconButton,
   RibbonSelect,
+  RibbonSecondary,
   ToolbarGroup,
   ToolbarRow,
 } from './ribbon-primitives'
@@ -38,6 +39,7 @@ export function ReferencesRibbon({
   onCitationStyle,
   legalChecks,
   structure,
+  onOpenVerify,
 }: {
   authoritiesOpen: boolean
   onToggleAuthorities: () => void
@@ -53,6 +55,8 @@ export function ReferencesRibbon({
     onOpen: (focus: LegalChecksFocus) => void
   }
   structure?: DocumentStructureToolbar
+  /** Opens the docked Verify panel; absent on surfaces without one. */
+  onOpenVerify?: () => void
 }) {
   const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
   const verification = useVerificationWorkspace()
@@ -67,7 +71,7 @@ export function ReferencesRibbon({
       : null
   return (
     <div
-      className="flex min-w-0 flex-wrap items-stretch"
+      className="flex min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto"
       role="toolbar"
       aria-label="References"
     >
@@ -85,7 +89,10 @@ export function ReferencesRibbon({
               verification ? startAvailability?.available === false : undefined
             }
             disabledReason={verifyReason ?? undefined}
-            onClick={() => verification?.revealStart()}
+            onClick={() => {
+              onOpenVerify?.()
+              verification?.revealStart()
+            }}
             icon={<ShieldCheck size={16} aria-hidden />}
           />
           <IconButton
@@ -147,72 +154,74 @@ export function ReferencesRibbon({
           />
         </ToolbarRow>
       </ToolbarGroup>
-      <ToolbarGroup label="Cross-references">
-        <ToolbarRow>
-          <IconButton
-            label="Insert cross-reference"
-            disabled={
-              !structure || Boolean(structure.crossReferenceUnavailable)
-            }
-            disabledReason={structure?.crossReferenceUnavailable}
-            onClick={() => setCrossReferenceOpen(true)}
-            icon={<BookOpen size={16} aria-hidden />}
-          />
-          <IconButton
-            label="Check cross-references"
-            pressed={legalChecks?.open === 'references'}
-            disabled={!legalChecks}
-            onClick={() => legalChecks?.onOpen('references')}
-            icon={<CheckCircle size={16} aria-hidden />}
-          />
-        </ToolbarRow>
-      </ToolbarGroup>
-      <ToolbarGroup label="Notes">
-        <ToolbarRow>
-          <IconButton
-            label={
-              structure?.editingStoryKind === 'footnotes'
-                ? 'Close footnotes'
-                : 'Insert footnote'
-            }
-            pressed={structure?.editingStoryKind === 'footnotes'}
-            disabled={
-              !structure ||
-              (structure.editingStoryKind !== 'footnotes' &&
-                Boolean(structure.footnoteUnavailable))
-            }
-            disabledReason={structure?.footnoteUnavailable}
-            onClick={() => {
-              if (structure?.editingStoryKind === 'footnotes') {
-                structure.onCloseStory()
-              } else {
-                structure?.onInsertFootnote()
+      <RibbonSecondary label="More Reference tools">
+        <ToolbarGroup label="Cross-references">
+          <ToolbarRow>
+            <IconButton
+              label="Insert cross-reference"
+              disabled={
+                !structure || Boolean(structure.crossReferenceUnavailable)
               }
-            }}
-            icon={<Note size={16} aria-hidden />}
-          />
-          <IconButton
-            label="Table of contents"
-            onClick={structure?.onInsertTableOfContents}
-            disabled={
-              !structure || Boolean(structure.tableOfContentsUnavailable)
+              disabledReason={structure?.crossReferenceUnavailable}
+              onClick={() => setCrossReferenceOpen(true)}
+              icon={<BookOpen size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Check cross-references"
+              pressed={legalChecks?.open === 'references'}
+              disabled={!legalChecks}
+              onClick={() => legalChecks?.onOpen('references')}
+              icon={<CheckCircle size={16} aria-hidden />}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+        <ToolbarGroup label="Notes">
+          <ToolbarRow>
+            <IconButton
+              label={
+                structure?.editingStoryKind === 'footnotes'
+                  ? 'Close footnotes'
+                  : 'Insert footnote'
+              }
+              pressed={structure?.editingStoryKind === 'footnotes'}
+              disabled={
+                !structure ||
+                (structure.editingStoryKind !== 'footnotes' &&
+                  Boolean(structure.footnoteUnavailable))
+              }
+              disabledReason={structure?.footnoteUnavailable}
+              onClick={() => {
+                if (structure?.editingStoryKind === 'footnotes') {
+                  structure.onCloseStory()
+                } else {
+                  structure?.onInsertFootnote()
+                }
+              }}
+              icon={<Note size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Table of contents"
+              onClick={structure?.onInsertTableOfContents}
+              disabled={
+                !structure || Boolean(structure.tableOfContentsUnavailable)
+              }
+              disabledReason={structure?.tableOfContentsUnavailable}
+              icon={<ListChecks size={16} aria-hidden />}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+        <InsertCrossReferenceDialog
+          open={crossReferenceOpen}
+          onOpenChange={setCrossReferenceOpen}
+          targets={structure?.crossReferenceTargets ?? []}
+          onInsert={(targetParagraphId) =>
+            structure?.onInsertCrossReference(targetParagraphId) ?? {
+              inserted: false,
+              reason: 'The document is still loading.',
             }
-            disabledReason={structure?.tableOfContentsUnavailable}
-            icon={<ListChecks size={16} aria-hidden />}
-          />
-        </ToolbarRow>
-      </ToolbarGroup>
-      <InsertCrossReferenceDialog
-        open={crossReferenceOpen}
-        onOpenChange={setCrossReferenceOpen}
-        targets={structure?.crossReferenceTargets ?? []}
-        onInsert={(targetParagraphId) =>
-          structure?.onInsertCrossReference(targetParagraphId) ?? {
-            inserted: false,
-            reason: 'The document is still loading.',
           }
-        }
-      />
+        />
+      </RibbonSecondary>
     </div>
   )
 }

@@ -34,6 +34,7 @@ import { LINE_SPACING_OPTIONS } from '../../document-paragraph-format'
 import {
   CaptionButton,
   IconButton,
+  RibbonSecondary,
   RibbonSelect,
   ToolbarGroup,
   ToolbarRow,
@@ -76,7 +77,7 @@ const FONT_COLOURS = [
 ]
 
 const DEFAULT_FONT = { value: '', label: 'Default font' }
-const DEFAULT_SIZE = { value: '', label: 'Default size' }
+const DEFAULT_SIZE = { value: '', label: 'Default' }
 const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
 
 /**
@@ -116,7 +117,7 @@ export function HomeRibbon({
   const editing = canEdit && Boolean(format)
   return (
     <div
-      className="flex min-w-0 flex-wrap items-stretch"
+      className="flex min-w-0 flex-1 flex-nowrap items-stretch overflow-x-auto"
       role="toolbar"
       aria-label="Home"
     >
@@ -152,7 +153,7 @@ export function HomeRibbon({
         <ToolbarRow>
           <RibbonSelect
             label="Font"
-            className="w-[8.5rem]"
+            className="w-30"
             value={format?.fontFamily ?? ''}
             options={[DEFAULT_FONT, ...FONT_FACES]}
             disabled={!editing}
@@ -163,7 +164,7 @@ export function HomeRibbon({
           />
           <RibbonSelect
             label="Font size"
-            className="w-12"
+            className="w-20"
             value={
               format?.fontSize === null || format?.fontSize === undefined
                 ? ''
@@ -332,7 +333,7 @@ export function HomeRibbon({
           />
           <RibbonSelect
             label="Line spacing"
-            className="w-14"
+            className="w-16"
             value={format?.lineSpacing ?? ''}
             options={LINE_SPACING_OPTIONS}
             disabled={!editing}
@@ -340,36 +341,38 @@ export function HomeRibbon({
           />
         </ToolbarRow>
       </ToolbarGroup>
-      <StyleGallery format={format} />
-      <ToolbarGroup label="Editing">
-        <ToolbarRow>
-          <IconButton
-            label="Insert paragraph"
-            disabled={!canEdit}
-            onClick={onInsertParagraph}
-            icon={<Plus size={16} aria-hidden />}
-          />
-          <IconButton
-            label="Delete paragraph"
-            disabled={!canEdit || deleteParagraphReason !== undefined}
-            disabledReason={deleteParagraphReason}
-            onClick={onDeleteParagraph}
-            icon={<Trash size={16} aria-hidden />}
-          />
-          <IconButton
-            label="Undo"
-            disabled={!canEdit || !canUndo}
-            onClick={onUndo}
-            icon={<ArrowCounterClockwise size={16} aria-hidden />}
-          />
-          <IconButton
-            label="Redo"
-            disabled={!canEdit || !canRedo}
-            onClick={onRedo}
-            icon={<ArrowClockwise size={16} aria-hidden />}
-          />
-        </ToolbarRow>
-      </ToolbarGroup>
+      <RibbonSecondary label="More Home tools">
+        <StyleGallery format={format} />
+        <ToolbarGroup label="Editing">
+          <ToolbarRow>
+            <IconButton
+              label="Insert paragraph"
+              disabled={!canEdit}
+              onClick={onInsertParagraph}
+              icon={<Plus size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Delete paragraph"
+              disabled={!canEdit || deleteParagraphReason !== undefined}
+              disabledReason={deleteParagraphReason}
+              onClick={onDeleteParagraph}
+              icon={<Trash size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Undo"
+              disabled={!canEdit || !canUndo}
+              onClick={onUndo}
+              icon={<ArrowCounterClockwise size={16} aria-hidden />}
+            />
+            <IconButton
+              label="Redo"
+              disabled={!canEdit || !canRedo}
+              onClick={onRedo}
+              icon={<ArrowClockwise size={16} aria-hidden />}
+            />
+          </ToolbarRow>
+        </ToolbarGroup>
+      </RibbonSecondary>
     </div>
   )
 }
@@ -392,7 +395,7 @@ function StyleGallery({ format }: { format?: DocumentFormatToolbar }) {
         <ToolbarRow>
           <RibbonSelect
             label="Paragraph style"
-            className="max-w-36"
+            className="w-28"
             value=""
             options={[{ value: '', label: 'No paragraph styles' }]}
             disabled
@@ -420,7 +423,7 @@ function StyleGallery({ format }: { format?: DocumentFormatToolbar }) {
         ))}
         <RibbonSelect
           label="Paragraph style"
-          className="max-w-36"
+          className="w-28"
           value={mixed ? MIXED_STYLE_VALUE : format.paragraphStyleId}
           options={[
             ...(mixed

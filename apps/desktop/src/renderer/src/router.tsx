@@ -156,6 +156,9 @@ const documentDetailRoute = createRoute({
         documentQueryOptions(params.documentId),
       ),
     )
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.prefetchQuery(matterQueryOptions(params.matterId)),
+    )
   },
   component: DesktopDocumentDetailRoute,
 })

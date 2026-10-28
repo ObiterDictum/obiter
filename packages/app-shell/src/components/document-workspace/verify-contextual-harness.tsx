@@ -4,7 +4,7 @@ import '@obiter/test-dom'
 // suites can each read as the behaviour they cover instead of restating setup.
 // It is deliberately not named `*.test.*`: only the suites are collected.
 import { createElement, type PropsWithChildren } from 'react'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -484,7 +484,11 @@ export function mount(
     isError: false,
     findings,
   })
-  return render(workspaceElement(documentId), { wrapper })
+  const result = render(workspaceElement(documentId), { wrapper })
+  // Findings live in the docked Verify panel now, not a strip above the page:
+  // open it through the header chip so the suites exercise the real control.
+  fireEvent.click(screen.getByRole('button', { name: /^Verify:/ }))
+  return result
 }
 
 beforeEach(() => {
