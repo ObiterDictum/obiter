@@ -119,7 +119,10 @@ async function openUploadedDocument(
   await expect(
     page.getByRole('heading', { name: 'Matters', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
-  await page.getByRole('button', { name: 'Create matter' }).first().click()
+  await page
+    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
+    .first()
+    .click()
   await page.getByLabel('Matter name').fill(matterName)
   await page.getByLabel('Primary jurisdiction').fill('England & Wales')
   await page

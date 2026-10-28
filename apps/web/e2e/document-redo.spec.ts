@@ -88,7 +88,10 @@ async function openFixtureDocument(page: Page, matter = matterName) {
 
   const matterLink = page.getByRole('link', { name: matter }).first()
   if ((await matterLink.count()) === 0) {
-    await page.getByRole('button', { name: 'Create matter' }).first().click()
+    await page
+      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
+      .first()
+      .click()
     await check(page.getByRole('dialog')).toBeVisible({ timeout: 20_000 })
     await page.getByLabel('Matter name').fill(matter)
     await page.getByLabel('Primary jurisdiction').fill('England & Wales')

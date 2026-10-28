@@ -2225,6 +2225,30 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">Matters</td>
+                  <td>
+                    Routes <code>/matters</code>,
+                    <code>/matters/:matterId</code>
+                  </td>
+                  <td>
+                    The list is a table of every matter (documents, open work,
+                    last activity) with search and legal-domain filters over the
+                    fields the API returns, and the selected matter beside it.
+                    Below 1181px the preview is a modal drawer instead of a
+                    column. “Open work” is the same attention items Home ranks,
+                    grouped by matter (<code>views/matters-rows.ts</code>), so
+                    the queue, the list and the sidebar count cannot disagree.
+                    The matter page shows the document table with each
+                    document’s Verify state, the details rail, upload and new
+                    document, and a share dialog listing named people with
+                    access from
+                    <code>GET /api/matters/:matterId/shares</code> (owner only,
+                    as the API requires). There is no matter-level activity,
+                    artefact, archive or export endpoint, so none of those is
+                    shown.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">Home</td>
                   <td>Route <code>/</code></td>
                   <td>
@@ -2569,9 +2593,10 @@
               <dl class="kv">
                 <dt>Views</dt>
                 <dd>
-                  home · LegalSearchView · matters · document-detail ·
-                  CaseLawDocumentView · settings · verify · sign-in · sign-up ·
-                  accept-invite · forgot-password · reset-password
+                  home · LegalSearchView · matters · matter-detail ·
+                  document-detail · CaseLawDocumentView · settings · verify ·
+                  sign-in · sign-up · accept-invite · forgot-password ·
+                  reset-password
                 </dd>
                 <dt>Shell</dt>
                 <dd>

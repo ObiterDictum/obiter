@@ -130,10 +130,13 @@
   --obiter-text-item-weight: 500;
   --obiter-text-body: 14px;
   --obiter-text-body-line-height: 1.55;
+  --obiter-text-body-weight: 400;
   --obiter-text-meta: 13px;
   --obiter-text-meta-line-height: 1.45;
+  --obiter-text-meta-weight: 400;
   --obiter-text-caption: 12px;
   --obiter-text-caption-line-height: 1.4;
+  --obiter-text-caption-weight: 400;
 }
 
 [data-theme='dark'] {
