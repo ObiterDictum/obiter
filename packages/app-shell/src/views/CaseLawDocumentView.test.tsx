@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { ToastProvider } from '@obiter/ui'
 
 // The view renders <Link to="/search"> and reads useNavigate-free; mock the
 // router pieces it touches so the test does not need a full router tree.
@@ -99,12 +100,16 @@ function renderView(caseId = 'uksc-2024-3') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
+  // The page's source actions file against a matter and confirm with a toast,
+  // so the provider the frame mounts is here too.
   return render(
-    <QueryClientProvider client={queryClient}>
-      <Suspense fallback={<div>Loading case…</div>}>
-        <CaseLawDocumentView caseId={caseId} />
-      </Suspense>
-    </QueryClientProvider>,
+    <ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div>Loading case…</div>}>
+          <CaseLawDocumentView caseId={caseId} />
+        </Suspense>
+      </QueryClientProvider>
+    </ToastProvider>,
   )
 }
 
@@ -179,6 +184,48 @@ describe('CaseLawDocumentView', () => {
     // them from the title.
     expect(screen.queryByText('Judges')).toBeNull()
     expect(screen.queryByText('Panel')).toBeNull()
+  })
+
+  it('shows the recorded retrieval date when the source carries one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          ...DOCUMENT_PAYLOAD,
+          acquiredAt: '2026-09-06T14:49:54.709Z',
+        }),
+      ),
+    )
+    renderView()
+
+    await screen.findByRole('document')
+    // The corpus read this judgment on this date: it is shown, not replaced
+    // by the "not recorded" warning.
+    expect(screen.getByText('Retrieved 6 Sept 2026')).toBeTruthy()
+    expect(screen.queryByText('Retrieval date not recorded')).toBeNull()
+  })
+
+  it('offers the original on The National Archives when the load fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockRejectedValue(new Error('network down')),
+    )
+    // A Find Case Law slug names the source even though the record failed to
+    // load, so the failure page is not a dead end.
+    renderView('uksc/2024/3')
+
+    expect(
+      await screen.findByText('Judgment could not be loaded', undefined, {
+        timeout: 3000,
+      }),
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole('link', {
+          name: /Open original on The National Archives/,
+        })
+        .getAttribute('href'),
+    ).toBe('https://caselaw.nationalarchives.gov.uk/uksc/2024/3')
   })
 
   it('shows a source failure with a retry instead of an empty judgment', async () => {

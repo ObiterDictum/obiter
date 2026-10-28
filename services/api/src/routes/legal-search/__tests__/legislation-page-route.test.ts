@@ -44,8 +44,12 @@ const currentProvision = {
   documentIdentity: 'ukpga/2010/15',
   labelPath: 'section/13',
   label: 's. 13',
+  heading: 'Direct discrimination',
   extent: 'E+W+S',
   text: 'Direct discrimination applies here.',
+  ownText: '',
+  acquiredAt: '2026-09-06T14:49:54.709Z',
+  parentLabelPath: 'part/2/chapter/2',
   hasUnappliedEffects: false,
   effectsCheckedAt: '2026-09-01T00:00:00Z',
   title: 'Equality Act 2010',
@@ -53,9 +57,37 @@ const currentProvision = {
   sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
 }
 
-function createApp(provision = currentProvision) {
+const currentSubsections = [
+  {
+    ...currentProvision,
+    id: 'ukpga/2010/15/section/13/1',
+    labelPath: 'section/13/1',
+    label: 's. 13(1)',
+    heading: '',
+    parentLabelPath: 'section/13',
+    ownText: 'A person (A) discriminates against another (B).',
+  },
+  {
+    ...currentProvision,
+    id: 'ukpga/2010/15/section/13/2',
+    labelPath: 'section/13/2',
+    label: 's. 13(2)',
+    heading: '',
+    parentLabelPath: 'section/13',
+    ownText: 'If the protected characteristic is age, subsection (1) applies.',
+  },
+]
+
+function createApp(
+  provision = currentProvision,
+  tree = [provision, ...currentSubsections],
+) {
   const pool = {
-    query: vi.fn(async () => ({ rows: [provision] })),
+    // The page reads the provision row, then its tree; both come from this
+    // double, so the tree is told apart by the recursive query's shape.
+    query: vi.fn(async (sql: string) => ({
+      rows: sql.includes('with recursive') ? tree : [provision],
+    })),
   }
   const proxy = createLegalSearchProxyRoutes(createTestApiEnv(), undefined, {
     legislation: {
@@ -82,10 +114,29 @@ describe('GET /api/search/legislation/*', () => {
     )
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
-      provision: { text?: string; legislationStatus: string }
+      provision: {
+        text?: string
+        heading?: string
+        acquiredAt?: string
+        legislationStatus: string
+        subsections?: Array<{ label: string; text?: string }>
+      }
     }
     expect(body.provision.legislationStatus).toBe('current')
-    expect(body.provision.text).toContain('Direct discrimination')
+    expect(body.provision.heading).toBe('Direct discrimination')
+    // The retrieval date is served, so the page does not warn it is missing.
+    expect(body.provision.acquiredAt).toBe('2026-09-06T14:49:54.709Z')
+    // The subsection structure is served with each level's own words, so a
+    // section page can render s. 13(1) and s. 13(2) nested under s. 13.
+    expect(
+      body.provision.subsections?.map((node) => [node.label, node.text]),
+    ).toEqual([
+      ['s. 13(1)', 'A person (A) discriminates against another (B).'],
+      [
+        's. 13(2)',
+        'If the protected characteristic is age, subsection (1) applies.',
+      ],
+    ])
   })
 
   it('withholds amended text on the page too', async () => {
@@ -99,7 +150,13 @@ describe('GET /api/search/legislation/*', () => {
     }).request('/api/search/legislation/ukpga/2010/15/section/80')
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
-      provision: { text?: string; legislationStatus: string }
+      provision: {
+        text?: string
+        heading?: string
+        acquiredAt?: string
+        legislationStatus: string
+        subsections?: Array<{ label: string; text?: string }>
+      }
     }
     expect(body.provision.legislationStatus).toBe('amended_not_held')
     expect(body.provision).not.toHaveProperty('text')
@@ -116,7 +173,13 @@ describe('GET /api/search/legislation/*', () => {
     )
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
-      provision: { text?: string; legislationStatus: string }
+      provision: {
+        text?: string
+        heading?: string
+        acquiredAt?: string
+        legislationStatus: string
+        subsections?: Array<{ label: string; text?: string }>
+      }
     }
     expect(body.provision.legislationStatus).toBe('amended_not_held')
     expect(body.provision).not.toHaveProperty('text')

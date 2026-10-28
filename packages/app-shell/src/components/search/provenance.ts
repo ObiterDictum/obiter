@@ -1,8 +1,4 @@
-import type {
-  CaseLawSnippet,
-  LegalSearchResult,
-  LegislationSearchResultHit,
-} from './searchTypes'
+import type { CaseLawSnippet, LegislationSearchResultHit } from './searchTypes'
 
 /**
  * The source's own name, read from the URL the API stored. Never assumed: a
@@ -24,6 +20,17 @@ export function sourceNameForUrl(url: string): string {
     return 'legislation.gov.uk'
   }
   return host
+}
+
+/**
+ * The Find Case Law page for a stored judgment, derived from a document id
+ * that is the provider's own slug (uksc/2018/24). Null for any other id: a
+ * page whose record failed to load must not point at a URL we guessed wrong.
+ */
+export function findCaseLawUrlForDocumentId(documentId: string): string | null {
+  return /^[a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*\/\d{4}\/\d+$/u.test(documentId)
+    ? `https://caselaw.nationalarchives.gov.uk/${documentId}`
+    : null
 }
 
 /** The pinpoint a snippet came from, or null when the data has no paragraph. */
@@ -48,8 +55,4 @@ export function legislationExtractLabel(
   hit: LegislationSearchResultHit,
 ): string {
   return `Legislation extract · ${hit.provisionLabel}`
-}
-
-export function judgmentIsHeld(result: LegalSearchResult): boolean {
-  return Boolean(result.snippets?.some((snippet) => snippet.text.trim()))
 }

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { ToastProvider } from '@obiter/ui'
 
 // The real module's export names as undefined: bun links named imports
 // statically and rejects a mock that omits one, while vitest left an
@@ -84,12 +85,16 @@ function renderView(path: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
+  // The page's source actions confirm with a toast, so the provider the frame
+  // mounts is here too.
   return render(
-    <QueryClientProvider client={queryClient}>
-      <Suspense fallback={<div>Loading</div>}>
-        <LegislationProvisionView provisionPath={path} />
-      </Suspense>
-    </QueryClientProvider>,
+    <ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={<div>Loading</div>}>
+          <LegislationProvisionView provisionPath={path} />
+        </Suspense>
+      </QueryClientProvider>
+    </ToastProvider>,
   )
 }
 
@@ -139,6 +144,75 @@ describe('LegislationProvisionView', () => {
     })
     expect(screen.getByText(/amendments that have been recorded/)).toBeTruthy()
     expect(screen.queryByText('Direct discrimination applies here.')).toBeNull()
+  })
+
+  it('renders a section heading and its subsections nested, each citable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          provision: {
+            ...CURRENT_PAYLOAD.provision,
+            heading: 'Direct discrimination',
+            text: '',
+            acquiredAt: '2026-09-06T14:49:54.709Z',
+            subsections: [
+              {
+                label: 's. 13(1)',
+                labelPath: 'section/13/1',
+                href: '/ln/ukpga/2010/15/section/13/1',
+                legislationStatus: 'current',
+                text: 'A person (A) discriminates against another (B).',
+                children: [],
+              },
+              {
+                label: 's. 13(6)',
+                labelPath: 'section/13/6',
+                href: '/ln/ukpga/2010/15/section/13/6',
+                legislationStatus: 'current',
+                text: 'If the protected characteristic is sex—',
+                children: [
+                  {
+                    label: 's. 13(6)(a)',
+                    labelPath: 'section/13/6/a',
+                    href: '/ln/ukpga/2010/15/section/13/6/a',
+                    legislationStatus: 'current',
+                    text: 'less favourable treatment of a woman includes…',
+                    children: [],
+                  },
+                ],
+              },
+              {
+                label: 's. 13(7)',
+                labelPath: 'section/13/7',
+                href: '/ln/ukpga/2010/15/section/13/7',
+                legislationStatus: 'amended_not_held',
+                children: [],
+              },
+            ],
+          },
+        }),
+      ),
+    )
+
+    renderView('ukpga/2010/15/section/13')
+
+    // The Act's own heading for the section, not just its number.
+    expect(await screen.findByText('Direct discrimination')).toBeTruthy()
+    // The number shown is the level's own: (1), (6), (a).
+    expect(
+      screen.getByRole('link', { name: 's. 13(1) of this provision' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('link', { name: 's. 13(6)(a) of this provision' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByText('A person (A) discriminates against another (B).'),
+    ).toBeTruthy()
+    // A withheld level keeps its number and loses its wording.
+    expect(screen.getByText(/Wording withheld/)).toBeTruthy()
+    // The retrieval date is the recorded one, not the "not recorded" warning.
+    expect(screen.getByText(/Retrieved 6 Sept 2026/)).toBeTruthy()
   })
 
   it('shows a source failure with a retry instead of empty provision text', async () => {

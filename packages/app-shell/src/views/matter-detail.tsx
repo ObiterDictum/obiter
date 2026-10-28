@@ -29,6 +29,7 @@ import { PageScaffold } from '../page-scaffold'
 import { useOrganisationVerificationRuns } from '../verification-runs'
 import { buildAttentionItems } from './home-attention'
 import { MatterDocumentsTable } from './matter-documents-table'
+import { MatterSavedSources } from './matter-saved-sources'
 import { MatterOverview } from './matter-overview'
 import { MatterShareControls } from './matter-share-dialog'
 import { openWorkByMatter, openWorkFor } from './matters-rows'
@@ -190,12 +191,13 @@ export function MatterRouteView({
             />
           </section>
 
-          <aside aria-label="Matter details">
+          <aside aria-label="Matter details" className="flex flex-col gap-6">
             <MatterOverview
               matter={m}
               openWork={attentionReady ? openWorkFor(attention, m.id) : null}
               openWorkUnavailable={openWorkUnavailable}
             />
+            <MatterSavedSources matterId={m.id} />
           </aside>
         </div>
       </MatterDropZone>

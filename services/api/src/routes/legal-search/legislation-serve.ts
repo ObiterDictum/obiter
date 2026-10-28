@@ -653,6 +653,15 @@ export type LegislationProvisionPageResult =
  * nesting). The root row is dropped: the page renders it as its own heading
  * and body, and every other level beneath it as a numbered subsection.
  */
+/**
+ * False for a row predating migration 0037: how its concatenated text splits
+ * between levels is unknown, so the page keeps serving that text flat rather
+ * than guessing a split.
+ */
+function hasStructuredText(row: StoredLegislationProvision) {
+  return row.ownText !== null && row.ownText !== undefined
+}
+
 function buildSubsectionTree(
   rows: StoredLegislationProvision[],
   documentIdentity: string,
@@ -671,7 +680,7 @@ function buildSubsectionTree(
       // A withheld level keeps its number and loses its wording: the page
       // never substitutes text it does not hold.
       ...(servable
-        ? { text: row.ownText === null ? row.text : row.ownText || undefined }
+        ? { text: hasStructuredText(row) ? row.ownText || undefined : row.text }
         : {}),
       children: [],
     })
@@ -724,10 +733,7 @@ export async function resolveLegislationProvisionPage(
     tree,
     provision.documentIdentity,
   ).filter((node) => node.labelPath === provision.labelPath)[0]?.children
-  // `ownText === null` is a row predating migration 0037: how its
-  // concatenated text splits between levels is unknown, so the page keeps
-  // serving that text flat rather than guessing a split.
-  const structured = provision.ownText === null ? undefined : subsections
+  const structured = hasStructuredText(provision) ? subsections : undefined
   const shared = {
     id: provision.id,
     documentIdentity: provision.documentIdentity,
@@ -754,8 +760,10 @@ export async function resolveLegislationProvisionPage(
         provision: {
           ...shared,
           legislationStatus: 'current',
+          // With a subsection tree, `text` is the provision's own words: the
+          // concatenation would repeat every subsection under its section.
+          text: structured ? (provision.ownText ?? '') : provision.text,
           ...(structured ? { subsections: structured } : {}),
-          text: provision.text,
         },
       },
     }

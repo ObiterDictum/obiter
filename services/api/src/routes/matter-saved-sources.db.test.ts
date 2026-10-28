@@ -97,9 +97,10 @@ async function cleanup(seed: Seed) {
   await pool.query('delete from audit_logs where organisation_id = any($1)', [
     [seed.orgId, seed.otherOrgId],
   ])
-  await pool.query('delete from matter_saved_sources where organisation_id = $1', [
-    seed.orgId,
-  ])
+  await pool.query(
+    'delete from matter_saved_sources where organisation_id = $1',
+    [seed.orgId],
+  )
   await pool.query('delete from matter_shares where organisation_id = $1', [
     seed.orgId,
   ])
@@ -184,11 +185,8 @@ describe('matter saved sources', () => {
         role: 'member',
       })
       expect(
-        (
-          await stranger.request(
-            `/api/matters/${seed.matterId}/saved-sources`,
-          )
-        ).status,
+        (await stranger.request(`/api/matters/${seed.matterId}/saved-sources`))
+          .status,
       ).toBe(404)
       expect(
         (

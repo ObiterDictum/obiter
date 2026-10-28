@@ -15,7 +15,11 @@ import {
 } from '../components/search'
 import { formatResultSummary } from '../components/search/searchResultRows'
 import { useLegalSearch } from '../legal-search-controller'
-import { getLegalSearchEmptyFeedback } from '../legal-search-state'
+import {
+  countActiveLegalSearchFilters,
+  getLegalSearchElsewhereLinks,
+  getLegalSearchEmptyFeedback,
+} from '../legal-search-state'
 
 export {
   LEGAL_SEARCH_DEBOUNCE_MS,
@@ -23,6 +27,7 @@ export {
   LEGAL_SEARCH_HYDRATION_POLL_MS,
   countActiveLegalSearchFilters,
   createLegalSearchFetchRequest,
+  getLegalSearchElsewhereLinks,
   getLegalSearchEmptyFeedback,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
@@ -81,19 +86,15 @@ export function LegalSearchView() {
     setShortcutsOpen,
     setTypeFilter,
   } = useLegalSearch()
+  const activeFilterCount = countActiveLegalSearchFilters(filters)
 
   return (
     <ContentFrame className="flex flex-col gap-6 py-14">
       <header className="flex flex-col gap-6">
-        <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <h1 className="text-page text-ink">Search</h1>
-            <p className="mt-2 max-w-[68ch] text-body text-muted">
-              UK case law and legislation. Every result links to the source.
-            </p>
-          </div>
-          <p className="hidden max-w-[30ch] text-right text-meta text-subtle wide:block">
-            Extracts are the source’s words; the pinpoint is shown.
+        <div className="min-w-0">
+          <h1 className="text-page text-ink">Search</h1>
+          <p className="mt-2 max-w-[68ch] text-body text-muted">
+            UK case law and legislation. Every result links to the source.
           </p>
         </div>
         <SearchCommandBar
@@ -197,6 +198,7 @@ export function LegalSearchView() {
                 legislationScheduleGuidance: state.legislationScheduleGuidance,
                 hydrationAttempt: state.hydrationAttempt,
                 hydrationExpired: state.hydrationExpired,
+                filtersActive: activeFilterCount > 0,
               })}
               action={
                 scheduleResubmitQuery
@@ -211,8 +213,14 @@ export function LegalSearchView() {
                           : 'Retry now',
                         onClick: () => void runSearch(state.query),
                       }
-                    : undefined
+                    : activeFilterCount > 0
+                      ? {
+                          label: 'Clear filters',
+                          onClick: clearFilters,
+                        }
+                      : undefined
               }
+              searchLinks={getLegalSearchElsewhereLinks(state.query)}
               tone="warning"
             />
           ) : null}

@@ -79,12 +79,7 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(
-      pool,
-      user,
-      c.req.param('matterId'),
-      'view',
-    )
+    const matter = await getMatter(pool, user, c.req.param('matterId'), 'view')
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
@@ -113,12 +108,7 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
         400,
       )
     }
-    const matter = await getMatter(
-      pool,
-      user,
-      c.req.param('matterId'),
-      'edit',
-    )
+    const matter = await getMatter(pool, user, c.req.param('matterId'), 'edit')
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
@@ -183,12 +173,7 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
           where id = $2 and organisation_id = $3 and matter_id = $4
             and deleted_at is null
         returning id`,
-        [
-          user.id,
-          c.req.param('savedSourceId'),
-          user.organisationId,
-          matter.id,
-        ],
+        [user.id, c.req.param('savedSourceId'), user.organisationId, matter.id],
       )
       if (!result.rows[0]) {
         return errorResponse(

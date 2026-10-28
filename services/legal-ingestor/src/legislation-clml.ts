@@ -618,8 +618,7 @@ function parseClmlWithStack(
       // the group it sits in, read from the stack here because the group
       // closes after its last provision. Sub-provisions never inherit it:
       // they are cited under their section's heading, not as its equal.
-      heading:
-        frame.title || (frame.tag === 'P1' ? enclosingGroupTitle() : ''),
+      heading: frame.title || (frame.tag === 'P1' ? enclosingGroupTitle() : ''),
       parentLabelPath: frame.parentLabelPath,
       extent: frame.extent,
       text,

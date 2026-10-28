@@ -9,6 +9,12 @@ export {
   type ButtonVariant,
 } from './button'
 export { Input, type InputProps } from './input'
+export {
+  DatePicker,
+  type DatePickerProps,
+  formatDdMmYyyy,
+  parseDdMmYyyy,
+} from './date-picker'
 export { Select, type SelectProps, type SelectOption } from './select'
 export {
   Dialog,

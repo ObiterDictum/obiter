@@ -48,7 +48,10 @@ export interface StoredLegislationProvision {
   acquiredAt: string | null
 }
 
-export type LegislationActListEntry = Omit<StoredLegislationDocument, 'acquiredAt'>
+export type LegislationActListEntry = Omit<
+  StoredLegislationDocument,
+  'acquiredAt'
+>
 
 export interface StoredLegislationActProvision {
   label: string
@@ -199,7 +202,7 @@ export async function listLegislationProvisionTree(
               provision_text as text, own_text as "ownText",
               has_unapplied_effects as "hasUnappliedEffects",
               effects_checked_at as "effectsCheckedAt", doc_order,
-              parent_label_path
+              parent_label_path as "parentLabelPath"
          from legislation_provisions
         where document_identity = $1 and label_path = $2
        union all
@@ -208,7 +211,7 @@ export async function listLegislationProvisionTree(
               p.provision_text as text, p.own_text as "ownText",
               p.has_unapplied_effects as "hasUnappliedEffects",
               p.effects_checked_at as "effectsCheckedAt", p.doc_order,
-              p.parent_label_path
+              p.parent_label_path as "parentLabelPath"
          from legislation_provisions p
          join node on p.parent_label_path = node."labelPath"
         where p.document_identity = $1
