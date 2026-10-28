@@ -15,6 +15,7 @@ export const apiErrorCodeSchema = z.enum([
   'no_organisation',
   'closed_beta_required',
   'matter_not_found',
+  'saved_source_not_found',
   'matter_share_not_found',
   'document_not_found',
   'document_version_not_found',
