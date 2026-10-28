@@ -5,37 +5,31 @@ import { render, screen } from '@testing-library/react'
 import { SearchCommandBar } from './SearchCommandBar'
 
 const baseProps = {
-  activeFilterCount: 0,
-  courtLabel: 'All courts and tribunals',
-  dateFrom: '',
-  dateTo: '',
   isSearching: false,
-  onFilterClick: vi.fn(),
+  onClear: vi.fn(),
   onQueryChange: vi.fn(),
-  onRemoveFilter: vi.fn(),
   onSubmit: vi.fn(),
   query: '',
 }
 
 describe('SearchCommandBar accessibility', () => {
-  it('exposes the search input under an accessible name derived from its label', () => {
-    render(<SearchCommandBar {...baseProps} />)
-
-    const input = screen.getByRole('searchbox', {
-      name: /search legal sources/i,
-    })
-    expect(input.tagName).toBe('INPUT')
-  })
-
-  it('associates the label with the input via htmlFor/id so the name is programmatic', () => {
+  it('exposes the search input under its programmatic label', () => {
     const { container } = render(<SearchCommandBar {...baseProps} />)
 
-    const input = container.querySelector<HTMLInputElement>(
-      'input[name="query"]',
-    )
+    const input = screen.getByRole('searchbox', {
+      name: /search case law and legislation/i,
+    })
     const label = container.querySelector<HTMLLabelElement>('label.sr-only')
 
-    expect(label?.getAttribute('for')).toBe(input?.id)
-    expect(input?.getAttribute('aria-labelledby')).toBeNull()
+    expect(label?.getAttribute('for')).toBe(input.id)
+    expect(input.getAttribute('name')).toBe('query')
+  })
+
+  it('offers a labelled clear control only when there is a query', () => {
+    const { rerender } = render(<SearchCommandBar {...baseProps} />)
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull()
+
+    rerender(<SearchCommandBar {...baseProps} query="Mercer" />)
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy()
   })
 })

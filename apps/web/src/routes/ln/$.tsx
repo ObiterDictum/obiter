@@ -14,11 +14,11 @@ export const Route = createFileRoute('/ln/$')({
   loader: ({ context, params }) => {
     const splat = requireSplat(params._splat)
     if (parseLegislationProvisionPath(splat)) {
-      return context.queryClient.ensureQueryData(
+      return context.queryClient.prefetchQuery(
         legislationProvisionQueryOptions(splat),
       )
     }
-    return context.queryClient.ensureQueryData(
+    return context.queryClient.prefetchQuery(
       legislationActQueryOptions(requireActIdentity(splat)),
     )
   },

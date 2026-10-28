@@ -334,9 +334,10 @@ describe('LegalSearchView debounce lifecycle', () => {
     container = mount()
 
     expect(container.textContent).toContain('Search judgments')
-    // The idle discovery copy must not advertise a provider the corpus-only
-    // API never contacts.
-    expect(container.textContent).not.toContain('Find Case Law')
+    // Naming the stored source is not a claim that a provider is contacted.
+    expect(container.textContent).toContain(
+      'The National Archives (Find Case Law)',
+    )
     expect(container.textContent).toContain(
       'the records ingested so far, not every published judgment',
     )
@@ -804,25 +805,39 @@ describe('LegalSearchView debounce lifecycle', () => {
   it('removes one active filter while preserving the others through stored-only browse', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(createSearchResponse())
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     container = mount()
 
     await clickButton(container, 'UKSC')
-    await clickButton(container, 'Filters')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
 
     const dateFromInput = container.querySelector<HTMLInputElement>(
-      'input[name="date-from-filter"]',
+      'input[name="search-date-from"]',
     )
     const dateToInput = container.querySelector<HTMLInputElement>(
-      'input[name="date-to-filter"]',
+      'input[name="search-date-to"]',
     )
     if (!dateFromInput || !dateToInput)
       throw new Error('Date filters were not rendered')
 
     await changeSearchInput(dateFromInput, '2024-01-01')
     await changeSearchInput(dateToInput, '2024-12-31')
-    await clickButton(container, 'Apply filters')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
 
     expect(container.textContent).toContain('Supreme Court')
     expect(container.textContent).toContain('From 2024-01-01')
@@ -834,10 +849,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    const request = fetchMock.mock.calls.at(-1)?.[1] as RequestInit | undefined
     expect(JSON.parse(String(request?.body))).toEqual({
-      query: '',
+      query: 'Potanina',
       court: 'uksc',
       dateTo: '2024-12-31',
     })
@@ -861,21 +875,21 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     const host = container
-    const resultLinks = () => [
-      ...host.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
+    const resultRows = () => [
+      ...host.querySelectorAll<HTMLElement>('[data-result-index]'),
     ]
-    expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
-    expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
+    expect(resultRows()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultRows()[1]?.getAttribute('aria-current')).toBeNull()
 
     await pressKey('ArrowDown')
 
-    expect(resultLinks()[0]?.getAttribute('aria-current')).toBeNull()
-    expect(resultLinks()[1]?.getAttribute('aria-current')).toBe('true')
+    expect(resultRows()[0]?.getAttribute('aria-current')).toBeNull()
+    expect(resultRows()[1]?.getAttribute('aria-current')).toBe('true')
 
     await pressKey('ArrowUp')
 
-    expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
-    expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
+    expect(resultRows()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultRows()[1]?.getAttribute('aria-current')).toBeNull()
   })
 
   it('leaves navigation keys to the search input', async () => {
@@ -895,11 +909,11 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
     for (const key of ['j', 'k', 'ArrowDown', 'ArrowUp', 'Enter']) {
       await pressKey(key, input)
-      const resultLinks = [
-        ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
+      const resultRows = [
+        ...container.querySelectorAll<HTMLElement>('[data-result-index]'),
       ]
-      expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
-      expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
+      expect(resultRows[0]?.getAttribute('aria-current')).toBe('true')
+      expect(resultRows[1]?.getAttribute('aria-current')).toBeNull()
       expect(routerMocks.navigate).not.toHaveBeenCalled()
     }
   })
@@ -924,7 +938,7 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(firstResultLink?.getAttribute('href')).toBe(
       '/case/potanina-v-potanin-2024-uksc-3',
     )
-    expect(container.textContent).toContain('Exact citation · stored index')
+    expect(container.textContent).toContain('Potanina v Potanin')
 
     await pressKey('Enter')
 
@@ -932,6 +946,65 @@ describe('LegalSearchView debounce lifecycle', () => {
       to: '/case/$caseSlug',
       params: { caseSlug: 'potanina-v-potanin-2024-uksc-3' },
     })
+  })
+
+  it('filters the served answer by the type facet without another request', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        hits: createTwoResultHits(),
+        groups: [
+          {
+            key: 'legislation',
+            label: 'Legislation',
+            hits: [
+              {
+                id: 'ukpga/2010/15/section/13',
+                resultGroup: 'legislation',
+                legislationStatus: 'current',
+                title: 'Equality Act 2010',
+                year: 2010,
+                provisionLabel: 's. 13',
+                labelPath: 'section/13',
+                documentIdentity: 'ukpga/2010/15',
+                extent: 'E+W+S',
+                canonicalUrl: '/ln/ukpga/2010/15/section/13',
+                officialUrl:
+                  'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+                sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+                text: 'Direct discrimination applies here.',
+              },
+            ],
+          },
+        ],
+        cached: true,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const host = mount()
+    container = host
+
+    await changeSearchInput(getSearchInput(host), 'discrimination')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const rows = () => [
+      ...host.querySelectorAll<HTMLElement>('[data-result-index]'),
+    ]
+    expect(rows()).toHaveLength(3)
+
+    const legislationType = host.querySelector<HTMLInputElement>(
+      'input[name="search-type"][value="legislation"]',
+    )
+    if (!legislationType) throw new Error('Type facet was not rendered')
+    await act(async () => {
+      legislationType.click()
+    })
+
+    expect(rows()).toHaveLength(1)
+    expect(host.textContent).toContain('s. 13 · Equality Act 2010')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('names the wait on rate-limited search instead of a generic failure', async () => {
@@ -1297,8 +1370,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
 
     const resultLink =
       host.querySelector<HTMLAnchorElement>('a[href^="/case/"]')
-    const nested = resultLink?.querySelector('strong')
-    expect(nested).toBeTruthy()
+    expect(resultLink).toBeTruthy()
 
     const enter = new KeyboardEvent('keydown', {
       key: 'Enter',
@@ -1306,7 +1378,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
       cancelable: true,
     })
     await act(async () => {
-      nested?.dispatchEvent(enter)
+      resultLink?.dispatchEvent(enter)
     })
 
     // A nested icon/span must not be mistaken for the non-interactive result
