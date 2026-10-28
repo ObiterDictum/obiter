@@ -44,23 +44,17 @@ export function DocumentAuthoritiesPanel({
           ? 'stale'
           : 'current'
   return (
-    <aside
-      className="flex w-full flex-col gap-4 lg:max-w-sm"
-      aria-label="Authorities"
-    >
-      <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-semibold text-ink">List of authorities</h3>
-        <p className="text-xs leading-relaxed text-muted">
-          Citations in this document, grouped by authority.{' '}
-          {runState === 'current'
-            ? 'States come from the latest verification run.'
-            : runState === 'stale'
-              ? 'States come from a run over an earlier version — save and verify again to refresh them.'
-              : runState === 'loading'
-                ? 'Verification findings are still loading.'
-                : 'Run Verify citations to check these against the stored sources.'}
-        </p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <p className="text-caption text-muted">
+        Citations in this document, grouped by authority.{' '}
+        {runState === 'current'
+          ? 'States come from the latest verification run.'
+          : runState === 'stale'
+            ? 'States come from a run over an earlier version — save and verify again to refresh them.'
+            : runState === 'loading'
+              ? 'Verification findings are still loading.'
+              : 'Run Verify citations to check these against the stored sources.'}
+      </p>
       {groups.length === 0 ? (
         <EmptyState
           title="No citations found"
@@ -89,7 +83,7 @@ export function DocumentAuthoritiesPanel({
           ))}
         </ul>
       )}
-    </aside>
+    </div>
   )
 }
 
@@ -146,7 +140,7 @@ function AuthorityRow({
         <Button
           variant="ghost"
           size="sm"
-          className="justify-start text-[11px]"
+          className="justify-start text-caption"
           onClick={() => onShowFinding?.(finding.id)}
         >
           {STATE_LABELS[finding.state]}

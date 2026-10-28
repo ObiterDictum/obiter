@@ -3,6 +3,7 @@ import {
   currentUserQueryOptions,
   documentQueryOptions,
   guardAuth,
+  matterQueryOptions,
 } from '@obiter/app-shell'
 import { RedactionRunsRegion } from '@obiter/redact-ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -23,6 +24,11 @@ export const Route = createFileRoute(
       context.queryClient.prefetchQuery(
         documentQueryOptions(params.documentId),
       ),
+    )
+    // The editor header names the matter, so the breadcrumb is there on a
+    // direct load rather than appearing a moment later.
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.prefetchQuery(matterQueryOptions(params.matterId)),
     )
   },
   component: DocumentDetailRouteComponent,

@@ -118,9 +118,6 @@ export function VerificationDock() {
     <VerificationStrip>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <h2 className="text-xs font-semibold tracking-wide text-ink uppercase">
-            Verify
-          </h2>
           {run ? (
             <Badge tone={statusTone(run.status)}>
               {verificationRunStatusLabel(run.status)}
@@ -149,7 +146,7 @@ export function VerificationDock() {
             </span>
           ) : null}
           {nextFinding ? (
-            <span className="text-xs text-subtle">
+            <span className="text-xs text-subtle max-compact:hidden">
               · Next actionable: {nextFinding.authorityLabel} -{' '}
               {verificationStateLabel(nextFinding.state)}
             </span>
@@ -172,7 +169,7 @@ export function VerificationDock() {
           tabIndex={-1}
           role="status"
           aria-live="polite"
-          className="text-sm text-muted outline-none"
+          className="sr-only"
         >
           {statusMessage}
           {verification.checkedVersionId ? (
@@ -288,7 +285,7 @@ function VerificationStrip({ children }: { children: ReactNode }) {
       id={verificationDockId}
       tabIndex={-1}
       aria-label="Verification"
-      className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-3 py-2 focus:outline-2 focus:outline-offset-2 focus:outline-brand"
+      className="flex items-center gap-x-3 overflow-x-auto border-b border-line bg-surface px-12 py-1.5 whitespace-nowrap focus:outline-2 focus:outline-offset-2 focus:outline-brand max-compact:px-8"
     >
       {children}
     </section>

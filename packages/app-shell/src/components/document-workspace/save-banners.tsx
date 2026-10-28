@@ -2,7 +2,7 @@ import { Button } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { refocusCaretBeforeFlight } from './document-actions'
 import { blockedSummary, refusedSummary } from './document-save-messages'
-import type { DocumentSave, SaveState } from './use-document-save'
+import type { DocumentSave } from './use-document-save'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
 
@@ -24,13 +24,6 @@ export function DocumentSaveBanners({
   const plural = save.blocked.length === 1 ? 'change' : 'changes'
   return (
     <div className="flex flex-col gap-2 px-3 pb-2">
-      <p
-        className="text-xs text-muted"
-        data-save-state={save.saveState.status}
-        aria-live="polite"
-      >
-        {saveStatusLabel(save.saveState)}
-      </p>
       {drafts.restored && save.dirty ? (
         <Banner
           tone="info"
@@ -163,23 +156,6 @@ function hasUnsavedWork(save: DocumentSave, drafts: WorkspaceDrafts) {
     save.blocked.length > 0 ||
     drafts.recoverable.length > 0
   )
-}
-
-function saveStatusLabel(state: SaveState) {
-  switch (state.status) {
-    case 'saved':
-      return 'All changes saved'
-    case 'unsaved':
-      return 'Unsaved changes'
-    case 'saving':
-      return 'Saving…'
-    case 'failed':
-      return 'Save failed: your work is not on the server'
-    case 'stale':
-      return 'The document changed on the server; reload before saving'
-    case 'blocked':
-      return 'Saved, but the edit history needs a reload'
-  }
 }
 
 function heldSummary(save: DocumentSave) {

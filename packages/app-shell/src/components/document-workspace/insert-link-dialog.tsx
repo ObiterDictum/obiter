@@ -3,8 +3,10 @@ import {
   Button,
   Dialog,
   DialogClose,
+  DialogCloseButton,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogTitle,
   Input,
 } from '@obiter/ui'
@@ -35,6 +37,7 @@ export function InsertLinkDialog({
       }}
     >
       <DialogContent size="sm">
+        <DialogCloseButton />
         <DialogTitle>Insert link</DialogTitle>
         <DialogDescription>
           Links the selected text to a web address or email.
@@ -64,11 +67,11 @@ export function InsertLinkDialog({
             }}
           />
           {error ? (
-            <p role="alert" className="text-[12px] text-[#9a4f3c]">
+            <p role="alert" className="text-caption text-danger">
               {error}
             </p>
           ) : null}
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <DialogClose
               render={<Button type="button" variant="ghost" size="sm" />}
             >
@@ -77,7 +80,7 @@ export function InsertLinkDialog({
             <Button type="submit" size="sm" disabled={target.length === 0}>
               Insert
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
