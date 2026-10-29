@@ -174,11 +174,12 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
         </div>
       ) : null}
 
+      {summary ? (
+        <PublishedSummaryCard summary={summary} courtLabel={courtLabel} />
+      ) : null}
+
       <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
-          {summary ? (
-            <PublishedSummaryCard summary={summary} courtLabel={courtLabel} />
-          ) : null}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex items-center gap-2">
               <MagnifyingGlass aria-hidden size={14} className="text-subtle" />
@@ -321,7 +322,7 @@ function PublishedSummaryCard({
   courtLabel: string
 }) {
   return (
-    <Card aria-label="Summary">
+    <Card aria-label="Summary" className="max-w-[68ch]">
       <CardHead title="Summary" />
       <CardBody className="flex flex-col gap-3">
         <p className="text-meta text-subtle">
