@@ -5,6 +5,7 @@ import { buildShareSafeDocx, parseDocx } from './index'
 import {
   expectClean,
   expectRefusal,
+  outputParts,
   override,
   probePackage,
   rel,
@@ -338,5 +339,24 @@ describe('share-safe probes: bookmarks, anchors and markup compatibility', () =>
     expect(story).not.toContain('SECRETFALLBACK')
     expect(story).not.toContain('AlternateContent')
     expect(story).not.toContain('mc:')
+  })
+})
+
+describe('share-safe probes: part roles', () => {
+  it('refuses a header part whose root is a document', async () => {
+    await expectRefusal({
+      documentRels: rel('rId9', 'header', 'odd.xml'),
+      overrides: override('/word/odd.xml', 'header'),
+      parts: {
+        'word/odd.xml': `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Visible.</w:t></w:r></w:p></w:body></w:document>`,
+      },
+    })
+  })
+
+  it('drops an unreadable custom.xml that no relationship declares', async () => {
+    const { parts } = await outputParts({
+      parts: { 'docProps/custom.xml': '<?xml version="1.0"?><NotProperties/>' },
+    })
+    expect(parts.has('docProps/custom.xml')).toBe(false)
   })
 })
