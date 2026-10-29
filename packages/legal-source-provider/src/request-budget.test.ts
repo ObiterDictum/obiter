@@ -8,15 +8,6 @@ import {
 import type { MojRequestBudget, MojRequestCharge } from './rate-limiter'
 import type { AtomEntry } from './atom-parser'
 
-/**
- * The provider charges a request budget immediately before each HTTP attempt,
- * so these tests pin the accounting rather than the parsing: one charge per
- * attempted fetch, many charges per operation, and no charge for an attempt
- * that is refused or guarded before dispatch.
- *
- * No provider is reached anywhere here: `fetch` is stubbed globally.
- */
-
 const BASE = 'https://caselaw.nationalarchives.gov.uk'
 
 function countingBudget(
@@ -114,7 +105,6 @@ describe('provider request budget accounting', () => {
 
     expect(result.status).toBe('unavailable')
     expect(fetchMock).not.toHaveBeenCalled()
-    // Exactly one charge was attempted; the refusal is what stops dispatch.
     expect(attempts()).toBe(1)
   })
 

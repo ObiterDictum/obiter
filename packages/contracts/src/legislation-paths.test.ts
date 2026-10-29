@@ -61,9 +61,6 @@ describe('legislation provision paths', () => {
   })
 
   it('refuses a non-canonical Act year in a pasted path', () => {
-    // The canonical identity grammar is the same one the free-text chapter
-    // classifier applies, so a zero-padded or pre-1801 year is not canonical
-    // here either rather than producing an identity Number() would rewrite.
     for (const path of [
       '/ln/ukpga/0204/1',
       '/ln/ukpga/0000/1',

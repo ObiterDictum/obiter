@@ -41,7 +41,6 @@ describe('updateProfileInputSchema', () => {
   })
 
   it('drops fields the request was never allowed to set', () => {
-    // A body carrying another user's id must not reach the update scope.
     expect(
       updateProfileInputSchema.parse({ name: 'Ada', id: 'usr_other' }),
     ).toEqual({ name: 'Ada' })
@@ -50,8 +49,6 @@ describe('updateProfileInputSchema', () => {
 
 describe('parseOrganisationName — same name rule as the account name', () => {
   it('preserves the messages the organisation routes already return', () => {
-    // The shared field builder replaced a hand-written copy of this rule; the
-    // surfaced messages are part of the API contract and must not move.
     expect(parseOrganisationName(undefined)).toEqual({
       ok: false,
       message: 'Organisation name is required.',

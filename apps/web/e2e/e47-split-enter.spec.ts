@@ -5,21 +5,10 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/*
- * E47 browser regression: pressing Enter in the middle of a paragraph must
- * leave the second half visible in the pending paragraph, editable, and
- * stored byte-for-byte after a save and a fresh-context reload. The symptom
- * the card records is browser-only: an empty paragraph with no textarea,
- * which jsdom's zero-size hit testing cannot see. This runs against the
- * isolated editor lane, a synthetic account and a wholly synthetic DOCX.
- */
-
 const FIXTURE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   'fixtures/e47-split.docx',
 )
-// Set to a directory to capture the journey stage by stage; a normal run
-// writes nothing.
 const shots = process.env.E47_E2E_SHOTS
 
 function shot(page: Page, name: string) {
@@ -35,7 +24,6 @@ const BOLD = '3. On 3 March 2024, I inspected the property and exhibit ME/1.'
 const BOLD_LEFT = BOLD.slice(0, 10)
 const BOLD_RIGHT = BOLD.slice(10)
 
-/** Opens the synthetic fixture through the product's own navigation. */
 async function openFixtureDocument(
   page: Page,
   email: string,
@@ -89,7 +77,6 @@ async function openFixtureDocument(
   return modelUrl.match(/\/api\/documents\/([^/]+)\/model$/u)?.[1] ?? ''
 }
 
-/** Clicks a paragraph and leaves the caret at a known offset. */
 async function caretAfter(page: Page, text: string, offset: number) {
   await focusParagraph(page, text)
   await page.keyboard.press('Control+Home')
@@ -98,9 +85,6 @@ async function caretAfter(page: Page, text: string, offset: number) {
   }
 }
 
-/** The painted text of every paragraph block, in document order. A focused or
- * pending paragraph keeps its text in the textarea value, not in the static
- * run paint, so both surfaces are read. */
 async function paintedParagraphTexts(page: Page): Promise<string[]> {
   return page.locator('[data-paragraph-id]').evaluateAll((nodes) =>
     nodes.map((node) => {
@@ -143,7 +127,6 @@ async function storedParagraphTexts(page: Page, documentId: string) {
   }, documentId)
 }
 
-/** The preserved run XML of the stored paragraph whose text is `text`. */
 async function storedParagraphFragments(
   page: Page,
   documentId: string,
@@ -186,7 +169,6 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
   const documentId = await openFixtureDocument(page, email, password, matter)
   expect(documentId).not.toBe('')
 
-  // The fixture's bold paragraph really is bold before any split.
   await focusParagraph(page, BOLD)
   expect(
     await page
@@ -196,7 +178,6 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
       .evaluate((node) => getComputedStyle(node).fontWeight),
   ).toBe('700')
 
-  // 1. Plain paragraph: split at the E47 offset.
   await caretAfter(page, PLAIN, 30)
   await page.keyboard.press('Enter')
 
@@ -209,11 +190,9 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
   const afterPlain = await paintedParagraphTexts(page)
   expect(afterPlain).toContain(PLAIN_LEFT)
   expect(afterPlain).toContain(PLAIN_RIGHT)
-  // The full draft (not only the painted first half) survives in storage.
   expect(await draftStorage(page)).toContain(PLAIN_RIGHT)
   await shot(page, '01-plain-split')
 
-  // 2. Bold run: split at the E47 offset; the remainder must survive.
   await caretAfter(page, BOLD, 10)
   await page.keyboard.press('Enter')
   const boldPending = page.getByLabel('Pending paragraph text').last()
@@ -224,7 +203,6 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
   expect(afterBold).toContain(BOLD_RIGHT)
   await shot(page, '02-bold-split')
 
-  // 3. Save, then read the stored document in a fresh browser context.
   const editBodies: Array<{ operations?: Array<Record<string, unknown>> }> = []
   page.on('request', (outgoing) => {
     if (/\/api\/documents\/[^/]+\/edit$/u.test(outgoing.url())) {
@@ -246,10 +224,8 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
     expect(stored).toContain(PLAIN_RIGHT)
     expect(stored).toContain(BOLD_LEFT)
     expect(stored).toContain(BOLD_RIGHT)
-    // The remainder is a paragraph of its own, not folded into its neighbour.
     expect(stored.indexOf(PLAIN_RIGHT)).toBe(stored.indexOf(PLAIN_LEFT) + 1)
     expect(stored.indexOf(BOLD_RIGHT)).toBe(stored.indexOf(BOLD_LEFT) + 1)
-    // The bold remainder is still bold in the stored document, not just text.
     expect(
       (await storedParagraphFragments(reloaded, documentId, BOLD_RIGHT)).join(
         '',

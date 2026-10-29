@@ -6,16 +6,6 @@ export type PdfPreviewStatus =
   | { kind: 'ready'; pageCount: number }
   | { kind: 'error'; message: string }
 
-/**
- * Read-only multi-page PDF preview (no span overlays).
- *
- * Pages render lazily: a page mounts its canvas and starts a pdf.js render only
- * when it scrolls near the viewport, so a several-hundred-page secure PDF does
- * not allocate every page bitmap at once. Readiness is still reported only
- * after page 1 has actually rendered; loading the document is not enough. The
- * parent owns the download; this component only renders the bytes it is given
- * and never substitutes another source.
- */
 export function PdfDocumentPreview({
   file,
   onStatusChange,
@@ -29,8 +19,6 @@ export function PdfDocumentPreview({
   const [error, setError] = useState<string | null>(null)
   const [pageCount, setPageCount] = useState(0)
   const [firstPageRendered, setFirstPageRendered] = useState(false)
-  // The loaded document owns a pdf.js worker port and its decoded pages. Hold
-  // it so unmount or a new Blob can destroy it instead of leaking both.
   const loadedDocument = useRef<PDFDocumentProxy | null>(null)
 
   useEffect(() => {
@@ -41,7 +29,6 @@ export function PdfDocumentPreview({
         import.meta.url,
       ).toString()
       try {
-        // Copy bytes — pdf.js may detach the underlying ArrayBuffer.
         const buffer = await file.arrayBuffer()
         const document = await pdfjs.getDocument({
           data: Uint8Array.from(new Uint8Array(buffer)),
@@ -121,7 +108,6 @@ export function PdfDocumentPreview({
   )
 }
 
-/** Distance ahead of the viewport at which a page starts rendering. */
 const RENDER_ROOT_MARGIN = '800px 0px'
 
 function PdfPreviewPage({
@@ -136,9 +122,6 @@ function PdfPreviewPage({
   onFirstPageRendered: () => void
 }) {
   const placeholder = useRef<HTMLElement | null>(null)
-  // Environments without IntersectionObserver (jsdom, older engines) render
-  // eagerly rather than never: the preview must still work, just without the
-  // memory saving.
   const [visible, setVisible] = useState(
     () => typeof IntersectionObserver === 'undefined',
   )

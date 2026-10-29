@@ -53,8 +53,6 @@ function decide(resolution: CitationResolution, raw = caseLawRaw) {
   })
 }
 
-/** Every outcome the result model can carry, so the table below cannot drift
- * from the union without a typecheck failure. */
 const everyResolution: CitationResolution[] = [
   caseLaw,
   { outcome: 'unresolved' },
@@ -115,8 +113,6 @@ describe('citation resolution decision', () => {
   })
 
   it('never clears a whole Act on a provision fragment, or the reverse', () => {
-    // The evidence granularity follows the identity, so a resolved citation
-    // cannot be cleared on a fragment of a different thing than it names.
     const wholeActFinding = decide(wholeAct, citation('/ln/ukpga/2099/1'))
     const provisionFinding = decide(
       provision,
@@ -302,8 +298,6 @@ describe('resolution to authority-existence seam', () => {
 
       expect(normalized.kind).not.toBe('case_law')
       expect(normalized.kind).not.toBe('legislation')
-      // V2 refuses a store outcome for a citation with no identity, so a
-      // non-resolved result cannot acquire a store verdict by accident.
       expect(() =>
         decideAuthorityExistence({
           subject,

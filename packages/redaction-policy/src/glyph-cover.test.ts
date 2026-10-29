@@ -121,8 +121,6 @@ describe('coverRectsForSpan', () => {
           y: 100,
           width: 20,
           height: 20,
-          // Version 1 used these values for both placement and extent. Without
-          // the v2 override marker they must not enter the exact path.
           advances: [4, 10],
         },
       ],
@@ -136,8 +134,6 @@ describe('coverRectsForSpan', () => {
   })
 
   it('merges across a wide whitespace gap only when source adjacency is proven', () => {
-    // 'A B': glyphs at 40 and 60 with a 10pt gap, wider than the single-span
-    // threshold. Only a coalesced-region caller may bridge it.
     const segments = [
       { start: 0, end: 1, pageIndex: 0, x: 40, y: 100, width: 10, height: 12 },
       { start: 2, end: 3, pageIndex: 0, x: 60, y: 100, width: 10, height: 12 },
@@ -226,14 +222,12 @@ describe('coverRectsForSpan whitespace merge bound', () => {
   })
 
   it('still merges a multi-space gap wider than one space', () => {
-    // Two spaces at 12pt: a 10pt gap, inside the two-em bound.
     expect(
       planned([segment(0, 1, 40, 10), segment(3, 4, 60, 10)], 'A  B'),
     ).toHaveLength(1)
   })
 
   it('does not bridge the reproduced 260pt same-baseline gap', () => {
-    // The review's adversarial layout: glyphs 260pt apart, source 'A B'.
     expect(
       planned([segment(0, 1, 40, 10), segment(2, 3, 310, 10)], 'A B'),
     ).toHaveLength(2)
@@ -246,7 +240,6 @@ describe('coverRectsForSpan whitespace merge bound', () => {
   })
 
   it('does not bridge a same-baseline table gutter beyond word spacing', () => {
-    // A 30pt gutter at 12pt text: wider than the two-em bound, so it splits.
     expect(
       planned([segment(0, 1, 40, 10), segment(2, 3, 80, 10)], 'A B'),
     ).toHaveLength(2)

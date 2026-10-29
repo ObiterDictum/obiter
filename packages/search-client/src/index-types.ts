@@ -42,29 +42,11 @@ export type LegalSearchFilters = Partial<{
 
 export interface SearchIndexOptions {
   primaryKey?: 'id'
-  /**
-   * Continue when the server does not support one of the index settings, and
-   * report which. Off by default: a Meilisearch that cannot apply a setting is
-   * not running the configuration this package defines, and a caller that has
-   * not said it can live with that should be told rather than served silently.
-   *
-   * The one real case is `prefixSearch`, which Meilisearch added in 1.12.
-   * A 1.8 server has no `settings/prefix-search` route and answers 404, so
-   * prefix search stays on and short queries match on prefixes. That materially
-   * changes short-word precision, which is why this is opt-in and reported
-   * rather than assumed harmless.
-   */
   allowUnsupportedSettings?: boolean
 }
 
 export interface SearchIndexResult {
   taskUid?: number
-  /**
-   * Settings the server could not apply, empty when everything applied. A run
-   * that measures anything must put this in its report: a number measured under
-   * a configuration the report does not name cannot be compared with one that
-   * was.
-   */
   unsupportedSettings: string[]
 }
 
@@ -83,16 +65,10 @@ export interface IndexDocumentsProgress {
 }
 
 export interface IndexDocumentsOptions {
-  /**
-   * UTF-8 byte cap for `JSON.stringify(batch)` sent to addDocuments.
-   * Defaults to {@link meilisearchDocumentPayloadMaxBytes}. Tests pass a
-   * smaller value so batching can be asserted without 80 MB fixtures.
-   */
   maxPayloadBytes?: number
   onProgress?: (progress: IndexDocumentsProgress) => void
 }
 
-// Optional timings for diagnostics, not product behaviour.
 export interface LegalSearchDiagnostics {
   providerSearchTimeMs: number
   clientProcessingTimeMs: number
@@ -107,20 +83,11 @@ export interface LegalSearchResult {
 }
 
 export interface LegalSearchOptions {
-  // With both of these false the request omits paragraphs, so ranking has no
-  // body text to read and the body match tiers cannot fire.
   includeParagraphs?: boolean
   includeSnippets?: boolean
   limit?: number
-  // Set null to disable the relevance floor when recall matters more than precision.
   rankingScoreThreshold?: number | null
   matchingStrategy?: 'all' | 'frequency'
-  /**
-   * Recognised citation surface form. When set, the engine query becomes an
-   * exact phrase for that citation instead of the keyword query, so an
-   * absent citation returns nothing rather than keyword neighbours. Snippet
-   * extraction and tier ranking still read the original query.
-   */
   exactPhrase?: string
 }
 
@@ -153,7 +120,6 @@ export type IndexLike = {
   updatePrefixSearch(
     prefixSearch: 'disabled' | 'indexingTime',
   ): SearchEnqueuedTaskPromise
-  /** Read-only support probe. See `applyOptionalSetting`. */
   getPrefixSearch(): Promise<string>
   updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
   updateTypoTolerance(settings: {

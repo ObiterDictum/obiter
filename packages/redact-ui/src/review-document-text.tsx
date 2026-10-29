@@ -35,11 +35,6 @@ const sourceClasses = {
   uk_supplement: 'border-dashed',
 } satisfies Record<RedactionSpan['source'], string>
 
-/**
- * Colour is a reading aid, never the only carrier of the category: the legend
- * below names every colour in use, each span states its category on hover and
- * on focus, and a screen reader reads it from the span's own text.
- */
 export function CategoryLegend({
   categories,
 }: {
@@ -66,13 +61,6 @@ export function CategoryLegend({
   )
 }
 
-/**
- * The source text as the reviewer reads it. A span is painted by category (the
- * contract's palette) and its decision state is never carried by colour alone:
- * an accepted span keeps its fill, a kept span fades and keeps a dashed
- * baseline, and an undecided span carries a warning outline. The decision is
- * also stated in words in the panel and in the decision bar.
- */
 export function HighlightedText({
   text,
   run,
@@ -139,11 +127,6 @@ export function HighlightedText({
   )
 }
 
-/**
- * The page is paper in both themes, so the span palette is pinned to the light
- * token set for this subtree: a dark-theme span tint would paint a dark block on
- * white paper and read as a redaction that is not there.
- */
 export function Paper({ children }: { children: ReactNode }) {
   return (
     <div className="flex justify-center px-12 py-8 max-compact:px-8">

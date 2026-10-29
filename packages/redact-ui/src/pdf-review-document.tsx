@@ -9,11 +9,6 @@ import type { DocumentTextLayout } from './types'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import { spanDecisionState } from './span-copy'
 
-/**
- * The decision state as the page paints it. A kept span fades back so it can
- * never be mistaken for one that will be removed, and an undecided span carries
- * a warning outline. The panel states every state in words as well.
- */
 const decisionOverlayClass = {
   accepted: 'opacity-80',
   rejected: 'opacity-25',
@@ -191,9 +186,6 @@ function PdfPage({
           renderTask = null
         }
 
-        // Residual: a second paint() that enters while the first is still
-        // inside pdf.getPage (before renderTask is assigned) will also render
-        // onto the same canvas. The 100ms resize debounce makes that unlikely.
         const page = await pdf.getPage(pageNumber)
         if (cancelled) return
         const base = page.getViewport({ scale: 1 })

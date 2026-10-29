@@ -61,11 +61,9 @@ describe('parseNeutralCitationCandidate', () => {
   })
 
   it.each([
-    // Fullwidth brackets and digits NFKC-fold to a citation nobody typed.
     '［2024] UKSC 22',
     '[２０２４] UKSC 22',
     '[2024] UKSC ２２',
-    // A Cyrillic К is not the ASCII K the grammar names.
     '[2024] UКSC 22',
     '[2024] UKSС 22',
   ])('refuses the lookalike %s', (candidate) => {
@@ -140,8 +138,6 @@ describe('classifyNeutralCitationCandidate', () => {
   })
 
   it('keeps the unsupported court out of the supported parse', () => {
-    // The classifier is the only place that distinguishes the two; the older
-    // parse entry point still returns null for an unlisted court.
     expect(parseNeutralCitationCandidate('[2024] EAT 12')).toBeNull()
     expect(classifyNeutralCitationCandidate('[2024] UKSC 22')).toBe('citation')
   })

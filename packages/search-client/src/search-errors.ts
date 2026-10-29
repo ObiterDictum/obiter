@@ -39,7 +39,6 @@ function searchProviderErrorBody(
   return body
 }
 
-/** Meilisearch error code off the error or its cause; null when neither carries one. */
 function searchProviderCode(error: unknown): string | null {
   const body = searchProviderErrorBody(error)
   return body?.code ?? body?.cause?.code ?? null
@@ -53,9 +52,6 @@ function searchProviderMessage(error: unknown): string | null {
     : null
 }
 
-// The cause keeps the full provider object for diagnostics such as the
-// benchmark report. The wrapped message names the provider code and message
-// so operators can see payload_too_large; it must not include judgment text.
 function wrapSearchError(message: string, error: unknown): Error {
   if (error instanceof SearchTaskError) {
     return new Error(`${message} ${error.message}`, { cause: error })

@@ -1,11 +1,5 @@
 import { z } from 'zod'
 
-/**
- * Sources kept with a matter. A saved row records that a member filed one
- * judgment or provision against one matter; it holds the corpus identity, not
- * a copy of the text, so the saved entry always reads the same stored source
- * the source page does.
- */
 export const savedSourceKindSchema = z.enum(['judgment', 'legislation'])
 export type SavedSourceKind = z.infer<typeof savedSourceKindSchema>
 
@@ -13,8 +7,6 @@ export const savedMatterSourceSchema = z.object({
   id: z.string().min(1),
   matterId: z.string().min(1),
   kind: savedSourceKindSchema,
-  /** Corpus identity: a judgment document id, or
-   * `{documentIdentity}/{labelPath}` for a provision. */
   sourceId: z.string().min(1),
   title: z.string().min(1),
   citation: z.string().nullable(),

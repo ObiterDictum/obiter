@@ -34,11 +34,9 @@ describe('definedTermBookmarkName', () => {
 
   it('refuses text with no words and text that outgrows the name cap', () => {
     expect(definedTermBookmarkName('   ')).toBeNull()
-    // _Def_ plus eight five-letter words exceeds Word's 40-character cap.
     expect(
       definedTermBookmarkName('aaaaa aaaaa aaaaa aaaaa aaaaa aaaaa aaaaa'),
     ).toBeNull()
-    // The cap boundary itself is accepted: _Def_ plus 35 letters is 40.
     const boundary = 'a'.repeat(35)
     expect(definedTermBookmarkName(boundary)).toBe(`_Def_${boundary}`)
     expect(definedTermBookmarkName(`${boundary}a`)).toBeNull()

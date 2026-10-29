@@ -25,19 +25,8 @@ const searchableAttributes = [
   'paragraphs.text',
 ]
 
-/**
- * Meilisearch comparison operators take numeric operands only, so a range
- * filter cannot read the ISO `dateDecided` string. The index carries this
- * derived companion field for range filtering; `dateDecided` remains the
- * authority and the only date the domain schema and callers ever see.
- */
 export const dateDecidedTimestampField = 'dateDecidedTimestamp'
 
-/**
- * Midnight UTC for an ISO `YYYY-MM-DD` date. Every indexed value lands on a day
- * boundary, so an inclusive `dateTo` needs no end-of-day adjustment: a document
- * decided on the boundary day compares equal, not greater.
- */
 export function toDateDecidedTimestamp(isoDate: string): number | null {
   const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!match) return null
@@ -50,11 +39,6 @@ export function toDateDecidedTimestamp(isoDate: string): number | null {
   return Number.isNaN(timestamp) ? null : timestamp
 }
 
-/**
- * Projects a validated authority into the shape sent to the engine. The schema
- * has already guaranteed `dateDecided` is an ISO date, so a null here means the
- * two have drifted apart rather than that a caller passed something odd.
- */
 function toIndexedLegalAuthority(document: LegalAuthority) {
   const timestamp = toDateDecidedTimestamp(document.dateDecided)
 
@@ -120,28 +104,10 @@ const rankingRules = [
   'exactness',
   'sort',
 ]
-/**
- * The settings createIndex applies, plus the defaults search falls back to,
- * held in one place so callers can report exactly what ran. The benchmark
- * embeds this verbatim, which is what stops a reported tuning decision from
- * quietly disagreeing with the committed value.
- */
 export const legalSearchIndexSettings = {
   minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
   prefixSearch: 'disabled',
   matchingStrategy: 'all',
-  // Swept across the full benchmark at null, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45
-  // and 0.5. Everything from 0.2 to 0.35 beats 0.5 on top-1 and top-3 and is
-  // worse on nothing, because the only case the floor is load-bearing for is
-  // "claimnt", whose sole candidate scores 0.0928. The lowest legitimate typo
-  // match measured is "Rizwun" at 0.3655. 0.25 sits near the middle of that
-  // gap, leaving 0.157 of headroom over the junk match and 0.116 under the
-  // recall one. The other three no-answer cases return nothing even with the
-  // floor removed entirely, so they do not constrain this value.
-  //
-  // Those scores come from the synthetic benchmark fixture, and ranking scores
-  // depend on corpus statistics, so re-measure this on a real corpus before
-  // trusting it. See the calibration note in the package README.
   rankingScoreThreshold: 0.25,
   stopWordCount: legalStopWords.length,
 } as const
@@ -149,20 +115,6 @@ export const legalSearchIndexSettings = {
 const indexSetupTaskTimeoutMs = 10 * 60_000
 export const documentIndexingTaskTimeoutMs = 30 * 60_000
 
-/**
- * Search-time parameters this server rejects as unknown.
- *
- * `createIndex` can only discover what an old server cannot be *configured*
- * with. This finds what it cannot be *asked* for, which is a separate gap and
- * was the larger one: Meilisearch added `rankingScoreThreshold` in 1.9, and a
- * 1.8 server answers "Unknown field `rankingScoreThreshold`" to every non-empty
- * query. Left undetected that is 51 of 54 benchmark cases failing as search
- * errors, which looks like a broken index rather than an old server.
- *
- * One probe query, run once, rather than a per-search retry: a retry loop would
- * hide the gap inside every call site and make the numbers depend on which
- * queries happened to be tried.
- */
 export async function detectUnsupportedSearchFeatures(
   client: SearchClient,
   indexName: string,
@@ -174,8 +126,6 @@ export async function detectUnsupportedSearchFeatures(
     })
     return []
   } catch (error) {
-    // MeiliSearchApiError puts the provider's message on `message` itself; the
-    // `cause` is the parsed error body, not a string.
     const message = error instanceof Error ? error.message : ''
     if (message.includes('rankingScoreThreshold')) {
       return ['rankingScoreThreshold']
@@ -207,12 +157,6 @@ export async function createIndex(
   )
 }
 
-/**
- * Index settings bundle for a product index other than legal_authorities.
- * createIndex above is this function with the judgment settings; the
- * legislation provisions index passes its own. One code path applies
- * settings so the two indexes cannot drift in how they handle old servers.
- */
 export interface ProductIndexSettings {
   searchableAttributes: string[]
   filterableAttributes: string[]
@@ -262,9 +206,6 @@ export async function setupIndexWithSettings(
       index.updateRankingRules(settings.rankingRules),
       indexSetupTaskTimeoutMs,
     )
-    // Optional only in the sense that an older server cannot be given it. It is
-    // load-bearing where it applies: `minimumShortWordPrecision` in the
-    // benchmark baseline rests on prefix search being off.
     await applyOptionalSetting(
       'prefixSearch',
       () => index.getPrefixSearch(),
@@ -383,8 +324,6 @@ export async function indexDocuments(
 }
 
 function isUnsupportedSettingError(error: unknown) {
-  // MeiliSearchApiError carries the raw Response. A 404 from a settings route
-  // means the route is absent from this server's version.
   return (
     error instanceof Error &&
     'response' in error &&
@@ -393,20 +332,6 @@ function isUnsupportedSettingError(error: unknown) {
   )
 }
 
-/**
- * Applies a setting the server may not have, checking with a read first.
- *
- * The read is not politeness. Writing to a settings route Meilisearch 1.8.3 does
- * not have returns 404 and then wedges the index: measured with plain curl, a
- * `stop-words` write succeeds 5 times out of 5 on its own at 67ms, and times out
- * 4 times out of 5 when it follows a `prefix-search` write to the absent route.
- * A read of the same absent route is harmless — 5 out of 5, same 67ms — so
- * support is established by reading and the unsupported write is never sent.
- *
- * Catching the write's 404 is therefore not enough. The damage is done by
- * issuing it, and it lands on whatever request comes next, which makes it look
- * like an unrelated flake somewhere downstream.
- */
 async function applyOptionalSetting(
   name: string,
   probe: () => Promise<string>,
@@ -483,8 +408,5 @@ function isIndexAlreadyExistsError(error: unknown): boolean {
     return true
   }
 
-  // Meilisearch v1.53 enqueues index creation, so a duplicate surfaces as a
-  // failed waitTask: SearchTaskError('Meilisearch task <n> failed
-  // (index_already_exists).') with no .code/.cause. Match the async form here.
   return error instanceof Error && /index_already_exists/.test(error.message)
 }

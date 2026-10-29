@@ -133,9 +133,6 @@ describe('structural edit contracts', () => {
   })
 
   it('rejects a maximum-sized invalid base64 payload without overflowing', () => {
-    // One bad character at the tail of a bound-length string; the check is a
-    // linear scan, so this cannot throw a stack RangeError the way the old
-    // regex did at 8 MiB.
     const parsed = parse([
       {
         ...image,

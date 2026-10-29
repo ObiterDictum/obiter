@@ -12,7 +12,6 @@ describe('parseDdMmYyyy', () => {
   it('reads a UK date as ISO, and rejects text that is not a real date', () => {
     expect(parseDdMmYyyy('13/03/2010')).toBe('2010-03-13')
     expect(parseDdMmYyyy('1/3/2010')).toBe('2010-03-01')
-    // The defect this replaces: a US-format field read 03/13/2010 as March.
     expect(parseDdMmYyyy('03/13/2010')).toBeNull()
     expect(parseDdMmYyyy('31/02/2020')).toBeNull()
     expect(parseDdMmYyyy('2010-03-13')).toBeNull()
@@ -27,8 +26,6 @@ describe('parseDdMmYyyy', () => {
 
 describe('monthCells', () => {
   it('starts the month on a Monday and ends it on its last day', () => {
-    // 1 March 2026 is a Sunday, so six blanks precede it in a Monday-first
-    // grid, and the 31 days run to the end of the month.
     const cells = monthCells(2026, 2)
     expect(cells.slice(0, 7)).toEqual([null, null, null, null, null, null, 1])
     expect(cells.filter((day) => day !== null)).toHaveLength(31)

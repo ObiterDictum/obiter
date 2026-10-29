@@ -110,8 +110,6 @@ describe('Finding status handling', () => {
   })
 })
 
-/** Decodes the length-prefixed component encoding, so a value that contains
- * `:` cannot be mistaken for a delimiter. */
 function decodeFindingId(id: string): string[] {
   expect(id.startsWith('vf:')).toBe(true)
   const values: string[] = []

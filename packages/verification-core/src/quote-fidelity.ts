@@ -21,24 +21,11 @@ import {
 } from './quote-span'
 import type { VerificationSubject } from './subject'
 
-/**
- * The V4 decision: a quotation and a store read onto a V1 `quote_fidelity`
- * finding, with the source-identity guard it rests on (`quote-span.ts`,
- * `quote-text.ts`).
- */
-
-/**
- * One addressable stored source fragment, already read by the store boundary.
- * Evidence references hold ids and positions. The API also preserves the checked
- * fragment text with the finding so later corpus changes cannot replace it.
- */
 export type QuoteFragment =
   | {
       sourceType: 'judgment'
       sourceId: string
-      /** 1-based position in the document's paragraph array. */
       ordinal: number
-      /** Printed number, when the judgment shows one. Display only. */
       paragraphNumber: number | null
       text: string
     }
@@ -49,11 +36,6 @@ export type QuoteFragment =
       text: string
     }
 
-/**
- * Why the store boundary could not supply a trustworthy fragment set. The
- * categories stay distinct so an operational caller can tell an outage from a
- * withdrawn source from an absent provision without reading the explanation.
- */
 export type QuoteSourceUnavailableReason =
   | 'source_not_held'
   | 'source_withdrawn'
@@ -67,31 +49,16 @@ export type QuoteSourceUnavailableReason =
   | 'no_source_fragments'
   | 'source_too_large'
 
-/**
- * What the store boundary read for a resolved citation. `ready` carries the
- * fragments V2 judged trustworthy; `unavailable` says why none could be used;
- * `not_checked` says no source read ran because the citation never resolved.
- * V4 cannot compare against anything but `ready`, so a withdrawn, absent,
- * ambiguous or malformed source cannot enter the comparison.
- */
 export type QuoteSourceOutcome =
   | {
       outcome: 'ready'
       fragments: QuoteFragment[]
-      /** The canonical identity the citation resolved to, as the one owner of
-       * citation resolution returned it. A legislation comparison refuses a
-       * fragment that is not this provision, so the single-schedule alias maps
-       * onto its stored path without V4 re-implementing the alias. */
       resolvedProvision?: { documentIdentity: string; labelPath: string }
-      /** The bounded source representation, prepared once for every quotation
-       * citing it. Optional: a one-quotation caller may let the comparison
-       * prepare its own. */
       preparedSource?: PreparedQuoteSource
     }
   | { outcome: 'unavailable'; reason: QuoteSourceUnavailableReason }
   | { outcome: 'not_checked' }
 
-/** Every way a quote comparison can fail to conclude. */
 export type QuoteInconclusiveReason =
   | QuoteSourceUnavailableReason
   | 'citation_unresolved'
@@ -101,14 +68,6 @@ export type QuoteInconclusiveReason =
   | 'passage_ambiguous'
   | 'quote_elided'
 
-/**
- * The comparison result. It is deliberately separate from the V1 finding: it
- * says what the comparison established, and `decideQuoteFidelity` maps it onto
- * the finding vocabulary. A mismatch is only ever produced by a unique
- * anchored alignment naming real fragments, so it is a positive claim the
- * evidence supports; everything the comparison could not establish is
- * `inconclusive`.
- */
 export type QuoteComparison =
   | { outcome: 'match'; exact: boolean; fragments: QuoteFragment[] }
   | {
@@ -126,18 +85,11 @@ export interface QuoteFidelityInput {
   source: QuoteSourceOutcome
 }
 
-/** A resolved citation, the only citation state a comparison can act on. */
 type ResolvedCitation = Extract<
   NormalizedCitation,
   { kind: 'case_law' | 'legislation' }
 >
 
-/**
- * Handed a fragment from another source than the resolved citation. This is a
- * programmer error in the store boundary, not a check outcome, so it fails
- * loudly rather than being reported as an inconclusive comparison. It is the
- * guard that stops a quote for one authority being "verified" against another.
- */
 export class QuoteSourceMismatchError extends Error {
   constructor(message: string) {
     super(message)
@@ -145,20 +97,6 @@ export class QuoteSourceMismatchError extends Error {
   }
 }
 
-/**
- * Every fragment must belong to the resolved citation's own source, and the
- * count must match the granularity the citation addresses: one judgment
- * document's paragraphs, or exactly one provision. A whole-document reference
- * cannot satisfy a quote check because a quote needs inside the document, and a
- * provision citation is scoped to the one provision it names.
- *
- * A legislation fragment must also be the provision the citation resolved to,
- * not merely a provision of the same Act. `resolvedProvision` is the canonical
- * identity the resolver returned, so the schedule alias maps onto its stored
- * path without V4 re-implementing the alias; a boundary that emitted another
- * provision's text fails here rather than clearing or flagging by the wrong
- * provision.
- */
 function assertFragmentsMatchCitation(
   citation: ResolvedCitation,
   fragments: readonly QuoteFragment[],
@@ -266,12 +204,6 @@ function toComparison(
   }
 }
 
-/**
- * Compare a quotation against the stored fragments of the authority a V3
- * citation resolved to. It never reads a store, never re-resolves the citation
- * and never claims an authority exists: the only store state it acts on is the
- * trustworthy fragment set V2's assessment produced.
- */
 export function compareQuote(input: QuoteFidelityInput): QuoteComparison {
   const citation = input.normalizedCitation
   if (citation.kind === 'not_checked') return { outcome: 'not_checked' }
@@ -305,9 +237,6 @@ export function compareQuote(input: QuoteFidelityInput): QuoteComparison {
   if (prepared === null) {
     return { outcome: 'inconclusive', reason: 'no_source_fragments' }
   }
-  // A prepared source that does not describe the fragments it was paired with
-  // would put one source's text behind another's indexes. Fail closed rather
-  // than compare across sources.
   if (prepared.fragmentCount !== fragments.length) {
     throw new QuoteSourceMismatchError(
       'A prepared quote source must describe the fragments it is compared with.',
@@ -462,13 +391,6 @@ function decide(comparison: QuoteComparison): DecidedQuote {
   }
 }
 
-/**
- * One quote-fidelity finding for a quotation and a source read. The returned
- * value is an accepted V1 finding state, so a caller cannot wrap the outcome in
- * a status the truth table refuses: a proven mismatch always carries the
- * fragment that shows it, and an unavailable or unaddressable comparison can
- * never be reported as a mismatch.
- */
 export function decideQuoteFidelity(
   input: QuoteFidelityInput,
 ): VerificationFinding {

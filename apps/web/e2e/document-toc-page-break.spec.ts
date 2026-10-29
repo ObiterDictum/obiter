@@ -11,18 +11,6 @@ import {
   runMenuCommand,
 } from './editor-chrome'
 
-/*
- * E7c regression journey: a save that stores a page break and a table of
- * contents in one batch used to leave the workspace permanently blocked —
- * the history baseline could not translate the snapshot recorded between
- * the two pending insertions, so a typed edit painted but Save stayed
- * disabled and a fresh context silently lost it. Each feature alone
- * dirtied correctly; only the combination failed, which is why the
- * mounted and single-save journeys never saw it. Only a real browser
- * decides the painted fold, the save boundary and the reload; the mounted
- * suite covers the snapshot translation the boundary runs.
- */
-
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
 const HEADING = 'E4 Heading'
@@ -55,8 +43,6 @@ test('a typed edit beside a stored table of contents and page break saves and re
   const matter = `E7c contents break ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter, FIXTURE)
 
-  // Two headings so the field lists real entries, and a page break so the
-  // body paginates onto a second sheet.
   for (const text of [HEADING, 'Beta paragraph']) {
     await focusParagraph(page, text)
     await openMenu(page, 'Format')
@@ -67,8 +53,6 @@ test('a typed edit beside a stored table of contents and page break saves and re
   await openRibbon(page, 'Insert')
   await runMenuCommand(page, 'Insert', 'Page break')
 
-  // Place the field in the first sheet's flow; the break and the field
-  // store in one save.
   await focusParagraph(page, 'Alpha item')
   await openRibbon(page, 'References')
   await tocButton(page).click()
@@ -78,8 +62,6 @@ test('a typed edit beside a stored table of contents and page break saves and re
   expect(sheets).toBeGreaterThan(1)
   await shot(page, '01-saved')
 
-  // The typed edit must dirty the workspace: Save enabled, not a painted
-  // value that only lives in the DOM until the next reload.
   const TYPED = 'E7CTYPED'
   await focusParagraph(page, 'Delta paragraph')
   await page.keyboard.press('End')
@@ -88,7 +70,6 @@ test('a typed edit beside a stored table of contents and page break saves and re
   await shot(page, '02-typed-dirty')
   await saveAndWait(page)
 
-  // A fresh context reads the typed text back alongside the stored field.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {

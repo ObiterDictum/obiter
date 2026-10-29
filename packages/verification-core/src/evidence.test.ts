@@ -130,7 +130,6 @@ describe('Evidence references', () => {
         paragraphNumber: 9,
       }),
     ).toThrow()
-    // A document granularity on the provision source type is not a member.
     expect(() =>
       evidenceReferenceSchema.parse({
         sourceType: 'legislation_provision',
@@ -262,7 +261,6 @@ describe('Evidence reference identity', () => {
     expect(createEvidenceReferenceId(legislationDocumentReference)).toBe(
       'ukpga/2010/15:legislation_document',
     )
-    // A document reference cannot collide with a fragment of the same source.
     expect(createEvidenceReferenceId(judgmentDocumentReference)).not.toBe(
       createEvidenceReferenceId(judgmentReference),
     )

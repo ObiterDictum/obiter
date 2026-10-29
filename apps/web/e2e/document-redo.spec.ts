@@ -27,9 +27,6 @@ const password = process.env.E6_E2E_PASSWORD
 const fixture = process.env.E6_E2E_DOCX
 const shots = process.env.E6_E2E_SHOTS ?? '/tmp/e6-shots'
 const matterName = process.env.E6_E2E_MATTER ?? 'E6 Redo Matter'
-// Typing coalesces into one history step per burst (document-history-grouping):
-// a word boundary ends the run, so this marker is two steps (the space, then
-// the word) and two Undo presses remove it.
 const textMarker = ' REDO-MARKER'
 const ready = Boolean(email && password && fixture)
 const capturing = process.env.E6_E2E_CAPTURE === '1'
@@ -78,7 +75,6 @@ async function signIn(page: Page) {
   throw new Error('sign-in did not leave the sign-in route')
 }
 
-/** Opens the synthetic fixture through the product's own navigation. */
 async function openFixtureDocument(page: Page, matter = matterName) {
   await signIn(page)
 
@@ -130,7 +126,6 @@ const save = (page: Page) => page.getByRole('button', { name: 'Save' })
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
-/** Distinct paragraphs rendered, counting a block split across pages once. */
 function uniqueParagraphCount(page: Page) {
   return page.$$eval(
     '[data-paragraph-id]',
@@ -139,7 +134,6 @@ function uniqueParagraphCount(page: Page) {
   )
 }
 
-/** Clicks a paragraph until its editor holds the focus. */
 async function focusParagraph(page: Page, text: string) {
   const target = paragraph(page, text)
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -154,7 +148,6 @@ async function focusParagraph(page: Page, text: string) {
   throw new Error(`could not focus the paragraph containing "${text}"`)
 }
 
-/** Focuses a paragraph and leaves the caret at the end of its text. */
 async function caretAtEnd(page: Page, text: string) {
   await focusParagraph(page, text)
   await page.keyboard.press('Control+End')
@@ -165,26 +158,16 @@ async function typeInParagraph(page: Page, text: string, marker: string) {
   await page.keyboard.type(marker)
 }
 
-/**
- * Clicks a control, skipping it in capture mode when the checkout under test
- * has it disabled: a disabled button is a Before-column result, not a reason
- * for the capture run to stop.
- */
 async function clickControl(locator: ReturnType<Page['getByRole']>) {
   if (capturing && (await locator.isDisabled().catch(() => true))) return
   await locator.click()
 }
 
-/**
- * Clicks when the control is enabled in either mode, so a stage that the
- * repaired checkout correctly disables does not hang the run.
- */
 async function clickIfEnabled(locator: ReturnType<Page['getByRole']>) {
   if (await locator.isDisabled().catch(() => true)) return
   await locator.click()
 }
 
-/** Waits for the rendered paragraph count to settle on a value. */
 async function waitForParagraphCount(
   page: Page,
   expected: number,
@@ -199,7 +182,6 @@ async function waitForParagraphCount(
     .toBe(expected)
 }
 
-/** The count once two consecutive reads agree, so a late render is not read mid-flight. */
 async function settledParagraphCount(page: Page) {
   let previous = -1
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -218,7 +200,6 @@ test.describe('redo in a browser', () => {
   }) => {
     await openFixtureDocument(page)
 
-    // No undo has happened, so there is no redo branch yet.
     await check(redo(page)).toBeDisabled()
     await shot(page, '01-redo-disabled-before-any-undo')
 
@@ -226,7 +207,6 @@ test.describe('redo in a browser', () => {
     await shot(page, '02-text-edited')
     await check(editor(page)).toHaveValue(/REDO-MARKER$/)
 
-    // Two typing runs is two undo steps: the space, then the word.
     await clickControl(undo(page))
     await clickControl(undo(page))
     await shot(page, '03-undo-removed-the-edit')
@@ -239,8 +219,6 @@ test.describe('redo in a browser', () => {
     await check(editor(page)).toHaveValue(/REDO-MARKER$/)
     await check(redo(page)).toBeDisabled()
 
-    // Save, then read the stored version back in a fresh context: only the
-    // saved model can produce the marker.
     await clickControl(save(page))
     await check(save(page)).toBeDisabled({ timeout: 30_000 })
 
@@ -259,8 +237,6 @@ test.describe('redo in a browser', () => {
   test('steps several edits back and forward', async ({ page }) => {
     await openFixtureDocument(page)
 
-    // Undo is per typing run, not per keystroke: word boundaries break the
-    // burst, so 'A B C' is three steps where three plain letters would be one.
     await typeInParagraph(page, 'Paragraph 2.', 'A B C')
     await check(editor(page)).toHaveValue(/A B C$/)
 
@@ -288,7 +264,6 @@ test.describe('redo in a browser', () => {
     await check(redo(page)).toBeDisabled()
     await shot(page, '08-new-edit-cleared-redo')
 
-    // The shortcut is inert once the branch is gone, not just the button.
     await page.keyboard.press('Control+Shift+Z')
     await check(editor(page)).toHaveValue(/NEW$/)
     await check(editor(page)).not.toHaveValue(/OLD/)
@@ -301,12 +276,9 @@ test.describe('redo in a browser', () => {
     await page.keyboard.press('Enter')
     const pending = page.getByLabel('Pending paragraph text', { exact: true })
     await check(pending).toBeVisible({ timeout: 10_000 })
-    // One keystroke is one history step, so a single character keeps the
-    // split and the text as two separable redo steps.
     await pending.pressSequentially('S', { delay: 20 })
     await shot(page, '09-split-typed')
 
-    // Undo is per edit: the text rewinds first, the split second.
     await clickControl(undo(page))
     await check(pending).toHaveValue(/^$/)
     await clickControl(undo(page))
@@ -369,15 +341,12 @@ test.describe('redo in a browser', () => {
     page,
     browser,
   }) => {
-    // Its own matter so a previous run's saved insert cannot move the count.
     const matter = `${matterName} duplicate ${String(Date.now())}`
     await openFixtureDocument(page, matter)
 
     await focusParagraph(page, 'Paragraph 1.')
     const before = await settledParagraphCount(page)
 
-    // Insert a paragraph, then type so Undo has a text step while the insert
-    // itself stays in the draft state.
     await runMenuCommand(page, 'Edit', 'Insert paragraph')
     const pending = page.getByLabel('Pending paragraph text', { exact: true })
     await check(pending).toBeVisible({ timeout: 10_000 })
@@ -385,9 +354,6 @@ test.describe('redo in a browser', () => {
     await clickControl(undo(page))
     await check(pending).toHaveValue(/^$/)
 
-    // Saving covers the insert, which ends the redo branch: a redo would
-    // restore the snapshot that still holds it and the next save would insert
-    // a second copy.
     await clickControl(save(page))
     await check(save(page)).toBeDisabled({ timeout: 30_000 })
     await check(redo(page)).toBeDisabled({ timeout: 30_000 })
@@ -396,8 +362,6 @@ test.describe('redo in a browser', () => {
     await clickIfEnabled(save(page))
     await check(save(page)).toBeDisabled({ timeout: 30_000 })
 
-    // A fresh context reads the stored version back: exactly one paragraph was
-    // added, not two.
     const fresh = await browser.newContext()
     const reloaded = await fresh.newPage()
     try {
@@ -420,8 +384,6 @@ test.describe('redo in a browser', () => {
     await focusParagraph(page, 'Paragraph 1.')
     const before = await settledParagraphCount(page)
 
-    // Join 'Paragraph 2.' into 'Paragraph 1.', then undo so the redo deletes
-    // the same stored paragraph again.
     await focusParagraph(page, 'Paragraph 2.')
     await page.keyboard.press('Control+Home')
     await page.keyboard.press('Backspace')
@@ -433,7 +395,6 @@ test.describe('redo in a browser', () => {
     await clickControl(undo(page))
     await waitForParagraphCount(page, before, 'paragraph restored by undo')
 
-    // Park the caret on the paragraph the redo is about to remove.
     await focusParagraph(page, 'Paragraph 2.')
     await clickControl(redo(page))
     await waitForParagraphCount(
@@ -442,8 +403,6 @@ test.describe('redo in a browser', () => {
       'paragraph removed by the redo',
     )
 
-    // Focus must land on the surviving paragraph, not the body, and the next
-    // typed character must go there.
     const surviving = editor(page)
     await check(surviving).toBeFocused()
     await page.keyboard.type('Z')

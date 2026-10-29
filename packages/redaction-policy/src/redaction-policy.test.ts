@@ -11,11 +11,6 @@ import {
 import type { RampartSpanInput } from './rampart-map'
 import type { RedactionSpan } from './types'
 
-/**
- * The production order for a set of contributing detections: normalise the
- * person spans, then map. The mapper is heuristic-free; normalisation happens
- * before the union so a heuristic only ever judges a single detection (P0.30).
- */
 function mapNormalized(text: string, spans: RampartSpanInput[]) {
   return mapRampartSpans({
     text,
@@ -54,9 +49,6 @@ describe('redaction policy', () => {
   })
 
   it('trims honorifics and salutations swept into person spans', () => {
-    // The classifier's particle rescue widens name spans across short
-    // capitalised tokens, so a span arrives as "Dear Ms Amara" when the model
-    // only tagged "Amara". The name must survive; the salutation must not.
     const text = 'Dear Ms Amara Okonkwo, our client Dr Fairbairn agrees.'
     const spans = mapNormalized(text, [
       { start: 0, end: 13, label: 'GIVEN_NAME', score: 0.99 },
@@ -68,8 +60,6 @@ describe('redaction policy', () => {
       },
     ])
     expect(spans.map((span) => span.text)).toEqual(['Amara', 'Fairbairn'])
-    // Offsets must still point at the name in the source text, or the cover
-    // geometry would black out the wrong characters.
     expect(spans.map((span) => text.slice(span.start, span.end))).toEqual([
       'Amara',
       'Fairbairn',
@@ -123,9 +113,6 @@ describe('redaction policy', () => {
   })
 
   it('maps an already-normalised union without re-applying person heuristics', () => {
-    // P0.30: the union is wider than either contributing detection, so trimming
-    // or denying it here would discard the losing contributor's bytes. The
-    // caller normalises before the union; the mapper must not do it again.
     const text = 'Dr Smith Street'
     const spans = mapRampartSpans({
       text,
@@ -135,8 +122,6 @@ describe('redaction policy', () => {
   })
 
   it('maps an already-normalised union that contains a line break', () => {
-    // The break belonged to a contributing detection denied before the merge,
-    // or to a non-person detection; the mapper must not re-deny the union.
     const text = 'Jo\nnes Smith'
     const spans = mapRampartSpans({
       text,
@@ -146,7 +131,6 @@ describe('redaction policy', () => {
   })
 
   it('leaves non-person categories untrimmed', () => {
-    // "Dr" is a road abbreviation in an address, not an honorific.
     const spans = mapRampartSpans({
       text: 'Mount Dr, Bristol',
       spans: [{ start: 0, end: 8, label: 'STREET_NAME', score: 0.97 }],
@@ -155,8 +139,6 @@ describe('redaction policy', () => {
   })
 
   it('maps the address component labels the model actually emits', () => {
-    // CITY/STATE/ZIP_CODE verified present in the model label space (spike, July 2026);
-    // they fire on virtually every UK address ("Leicester", "LE4 5AB").
     const spans = mapRampartSpans({
       text: 'Leicester LE4 5AB',
       spans: [
@@ -168,10 +150,6 @@ describe('redaction policy', () => {
   })
 
   it('re-slices merged spans from the source so text always matches offsets', () => {
-    // Upstream's partial-overlap union widens start/end but keeps the winner's
-    // text, so a merged span can arrive with text that disagrees with its
-    // offsets. Finalize and the .docx burner require text.slice(start, end) ===
-    // text; the mapper must derive text from the source, not inherit it.
     const text = 'Alice alice@example.com'
     const spans = mapRampartSpans({
       text,
@@ -386,12 +364,6 @@ describe('redaction policy', () => {
   })
 })
 
-/**
- * P0.31: `reconcileRampartSpans` owns coverage and disposition *between*
- * detections. URL is the only keep category the product can emit; GIVEN_NAME and
- * SURNAME are redact. These exercise geometry directly, without the detector's
- * premask and projection in the way.
- */
 describe('reconcileRampartSpans (P0.31)', () => {
   const text = 'alpha bravo charlie delta'
   const at = (word: string, source = text) => {
@@ -416,7 +388,6 @@ describe('reconcileRampartSpans (P0.31)', () => {
         start: 6,
         end: 19,
         text: 'bravo charlie',
-        // The winner's category and source stay; only the disposition moves.
         category: 'url',
         source: 'rampart_deterministic',
         confidence: 'high',
@@ -539,9 +510,6 @@ describe('reconcileRampartSpans (P0.31)', () => {
   })
 
   it('resolves an equal-score tie deterministically and still redacts', () => {
-    // Equal score and equal length: only the source tie-break decides which
-    // detection names the union. The deterministic source (URL) wins, but the
-    // redact-required contributor still owns the disposition.
     const redact = span('GIVEN_NAME', at('charlie'), 0.9)
     const keep = span('URL', at('charlie'), 0.9)
     const forward = reconcile(text, [keep, redact])
@@ -560,9 +528,6 @@ describe('reconcileRampartSpans (P0.31)', () => {
   })
 
   it('is order-independent when contributors have no usable score', () => {
-    // `NaN !== NaN`, so an unnormalised comparison would skip the length,
-    // source and category tie-breaks and let input order name the union. A
-    // non-finite score is normalised to 0.
     const email = span('EMAIL', at('charlie'), Number.NaN)
     const city = span('CITY', at('charlie'), Number.NaN)
     const forward = reconcile(text, [email, city])

@@ -4,12 +4,8 @@ export type SearchIndexStatus = 'ready' | 'empty' | 'missing' | 'unreachable'
 
 export interface SearchIndexState {
   status: SearchIndexStatus
-  /** False for unreachable too: the index was not confirmed present. */
   exists: boolean
-  /** Null when the probe failed before the server answered. */
   documentCount: number | null
-  /** Provider error code (for example `index_not_found`, `invalid_api_key`)
-   * or `timeout` / `connection_failed`. Codes only, never key material. */
   reason?: string
 }
 
@@ -26,11 +22,6 @@ class SearchIndexProbeTimeout extends Error {
   }
 }
 
-/**
- * Readiness probe for the product index: does it exist and roughly how many
- * documents does it hold. Never rejects — every failure mode is returned as
- * data so readiness and the boot check can report it instead of throwing it.
- */
 export async function getIndexStatus(
   client: IndexStatsClient,
   indexName: string,

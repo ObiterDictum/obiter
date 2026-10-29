@@ -56,14 +56,10 @@ describe('parseLegalDocMlParagraphs', () => {
 
     expect(paragraphs).toHaveLength(2)
     expect(paragraphs?.[0]?.text).toBe('The claimant runs the awards.')
-    // The cover sheet holds the case number and the court's address. The HTML
-    // path emitted those as the first judgment paragraphs.
     expect(JSON.stringify(paragraphs)).not.toContain('IP-2017-000196')
     expect(JSON.stringify(paragraphs)).not.toContain('Royal Courts of Justice')
   })
 
-  // A pinpoint citation has to resolve to the paragraph the court numbered, not
-  // to the nth block some extractor happened to produce.
   it('numbers paragraphs the way the court numbered them', () => {
     const paragraphs = parseLegalDocMlParagraphs(
       judgment(
@@ -95,8 +91,6 @@ describe('parseLegalDocMlParagraphs', () => {
     expect(paragraphs?.[0]?.paragraphNumber).toBe(106)
   })
 
-  // Appellate judgments contain several opinions, each numbering from one, so
-  // paragraph numbers repeat within a document. `id` stays unique by position.
   it('allows repeated numbers across separate opinions', () => {
     const paragraphs = parseLegalDocMlParagraphs(
       judgment(
@@ -111,7 +105,6 @@ describe('parseLegalDocMlParagraphs', () => {
     expect(new Set(paragraphs?.map((p) => p.id)).size).toBe(2)
   })
 
-  // A subparagraph is part of its paragraph, not a paragraph of its own.
   it('keeps nested sub-items inside their paragraph', () => {
     const paragraphs = parseLegalDocMlParagraphs(
       judgment(`
@@ -130,9 +123,6 @@ describe('parseLegalDocMlParagraphs', () => {
     expect(paragraphs?.[0]?.text).toContain('the second condition')
   })
 
-  // Block quotes of authority sit between paragraphs as unnumbered levels. They
-  // are substance, so they travel with the paragraph that introduced them
-  // rather than being dropped or given a number nobody could cite.
   it('attaches unnumbered content to the paragraph that introduced it', () => {
     const paragraphs = parseLegalDocMlParagraphs(
       judgment(
@@ -161,8 +151,6 @@ describe('parseLegalDocMlParagraphs', () => {
     expect(paragraphs?.[0]?.text).toBe('The claim is for passing off.')
   })
 
-  // Leaving these encoded puts `&#8220;` into the indexed text where a quotation
-  // mark belongs, so a phrase query spanning a quote cannot match.
   it('decodes character references in judgment text', () => {
     const paragraphs = parseLegalDocMlParagraphs(
       judgment(
@@ -195,10 +183,6 @@ describe('parseLegalDocMlParagraphs', () => {
 })
 
 describe('judgments grouped under levels', () => {
-  // Some judgments nest their paragraphs inside <level> groupings with
-  // headings instead of listing them under <decision>. A traversal that only
-  // read direct children found no paragraphs in those and fell back to HTML,
-  // which is the parse this parser exists to avoid.
   it('reads paragraphs nested inside a level', () => {
     const paragraphs = parseLegalDocMlParagraphs(
       judgment(`
@@ -248,8 +232,6 @@ describe('judgments grouped under levels', () => {
 })
 
 describe('falling back to HTML', () => {
-  // Returning null is the signal to use the HTML path. Returning an empty
-  // document instead would store a judgment with no text and look like success.
   it('returns null when the document has no judgment body', () => {
     expect(
       parseLegalDocMlParagraphs('<akomaNtoso><judgment/></akomaNtoso>', 'doc'),
@@ -288,11 +270,6 @@ describe('extractLegalDocMlMetadata', () => {
   })
 })
 
-/**
- * Trimmed from [2026] UKSC 31's own data.xml. The `<judge>` elements and the
- * `TLCPerson` entries carry the published bench; the cover prose around them
- * is the part the licence does not let us read.
- */
 const enrichedHeader = `
       <references source="#tna">
         <TLCPerson eId="judge-lord-reed-president" href="/judge-lord-reed-president" showAs="Lord Reed, President"/>
@@ -315,9 +292,6 @@ describe('extractLegalDocMlJudges', () => {
     ])
   })
 
-  // The licence boundary: [2026] EWHC 2282 (Admin) names its judge only in
-  // cover prose ("HUGO KEITH KC, SITTING AS A DEPUTY HIGH COURT JUDGE") with
-  // no marked-up element. Reading that paragraph would be text extraction.
   it('yields nothing when the bench is only cover prose', () => {
     const proseHeader = `
       <p style="text-align:center"><span style="font-weight:bold">Before</span>:</p>
@@ -336,7 +310,6 @@ describe('extractLegalDocMlJudges', () => {
 })
 
 describe('extractLegalDocMlPressSummary', () => {
-  // Trimmed from the published press summary of [2026] UKSC 31.
   const pressSummary = `<?xml version="1.0" encoding="UTF-8"?>
 <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:uk="https://caselaw.nationalarchives.gov.uk/akn">
   <doc name="pressSummary">

@@ -11,10 +11,6 @@ const pagedFeed = `<?xml version="1.0"?>
 </feed>`
 
 describe('reading links out of an Atom feed', () => {
-  // Attribute values are XML-escaped. Handed to `new URL` undecoded, this href
-  // parses as a parameter literally named `amp;page`, so the page number and
-  // every filter after the first ampersand are dropped and the request returns
-  // page one again. A paged walk then loops on the first page forever.
   it('decodes escaped ampersands in a next link', () => {
     const next = readRelLink(pagedFeed, 'next')
 

@@ -92,7 +92,6 @@ describe('Draft location offsets', () => {
   })
 
   it('measures an astral character as two UTF-16 code units', () => {
-    // U+1F600 is one code point, two UTF-16 code units and four UTF-8 bytes.
     const rawText = '\u{1F600} [2099] EWCA Civ 7'
     expect(rawText.length).toBe(20)
     expect([...rawText].length).toBe(19)
@@ -110,7 +109,6 @@ describe('Draft location offsets', () => {
   })
 
   it('measures a combining mark as its own UTF-16 code unit', () => {
-    // `e` plus U+0301: two UTF-16 code units, two code points, three UTF-8 bytes.
     const rawText = `e\u0301 ${citationText}`
     expect(rawText.length).toBe(20)
     expect([...rawText].length).toBe(20)
@@ -328,11 +326,6 @@ describe('Canonical legislation path normalisation', () => {
 
 describe('citation unresolved reasons', () => {
   it('names every distinct way an identity can fail to appear', () => {
-    // Resolution (V3) can fail in ways the first three reasons cannot express:
-    // a citation-shaped candidate no canonical identity matches, and a
-    // resolution that could not complete because a dependency failed. Both must
-    // be nameable, because a store outage recorded as "no match" would be a
-    // negative result the check never established.
     for (const reason of [
       'not_a_citation',
       'ambiguous',

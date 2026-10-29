@@ -26,13 +26,6 @@ const formatDefaults = {
   txt: 'Obiter could not read this text file.',
 } satisfies Record<Format, string>
 
-/**
- * What a failed detection means for this file. A stored failure reason records
- * what the detector reported, not what the reviewer is holding: an engine
- * message about a PDF text layer on a Word document sends the reviewer looking
- * for the wrong problem, so a reason that names another file format is replaced
- * with copy for the file's own type.
- */
 export function detectionFailureMessage(run: RedactionRun) {
   const format = sourceFormat(run)
   const stored = run.summary.failureReason?.trim()
@@ -44,12 +37,6 @@ export function detectionFailureMessage(run: RedactionRun) {
   return stored && !namesAnotherFormat ? stored : formatDefaults[format]
 }
 
-/**
- * A failed run is not a dead end: the reviewer gets the two things they can do
- * — try a different file, or go back to the run list — instead of a message and
- * nothing else. The upload starts the new run from here, so a failed file does
- * not cost a trip back to the start page.
- */
 export function DetectionFailure({
   run,
   onTryAnotherFile,
@@ -120,7 +107,6 @@ export function DetectionFailure({
   )
 }
 
-/** Why a run that finished found nothing, per detection mode it ran in. */
 export function zeroSpanBody(run: RedactionRun) {
   if (run.detectionMode === 'heuristics+supplement')
     return 'Only the fixed patterns ran: automatic reading of the text did not run, so check the document yourself for names, addresses and dates of birth before finalising.'

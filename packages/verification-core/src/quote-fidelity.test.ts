@@ -18,13 +18,6 @@ import {
   subject,
 } from './quote-fidelity.test-support'
 
-/**
- * The V4 decision: a quotation and a store read onto a V1 `quote_fidelity`
- * finding. The cases assert the honest mapping, the evidence rules, and the
- * guards that stop a quote being verified against a source it does not belong
- * to.
- */
-
 describe('quote fidelity decisions', () => {
   it('clears an exact quotation with the fragment that shows it', () => {
     const finding = find('the court must consider the point', caseLaw, {

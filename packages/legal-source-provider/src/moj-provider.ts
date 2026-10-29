@@ -35,20 +35,8 @@ import {
   type ParserIdentity,
 } from './legaldocml-parser'
 
-/**
- * Retrieval against Find Case Law. Fetches and parses; it does not store or
- * index. The search request path and bulk ingestion both call these, so that
- * there is one definition of how a judgment is read from the provider.
- */
-
 export type MojRateLimiter = ReturnType<typeof createMojRateLimiter>
 
-/**
- * The provider configuration these functions need. Narrower than the API's
- * environment on purpose: bulk ingestion runs outside the API and should not
- * have to construct an `ApiEnv` to fetch a judgment. `ApiEnv` satisfies this
- * structurally, so API call sites are unchanged.
- */
 export interface FindCaseLawEnv {
   mojFindCaseLawBaseUrl: string
 }
@@ -61,26 +49,14 @@ export interface ProviderSourceMetadata {
   contentHash: string
   rawAtomEntry: string
   rawDocumentHtml?: string
-  /** When this process read the source's metadata: the retrieval date a
-   * source page shows. Absent on rows written before it was recorded, and
-   * then shown as not recorded rather than inferred from `updated_at`. */
   acquiredAt?: string
 }
 
-/** A stored record, narrowed to what re-fetching actually reads. */
 export interface ProviderDocumentSource {
   summary: LegalAuthority
   provider: ProviderSourceMetadata
 }
 
-/**
- * Why a judgment body could not be read from the provider.
- *
- * The distinction matters to callers that retry: `off_origin` and
- * `http_error` mean a body was fetchable and was not received, while
- * `unparsable` means the body arrived and cannot be read, so a retry will not
- * change the outcome.
- */
 export type ProviderSkipReason = 'off_origin' | 'http_error' | 'unparsable'
 
 export type ProviderDocumentResult =
@@ -88,59 +64,26 @@ export type ProviderDocumentResult =
       status: 'ok'
       document: LegalAuthority
       provider: ProviderSourceMetadata
-      /**
-       * Which parser produced the paragraphs. A corpus that mixes parsers
-       * without recording which is which makes later drift undiagnosable: a
-       * changed document could be the provider's doing or ours.
-       */
       parser: ParserIdentity
-      /** Set when LegalDocML was wanted but the HTML path had to be used. */
       fallbackReason?: LegalDocMlFallbackReason
     }
   | { status: 'skipped'; reason: ProviderSkipReason }
   | { status: 'rate_limited'; retryAfter: string | null }
   | { status: 'unavailable' }
 
-/**
- * Why a judgment was read from HTML rather than from LegalDocML. Recorded and
- * reported rather than swallowed: a rise in any of these is the signal that the
- * provider's XML coverage has changed.
- */
 export type LegalDocMlFallbackReason =
   'no_xml_uri' | 'xml_unavailable' | 'xml_unparsable' | 'xml_off_origin'
 
-/**
- * The one way this package fetches an upstream URL: same-origin, redirects not
- * followed. Narrower than `typeof fetch` so a caller can pass a paced wrapper
- * without reproducing runtime-specific members of the global.
- */
 export type ProviderFetch = (
   url: URL,
   init: { redirect: 'manual' },
 ) => Promise<Response>
 
 export interface DetailFetchOptions {
-  /**
-   * Read the judgment from LegalDocML `data.xml` instead of the HTML page.
-   *
-   * Defaults to false so that the search request path keeps the behaviour it
-   * shipped with. Bulk ingestion opts in, because paragraph boundaries are the
-   * unit its evidence model is built on and the HTML path numbers them by
-   * position among extracted blocks rather than by the court's own numbering.
-   */
   preferLegalDocMl?: boolean
-  /**
-   * HTTP implementation. Defaults to the global fetch; bulk ingestion passes
-   * its own so the whole ingest walk, body included, runs against one seam.
-   */
   fetchImpl?: ProviderFetch
 }
 
-/**
- * Search hydration takes the first page or so. A collection walk takes
- * everything in the slice, so both bounds are caller-supplied rather than fixed
- * at the search path's values.
- */
 export interface AtomFetchLimits {
   maxEntries: number
   maxPages: number
@@ -213,8 +156,6 @@ export async function fetchMojAuthoritySummaries(
     entries.push(...parseFindCaseLawAtom(xml, request))
     const nextHref =
       entries.length < limits.maxEntries ? readRelLink(xml, 'next') : null
-    // An off-origin rel="next" ends the walk rather than being fetched: a
-    // feed cannot redirect the collection walk at another host.
     nextUrl = nextHref
       ? resolveProviderUrl(env.mojFindCaseLawBaseUrl, nextHref)
       : null
@@ -265,10 +206,6 @@ export function providerMetadataFromAtomEntry(
   }
 }
 
-/**
- * Reads a judgment from LegalDocML. Returns the reason it could not, so the
- * caller can fall back to HTML and report why rather than silently degrading.
- */
 async function fetchLegalDocMlParagraphs(
   env: FindCaseLawEnv,
   entry: AtomEntry,
@@ -286,8 +223,6 @@ async function fetchLegalDocMlParagraphs(
   const xmlUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, entry.xmlUri)
   if (!xmlUrl) return { status: 'fallback', reason: 'xml_off_origin' }
 
-  // Charged after the off-origin guard and immediately before the attempt: a
-  // URI we refuse to fetch must not spend a slot.
   const charged = await budget.charge()
   if (charged.status === 'unavailable') return { status: 'unavailable' }
   if (charged.status === 'rate_limited') {
@@ -358,7 +293,6 @@ export async function fetchMojAuthorityDetail(
   )
   if (!detailUrl) return { status: 'skipped', reason: 'off_origin' }
 
-  // LegalDocML supplied the paragraphs, so the HTML page is not fetched at all.
   if (legalDocMlParagraphs) {
     const document = LegalAuthoritySchema.safeParse({
       id: documentId,
@@ -439,8 +373,6 @@ export async function fetchMojAuthorityDocumentFromRecord(
     (uri): uri is string => Boolean(uri),
   )
 
-  // Best of the failed attempts: a guard refusal outranks a bad response,
-  // which outranks a body we received but could not parse.
   const failures: ProviderSkipReason[] = []
 
   for (const sourceUri of sourceUris) {

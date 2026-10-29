@@ -1,14 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { documentWidths, mockSession, workspaceNav } from './shell-harness'
 
-/**
- * The meeting-demo repairs that can be proven without a database: Verify's
- * identity and live status, the search focus rings, and the 390px viewport.
- * The API is mocked at the network boundary so the assertions read rendered
- * layout and focus, not a seeded fixture. The sidebar's own layout has its
- * spec in responsive-shell.spec.ts.
- */
-
 const RUN_ID = 'vrun_6f2ffddc-4c20-4df5-b981-44ea5e1bd4dc'
 const VERSION_ID = 'ver_9a6135fb-0000-4000-8000-000000000003'
 const DOC_ID = 'doc_9a6135fb-0000-4000-8000-000000000001'
@@ -46,9 +38,6 @@ async function mockVerifyData(page: Page) {
       },
     }),
   )
-  // The findings endpoint shares the `/api/verification-runs` prefix, so it is
-  // mocked in its own shape: a run, a page of findings and the next cursor.
-  // Answering it with the run list is how this spec used to crash the view.
   await page.route(`**/api/verification-runs/${RUN_ID}/findings**`, (route) =>
     route.fulfill({
       json: {
@@ -183,8 +172,6 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
   await page.goto('/verify')
   await expect(workspaceNav(page)).toBeVisible()
 
-  // The nav calls no working capability "Soon" any more: Agent is a real row
-  // that opens a panel, and nothing is marked as coming later.
   const verifyMode = workspaceNav(page).getByRole('link', {
     name: /^Verify/,
   })
@@ -195,8 +182,6 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
     workspaceNav(page).getByRole('button', { name: 'Agent' }),
   ).toBeVisible()
 
-  // Identity is the document and matter, not the run or version UUID. The
-  // sidebar also lists the matter, so the page's own copy is what is read here.
   await expect(
     page.locator('main').getByText('Potanina-skeleton-argument.docx'),
   ).toBeVisible()
@@ -212,8 +197,6 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
     page.locator('main').getByRole('link', { name: 'Open document' }),
   ).toBeVisible()
 
-  // The checked version is named by its number, as everywhere else in the
-  // product; the internal version id is never shown.
   await expect(
     page
       .locator('main')
@@ -222,7 +205,6 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
   ).toBeVisible()
   await expect(page.locator('main').getByText(VERSION_ID)).toBeHidden()
 
-  // Matches are folded behind one line that opens in place.
   const matches = page.locator('main').getByRole('button', {
     name: /matches? the checked source/,
   })

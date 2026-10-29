@@ -7,12 +7,6 @@ import {
   type VerificationSubject,
 } from './index'
 
-/**
- * Shared fixtures for the quote-fidelity decision suites. The same subject,
- * citations and fragment builders feed the decision, span and source-integrity
- * tests so they cannot drift from each other.
- */
-
 export const subject: VerificationSubject = {
   documentId: 'd-4',
   versionId: 'v-1',
@@ -58,7 +52,6 @@ export const provision = {
   text: 'A public authority must not act incompatibly with the Convention.',
 } satisfies QuoteFragment
 
-/** The stored identity `legislation` resolves to, as the resolver returns it. */
 export const resolvedSection40 = {
   documentIdentity: 'ukpga/2010/15',
   labelPath: 'section/40',

@@ -87,8 +87,6 @@ describe('authority existence decision', () => {
   })
 
   it('refuses to clear a whole-authority finding on a fragment alone', () => {
-    // A paragraph the check never read is not proof of the document, so a
-    // fragment cannot substitute for the document identity.
     expect(() =>
       decide({
         outcome: { outcome: 'held', evidence: judgmentFragmentEvidence },
@@ -175,8 +173,6 @@ describe('authority existence decision', () => {
   })
 
   it('rejects the impossible case law missing-provision pairing', () => {
-    // Case law has no provisions, so this pairing is contradictory rather than
-    // an unreachable branch waiting to be emitted for a judgment.
     expect(() =>
       decide({ outcome: { outcome: 'not_held', missing: 'provision' } }),
     ).toThrow()
@@ -232,7 +228,6 @@ describe('authority existence decision', () => {
       reason: 'evidence_unavailable',
     })
     expect(finding.evidence).toEqual([])
-    // Correct for one withdrawn match and for several.
     expect(finding.explanation.toLowerCase()).toContain('every')
   })
 

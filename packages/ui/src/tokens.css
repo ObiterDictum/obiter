@@ -1,9 +1,3 @@
-/*
- * Frozen token names: docs/specs/app-shell/contract.md §2.
- * Light is the default (:root); dark is an explicit override. The shell still
- * seeds and persists dark until redesign Stage 2, so the product looks the
- * same as before while the token layer matches the approved design.
- */
 :root {
   color-scheme: light;
   --obiter-bg: #f4f0e7;
@@ -76,8 +70,6 @@
   --obiter-span-organisation-name-bg: hsl(280 45% 89%);
   --obiter-span-organisation-name-fg: hsl(282 40% 34%);
 
-  /* Reviewers: one hue per person, so a change's author is readable without
-     relying on colour alone — the list prints their initials too. */
   --obiter-reviewer-1: hsl(214 70% 34%);
   --obiter-reviewer-1-surface: hsl(214 65% 93%);
   --obiter-reviewer-2: hsl(150 55% 26%);
@@ -167,9 +159,7 @@
   --obiter-text: #f1efe8;
   --obiter-text-muted: #a7aaaf;
   --obiter-text-subtle: #8b8f95;
-  /* Deeper than the first pass (#5c7391): a primary button read as a washed
-     grey on the night surface. 5.58:1 against its white label and 3.25:1
-     against the page, so the fill still reads as a control boundary. */
+
   --obiter-brand: #54698a;
   --obiter-brand-fg: #ffffff;
   --obiter-brand-hover: #5f7596;

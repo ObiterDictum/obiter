@@ -43,7 +43,6 @@ describe('resolveProviderUrl', () => {
 
   it('upgrades a plaintext same-host link to the base scheme', () => {
     // legislation.gov.uk publishes rel="next" hrefs as http:// on its own
-    // host; those must be fetched over https, never in the clear.
     expect(
       resolveProviderUrl(
         'https://www.legislation.gov.uk',
@@ -168,8 +167,6 @@ describe('provider fetch sinks refuse off-origin URLs', () => {
   })
 
   it('does not follow a redirect that leaves the provider host', async () => {
-    // A stub that would happily follow the redirect if the sink forgot
-    // redirect: 'manual' — the exact regression this pins.
     const fetchMock = vi.fn(async (_input: unknown, init?: RequestInit) => {
       if (init?.redirect === 'manual') {
         return new Response(null, {

@@ -5,19 +5,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openRibbonTab } from './editor-chrome'
 
-/*
- * E6a browser journey: the Insert ribbon's table and picture controls must
- * paint the pending insertion through the same wire model a reloaded document
- * uses, and a fresh context must read the stored `w:tbl` and `w:drawing` back.
- * Only a real browser decides the painted table grid, the decoded image
- * bytes, and the re-parsed identities; the mounted suites cover the fold,
- * the save plan, and the writer round-trip.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. The fixture is the repo's synthetic demo document.
- */
-
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -26,7 +13,6 @@ const FIXTURE = path.resolve(
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
 const shots = process.env.E6A_E2E_SHOTS
 
-/** A 1x1 synthetic PNG — the picker reads its natural size from real bytes. */
 const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
@@ -65,7 +51,6 @@ async function saveAndWait(page: Page) {
   await expect(save(page)).toBeDisabled({ timeout: 30_000 })
 }
 
-/** The pending fold and the reload both paint the inserted 3x4 grid. */
 function expectInsertedTable(page: Page) {
   return expect
     .poll(async () =>
@@ -107,7 +92,6 @@ test('table and picture insertions paint, save and reload', async ({
     }
   })
 
-  // A table anchors to the caret paragraph and paints its grid before save.
   await focusHeading(page)
   await openRibbon(page, 'Insert')
   await page
@@ -119,7 +103,6 @@ test('table and picture insertions paint, save and reload', async ({
   await expectInsertedTable(page)
   await shot(page, '01-pending-table')
 
-  // The picture input validates real bytes and the drawing paints pending.
   const imagesBefore = await page.locator('img').count()
   await focusHeading(page)
   await page.locator('input[aria-label="Insert picture"]').setInputFiles({
@@ -145,8 +128,6 @@ test('table and picture insertions paint, save and reload', async ({
     }),
   )
 
-  // A fresh context reads the stored block back: the same 3x4 grid and the
-  // same image count, now resolved from the stored media part.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {

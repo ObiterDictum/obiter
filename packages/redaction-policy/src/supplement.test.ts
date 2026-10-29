@@ -4,9 +4,6 @@ import type { RedactionSpan } from './types'
 
 const legalText = `Jane Smith of 10 Downing Street emailed jane.smith@example.com about matter CR-2024-00123. Her NI number is QQ 12 34 56 C. Smith & Jones Solicitors LLP act for the claimant.`
 
-// Returns only the matched text grouped by category, in document order. Keeps
-// assertions readable for the realistic-mixed-paragraph case where exact span
-// counts are brittle.
 function byCategory(spans: RedactionSpan[]) {
   const groups: Record<string, string[]> = {}
   for (const span of spans) (groups[span.category] ??= []).push(span.text)
@@ -219,10 +216,6 @@ describe('UK supplement — bank details (context-gated)', () => {
 })
 
 describe('UK supplement — negatives (new patterns must never trigger)', () => {
-  // The new contact/financial patterns must not fire on legal prose. These
-  // strings ARE legitimate matches for the pre-existing case_reference pattern
-  // (CR-2024-00123, 2024/ABC/0123), so the assertion is scoped to the new
-  // categories — the requirement is that the new detectors stay silent here.
   const newCategories = ['email', 'phone', 'account_number'] as const
 
   const neutral = [
@@ -258,16 +251,12 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
     expect(groups.national_insurance).toEqual(['JX 12 34 56 D'])
     expect(groups.case_reference).toEqual(['CR-2024-00123'])
     expect(groups.organisation_name).toEqual(['Smith & Jones Solicitors LLP'])
-    // account_number covers account number + sort code + IBAN (all three),
-    // in document order.
     expect(groups.account_number).toEqual([
       '12345678',
       '12-34-56',
       'GB29 NWBK 6016 1331 9268 19',
     ])
 
-    // No false positives: the legal date and the neutral citation must not
-    // appear anywhere in the span set.
     const allText = spans.map((span) => span.text)
     expect(allText).not.toContain('15 March 2024')
     expect(allText).not.toContain('[2024]')
@@ -275,7 +264,6 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
 
   it('does not flag the postcode/email as overlapping (distinct, non-overlapping spans)', () => {
     const spans = supplementSpans(paragraph)
-    // Within the supplement alone, no two spans should overlap.
     for (let i = 0; i < spans.length; i += 1) {
       for (let j = i + 1; j < spans.length; j += 1) {
         const overlaps =
@@ -286,8 +274,6 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
   })
 
   it('merges supplement spans with Rampart spans, Rampart winning on overlap', () => {
-    // Rampart detects the full email region as part of a person/identifier span;
-    // the supplement email inside it must be dropped by the existing merge.
     const emailStart = paragraph.indexOf('james.cartwright@personal.co.uk')
     const emailEnd = emailStart + 'james.cartwright@personal.co.uk'.length
     const rampart: RedactionSpan = {
@@ -302,7 +288,6 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
     }
     const supplement = supplementSpans(paragraph)
     const merged = mergeSpans([rampart], supplement)
-    // The supplement email that sat inside the Rampart region is gone.
     expect(
       merged.find(
         (span) =>
@@ -310,22 +295,14 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
           span.source === 'uk_supplement',
       ),
     ).toBeUndefined()
-    // Non-overlapping supplement spans survive.
     expect(
       merged.find((span) => span.category === 'national_insurance'),
     ).toBeDefined()
   })
 })
 
-// ---------------------------------------------------------------------------
-// Review fixes (PR #33): tighten the new detection patterns. Each block below
-// covers one verified review finding — the false positive it closed plus the
-// real positive that must still match.
-// ---------------------------------------------------------------------------
-
 describe('review fix — account cue trailing boundary', () => {
   it('does not let cue prefix words ("not", "northern", "notes") satisfy "account no"', () => {
-    // Before the fix the cue `no` matched as a prefix of later words.
     expect(
       supplementSpans('account not 12345678').filter(
         (s) => s.category === 'account_number',
@@ -393,7 +370,6 @@ describe('review fix — phone constrained to real UK numbering shapes', () => {
   })
 
   it('does not match bundle/exhibit reference numbers or bare 0-prefixed runs', () => {
-    // Before the fix the national arm accepted any 9–13 digit 0-prefixed run.
     const cases = [
       'reference 012345678 in the bundle',
       'exhibit 012345678901',
@@ -442,19 +418,14 @@ describe('review fix — email vs filenames', () => {
 
 describe('review fix — intra-supplement overlap dedupe', () => {
   it('resolves overlapping spans from different patterns before returning', () => {
-    // A national insurance number "AB 12 34 56 C" overlapping a context-gated
-    // sort code "12 34 56" (cue immediately before) is the canonical case:
-    // two patterns fire on the same region.
     const text = 'sort code AB 12 34 56 C'
     const spans = supplementSpans(text)
 
-    // Exactly one span survives the overlap region.
     const overlapping = spans.filter(
       (s) => s.start < 23 && s.end > 10, // intersects [10, 23)
     )
     expect(overlapping).toHaveLength(1)
 
-    // And no two returned spans overlap at all (property holds globally).
     for (let i = 0; i < spans.length; i += 1) {
       for (let j = i + 1; j < spans.length; j += 1) {
         const overlap =
@@ -467,7 +438,6 @@ describe('review fix — intra-supplement overlap dedupe', () => {
   it('keeps the higher-confidence span when two overlap (NI high vs sort code medium)', () => {
     const text = 'sort code AB 12 34 56 C'
     const spans = supplementSpans(text)
-    // The NI span (high) wins over the sort-code span (medium).
     const survivor = spans.find((s) => s.category === 'national_insurance')
     expect(survivor?.text).toBe('AB 12 34 56 C')
     expect(
@@ -478,7 +448,6 @@ describe('review fix — intra-supplement overlap dedupe', () => {
   })
 
   it('does not drop adjacent, non-overlapping spans (end === start)', () => {
-    // Two spans that merely touch must both survive.
     const spans = supplementSpans('account number 12345678 sort code 12-34-56')
     const account = spans.filter((s) => s.category === 'account_number')
     expect(account.map((s) => s.text)).toEqual(['12345678', '12-34-56'])
