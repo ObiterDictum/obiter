@@ -3,12 +3,6 @@ import { exitOnStartupFailure, installGracefulShutdown } from './lifecycle'
 import { closeDocumentModelWorkers } from './document-model-pool'
 import { createApiRuntime } from './runtime'
 
-/**
- * Node entry point and the documented rollback path. It serves the same
- * application as `server-bun.ts` through `@hono/node-server`; switching back is
- * redeploying the image whose entry point is this file, with no data or schema
- * change involved.
- */
 async function main() {
   const { env, pools, app } = await createApiRuntime('node')
 
@@ -39,14 +33,9 @@ async function main() {
     stopAccepting: () =>
       new Promise<void>((resolve) => {
         server.close(() => resolve())
-        // Keep-alive sockets are idle, not in flight; close() alone would wait
-        // out their timeout before its callback runs. Only the HTTP/1 server
-        // type exposes this, and this adapter only ever serves HTTP/1.
         if ('closeIdleConnections' in server) server.closeIdleConnections()
       }),
     closeResources: async () => {
-      // The document-model workers are process-owned resources like the
-      // pools: a drain must not leave threads behind holding the process.
       await Promise.all([pools.close(), closeDocumentModelWorkers()])
     },
     pendingCount: () =>

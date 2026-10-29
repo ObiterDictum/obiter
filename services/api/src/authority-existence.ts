@@ -21,21 +21,6 @@ import {
   resolveStoredProvisionPath,
 } from './routes/legal-search/legislation-store'
 
-/**
- * The authority-existence store boundary. It reads Obiter's stored public
- * legal-source record and returns what it found; it makes no truth-table
- * decision, which lives in `@obiter/verification-core`. Nothing here reads
- * matter data, calls an external provider, or writes: a check is a read of the
- * public corpus.
- *
- * A store failure is reported as `unavailable`, never swallowed into an
- * absence. The failure keeps its category, so a database that is down
- * (`store_error`) and a row that fails its schema (`malformed_record`) are
- * distinguishable by an operational caller even though both make the check
- * inconclusive. A withdrawn source is `unavailable` too: the row exists but is
- * not a trustworthy current source, which is different from not holding it at
- * all.
- */
 export async function lookupAuthorityExistence(
   pool: Pick<Pool, 'query'>,
   citation: NormalizedCitation,
@@ -55,12 +40,6 @@ export async function lookupAuthorityExistence(
   }
 }
 
-/**
- * One authority-existence finding: the store lookup for a resolved citation,
- * then the pure decision. A citation that did not resolve never reaches the
- * store, so an unresolved or unrun citation cannot accidentally acquire a
- * store verdict.
- */
 export async function checkAuthorityExistence(
   pool: Pick<Pool, 'query'>,
   input: {
@@ -78,11 +57,6 @@ export async function checkAuthorityExistence(
   return decideAuthorityExistence({ ...input, outcome })
 }
 
-/**
- * A store read that failed. The category is set only at the store boundary, so
- * a programmer error in the check's own logic is a different error type and is
- * never converted into an expected store failure.
- */
 type StoreFailureCategory = 'store_error' | 'malformed_record'
 
 class StoreReadError extends Error {
@@ -95,11 +69,6 @@ class StoreReadError extends Error {
   }
 }
 
-/**
- * Runs one stored read. Only a failure raised by the store boundary is
- * classified; anything else propagates, so a bug in this file cannot read as a
- * database outage.
- */
 async function readStore<T>(read: () => Promise<T>): Promise<T> {
   try {
     return await read()
@@ -113,11 +82,6 @@ async function readStore<T>(read: () => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * The only place a store failure becomes a lookup outcome, so the diagnostic
- * exists exactly once. It records the category and the error message — never
- * the citation, matter text or any other input.
- */
 function storeUnavailable(error: StoreReadError): AuthorityExistenceOutcome {
   const message = error.cause instanceof Error ? error.cause.message : null
   console.warn('Authority existence store read failed', {
@@ -127,14 +91,6 @@ function storeUnavailable(error: StoreReadError): AuthorityExistenceOutcome {
   return { outcome: 'unavailable', reason: error.category }
 }
 
-/**
- * Exact neutral-citation match only. A held judgment is evidenced by the
- * stored document itself, not by an arbitrary paragraph of it: existence is a
- * claim about the document, so a judgment whose paragraph array is empty still
- * clears truthfully. A single match whose stored id disagrees with the
- * citation's resolved source id is an inconsistent identity, not a held
- * authority.
- */
 async function lookupCaseLaw(
   pool: Pick<Pool, 'query'>,
   citation: Extract<NormalizedCitation, { kind: 'case_law' }>,
@@ -157,8 +113,6 @@ async function lookupCaseLaw(
       }
     }
 
-    // One rule, shared with V3, decides what a live or withdrawn carrier set
-    // means; this function only maps the selection onto its verdict.
     const selection = selectAuthorityCarriers(carriers)
     switch (selection.kind) {
       case 'none':
@@ -188,13 +142,6 @@ async function lookupCaseLaw(
   }
 }
 
-/**
- * A held Act is evidenced by the document identity itself, so an Act that
- * holds no provisions still clears truthfully. A provision citation is
- * resolved through the shared single-schedule resolver, the same one the
- * serving path uses, so a stored `schedule/paragraph/N` answers a citation
- * for `schedule/1/paragraph/N` instead of reading as not held.
- */
 async function lookupLegislation(
   pool: Pick<Pool, 'query'>,
   documentIdentity: string,
@@ -245,9 +192,6 @@ async function lookupLegislation(
       case 'missing':
         return { outcome: 'not_held', missing: 'provision' }
       case 'underspecified':
-        // The Act is held but the citation names no schedule and the store
-        // cannot resolve it without guessing. That is a citation problem, not
-        // an absent provision, so it must not read as not held.
         return { outcome: 'unavailable', reason: 'citation_underspecified' }
     }
   } catch (error) {

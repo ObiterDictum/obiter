@@ -31,16 +31,6 @@ import {
 } from './redaction-secure-pdf'
 import type { StorageService } from './storage'
 
-/**
- * Produce the secure PDF for a hard redaction, or refuse. This is a domain
- * function behind the finalize handler so the route stays a boundary: it owns
- * source-kind dispatch, the DOCX render hop, rasterization and the safety gate
- * that must pass before any output is stored or the run is finalized.
- *
- * There is no text fallback here by design. A failure is surfaced so the run
- * stays unfinalized and no share-safe claim is made about a substitute file.
- */
-
 export type HardRedactionFailureCategory =
   | 'container_unavailable'
   | 'pdf_burn_failed'
@@ -78,9 +68,7 @@ export interface HardRedactionSource {
 export interface BuildHardRedactionPdfInput {
   ooxmlLimits?: OoxmlPackageLimits
   run: RedactionRunRecord
-  /** Extracted source text the span offsets address, unmodified. */
   sourceText: string
-  /** `applyRedacted(sourceText, ...)`: accepted regions already removed. */
   redactedText: string
   source: HardRedactionSource | null
   layoutObjectKey: string | null
@@ -126,7 +114,6 @@ async function buildSecurePdfFromSourcePdf(
   const layout = await readLayout(storage, layoutObjectKey)
   const pdfBytes = await storage.readBinary(source.objectKey)
   try {
-    // The PDF path already rasterizes marks into a text-free image per page.
     return await buildRedactedPdf({
       pdfBytes,
       layout,
@@ -135,11 +122,7 @@ async function buildSecurePdfFromSourcePdf(
       decisions,
     })
   } catch (error) {
-    // A page the rasterizer refused as too large is a safety refusal, not a
-    // geometry or parse failure, so it keeps its own category.
     if (error instanceof RedactionRasterLimitError) throw error
-    // Span-integrity errors are handled by the route before this runs, so any
-    // refusal here is a cover or rasterization failure.
     throw new HardRedactionOutputError(
       'pdf_burn_failed',
       error instanceof RedactionCoverGeometryError
@@ -222,7 +205,6 @@ async function readLayout(
   return { version: 2, pages: [{ width: 1, height: 1 }], segments: [] }
 }
 
-/** Map any thrown value to a stable failure category for logs and audit. */
 export function hardRedactionFailureCategory(
   error: unknown,
 ): HardRedactionFailureCategory {

@@ -10,10 +10,6 @@ import { RedactionDocxBurnError } from './redaction-docx-error'
 import { hiddenXmlMarkup, mapDocxText } from './redaction-docx-map'
 import { decodedXmlText } from './redaction-docx-xml'
 
-/** Text carriers covered by the verified coordinate burn may deliberately keep
- * rejected duplicates. All other container content is checked independently.
- * Nested packages share a total expansion budget and a depth limit.
- */
 export async function assertNoSpanTextSurvives(
   bytes: Uint8Array,
   affected: RedactionSpan[],
@@ -62,7 +58,6 @@ export async function assertNoSpanTextSurvives(
         continue
       }
       const namedXml = /\.(?:xml|rels)$/iu.test(name)
-      // Mapped offsets were computed on UTF-8 text, so those parts stay UTF-8.
       const source = ranges.has(name)
         ? new TextDecoder('utf-8', { fatal: true }).decode(payload)
         : namedXml
@@ -94,8 +89,6 @@ export async function assertNoSpanTextSurvives(
           texts = decodedXmlText(
             residual,
             (element, attribute) =>
-              // Font names are definitions, not content: a person may share a
-              // name with the theme, style or run font that displays it.
               !(
                 (element.namespaceUri ===
                   'http://schemas.openxmlformats.org/drawingml/2006/main' &&
@@ -128,13 +121,9 @@ export async function assertNoSpanTextSurvives(
               ),
           )
         } catch (error) {
-          // Markup-like content that is not well-formed XML (an HTML altChunk,
-          // say) is still entity-decoded whole; named XML parts must parse.
           if (namedXml) throw error
           texts = [residual]
         }
-        // Fail closed on any substring: identifiers, link targets and custom
-        // XML have no word boundaries a reviewer could have relied on.
         const decoded = texts.map(decodeTarget)
         hit = needles.some((needle) =>
           decoded.some((text) => containsResidual(text, needle.text)),
@@ -149,8 +138,6 @@ export async function assertNoSpanTextSurvives(
   await check(bytes, '', 0)
 }
 
-/** Decode an XML part by BOM, UTF-16 shape or declaration. Undecodable
- * bytes, or a declaration contradicting single-byte content, throw. */
 function decodeXmlPart(payload: Uint8Array) {
   const [a, b, c, d] = payload
   if ((a === 0xff && b === 0xfe) || (a === 0x3c && b === 0 && c === 0x3f))
@@ -165,14 +152,12 @@ function decodeXmlPart(payload: Uint8Array) {
   if (!bom && /^(?:utf-?16|ucs-?2)/iu.test(declared))
     throw new Error('XML declares UTF-16 but is not UTF-16 encoded.')
   // SAFETY: TextDecoder validates the label at runtime; an unsupported
-  // declared encoding throws, refusing the output.
   const label = (bom ? 'utf-8' : declared) as ConstructorParameters<
     typeof TextDecoder
   >[0]
   return new TextDecoder(label, { fatal: true }).decode(payload)
 }
 
-/** Parts of any name whose content is XML: a BOM or a leading tag. */
 function sniffXmlPart(payload: Uint8Array) {
   const [a, b, c] = payload
   const marked =
@@ -186,14 +171,12 @@ function sniffXmlPart(payload: Uint8Array) {
   try {
     return decodeXmlPart(payload)
   } catch {
-    // Undecodable markup-like bytes keep the raw byte check only.
     return null
   }
 }
 
 export function decodeTarget(value: string) {
   let result = decodeReferences(value)
-  // Decode percent escapes without rejecting an ordinary literal percent sign.
   for (let i = 0; i < 4; i++) {
     const next = result.replace(/(?:%[\da-f]{2})+/giu, (encoded) => {
       try {
@@ -208,7 +191,6 @@ export function decodeTarget(value: string) {
   return result
 }
 
-/** Values are often already decoded once, so a literal "&" is ordinary text. */
 function decodeReferences(value: string) {
   return value.replace(/&#?[\da-z]+;/giu, (reference) => {
     try {
@@ -219,8 +201,6 @@ function decodeReferences(value: string) {
   })
 }
 
-/** Substring match, except that a number is not found inside a longer
- * number: accepted "24" must not refuse the date 2024 in docProps. */
 function containsResidual(value: string, needle: string) {
   for (
     let index = value.indexOf(needle);

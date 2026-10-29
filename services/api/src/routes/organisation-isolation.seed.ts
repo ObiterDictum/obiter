@@ -268,10 +268,6 @@ export async function seedOrganisationIsolation(
   const suffix = randomUUID().replace(/-/g, '').slice(0, 12)
   const tenantA = await seedTenant(pool, suffix, 'a')
   const tenantB = await seedTenant(pool, suffix, 'b')
-  // The seed used to add a B-matter-to-A-user share as an adversarial probe for
-  // the access predicate. Since 0027 the composite grantee foreign key rejects
-  // that row outright, so it cannot be seeded; the constraint test owns the
-  // rejection proof and the reads below prove organisation scoping without it.
 
   return {
     suffix,

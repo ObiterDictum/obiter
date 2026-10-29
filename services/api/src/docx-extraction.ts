@@ -60,7 +60,6 @@ function hasDocxVisualContent(xml: string, relationshipsXml: string) {
 interface DocxSupplementalContent {
   header: string[]
   footer: string[]
-  /** Labelled footnote/endnote bodies, appended after the footer. */
   notes: string[]
   visualContent: 'present' | 'absent' | 'unknown'
 }
@@ -71,11 +70,6 @@ export interface DocxNoteBody {
   text: string
 }
 
-/**
- * Footnote/endnote bodies in document order, skipping separator and
- * continuation placeholders (w:type). Shared by extraction and the coverage
- * guard so both agree on what "covered" means.
- */
 export function readDocxNoteBodies(
   entries: Map<string, Uint8Array>,
 ): DocxNoteBody[] {
@@ -90,16 +84,12 @@ export function readDocxNoteBodies(
           : null
     if (!kind) continue
     const tag = kind === 'footnote' ? 'footnote' : 'endnote'
-    // (?<!\/)> keeps self-closing placeholders (<w:footnote ... />) from
-    // matching as an open tag and swallowing the next note's body.
     const pattern = new RegExp(
       `<w:${tag}\\b([^>]*)(?<!\\/)>([\\s\\S]*?)<\\/w:${tag}>`,
       'gi',
     )
     const xml = new TextDecoder().decode(payload)
     for (const match of xml.matchAll(pattern)) {
-      // Any w:type means a non-content placeholder (separator,
-      // continuationSeparator, continuationNotice).
       if (/\bw:type\s*=/i.test(match[1] ?? '')) continue
       const id = /\bw:id\s*=\s*"([^"]+)"/i.exec(match[1] ?? '')?.[1] ?? '?'
       const text = extractWordXmlText(match[2] ?? '')
@@ -109,12 +99,6 @@ export function readDocxNoteBodies(
   return notes
 }
 
-/**
- * Addressable label for a note body: the w:id routes a future OOXML burn-in
- * back to word/footnotes.xml (or endnotes.xml); the body keeps the w:anchor
- * context ("Footnote reference N") next to its w:footnoteReference in the
- * main text, so reviewers can find the reference point.
- */
 function formatDocxNoteBody(note: DocxNoteBody): string {
   const label = note.kind === 'footnote' ? 'Footnote' : 'Endnote'
   return `[${label} ${note.id}] ${note.text}`

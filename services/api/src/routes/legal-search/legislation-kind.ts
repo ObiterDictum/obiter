@@ -1,8 +1,3 @@
-/** Kind of a legislation row: the CLML element tag for provisions (P1..P5)
- * or the container name for the hierarchy levels (part, chapter, schedule,
- * crossheading). Mirrors LegislationProvisionKind in the ingestor's
- * legislation-clml.ts; services must not import each other, and this is the
- * one shape the Act page depends on for tree building. */
 export type LegislationProvisionKind =
   | 'part'
   | 'chapter'

@@ -17,11 +17,6 @@ import {
 type Queryable = Pick<Pool, 'query'>
 type AccessLevel = 'view' | 'edit'
 
-/** A run's completion is bounded request-scoped work: at most 500 citations
- * and 500 quotations, executed in 200-item batches. Observed runs take seconds,
- * so a ten-minute lease comfortably exceeds any live request and only a dead
- * executor's claim can expire. It is renewed at explicit boundaries, never by
- * an interval, so a hung process cannot hold the lease open forever. */
 const verificationRunLeaseSeconds = 600
 
 const runColumns = `
@@ -40,12 +35,6 @@ const runColumns = `
 
 type RunCursorRow = VerificationRunRow & { cursor_created_at: string }
 
-/**
- * Counts are read through a lateral per returned run, not by grouping the whole
- * findings table. The planner drives one `(organisation_id, run_id)` index scan
- * per selected run, so a run-list request costs the page size, not the size of
- * the organisation's history.
- */
 const runFrom = `
   from verification_runs run
   join matters matter
@@ -111,12 +100,6 @@ export type VerificationRunPage = {
   nextCursor: string | null
 }
 
-/**
- * One bounded page of runs, newest first, scoped before pagination. The order
- * key is `(created_at desc, id desc)` so identical timestamps cannot reorder
- * between pages. `limit + 1` rows are read only to decide whether a next page
- * exists; the extra row is never returned.
- */
 export async function listVerificationRuns(
   queryable: Queryable,
   user: AuthenticatedOrgUser,
@@ -164,14 +147,10 @@ type StoredFindingDismissal = {
 
 export type VerificationFindingPage = {
   findings: VerificationFinding[]
-  /** Dismissals keyed by finding id, for the findings on this page only. */
   dismissals: Map<string, StoredFindingDismissal>
   nextCursor: string | null
 }
 
-/** One bounded page of a run's findings, in `(created_at, finding_id)` order.
- * The run is scoped by the caller before this read, so an inaccessible run
- * yields no page at all rather than a page of someone else's findings. */
 export async function listVerificationFindings(
   queryable: Queryable,
   user: AuthenticatedOrgUser,
@@ -296,12 +275,6 @@ export type LiveVerificationRun = {
   lease_token: string | null
 }
 
-/**
- * The one live run for a version, locked for the rest of the transaction. A
- * terminal run has left the partial unique index, so this returns at most one
- * row and the executor's reclaim decision is serialised with every other POST
- * for the same version.
- */
 export async function lockLiveVerificationRunForVersion(
   client: PoolClient,
   input: {
@@ -324,9 +297,6 @@ export async function lockLiveVerificationRunForVersion(
   return result.rows[0] ?? null
 }
 
-/** True when a live row's lease still covers the present moment. A null lease
- * on a running row is a row written before the lease existed, or one whose
- * executor never committed a lease: it is reclaimable. */
 export function leaseIsLive(
   run: Pick<LiveVerificationRun, 'lease_expires_at'>,
   now: Date = new Date(),
@@ -357,9 +327,6 @@ export async function markVerificationRunRunning(
   )
 }
 
-/** Extend the current executor's lease at a safe boundary. A row that has been
- * reclaimed or completed no longer matches, so renewal never resurrects a
- * finished run. */
 export async function renewVerificationRunLease(
   pool: Pick<Pool, 'query'>,
   input: { organisationId: string; runId: string; leaseToken: string },
@@ -381,12 +348,6 @@ export async function renewVerificationRunLease(
   )
 }
 
-/**
- * Terminal transition for a live row whose executor is gone. It is monotonic
- * (only a live row can enter a terminal state), records an honest
- * `interrupted` failure, clears the lease, and drops any findings a previous
- * attempt left on the row so partial execution can never read as a result.
- */
 export async function interruptVerificationRun(
   client: PoolClient,
   input: { organisationId: string; runId: string },
@@ -412,11 +373,6 @@ export async function interruptVerificationRun(
   return (result.rowCount ?? 0) > 0
 }
 
-/**
- * Complete a run only if this executor still owns the live lease. A slow
- * executor whose lease was reclaimed by a newer run matches nothing and is told
- * so, which is what stops a stale attempt from overwriting its replacement.
- */
 export async function completeVerificationRun(
   client: PoolClient,
   input: {

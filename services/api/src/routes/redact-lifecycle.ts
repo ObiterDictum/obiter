@@ -158,12 +158,6 @@ export function createRedactLifecycleRoutes(
     return c.json({ run: publicRun(result.run) })
   })
 
-  /**
-   * E12 handoff: commits the run's finalized DOCX output as a new immutable
-   * version of the source document and links it back on the run. `stale`
-   * (409) means the document head moved past the version the run redacted —
-   * re-run redaction on the current version rather than losing the edits.
-   */
   routes.post('/api/redaction-runs/:runId/return-to-document', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
@@ -221,11 +215,6 @@ export function createRedactLifecycleRoutes(
     )
   })
 
-  /**
-   * Files a finalized standalone run's copy into a matter as version 1 of a new
-   * document. A run that is already document-linked has a version to return to
-   * and is refused here.
-   */
   routes.post('/api/redaction-runs/:runId/save-to-matter', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
@@ -285,9 +274,6 @@ export function createRedactLifecycleRoutes(
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    // Live audits retain ordinary view access. Deleted audits use a separate
-    // owner/admin-gated resolver so deleted matters and non-creator standalone
-    // runs do not enter the live access predicate.
     let run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run) {
       const manageUser = await requireManageRole(c, pool)

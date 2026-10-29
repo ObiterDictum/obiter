@@ -38,7 +38,6 @@ function patch(
   })
 }
 
-/** Every replacement addresses the immutable extraction source map. */
 export function burnMappedNodes(
   document: OoxmlDocument,
   nodes: readonly MappedDocxNode[],
@@ -117,8 +116,6 @@ export function burnMappedNodes(
   return burned
 }
 
-/** The renderer's read-only model does not expose these OOXML carriers. Its
- * private input gets equivalent Unicode text; editable output keeps the wire. */
 export function normaliseRenderCharacters(
   document: OoxmlDocument,
   nodes: readonly MappedDocxNode[],
@@ -165,7 +162,6 @@ function blackProperties(
   ]
   if (!own || own.selfClosing)
     return `<${prefix}:rPr>${additions.map((item) => item.xml).join('')}</${prefix}:rPr>`
-  // CT_RPr sequence. History remains last and is never treated as active style.
   const order =
     'rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rPrChange'.split(
       ' ',
@@ -251,8 +247,6 @@ export function scrubBurnedFields(
           decodeTarget(source.slice(node.startTagEnd, node.endTagStart)),
         )
         .join('')
-      // TOC is a container of independently refreshable entry fields. Its
-      // command is harmless unless the command itself contains accepted text.
       if (
         field.redacted &&
         (!/^\s*TOC(?:\s|$)/iu.test(instruction) ||
@@ -339,8 +333,6 @@ export function scrubBurnedFields(
     for (const field of fields) {
       clearField(field)
     }
-    // Remove both the target and references to it, including shared references:
-    // a hidden external target behind a redacted name is still a disclosure.
     for (const element of elements) {
       const attrs = element.attributes.filter(
         (attr) => attr.namespaceUri === REL_NS && linkIds.has(attr.value),
@@ -378,8 +370,6 @@ export function scrubBurnedFields(
   }
 }
 
-/** Metadata has no review offsets. Scrub only accepted entity text, including
- * filename spellings, preserving descriptions and authors unrelated to it. */
 export function scrubAcceptedMetadata(
   document: OoxmlDocument,
   accepted: readonly string[],
@@ -404,7 +394,6 @@ export function scrubAcceptedMetadata(
       if (!names.length) continue
       let opening = source.slice(element.start, element.startTagEnd)
       let authorBurned = false
-      // Initials follow a burned author whichever attribute comes first.
       const attributes = element.attributes
         .filter((attr) => names.includes(attr.localName))
         .sort(

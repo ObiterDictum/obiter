@@ -46,14 +46,7 @@ class DocumentExportError extends DocumentDerivedStoreError {
   }
 }
 
-/**
- * The package failed the share-safe policy — tracked changes, hidden text,
- * embedded objects or residue the sanitiser could not verify out. Maps to a
- * 422 `share_safe_export_refused`: a refusal, not a broken export.
- */
 export class ShareSafeExportRefusalError extends DocumentExportError {
-  /** The bounded policy class — safe for telemetry; carries no part names,
-   * attribute values or document text. */
   readonly refusalReason: ShareSafeRefusalReason
 
   constructor(reason: ShareSafeRefusalReason) {
@@ -85,8 +78,6 @@ export async function exportDocumentDocx(
     shareSafe?: boolean
   },
 ): Promise<DocumentExportResult> {
-  // Share-safe export embeds nothing: product comments are exactly the
-  // collaboration metadata the mode exists to keep out of the file.
   const listed: ListedDocumentComments | null =
     input.shareSafe === true
       ? { comments: [], replies: [] }
@@ -158,23 +149,12 @@ const SHARE_SAFE_SUFFIX = '-share-safe.docx'
 export function shareSafeExportFilename(filename: string) {
   const safe = safeDownloadFilename(filename, { extension: '.docx' })
   const stem = safe.replace(/\.docx$/iu, '')
-  // The suffix is part of the length budget: truncating the assembled name
-  // against `.docx` alone would drop `-share-safe` — the marker that tells a
-  // recipient which policy produced the file.
   const budget = DOWNLOAD_FILENAME_MAX_LENGTH - SHARE_SAFE_SUFFIX.length
   const trimmed =
     stem.slice(0, Math.max(1, budget)).replace(/[.\s]+$/u, '') || 'document'
   return `${trimmed}${SHARE_SAFE_SUFFIX}`
 }
 
-/**
- * A refused share-safe export is a safety event worth an audit row. The audit
- * records the bounded reason class only — the free-text detail can name parts
- * and shapes inside the private package, so it never reaches the record. The
- * refusal itself is unchanged; if the audit write fails, that failure
- * propagates as the standard storage error, exactly as it does on the success
- * path, rather than being swallowed.
- */
 async function shareSafeEmbedded(
   pool: Pool,
   input: {
@@ -224,8 +204,6 @@ async function shareSafeBytes(source: Buffer) {
     }
   } catch (error) {
     if (error instanceof ShareSafeRefusal) {
-      // `reason` is the bounded class — the free-text detail can name parts
-      // and shapes from the private package, so it never leaves the layer.
       throw new ShareSafeExportRefusalError(error.reason)
     }
     throw new DocumentExportError()
@@ -270,12 +248,6 @@ async function embedComments(
         if (list) list.push(reply)
         else productReplies.set(record.commentId, [reply])
       } else if (record.importedCommentId !== null) {
-        // The head is resolved against this version's own comments part and
-        // must match the identity the reply was written against. A head that
-        // is absent, carries a different thread under the same w:id, or has
-        // no paraId to thread under still exports its reply unanchored so
-        // the product-authored text is not dropped — and is counted so the
-        // caller knows it did not land on its thread.
         const head = importedById.get(record.importedCommentId)
         const attached =
           head !== undefined &&
@@ -309,8 +281,6 @@ async function embedComments(
           error instanceof OoxmlError &&
           error.code === 'comment-anchor-unresolved'
         ) {
-          // The comment is skipped; its product replies cannot export either,
-          // so they are counted too rather than dropped unaccounted.
           skippedCommentCount +=
             1 + (productReplies.get(record.id)?.length ?? 0)
         } else {

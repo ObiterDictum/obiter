@@ -22,11 +22,7 @@ interface LegislationActContentsNode {
   extent: string
   withheld: boolean
   kind: LegislationProvisionKind
-  /** Heading text for container rows; never set for provision rows (the
-   * Act page never serves provision body text). */
   text?: string
-  /** A provision's own published heading, so the contents read
-   * "s. 13 Direct discrimination". Absent when the source carries none. */
   heading?: string
   children: LegislationActContentsNode[]
 }
@@ -41,16 +37,10 @@ interface LegislationActPage {
     extent: string
     officialUrl: string
     sourceUrl: string
-    /** When this corpus read the Act's data.xml; absent when not recorded. */
     acquiredAt?: string
     canonicalUrl: string
-    /** P1 content rows: sections plus schedule paragraphs, the withheld-
-     * eligible entries. Containers (Part, Chapter, Schedule, crossheading)
-     * are headings and never withheld, so they are excluded from both
-     * counts. */
     totalCount: number
     withheldCount: number
-    /** Tree roots in document order. */
     contents: LegislationActContentsNode[]
   }
 }
@@ -60,21 +50,11 @@ type LegislationActPageResult =
   | { status: 'not_found' }
   | { status: 'unavailable' }
 
-/** Fail-closed per-row withheld state for the contents tree: a P1 row
- * withholds unless a successful effects check (non-null timestamp) found
- * no unapplied effects. Container rows are headings: never flagged by the
- * effects pass, never withheld. */
 function rowWithheld(row: StoredLegislationActProvision): boolean {
   if (isContainerKind(row.kind)) return false
   return !provisionTextServable(row.hasUnappliedEffects, row.effectsCheckedAt)
 }
 
-/**
- * Assembles the contents tree from rows already ordered by doc_order.
- * Children attach through the stored parent pointers (CLML nesting), never
- * through label-path prefixes. DocOrder order preserved because children
- * are appended in row order and rows arrive in doc order.
- */
 interface LegislationActContentsTree {
   roots: LegislationActContentsNode[]
   totalCount: number
@@ -92,14 +72,8 @@ function buildContentsTree(
       labelPath: row.labelPath,
       href: createCanonicalProvisionPath(documentIdentity, row.labelPath),
       extent: row.extent,
-      // Fail-closed, matching the provision-page gate: only an explicit
-      // false carrying a check timestamp reads as servable. Containers are
-      // never flagged and never withheld, so headings stay visible.
       withheld: rowWithheld(row),
       kind: row.kind,
-      // Container rows carry their heading text so the Act page can render
-      // "Part 2 — Equality: key concepts". Provision body text is never
-      // served here (the provision page carries that gate).
       text: isContainerKind(row.kind) ? row.text : undefined,
       ...(isContainerKind(row.kind) || !row.heading
         ? {}
@@ -126,15 +100,6 @@ function buildContentsTree(
   return { roots, totalCount: contentRowCount, withheldCount }
 }
 
-/**
- * Whole-Act page. Contents arrive in document order from the store and the
- * tree is assembled without any sort, so inserted sections (s. 13A between
- * ss. 13 and 14) keep their enacted position. Withheld entries stay listed
- * and linked (the provision page carries the gate); only the text is
- * absent, and text is never served here at all. Fail-closed matches the
- * provision page: current text reads as servable only after a successful
- * effects check; an unchecked row still lists and links, minus text.
- */
 export async function resolveLegislationActPage(
   pool: LegislationServeDeps['pool'],
   identity: string,
@@ -152,14 +117,6 @@ export async function resolveLegislationActPage(
     return { status: 'unavailable' }
   }
   if (!document) return { status: 'not_found' }
-  // Rows written before migration 0022 carry kind = NULL until a
-  // --force-reparse rewrites them; listing them here would render their
-  // P2..P5 content as flat top-level provisions. Fail closed: the whole
-  // Act page stays unavailable until every row of the document is
-  // classified, never a silently mis-classified tree. The gate flag and
-  // the rows come from one statement (getLegislationActProvisionsSnapshot),
-  // so they always share a snapshot: a reparse rewrite (one transaction)
-  // cannot land between the two reads and leave a torn 200.
   if (!snapshot.classified) return { status: 'unavailable' }
   const officialUrl = `https://www.legislation.gov.uk/${document.identity}`
   const { roots, totalCount, withheldCount } = buildContentsTree(

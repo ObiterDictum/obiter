@@ -20,12 +20,6 @@ import {
 
 type RouteContext = Context<{ Variables: AuthzVariables }>
 
-/**
- * POST /api/documents/:id/markings — commits the document classification and
- * markings (Document type, Draft, Privileged, Without prejudice) as a new
- * immutable version. Like every version mutation it requires matter edit
- * access, names its base version, and answers `stale` when the head moved.
- */
 export function createDocumentMarkingsRoutes(
   pool: Pool,
   storage: StorageService,

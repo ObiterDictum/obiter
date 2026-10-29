@@ -1,15 +1,8 @@
 import type { DocumentComparisonSegment } from '@obiter/contracts'
 import { DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT } from '@obiter/contracts'
 
-/**
- * The per-side token ceiling for a word-level paragraph diff. Above it the
- * paragraph still reports, but the middle collapses to a single
- * removed-then-added pair — honest, just not minimal. This bounds the LCS
- * table at roughly one megabyte per paragraph.
- */
 const WORD_DIFF_TOKEN_LIMIT = 500
 
-/** Word-level diff of one paragraph pair into same/added/removed segments. */
 export function wordDiff(
   baseText: string,
   targetText: string,
@@ -35,11 +28,6 @@ export function wordDiff(
     targetEnd -= 1
   }
 
-  // The coarse form: verified common head and tail stay 'same', the changed
-  // middle reports as one removed block and one added block — honest, just
-  // not minimal. It answers both ways the fine-grained diff cannot be
-  // served: a middle too large to diff at all, and an LCS result that would
-  // fragment past the contract's segment bound.
   const coarse = () => {
     const segments: DocumentComparisonSegment[] = []
     const sameHead = joinTokens(baseTokens.slice(0, start))
@@ -77,10 +65,6 @@ export function wordDiff(
     : coarse()
 }
 
-/**
- * The shared tokeniser: runs and whitespace are both tokens, so diff
- * segments rejoin verbatim and overlap scoring sees the same words.
- */
 export function tokenise(text: string) {
   return text.match(/\S+|\s+/g) ?? []
 }
@@ -89,7 +73,6 @@ function joinTokens(tokens: string[]) {
   return tokens.join('')
 }
 
-/** LCS diff over two token lists — quadratic in the (bounded) middle only. */
 function lcsDiff(base: string[], target: string[]) {
   const rows = base.length
   const columns = target.length

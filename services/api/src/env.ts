@@ -33,9 +33,6 @@ const requiredProductionKeys = [
   'BETTER_AUTH_URL',
   'OBITER_WEB_ORIGIN',
   'OBITER_RESEND_API_KEY',
-  // Hard-redaction finalize renders sanitized DOCX through the sandboxed
-  // rendering worker. Without it a DOCX-source run cannot produce its secure
-  // PDF, so production must configure it rather than fail at finalize time.
   'OBITER_REDACTION_RENDERER_URL',
   'MEILISEARCH_HOST',
   'MEILISEARCH_SEARCH_API_KEY',
@@ -46,14 +43,7 @@ const requiredTestKeys = ['TEST_DATABASE_URL'] as const
 
 export interface ApiEnv {
   databaseUrl: string
-  /** Legal-corpus reads. Null means no separate corpus target was configured,
-   * so the corpus is `databaseUrl`: the compatibility seam. */
   corpusDatabaseUrl: string | null
-  /** Legal-corpus writes for the explicit indexing run. Null means no
-   * corpus write path: either the compatibility seam, where writes use
-   * `databaseUrl`, or an explicitly configured read-only corpus. No user
-   * request path writes the corpus; the writer capability exists for bulk
-   * ingestion. */
   corpusWriteDatabaseUrl: string | null
   authSecret: string
   authBaseUrl: string
@@ -62,11 +52,6 @@ export interface ApiEnv {
   desktopOrigin: string
   resendApiKey: string | null
   emailFrom: string
-  /**
-   * Base URL of the sandboxed rendering worker that turns a sanitized .docx
-   * into an intermediate PDF. Null outside production when unconfigured; a
-   * DOCX-source hard redaction then fails visibly instead of downgrading.
-   */
   redactionRendererUrl: string | null
   meilisearchHost: string
   meilisearchSearchApiKey: string
@@ -75,12 +60,6 @@ export interface ApiEnv {
   legislationProvisionsIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
-  /**
-   * Cluster-wide Find Case Law HTTP attempts allowed across every API replica
-   * in the rolling five-minute window. Retained for the explicit indexing run's
-   * admission machinery: no user request path constructs the budget, so the
-   * user-facing API neither charges nor enforces it.
-   */
   mojFindCaseLawRequestBudget: number
   rampartModel: string
   rampartRevision: string
@@ -101,9 +80,6 @@ export interface ApiEnv {
   legalSearchHydrationLeaseMs: number
   port: number
   nodeEnv: NodeEnv
-  // The .env this process actually read, or null when it read none. Reported by
-  // /api/health provenance so a lane can prove which configuration file it runs
-  // with, the same way it proves its checkout root and commit.
   localEnvFile: string | null
 }
 
@@ -210,9 +186,6 @@ function readSecret(key: string, fallback: string, nodeEnv: ApiEnv['nodeEnv']) {
   return trimmed
 }
 
-// `dev-key` is a working local placeholder, so it is reachable only in
-// development. Production already refused it; test now does too, because a
-// default credential that works eventually gets used somewhere real.
 function readMeilisearchKey(key: string, nodeEnv: ApiEnv['nodeEnv']) {
   if (nodeEnv === 'development') {
     return readSecret(key, 'dev-key', nodeEnv)
@@ -281,13 +254,6 @@ function readPort() {
   return port
 }
 
-/**
- * Load the worktree's `.env` into process.env without overriding values the
- * process already has, and return the path read (null when none was). The path
- * is reported by /api/health provenance so a lane can prove its configuration
- * file as well as its checkout. The bounded walk and duplicate rule live once,
- * in `@obiter/config`, shared with the legal ingestor.
- */
 function loadLocalDotEnv(): string | null {
   return loadLocalEnvFile()
 }
@@ -370,12 +336,6 @@ function readRampartChunkTokens() {
   return parsed
 }
 
-/**
- * Detection settings on their own, without the database, auth and search
- * configuration `readApiEnv` also demands. The model prefetch script needs the
- * same model id, revision and cache directory the API will use, but it has no
- * business requiring production secrets to download a file.
- */
 export function readRampartDetectionConfig(): RedactionDetectionConfig {
   loadLocalDotEnv()
 

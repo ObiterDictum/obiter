@@ -67,13 +67,6 @@ function errorResponse(
   return c.json(body, status)
 }
 
-/**
- * Sources kept with a matter. Access is the matter's own: saving is a write,
- * so it requires edit access to that matter, and reading requires view
- * access. The matter lookup is the authorisation — a source id alone never
- * reaches a row, so one organisation's saved sources cannot be read or
- * extended from another.
- */
 export function createMatterSavedSourcesRoutes(pool: Pool) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
@@ -126,9 +119,6 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
         }))
       )
         return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
-      // Re-saving a source that was unsaved revives the same row: the unique
-      // key is (matter, kind, source), so filing it twice stays one entry and
-      // the audit trail keeps the earlier filing.
       const result = await client.query<SavedSourceRow>(
         `insert into matter_saved_sources (
          organisation_id, matter_id, source_kind, source_id, title, citation,

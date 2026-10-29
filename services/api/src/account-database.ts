@@ -2,19 +2,6 @@ import type { Pool } from 'pg'
 import type { CurrentUser, UserRole } from '@obiter/contracts'
 import { appendAuditLog } from './audit-log'
 
-/**
- * The account write path: the signed-in user's own display name. It lives here
- * rather than in `database.ts`, which already owns matters, documents,
- * organisations and audit storage and is far past the file-size ceiling.
- */
-
-/**
- * Updates the caller's own display name and writes the audit row in one
- * transaction. The user id is the session's, supplied by the route, so there
- * is no request field a caller could change to reach another account. The
- * audit row records the action and identifier only: the previous and new names
- * are personal data and are deliberately not stored.
- */
 export async function updateUserName(
   pool: Pool,
   input: {

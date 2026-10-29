@@ -1,9 +1,6 @@
 import type { Queryable } from './database-rows'
 
 export interface AuditRecordInput {
-  // nullable: auth audit rows (sign-in/sign-up) are written for org-less users
-  // before they create an organisation (audit_logs.organisation_id is nullable
-  // as of migration 0009). Org-scoped actions always pass a real id.
   organisationId: string | null
   userId: string | null
   entityType: string

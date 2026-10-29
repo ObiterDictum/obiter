@@ -156,9 +156,6 @@ export function createCommentsRoutes(pool: Pool, storage: StorageService) {
       const byId = new Map(model.comments.map((entry) => [entry.id, entry]))
       const hit = byId.get(parent)
       const head = hit?.parentId ? byId.get(hit.parentId) : hit
-      // An imported thread without the file's own numeric w:id has no stable
-      // identity to key a reply to across reparses: refuse it the same way a
-      // missing target is refused, without exposing which case occurred.
       if (!head || head.ooxmlId === null) return documentNotFound(c)
       target = {
         importedCommentId: head.id,
@@ -230,9 +227,6 @@ async function transitionResolution(
   ).safeParse(await c.req.json().catch(() => null))
   if (!request.success) return validationFailed(c)
 
-  // The model is read before the transition commits and the replies are read
-  // inside the transition transaction itself, so the response renders only
-  // state captured before commit — never a post-commit re-read.
   const model = await getDocumentModel(storage, resolved.version)
   const outcome = await setDocumentCommentResolution(pool, {
     organisationId: resolved.user.organisationId,
@@ -258,12 +252,6 @@ async function transitionResolution(
   )
 }
 
-/**
- * The merged list the panel renders: product threads with their replies and
- * live `anchorResolved` honesty, the package's own comment threads (imported
- * children folded in as replies), and product replies whose imported thread
- * is no longer in this version so nothing silently disappears.
- */
 function commentListBody(
   model: DocumentModelWire,
   comments: DocumentCommentRecord[],
@@ -283,9 +271,6 @@ function commentListBody(
     }
   }
 
-  // A reply joins its imported thread only when this version's head matches
-  // the identity the reply was written against; a `w:id` the file now uses
-  // for a different thread leaves the reply orphaned instead of misattaching.
   const productReplies = new Map<string, DocumentCommentReply[]>()
   const importedReplies = new Map<string, DocumentCommentReply[]>()
   const orphanedReplies: DocumentCommentReply[] = []
@@ -328,8 +313,6 @@ function commentListBody(
     })
     .map((head) => {
       const threadReplies = [
-        // Package-carried children come first: they predate every product
-        // reply and stay in their own comments.xml order.
         ...(children.get(head.id) ?? []).map(importedReply),
         ...(importedReplies.get(head.id) ?? []),
       ]

@@ -20,14 +20,6 @@ import {
   type MatterDocumentRow,
 } from './database-rows'
 
-/**
- * The run that produced a version, read from the run's own record of the version
- * it created: return-to-document and save-to-matter both set
- * `returned_document_version_id`, so provenance needs no column of its own. The
- * reviewer is the person whose finalise audit row approved the output, and the
- * run is offered only to a reader who may open it — a standalone run's copy can
- * be filed into a matter its runner is the only one able to open.
- */
 function versionRedactionSelect(userParameter: `$${number}`) {
   return `case when redaction_run.id is null then null else jsonb_build_object(
     'runId', redaction_run.id,
@@ -149,7 +141,6 @@ export async function createDocument(
   }
 }
 
-/** The caller owns commit/rollback when a document is part of a larger write. */
 export async function createDocumentInTransaction(
   client: PoolClient,
   input: CreateDocumentInput,
@@ -157,8 +148,6 @@ export async function createDocumentInTransaction(
   document: MatterDocumentRecord
   version: DocumentVersionRecord
 } | null> {
-  // Matter lock before the document insert, so an upload cannot commit on a
-  // share revocation or removed membership that landed while it was queued.
   if (
     !(await lockMatterForEdit(client, {
       organisationId: input.organisationId,

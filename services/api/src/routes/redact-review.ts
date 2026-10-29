@@ -62,19 +62,6 @@ import {
   type RouteVariables,
 } from './redact-shared'
 
-/**
- * Deliberately a second check, not a duplicate of mimeTypeFromStoredFileType.
- * That helper translates stored types and passes real MIME types through
- * unchanged, which is correct for its callers: standalone runs store real MIME
- * types while document_versions stores short ones. This allowlist is the
- * control. The response must not trust a stored value, so an unrecognised type
- * degrades to octet-stream here, at the boundary, rather than upstream.
- *
- * Do not collapse these into one. Hardening the translator instead would put
- * the control back on a single upstream path and leave the response trusting
- * its input, which is the finding this closes. It would also return
- * octet-stream for every standalone run, breaking PDF review. See P0.19.
- */
 const REDACTION_SOURCE_RESPONSE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -88,12 +75,6 @@ function redactionSourceResponseContentType(storedMimeType: string): string {
     : 'application/octet-stream'
 }
 
-/**
- * Map a burn refusal to a user-facing reason code. Matches on stable
- * message fragments server-side; only the code crosses to the client —
- * never the message (cover-geometry errors name span ids, the package
- * gate names part paths).
- */
 function burnFallbackReason(error: unknown): OutputDowngradeReason {
   const message = error instanceof Error ? error.message : ''
   if (message.includes('tracked change')) return 'tracked_change'
@@ -101,11 +82,6 @@ function burnFallbackReason(error: unknown): OutputDowngradeReason {
   return 'burn_failed'
 }
 
-/**
- * A hard-redaction finalize that cannot produce a secure PDF is a visible
- * failure: the run stays unfinalized, no output is kept, and an audit event
- * records only the stable failure category.
- */
 async function reportSecurePdfFailure(
   c: RouteContext,
   pool: Pool,
@@ -137,8 +113,6 @@ async function reportSecurePdfFailure(
       requestId: c.get('requestId'),
     })
   } catch {
-    // The run is already unfinalized; a failed audit append must not turn the
-    // secure-PDF refusal into a different error.
     console.error('redaction_finalize_failed_audit_unavailable', {
       requestId: c.get('requestId'),
       runId: input.runId,
@@ -148,7 +122,6 @@ async function reportSecurePdfFailure(
     c,
     'redaction_secure_pdf_failed',
     securePdfFailureMessage(category),
-    // Busy or warming are retriable; the caller can try the same run again.
     category === 'renderer_at_capacity' || category === 'renderer_not_ready'
       ? 503
       : 502,
@@ -188,8 +161,6 @@ function outputMimeTypeOf(run: FinalizedRun) {
 }
 
 function outputFilenameOf(mimeType: string) {
-  // The source name can itself identify somebody the copy redacts. Legacy
-  // summary filenames are equally private, so downloads never reuse them.
   return mimeType === 'application/pdf'
     ? redactedPdfFilename('document')
     : mimeType ===
@@ -198,11 +169,6 @@ function outputFilenameOf(mimeType: string) {
       : redactedTextFilename('document')
 }
 
-/**
- * A hard-redaction PDF from the rasterized path, including legacy PDF runs
- * that predate the `securePdf` summary flag. A pseudonymised PDF is not a
- * secure redaction and reports false.
- */
 function isSecurePdfOutput(run: FinalizedRun, mimeType: string) {
   if (mimeType !== 'application/pdf') return false
   if (run.summary.outputMode === 'pseudonymised') return false
@@ -223,11 +189,6 @@ export function createRedactReviewRoutes(
   renderer: RedactionRenderer | null = null,
   limits: ApiRequestLimits = DEFAULT_API_REQUEST_LIMITS,
 ) {
-  /**
-   * A run read for a reviewer names the person behind each decision. The read is
-   * scoped to the run's organisation, so a name only ever reaches a colleague in
-   * that organisation — never across tenants, and never an email address.
-   */
   async function namedReviewers(pool: Pool, run: RedactionRunRecord) {
     return {
       ...run,
@@ -497,7 +458,6 @@ export function createRedactReviewRoutes(
         'Acknowledge that the detection mode was not recorded before finalising.',
         400,
       )
-    // DOCX output honours individual reviewed coordinates, including kept duplicates.
     const mixedGroups = mixedTextGroups(run.spans, run.decisions)
     if (
       mixedGroups.length > 0 &&
@@ -521,24 +481,9 @@ export function createRedactReviewRoutes(
       )
     const text = await storage.readText(textObjectKey)
     const source = await getRunSourceFile(pool, run, user)
-    // Fail closed: finalising claims the output is complete, so refuse when
-    // the source holds text extraction never examined (footnotes, endnotes,
-    // comments, textboxes, fused PDF runs). Checked here — after the text
-    // read, before any output write — so refusal leaves no output behind.
-    // 409 matches the other finalize conflicts (already-finalized,
-    // span-integrity); uncovered regions ride in the message because the
-    // shared error envelope carries no extra fields, and the review UI
-    // already renders the message. E43 owns extracting these regions.
-    // No stored source (legacy runs predate the guard) is the one exception:
-    // those proceed but are marked unchecked below. A stored source that
-    // cannot be read is not evidence of coverage, so it refuses like an
-    // uncovered region.
     let sourceBytes: Buffer | null = null
     let coverageUnchecked = false
     if (!source || !storage.readBinary) {
-      // No stored source recorded, so coverage cannot be checked. The bytes
-      // never existed (legacy runs predate the guard), which is distinct
-      // from a stored source that failed to read — see below.
       coverageUnchecked = true
     } else {
       try {
@@ -593,16 +538,10 @@ export function createRedactReviewRoutes(
     let outputFilename = redactedTextFilename('document')
     let outputSha256: string
     let securePdf = false
-    // Which container burn was started, so a refusal can name it. A downgrade
-    // is recorded only when that burn fails and the text fallback replaces it;
-    // a successful burn must not persist a downgrade. Reason codes only —
-    // never span text or filenames (user-facing).
     let attemptedBurn: 'pdf' | 'docx' | null = null
     let downgradeReason: OutputDowngradeReason | null = null
 
     if (body.data.outputMode === 'redacted') {
-      // Hard redaction has exactly one share-safe output: a rasterized PDF.
-      // There is no text fallback, so any failure leaves the run unfinalized.
       const layoutObjectKey = await getRunLayoutObjectKey(pool, run, user)
       try {
         if (!storage.writeBinary)
@@ -634,7 +573,6 @@ export function createRedactReviewRoutes(
             'The document text changed; create a new redaction run before finalizing.',
             409,
           )
-        // Never leave a partially staged output behind a refusal.
         await storage.delete(objectKey)
         return await reportSecurePdfFailure(c, pool, {
           runId: run.id,
@@ -645,14 +583,8 @@ export function createRedactReviewRoutes(
         })
       }
     } else {
-      // Pseudonymised output is the editable confidentiality workflow: category
-      // tokens, no black bars, and a token map behind restricted audited access.
-      // It never rasterizes a PDF, because a rasterized cover is not an editable
-      // token copy; a PDF source therefore gets token text.
       try {
         const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
-        // Burned .docx needs no layout geometry: spans address w:t runs, not
-        // page coordinates, so the source bytes alone are sufficient.
         const canWriteDocx =
           Boolean(source) &&
           Boolean(storage.readBinary) &&
@@ -682,12 +614,6 @@ export function createRedactReviewRoutes(
         }
       } catch (error) {
         if (error instanceof RedactionSpanIntegrityError) throw error
-        // DOCX burn failed — fall back to text output so finalize still
-        // completes. The text output carries no source container, so tracked
-        // changes, metadata, comments, and embedded parts cannot leak
-        // through it.
-        // Do not log span ids, filenames, or document content (cover-geometry
-        // errors name span ids in their message).
         console.error('redaction_burn_failed', {
           requestId: c.get('requestId'),
           runId: run.id,
@@ -702,10 +628,6 @@ export function createRedactReviewRoutes(
       }
     }
 
-    // The single downgrade value used for both the persisted summary and the
-    // response, so the warning can never disagree with the stored state. Only
-    // a genuine burn refusal counts: a successful burn leaves downgradeReason
-    // null and records no downgrade.
     const outputDowngrade =
       attemptedBurn && downgradeReason
         ? { from: attemptedBurn, reason: downgradeReason }

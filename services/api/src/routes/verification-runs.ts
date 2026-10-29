@@ -33,8 +33,6 @@ import {
 import { toPublicFinding } from '../verification-present'
 import { errorResponse } from './redact-shared'
 
-/** The run and finding list pagination contract, validated together so a
- * malformed limit or cursor is a 400 rather than an unbounded query. */
 function listQuery(c: { req: { query: (key: string) => string | undefined } }) {
   const rawCursor = c.req.query('cursor')
   const cursor =
@@ -229,14 +227,7 @@ export function createVerificationRunRoutes(
         cursor: query.cursor,
       },
     )
-    // One batched read per source family for the page, so naming a finding's
-    // stored source and building its pinpoint costs two queries, not two per
-    // finding. Sources live in the corpus store, which is a different database
-    // from the organisation's matters.
     const sources = await loadFindingSources(corpusPool, page.findings)
-    // Who dismissed a finding is named by their member name, not by their id:
-    // the page is already scoped to this organisation's run, so the name stays
-    // inside the tenant and no address is ever served.
     const names = await reviewerNames(
       pool,
       user.organisationId,
@@ -316,8 +307,6 @@ export function createVerificationRunRoutes(
           404,
         )
       }
-      // The dismissal row is the whole record of the decision, so the reopening
-      // is audited: nothing else would survive it.
       if (outcome.removed) {
         await appendAuditLog(pool, {
           organisationId: user.organisationId,

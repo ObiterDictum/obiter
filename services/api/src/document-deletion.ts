@@ -14,12 +14,6 @@ export interface DeleteDocumentCascadeResult {
   runs: { id: string }[]
 }
 
-/**
- * Soft-deletes a document and cascades to its redaction runs in one
- * transaction, writing one `*.delete` audit row per deleted entity. Same
- * transaction-stable-timestamp provenance as softDeleteMatterWithCascade.
- * Returns null when the document is missing, cross-org, or already deleted.
- */
 export async function softDeleteDocumentWithCascade(
   pool: Pool,
   input: {
@@ -34,8 +28,6 @@ export async function softDeleteDocumentWithCascade(
   try {
     await client.query('begin')
 
-    // Unlocked routing read: it only names the parent matter. The matter lock
-    // and the locked document re-read below are the authoritative checks.
     const candidate = await client.query<{ matter_id: string }>(
       `select matter_id from matter_documents
        where id = $1 and organisation_id = $2 and deleted_at is null`,
@@ -47,8 +39,6 @@ export async function softDeleteDocumentWithCascade(
       return null
     }
 
-    // Matter lock, fresh edit re-check and acting-member lock before the
-    // document is locked and soft-deleted.
     if (
       !(await lockMatterForEdit(client, {
         organisationId: input.organisationId,
@@ -131,7 +121,6 @@ export async function softDeleteDocumentWithCascade(
   }
 }
 
-/** Restores a document and its cascade-deleted runs. */
 export async function restoreDocumentWithAudit(
   pool: Pool,
   input: {
@@ -146,8 +135,6 @@ export async function restoreDocumentWithAudit(
   try {
     await client.query('begin')
 
-    // Unlocked routing read: it only names the parent matter. The matter lock
-    // and the locked document re-read below are the authoritative checks.
     const candidate = await client.query<{ matter_id: string }>(
       `select matter_id from matter_documents
        where id = $1 and organisation_id = $2 and deleted_at is not null`,
@@ -159,8 +146,6 @@ export async function restoreDocumentWithAudit(
       return null
     }
 
-    // Matter lock before the document lock, so a restore cannot commit on an
-    // access fact that a revocation or member removal already changed.
     if (
       !(await lockMatterForEdit(client, {
         organisationId: input.organisationId,

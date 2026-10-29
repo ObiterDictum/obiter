@@ -57,7 +57,6 @@ export async function extractDocumentText(
   return (await extractDocumentContent(fileType, buffer, dependencies)).text
 }
 
-/** Extract text plus optional PDF layout geometry for review overlays. */
 export async function extractDocumentContent(
   fileType: SupportedDocumentType,
   buffer: Buffer,

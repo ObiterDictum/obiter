@@ -41,12 +41,6 @@ type VersionMutationInput = {
 
 type EditedVersionInput = VersionMutationInput & {
   operations: readonly DocumentEditOperation[]
-  /**
-   * The `w:trackRevisions` state the version persists — also whether the
-   * batch is recorded as tracked changes. Omitted leaves the base version's
-   * stored setting in place and tracks the batch by it, so an older client
-   * cannot clear the toggle by accident.
-   */
   trackChanges?: boolean
   userName?: string
   now?: () => Date
@@ -56,13 +50,11 @@ type TrackedChangeDecisionVersionInput = VersionMutationInput & {
   action: DocumentTrackedChangeDecisionRequest['action']
   changeIds: readonly string[]
   removeParagraphIds?: readonly string[]
-  /** The toggle state the decision version persists; omitted leaves it. */
   trackRevisions?: boolean
 }
 
 type MarkingsVersionInput = VersionMutationInput & {
   markings: DocumentMarkingsWire
-  /** The toggle state the markings version persists; omitted leaves it. */
   trackRevisions?: boolean
 }
 
@@ -108,9 +100,6 @@ export async function createEditedVersion(
 ): Promise<CreateEditedVersionResult> {
   const prepared = await prepareEditedSource(storage, input)
   if (prepared.status === 'noop') {
-    // The request's only intent was a flip to the state the base version
-    // already stores: no version and no audit are written, and the base
-    // version is the state the client asked for.
     return {
       status: 'created',
       versionId: input.baseVersion.id,
@@ -142,16 +131,10 @@ async function prepareEditedSource(
 ) {
   validateBaseVersion(input)
   const document = await readSourceDocument(storage, input.baseVersion)
-  // An omitted toggle rides the base version's own setting: the batch tracks
-  // the way the document says it should, and the persisted state is left as
-  // it was rather than cleared by a client that never sent the field.
   const trackChanges = input.trackChanges ?? document.model.trackRevisions
   const trackRevisionsChanged =
     input.trackChanges !== undefined &&
     input.trackChanges !== document.model.trackRevisions
-  // A settings-only request that asks for the stored state has nothing to
-  // write; serialising it would mint a version whose only content is an
-  // identical settings part.
   if (input.operations.length === 0 && !trackRevisionsChanged) {
     return { status: 'noop' as const }
   }
@@ -170,10 +153,6 @@ async function prepareEditedSource(
         recorder,
       )
     }
-    // The edit batch is also the toggle's persistence point: saving with
-    // tracking on writes `w:trackRevisions`, saving without it removes it,
-    // matching what Word writes when the toggle changes. A request that
-    // omits the field writes nothing.
     if (input.trackChanges !== undefined) {
       writeTrackRevisions(document, input.trackChanges)
     }
@@ -194,8 +173,6 @@ async function prepareEditedSource(
     canonicalParagraphIds,
     baseVersionId: input.baseVersionId,
     versionId: '',
-    // Tracked wrappers reparse to a different run list, so no run address in a
-    // tracked version is trustworthy. The client blocks a run-keyed reversal.
     runAddressesReliable: !trackChanges,
   })
   const { versionId: _versionId, ...lineage } = built
@@ -221,8 +198,6 @@ export async function createTrackedChangeDecisionVersion(
       input.action,
       input.removeParagraphIds ?? [],
     )
-    // A decision commits a version, so an unsaved toggle flip rides on it
-    // rather than being dropped; an omitted field writes nothing.
     if (input.trackRevisions !== undefined) {
       writeTrackRevisions(document, input.trackRevisions)
     }
@@ -245,13 +220,6 @@ export async function createTrackedChangeDecisionVersion(
   })
 }
 
-/**
- * Markings are metadata-only, but they still ride the immutable-version
- * pipeline: a new classification commits a new version, so the audit trail
- * can say exactly which revision was marked Privileged or Without prejudice.
- * The lineage is the identity map — paragraphs and runs are untouched, so a
- * restore anchored on the previous version still resolves.
- */
 export async function createMarkingsVersion(
   pool: Pool,
   storage: StorageService,
@@ -260,8 +228,6 @@ export async function createMarkingsVersion(
   let lineage: Omit<DocumentVersionLineage, 'versionId'> | undefined
   const editedBytes = await prepareSource(storage, input, (document) => {
     writeDocumentMarkings(document, input.markings)
-    // Same carry-through as a decision: the committed version persists the
-    // toggle the client asked for, so a pending flip is not lost.
     if (input.trackRevisions !== undefined) {
       writeTrackRevisions(document, input.trackRevisions)
     }
@@ -373,9 +339,6 @@ async function createPreparedVersion(
 
   try {
     await client.query('begin')
-    // Matter before document: the commit-time authorization re-check shares the
-    // revocation lock, so a grant withdrawn while this write was queued cannot
-    // be outrun by the document lock. See matter-lock.ts.
     if (!(await lockMatterForEdit(client, input))) {
       await client.query('rollback')
       return { status: 'not_found' }

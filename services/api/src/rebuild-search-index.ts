@@ -8,58 +8,9 @@ import {
   indexDocuments,
 } from '@obiter/search-client'
 
-/**
- * Rebuilds the product Meilisearch index from Postgres, which is the system
- * of record. Repeatable and idempotent: every run streams all of
- * legal_source_documents through a staging index and atomically swaps it
- * into place. Not a migration — it derives the index from current rows.
- *
- * Rows with only summary_json (no document_json) ARE indexed, as summaries.
- * Paragraphs are optional in the authority schema, so a summary-only row
- * still answers exact citation, id and title lookups; only the body-text
- * match tiers cannot fire for it. Dropping those rows would silently narrow
- * the derived index below what Postgres holds, which is worse than a
- * summary-only hit. They are counted separately as indexedFromSummaryOnly.
- *
- * Memory is bounded by one read page, not one corpus. Rows are keyset-paged
- * from Postgres on document_id (page size below), validated per page, and
- * each page is partitioned by measured JSON bytes, sent to staging, and
- * released before the next page is read. Peak memory is one page plus one
- * HTTP payload batch; the whole corpus is never materialised.
- *
- * The whole paged read runs inside a single REPEATABLE READ transaction on
- * one dedicated client, so every page sees the same snapshot. document_id
- * is a hash, not a sequence, so without this a row inserted below the
- * cursor mid-rebuild would be missed entirely and the index would silently
- * end up short. The transaction commits as soon as the last page is read
- * and never spans the swap; every abort path rolls it back before staging
- * cleanup, because a leaked open transaction blocks vacuum.
- *
- * Fail-before-write is per page, not whole-corpus: each page is validated as
- * it is read and the first bad row aborts the run with the product index
- * untouched. Earlier pages may already sit on the staging index at that
- * point, so an abort deletes the staging index. The product index is only
- * ever touched by the atomic swap, which runs after every batch succeeded.
- * A whole-corpus validation pass before any write would double the read for
- * no extra product safety, so the run does not do one.
- *
- * Failure leaves no half-rebuilt product index behind. Indexing happens on
- * the staging index; if it fails the staging index is deleted and the
- * product index keeps serving the previous build. The run verifies readiness
- * afterwards and exits non-zero unless the product index reports ready with
- * the expected document count, so readiness can never call a partial rebuild
- * ready.
- */
-
-// 500 rows keeps a page plus one 80 MB payload batch well under the default
-// heap even for the largest judgments measured (~1 MB stored), while keeping
-// the page count (76 for 37,934 rows) low enough that keyset round trips do
-// not dominate the run.
 const readPageSize = 500
 
 const localMeilisearchHost = 'http://127.0.0.1:7700'
-// The single local key. Compose, CI, ci-local.sh and the benchmark all use
-// this value; production sets MEILISEARCH_ADMIN_API_KEY explicitly.
 const localMeilisearchAdminKey = 'obiter-local-dev-key'
 const localDatabaseUrl = 'postgres://obiter:obiter@localhost:5432/obiter'
 const defaultIndexName = 'legal_authorities'
@@ -131,11 +82,6 @@ async function main() {
     console.log(JSON.stringify(report, null, 2))
     throw new Error(message)
   }
-  // Staging cleanup must never mask the error that caused it. When the
-  // staging failure is the engine itself going away, the delete below
-  // fails too; the run still reports the original reason and the product
-  // guarantee, and notes the orphan. The next run deletes stale staging
-  // before writing anything, so an orphan can never leak into a build.
   const removeStaging = async (): Promise<string | null> => {
     try {
       await admin.deleteIndexIfExists(stagingIndexName)
@@ -147,15 +93,6 @@ async function main() {
     }
   }
 
-  // The paged read below runs in a single REPEATABLE READ transaction on
-  // one dedicated client, so every page sees the same snapshot even if
-  // rows are inserted concurrently. The client is released on every exit
-  // path (including the abort paths, which roll back before staging
-  // cleanup); a leaked open transaction blocks vacuum, which is worse than
-  // the missed-row problem being fixed. Counts run on the same client so
-  // the expected total matches the snapshot the pages read.
-  // pool.connect sits inside the try so a connect failure still reaches
-  // pool.end in the finally.
   let snapshot: PoolClient | null = null
   let snapshotOpen = false
   const rollbackSnapshot = async (): Promise<void> => {
@@ -169,19 +106,11 @@ async function main() {
   }
   try {
     snapshot = await pool.connect()
-    // Idempotent staging: a crashed run may have left the staging index behind.
-    // Runs before BEGIN so the snapshot is held only for the read itself.
     await admin.deleteIndexIfExists(stagingIndexName)
     await createIndex(admin, stagingIndexName)
 
     await snapshot.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ')
     snapshotOpen = true
-    // Withdrawn rows are excluded from the derived index: Postgres is the
-    // record, so the mark survives there and the product index simply stops
-    // serving the document. Counted separately so the report shows what was
-    // left out and why, rather than silently narrowing the index.
-    // Sequential queries: one client runs one query at a time, and both
-    // must see the same snapshot as the pages below.
     const expected = await snapshot.query<{ count: string }>(
       `select count(*) as count from legal_source_documents
           where provider_json->>'withdrawn' is null`,
@@ -198,9 +127,6 @@ async function main() {
     )
 
     try {
-      // Keyset on document_id: stable under concurrent inserts elsewhere in
-      // the keyspace and free of offset drift within the snapshot.
-      // document_id is unique, so `>` never skips or repeats a row.
       let lastDocumentId = ''
       let pageNumber = 0
       let batchNumber = 0
@@ -243,9 +169,6 @@ async function main() {
           )
         }
 
-        // indexDocuments partitions this page by measured payload bytes and
-        // sends it batch by batch; the page array is released before the
-        // next page is read, so peak memory stays at one page plus one batch.
         const indexed = await indexDocuments(
           admin,
           stagingIndexName,
@@ -282,9 +205,6 @@ async function main() {
       snapshotOpen = false
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      // Roll back before touching Meilisearch: the snapshot must not stay
-      // open across cleanup, and fail() below throws, so this catch is the
-      // only place that can release it on the abort path.
       await rollbackSnapshot()
       const cleanupFailure = await removeStaging()
       fail(
@@ -295,8 +215,6 @@ async function main() {
       )
     }
 
-    // createIndex tolerates an existing index, so this also covers the first
-    // rebuild on a fresh instance where the product index does not exist yet.
     await createIndex(admin, config.indexName)
     try {
       const swapPair: [string, string] = [stagingIndexName, config.indexName]
@@ -329,11 +247,6 @@ async function main() {
         `(${report.indexedFromSummaryOnly} from summaries only, ${report.excludedWithdrawn} withdrawn excluded), readiness ready.`,
     )
   } finally {
-    // Covers connect failure (snapshot null, no-op rollback), BEGIN
-    // failure, count-query failure, and any throw between BEGIN and COMMIT
-    // that the inner catch did not already roll back. No-op after a
-    // successful COMMIT. pool.end runs after the client is back in the
-    // pool so an open snapshot can never outlive the run.
     await rollbackSnapshot()
     snapshot?.release()
     await pool.end()
@@ -343,12 +256,5 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   void main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : 'Rebuild failed')
-    // Exit explicitly rather than setting exitCode: a waitTask that throws
-    // (the abort path above) leaks its timeout timer inside meilisearch-js
-    // 0.51.0, which only clears it on success. The ref'd timer holds the
-    // event loop for the full indexing timeout, so the run would report its
-    // failure and then hang for 30 minutes instead of exiting non-zero.
-    // Every cleanup this run owns (pool.end, staging delete attempt) has
-    // already run by this point, so nothing is skipped.
     process.exit(1)
   })

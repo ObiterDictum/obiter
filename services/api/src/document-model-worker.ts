@@ -11,16 +11,6 @@ import type {
   DocumentModelTaskResult,
 } from './document-model-pool'
 
-/**
- * Worker-thread entry for document-model loading. Everything here used to run
- * synchronously on the serving event loop inside `document-model-store`:
- * parsing a stored `model.json`, or inflating and parsing the whole OOXML
- * package and serialising its model. Keeping it on a worker thread is what
- * lets search, health and every other route keep answering while a document
- * of any size loads. The module is side-effect-free when imported from a
- * test: without a `parentPort` there is nothing to listen on.
- */
-
 interface CachedModelProbe {
   changes?: unknown
   numbering?: DocumentNumberingWire[]
@@ -43,7 +33,6 @@ function cachedModelNeedsRegeneration(json: string) {
         !Object.hasOwn(item, 'levels'),
     )
   } catch {
-    // Defer malformed JSON to parseModelJson and its curated invalid-model path.
     return false
   }
 }
@@ -73,9 +62,6 @@ async function runTask(
         const json = serialiseModelJson(await parseDocx(task.bytes))
         return { status: 'ok', model: parseModelJson(json), json }
       } catch {
-        // The same discard the pre-worker code applied: a parser, schema or
-        // serialisation failure never reaches a response or log as a
-        // diagnostic; the caller reports the curated model-unavailable error.
         return { status: 'failed' }
       }
     }

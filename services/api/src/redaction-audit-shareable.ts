@@ -17,13 +17,6 @@ export const SHAREABLE_AUDIT_VERSION = 'obiter.redaction-audit-shareable/v1'
 
 export type ShareableAuditReport = ReturnType<typeof buildShareableAuditReport>
 
-/**
- * The audit as a file that can be handed to the other side. It carries what the
- * schedule carries — counts, categories, decisions, reviewers, times, where each
- * span sat, and the output's SHA-256 — and never the removed words, the source
- * filename or any source text. The restricted JSON keeps those for the run's own
- * access-controlled record; this format is the one that leaves the firm.
- */
 export function buildShareableAuditReport(
   report: AuditReport,
   run: RedactionRunRecord,
@@ -79,17 +72,10 @@ export function buildShareableAuditReport(
   }
 }
 
-/** The shareable audit as the bytes the download serves. */
 export function shareableAuditBytes(report: ShareableAuditReport) {
   return new TextEncoder().encode(`${JSON.stringify(report, null, 2)}\n`)
 }
 
-/**
- * The page each span sits on, from the layout the review screen reads. A source
- * without a stored layout (or one this API cannot parse) leaves every page
- * absent rather than guessing: a wrong page number in an audit file is worse
- * than none.
- */
 export function spanPages(
   layout: DocumentTextLayout,
   spans: RedactionRunRecord['spans'],

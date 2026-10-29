@@ -1,24 +1,3 @@
-/**
- * Pure legislation citation recognition for Stage 1 (UK Public General Acts).
- *
- * Resolves, in order: chapter numbers (`1998 c. 42`), short titles
- * (`Human Rights Act 1998`), curated aliases (`HRA 1998`), and section forms
- * (`s 6 HRA 1998`, `section 6 Human Rights Act 1998`,
- * `Schedule 2 paragraph 4`, `s 13(2)(a)` with the Act named in the query).
- * Secondary legislation is out of scope and never matches here.
- *
- * Ambiguity never resolves silently: a query naming an Act two stored titles
- * could satisfy returns `ambiguous` with the candidates, and a section form
- * without an identifiable Act returns `unrecognised`. Callers turn both into
- * visible states, never a guessed winner.
- *
- * Title folding, the stored-title directory and the whole-title-versus-prose
- * decision live in `legislation-titles.ts`; this module owns citation parsing
- * and the order resolution runs in.
- *
- * No network, no storage. Callers supply the act directory from Postgres.
- */
-
 import { isCanonicalActYear } from '@obiter/contracts'
 import {
   actRemainderIsProse,
@@ -41,7 +20,6 @@ export type {
 interface LegislationProvisionRef extends LegislationActRef {
   labelPath: string
   label: string
-  /** Full provision identity, e.g. ukpga/2010/15/section/40. */
   provisionId: string
 }
 
@@ -67,11 +45,6 @@ export type LegislationCitationOutcome =
   | { kind: 'unresolved_title'; recognisedQuery: string }
   | { kind: 'unrecognised' }
 
-/** Curated aliases only: an alias maps one surface form to one Act, and any
- * form that could name two Acts stays out of this table on purpose. A Map, not
- * an object literal: `actAliases['constructor']` on an object resolves to
- * `Object` and truthy, which then throws in `normalizeActTitle` for a bare
- * query. */
 const actAliases = new Map<string, string>([
   ['hra 1998', 'Human Rights Act 1998'],
 ])
@@ -79,9 +52,6 @@ const actAliases = new Map<string, string>([
 function parseChapterNumber(query: string): {
   year: number
   number: number
-  /** Canonical `ukpga/YYYY/N` identity, built from the validated year text and
-   * the unpadded chapter number, never from `Number()` output, which drops a
-   * leading zero from the year and would fabricate `ukpga/204/N` for `0204`. */
   identity: string
 } | null {
   const match = query.match(/^\s*([0-9]{4})\s*,?\s*c\.?\s*([0-9]+)\s*$/i)
@@ -89,14 +59,8 @@ function parseChapterNumber(query: string): {
   const yearText = match[1]
   const numberText = match[2]
   if (!yearText || !numberText) return null
-  // A zero-padded or pre-1801 year is not a chapter citation, so it is refused
-  // before any numeric conversion can turn `0204` into `204`.
   if (!isCanonicalActYear(yearText)) return null
   const number = Number(numberText)
-  // A chapter number is at least one; a digit run too large to be a safe
-  // integer cannot be looked up or echoed without losing precision, so it is
-  // refused rather than rounded. Leading zeros are harmless for a count and
-  // are dropped, so `042` names the same chapter as `42`.
   if (!Number.isSafeInteger(number) || number < 1) return null
   return {
     year: Number(yearText),
@@ -105,11 +69,6 @@ function parseChapterNumber(query: string): {
   }
 }
 
-/** s. 13(2)(a) to section/13/2/a; 6 to section/6. Null when not a section form.
- * Subsection groups are bounded at 5: real citations nest far less, and an
- * unbounded `(…)*` over user input is the ReDoS surface CodeQL flags. A group
- * may be spaced (`20 (3)`) or spelled (`20 subsection 3`); both name the same
- * subsection, and the bounded group count is not weakened by either. */
 export function parseSectionLabelPath(sectionText: string): string | null {
   const match = sectionText
     .trim()
@@ -129,11 +88,6 @@ export function parseSectionLabelPath(sectionText: string): string | null {
   return `section/${parts.join('/')}`
 }
 
-/** A schedule citation to its stored label path. Accepts schedule-first
- * (`Schedule 2 paragraph 4`, `Sch. para. 2`) and paragraph-first
- * (`para. 2 Sch. 1`) order, with the same 5-group bound as sections. An
- * unnumbered schedule produces `schedule/paragraph/4`; whether the Act uses
- * that shape is the store's decision, not this parser's. */
 const scheduleGroups = String.raw`((?:\s*\([^()]+\)){0,5})`
 
 export function parseScheduleLabelPath(scheduleText: string): string | null {
@@ -186,8 +140,6 @@ function appendScheduleGroups(parts: string[], groups: string): boolean {
 }
 
 export function formatProvisionDisplayLabel(labelPath: string): string {
-  // Mirrors formatProvisionLabel in the ingestor's legislation-clml.ts (kept
-  // separate: services must not import each other).
   const parts = labelPath.split('/')
   if (parts[0] === 'section') {
     const nums = parts.slice(1)
@@ -198,8 +150,6 @@ export function formatProvisionDisplayLabel(labelPath: string): string {
       .join('')}`
   }
   if (parts[0] === 'schedule') {
-    // An unnumbered single schedule stores its paragraphs directly under
-    // `schedule`, so parts[1] is `paragraph`, not a schedule number.
     const numbered = /^\d+[A-Za-z]?$/.test(parts[1] ?? '')
     let label = numbered ? `Sch. ${parts[1]}` : 'Sch.'
     for (let i = numbered ? 2 : 1; i < parts.length; i += 2) {
@@ -215,12 +165,6 @@ export function formatProvisionDisplayLabel(labelPath: string): string {
   return labelPath
 }
 
-/** The citation form of a stored schedule label path, so guidance the product
- * emits is a citation the parser accepts. A numbered path names its own
- * schedule. An unnumbered `schedule/paragraph/N` path is the single-schedule
- * shape, which the store only reaches on an Act that holds a numbered
- * Schedule 1, so the example names Schedule 1. Null for a path that is not a
- * schedule paragraph. */
 export function formatScheduleCitation(labelPath: string): string | null {
   const parts = labelPath.split('/')
   const numbered = /^\d+$/.test(parts[1] ?? '')
@@ -248,10 +192,6 @@ function resolveActByName(
   directory: ActDirectory,
   recognisedQuery: string,
 ): LegislationCitationOutcome {
-  // `trimTitleBoundary` first: a real request arrives as a sentence, wrapped in
-  // quotes, or carrying the terminal status annotation, and all three name the
-  // same Act. Exact and relaxed directory resolution runs on that core before
-  // any prose claim.
   const titleText = trimTitleBoundary(actText)
   const matches = new Map<string, LegislationActDirectoryEntry>()
   for (const value of [titleText, stripLeadingTitleConnectors(titleText)]) {
@@ -281,11 +221,6 @@ function resolveActByName(
       reason: `“${actText.trim()}” names more than one stored Act.`,
     }
   }
-  // A title-shaped request the directory cannot resolve is not proof the Act
-  // is absent: the directory is partial and the fold is imperfect. Suppress
-  // unrelated keyword provisions, but say only that no exact title matched.
-  // Directory and structure evidence that the query is really a subject
-  // phrase keeps it on the keyword path instead.
   const stripped = stripLeadingTitleConnectors(titleText)
   if (!looksLikeWholeActTitle(stripped)) return { kind: 'unrecognised' }
   if (actRemainderIsProse(stripped, directory)) return { kind: 'unrecognised' }
@@ -297,11 +232,6 @@ interface SplitSectionQuery {
   actText: string
 }
 
-/** Accepts the Act before or after the section: "Equality Act 2010 s. 40"
- * as well as "s. 40 Equality Act 2010". The section token absorbs spaced
- * parentheses (`s. 20 (3)`) and the spelled `subsection N` form, so the Act
- * remainder starts at the first word after it and no citation text leaks
- * into title resolution. */
 function splitSectionQuery(query: string): SplitSectionQuery | null {
   const sectionToken = String.raw`\d+[A-Za-z]?(?:\s*(?:\([^()]+\)|(?:subsection|sub-section|subs\.?)\s*\d+[A-Za-z]?)){0,5}`
   const sectionFirst = query.match(
@@ -313,9 +243,6 @@ function splitSectionQuery(query: string): SplitSectionQuery | null {
   if (sectionFirst) {
     return { sectionText: sectionFirst[1]!, actText: sectionFirst[2]! }
   }
-  // A section form with no Act remainder names no Act: visible
-  // non-resolution, never a guess. A malformed section token lands here too,
-  // so `s. 20 () X` cannot smuggle the section text into the Act.
   const afterSection = query.replace(/^\s*(?:s\.?|section)\s+/i, '')
   if (afterSection !== query) return { sectionText: afterSection, actText: '' }
 
@@ -332,14 +259,12 @@ function splitSectionQuery(query: string): SplitSectionQuery | null {
 function splitScheduleQuery(
   query: string,
 ): { scheduleText: string; actText: string } | null {
-  // Schedule-first: "Schedule 1 paragraph 2 <Act>", "Sch. para. 2 <Act>".
   const scheduleFirst = query.match(
     /^\s*((?:schedule|sch\.?)\s*(?:\d+\s*)?(?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)){0,5})\s+([A-Za-z][\s\S]*?)\s*$/i,
   )
   if (scheduleFirst) {
     return { scheduleText: scheduleFirst[1]!, actText: scheduleFirst[2]! }
   }
-  // Paragraph-first: "paragraph 2 Schedule 1 <Act>", "para. 2 Sch. 1 <Act>".
   const paragraphFirst = query.match(
     /^\s*((?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)){0,5}\s*(?:of\s*)?(?:schedule|sch\.?)\s*\d+)\s+([A-Za-z][\s\S]*?)\s*$/i,
   )
@@ -350,7 +275,6 @@ function splitScheduleQuery(
     /^\s*([A-Za-z][\s\S]*?)\s+((?:schedule|sch\.?)\s*\d+\s*(?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)){0,5})\s*$/i,
   )
   if (trailing) return { scheduleText: trailing[2]!, actText: trailing[1]! }
-  // A bare schedule form names no Act: visible non-resolution, not a guess.
   if (parseScheduleLabelPath(query) !== null) {
     return { scheduleText: query.trim(), actText: '' }
   }
@@ -374,11 +298,6 @@ function withProvision(
   }
 }
 
-/**
- * Classify a raw query against the stored Act directory. Returns the
- * recognised surface form alongside every hit so served labels and the
- * citation honesty fields read the same value.
- */
 export function classifyLegislationCitation(
   query: string,
   directory: ActDirectory,
@@ -391,11 +310,6 @@ export function classifyLegislationCitation(
     const found = directory.byYearNumber(chapter.year, chapter.number)
     if (found)
       return { kind: 'act', act: toActRef(found), recognisedQuery: trimmed }
-    // A chapter number the directory does not hold is a recognised citation
-    // with no answer in the corpus, not a phrase to keyword-search. The
-    // identity is derived here, where the chapter form is parsed and its
-    // year and number are validated, so no caller re-derives it from the
-    // digits.
     return {
       kind: 'not_held',
       identity: chapter.identity,
@@ -415,8 +329,6 @@ export function classifyLegislationCitation(
   const section = splitSectionQuery(trimmed)
   if (section) {
     const labelPath = parseSectionLabelPath(section.sectionText)
-    // A section number that is really an Act remainder (no Act part, or a
-    // non-section token) is not a legislation citation at all.
     if (!labelPath || !section.actText) return { kind: 'unrecognised' }
     const act = resolveActByName(section.actText, directory, trimmed)
     if (act.kind === 'act') return withProvision(act.act, labelPath, trimmed)

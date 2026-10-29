@@ -10,7 +10,6 @@ type BurnPart = {
   elements: XmlElement[]
   children: Map<number, XmlElement[]>
 }
-// Anchors address the immutable overlay source, never the queued replacements.
 const parts = new WeakMap<OoxmlDocument, Map<string, BurnPart>>()
 
 export function readBurnPart(

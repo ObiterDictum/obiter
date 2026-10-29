@@ -25,23 +25,6 @@ export type RedactionReturnResult =
   | { status: 'unavailable' }
   | { status: 'not_found' }
 
-/**
- * Returns a finalized redaction output to its source document as a new
- * immutable version — the last leg of the handoff: document version → run →
- * reviewed decisions → burned DOCX output → linked version.
- *
- * Safety rails, all enforced inside one transaction:
- *  - `selectMutationRun` locks the run FOR UPDATE and re-checks edit access
- *    on the matter, document and run, so a revoked or raced caller loses;
- *  - the run must be document-bound, finalized, unreplaced, and its output a
- *    DOCX output whose stored bytes still match the sha256 recorded at
- *    finalization — provenance, not trust;
- *  - the output is a complete replacement for the source it was burned from,
- *    so the document head must still be that source version. Anything else
- *    is `stale`: returning would silently discard the edits in between;
- *  - `returned_document_version_id` makes a retried return resolve to the
- *    version it already created instead of minting a second.
- */
 export async function returnRedactionToDocument(
   pool: Pool,
   storage: StorageService,
@@ -137,8 +120,6 @@ export async function returnRedactionToDocument(
       return { status: 'unavailable' }
     }
 
-    // The bytes must be a package this deployment can serve: a DOCX that
-    // fails to parse would become a version no route can read.
     try {
       await parseDocx(Uint8Array.from(output))
     } catch {
@@ -162,8 +143,6 @@ export async function returnRedactionToDocument(
     if (
       locked.current.id !== input.baseVersionId ||
       locked.base.id !== input.baseVersionId ||
-      // The output replaces the whole version content; the head must still be
-      // the exact version the run redacted, or intervening edits are lost.
       locked.current.id !== run.documentVersionId
     ) {
       await client.query('rollback')
@@ -182,9 +161,6 @@ export async function returnRedactionToDocument(
       expectedCurrentVersionId: locked.current.id,
       parentVersion: locked.current,
       preparedBytes: Uint8Array.from(output),
-      // No paragraph lineage: the returned bytes come from the output, not
-      // from run-level edits to the source model, so there is no honest
-      // address map to record.
       lineage: null,
       audit: {
         action: 'redaction.return_to_document',

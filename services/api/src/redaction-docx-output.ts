@@ -50,7 +50,6 @@ function replacementForSpan(
   return `[${token}]`
 }
 
-/** Burn with Redact-owned XML replacements, then refuse any residual span text. */
 export async function buildRedactedDocx(
   input: RedactedDocxInput,
 ): Promise<Uint8Array> {
@@ -62,7 +61,6 @@ export async function buildRedactedDocx(
       error instanceof RedactionSpanIntegrityError
     )
       throw error
-    // Never return uncertain bytes or expose parser/provider internals to callers.
     throw new RedactionDocxBurnError(
       'The document could not be redacted safely.',
     )
@@ -114,8 +112,6 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
         replacements: new Map(),
       }
   }
-  // Legacy Mammoth runs are usable only when their complete stored text agrees.
-  // Never realign by searching: duplicates make that intrinsically ambiguous.
   if (mapped.text !== input.text.trim())
     throw new RedactionDocxBurnError(
       'Stored extraction coordinates differ from the Word document; create a new redaction run from a fresh upload.',
@@ -168,8 +164,6 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
     Buffer.from(serialised),
     input.ooxmlLimits,
   )
-  // Independent output proof: rebuild reviewed text from the emitted package
-  // and compare it to offset edits, including preserved synthetic separators.
   const edits: Array<{ start: number; end: number; value: string }> = []
   const emitted = new Set<BurnRange>()
   let firstSpan = 0
@@ -201,20 +195,6 @@ async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   return stripped
 }
 
-/**
- * A redacted document naming its author in metadata has disclosed something.
- * Empty the authorship fields Word writes (dc:creator, cp:lastModifiedBy,
- * Company, Manager) plus the other free-text docProps scalars that can carry
- * client matter text unseen by the reviewer (dc:title, dc:subject,
- * cp:keywords, dc:description, cp:category, cp:contentStatus, Template) and
- * the arbitrary custom.xml properties. Counts, dates, revisions, producer
- * ids, stats, and hyperlink bases stay: functional or non-textual. The
- * thumbnail rendering is removed outright with its rel and content-type
- * entry — a stale first-page preview would otherwise leak the unredacted
- * document through the file manager. Coverage refuses non-trivial unexamined
- * text in these parts before the burn, so stripping here only ever removes
- * short residue the guard accepted.
- */
 async function stripDocumentAuthorship(input: Uint8Array) {
   const zip = await JSZip.loadAsync(input)
   const scrubs = new Map([

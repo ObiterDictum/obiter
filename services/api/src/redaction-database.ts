@@ -59,13 +59,7 @@ export interface RedactionRunRecord {
   detectionMode: DetectionMode
   replacesRunId: string | null
   replacementRunId: string | null
-  /**
-   * The document version this run's finalized output was returned into
-   * (E12). Present only after a successful return-to-document; doubles as the
-   * idempotence marker, so a retried return resolves to this version.
-   */
   returnedDocumentVersionId: string | null
-  /** Where that version lives, so the finalised page can offer to open it. */
   returnedMatterId: string | null
   returnedDocumentId: string | null
   returnedDocumentVersionNumber: number | null
@@ -160,8 +154,6 @@ function parseSpans(value: unknown): RedactionSpan[] {
     if (typeof span !== 'object' || span === null)
       throw new Error('Stored redaction span is invalid.')
     // SAFETY: span passed the non-null object guard above; every field read from item is
-    // validated below (safeParse for category/source/confidence/suggestion, typeof for
-    // id/start/end/text), so a wrong shape throws instead of propagating.
     const item = span as Record<string, unknown>
     const category = spanCategorySchema.safeParse(item.category)
     const source = spanSourceSchema.safeParse(item.source)
@@ -201,7 +193,6 @@ function parseDecisions(value: unknown): Decisions {
     if (typeof value !== 'object' || value === null)
       throw new Error('Stored redaction decision is invalid.')
     // SAFETY: value passed the non-null object guard above; the decision is safeParsed and
-    // decidedBy/decidedAt are typeof-checked below, so a wrong shape throws instead of propagating.
     const item = value as Record<string, unknown>
     const decision = spanDecisionSchema.safeParse(item.decision)
     if (
@@ -264,7 +255,6 @@ export function computeSummary(
   decisions: Decisions,
 ): RunSummary {
   // SAFETY: entries are built from spanCategorySchema.options, so the result carries exactly
-  // one zero count per span category.
   const byCategory = Object.fromEntries(
     spanCategorySchema.options.map((category) => [category, 0]),
   ) as Record<RedactionSpan['category'], number>
@@ -304,13 +294,6 @@ export function computeSummary(
   }
 }
 
-/**
- * Decisions name the person who made them. The stored record holds the id, so
- * the organisation's member names are joined in where a run is read for
- * display; they are never written back, because a name inside `decisions_json`
- * would freeze somebody's name into an audit record and drift from the account
- * it names.
- */
 export async function withDecisionNames(
   queryable: Pick<Pool, 'query'>,
   organisationId: string,
@@ -333,7 +316,6 @@ export async function withDecisionNames(
   return named
 }
 
-/** The stored shape of a set of decisions: the id, never the joined name. */
 function storedDecisions(decisions: Decisions): Decisions {
   const stored: Decisions = {}
   for (const [spanId, record] of Object.entries(decisions)) {
@@ -531,17 +513,6 @@ export async function listRedactionRunsForDocument(
   return result.rows.map(mapRedactionRun)
 }
 
-/**
- * A run bound to a document version reads that version's storage objects.
- * While the bound version is still the document's current one, run-level
- * access already implies the caller may read its content; once a newer
- * version supersedes it, the bytes are historical document content and the
- * same 'edit' gate as `?versionId=` applies. The predicate lives inside the
- * key lookup itself, so no caller can forget it and a version that flips
- * non-current between an earlier check and this read cannot slip through. A
- * denied lookup returns no row, so callers report the same not-found they
- * would for a missing version.
- */
 async function getRunDocumentVersion(
   pool: Pool,
   run: RedactionRunRecord,
@@ -609,10 +580,6 @@ export async function getRunSourceFile(
   }
 }
 
-/**
- * document_versions.file_type stores short types (`pdf` / `docx` / `txt`);
- * standalone runs already store real MIME types. Accept both.
- */
 export function mimeTypeFromStoredFileType(
   fileType: string | null | undefined,
 ): string {
@@ -680,7 +647,6 @@ export async function recordSpanDecision(input: {
   spanId: string
   decision: SpanDecision
   userId: string
-  /** Repeat the decision on every span reading the same text in this run. */
   applyToSameText?: boolean
 }) {
   const client = await input.pool.connect()
@@ -716,9 +682,6 @@ export async function recordSpanDecision(input: {
       await client.query('rollback')
       return { kind: 'span_not_found' as const }
     }
-    // Same text, same decision: keeping one "Priya" and redacting another
-    // leaves the name in the copy that leaves the firm. The repeat is recorded
-    // as one action against every occurrence so the audit names each span.
     const spanIds = input.applyToSameText
       ? sameTextOccurrences(run.spans, span.text).map((item) => item.id)
       : [span.id]
@@ -835,12 +798,8 @@ export async function finalizeRedactionRun(input: {
       outputMode: input.outputMode,
       outputMimeType: input.outputMimeType ?? 'text/plain',
       outputFilename: input.outputFilename ?? null,
-      // Burn fallback reason persists here (not just in the finalize
-      // response) so the review UI still warns after a page reload.
       outputDowngrade: input.outputDowngrade ?? null,
       ...(input.outputSha256 ? { outputSha256: input.outputSha256 } : {}),
-      // True only for the new secure rasterized hard-redaction PDF; absent on
-      // legacy DOCX/TXT outputs and pseudonymised output.
       securePdf: input.securePdf === true,
     }
     await client.query(
@@ -922,8 +881,6 @@ export async function listRedactionAuditLog(
   pool: Pool,
   run: RedactionRunRecord,
 ): Promise<RedactionAuditLogEntry[]> {
-  // organisation_id is deliberately part of the predicate: nullable auth rows
-  // (migration 0009) cannot leak into an organisation-scoped run report.
   const result = await pool.query<{
     action: string
     user_id: string | null
@@ -956,12 +913,6 @@ export async function getRedactionOutputKey(
   return result.rows[0]?.object_key ?? null
 }
 
-/**
- * Soft-deletes a redaction run and writes the audit event in one transaction.
- * Returns null when the run is missing, cross-org, or already deleted (caller
- * surfaces 404 without auditing). Cascade deletes from a matter or document
- * are handled by database.ts and do not call this.
- */
 export async function softDeleteRedactionRun(
   pool: Pool,
   input: {
@@ -1026,7 +977,6 @@ export async function softDeleteRedactionRun(
   }
 }
 
-/** Restores one run after parent-liveness checks. */
 export async function restoreRedactionRunWithAudit(
   pool: Pick<Pool, 'connect'>,
   input: {
@@ -1041,8 +991,6 @@ export async function restoreRedactionRunWithAudit(
   try {
     await client.query('begin')
 
-    // Parent rows are locked before the target and lineage runs. Share
-    // revocation uses the same matter-first order.
     const parent = await selectMutationRun(client, {
       organisationId: input.organisationId,
       userId: input.userId,
@@ -1057,9 +1005,6 @@ export async function restoreRedactionRunWithAudit(
     const cascadeTimestamp = parent.deletedAt
 
     if (parent.replacesRunId) {
-      // selectMutationRun holds the source and target in deterministic id
-      // order, so a concurrent re-detection cannot install a competing
-      // replacement between this check and the update below.
       const competing = await client.query<{ id: string }>(
         `select id from redaction_runs
          where organisation_id = $1

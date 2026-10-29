@@ -15,36 +15,14 @@ export interface DocumentModelComparison {
   truncated: boolean
 }
 
-/**
- * Compares two immutable document models — the same derived file `/model`
- * serves — into a bounded, ordered entry list. Paragraph pairing is tiered:
- * paragraphs sharing a preserved `w14:paraId` anchor the alignment, leftovers
- * pair on identical text, and the still-unpaired remainder pairs on a
- * high word overlap, so an edit across the canonicalisation boundary — where
- * one version lacks `w14:paraId` entirely — still reports 'modified' rather
- * than a whole-document remove+add. No pairing is ever invented below that
- * bar: anything unmatched is reported as an insertion or deletion.
- *
- * The comparison covers what the wire model carries: story paragraphs and
- * their formatting fingerprints, non-paragraph story structure, styles,
- * numbering, relationships, tracked revisions and imported comments. It does
- * not cover opaque package bytes (media parts, other preserved parts); the
- * route reports a byte-level difference as a note when the model is equal.
- */
 export function compareDocumentModels(
   base: DocumentModelWire,
   target: DocumentModelWire,
 ): DocumentModelComparison {
   const entries: DocumentComparisonEntry[] = []
-  // What each version reads as with its tracked insertions accepted. The
-  // stored runs hold neither inserted nor deleted text, so diffing them raw
-  // would report a replacement's deletion and lose the words that replaced it.
   const baseText = versionReader(base)
   const targetText = versionReader(target)
   let truncated = false
-  // The entry list is capped by contract. Entries are built lazily: once the
-  // bound is hit a push only records truncation, so a pair past the cap costs
-  // a text compare — never a bounded-LCS word diff nobody will read.
   const push = (build: () => DocumentComparisonEntry) => {
     if (entries.length < DOCUMENT_COMPARISON_ENTRY_MAX_COUNT) {
       entries.push(build())
@@ -53,8 +31,6 @@ export function compareDocumentModels(
     }
   }
 
-  // Target-first ordering keeps inserted content in reading order; stories
-  // only in the base follow so their removals still land deterministically.
   const partNames = [
     ...new Set(
       [...target.stories, ...base.stories].map((story) => story.partName),
@@ -85,8 +61,6 @@ export function compareDocumentModels(
         )
       }
     }
-    // Non-paragraph story content — tables, section properties, bookmarks —
-    // lives in the preserved fragments; paragraph diffs cannot see it.
     if (baseStory !== undefined && targetStory !== undefined) {
       if (
         !arraysEqual(
@@ -97,10 +71,6 @@ export function compareDocumentModels(
         push(() => ({ type: 'story', storyPartName: partName }))
       }
     } else {
-      // A part present on only one side: its paragraphs already report
-      // above as added or removed, but its non-paragraph content (or the
-      // bare part, when it has no paragraphs at all) would otherwise
-      // leave no trace.
       const present = baseStory ?? targetStory
       if (
         present !== undefined &&
@@ -140,8 +110,6 @@ export function compareDocumentModels(
   ]
   for (const { area, before, after } of areas) {
     if (truncated) break
-    // These lists are content-addressed: a reorder without content change is
-    // not a document difference, so the comparison is order-insensitive.
     if (!sameUnorderedList(before, after)) {
       push(() => ({ type: 'package', area }))
     }
@@ -152,12 +120,6 @@ export function compareDocumentModels(
 
 type ParagraphReader = (paragraph: DocumentParagraphWire) => string
 
-/**
- * Each paragraph's text with this version's tracked insertions accepted: the
- * stored runs, plus the text of every insert the change list anchors before a
- * run, in source order. Deleted text is already absent from the runs, so this
- * is the document as a reader of this version sees it.
- */
 function versionReader(model: DocumentModelWire): ParagraphReader {
   const inserts = new Map<
     string,
@@ -225,12 +187,6 @@ function diffPairedParagraphs(
   }))
 }
 
-/**
- * What a reader would call this paragraph's formatting: style, paragraph-level
- * preserved markup, and the run property sequence — text and run ids excluded.
- * Runs fold to their property groups first, so a pure run split or merge with
- * identical formatting does not manufacture a diff entry.
- */
 function paragraphFormatFingerprint(paragraph: DocumentParagraphWire) {
   const runGroups: string[] = []
   let last = ''
@@ -293,7 +249,6 @@ function arraysEqual(left: readonly string[], right: readonly string[]) {
   )
 }
 
-/** Order-insensitive multiset equality over JSON-serialised elements. */
 function sameUnorderedList(
   left: readonly unknown[],
   right: readonly unknown[],

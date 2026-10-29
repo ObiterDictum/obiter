@@ -9,12 +9,10 @@ import {
   type OoxmlPackageLimits,
 } from '@obiter/ooxml'
 
-/** Fallback text boxes duplicate the modern drawing but escape model anchors. */
 export async function prepareDocxForBurn(
   bytes: Buffer,
   limits?: OoxmlPackageLimits,
 ) {
-  // Enforce package expansion limits before JSZip or XML parsing touches data.
   const entries = await loadOoxmlZipEntries(bytes, limits)
   const zip = new JSZip()
   for (const [name, payload] of entries) zip.file(name, payload)
@@ -82,8 +80,6 @@ export async function prepareDocxForBurn(
         value: source.slice(branch.startTagEnd, branch.endTagStart),
       })
     }
-    // Word's modern Choice is the canonical reviewed representation. Its
-    // legacy duplicate must not survive elsewhere in the package.
     replacements.push(
       ...elements
         .filter(
@@ -97,7 +93,6 @@ export async function prepareDocxForBurn(
         .map((element) => ({ ...element, value: '' })),
     )
     replacements.sort((a, b) => a.start - b.start || b.end - a.end)
-    // Outermost removals also consume any nested fallback.
     let result = ''
     let cursor = 0
     for (const element of replacements) {
@@ -110,7 +105,6 @@ export async function prepareDocxForBurn(
   return zip.generateAsync({ type: 'uint8array' })
 }
 
-/** Decode attributes and mixed text, both with and without layout separators. */
 export function decodedXmlText(
   source: string,
   includeAttribute: (
@@ -152,17 +146,12 @@ export function decodedXmlText(
   let layoutText = ''
   let bodyText = ''
   for (const tag of tags) {
-    // The complete part has already passed XML validation. Read its text
-    // segments without treating markup removal as a string sanitiser. CDATA
-    // is literal; entity references are decoded only in ordinary XML text.
     const segments = source
       .slice(cursor, tag.start)
       .matchAll(/<!--[^]*?-->|<\?[^]*?\?>|<!\[CDATA\[([^]*?)\]\]>|([^<]+)/gu)
     const content = [...segments]
       .map((segment) => segment[1] ?? decodeXmlReferences(segment[2] ?? ''))
       .join('')
-    // Indentation between elements is not rendered text. Preserve whitespace
-    // inside text carriers, including a run containing only a space.
     const meaningful =
       content.trim() || !parents.has(stack.at(-1)) ? content : ''
     text += meaningful

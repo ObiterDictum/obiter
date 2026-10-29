@@ -1,16 +1,3 @@
-/**
- * Bounded reading of an outbound upstream response body.
- *
- * Upstream bodies are untrusted too, so the read stops at a byte cap and the
- * reader is cancelled as soon as the cap is crossed. The deadline passed to
- * `fetch` still aborts the stream, so a stalled body cannot hold the request
- * open past it.
- *
- * This lives outside `routes/` so the request-body architecture boundary keeps
- * proving that route modules never read a raw body stream directly; this
- * module is the reviewed, bounded exception for outbound responses. It is
- * distinct from `limited-request-body.ts`, which bounds incoming requests.
- */
 export async function readBoundedResponseText(
   response: Response,
   maxBytes: number,
@@ -39,7 +26,6 @@ export async function readBoundedResponseText(
     }
     text += decoder.decode()
   } catch {
-    // An aborted body (deadline) or socket error makes the body unusable.
     return null
   }
   return text

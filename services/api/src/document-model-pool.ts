@@ -3,71 +3,15 @@ import { Worker } from 'node:worker_threads'
 import { fileURLToPath } from 'node:url'
 import type { DocumentModelWire } from '@obiter/contracts'
 
-/**
- * How many document-model loads may execute at once. Loading a model is
- * CPU-bound single-threaded work: more workers would compete for the same
- * cores while multiplying peak memory (each worker transiently holds the
- * source bytes, the parsed model and its JSON). Two lets a verification run
- * and an editor model fetch proceed together without letting a burst of
- * uploads or verifications grow the process's worker footprint.
- */
 const documentModelWorkerConcurrency = 2
 
-/**
- * How long a dispatched task may take to answer. A worker that never
- * responds parks its slot and its caller forever without this; with it, the
- * worker is terminated (both runtimes kill a spinning thread in
- * milliseconds, measured), the caller settles once, and later work proceeds.
- *
- * Calibrated, not arbitrary: uploads are capped at 25 MiB and packages at
- * 72 MiB uncompressed (package-limits-defaults.ts), and the fixture this is
- * sized against — 5091 styled paragraphs inside the guards, carrying 1697
- * fields, 1747 tracked changes and 728 move ranges, so all three loads are
- * present — parses in about 0.7 s under Bun on the reference host.
- * `parse-change-cost.test.ts` builds exactly that fixture and asserts its
- * paragraph, field, change and move counts, so the number can be re-measured
- * rather than taken on trust.
- *
- * The figure this replaces — about 210 s under Node and 105 s under Bun for a
- * 5091-paragraph fixture — was taken before the fixes for #303 and #313 removed
- * the per-paragraph, per-field, per-change and per-container scans, so it
- * measured the shape of that parse rather than the size of a legitimate
- * document. Parsing is linear in paragraphs, runs and fields, and in tracked
- * changes; move ranges are linear except for a wrapper that no container holds,
- * which is tracked in #325.
- *
- * The deadline itself is unchanged, because it bounds liveness rather than
- * performance: a document far beyond the measured envelope can still exceed
- * it and fail with the curated store error, which is not a reason to let
- * callers park forever.
- */
 const documentModelTaskTimeoutMs = 600_000
 
-/**
- * How many callers may park waiting for a free worker. Waiters hold their
- * own task payload (for `generate`, the source bytes their request already
- * read), so the list must not be bounded by request concurrency alone: a
- * burst beyond this many parked callers is rejected and surfaces as the
- * curated store error, which keeps retention bounded at
- * `documentModelWorkerMaxWaiting` payloads whatever the server's request
- * concurrency turns out to be.
- */
 const documentModelWorkerMaxWaiting = 16
 
-/**
- * The one task the worker executes. `parse` validates an already-stored
- * `model.json`; `generate` parses source bytes into a model and its JSON.
- * Both are the synchronous work that used to run on the serving event loop.
- */
 export type DocumentModelTask =
   { kind: 'parse'; json: string } | { kind: 'generate'; bytes: Uint8Array }
 
-/**
- * A task's outcome. `invalid` means a cached model must be regenerated from
- * the source (never a failure to the caller), `failed` means the caller
- * reports the curated model-unavailable error. `json` is set only by
- * `generate`, so the caller can persist exactly what was validated.
- */
 export type DocumentModelTaskResult =
   | { status: 'ok'; model: DocumentModelWire; json: string | null }
   | { status: 'invalid' }
@@ -97,8 +41,6 @@ interface WorkerSlot {
 }
 
 function tsxLoaderPath(): string {
-  // Absolute, so the worker's --import resolves from this module's package
-  // rather than from whatever directory the process happens to run in.
   return createRequire(import.meta.url).resolve('tsx')
 }
 
@@ -106,12 +48,7 @@ function spawnDocumentModelWorker(): Worker {
   const entry = fileURLToPath(
     new URL('./document-model-worker.ts', import.meta.url),
   )
-  // Bun executes TypeScript natively and does not take a Node --import;
-  // Node needs the loader because the workspace packages ship TypeScript
-  // source only. The same rule as the two server entry points, applied to
-  // their workers.
   // SAFETY: the cast only adds an optional Bun property for runtime detection; on Node the
-  // property is absent and the worker gets the tsx loader, on Bun it gets native TS support.
   const options =
     typeof (globalThis as { Bun?: unknown }).Bun === 'undefined'
       ? { execArgv: ['--import', tsxLoaderPath()] }
@@ -126,39 +63,11 @@ function containedError(message: string, cause: unknown): Error {
 }
 
 function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
-  // A deadline must never be the reason a process stays alive; a runtime
-  // that returns a plain handle simply has nothing to unref.
   if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
     timer.unref()
   }
 }
 
-/**
- * A bounded pool of document-model worker threads.
- *
- * A caller dispatches immediately when a worker is free; otherwise it parks
- * in a FIFO of waiting callers, each still holding its own task payload (for
- * `generate`, the source bytes its request already read). That list is the
- * queue this pool does have: it is bounded by `documentModelWorkerMaxWaiting`
- * rather than by the server's request concurrency, callers beyond the bound
- * are rejected with the pool's own error, and there is no cancellation, so
- * an abandoned request's task still runs when its turn comes. Concurrency
- * and memory stay bounded by `documentModelWorkerConcurrency` workers plus
- * at most that many parked payloads.
- *
- * Every dispatched task gets `documentModelTaskTimeoutMs` to answer; a worker
- * that never responds is terminated, its caller settles once, and the slot is
- * replaced lazily on the next dispatch. A worker that errors, exits or sends
- * an unexpected message is dropped with its task rejected exactly once; a
- * `new Worker` call that throws synchronously (fd, thread or memory
- * pressure) is contained inside `pump()` and settles the head waiter, because
- * `pump()` also runs from inside worker event listeners, where an escaped
- * throw would take the process down. `close()` rejects everything in flight
- * and terminates the workers, which is what shutdown waits on.
- *
- * The constructor's arguments exist for tests, which drive scheduling with a
- * fake worker at the thread boundary; production uses the defaults.
- */
 export class DocumentModelWorkerPool {
   private readonly slots: WorkerSlot[] = []
   private readonly waiting: WaitingTask[] = []
@@ -212,7 +121,6 @@ export class DocumentModelWorkerPool {
     )
   }
 
-  /** Never throws: it runs from inside worker event listeners. */
   private pump(): void {
     while (!this.closed) {
       const free = this.slots.find((slot) => slot.waiting === null)
@@ -222,18 +130,12 @@ export class DocumentModelWorkerPool {
         this.dispatch(free, waiter)
         continue
       }
-      // Spawn only for work that is actually waiting and unclaimed: a second
-      // worker exists because two loads contend, never just because one did.
       if (this.waiting.length === 0 || this.slots.length >= this.maxWorkers) {
         return
       }
       try {
         this.attach(this.spawnWorker())
       } catch (error) {
-        // `new Worker` throws synchronously under the same host pressure that
-        // kills workers. Contain it here, settle the head waiter once, and
-        // let the next dispatch attempt the spawn again; retrying in this
-        // tick would spin through every waiter.
         this.waiting
           .shift()
           ?.reject(
@@ -255,8 +157,6 @@ export class DocumentModelWorkerPool {
     try {
       slot.worker.postMessage({ id, task: waiter.task } satisfies TaskMessage)
     } catch (error) {
-      // A payload the thread boundary refuses leaves the slot exactly as it
-      // was found: idle and unclaimed, with only this caller to settle.
       slot.waiting = null
       slot.taskId = 0
       slot.worker.unref()
@@ -318,9 +218,6 @@ export class DocumentModelWorkerPool {
 
   private drop(slot: WorkerSlot, error: Error): void {
     const index = this.slots.indexOf(slot)
-    // A crashed worker fires 'error', 'exit' and possibly 'messageerror';
-    // only the first event owns the slot, so the in-flight task is rejected
-    // exactly once however many signals arrive.
     if (index === -1) return
     this.slots.splice(index, 1)
     if (slot.timer) {
@@ -329,8 +226,6 @@ export class DocumentModelWorkerPool {
     }
     const waiter = slot.waiting
     slot.waiting = null
-    // Best-effort cleanup of an already-failed thread; it can never reject,
-    // and a rejection here would take the process down over housekeeping.
     void slot.worker.terminate().catch(() => undefined)
     if (waiter) waiter.reject(error)
     if (!this.closed) this.pump()
@@ -345,7 +240,6 @@ export function runDocumentModelTask(
   return sharedDocumentModelPool.run(task)
 }
 
-/** Idempotent. Entry points call it from their shutdown resource close. */
 export function closeDocumentModelWorkers(): Promise<void> {
   return sharedDocumentModelPool.close()
 }

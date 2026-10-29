@@ -60,16 +60,6 @@ export function detectionMode(degraded: boolean): DetectionMode {
   return degraded ? 'heuristics+supplement' : 'model+supplement'
 }
 
-/**
- * Detection provenance. `reconcile@1` names the product-owned overlap
- * reconciliation introduced for P0.31 and `court-context@1` the court-detail
- * suppression that follows it: the same model over the same text can now
- * produce a different span set than a run recorded before either, so old and
- * new runs must not share a version. Stored `detector_version` values are
- * historical records and are never rewritten; re-detecting a stored document
- * creates a new run whose version carries these components (see
- * `redaction-redetect.ts`).
- */
 function version(model: string, revision: string, mode: DetectionMode) {
   return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;reconcile@1;court-context@1;mode=${mode}`
 }
@@ -84,12 +74,6 @@ function provenance(model: string, revision: string, degraded: boolean) {
 
 export interface RedactionDetector {
   (text: string): Promise<DetectionResult>
-  /**
-   * Load the model without running detection, so the one-off download happens
-   * at a point where failing is visible instead of inside a user's first
-   * redaction. Rejects with the load failure; the next call re-attempts the
-   * load exactly as an uninitialized detector would.
-   */
   warm: () => Promise<void>
 }
 
@@ -98,8 +82,6 @@ export function createRedactionDetector(
   configuration: RedactionDetectionConfig = DEFAULT_CONFIG,
 ): RedactionDetector {
   let classifier: Promise<TokenClassifier> | undefined
-  // ONNX sessions are not safe for concurrent inference. This queue is adequate
-  // for the current API scale; use per-request sessions or a worker pool to scale.
   let inferenceTail: Promise<void> = Promise.resolve()
   const serializeInference = async <T>(operation: () => Promise<T>) => {
     const previous = inferenceTail
@@ -137,7 +119,6 @@ export function createRedactionDetector(
         ...provenance(configuration.model, configuration.revision, false),
       }
     const started = performance.now()
-    // Heuristics do not require the model and remain available when it fails.
     const heuristic = detectHeuristics(text)
     let usedClassifier: Promise<TokenClassifier> | undefined
     try {
@@ -175,7 +156,6 @@ export function createRedactionDetector(
         ...provenance(configuration.model, configuration.revision, false),
       }
     } catch (error) {
-      // A concurrent request may already have installed a newer load promise.
       if (classifier === usedClassifier) classifier = undefined
       const reason =
         error instanceof Error ? error.message : 'unknown model failure'
@@ -201,8 +181,6 @@ export function createRedactionDetector(
     try {
       await pending
     } catch (error) {
-      // Leave the detector exactly as it was before warming, so a failed
-      // prefetch does not pin the failure for every later request.
       if (classifier === pending) classifier = undefined
       throw error
     }
@@ -231,13 +209,6 @@ export function detectRedactionSpans(text: string) {
   return requireConfiguredDetector()(text)
 }
 
-/**
- * Pull the model into the cache before any request needs it. The API stays
- * usable if this fails — detection still degrades to heuristics per run, and the
- * review UI still labels those runs as limited — but the failure is reported
- * once at startup with its real cause instead of surfacing as a redaction that
- * quietly found fewer spans.
- */
 export function warmRedactionDetector() {
   return requireConfiguredDetector().warm()
 }

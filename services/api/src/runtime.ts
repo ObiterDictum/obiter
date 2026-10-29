@@ -7,20 +7,10 @@ import { warmRedactionDetector } from './redaction-detection'
 
 export interface ApiRuntime {
   env: ApiEnv
-  /**
-   * The process's one owner of application and corpus pools. Entry points close
-   * it through `close()` so a separate corpus reader or writer pool is released
-   * exactly once, and a lane configured with a read-only corpus never gets a
-   * writer to close.
-   */
   pools: DatabasePools
   app: ApiApp
 }
 
-/**
- * Raised when boot cannot reach the state serving requires. Entry points turn
- * it into a logged exit; nothing catches it and carries on.
- */
 export class ApiBootError extends Error {
   constructor(message: string, options: { cause?: unknown } = {}) {
     super(message, options)
@@ -28,13 +18,6 @@ export class ApiBootError extends Error {
   }
 }
 
-/**
- * Everything both runtimes do before a socket is bound: configuration,
- * migrations, the application, and the two non-blocking boot probes. This is
- * the one bootstrap; `server.ts` (`@hono/node-server`) and `server-bun.ts`
- * (`Bun.serve`) serve the identical application, so routes, middleware,
- * contracts and database access cannot drift between the adapters.
- */
 export async function createApiRuntime(
   runtime: ApiRuntimeKind,
 ): Promise<ApiRuntime> {
@@ -45,27 +28,12 @@ export async function createApiRuntime(
     await runMigrations(pools.application)
   } catch (error) {
     await pools.close()
-    // Fail closed: handlers assume the latest schema (e.g. sign-up reads the
-    // column added in 0016), so serving traffic on a half-migrated database
-    // would corrupt per-request state instead of producing one loud boot
-    // error. runMigrations holds a Postgres advisory lock, so concurrent
-    // instances queue instead of racing.
     throw new ApiBootError(
       'Refusing to start: pending migrations could not be applied.',
       { cause: error },
     )
   }
 
-  // The API is corpus-only: no request path reaches Find Case Law, so the
-  // runtime builds neither the hydration admission ledger nor the shared Find
-  // Case Law request budget. Those modules and migrations 0028/0029 are
-  // retained unchanged for an explicit indexing run to reuse; the API never
-  // constructs them, so a request cannot reach a provider or its meter.
-  //
-  // The application pool and the corpus access the process was configured for
-  // reach the app through the same boundary. A lane with `CORPUS_DATABASE_URL`
-  // and no writer credential gets `corpus.write === null`, so no route can
-  // attempt a corpus write or fall back to the application pool.
   const app = createApiApp(env, pools.application, {
     runtime,
     corpus: pools.corpus,
@@ -77,10 +45,6 @@ export async function createApiRuntime(
   return { env, pools, app }
 }
 
-// Loud at boot, never blocking: an unreachable or empty stored index must
-// be visible here, not discovered later as silent "no results". Serving
-// starts regardless — queries fail visibly with 503 until the engine
-// answers, because Meilisearch is the sole query layer.
 function reportIndexStatus(env: ApiEnv) {
   void getIndexStatus(
     createClient(env.meilisearchHost, env.meilisearchSearchApiKey),
@@ -112,9 +76,6 @@ function reportIndexStatus(env: ApiEnv) {
   })
 }
 
-// Deliberately not awaited: the first run on a cold cache downloads ~15 MB from
-// Hugging Face, and health checks and every non-redaction route should be
-// answering while that happens.
 function warmDetection(env: ApiEnv) {
   void warmRedactionDetector().then(
     () => {

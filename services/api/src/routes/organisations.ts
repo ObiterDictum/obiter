@@ -122,18 +122,6 @@ function callerOwnsOrganisation(
   return null
 }
 
-/**
- * Organisation creation. Every user is auto-provisioned a private organisation
- * on first authorised request via ensureOrgUser, so this route usually returns
- * 409. It exists for the remaining case where that has not happened. The
- * single-org model holds: a user that already has an organisation gets a 409
- * conflict. Creation and the owner assignment are transactional in
- * createOrganisationForUser.
- *
- * Accepting an invite therefore means leaving an organisation, which is why
- * the accept path moves the user and deletes the vacated organisation when it
- * is empty.
- */
 export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
@@ -168,14 +156,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     return c.json({ organisation: result.organisation }, 201)
   })
 
-  /**
-   * Owner-only rename. Two paths share one handler: PATCH /api/organisations
-   * renames the caller's own organisation, PATCH
-   * /api/organisations/:organisationId renames the addressed one after
-   * proving it is the caller's own. Both enforce the owner check — sibling
-   * management routes split owner vs owner/admin per route, so each twin
-   * states its own requirement rather than inheriting it.
-   */
   async function handleRename(c: RouteContext, organisationId: string) {
     const caller = await requireOwnerRole(c, pool)
     if (caller instanceof Response) return caller
@@ -253,8 +233,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     const token = randomBytes(32).toString('base64url')
     const expiresAt = new Date(Date.now() + INVITE_TTL_MS)
 
-    // Read the organisation name before opening the transaction: a missing
-    // organisation is a 404 and nothing has been written yet.
     const organisation = await pool.query<{ name: string }>(
       `select name from organisations where id = $1`,
       [caller.organisationId],
@@ -334,10 +312,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         logLabel: 'Organisation-invite',
       })
     } catch (error) {
-      // The invite_create audit row deliberately survives this withdrawal:
-      // the grant was recorded, and failure to deliver is operational, not a
-      // permission change. The revoke row makes the withdrawal visible, so a
-      // failed delivery is distinguishable from a delivered invite.
       await pool.query(`delete from organisation_invites where id = $1`, [
         row.id,
       ])
@@ -482,19 +456,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
       const client = await pool.connect()
       try {
         await client.query('begin')
-        // Lock the organisation's owner rows before reading and counting them.
-        // A target-row lock only serialises removals of the same user, so two
-        // removals of different owners never conflict and can both read a count
-        // that still includes the other. Locking the owner set first makes the
-        // count and the removal one serial decision; the fixed `order by id`
-        // gives concurrent sibling removals a deterministic lock order so they
-        // cannot deadlock each other. An `organisations`-row mutex was rejected:
-        // the invite-accept path updates `users` and only then deletes the
-        // vacated organisation, so taking the organisation lock before the user
-        // locks here would invert that order and deadlock against accept. A
-        // concurrent invite acceptance can only add an owner and never locks
-        // the existing owner rows, so it cannot create an ownerless
-        // organisation.
         const owners = await client.query<{ id: string }>(
           `
             select id
@@ -533,11 +494,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
             403,
           )
         }
-        // A removed member may still be a grantee of shares in this
-        // organisation. The composite foreign key from 0027 rejects the
-        // organisationId change while any remain, so revoke them in the same
-        // transaction, auditing each exactly as the share-revocation route
-        // does.
         await revokeMemberMatterShares(client, {
           organisationId: caller.organisationId,
           userId: targetUserId,
@@ -620,9 +576,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         404,
       )
     }
-    // The answer is only ever about the email the invite was sent to — the
-    // token already identifies the invitee — so this is not a general account
-    // enumeration surface.
     if (row.email !== email) {
       return errorResponse(
         c,
@@ -764,8 +717,6 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         `,
         [row.id],
       )
-      // Written in the same transaction as the move, so the role change and
-      // the grant record commit together.
       await appendAuditLog(client, {
         organisationId: row.organisation_id,
         userId: sessionUser.id,

@@ -27,7 +27,6 @@ function parseContentLength(request: Request): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
-/** Reject when Content-Length is present, finite, and above maxBytes. */
 export function contentLengthExceedsLimit(
   request: Request,
   maxBytes: number,
@@ -36,7 +35,6 @@ export function contentLengthExceedsLimit(
   return contentLength !== null && contentLength > maxBytes
 }
 
-/** Stream-read the body and abort once maxBytes is exceeded. */
 export async function readBoundedBodyBytes(
   request: Request,
   maxBytes: number,
@@ -84,7 +82,6 @@ export function payloadTooLargeResponse(
   limitKind: 'json' | 'upload',
 ): Response {
   // SAFETY: the '*' middleware in app.ts sets `requestId` to a `req_<uuid>` string before
-  // handlers run, and AppVariables types it as string, so both the key lookup and the string hold.
   const body: ApiErrorResponse = {
     error: {
       code: 'payload_too_large' satisfies ApiErrorCode,
@@ -97,7 +94,6 @@ export function payloadTooLargeResponse(
 
 function validationFailedResponse(c: Context, message: string): Response {
   // SAFETY: the '*' middleware in app.ts sets `requestId` to a `req_<uuid>` string before
-  // handlers run, and AppVariables types it as string, so both the key lookup and the string hold.
   const body: ApiErrorResponse = {
     error: {
       code: 'validation_failed' satisfies ApiErrorCode,
@@ -163,13 +159,8 @@ export async function readLimitedFormData(
   let form: FormData
   try {
     // SAFETY: bun-types and @types/node disagree on the FormData identity, but the value is
-    // this request's own form data either way, so reading it as FormData is sound.
     form = (await request.formData()) as FormData
   } catch {
-    // Scoped to the parse call alone. A complete HTTP request whose multipart
-    // body is malformed belongs to the client; storage and handler failures
-    // happen after this boundary and keep their own responses. The thrown
-    // message names parser internals, so it never reaches the response.
     return {
       ok: false,
       response: validationFailedResponse(

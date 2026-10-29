@@ -1,25 +1,6 @@
 import type { Pool } from 'pg'
 import { appendAuditLog } from './audit-log'
 
-/**
- * The success audit for `POST /api/auth/change-password`.
- *
- * better-auth applies the password change, revokes the other sessions and mints
- * the replacement session inside its own handler, before it produces the 200
- * the route returns. There is no shared transaction to join: better-auth's
- * adapter commits each of those writes through the pool, and the audit insert
- * is a later, separate statement. A failure here therefore cannot roll the
- * change back — so it must not be allowed to rewrite a completed credential
- * mutation as a failure.
- *
- * This appends the row when it can and reports when it cannot. A rejection is
- * logged as a structured operational error carrying identifiers only (action,
- * user id, organisation id, request id, message): the request body is never
- * read, so no password or token can reach the log, and `metadata` stays empty
- * so no name can reach the audit row.
- *
- * Returns `true` when the row was written, `false` when the append failed.
- */
 export interface PasswordChangedAuditInput {
   organisationId: string | null
   userId: string

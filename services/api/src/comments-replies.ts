@@ -20,15 +20,8 @@ export async function createDocumentCommentReply(
     matterId: string
     documentId: string
     currentVersionId: string
-    /** Product thread head; mutually exclusive with importedCommentId. */
     commentId?: string
-    /** Imported `ooxml-<w:id>` thread head the route resolved in the model. */
     importedCommentId?: string
-    /**
-     * SHA-256 of the imported head's served identity, required whenever
-     * `importedCommentId` is set, so a later version that reuses the `w:id`
-     * for a different thread cannot silently inherit this reply.
-     */
     importedParentFingerprint?: string
     body: string
     authorId: string
@@ -74,9 +67,6 @@ export async function createDocumentCommentReply(
       return null
     }
     if (input.commentId !== undefined) {
-      // The scoped composite foreign key covers row integrity; the explicit
-      // probe keeps a missing or cross-scope parent a clean null rather than
-      // a constraint violation.
       const parent = await client.query(
         `
           select id
@@ -124,12 +114,6 @@ export async function createDocumentCommentReply(
     )
     const row = inserted.rows[0]
     if (row === undefined) {
-      // Client-key replay: the stored row must carry the same payload —
-      // parent, parent's imported fingerprint, and body — or the key was
-      // reused for a different reply and the request conflicts. The
-      // organisation filter is belt-and-braces — the document foreign key
-      // already pins the row's organisation — but keeps the replay scope
-      // uniform with every other reply query.
       const stored = (
         await client.query<ReplyRow>(
           `

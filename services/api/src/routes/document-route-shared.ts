@@ -15,8 +15,6 @@ export async function resolveCurrentReadyDocumentVersion(
   c: RouteContext,
   pool: Pool,
   documentId: string,
-  // Null matches any ready version regardless of type (the download path).
-  // View routes keep passing their own type so a PDF never answers /model.
   fileType: string | null,
   requiredAccess: MatterAccessLevel = 'view',
 ) {
@@ -61,10 +59,6 @@ export async function resolveReadyDocumentVersion(
     return documentNotFound(c)
   }
 
-  // Historical versions carry their own gate: a matter-level 'view' share
-  // reads the document as it stands, not the history behind it. Naming a
-  // non-current version requires 'edit' on the matter, and the denial is the
-  // same concealed 404 as a version that does not exist.
   if (
     version.id !== result.document.currentVersionId &&
     (await canReadDocumentHistory(pool, user, result.document.matterId)) ===
@@ -81,14 +75,6 @@ export async function resolveReadyDocumentVersion(
   }
 }
 
-/**
- * The historical-version policy in one place: only callers who can edit the
- * matter may read non-current versions. The document detail response uses the
- * same decision to conceal the historical version list from viewers. Denied
- * ids can still appear as provenance on secondary records — a comment's
- * `anchorVersionId`, a redaction run's `documentVersionId` — but knowing an
- * id grants nothing: every content route enforces this gate regardless.
- */
 export async function canReadDocumentHistory(
   pool: Pool,
   user: AuthenticatedOrgUser,
@@ -97,7 +83,6 @@ export async function canReadDocumentHistory(
   return (await resolveMatterAccess(pool, user, matterId, 'edit')) === 'edit'
 }
 
-/** The `?versionId=` selection shared by every version-aware read route. */
 export function requestedVersionSelection(c: RouteContext) {
   const versionId = c.req.query('versionId')
   return versionId === undefined ? {} : { versionId }
