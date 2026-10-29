@@ -579,6 +579,22 @@ describe('readApiEnv', () => {
     )
   })
 
+  it('refuses production without an email provider key', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgres://obiter@db.example.com/obiter'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_REDACTION_RENDERER_URL = 'http://renderer:8080'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_ADMIN_API_KEY = TEST_AUTH_SECRET
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+    delete process.env.OBITER_RESEND_API_KEY
+
+    expect(() => readApiEnv()).toThrow('OBITER_RESEND_API_KEY')
+  })
+
   it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL =
