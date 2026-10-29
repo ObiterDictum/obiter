@@ -90,11 +90,12 @@ mock.module('@obiter/search-client', () => ({
         { stdout: 'pipe', stderr: 'pipe' },
       )
 
+      const stdout = new Response(child.stdout).text()
+      const stderr = new Response(child.stderr).text()
+
       expect(await child.exited).toBe(1)
-      expect(await new Response(child.stdout).text()).toContain('"missing"')
-      expect(await new Response(child.stderr).text()).toContain(
-        'Search parity drift',
-      )
+      expect(await stdout).toContain('"missing"')
+      expect(await stderr).toContain('Search parity drift')
     } finally {
       await rm(directory, { recursive: true, force: true })
     }
