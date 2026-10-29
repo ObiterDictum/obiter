@@ -123,7 +123,7 @@ export function rowMatchesFilter(row: ReviewRow, filter: ReviewFilter) {
  * paragraph's own opening words. Never a guess at a clause number the
  * document does not print.
  */
-export function paragraphLocation(
+function paragraphLocation(
   paragraphs: ReadonlyArray<{
     id: string
     runs?: ReadonlyArray<{ text: string }>
@@ -154,7 +154,7 @@ function paragraphText(paragraph: { runs?: ReadonlyArray<{ text: string }> }) {
 }
 
 /** A clause number at the start of a paragraph: "4", "4.2", "12.3.1". */
-export function leadingNumber(text: string) {
+function leadingNumber(text: string) {
   const match = /^\s*((?:\d+\.)*\d+)\.?(?:\s|$)/u.exec(text)
   return match?.[1]
 }
@@ -168,7 +168,7 @@ function firstWords(text: string, count: number) {
 }
 
 /** The paragraph's own words around the change, on one line. */
-export function surroundingText(
+function surroundingText(
   text: string,
   needle: string | undefined,
   before = 24,

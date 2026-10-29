@@ -70,9 +70,9 @@ const FONT_COLOURS = [
   { value: '00B050', label: 'Green' },
 ]
 
-export const DEFAULT_FONT = { value: '', label: 'Default font' }
-export const DEFAULT_SIZE = { value: '', label: 'Default' }
-export const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
+const DEFAULT_FONT = { value: '', label: 'Default font' }
+const DEFAULT_SIZE = { value: '', label: 'Default' }
+const DEFAULT_COLOUR = { value: '', label: 'Automatic' }
 
 const MARGIN_OPTIONS = [
   { value: '', label: 'Custom' },
@@ -260,6 +260,9 @@ export function EditorFormattingPanel({
                     value={format?.lineSpacing ?? ''}
                     options={LINE_SPACING_OPTIONS}
                     disabled={!editing}
+                    // No direct spacing means the style's own single spacing;
+                    // naming it keeps the control from reading "Select…".
+                    placeholder="Single"
                     onChange={(value) => format?.onLineSpacing(value)}
                   />
                   <EditorSelect
@@ -268,6 +271,7 @@ export function EditorFormattingPanel({
                     value={format?.indentKind ?? ''}
                     options={INDENT_OPTIONS}
                     disabled={!editing}
+                    placeholder="None"
                     onChange={(value) => {
                       const option = INDENT_OPTIONS.find(
                         (item) => item.value === value,

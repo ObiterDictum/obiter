@@ -19,7 +19,7 @@ import {
  * beside it, never part of the name, so "Accept change" keeps that name in a
  * menu row, a tooltip and a screen reader alike.
  */
-export function controlReason(
+function controlReason(
   soon: boolean | string | undefined,
   disabled: boolean | undefined,
   disabledReason: string | undefined,
