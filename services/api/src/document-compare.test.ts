@@ -488,6 +488,24 @@ describe('compareDocumentModels', () => {
     ).toEqual(['removed', 'added'])
   })
 
+  it('does not similarity-pair paragraphs across an oversized unmatched gap', () => {
+    const base = model(
+      Array.from({ length: 65 }, (_, index) =>
+        paragraph(`p${index}`, `one two three base${index}`),
+      ),
+    )
+    const target = model(
+      Array.from({ length: 65 }, (_, index) =>
+        paragraph(`q${index}`, `one two three target${index}`),
+      ),
+    )
+
+    const entries = compareDocumentModels(base, target).entries
+    expect(entries.filter((entry) => entry.type === 'modified')).toHaveLength(0)
+    expect(entries.filter((entry) => entry.type === 'removed')).toHaveLength(65)
+    expect(entries.filter((entry) => entry.type === 'added')).toHaveLength(65)
+  })
+
   it('reports story structure and package area changes', () => {
     const base = model([paragraph('p1', 'Text.', { sourceParaId: 'aa01' })], {
       styles: [{ styleId: 'Normal', sourceFragment: '<w:style a/>' }],
