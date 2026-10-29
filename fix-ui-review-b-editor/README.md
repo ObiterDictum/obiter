@@ -1,7 +1,13 @@
 # Editor frame and document review (PR #365) — evidence
 
-Captured from the branch head in this worktree, running against a copy of the
-demo data (`obiter_fix_b`), at 1440×900 and 1024×768, light and dark.
+Captured from the branch head (`03dc30ef`) in this worktree, running against a
+copy of the demo data (`obiter_fix_b`), at 1440×900 and 1024×768, light and
+dark.
+
+The dark set is genuinely dark. The app follows its own stored choice
+(`obiter.theme.v2`), not `prefers-color-scheme`, so the capture sets that key
+before the navigation that boots the theme; the previous set emulated the OS
+preference and therefore rendered the light theme in every "dark" file.
 
 The document is `supply-agreement-northgate.docx`: the copy of the demo storage
 in this worktree carries bytes for the supply agreement and the witness
@@ -22,8 +28,11 @@ the two change rows are the honest state for this document.
   below the toolbar row so it cannot cover the header's Check citations/Save.
 - `review-list-all|changes-*` — counts, filters, rows with initials, one
   decision bar.
-- `compare-*` — the whole document redlined with the Differences list beside it
-  ("Wording changed", wrapping rows).
+- `compare-*` — the whole document redlined with the Differences list beside
+  it: clause 4.2 reads with `60,000` struck through and `45,000` underlined in
+  place, the list rows wrap ("Wording changed", "Tracked changes differ"), and
+  the header keeps `Saved · version 2 · <matter>` on one line with the matter
+  truncated.
 - `info-panel-*` — document information and versions.
 - `authorities-*` — the Authorities panel on a document with no stored
   citations (the honest empty/not-checked state).
