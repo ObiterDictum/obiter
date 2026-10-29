@@ -6,7 +6,10 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { DocumentComparisonView } from './document-compare-redline'
+import {
+  DocumentComparisonView,
+  comparisonPageLayout,
+} from './document-compare-redline'
 
 afterEach(cleanup)
 
@@ -98,5 +101,19 @@ describe('DocumentComparisonView', () => {
     expect(
       screen.getAllByText(/The Supplier shall supply not less than/u).length,
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('comparisonPageLayout', () => {
+  it('keeps the reading size when the desk has room for the paper', () => {
+    // 1440px window, sidebar and the docked Differences panel removed.
+    expect(comparisonPageLayout(808)).toEqual({ zoom: 90, width: 794 })
+  })
+
+  it('narrows the sheet at a readable size beside a docked panel at 1024px', () => {
+    // 1024px window: 252px sidebar and a 380px panel leave ~390px of desk.
+    const { zoom, width } = comparisonPageLayout(392)
+    expect(zoom).toBe(80)
+    expect(Math.round((width * zoom) / 100)).toBeLessThanOrEqual(392 - 64)
   })
 })

@@ -24,6 +24,9 @@ import { EditorSelectionToolbar } from './editor-selection-toolbar'
 import { InsertTableDialog } from './insert-table-dialog'
 import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
+import { InsertAuthorityDialog } from './insert-authority-dialog'
+import { PendingCitationBar } from './pending-citation-bar'
+import { usePendingCitation } from './use-pending-citation'
 import { WorkspaceBanners } from './workspace-banners'
 import { WorkspaceRibbon } from './workspace-chrome'
 import { useVerificationWorkspace } from '../verification/verification-context'
@@ -49,6 +52,8 @@ export function DocxWorkspaceChrome({
   requests,
   selectionActive,
   onCommentSelection,
+  citation,
+  citationCanInsert,
 }: {
   props: EditorChromeProps
   save: DocumentSave
@@ -61,6 +66,9 @@ export function DocxWorkspaceChrome({
   requests: { find: number; palette: number; formatting: number }
   selectionActive: boolean
   onCommentSelection: () => void
+  /** The citation a source page left for this document, and its two answers. */
+  citation: ReturnType<typeof usePendingCitation>
+  citationCanInsert: boolean
 }) {
   const [formattingOpen, setFormattingOpen] = useState(false)
   const [formattingAnchor, setFormattingAnchor] = useState<HTMLElement | null>(
@@ -71,6 +79,7 @@ export function DocxWorkspaceChrome({
   const [tableOpen, setTableOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
+  const [authorityOpen, setAuthorityOpen] = useState(false)
   // The formatting panel has no close control of its own: the control that
   // opens it closes it, and Escape closes it from inside. Toggling here keeps
   // one button one name, so a reader can open and dismiss it from the toolbar
@@ -120,6 +129,7 @@ export function DocxWorkspaceChrome({
     openTable: () => setTableOpen(true),
     openLink: () => setLinkOpen(true),
     openCrossReference: () => setCrossReferenceOpen(true),
+    openAuthority: () => setAuthorityOpen(true),
     closeStory: props.structure.onCloseStory,
   }
   // The Review menu's Verify row reveals the dock's own Run control with
@@ -149,6 +159,14 @@ export function DocxWorkspaceChrome({
         }
         onOpenPalette={() => setPaletteOpen(true)}
       />
+      {citation.text === null ? null : (
+        <PendingCitationBar
+          citation={citation.text}
+          canInsert={citationCanInsert}
+          onInsert={citation.insertCitation}
+          onCancel={citation.cancelCitation}
+        />
+      )}
       {findOpen && props.find ? (
         <EditorFindBar find={props.find} onClose={() => setFindOpen(false)} />
       ) : null}
@@ -177,7 +195,7 @@ export function DocxWorkspaceChrome({
         format={props.format}
         canComment
         onComment={onCommentSelection}
-        onCite={props.onInsertAuthority}
+        onCite={actions.openAuthority}
       />
       {/* The picture picker is a hidden input the Insert ▸ Picture command
           clicks: it must stay mounted wherever the chrome is. */}
@@ -210,6 +228,13 @@ export function DocxWorkspaceChrome({
           }
         }
       />
+      <InsertAuthorityDialog
+        open={authorityOpen}
+        onOpenChange={setAuthorityOpen}
+        disabled={!props.canInsertAuthority}
+        citationStyle={props.citationStyle}
+        onInsert={props.onInsertAuthorityText}
+      />
     </WorkspaceRibbon>
   )
 }
@@ -236,7 +261,8 @@ export function docxWorkspaceChrome({
   commentCount,
   changeCount,
   insert,
-  onInsertAuthority,
+  onInsertAuthorityText,
+  canInsertAuthority,
   citationStyle,
   onCitationStyle,
   setZoom,
@@ -276,7 +302,8 @@ export function docxWorkspaceChrome({
   commentCount: number
   changeCount: number
   insert: InsertRibbonProps
-  onInsertAuthority: () => void
+  onInsertAuthorityText: (citation: string) => void
+  canInsertAuthority: boolean
   citationStyle: CitationStyle
   onCitationStyle?: (style: CitationStyle) => void
   setZoom: (next: number) => void
@@ -326,7 +353,8 @@ export function docxWorkspaceChrome({
     onToggleAuthorities: () => panels.toggle('authorities'),
     onToggleInfo,
     onOpenCompare,
-    onInsertAuthority,
+    onInsertAuthorityText,
+    canInsertAuthority,
     onOpenVerify,
     citationStyle,
     onCitationStyle,

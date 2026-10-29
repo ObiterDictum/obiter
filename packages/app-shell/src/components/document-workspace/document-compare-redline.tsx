@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { X } from '@phosphor-icons/react'
+import { useRef, useState } from 'react'
+import { ArrowsLeftRight, X } from '@phosphor-icons/react'
 import { Button, Select, cn } from '@obiter/ui'
 import type {
   DocumentComparisonSegment,
@@ -20,6 +20,8 @@ import {
 } from './document-compare-differences'
 import { TRACKED_DELETE_MARK } from './tracked-marks'
 import { DocumentDesk, DocumentPage } from './document-page'
+import { useElementWidth } from './use-element-width'
+import { A4_WIDTH_PX } from '../../document-page-units'
 import { QueryError } from './workspace-chrome'
 
 /**
@@ -94,6 +96,7 @@ export function DocumentCompareRedline({
           variant="ghost"
           size="sm"
           aria-label="Swap base and comparison"
+          iconStart={<ArrowsLeftRight size={14} aria-hidden />}
           onClick={() => {
             setBaseId(resolvedTarget)
             setTargetId(resolvedBase)
@@ -298,6 +301,32 @@ function segmentsFor(data: DocumentCompareResponse, index: number | undefined) {
   return entry?.type === 'modified' ? entry.segments : undefined
 }
 
+/** The redline's own reading size, before the desk has to shrink it. */
+const COMPARE_PAGE_ZOOM = 90
+/** Below this the redline is too small to read, so the sheet narrows instead. */
+const COMPARE_MIN_ZOOM = 80
+/** The desk's own gutter (`px-8`) on both sides of the paper. */
+const COMPARE_DESK_GUTTER = 64
+
+/**
+ * The size of the redline's sheet in the desk the Differences panel leaves it.
+ * Beside a docked panel on a 1024px window the desk is ~390px: shrinking a
+ * whole A4 sheet into that makes the text unreadable, so the sheet keeps a
+ * readable zoom and narrows instead, and the redline reflows to it. The
+ * redline is a reading view of the change, not the printed page.
+ */
+export function comparisonPageLayout(deskWidth: number | null) {
+  const room = deskWidth === null ? null : deskWidth - COMPARE_DESK_GUTTER
+  if (room === null || room >= (A4_WIDTH_PX * COMPARE_PAGE_ZOOM) / 100)
+    return { zoom: COMPARE_PAGE_ZOOM, width: A4_WIDTH_PX }
+  const fit = Math.floor((room / A4_WIDTH_PX) * 100)
+  if (fit >= COMPARE_MIN_ZOOM) return { zoom: fit, width: A4_WIDTH_PX }
+  return {
+    zoom: COMPARE_MIN_ZOOM,
+    width: Math.floor((room * 100) / COMPARE_MIN_ZOOM),
+  }
+}
+
 /** The redline over the paper, with the difference list beside it. */
 export function DocumentComparisonView({
   data,
@@ -315,6 +344,8 @@ export function DocumentComparisonView({
   onClose: () => void
 }) {
   const blocks = comparisonBlocks(data, base, target)
+  const deskRef = useRef<HTMLDivElement>(null)
+  const page = comparisonPageLayout(useElementWidth(deskRef))
   const jumpTo = (index: number) => {
     onActive(index)
     document
@@ -323,9 +354,9 @@ export function DocumentComparisonView({
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col items-stretch overflow-hidden lg:flex-row">
-      <DocumentDesk>
+      <DocumentDesk deskRef={deskRef}>
         <div className="flex w-full min-w-0 flex-col items-center gap-6">
-          <DocumentPage zoom={90}>
+          <DocumentPage zoom={page.zoom} width={page.width}>
             <div className="flex flex-col gap-2 p-14" data-compare-redline>
               <p className="mb-2 text-caption text-paper-muted">
                 Changes from version {data.base.versionNumber} to version{' '}

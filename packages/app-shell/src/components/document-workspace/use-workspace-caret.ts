@@ -395,18 +395,24 @@ export function useWorkspaceCaret({
     if (!model) return
     const paragraphId = selectedParagraphId ?? editingStory?.paragraphs[0]?.id
     if (!paragraphId) return
+    const paragraph = blockText(model, state ?? emptyEditorState(), paragraphId)
     const offset =
       restoreCaret?.paragraphId === paragraphId
         ? restoreCaret.offset
-        : blockText(model, state ?? emptyEditorState(), paragraphId).length
+        : paragraph.length
+    // A caret straight after a word or a full stop would run the citation
+    // into it ("parties.Wood v Capita"), so it gets the space a typist adds.
+    const text = /[^\s([“‘"']$/u.test(paragraph.slice(0, offset))
+      ? ` ${citation}`
+      : citation
     // The citation style only shapes what is written now — the house style's
     // italic is a formatting draft over the inserted range in the same
     // history step, so undo removes text and styling together.
     const caret = italic
-      ? drafts.insertStyledText(model, paragraphId, offset, citation, {
+      ? drafts.insertStyledText(model, paragraphId, offset, text, {
           italic: true,
         })
-      : drafts.insertText(model, paragraphId, offset, citation)
+      : drafts.insertText(model, paragraphId, offset, text)
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 

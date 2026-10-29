@@ -89,4 +89,14 @@ describe('contextual verification evidence', () => {
     expect(panel.textContent).toContain('Authority')
     expect(panel.textContent).not.toContain('Citation matches checked source')
   })
+
+  it('names the run once, as the Verify page does, then its time', async () => {
+    mount([finding()])
+    const region = await screen.findByRole('region', { name: 'Verification' })
+    // The dock states the state ("Checked") and then when it ran; a second verb
+    // for the same event ("Completed …") says it twice.
+    expect(region.textContent).toContain('Checked')
+    expect(region.textContent).toMatch(/14 Sep\w* 2026, 00:00/u)
+    expect(region.textContent).not.toContain('Completed')
+  })
 })

@@ -278,7 +278,8 @@ describe('DocxWorkspace change review', () => {
         onToggleComments: () => undefined,
         onToggleChanges: () => undefined,
         onToggleAuthorities: () => undefined,
-        onInsertAuthority: () => undefined,
+        onInsertAuthorityText: () => undefined,
+        canInsertAuthority: true,
         citationStyle: 'oscola',
         onToggleTrackChanges: () => undefined,
         onZoom: () => undefined,
@@ -331,6 +332,7 @@ describe('DocxWorkspace change review', () => {
         openTable: () => undefined,
         openLink: () => undefined,
         openCrossReference: () => undefined,
+        openAuthority: () => undefined,
         closeStory: () => undefined,
       },
     )
