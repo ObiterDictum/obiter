@@ -49,7 +49,7 @@ export type NumberingDraft = {
   startOverride?: number | null
 }
 
-export type ParagraphIndentationDraft = {
+type ParagraphIndentationDraft = {
   left?: number | null
   right?: number | null
   firstLine?: number | null
@@ -72,7 +72,7 @@ export type ParagraphFormatDraft = Partial<{
 }>
 
 /** Direct margin overrides in twips; a null field releases the attribute. */
-export type SectionMarginDraft = Partial<{
+type SectionMarginDraft = Partial<{
   top: number | null
   right: number | null
   bottom: number | null

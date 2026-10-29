@@ -5,7 +5,7 @@ import type {
 import type { StructuralDraft } from './document-structural-drafts'
 
 /** A run's [start, end) span in the paragraph's effective text. */
-export type ParagraphRunSpan = { start: number; end: number }
+type ParagraphRunSpan = { start: number; end: number }
 
 /** The fields of a structural draft the conflict rule reads. Each kind owns
  * its member so the kind discriminant narrows cleanly. */
@@ -87,7 +87,7 @@ function isZeroWidthSplice(
  * spans derive from the stored runs and the drafted text — never the painted
  * wire.
  */
-export function structuralRunSpans(
+function structuralRunSpans(
   paragraph: DocumentParagraphWire,
   drafts: Record<string, string>,
   extraRuns: readonly DocumentTextRunWire[],
@@ -115,7 +115,7 @@ export function structuralRunSpans(
  * neither conflicts. The check is deliberately order-aware: `earlier` is the
  * draft already held, `later` the one being added.
  */
-export function structuralDraftConflict(
+function structuralDraftConflict(
   spans: readonly ParagraphRunSpan[],
   earlier: StructuralPlacement,
   later: StructuralPlacement,

@@ -1,7 +1,7 @@
 export const DOCUMENT_DRAFT_SCHEMA_VERSION = 1
 export const DOCUMENT_DRAFT_KEY_PREFIX = 'obiter.document-draft'
-export const DOCUMENT_DRAFT_CLAIM_TTL_MS = 2000
-export const WRITER_SESSION_KEY = 'obiter.document-draft.tab'
+const DOCUMENT_DRAFT_CLAIM_TTL_MS = 2000
+const WRITER_SESSION_KEY = 'obiter.document-draft.tab'
 export const CLAIM_PREFIX = 'obiter.document-draft.claim'
 export const REGISTRY_PREFIX = 'obiter.document-draft.registry'
 
@@ -43,7 +43,7 @@ export function documentStaleDraftKey(scope: DraftScope) {
   return `${documentDraftKey(scope)}.stale`
 }
 
-export function registryKey(
+function registryKey(
   organisationId: string,
   userId: string,
   documentId: string,
@@ -57,7 +57,7 @@ export function registryKey(
   ].join('.')
 }
 
-export function claimKey(writerId: string) {
+function claimKey(writerId: string) {
   return `${CLAIM_PREFIX}.${writerId}`
 }
 
@@ -158,7 +158,7 @@ export function removeKey(storage: DraftStorage, key: string) {
   }
 }
 
-export function readClaim(storage: DraftStorage | null, writerId: string) {
+function readClaim(storage: DraftStorage | null, writerId: string) {
   if (!storage) return null
   try {
     const raw = storage.getItem(claimKey(writerId))
@@ -177,7 +177,7 @@ export function readClaim(storage: DraftStorage | null, writerId: string) {
   }
 }
 
-export function writeClaim(
+function writeClaim(
   storage: DraftStorage | null,
   writerId: string,
   instanceId: string,

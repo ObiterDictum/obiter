@@ -1,6 +1,5 @@
 import type {
   DocumentModelWire,
-  DocumentParagraphWire,
   DocumentStoryKind,
   VerificationFindingView,
 } from '@obiter/contracts'
@@ -50,19 +49,6 @@ function storiesFor(
   return partName
     ? stories.filter((story) => story.partName === partName)
     : stories
-}
-
-export function paragraphsInStory(
-  model: DocumentModelWire,
-  kind: DocumentStoryKind | undefined,
-  partName: string | undefined,
-): DocumentParagraphWire[] {
-  const stories = storiesFor(model, kind, partName)
-  if (stories.length === 0) return []
-  // Prefer the first part that holds the paragraph rather than merging every
-  // part: paragraph ids are only unique inside their story, so merging could
-  // silently pick another story's paragraph.
-  return stories[0]?.paragraphs ?? []
 }
 
 export function resolveFindingTarget(

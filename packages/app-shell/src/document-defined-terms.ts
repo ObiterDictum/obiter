@@ -35,7 +35,7 @@ import type { ExtraRuns } from './document-word-edits'
  * cannot be ordered and only cross-paragraph ordering is reported.
  */
 
-export type DefinedTermEntry = {
+type DefinedTermEntry = {
   /** The term's normalised words, joined for display. */
   term: string
   /** How many marks bind the term (stored and pending). */

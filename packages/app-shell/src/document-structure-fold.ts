@@ -322,5 +322,3 @@ function spliceDrawingRun(
     `${draft.id}:drawing`,
   )
 }
-
-export { pendingImagePartName } from './document-image-inserts'

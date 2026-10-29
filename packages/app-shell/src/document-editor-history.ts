@@ -11,7 +11,7 @@ export type WorkspaceDraftSnapshot = DraftState
 
 const HISTORY_LIMIT = 50
 
-export function cloneWorkspaceDraft(
+function cloneWorkspaceDraft(
   snapshot: WorkspaceDraftSnapshot,
 ): WorkspaceDraftSnapshot {
   return structuredClone(snapshot)

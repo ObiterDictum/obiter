@@ -31,16 +31,9 @@ import type { ParagraphFace } from '../../document-page-style'
  * reads as one highlight rather than a model-painted range butting against a
  * platform-painted one.
  */
-export const SELECTION_PAINT = '#b8d4f5'
+const SELECTION_PAINT = '#b8d4f5'
 
 export type ParagraphSelectionRange = { from: number; to: number }
-
-/**
- * A pending hyperlink painted over the text it covers, in paragraph-model
- * offsets. `target` rides along for the tooltip; the paint is a styled range
- * inside the text flow, so it aligns exactly like a selected range.
- */
-export type ParagraphLinkRange = { from: number; to: number; target: string }
 
 /**
  * A pending cross-reference: a zero-width marker anchored at `offset`. It
@@ -48,7 +41,7 @@ export type ParagraphLinkRange = { from: number; to: number; target: string }
  * the chip shows what the saved field will say without entering the
  * editable stream.
  */
-export type ParagraphFieldMarker = { offset: number; label: string }
+type ParagraphFieldMarker = { offset: number; label: string }
 
 type LinkOverlay = ParagraphLinkOverlay
 

@@ -372,7 +372,7 @@ export function findMatchLabel(index: number, count: number) {
  * The slice of one layout segment a PDF hit covers, as offsets into the
  * segment's own text (`segment.start`..`segment.end` over `view.text`).
  */
-export type PdfHitSlice = {
+type PdfHitSlice = {
   /** Index into `view.layout.segments`. */
   segment: number
   start: number

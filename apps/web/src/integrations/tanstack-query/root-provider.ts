@@ -5,5 +5,3 @@ export function getContext() {
     queryClient: new QueryClient(),
   }
 }
-
-export default function TanStackQueryProvider() {}

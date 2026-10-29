@@ -225,7 +225,7 @@ export function applySplitParagraph(
   }
 }
 
-export function applyLineBreak(
+function applyLineBreak(
   model: DocumentModelWire,
   state: EditorState,
   caret: EditorCaret,

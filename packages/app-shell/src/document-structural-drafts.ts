@@ -19,7 +19,7 @@ import {
  * paragraphs stay outside the editable flow — so they get their own draft
  * slot, folded into the painted model by `document-structure-fold`.
  */
-export type StructuralTableDraft = {
+type StructuralTableDraft = {
   id: string
   kind: 'table'
   paragraphId: string
@@ -76,7 +76,7 @@ export type StructuralCrossReferenceDraft = {
  * only in the saved OOXML and in the margin band's resolved paint, never in
  * the editable text stream.
  */
-export type StructuralPageNumberDraft = {
+type StructuralPageNumberDraft = {
   id: string
   kind: 'page-number'
   paragraphId: string
@@ -105,7 +105,7 @@ export type StructuralFootnoteDraft = {
  * applies. The draft itself is still only a placement: entry text, page
  * references and `_Toc` bookmarks are all generated, never held.
  */
-export type StructuralTableOfContentsDraft = {
+type StructuralTableOfContentsDraft = {
   id: string
   kind: 'table-of-contents'
   paragraphId: string
@@ -121,7 +121,7 @@ export type StructuralTableOfContentsDraft = {
  * applies. The draft itself is still only a placement: the citations,
  * marks, bookmarks and page references are all generated, never held.
  */
-export type StructuralTableOfAuthoritiesDraft = {
+type StructuralTableOfAuthoritiesDraft = {
   id: string
   kind: 'table-of-authorities'
   paragraphId: string
@@ -137,7 +137,7 @@ export type StructuralTableOfAuthoritiesDraft = {
  * citations, adds `TA` marks only where an occurrence is not already
  * marked, and reuses the `_ToA` bookmarks it finds.
  */
-export type StructuralTableOfAuthoritiesRefreshDraft = {
+type StructuralTableOfAuthoritiesRefreshDraft = {
   id: string
   kind: 'table-of-authorities-refresh'
   paragraphId: string
@@ -156,7 +156,7 @@ export type StructuralTableOfAuthoritiesRefreshDraft = {
  * the same slice still reads `marked` before the writer names the bookmark
  * — a mark whose text drifted is blocked, never silently re-pointed.
  */
-export type StructuralDefinedTermDraft = {
+type StructuralDefinedTermDraft = {
   id: string
   kind: 'defined-term'
   paragraphId: string

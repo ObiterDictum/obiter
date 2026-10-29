@@ -241,7 +241,7 @@ export type SaveWorkspaceOptions = {
  * separately so a test can render a different boundary around the same
  * workspace without restating the fixtures.
  */
-export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
+function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
   // A successful save advances the served model version, so the workspace's
   // version-matched reload gate resolves exactly as it does against the API.
   let currentVersionId = options.versionId ?? 'ver_1'
