@@ -2,6 +2,8 @@ import { CheckCircle } from '@phosphor-icons/react'
 import { ObiterMark, cn } from '@obiter/ui'
 import type { FormEvent, ReactNode } from 'react'
 import { ThemeToggle } from '../theme-toggle'
+import authArtDark from '../assets/auth/auth-art-dark.webp'
+import authArtLight from '../assets/auth/auth-art-light.webp'
 
 /**
  * The auth gate: the form on the left, a sample of the work on the right. It is
@@ -107,13 +109,11 @@ export function AuthFoot({ children }: { children: ReactNode }) {
  * a person has to read, so it is hidden from assistive technology (the region is
  * labelled) and from every window narrower than the 1025px breakpoint.
  *
- * The artwork is a single image per theme, full-bleed and cropped by the panel.
- * Karl supplies them: `apps/web/public/auth/auth-art-light.webp` and
- * `auth-art-dark.webp`, AVIF or WebP, at most 200 kB each, at least 1200x1600
- * so the crop survives a tall window. Until those files exist `AUTH_ART` stays
- * null and the panel is plain paper — a broken image is worse than no image.
+ * The artwork is one engraving per theme (Midjourney, 29 Oct 2026), full-bleed
+ * and cropped by the panel. Both leave the top of the panel empty, so the one
+ * line of text sits there rather than over the busy lines below.
  */
-const AUTH_ART: { light: string; dark: string } | null = null
+const AUTH_ART = { light: authArtLight, dark: authArtDark }
 
 function AuthSamplePanel() {
   return (
@@ -121,25 +121,21 @@ function AuthSamplePanel() {
       aria-label="About Obiter"
       className="relative hidden overflow-hidden border-l border-line bg-surface compact:block"
     >
-      {AUTH_ART ? (
-        <>
-          <img
-            src={AUTH_ART.light}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="size-full object-cover dark:hidden"
-          />
-          <img
-            src={AUTH_ART.dark}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="hidden size-full object-cover dark:block"
-          />
-        </>
-      ) : null}
-      <p className="absolute inset-x-0 bottom-0 p-10 text-caption text-subtle">
+      <img
+        src={AUTH_ART.light}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="size-full object-cover dark:hidden"
+      />
+      <img
+        src={AUTH_ART.dark}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="hidden size-full object-cover dark:block"
+      />
+      <p className="absolute inset-x-0 top-0 p-10 text-caption text-subtle">
         Evidence-first legal work
       </p>
     </aside>
