@@ -294,7 +294,6 @@ describe('GET /api/documents/:id/export response', () => {
     )
 
     expect(response.status).toBe(200)
-    // One unresolvable comment plus its two replies that cannot embed.
     expect(response.headers.get('x-obiter-comments-skipped')).toBe('3')
   })
 
@@ -360,8 +359,6 @@ describe('GET /api/documents/:id/export response', () => {
     )
 
     expect(response.status).toBe(200)
-    // Both replies export unanchored rather than attaching to the wrong or
-    // absent thread, and each is counted so the caller knows.
     expect(response.headers.get('x-obiter-comments-skipped')).toBe('2')
     expect(commentsXml).toContain(
       'Written against a thread this w:id no longer holds',
@@ -397,12 +394,6 @@ describe('GET /api/documents/:id/export response', () => {
   })
 })
 
-/**
- * A fixture that carries an imported comment thread: the export writer
- * embeds a resolved comment (resolved so it is allocated a paraId), then the
- * package is re-parsed so its comments surface as imported `ooxml-<w:id>`
- * entries with their own threading identity.
- */
 async function fixtureWithComment() {
   const source = await parseDocx(sourceBytes)
   const bytes = await serialiseDocxWithComments(source, [

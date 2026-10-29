@@ -6,12 +6,6 @@ import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import { createTestPool } from '../test-database.test-support'
 import { createRedactReviewRoutes } from './redact-review'
 
-/**
- * The same text decided both ways leaves one occurrence in the copy that leaves
- * the firm. Both halves of the guard are exercised against a real database and
- * the real route: repeating a decision on every occurrence, and refusing to
- * finalise while a group still disagrees.
- */
 const pool = createTestPool()
 
 const spans: RedactionSpan[] = [
@@ -189,7 +183,6 @@ describe('same text decided both ways', () => {
          where organisation_id = $1 and action = 'redaction.span_decision'`,
         [seed.orgId],
       )
-      // One recorded action naming every span it decided.
       expect(audit.rows).toHaveLength(1)
       expect(audit.rows[0]?.metadata_json).toMatchObject({
         spanId: 'span_1',

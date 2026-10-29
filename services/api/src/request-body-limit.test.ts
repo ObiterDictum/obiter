@@ -236,8 +236,6 @@ describe('request body limit middleware', () => {
         body: oversizedJsonBody(),
       })
 
-      // The document resolves to nothing in the stub pool, but the request
-      // reached the handler — the edit cap admitted it past the 48 KiB gate.
       expect(response.status).not.toBe(413)
     },
   )

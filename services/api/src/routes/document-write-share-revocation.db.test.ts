@@ -37,8 +37,6 @@ for (const spec of specs) {
           )
           const owner = shareApp(pool, ownerUser(seed), 'req_race_revoke')
 
-          // The early decision is authorisation at request time, before the
-          // revocation below commits. The service must not trust it.
           expect(
             await resolveMatterAccess(
               pool,
@@ -180,9 +178,6 @@ describe('collaboration already_applied replay', () => {
       const first = await writer.request(path, jsonRequest('POST', payload))
       expect(first.status).toBe(201)
 
-      // Replay through the gate: the early check sees the pre-revocation share,
-      // then revocation commits before the service re-reads authorization. A
-      // revoked grantee must not receive the idempotent replay.
       const gate = accessGate(pool)
       const replayWriter = app(
         gate.pool,

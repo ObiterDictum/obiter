@@ -6,15 +6,6 @@ import {
   findStoredAuthorityIdsByNeutralCitations,
 } from '../source-store'
 
-/**
- * The shape of the case-law candidate query, pinned structurally rather than
- * by wall-clock timing. The regression this guards: the lookup used to
- * transfer every stored citation row to Node on each call. The query must push
- * the citation year into SQL, return only the citation projection, and order
- * deterministically, so a per-document V3 caller does not pay a full-table
- * transfer per citation.
- */
-
 interface QueryCall {
   text: string
   values: unknown[] | undefined

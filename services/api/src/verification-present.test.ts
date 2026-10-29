@@ -94,7 +94,6 @@ describe('verification presenters', () => {
       anchor: 'para-10',
     })
 
-    // A whole-document reference names no pinpoint and no anchor.
     const wholeAct = toPublicFinding(
       {
         ...base,
@@ -122,7 +121,6 @@ describe('verification presenters', () => {
       anchor: null,
     })
 
-    // A provision keeps its label path as the pinpoint and the page path.
     const provision = toPublicFinding(
       {
         ...base,
@@ -151,8 +149,6 @@ describe('verification presenters', () => {
       anchor: null,
     })
 
-    // Without a stored record there is no page and no name to read, and the
-    // judgement's printed pinpoint is still stated.
     const unheld = toPublicFinding({
       ...base,
       id: judgment,

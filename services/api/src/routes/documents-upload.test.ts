@@ -346,8 +346,6 @@ describe('multipart document extraction', () => {
     })
   })
 
-  // P1.41: a complete HTTP request whose multipart body is malformed is a
-  // client error at the parse boundary, not an unhandled 500.
   function recordingPool(statements: string[]): Pool {
     const base = pool()
     type MockQuery = (
@@ -408,7 +406,6 @@ describe('multipart document extraction', () => {
     expect(persistedNothing(statements)).toBe(true)
     await expect(readFile(join(root, 'org'))).rejects.toThrow()
 
-    // The connection and server remain usable for a valid upload.
     const ok = await upload(
       api,
       'fixture.txt',
@@ -469,8 +466,6 @@ describe('multipart document extraction', () => {
   })
 })
 
-// P2.24/P2.29: real-toolchain corpus must upload 201 + ready, while a genuine
-// high-ratio package is rejected 413 without persisting any row.
 const CORPUS_DIR = 'test-fixtures/upload-corpus'
 const CORPUS_EXPECTED_TEXT: Record<string, string> = {
   'letter-plain.docx': 'Mill Farm',
@@ -480,7 +475,6 @@ const CORPUS_EXPECTED_TEXT: Record<string, string> = {
   'letter-image.docx': 'Site plan exhibit',
 }
 
-/** Genuine zip bomb: real deflate payload, ~1000x ratio, tiny absolute size. */
 function zipBomb(): Buffer {
   const uncompressedSize = 256 * 1024
   const payload = deflateSync(Buffer.alloc(uncompressedSize, 0))

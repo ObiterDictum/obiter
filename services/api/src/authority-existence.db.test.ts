@@ -12,13 +12,6 @@ import type {
   VerificationSubject,
 } from '@obiter/verification-core'
 
-/**
- * Authority existence against the real Postgres public legal-source record.
- * The lookup is exact source identity, not a keyword search, and a store
- * failure, a corrupt stored row or a withdrawn source must never read as not
- * held. Requires TEST_DATABASE_URL.
- */
-
 const subject: VerificationSubject = { documentId: 'd-v2-db', versionId: 'v-1' }
 
 function citation(rawText: string): CitationInput {
@@ -83,8 +76,6 @@ const judgmentFixtures: AuthorityFixture[] = [
   },
 ]
 
-/** Valid JSON that is not a legal-source record: enough for the citation
- * projection to match, not enough for the record schema. */
 const corruptAuthorities = [
   {
     id: 'db-test-v2-corrupt',
@@ -337,8 +328,6 @@ describe('authority existence against the stored legal source record', () => {
   })
 
   it('clears a held judgment with no addressable paragraph via the document', async () => {
-    // Existence is a claim about the document, so a summary-only record is
-    // sufficient evidence and no longer degrades to inconclusive.
     const finding = await checkAuthorityExistence(pool, {
       subject,
       citation: citation('[2099] UKSC 4'),
@@ -461,7 +450,6 @@ describe('authority existence against the stored legal source record', () => {
     })
 
     expect(finding.status).toEqual({ state: 'clear' })
-    // Evidence names the stored path, so it opens what the Act actually holds.
     expect(finding.evidence).toEqual([
       {
         sourceType: 'legislation_provision',
@@ -756,12 +744,6 @@ async function insertCorruptAuthority(
        (document_id, summary_json, document_json, provider_json,
         content_hash, source_uri)
      values ($1, $2::jsonb, null, '{}'::jsonb, $3, $4)`,
-    [
-      id,
-      // Valid JSON, missing every required record field but the citation.
-      JSON.stringify({ id, neutralCitation }),
-      `dbtest-v2-${id}`,
-      `/${id}`,
-    ],
+    [id, JSON.stringify({ id, neutralCitation }), `dbtest-v2-${id}`, `/${id}`],
   )
 }

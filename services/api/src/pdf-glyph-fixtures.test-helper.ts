@@ -21,7 +21,6 @@ export function rawFreeTextPdf() {
   }
 }
 
-/** Line advances pdf-lib cannot emit: T*, quote and double-quote rewrites. */
 export function rawNextLinePdf() {
   return rawType1Pdf(
     'BT /F1 12 Tf 14 TL 1 0 0 1 60 700 Tm (Line1) Tj T* (Line2) Tj ET ' +
@@ -30,10 +29,6 @@ export function rawNextLinePdf() {
   )
 }
 
-/**
- * One-page pdf-lib PDF: body text plus a text field holding `value`.
- * Coordinates use the pdf-lib origin (bottom-left).
- */
 export async function textFieldPdf(value: string) {
   const doc = await PDFDocument.create()
   const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -67,7 +62,6 @@ function rawPdf(objects: string[]) {
   return Buffer.from(pdf, 'binary')
 }
 
-/** Minimal one-page Type1 PDF for operators pdf-lib cannot emit. */
 export function rawType1Pdf(content: string) {
   return rawPdf([
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -78,25 +72,12 @@ export function rawType1Pdf(content: string) {
   ])
 }
 
-/**
- * A stray `Q` after a balanced `q Q`, under a `0.5` scale. pdf.js ignores the
- * extra `Q` (`CanvasGraphics.restore` early-returns on an empty stack), so the
- * page draws the text at half coordinates. A replay that pops unconditionally
- * resets the CTM to identity and places the cover at the unscaled position,
- * entirely above the 792pt page, where it paints nothing.
- */
 export function rawUnbalancedRestorePdf() {
   return rawType1Pdf(
     '0.5 0 0 0.5 0 0 cm q Q Q BT /F1 12 Tf 1 0 0 1 120 1200 Tm (SECRETVALUE) Tj ET',
   )
 }
 
-/**
- * `q`/`Q` around a text-matrix change. The PDF spec keeps the text matrix out
- * of the graphics state, but pdf.js saves and restores it with everything else,
- * so text after `Q` returns to the pre-`q` baseline. A replay that restores
- * only the CTM leaves it on the matrix set between `q` and `Q`.
- */
 export function rawRestoreTextMatrixPdf() {
   return rawType1Pdf(
     'BT /F1 12 Tf 1 0 0 1 60 700 Tm q 1 0 0 1 200 100 Tm Q (SECRETVALUE) Tj ET',
@@ -117,12 +98,6 @@ export function rawFormPdf() {
   ])
 }
 
-/**
- * A graphics state carrying a Font entry: the renderer applies it through
- * setFont, so the text after `/GS1 gs` is set at 24pt Times with no `Tf`
- * operator of its own. A replay that ignores the entry lays it at 12pt
- * Helvetica and paints the cover above the ink.
- */
 export function rawGStateFontPdf() {
   return rawPdf([
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -150,7 +125,6 @@ export function rawType3Pdf(textMatrix = '1 0 0 1 60 700') {
   ])
 }
 
-/** Type 3 font reached only through an ExtGState /Font entry, no `Tf`. */
 export function rawGStateType3Pdf() {
   return rawPdf([
     '<< /Type /Catalog /Pages 2 0 R >>',

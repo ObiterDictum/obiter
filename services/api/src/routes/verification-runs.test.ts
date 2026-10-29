@@ -9,8 +9,6 @@ import type { AuthzVariables } from '../authz'
 import { queryDouble, queryResult } from '../query-double.test-support'
 import { createVerificationRunRoutes } from './verification-runs'
 
-/** A query double answering with no rows, satisfying the real QueryResult
- * contract rather than an incomplete shape. */
 function emptyQuery(): Pool['query'] {
   return queryDouble(() => queryResult([])).pool.query
 }

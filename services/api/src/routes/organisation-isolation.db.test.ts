@@ -24,9 +24,6 @@ const commentModelJson = serialiseModelJson(
   await parseDocx(await readFile('../../data/evals/redact/demo-fixture.docx')),
 )
 
-// The comments list now reads the serving model to merge the package's own
-// threads; every other read or write still fails loudly, so a denied path
-// touching storage keeps failing the test.
 const modelJsonByKey = new Map<string, string>()
 
 const storage = {

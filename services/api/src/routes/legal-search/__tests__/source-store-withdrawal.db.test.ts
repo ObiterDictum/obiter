@@ -2,14 +2,6 @@ import { createTestPool } from '../../../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createPostgresLegalAuthoritySourceStore } from '../source-store'
 
-/**
- * Withdrawal surfacing against the real Postgres record store: a row marked
- * withdrawn (the checker writes provider_json.withdrawn, simulated here with
- * the same merge) still reads back by id with its flag set, so the document
- * route can answer with the banner instead of full text. Requires
- * TEST_DATABASE_URL.
- */
-
 const documentId = 'db-test-withdrawn-2026-1'
 
 const authority = {

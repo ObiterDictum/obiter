@@ -28,7 +28,6 @@ describe('safeDownloadFilename', () => {
   })
 
   it('removes bidirectional embedding, override and isolate controls', () => {
-    // RLO-wrapped "exe.docx" that renders as "docx.exe" in a file manager.
     expect(safeDownloadFilename('‮exe.docx')).toBe('exe.docx')
     expect(safeDownloadFilename('‮‪⁦a⁧‬⁩b.docx')).toBe('ab.docx')
   })

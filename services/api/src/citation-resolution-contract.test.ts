@@ -7,13 +7,6 @@ import {
 } from './citation-resolution.test-support'
 import { resolveCitationCandidates } from './citation-resolution'
 
-/**
- * The finding boundary: every resolution a candidate can produce must map to an
- * accepted finding, so no citation-shaped input can escape the result model as a
- * thrown schema error. A malformed candidate must also not abort the valid
- * siblings resolved in the same batch.
- */
-
 const subject = { documentId: 'd-contract', versionId: 'v-1' }
 
 async function findingsFor(rawTexts: string[]) {
@@ -30,13 +23,9 @@ async function findingsFor(rawTexts: string[]) {
 
 describe('citation resolution finding boundary', () => {
   it.each([
-    // A year Number() would rewrite to a non-canonical `ukpga/204/N`.
     '0204 c. 1',
-    // A year of zero.
     '0000 c. 1',
-    // A zero chapter number.
     '2066 c. 0',
-    // A chapter number too large to be a safe integer.
     '2066 c. 99999999999999999999',
   ])('turns %j into a finding instead of throwing', async (rawText) => {
     const [finding] = await findingsFor([rawText])
@@ -71,7 +60,6 @@ describe('citation resolution finding boundary', () => {
       )
 
       expect(result!.resolution).toEqual({ outcome: 'unsupported' })
-      // An unlisted court is never queried as though it were supported.
       expect(calls).toHaveLength(0)
 
       const finding = decideCitationResolution({

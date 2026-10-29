@@ -6,15 +6,6 @@ import {
   requireTestDatabaseUrl,
 } from './test-database.test-support'
 
-/**
- * Two independent connection pools stand in for two API replicas sharing one
- * migrated application database. Each has its own budget instance, so no
- * in-process state is shared; only the rows are. This is the cluster boundary
- * the per-process limiter cannot provide.
- *
- * Synthetic charges only, and no provider is reached: a charge is a row, so no
- * external call is made anywhere in this suite.
- */
 const poolA = createTestPool()
 const poolB = createTestPool()
 
@@ -66,7 +57,6 @@ describe('shared Postgres Find Case Law request budget', () => {
 
     expect(results.filter((r) => r.status === 'allowed')).toHaveLength(1)
     expect(results.filter((r) => r.status === 'rate_limited')).toHaveLength(1)
-    // Exactly one row was committed: the loser's transaction rolled back.
     expect(await chargeCount(poolA)).toBe(1)
   })
 
@@ -86,8 +76,6 @@ describe('shared Postgres Find Case Law request budget', () => {
     const refused = await a.charge()
     expect(refused.status).toBe('rate_limited')
     if (refused.status !== 'rate_limited') return
-    // The oldest charge is seconds old, so the wait is most of the window but
-    // never longer than it, and never zero.
     expect(refused.retryAfterSeconds).toBeGreaterThan(0)
     expect(refused.retryAfterSeconds).toBeLessThanOrEqual(300)
   })
@@ -99,8 +87,6 @@ describe('shared Postgres Find Case Law request budget', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 350))
 
-    // The out-of-window row is excluded by the count even before the sweep,
-    // so the next charge is admitted.
     expect((await a.charge()).status).toBe('allowed')
   })
 
@@ -182,8 +168,6 @@ describe('shared Postgres Find Case Law request budget', () => {
       held.release()
     }
 
-    // The connection that arrived after the timeout was released back into
-    // the pool, so a later charge is admitted rather than waiting forever.
     const recovered = await budget(exhausted, {
       connectTimeoutMs: 1_000,
     }).charge()

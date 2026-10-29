@@ -19,8 +19,6 @@ describe('diffParity', () => {
 
 describe('runParityCheck', () => {
   it('detects deliberate drift seeded on both sides', async () => {
-    // Postgres holds a and b; the index holds b and a stale c. The report
-    // must name a as missing and c as extra.
     const pool = {
       query: async () => ({
         rows: [{ document_id: 'a' }, { document_id: 'b' }],

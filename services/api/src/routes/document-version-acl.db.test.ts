@@ -23,16 +23,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-/**
- * P2-9: version-level ACL. A matter-level 'view' share reads the document as
- * it stands — the current version only. Naming a non-current version on any
- * read path requires 'edit', and the denial is the same concealed 404 a
- * nonexistent version gets. Every test below runs the real routes against a
- * real database: the fixture is a two-version document whose seeded v1
- * (tracked-change source bytes) becomes historical once v2 (plain source
- * bytes) takes over as current.
- */
-
 const plainSourceBytes = await readFile(
   '../../data/evals/redact/demo-fixture.docx',
 )
@@ -49,7 +39,6 @@ interface TwoVersionSeed extends Seed {
   currentSourceKey: string
 }
 
-/** Promote a fresh v2 to current so the seeded v1 becomes historical. */
 async function seedTwoVersions(
   access: 'edit' | 'view' | null,
 ): Promise<TwoVersionSeed> {
@@ -93,11 +82,6 @@ function storageForTwoVersions(seed: TwoVersionSeed) {
   return storage
 }
 
-/**
- * A third version carrying byte-identical source under a different recorded
- * hash, so a comparison sees differing bytes with an identical model — the
- * case the package-parts note exists for.
- */
 async function seedByteOnlyVariant(seed: TwoVersionSeed) {
   const versionId = `${seed.currentVersionId}_bytes`
   const objectKey = createDocumentObjectKey({
@@ -147,7 +131,6 @@ function readApp(pool: Pool, storage: unknown, user: AuthzUser) {
   return routes
 }
 
-/** Every read path that accepts `?versionId=` and serves a ready docx. */
 function versionedReadPaths(seed: TwoVersionSeed) {
   return [
     `/api/documents/${seed.documentId}/model?versionId=${seed.versionId}`,
@@ -208,8 +191,6 @@ describe('historical version read gate', () => {
         expect(path).toBeTruthy()
         await expectConcealed(response)
       }
-      // The gate fires before any output read: a denied request never
-      // touches stored bytes for the historical version.
       expect(storage.binaryReads).toEqual([])
       expect(storage.textReads).toEqual([])
     } finally {
@@ -247,8 +228,6 @@ describe('historical version read gate', () => {
       expect(response.status).toBe(200)
       const body = (await response.json()) as { versionId: string }
       expect(body.versionId).toBe(seed.currentVersionId)
-      // The same-versionId current read is also allowed — the gate only
-      // fires on non-current versions.
       const named = await viewer.request(
         `/api/documents/${seed.documentId}/model?versionId=${seed.currentVersionId}`,
       )
@@ -285,9 +264,6 @@ describe('historical version read gate', () => {
       const changesBody = (await changes.json()) as { changes: unknown[] }
       expect(changesBody.changes.length).toBeGreaterThan(0)
 
-      // A denied-looking media 404 reaches storage for an editor (the part is
-      // missing), while a denied viewer never got that far — the two 404s sit
-      // on different sides of the gate.
       storage.binaryReads.length = 0
       const media = await editor.request(
         `/api/documents/${seed.documentId}/media?versionId=${seed.versionId}&part=word%2Fmedia%2Fmissing.png`,
@@ -332,9 +308,6 @@ describe('historical version read gate', () => {
         ),
       )
 
-      // Same-org editor naming a different document's version: the version
-      // never appears in this document's version list, so the request is a
-      // plain concealed 404 — not a cross-document read.
       const editor = readApp(pool, storage, editorUser(seed))
       await expectConcealed(
         await editor.request(
@@ -367,12 +340,8 @@ describe('version comparison', () => {
       }
       expect(body.base.versionId).toBe(seed.currentVersionId)
       expect(body.target.versionId).toBe(seed.versionId)
-      // The historical fixture carries tracked changes the plain source
-      // lacks: the difference is real, not a metadata echo.
       expect(body.entries.length).toBeGreaterThan(0)
       expect(body.identical).toBe(false)
-      // The entries explain the difference, so the package-parts caveat does
-      // not fire — it is reserved for a byte difference no entry covers.
       expect(body.notes).toEqual([])
     } finally {
       await cleanupMatter(pool, seed)
@@ -396,8 +365,6 @@ describe('version comparison', () => {
         notes: string[]
         identical: boolean
       }
-      // Same model, different bytes: no entry explains the difference, so the
-      // caveat is the honest answer rather than a clean comparison.
       expect(body.entries).toEqual([])
       expect(body.identical).toBe(false)
       expect(body.notes).toEqual([
@@ -414,9 +381,6 @@ describe('version comparison', () => {
       const storage = storageForTwoVersions(seed)
       const viewer = readApp(pool, storage, editorUser(seed))
 
-      // One historical input is enough to deny the whole comparison. The
-      // denied requests precede the allowed one so the storage assertion
-      // proves the gate fired before any output read.
       await expectConcealed(
         await viewer.request(
           `/api/documents/${seed.documentId}/compare?baseVersionId=${seed.versionId}&targetVersionId=${seed.currentVersionId}`,

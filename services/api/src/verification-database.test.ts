@@ -19,9 +19,6 @@ const user: AuthenticatedOrgUser = {
 }
 const subject = { documentId: 'doc_1', versionId: 'ver_1' }
 
-/** Records every query and parameter list the store builds, and answers with
- * the supplied rows. Matching parameters to their `$n` placeholders is the
- * whole point: the placeholder contract is what the store's SQL depends on. */
 function capturingPool(rows: QueryResultRow[] = []) {
   return queryDouble(() => queryResult(rows))
 }
@@ -64,8 +61,6 @@ describe('verification database access', () => {
     expect(call?.values).toEqual(['vrun_1', 'org_1', 'usr_1'])
     expect(call?.text).toContain('run.id = $1')
     expect(call?.text).toContain('run.organisation_id = $2')
-    // The access predicate must read the user id from the third parameter, not
-    // the run id or the organisation.
     expect(call?.text).toContain('matter.created_by = $3')
     expect(call?.text).toContain('share.grantee_user_id = $3')
     expect(call?.text).not.toContain('matter.created_by = $1')
@@ -83,7 +78,6 @@ describe('verification database access', () => {
     expect(listCall?.text).toContain('matter.created_by = $2')
     expect(listCall?.text).toContain('share.grantee_user_id = $2')
     expect(listCall?.text).not.toContain('run.document_id = $3')
-    // Deterministic keyset ordering with an id tiebreaker, bounded server-side.
     expect(listCall?.text).toContain(
       'order by run.created_at desc, run.id desc',
     )

@@ -42,7 +42,6 @@ const amendedProvision = {
   hasUnappliedEffects: true,
 }
 
-/** Legacy default row: false flag, but never checked (null timestamp). */
 const uncheckedProvision = {
   ...currentProvision,
   effectsCheckedAt: null,
@@ -71,8 +70,6 @@ function createDeps(overrides: {
         }
       }
       if (text.includes('from legislation_provisions')) {
-        // Keyed on the requested provision id: an unknown id is a store
-        // miss (recognised_not_held), never a neighbouring row.
         if (overrides.provision === null) return { rows: [] }
         const stored = overrides.provision ?? currentProvision
         const wanted = values?.[0]
@@ -114,8 +111,6 @@ describe('resolveLegislationFetch', () => {
     expect(hit?.text).toContain('Direct discrimination')
     expect(hit?.canonicalUrl).toBe('/ln/ukpga/2010/15/section/13')
     expect(hit?.year).toBe(2010)
-    // An exact provision answer never searches the index, so there are no
-    // keyword search parameters to report — and none are invented.
     expect(result.keywordSearchParameters).toBe(null)
   })
 
@@ -134,9 +129,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('withholds text when the effects flag is undefined', async () => {
-    // Fail-closed: only an explicit false serves text. A row predating the
-    // flag (or any store shape that drops it) must land amended_not_held
-    // with no text, never current.
     const flagless = {
       ...currentProvision,
       hasUnappliedEffects: undefined,
@@ -155,9 +147,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('withholds text for an unchecked row even when the flag is false', async () => {
-    // Legacy rows carry has_unapplied_effects=false with
-    // effects_checked_at=null (migration default): never checked, never
-    // known-good. Only a false flag WITH a check timestamp serves.
     const result = await resolveLegislationFetch(
       createDeps({ provision: uncheckedProvision }),
       'section 13 Equality Act 2010',
@@ -172,8 +161,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('withholds keyword hits whose effects were never checked', async () => {
-    // A false flag without a check timestamp (stale index copy or an
-    // unchecked legacy row) never serves text on the keyword path either.
     const uncheckedHit = {
       ...currentProvision,
       provisionRef: currentProvision.id,
@@ -189,11 +176,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('serves the Act alone for an Act-name query, never tied provisions', async () => {
-    // Every provision of an Act carries its title, so an Act-name query
-    // matches all of them equally and the engine's tiebreak is the document
-    // id — whose `schedule/` prefix sorts ahead of `section/`. The result was
-    // a fixed handful of Schedule 1 paragraphs. The Act page carries the
-    // contents instead, so the keyword hits must not be served at all.
     const scheduleParagraph = {
       ...currentProvision,
       id: 'ukpga/2010/15/schedule/1/paragraph/1',
@@ -211,8 +193,6 @@ describe('resolveLegislationFetch', () => {
     const hit = result.groups[0]?.hits[0]
     expect(hit?.id).toBe('ukpga/2010/15')
     expect(hit?.labelPath).toBe('')
-    // The row renders `provisionLabel · title`: the chapter number, not the
-    // title a second time.
     expect(hit?.provisionLabel).toBe('2010 c. 15')
     expect(hit?.notice).toContain('browse its Parts, sections and schedules')
   })
@@ -230,8 +210,6 @@ describe('resolveLegislationFetch', () => {
     expect(result.citationRecognised).toBe(false)
     expect(result.groups[0]?.hits).toHaveLength(1)
     expect(result.groups[0]?.hits[0]?.labelPath).toBe('section/13')
-    // The parameters the engine was actually asked with, reported by the
-    // layer that asked, so a measuring caller never asserts its own.
     expect(result.keywordSearchParameters).toEqual({
       matchingStrategy: 'all',
       rankingScoreThreshold: 0.35,
@@ -249,9 +227,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('never serves a neighbour for an unknown provision id', async () => {
-    // Default store holds only s.13: s.99 resolves to a different
-    // provision id, so the keyed lookup misses and the answer is
-    // recognised_not_held with no group, not the s.13 text.
     const result = await resolveLegislationFetch(
       createDeps({}),
       's 99 Equality Act 2010',
@@ -263,13 +238,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('reports an unresolved Act title, never keyword provisions and never not-held', async () => {
-    // "Children Act 1989" is Act-shaped but not stored. A failed title
-    // lookup cannot prove the Act is absent, so the honest state suppresses
-    // keyword neighbours without making a not-held claim. Before the honest
-    // negative it fell to keyword search and served provisions of the
-    // Children's Wellbeing and Schools Act 2026 that merely share the word
-    // "children". The keyword hits are supplied here precisely so the test
-    // proves they are not served.
     const neighbour = {
       ...currentProvision,
       id: 'ukpga/2026/21/section/12',
@@ -289,17 +257,10 @@ describe('resolveLegislationFetch', () => {
     expect(result.groups).toEqual([])
     expect(result.note).toContain('No exact legislation title match')
     expect(result.note).toContain('Children Act 1989')
-    // No keyword search ran, so nothing may report parameters for one.
     expect(result.keywordSearchParameters).toBe(null)
   })
 
   it('suppresses an attached-opener bracketed held title with zero hits', async () => {
-    // `Amendment of (Equality Act 2010) Act 2020` is a standalone outer title
-    // with a held Act inside an attached bracket pair. The opener rides the
-    // first run token, so the token-boundary depth test read the run as an
-    // unbracketed separate mention and served provisions of an unrelated Act.
-    // The keyword hits are supplied so the test proves they are withheld, and
-    // the bracket families are exercised together.
     const neighbour = {
       ...currentProvision,
       id: 'ukpga/2022/32/section/166',
@@ -328,12 +289,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('serves keyword provisions for attached-opener prose about a held Act', async () => {
-    // `Duties under(Equality Act 2010)` shares a raw token between the prose
-    // word and the held title. The covered title word's capital must not
-    // promote the residue into a title phrase, and the trimmed-away closer
-    // must not read as a malformed bracket: the query is genuine prose and
-    // must reach keyword search. A fabricated outer title with its own year
-    // must still suppress with zero legislation hits.
     const directoryActs = [
       ...acts,
       {
@@ -397,10 +352,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('serves keyword provisions for prose about an unheld Act, in both casings', async () => {
-    // L35: the sentence-initial form must reach the same keyword path as its
-    // lowercase twin. Before the repair the capitalised form short-circuited
-    // on titleUnresolved and the neighbour provision was never served; the
-    // lowercase twin already keyword-searched.
     const directoryActs = [
       ...acts,
       {
@@ -447,10 +398,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('suppresses a standalone nested outer title without serving keyword provisions', async () => {
-    // `Worker Protection (Amendment of Equality Act 2010) Act 2010` is a
-    // complete title phrase that embeds a held Act. Before the repair it was
-    // routed by containment to the keyword path and served provisions of the
-    // 2023 Act for the unheld 2010 outer title.
     const directoryActs = [
       ...acts,
       {
@@ -483,9 +430,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('suppresses an unheld title carrying the terminal ", as amended" qualifier', async () => {
-    // `Children Act 1989, as amended` is a standalone whole-title request with
-    // the conventional terminal qualifier. It must suppress, not serve
-    // provisions of an unrelated Act that merely shares a word.
     const neighbour = {
       ...currentProvision,
       id: 'ukpga/2026/21/section/12',
@@ -559,7 +503,6 @@ describe('resolveLegislationFetch', () => {
     const result = await resolveLegislationFetch(deps, 'Sample Act 2020')
     expect(result.groups).toEqual([])
     expect(result.ambiguous).toBe(true)
-    // An Act that is held twice is not an unheld Act: the flag must not fire.
     expect(result.recognisedNotHeld).toBe(false)
     expect(result.titleUnresolved).toBe(false)
     expect(result.note).toContain('more than one')
@@ -610,8 +553,6 @@ describe('resolveLegislationFetch', () => {
   })
 
   it('does not throw on a query naming an inherited Object property', async () => {
-    // The bare query `constructor` used to resolve through `actAliases` to
-    // `Object`, throw in normalizeActTitle, and reject the whole federation.
     await expect(
       resolveLegislationFetch(createDeps({}), 'constructor'),
     ).resolves.toMatchObject({ citationRecognised: false, searched: true })
@@ -669,10 +610,6 @@ describe('resolveLegislationProvisionPage', () => {
 })
 
 describe('single-schedule storage shape (adjacent board finding)', () => {
-  // Some Acts leave their only schedule unnumbered, so its paragraphs store
-  // at `schedule/paragraph/N` while a citation says "Schedule 1 paragraph
-  // N". Reproduced live: "Schedule 1 paragraph 2 Carer's Leave Act 2023"
-  // reported not-held with a dead official URL while the content was held.
   const carersLeave = {
     identity: 'ukpga/2023/18',
     actType: 'ukpga',
@@ -813,8 +750,6 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
       'Sch. para. 2 Equality Act 2010',
     )
     const example = result.note?.match(/for example "([^"]+)"/)?.[1]
-    // Splicing the display label onto "Schedule 1" emitted
-    // "Schedule 1 Sch. para. 2", which parseScheduleLabelPath rejects.
     expect(example).toBe('Schedule 1 paragraph 2')
     expect(parseScheduleLabelPath(example ?? '')).toBe('schedule/1/paragraph/2')
   })
@@ -838,10 +773,6 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
   })
 
   it('returns a structured underspecified-schedule diagnostic the client can resubmit', async () => {
-    // Browser finding: the serve layer carried the corrective example only
-    // inside the free-text note, so the signed-in UI, which reads structured
-    // diagnostics, rendered nothing. The example and the Act context must be
-    // data, not prose the client has to parse.
     const first = await resolveLegislationFetch(
       createScheduleDeps(rows),
       'Sch. para. 2 Equality Act 2010',
@@ -850,7 +781,6 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
     if (!guidance) throw new Error('expected structured schedule guidance')
     expect(guidance.example).toBe('Schedule 1 paragraph 2')
     expect(guidance.actTitle).toBe('Equality Act 2010')
-    // The client composes the resubmission from the structured diagnostic.
     const second = await resolveLegislationFetch(
       createScheduleDeps(rows),
       `${guidance.example} ${guidance.actTitle}`,
@@ -887,7 +817,6 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
 })
 
 describe('resolveLegislationFetch — P1.34 legislation keyword bound', () => {
-  // A non-citation query over a one-Act directory reaches the keyword branch.
   const keywordQuery = 'appeal a housing decision'
 
   type KeywordEngineResponse = {
@@ -935,7 +864,6 @@ describe('resolveLegislationFetch — P1.34 legislation keyword bound', () => {
     expect(result.searched).toBe(false)
     expect(result.groups).toEqual([])
     expect(result.note).toBe('Legislation index unavailable.')
-    // The deadline aborted the transport, not just abandoned the response.
     expect(engineSignal?.aborted).toBe(true)
   })
 
@@ -950,8 +878,6 @@ describe('resolveLegislationFetch — P1.34 legislation keyword bound', () => {
     )
     expect(result.failed).toBe(true)
     expect(result.searched).toBe(false)
-    // Resolving after the deadline is discarded, and a later request still
-    // works: no stale verdict, no corrupted subsequent call.
     resolveLate({
       hits: [],
       query: keywordQuery,
@@ -982,8 +908,6 @@ describe('resolveLegislationFetch — P1.34 legislation keyword bound', () => {
       keywordQuery,
     )
     expect(result.failed).toBe(true)
-    // The race owns the engine promise, so this rejection is consumed, not
-    // raised as an unhandled rejection. Flush before asserting.
     rejectLate(new Error('late engine rejection'))
     await Promise.resolve()
     await Promise.resolve()

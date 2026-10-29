@@ -4,41 +4,7 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'bun:test'
 
-/**
- * Structural guard for the corpus-only API boundary.
- *
- * The owner's rule is absolute: the user-facing API must never contact the
- * National Archives. This file combines four checks, none of which alone
- * proves the absence of every possible egress:
- *
- *  1. A source scan of `services/api` across every source extension and the
- *     whole package tree, not just `src/`, for the provider fetch seam, the
- *     National Archives host, and direct `fetch(` calls.
- *  2. A static import walk from both production entry points, so a file that
- *     only the running process reaches is still checked, and a module that is
- *     not reachable cannot hide behind an unreferenced helper.
- *  3. A runtime check that `runtime.ts` constructs neither provider meter.
- *  4. Fail-first unit probes that feed the same scan known offences, so a
- *     scan that silently stops matching cannot pass unseen.
- *
- * The behavioural zero-upstream-call proof lives in `proxy-routes.test.ts`:
- * a counting fake provider that rejects if called. The static checks here
- * catch a call added in a branch no route test reaches; the runtime tests
- * prove the routes that do run make no upstream request.
- *
- * Limits, stated rather than implied. The fetch check matches a call whose
- * callee is the identifier `fetch` or a member named `fetch`; an aliased,
- * computed or dynamically constructed callee would evade it. The provider
- * name check is a text scan, so a comment that names a function reads as a
- * call. The host check fires on string and template literals, so a host built
- * at runtime from fragments is invisible. None of this is a proof of every
- * possible egress; it is a maintainable guard over the shapes a regression
- * actually takes, paired with the runtime counting-fake proof.
- */
-
-// `.../src/routes/legal-search/__tests__/` -> `src`
 const apiSourceRoot = fileURLToPath(new URL('../../..', import.meta.url))
-// `.../services/api/src/routes/legal-search/__tests__/` -> `services/api`
 const apiPackageRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 
 const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.mjs', '.cjs', '.js'])
@@ -54,12 +20,6 @@ const ignoredDirectories = new Set([
 
 const transpiler = new Bun.Transpiler({ loader: 'tsx' })
 
-/**
- * The provider fetch seam. One exported function in
- * `@obiter/legal-source-provider` per upstream call shape. These names catch
- * the cheap reintroduction; the host and specifier scans below catch other
- * shapes, within the limits stated at the top of this file.
- */
 const providerFetchNames = [
   'fetchMojAuthoritySummaries',
   'fetchMojAuthorityDetail',
@@ -69,11 +29,6 @@ const providerFetchNames = [
   'hydrateAndIndexMojAuthorities',
 ]
 
-/**
- * Provider module specifiers a fetch-through would import. The package's
- * public entry (`@obiter/legal-source-provider`) is allowed: the routes use it
- * for request schemas, citation parsing and type guards.
- */
 const providerFetchSpecifiers = [
   '@obiter/legal-source-provider/moj-provider',
   '@obiter/legal-source-provider/fetch',
@@ -81,15 +36,8 @@ const providerFetchSpecifiers = [
   'legal-search/moj-client',
 ]
 
-/** The provider package exports only through this entry. */
 const providerPublicSpecifier = '@obiter/legal-source-provider'
 
-/**
- * Provider public-entry symbols the API may import. The provider package has
- * one export path, so anything outside this list is treated as egress-capable:
- * a newly added or renamed provider fetch function fails the guard without
- * this list changing. Types appear because they name the same seam.
- */
 const providerPureImports = new Set([
   'LegalFetchRequest',
   'MojRequestBudget',
@@ -105,12 +53,6 @@ const providerPureImports = new Set([
   'readWithdrawnInfo',
 ])
 
-/**
- * Direct `fetch(` is allowed only in these files, each with a stated reason.
- * It is a file allowlist, not a directory or a blanket exemption for every
- * fetch. `routes/changelog.ts` is the API's only intentional egress: the fixed
- * GitHub releases/commits endpoint.
- */
 const fetchAllowedFiles = new Map<string, string>([
   [
     join(apiSourceRoot, 'routes/changelog.ts'),
@@ -118,10 +60,6 @@ const fetchAllowedFiles = new Map<string, string>([
   ],
 ])
 
-/** The upstream Find Case Law host. A scanned file that mentions it is either
- * configuration or a call site; only a configuration default is allowed. The
- * needle is a fully escaped regex over literal text: it is a static scan, not
- * URL sanitisation, and the escaped dot keeps CodeQL's hostname rules quiet. */
 const tnaHostPattern = /nationalarchives\.gov\.uk/
 const tnaHostLabel = 'nationalarchives.gov.uk'
 
@@ -159,8 +97,6 @@ function parseSource(file: string, source: string): ts.SourceFile {
   return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind)
 }
 
-/** Direct `fetch(` calls, as source line numbers. Matching the parsed call
- * expression keeps comments and string literals from reading as egress. */
 function directFetchCallLines(sourceFile: ts.SourceFile): number[] {
   const lines: number[] = []
   const visit = (node: ts.Node): void => {
@@ -184,8 +120,6 @@ function directFetchCallLines(sourceFile: ts.SourceFile): number[] {
   return lines
 }
 
-/** Provider public-entry imports and re-exports outside the pure allowlist,
- * plus any namespace import, which would expose the fetch functions. */
 function disallowedProviderImports(sourceFile: ts.SourceFile): string[] {
   const offences: string[] = []
   const check = (imported: string, kind: string): void => {
@@ -229,7 +163,6 @@ function disallowedProviderImports(sourceFile: ts.SourceFile): string[] {
   return offences
 }
 
-/** The literal text of a string or template literal node, or null. */
 function literalText(node: ts.Node): string | null {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
     return node.text
@@ -243,12 +176,6 @@ function literalText(node: ts.Node): string | null {
   return null
 }
 
-/**
- * A TNA host literal is allowed only where it is a configuration default, not
- * an egress target: the fallback argument of `readRequiredUrl`, or the
- * `mojFindCaseLawBaseUrl` property in a test environment fixture. Any other
- * occurrence fails, including elsewhere in `env.ts`.
- */
 function isConfigurationDefault(node: ts.Node): boolean {
   const parent = node.parent
   if (ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) {
@@ -309,21 +236,15 @@ function resolveRelative(fromFile: string, specifier: string): string | null {
   for (const candidate of candidates) {
     try {
       if (statSync(candidate).isFile()) return candidate
-    } catch {
-      // Not a file: try the next candidate.
-    }
+    } catch {}
   }
   return null
 }
 
-/** Import specifiers, over-approximated when Bun's scanner rejects a file. */
 function importedPaths(source: string): string[] {
   try {
     return transpiler.scanImports(source).map((entry) => entry.path)
   } catch {
-    // Bun's scanner rejects a few valid constructs (for example dynamic
-    // imports in `redaction-detection.ts`). The regex fallback only needs to
-    // over-approximate imports so the walk cannot silently miss a module.
     const paths: string[] = []
     for (const match of source.matchAll(
       /(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g,
@@ -334,7 +255,6 @@ function importedPaths(source: string): string[] {
   }
 }
 
-/** Every local module reachable from the entry points by static import. */
 function collectReachableModules(entries: string[]): string[] {
   const seen = new Set<string>()
   const queue = [...entries]
@@ -372,8 +292,6 @@ describe('corpus-only source boundary', () => {
 
     const reachable = collectReachableModules(entries)
 
-    // Non-vacuity: the walk must actually reach the corpus-only route module,
-    // so a broken resolver cannot pass by tracing nothing.
     expect(reachable).toContain(
       join(apiSourceRoot, 'routes/legal-search/proxy-routes.ts'),
     )
@@ -395,12 +313,6 @@ describe('corpus-only source boundary', () => {
   })
 })
 
-/**
- * Fail-first probes for the guard itself. Each synthetic offence is the shape
- * a real regression takes; the same `sourceOffences` the scans above use must
- * return it. These are unit probes over strings, so they cannot pass by
- * scanning the wrong tree or skipping a file.
- */
 describe('corpus-only boundary guard probes', () => {
   const innocent = join(apiSourceRoot, 'innocent-probe.ts')
   const envPath = join(apiSourceRoot, 'env.ts')

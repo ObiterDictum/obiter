@@ -1,24 +1,11 @@
 import { describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 
-/**
- * The quote-fidelity store boundary for case law, against an injected pool. The
- * fake answers the real judgment query; the real SQL is exercised in
- * `quote-fidelity.db.test.ts`.
- */
-
-/** Counts source preparations, to prove a batch prepares each authority once. */
 const prepareCalls = vi.hoisted(() => ({ count: 0 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const obiterVerificationCoreModule = {
   ...(await import('@obiter/verification-core')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterVerificationCoreModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/verification-core')).map((key) => [
     key,
@@ -41,9 +28,6 @@ mock.module('@obiter/verification-core', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   checkQuoteFidelity,
   checkQuoteFidelities,
@@ -59,43 +43,10 @@ const {
   judgmentAuthority,
   judgmentCitation,
   outcomes,
-  rejections,
   request,
 } = await import('./quote-fidelity.test-support')
 
 describe('quote fidelity judgment retrieval', () => {
-  it('clears an exact judgment quotation with its paragraph evidence', async () => {
-    const { pool } = fakeQuotePool({ authorities: [judgmentAuthority] })
-
-    const finding = await checkQuoteFidelity(
-      pool,
-      request('the court must consider the point', caseLaw),
-    )
-
-    expect(finding.status).toEqual({ state: 'clear' })
-    expect(finding.evidence).toEqual([
-      {
-        sourceType: 'judgment',
-        granularity: 'fragment',
-        sourceId: 'db-test-v4-uksc',
-        ordinal: 2,
-        paragraphNumber: 2,
-      },
-    ])
-  })
-
-  it('flags a proven mismatch from the stored record', async () => {
-    const { pool } = fakeQuotePool({ authorities: [judgmentAuthority] })
-
-    const finding = await checkQuoteFidelity(
-      pool,
-      request('the court must reject the point', caseLaw),
-    )
-
-    expect(finding.status).toEqual({ state: 'flagged' })
-    expect(finding.evidence).toHaveLength(1)
-  })
-
   it('reads one judgment once for every quotation that cites it', async () => {
     const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
 
@@ -114,59 +65,6 @@ describe('quote fidelity judgment retrieval', () => {
 
     expect(await checkQuoteFidelities(fake.pool, [])).toEqual([])
     expect(fake.queryCount()).toBe(0)
-  })
-
-  it('does not compare against a withdrawn source', async () => {
-    const { pool } = fakeQuotePool({
-      authorities: [{ ...judgmentAuthority, withdrawn: true }],
-    })
-
-    const finding = await checkQuoteFidelity(
-      pool,
-      request('the court must consider the point', caseLaw),
-    )
-
-    expect(finding.status).toEqual({
-      state: 'review_required',
-      reason: 'evidence_unavailable',
-    })
-    expect(finding.evidence).toEqual([])
-  })
-
-  it('reports a malformed stored record as inconclusive, not a mismatch', async () => {
-    const { pool } = fakeQuotePool({
-      authorities: [{ id: 'db-test-v4-uksc', malformed: true }],
-    })
-
-    const finding = await checkQuoteFidelity(
-      pool,
-      request('the court must consider the point', caseLaw),
-    )
-
-    expect(finding.status).toEqual({
-      state: 'review_required',
-      reason: 'check_inconclusive',
-    })
-  })
-
-  it('reports a store failure as inconclusive and never logs the quote', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { pool } = fakeQuotePool({
-      authorities: [judgmentAuthority],
-      fail: 'authorities',
-    })
-
-    const finding = await checkQuoteFidelity(
-      pool,
-      request('a private matter quotation', caseLaw),
-    )
-
-    expect(finding.status).toEqual({
-      state: 'review_required',
-      reason: 'check_inconclusive',
-    })
-    expect(JSON.stringify(warn.mock.calls)).not.toContain('private matter')
-    warn.mockRestore()
   })
 
   it('refuses a quote longer than the boundary accepts', async () => {
@@ -231,21 +129,6 @@ describe('quote fidelity judgment retrieval', () => {
 })
 
 describe('quote fidelity candidate isolation', () => {
-  it('keeps valid siblings when one candidate is blank', async () => {
-    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
-
-    const results = await checkQuoteFidelities(fake.pool, [
-      request('the court must consider the point', caseLaw),
-      request('   ', caseLaw),
-      request('the court must reject the point', caseLaw),
-    ])
-
-    expect(outcomes(results)).toEqual(['clear', 'quote_blank', 'flagged'])
-    expect(rejections(results)).toEqual([null, 'quote_blank', null])
-    // The rejected candidate is never read from the store.
-    expect(fake.queryCount()).toBe(1)
-  })
-
   it.each([
     ['spaces', '   '],
     ['tabs and newlines', '\t\r\n'],

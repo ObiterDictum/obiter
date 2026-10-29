@@ -7,15 +7,6 @@ import {
 import { PostgresLegalHydrationLedger } from './legal-hydration-ledger'
 import { createTestPool } from './test-database.test-support'
 
-/**
- * Two independent connection pools stand in for two API replicas sharing one
- * migrated application database. Each has its own ledger instance, so no
- * in-process state is shared; only the rows are. This is the cluster boundary
- * the per-process gate cannot provide.
- *
- * Synthetic subjects and keys only, and no provider is reached: admitted
- * leases are completed by the test, so no external call is made.
- */
 const poolA = createTestPool()
 const poolB = createTestPool()
 
@@ -95,8 +86,6 @@ describe('shared Postgres hydration admission ledger', () => {
     expect(first.status).toBe('admitted')
     if (first.status === 'admitted') await a.complete(first.leaseId)
 
-    // No cross-replica deduplication is promised: the second replica charges
-    // its own miss for the same canonical key and is refused by the window.
     expect((await b.admit('usr_a', 'same-key', true)).status).toBe(
       'budget_exceeded',
     )
@@ -113,8 +102,6 @@ describe('shared Postgres hydration admission ledger', () => {
     expect(
       (await b.admit(ANONYMOUS_HYDRATION_SUBJECT, 'doc-2', true)).status,
     ).toBe('budget_exceeded')
-    // A real session id draws a separate window, so the sentinel cannot merge
-    // with a user and a caller cannot mint it from an id.
     expect((await a.admit('usr_real', 'doc-3', true)).status).toBe('admitted')
   })
 
@@ -124,18 +111,15 @@ describe('shared Postgres hydration admission ledger', () => {
     const request = await a.admit('usr_a', 'query', true)
     expect(request.status).toBe('admitted')
 
-    // The charged request still holds the only in-flight slot.
     expect((await a.admit('usr_a', 'detail', false)).status).toBe(
       'budget_exceeded',
     )
     if (request.status === 'admitted') await a.complete(request.leaseId)
 
-    // With the slot free, downstream work takes a lease without a new miss.
     const detail = await a.admit('usr_a', 'detail', false)
     expect(detail.status).toBe('admitted')
     if (detail.status === 'admitted') await a.complete(detail.leaseId)
 
-    // The window still holds exactly the one charged miss.
     expect((await a.admit('usr_a', 'query-2', true)).status).toBe(
       'budget_exceeded',
     )
@@ -145,17 +129,12 @@ describe('shared Postgres hydration admission ledger', () => {
     const a = ledger(poolA, { queueMax: 1, leaseTtlMs: 150 })
     const b = ledger(poolB, { queueMax: 1, leaseTtlMs: 150, perClientMax: 100 })
 
-    // Process A is admitted and keeps running without completing. Its lease
-    // does not renew, exactly as a crashed replica's would not.
     expect((await a.admit('usr_a', 'key-a', true)).status).toBe('admitted')
     expect((await b.admit('usr_b', 'key-b', true)).status).toBe(
       'budget_exceeded',
     )
 
     await new Promise((resolve) => setTimeout(resolve, 350))
-    // The lease expired while A's operation still runs, so B is admitted. The
-    // ledger bounds unexpired leases, not every still-running operation; this
-    // pins the recorded limit so no claim can widen it by accident.
     expect((await b.admit('usr_b', 'key-b', true)).status).toBe('admitted')
   })
 
@@ -176,11 +155,8 @@ describe('shared Postgres hydration admission ledger', () => {
       const elapsed = Date.now() - started
 
       expect(result.status).toBe('unavailable')
-      // Bounded by the configured 150ms lock timeout, not by the holder.
       expect(elapsed).toBeGreaterThanOrEqual(100)
       expect(elapsed).toBeLessThan(1_000)
-      // A timed-out admission rolled back: it commits neither a lease nor a
-      // charged miss.
       const leases = await poolA.query<{ count: string }>(
         'select count(*)::text as count from legal_hydration_leases',
       )
@@ -214,8 +190,6 @@ describe('shared Postgres hydration admission ledger', () => {
       holder.release()
     }
 
-    // With the lock free, admission succeeds again: the timeout is a bound on
-    // waiting, not a latch that disables the ledger.
     const recovered = await short.admit('usr_a', 'key-a', true)
     expect(recovered.status).toBe('admitted')
     if (recovered.status === 'admitted') {
@@ -233,8 +207,6 @@ describe('shared Postgres hydration admission ledger', () => {
       expect((await unreachable.admit('usr_a', 'key', true)).status).toBe(
         'unavailable',
       )
-      // Releasing a lease against an unreachable database reports nothing and
-      // never throws; the lease expires on its own.
       await unreachable.complete('00000000-0000-0000-0000-000000000000')
     } finally {
       await broken.end()
@@ -278,9 +250,6 @@ describe('shared Postgres hydration admission ledger', () => {
     })
     expect(first.status).toBe('ok')
 
-    // A second process with the same subject is refused by the shared window
-    // before its operation runs, so it reaches neither the provider nor the
-    // corpus.
     const rejected = await gateB.run('usr_a', 'beta', async () => {
       providerCalls += 1
       corpusWrites += 1

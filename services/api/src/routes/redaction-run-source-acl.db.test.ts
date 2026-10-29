@@ -14,17 +14,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-/**
- * A redaction run bound to a document version resolves its source text,
- * source file and layout through `document_versions`. While the bound
- * version is the document's current one, run-level 'view' already covers
- * that content; once a newer version supersedes it the bytes are historical
- * document content and the same matter-level 'edit' gate as `?versionId=`
- * applies. A denied read returns the run's ordinary 'source not available'
- * 404 and never reaches storage. Every case below runs the real routes
- * against a real database.
- */
-
 const pool = createTestPool()
 
 type Seed = Awaited<ReturnType<typeof seedMatter>>
@@ -35,7 +24,6 @@ interface RunSeed extends Seed {
   layoutKey: string
 }
 
-/** A ready run bound to the seeded version; the version gets a text object. */
 async function seedBoundRun(access: 'edit' | 'view' | null): Promise<RunSeed> {
   const seed = await seedMatter(pool, access)
   const runId = `red_${seed.documentId}`
@@ -65,7 +53,6 @@ async function seedBoundRun(access: 'edit' | 'view' | null): Promise<RunSeed> {
   return { ...seed, runId, textKey, layoutKey }
 }
 
-/** Promote a fresh v2 to current, leaving the run's bound version historical. */
 async function supersedeBoundVersion(seed: RunSeed) {
   const currentVersionId = `${seed.versionId}_v2`
   const currentSourceKey = createDocumentObjectKey({
@@ -178,13 +165,9 @@ describe('run-bound source historical gate', () => {
           error: { code: 'document_version_not_found' },
         })
       }
-      // The gate fires inside the key lookup: a denied request never reaches
-      // stored bytes for the historical version.
       expect(storage.binaryReads).toEqual([])
       expect(storage.textReads).toEqual([])
 
-      // Concealment parity: the denied body is identical to the one for a
-      // run whose bound version simply has no text object.
       const denied = await viewer.request(
         `/api/redaction-runs/${seed.runId}/document-text`,
       )
@@ -253,8 +236,6 @@ describe('run-bound source historical gate', () => {
         `/api/redaction-runs/${seed.runId}/document-text`,
       )
       expect(denied.status).toBe(404)
-      // Upgrading the same grantee to 'edit' reopens the historical source:
-      // the decision reads the share at request time, not at run creation.
       await pool.query(
         `update matter_shares set access_level = 'edit' where id = $1`,
         [seed.shareId],

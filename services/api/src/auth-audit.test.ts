@@ -3,15 +3,6 @@ import { vi } from '../../../scripts/test/vitest-compat'
 import { type Auth, createPool, testEnv } from './app-test-support'
 import { createApiApp } from './app'
 
-/**
- * The password-change audit branch at the `/api/auth/*` boundary. A password
- * change is the one auth outcome the session hooks cannot see, so the audit
- * row is written from the response, and the request body must never be read.
- *
- * The mutation itself happens inside `auth.handler`; these tests pin the branch
- * either side of it — a success event for a success, no event for a rejection,
- * and a truthful success even when the audit append fails.
- */
 describe('POST /api/auth/change-password — audit', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -135,8 +126,6 @@ describe('POST /api/auth/change-password — audit', () => {
       createPool(async (...args) => {
         queries.push(args)
         const sql = String(args[0])
-        // Fail only at the audit insert: an incomplete double would throw
-        // earlier and the test would not prove where the failure landed.
         expect(sql).toContain('insert into audit_logs')
         throw auditError
       }),
@@ -154,12 +143,9 @@ describe('POST /api/auth/change-password — audit', () => {
       }),
     })
 
-    // The password mutation already committed inside the handler: the client
-    // must still be told the change succeeded.
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ user: { id: 'usr_1' } })
 
-    // The audit failure is operationally visible, with identifiers only.
     expect(errorSpy).toHaveBeenCalledTimes(1)
     const [message, context] = errorSpy.mock.calls[0] as [
       string,
@@ -193,8 +179,6 @@ describe('POST /api/auth/change-password — audit', () => {
           session: { id: 'ses_1' },
         }),
       },
-      // The first attempt succeeds; a retry with the now-stale password is
-      // rejected by the auth layer, exactly as better-auth would reject it.
       handler: async () =>
         inserts.length === 0
           ? Response.json({ user: { id: 'usr_1' } })

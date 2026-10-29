@@ -208,8 +208,6 @@ describe('GET /api/documents/:id/text gates', () => {
   })
 
   it('serves a large txt in full: /text is bounded by the upload cap, not truncated', async () => {
-    // The 200,000-character bound lives on the PDF extraction path only.
-    // A 255,500-character txt was observed live; the route returns it whole.
     const largeText = 'x'.repeat(255_500)
     const database = new TestDatabase({
       fileType: 'txt',

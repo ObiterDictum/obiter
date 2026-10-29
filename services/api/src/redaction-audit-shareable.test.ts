@@ -107,7 +107,6 @@ describe('shareable audit export', () => {
     const { report, bytes } = shareable()
     const text = new TextDecoder().decode(bytes)
 
-    // The restricted report does hold both; the shareable one must not.
     expect(JSON.stringify(report)).toContain(acceptedName)
     expect(JSON.stringify(report)).toContain(sourceFilename)
     expect(text).not.toContain(acceptedName)

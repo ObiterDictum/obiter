@@ -48,7 +48,6 @@ describe('email templates', () => {
   it('escapes HTML-special characters in the URL within the html part', () => {
     const evil = 'https://app.obiter.test/auth/reset?token=a&b=<script>'
     const email = magicLinkEmail(evil)
-    // The raw angle brackets must not appear unescaped in the rendered html.
     expect(email.html).not.toContain('<script>')
     expect(email.html).toContain('&lt;script&gt;')
   })

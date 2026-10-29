@@ -50,10 +50,6 @@ describe('redaction detection', () => {
   })
 
   it('does not propose a court claim number or court name as personal data', async () => {
-    // The heading and the address sentence of the Shah witness statement, with
-    // the labels the model actually emits: DRIVERS_LICENSE on the claim number
-    // and CITY on the court's location. The genuine address in the next
-    // paragraph still has to be detected in full, including its Leicester.
     const text =
       'Claim No. LS26C00418  |  In the County Court at Leicester\n\n' +
       'I, Priya Shah, of 14 Elmfield Avenue, Leicester LE2 1RB, will say as follows.'

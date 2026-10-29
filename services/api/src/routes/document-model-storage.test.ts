@@ -12,8 +12,6 @@ import {
   TestDatabase,
 } from './document-model.test-support'
 
-/** Removes a top-level model field, producing the shape a cache written before
- * the field existed would hold — the route must regenerate, not serve it. */
 function modelJsonWithout(field: string, json: string) {
   const value = JSON.parse(json) as Record<string, unknown>
   delete value[field]

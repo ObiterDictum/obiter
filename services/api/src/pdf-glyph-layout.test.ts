@@ -44,11 +44,6 @@ const SIZE = 11
 const START_X = 60
 const BASELINE = 700
 
-/**
- * `drawText` emits no kerning, so the drawn position of each character is the
- * running sum of individual glyph advances. `widthOfTextAtSize` over a whole
- * string applies kern pairs and would overstate it.
- */
 function drawnAdvance(
   font: { widthOfTextAtSize: (s: string, n: number) => number },
   text: string,
@@ -113,12 +108,6 @@ async function itemPathText(bytes: Buffer) {
   }
 }
 
-/**
- * Rasterise a page and return the ink bounding box. Callers assert that a
- * redaction cover contains this box with no slack: a short cover publishes
- * part of a redacted glyph. Font mismatch (missing Liberation) moves the ink
- * by fractions of a point; that is a CI install defect, not a looser bound.
- */
 async function renderedInkBounds(bytes: Buffer) {
   const CanvasFactory = await createIsomorphicCanvasFactory(
     () => import('@napi-rs/canvas'),
@@ -163,7 +152,6 @@ async function renderedInkBounds(bytes: Buffer) {
   }
 }
 
-/** Accepted single-span input for a PDF whose extraction contains `spanText`. */
 function acceptedSpanInput(
   pdfBytes: Buffer,
   layout: DocumentTextLayout,
@@ -225,11 +213,6 @@ async function rasterizePage(bytes: Uint8Array) {
   }
 }
 
-/**
- * Count background (non-dark) pixels inside a device-space box. A cover renders
- * as a solid bar, so a correctly redacted region has no light pixels; a
- * surviving glyph always leaves background around its strokes.
- */
 function countLightPixels(
   pixels: Uint8ClampedArray,
   width: number,
@@ -278,8 +261,6 @@ function coverBoundsInViewport(
 }
 
 describe('exact glyph geometry', () => {
-  // Proportional text where the advances differ sharply: W and M are over three
-  // times the width of i, l and a full stop, so any uniform assumption drifts.
   const LINE =
     'Ms Wilhelmina Ashcroft-Hargreaves of 14 St Aldgate Terrace, Oxford'
 
@@ -306,13 +287,9 @@ describe('exact glyph geometry', () => {
       expect(covers).toHaveLength(1)
       const cover = covers[0]!
 
-      // The bar must reach past the ink on both sides. Under-covering by any
-      // amount publishes part of a redacted name.
       expect(cover.x).toBeLessThanOrEqual(trueLeft)
       expect(cover.x + cover.width).toBeGreaterThanOrEqual(trueRight)
 
-      // And it must not swallow neighbouring words: the only slack is the
-      // deliberate padding in glyphCoverRect, a twentieth of the font size.
       const padding = SIZE * 0.04
       expect(trueLeft - cover.x).toBeLessThanOrEqual(padding + 0.01)
       expect(cover.x + cover.width - trueRight).toBeLessThanOrEqual(
@@ -326,7 +303,6 @@ describe('exact glyph geometry', () => {
     const extracted = await extractDocumentContent('pdf', bytes)
     const segments = extracted.layout!.segments
 
-    // Contiguous text on one baseline is one run, not one segment per glyph.
     expect(segments.length).toBeLessThan(4)
     for (const segment of segments) {
       expect(segment.advances).toHaveLength(segment.end - segment.start)
@@ -340,8 +316,6 @@ describe('exact glyph geometry', () => {
   })
 
   it('places characters after a kerning adjustment at their drawn position', async () => {
-    // TJ offsets shift text without an intervening glyph. The replay must apply
-    // them, or everything after the adjustment is misplaced.
     const doc = await PDFDocument.create()
     const font = await doc.embedFont(StandardFonts.TimesRoman)
     const page = doc.addPage([595, 842])
@@ -501,9 +475,6 @@ describe('exact glyph geometry', () => {
   })
 
   it('falls back when a Type 3 font arrives through the graphics state', async () => {
-    // A setGState Font entry reaches the renderer's setFont path, so a Type 3
-    // font that is never named by `Tf` still has to be screened. Replaying it
-    // would use metrics the glyph path cannot read.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
       await extractDocumentContent('pdf', rawGStateType3Pdf())
@@ -544,8 +515,6 @@ describe('exact glyph geometry', () => {
   })
 
   it('fails closed when skewed text reaches the interpolated item path', async () => {
-    // A Type 3 font bypasses operator replay, so the skew rejection must also
-    // hold on the item fallback that pages like this one use.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
       await expect(
@@ -558,8 +527,6 @@ describe('exact glyph geometry', () => {
 })
 
 describe('claim-form word boundaries', () => {
-  // Synthetic claim-form lines (never real legal text): all-caps headings, a
-  // damages figure, and a spaced NI number.
   const LINES = [
     'IN THE COUNTY COURT AT CENTRAL LONDON',
     'PARTICULARS OF CLAIM',
@@ -567,7 +534,6 @@ describe('claim-form word boundaries', () => {
     'NI number QQ 12 34 56 C was recorded',
   ]
 
-  /** One drawText per line: real space glyphs, the well-formed producer. */
   async function spacedClaimFormPdf() {
     const doc = await PDFDocument.create()
     const font = await doc.embedFont(StandardFonts.TimesRoman)
@@ -583,11 +549,6 @@ describe('claim-form word boundaries', () => {
     return Buffer.from(await doc.save())
   }
 
-  /**
-   * Word-by-word at the running advance: zero inter-word advance, the fused
-   * producer. Per-character advance sums (drawText emits no kerning) so the
-   * gap is truly zero, matching the measured failure mode.
-   */
   async function fusedClaimFormPdf() {
     const doc = await PDFDocument.create()
     const font = await doc.embedFont(StandardFonts.TimesRoman)
@@ -616,8 +577,6 @@ describe('claim-form word boundaries', () => {
     expect(extracted.text).toContain('IN THE COUNTY COURT AT CENTRAL LONDON')
     expect(extracted.text).toContain('PARTICULARS OF CLAIM')
     expect(extracted.text).toContain('totalling GBP 162,526.25')
-    // The spaced NI survives extraction, so deterministic detection fires and
-    // the end-to-end redacted output carries no trace of it.
     const spans = supplementSpans(extracted.text)
     expect(spans).toEqual(
       expect.arrayContaining([
@@ -649,13 +608,8 @@ describe('claim-form word boundaries', () => {
       await fusedClaimFormPdf(),
     )
 
-    // True zero-gap fusion is faithful extraction: the rendered page shows no
-    // spaces, and intra- and inter-word gaps both measure 0.00pt, so no
-    // threshold can recover the boundaries.
     expect(extracted.text).toContain('PARTICULARSOFCLAIM')
     expect(extracted.text).not.toContain('IN THE COUNTY')
-    // The NI fused to its neighbours matches no pattern (no boundary either
-    // side), so the coverage guard must refuse finalisation instead.
     expect(
       supplementSpans(extracted.text).filter(
         (span) => span.category === 'national_insurance',
@@ -745,10 +699,6 @@ describe('annotation glyph placement', () => {
     )
   }
 
-  /**
-   * Every dark source pixel inside `rect` must be black in the burned
-   * output: proves the value's ink is covered, not just the cover box.
-   */
   async function expectSourceInkCovered(
     source: Buffer,
     output: Uint8Array,
@@ -773,11 +723,9 @@ describe('annotation glyph placement', () => {
         expect(brightest).toBeLessThan(20)
       }
     }
-    // The value must actually render, or the check above is vacuous.
     expect(inkPixels).toBeGreaterThan(50)
   }
 
-  /** Body text outside the bar must still render: the bar is local, not page-wide. */
   async function expectInkPresent(output: Uint8Array, strip: PageRect) {
     const { viewport, pixels } = await rasterizePdf(output)
     const box = deviceBox(viewport, strip)
@@ -818,7 +766,6 @@ describe('annotation glyph placement', () => {
       text: extracted.text,
       spanText: SECRET,
     })
-    // Without beginAnnotation replay this cover sat at the page origin.
     expect(cover.y).toBeGreaterThan(200)
     expect(cover.x).toBeGreaterThanOrEqual(rect.x - 2)
     expect(cover.y).toBeGreaterThanOrEqual(rect.y - 3)
@@ -863,8 +810,6 @@ describe('annotation glyph placement', () => {
       'Ms Wilhelmina Ashcroft-Hargreaves of 14 St Aldgate Terrace, Oxford',
     )
     const extracted = await extractDocumentContent('pdf', bytes)
-    // Annotation and nextLine handling must not move plain content-stream
-    // text: these pins predate both fixes.
     const cover = spanCover({
       layout: extracted.layout!,
       text: extracted.text,
@@ -915,9 +860,6 @@ describe('annotation glyph placement', () => {
       text: extracted.text,
       spanText: SECRET,
     })
-    // SECRETVALUE is 24pt through /GS1: replayed at the previous 12pt state
-    // its cover would be half as tall and ~half as wide, sitting above the
-    // rendered ink rather than on it.
     expect(secretCover.height).toBeGreaterThan(bodyCover.height * 1.6)
     expect(secretCover.width).toBeGreaterThan(bodyCover.width * 1.6)
     expect(secretCover.y).toBeLessThan(600)
@@ -954,11 +896,6 @@ describe('graphics state replay fidelity', () => {
     return { extracted, cover: covers[0]! }
   }
 
-  /**
-   * The renderer, not the replay, decides where ink lands. Burn the accepted
-   * span, re-render, and require the region the source actually inked to become
-   * a solid bar. A light pixel inside that region is a surviving glyph edge.
-   */
   async function expectInkRemoved(bytes: Buffer, spanText: string) {
     const source = await renderedInkBounds(bytes)
     const extracted = await extractDocumentContent('pdf', bytes)
@@ -978,9 +915,6 @@ describe('graphics state replay fidelity', () => {
   }
 
   it('ignores a stray Q exactly as the renderer does', async () => {
-    // Pre-fix the replay reset to identity, put the cover above the page and
-    // left the glyphs in place: 620px of source ink survived as 620px in the
-    // burned output.
     await expectInkRemoved(rawUnbalancedRestorePdf(), SECRET)
   })
 
@@ -997,14 +931,10 @@ describe('graphics state replay fidelity', () => {
   })
 
   it('restores the text matrix with the graphics state, as the renderer does', async () => {
-    // Balanced `q`/`Q`, no stray operator: pdf.js still restores the text
-    // matrix, so the text after `Q` returns to the pre-`q` baseline.
     await expectInkRemoved(rawRestoreTextMatrixPdf(), SECRET)
   })
 
   it('refuses an accepted span whose cover misses the page', async () => {
-    // Defence in depth. The replay guard above is the fix; this refuses even if
-    // a future divergence places a cover entirely off the page again.
     const bytes = rawUnbalancedRestorePdf()
     const extracted = await extractDocumentContent('pdf', bytes)
     const offPage: DocumentTextLayout = {

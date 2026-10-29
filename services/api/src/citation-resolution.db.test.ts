@@ -13,12 +13,6 @@ import {
   createResolutionPipeline,
 } from './citation-resolution.test-support'
 
-/**
- * Case-law citation resolution against the real Postgres public legal-source
- * record, wired to the authority-existence check the way a caller will wire it.
- * Requires TEST_DATABASE_URL.
- */
-
 const subject: VerificationSubject = { documentId: 'd-v3-db', versionId: 'v-1' }
 
 interface Fixture {
@@ -68,9 +62,6 @@ describe('case law resolution against the stored record', () => {
     for (const fixture of judgmentFixtures) {
       await insertAuthority(pool, fixture)
     }
-    // A stored carrier row that is valid JSON with a citation but not a valid
-    // legal-source record. The batch lookup matches its citation; V2's schema
-    // check on the record rejects it, so it cannot create a false resolution.
     await pool.query(
       `insert into legal_source_documents
          (document_id, summary_json, provider_json, content_hash, source_uri)
@@ -149,8 +140,6 @@ describe('case law resolution against the stored record', () => {
       state: 'review_required',
       reason: 'citation_unresolved',
     })
-    // Not a non-existence claim, and not the authority-existence check's
-    // verdict either: resolution could not establish an identity to check.
     expect(finding.status).not.toEqual({
       state: 'review_required',
       reason: 'authority_not_held',
@@ -159,9 +148,6 @@ describe('case law resolution against the stored record', () => {
   })
 
   it('resolves the live carrier beside a withdrawn one and clears on it', async () => {
-    // A withdrawn row is not a second candidate identity. V3 resolves the one
-    // live source and V2 clears on it, which is V2's documented answer for this
-    // store state, rather than resolution inventing an ambiguity.
     expect(await resolveOne('[2066] UKSC 6')).toEqual({
       outcome: 'resolved',
       citation: {
@@ -210,11 +196,6 @@ describe('case law resolution against the stored record', () => {
     ).toBe(true)
   })
 
-  /**
-   * Every carrier state, with what V3 resolves it to and what the V3 to V2
-   * pipeline concludes. Both stages read the one shared carrier rule, so this
-   * table is where they are proven not to disagree.
-   */
   const carrierStates: Array<{
     state: string
     citation: string
@@ -320,11 +301,6 @@ describe('case law resolution against the stored record', () => {
   )
 
   it('documents the multiple-withdrawn limitation instead of picking one', async () => {
-    // V3 cannot hand V2 one sourceId for two withdrawn carriers and never picks
-    // by row order, so it fails closed as ambiguous. V2's own answer for the
-    // same store state, handed either identity, is evidence_unavailable. Both
-    // are review-required, neither is a pass, and the gap is the V1
-    // sourceId-identity constraint tracked as a separate board item.
     expect(await resolveOne('[2066] UKSC 9')).toEqual({ outcome: 'ambiguous' })
 
     for (const sourceId of ['db-test-v3-wd9a', 'db-test-v3-wd9b']) {

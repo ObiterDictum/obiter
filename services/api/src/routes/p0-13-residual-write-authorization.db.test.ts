@@ -27,24 +27,7 @@ import {
   uploadRequest,
 } from './p0-13-residual-write-authorization.test-support'
 
-/**
- * P0.13 residual paths: matter PATCH, matter soft-delete and restore, document
- * upload, document soft-delete and restore, and actor-side share grant/revoke.
- *
- * Each write below still had its edit predicate inside the locking statement,
- * or authorised share management on `matters.created_by` with no membership
- * re-read. A share revocation, edit-to-view downgrade, or member removal that
- * commits while the write is queued must make the write fail with the concealed
- * not-found response and leave no row, pointer, audit event or stored object.
- *
- * The lock, not a sleep, orders each transaction: the blocker holds the row
- * lock, the writer's own in-transaction statement is proven blocked in
- * `pg_stat_activity`, and only then does the blocker commit.
- */
-
 type Seed = Awaited<ReturnType<typeof seedMatter>>
-/** The revoke spec acts on a bystander share that member removal does not
- * delete, so a stale committed revoke is observable rather than a no-op. */
 interface PreparedSeed extends Seed {
   bystanderShareId: string
 }
@@ -52,15 +35,12 @@ interface PreparedSeed extends Seed {
 interface PathSpec {
   name: string
   actorRole: UserRole
-  // Some paths act on a soft-deleted matter or document.
   needsDeletedMatter?: boolean
   needsDeletedDocument?: boolean
   path: (seed: PreparedSeed) => string
   init: (seed: PreparedSeed) => RequestInit
   successStatus: number
   expectStorageWrite: boolean
-  // After a successful soft-delete the share route can no longer see the
-  // matter, so the follow-up revocation is itself the concealed 404.
   revokeAfterWriteStatus?: number
   deniedCode: 'matter_not_found' | 'document_not_found'
   assertDenied: (pool: Pool, seed: PreparedSeed) => Promise<void>
@@ -75,9 +55,6 @@ function requirePid(pid: number | undefined, label: string) {
   return pid
 }
 
-/** The writer's own in-transaction matter statement. On the fixed head it is
- * the predicate-free lock; on the unfixed base the matter PATCH has no
- * `FOR UPDATE`, so its mutating `update matters` is the locking statement. */
 function isMatterWriteStatement(sql: string) {
   return isMatterLockStatement(sql) || sql.trim().startsWith('update matters')
 }
@@ -280,9 +257,6 @@ const actorShareSpecs: PathSpec[] = [
     expectStorageWrite: false,
     deniedCode: 'matter_not_found',
     assertDenied: async (current, seed) => {
-      // The bystander share is not the removed editor's, so its presence is
-      // direct evidence the writer's revoke did not commit. The writer's own
-      // request id isolates its audit from removal's.
       const share = await current.query<{ id: string }>(
         `select id from matter_shares where id = $1`,
         [seed.bystanderShareId],
@@ -397,8 +371,6 @@ async function openShareRevocation(
   return { revoker, request }
 }
 
-/** Blocker holds the matter lock; the writer's own locking statement must be
- * proven blocked before the blocker commits. */
 async function runWriterBlocked(
   spec: PathSpec,
   conflict: 'revoke' | 'downgrade',
@@ -435,16 +407,11 @@ async function runWriterBlocked(
     await spec.assertDenied(pool, seed)
     if (spec.expectStorageWrite) expect(storage.writes).toEqual([])
   } finally {
-    // Release either gate before cleanup so an assertion failure cannot leave a
-    // transaction holding the row lock and cascade into neighbour timeouts.
     revoker?.open()
     await cleanupMatter(pool, seed)
   }
 }
 
-/** Member removal takes no matter lock. The writer is paused after its matter
- * lock; removal commits; the writer resumes and must observe the lost share or
- * membership. */
 async function runWriterBlockedByRemoval(spec: PathSpec) {
   const seed = await prepareSpec(spec)
   const storage = storageFor(seed)
@@ -477,7 +444,6 @@ async function runWriterBlockedByRemoval(spec: PathSpec) {
   }
 }
 
-/** Writer wins the lock, so its authorised commit precedes the revocation. */
 async function runWriterWins(spec: PathSpec) {
   const seed = await prepareSpec(spec)
   const storage = storageFor(seed)
@@ -525,7 +491,6 @@ async function runWriterWins(spec: PathSpec) {
   }
 }
 
-/** Writer completes first; removal then succeeds without touching it. */
 async function runWriterThenRemoval(spec: PathSpec) {
   const seed = await prepareSpec(spec)
   try {

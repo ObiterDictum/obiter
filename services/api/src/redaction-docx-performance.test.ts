@@ -6,8 +6,6 @@ const extractDocumentText = async (type: 'docx', bytes: Buffer) =>
   (await extractRedactionContent(type, bytes)).text
 import { buildRedactedDocx } from './redaction-docx-output'
 
-// Like the OOXML tracked-change scaling tests, this coarse bound catches a
-// whole-part parse per marker, rather than timing individual implementation calls.
 it('exports many accepted ranges without reparsing the part for every marker', async () => {
   async function measure(count: number) {
     const lines = Array.from(

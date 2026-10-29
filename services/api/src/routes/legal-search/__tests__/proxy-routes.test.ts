@@ -15,19 +15,11 @@ const searchClientMock = vi.hoisted(() => ({
 
 const legislationServeMock = vi.hoisted(() => ({
   resolveLegislationFetch: vi.fn(),
-  /** The real serve function, so a route-level test can exercise the true
-   * classification instead of a hand-written verdict object. */
   actual:
     null as unknown as (typeof import('../legislation-serve'))['resolveLegislationFetch'],
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const obiterSearchClientModule = { ...(await import('@obiter/search-client')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterSearchClientModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/search-client')).map((key) => [
     key,
@@ -44,13 +36,7 @@ mock.module('@obiter/search-client', () =>
   ),
 )
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const legislationServeModule = { ...(await import('../legislation-serve')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const legislationServeModuleKeys = Object.fromEntries(
   Object.keys(await import('../legislation-serve')).map((key) => [
     key,
@@ -71,9 +57,6 @@ mock.module('../legislation-serve', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   createLegalSearchProxyRoutes,
   parseFindCaseLawAtom,
@@ -106,11 +89,6 @@ function createAuthenticatedProxyApp(
   return app
 }
 
-/**
- * Bounds a route assertion so a regression that hangs the handler fails the
- * test instead of wedging the file. The guard is only a test harness: the
- * assertions below still read the response the route produced.
- */
 async function raceRouteWithin(
   request: Response | Promise<Response>,
   ms: number,
@@ -139,9 +117,6 @@ const hit = {
   sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
 }
 
-// Each test asserts on its own upstream calls. Without this, the module-scope
-// spies accumulate calls across tests and a `not.toHaveBeenCalled()` becomes an
-// ordering accident rather than a statement about the route.
 beforeEach(() => {
   searchClientMock.search.mockReset()
   searchClientMock.getDocument.mockReset()
@@ -156,9 +131,6 @@ beforeEach(() => {
 
 describe('createLegalSearchProxyRoutes', () => {
   it('keeps the judgment half when the legislation half rejects', async () => {
-    // The two corpora are federated so each fails independently. A rejection
-    // from the legislation half must not reject the Promise.all and lose the
-    // judgment results with it.
     legislationServeMock.resolveLegislationFetch.mockRejectedValueOnce(
       new Error('legislation half exploded'),
     )
@@ -187,8 +159,6 @@ describe('createLegalSearchProxyRoutes', () => {
       diagnostics: Record<string, unknown>
     }
     expect(body.hits.map((entry) => entry.id)).toContain(hit.id)
-    // P1.35: a rejected legislation half is named and never reads as
-    // searched. The judgment hits are kept; coverage is explicitly partial.
     expect(body.diagnostics.legislationSearchFailed).toBe(true)
     expect(body.diagnostics.legislationSearched).not.toBe(true)
     expect(body.diagnostics.judgmentSearchFailed).toBeUndefined()
@@ -241,9 +211,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('P1.35 a malformed stored Act row cannot answer no_match', async () => {
-    // A null title throws in createActDirectory, outside the store's own
-    // error handling. The route must not convert that crash into a
-    // confident "no match" for an Act the corpus holds.
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
@@ -292,10 +259,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('P1.35 a malformed stored Act row is observable, not swallowed', async () => {
-    // The catch around createActDirectory/classifyLegislationCitation must
-    // leave an operational trace: at base the throw reached settleSearchHalf
-    // and was logged there. Only the error message is logged, never the query
-    // or legal text, and the note never claims a store outage.
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
@@ -346,7 +309,6 @@ describe('createLegalSearchProxyRoutes', () => {
       .join('\n')
     consoleError.mockRestore()
 
-    // The client response stays honest: a half that failed is not a verdict.
     expect(response.status).toBe(503)
     const body = (await response.json()) as {
       error?: { code?: string }
@@ -354,14 +316,11 @@ describe('createLegalSearchProxyRoutes', () => {
     }
     expect(body.error?.code).toBe('search_incomplete')
     expect(body.diagnostics).toBeUndefined()
-    // The failure is observable server-side, and the query never leaks.
     expect(logged).toContain('classification')
     expect(logged).not.toContain('Human Rights Act 1998')
   })
 
   it('P1.35 a rejected legislation keyword index is never legislationSearched', async () => {
-    // searchKeywordProvisions catches an engine rejection to empty hits and
-    // reported searched:true. That is a failed leg, not a zero-hit search.
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
@@ -381,8 +340,6 @@ describe('createLegalSearchProxyRoutes', () => {
         throw new Error('legislation index down')
       }),
     })
-    // A variable, not a fresh literal: the real serve reads `.index()` off the
-    // client, while the default mock client deliberately carries only an id.
     const provisionSearchClient = {
       id: 'meili-client',
       index: searchClientMock.index,
@@ -422,8 +379,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('P1.35 keeps a legislation hit when the judgment index fails', async () => {
-    // The federated property is symmetric: a judgment-side engine outage
-    // must not discard a legislation answer that came from Postgres.
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
@@ -470,9 +425,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('P1.35 a recognised citation whose exact lookup fails is never not_held', async () => {
-    // The exact-lookup half already converts an engine failure into a
-    // visible index outage; this pins that it can never fall through to a
-    // recognised_not_held verdict for a held citation.
     searchClientMock.search.mockRejectedValue(new Error('index missing'))
     const app = createAuthenticatedProxyApp()
 
@@ -494,11 +446,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('P1.35 a failed judgment half never asserts a not_held citation verdict', async () => {
-    // Reviewer's case: a recognised citation whose judgment exact lookup
-    // cannot answer (the judgment engine rejects) while the legislation
-    // keyword index succeeds and serves a provision. The legislation hit is
-    // kept, but the response must not assert a judgment-corpus verdict or
-    // claim either judgment leg completed.
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
@@ -537,15 +484,11 @@ describe('createLegalSearchProxyRoutes', () => {
         processingTimeMs: 1,
       })),
     })
-    // A variable, not a fresh literal: the real serve reads `.index()` off the
-    // client, while the default mock client deliberately carries only an id.
     const provisionSearchClient = {
       id: 'meili-client',
       index: searchClientMock.index,
     }
     searchClientMock.createClient.mockReturnValue(provisionSearchClient)
-    // Judgment engine down: the exact leg reports unavailable and the stored
-    // and citing lookups never run.
     searchClientMock.search.mockRejectedValue(new Error('judgment index down'))
     const app = createAuthenticatedProxyApp(undefined, {
       legislation: {
@@ -573,15 +516,11 @@ describe('createLegalSearchProxyRoutes', () => {
       groups?: Array<{ hits: Array<{ id: string }> }>
       diagnostics: Record<string, unknown>
     }
-    // The legislation answer survives the judgment failure.
     expect(body.outcome).toBe('results')
     expect(body.groups?.[0]?.hits[0]?.id).toBe(provisionHit.id)
     expect(body.diagnostics.judgmentSearchFailed).toBe(true)
-    // Recognition is not erased by the incomplete verification...
     expect(body.diagnostics.citationRecognised).toBe(true)
     expect(body.citation?.recognised).toBe(true)
-    // ...but a corpus that never answered cannot be asserted not held, and a
-    // failed leg cannot claim its exact lookup or index search completed.
     expect(body.citation?.status).toBe('unverified')
     expect(body.diagnostics.citationStatus).toBe('unverified')
     expect(body.diagnostics.exactLookupSearched).toBe(false)
@@ -589,10 +528,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('P1.35 control: skipped legs report neither searched nor failed', async () => {
-    // A judgment-only caller opts out of the legislation half, and a
-    // non-citation query has no exact lookup to run. Neither a skipped leg
-    // nor the completed judgment leg may be reported as a failed half, and
-    // a skipped exact lookup must not read as searched.
     searchClientMock.search.mockResolvedValue({
       hits: [],
       query: 'Potanina',
@@ -631,11 +566,6 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(legislationServeMock.resolveLegislationFetch).not.toHaveBeenCalled()
   })
 
-  // --- P1.34: the legislation keyword engine has its own 2s bound ---
-
-  // A never-settling legislation keyword search. Before P1.34 the route's
-  // Promise.all waited on this forever, so the whole request hung even though
-  // the judgment half had answered; the bound must turn it into a failed half.
   const directoryActs = [
     {
       identity: 'ukpga/2010/15',
@@ -660,8 +590,6 @@ describe('createLegalSearchProxyRoutes', () => {
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
-    // Controlled deferred, not a sleep: the test resolves it only after the
-    // route has already answered, to prove the late value is discarded.
     let resolveLate: (value: unknown) => void = () => undefined
     const lateSearch = new Promise((resolve) => {
       resolveLate = resolve
@@ -696,7 +624,6 @@ describe('createLegalSearchProxyRoutes', () => {
       5000,
     )
 
-    // Fail-first: at base this is null because the route never resolved.
     expect(response).not.toBeNull()
     if (!response) throw new Error('P1.34: the route did not finish')
     expect(response.status).toBe(200)
@@ -705,15 +632,12 @@ describe('createLegalSearchProxyRoutes', () => {
       groups?: Array<{ hits: Array<{ id: string }> }>
       diagnostics: Record<string, unknown>
     }
-    // The judgment hit survives and the hung half is named as failed.
     expect(body.hits.map((entry) => entry.id)).toContain(hit.id)
     expect(body.diagnostics.legislationSearchFailed).toBe(true)
     expect(body.diagnostics.legislationSearched).not.toBe(true)
     expect(body.diagnostics.judgmentSearchFailed).toBeUndefined()
     expect(body.groups).toBeUndefined()
 
-    // A resolution after the deadline produces no second response and no
-    // stale legislation group, and the next request is unaffected.
     resolveLate({
       hits: [],
       query: keywordQuery,
@@ -970,8 +894,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('returns recognised_not_held for an absent citation instead of keyword neighbours', async () => {
-    // Before the honesty gate this served body_text_match neighbours as
-    // `results`; the citation is absent, so the honest answer is empty.
     const neighbours = [
       {
         ...hit,
@@ -1027,14 +949,10 @@ describe('createLegalSearchProxyRoutes', () => {
       expect.objectContaining({ sourceType: 'judgment' }),
       expect.objectContaining({ exactPhrase: '[2023] EWCA Civ 123' }),
     )
-    // Anonymous stays stored-only: no live call, honest empty instead.
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('names an unheld Act in diagnostics instead of a judgment citation', async () => {
-    // The legislation half recognised the Act and held nothing: the response
-    // must carry a not-held verdict, not just a free-text note that an outage
-    // could also set.
     legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
       groups: [],
       citationRecognised: true,
@@ -1081,10 +999,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('keywords an unheld Act named in prose, in both casings, with no verdict', async () => {
-    // L35 through the route, against the real serve classification rather than
-    // a hand-written verdict object. The sentence-initial form must reach the
-    // same keyword path as its lowercase twin: the legislation group is
-    // served and no title-unresolved or not-held diagnostic is emitted.
     legislationServeMock.resolveLegislationFetch.mockImplementation(
       legislationServeMock.actual,
     )
@@ -1139,8 +1053,6 @@ describe('createLegalSearchProxyRoutes', () => {
         processingTimeMs: 1,
       })),
     })
-    // A variable, not a fresh literal: the real serve reads `.index()` off the
-    // client, while the default mock client deliberately carries only an id.
     const provisionSearchClient = {
       id: 'meili-client',
       index: searchClientMock.index,
@@ -1179,9 +1091,6 @@ describe('createLegalSearchProxyRoutes', () => {
         outcome: string
         diagnostics: Record<string, unknown>
       }
-      // The verdict-free prose path leaves the transport outcome to the
-      // judgment half, but the legislation keyword group is served and no
-      // title-unresolved or not-held diagnostic is emitted.
       expect(body.diagnostics.legislationGroupServed).toBe(true)
       expect(body.diagnostics.legislationSearchParameters).toBeTruthy()
       expect(body.diagnostics.legislationTitleUnresolved).toBeUndefined()
@@ -1235,8 +1144,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('serves stored citing cases to anonymous callers, labelled not_held', async () => {
-    // [2003] UKHL 1 is recognised but not held; the stored citing cases
-    // must serve clearly distinguished instead of being discarded.
     const citing = {
       ...hit,
       id: 'ewca-civ-2005-420',
@@ -1289,14 +1196,10 @@ describe('createLegalSearchProxyRoutes', () => {
         },
       ],
     })
-    // Anonymous stays stored-only: no live call even when serving citing.
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('hydrates index summaries from the source store to prove citing cases', async () => {
-    // Production index hits arrive as summaries: paragraphs stripped, short
-    // excerpts only. The phrase check cannot read those, so the candidate
-    // is hydrated from the source store before labelling.
     const summaryHit = {
       ...hit,
       id: 'ewca-civ-2005-420',
@@ -1354,8 +1257,6 @@ describe('createLegalSearchProxyRoutes', () => {
         },
       ],
     })
-    // The ranked lookup keeps the tuned floor; the citing lookup repeats
-    // the same phrase without it so floor-starved citing cases verify.
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
       'legal_authorities',
@@ -1384,9 +1285,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('excludes keyword neighbours that never quote the citation', async () => {
-    // Scattered terms are not citing: a neighbour whose excerpts mention
-    // the court, the year, and some other number must not serve, and a
-    // judgment citing only [2003] UKHL 17 must not match [2003] UKHL 1.
     const neighbourSummary = {
       ...hit,
       id: 'ewhc-2026-1362',
@@ -1599,10 +1497,6 @@ describe('createLegalSearchProxyRoutes', () => {
       headers: { 'content-type': 'application/json' },
     })
 
-    // Stage 1 implements legislation source types: the request is searched,
-    // not rejected, and judgment-only callers keep the unsupported outcome
-    // for anything else. No legislation store is wired in this test, so no
-    // legislation group is served.
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
       hits: [],
@@ -1697,8 +1591,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('fails visibly with search_unavailable when the stored index errors', async () => {
-    // Meilisearch is the sole query engine: an unreachable engine is a 503
-    // naming the outage, never an empty result set standing in for failure.
     searchClientMock.search.mockRejectedValueOnce(new Error('index missing'))
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const app = createAuthenticatedProxyApp()
@@ -1718,8 +1610,6 @@ describe('createLegalSearchProxyRoutes', () => {
         requestId: 'req_test',
       },
     })
-    // No hydration is queued behind an outage: there is nothing to rank
-    // the hydrated documents against until the engine answers.
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -1745,10 +1635,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('keeps a stored-index miss distinct from an outage', async () => {
-    // A miss with a healthy engine answers 200 with no hits; an outage
-    // answers 503 naming the engine. Status code, not a diagnostics flag,
-    // keeps the two distinguishable. A miss never falls back to Find Case
-    // Law, so no upstream call is made either.
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -1785,8 +1671,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('fails visibly with search_unavailable when stored search is slow', async () => {
-    // A hung engine holds the route only up to the stored-search budget,
-    // then answers 503 rather than degrading to a second engine.
     searchClientMock.search.mockImplementationOnce(
       () => new Promise(() => undefined),
     )
@@ -1936,8 +1820,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('returns a withdrawn document with a banner and no full text', async () => {
-    // The derived index still holds a stale copy; Postgres is the record, so
-    // the banner wins over the stale indexed full text.
     searchClientMock.getDocument.mockResolvedValueOnce({
       ...hit,
       paragraphs: [
@@ -1997,8 +1879,6 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const base = createInMemoryLegalAuthoritySourceStore()
-    // Withdrawn rows never surface in search: the exact-id record read
-    // below drops the flagged row, and the empty index contributes nothing.
     const store = {
       ...base,
       get: async () => ({
@@ -2058,8 +1938,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('filters stale withdrawn hits from the derived index before responding', async () => {
-    // The derived index still holds the copy; Postgres is the record, so the
-    // stale hit is dropped and the browse reads empty instead of serving it.
     searchClientMock.search.mockResolvedValue({
       hits: [hit],
       query: '',
@@ -2150,8 +2028,6 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('fails closed on the document route when the store times out', async () => {
-    // The derived index may hold a stale full text; an unknown store state
-    // must 503, never fall through to it.
     searchClientMock.getDocument.mockResolvedValueOnce({
       ...hit,
       paragraphs: [
@@ -2425,9 +2301,6 @@ describe('Find Case Law parsing', () => {
 })
 
 describe('corpus-only provider boundary', () => {
-  // A counting fake provider: any route that dispatches an upstream request
-  // records the URL here. The fake rejects as well as counts, so a path that
-  // reaches Find Case Law fails loudly instead of quietly succeeding.
   const upstreamCalls: string[] = []
   const providerMetadata = {
     documentUri: '/uksc/2024/3',
@@ -2579,9 +2452,6 @@ describe('corpus-only provider boundary', () => {
   })
 
   it('serves a stored summary-only record without contacting the provider', async () => {
-    // A PDF-only judgment has a stored summary and no full text. It is held
-    // locally, so the route serves the metadata instead of a not-found or a
-    // provider fetch.
     searchClientMock.getDocument.mockResolvedValueOnce(null)
     const store = createInMemoryLegalAuthoritySourceStore()
     await store.upsertSummary(hit, providerMetadata)

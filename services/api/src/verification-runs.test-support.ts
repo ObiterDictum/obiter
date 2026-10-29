@@ -7,11 +7,6 @@ import type { OrganisationIsolationSeed } from './routes/organisation-isolation.
 
 export type Subject = { documentId: string; versionId: string }
 
-/**
- * Fixtures for the V5 persistence tests. The seed gives one document and one
- * version per tenant, so the run-lifecycle tests add extra ready versions to
- * the same document rather than sharing the seeded version's single live run.
- */
 export async function insertReadyVersion(
   pool: Pool,
   seed: OrganisationIsolationSeed,

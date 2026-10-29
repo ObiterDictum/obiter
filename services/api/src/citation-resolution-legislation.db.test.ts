@@ -6,13 +6,6 @@ import type { VerificationSubject } from '@obiter/verification-core'
 import { resolveCitationCandidates } from './citation-resolution'
 import { createResolutionPipeline } from './citation-resolution.test-support'
 
-/**
- * Legislation citation resolution against the real Postgres record, run through
- * the authority-existence check. The point of most of these is the boundary:
- * resolution establishes the identity, and only V2 answers whether Obiter holds
- * it. Requires TEST_DATABASE_URL.
- */
-
 const subject: VerificationSubject = { documentId: 'd-v3-db', versionId: 'v-1' }
 
 interface ProvisionFixture {
@@ -94,10 +87,6 @@ const actFixtures: ActFixture[] = [
     provisions: [],
   },
   {
-    // The curated `HRA 1998` alias resolves by stored title, so this fixture
-    // keeps that title and takes a synthetic chapter. Using the real chapter
-    // identity put a delete on a real Act in this suite's cleanup, which only
-    // stayed harmless while the test database happened to be empty.
     identity: 'ukpga/2066/10',
     year: 2066,
     number: 10,
@@ -310,8 +299,6 @@ describe('legislation resolution against the stored record', () => {
       's 99 Test Authority Act 2066',
     )
 
-    // Resolution established the identity; whether the provision is held is the
-    // existence check's answer, and it is not a resolution failure.
     expect(resolution).toMatchObject({
       outcome: 'resolved',
       citation: { labelPath: 'section/99' },
@@ -342,9 +329,6 @@ describe('legislation resolution against the stored record', () => {
       'Schedule 1 paragraph 4 Single Schedule Test Act 2066',
     )
 
-    // Resolution keeps the path the citation names; the single-schedule alias
-    // has one owner and it is the store resolver V2 calls, so resolution does
-    // not duplicate it.
     expect(resolution).toMatchObject({
       outcome: 'resolved',
       citation: {

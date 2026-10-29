@@ -21,26 +21,6 @@ import {
   waitForLockWait,
 } from './matter-lock-race.test-support'
 
-/**
- * P0.13 blocker ordering: the writer's in-transaction matter-lock statement
- * must be issued while a revocation holds the matter row lock, so the
- * revocation wins and the writer resumes after it commits.
- *
- * `document-write-share-revocation.db.test.ts` gates the writer *before* its
- * write transaction, so the lock statement always runs on a post-commit
- * snapshot. That ordering cannot reach the defect: when `lockMatterForEdit`
- * evaluates the `EXISTS matter_shares` predicate inside the same statement as
- * `FOR UPDATE`, the predicate is resolved on the statement snapshot taken
- * before the lock wait and is not re-evaluated when the wait ends. These tests
- * hold the revoker instead (after its `lockOwnedMatter`) and prove the writer
- * is blocked on the matter lock before the revoker commits.
- *
- * On the unfixed head every denial case returns 201/200 and commits. With the
- * lock and the fresh re-check split into separate statements, the re-check sees
- * the revoked or downgraded share and the write is denied with the concealed
- * 404.
- */
-
 type WriteSpec = (typeof specs)[number]
 
 const pool = createTestPool()
@@ -73,11 +53,6 @@ async function openRevocation(
   return { revoker, request }
 }
 
-/**
- * Revocation holds the matter lock, the writer's own lock statement blocks on
- * it, and the revocation commits first. The write must be denied and leave
- * nothing behind.
- */
 async function runWriterBlocked(
   spec: WriteSpec,
   revocation: 'revoke' | 'downgrade',
@@ -95,8 +70,6 @@ async function runWriterBlocked(
     )
     await writerGate.entered
 
-    // The ordering is enforced by the row lock, not by timing: the writer's
-    // lock statement is waiting on the lock the revoker holds.
     const blockers = await waitForLockWait(
       pool,
       requirePid(writerGate.backendPid, 'writer'),
@@ -121,10 +94,6 @@ async function runWriterBlocked(
   }
 }
 
-/**
- * The writer takes the matter lock first, the revocation blocks on it, and the
- * writer's authorised commit completes before the revocation proceeds.
- */
 async function runWriterWins(spec: WriteSpec) {
   const seed = await seedMatter(pool, 'edit')
   try {

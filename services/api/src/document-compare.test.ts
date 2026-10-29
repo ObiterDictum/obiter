@@ -12,14 +12,6 @@ import type {
 } from '@obiter/contracts'
 import { compareDocumentModels } from './document-compare'
 
-/**
- * `compareDocumentModels` pairs paragraphs by durable `w14:paraId` identity
- * (or identical text when a paragraph carries none) and order-preserves the
- * pairs. The tests here pin the alignment contract: an insertion in the
- * middle must not cascade into "every following paragraph changed", and a
- * move must report as remove+add rather than fabricate modified pairs.
- */
-
 function paragraph(
   id: string,
   text: string,
@@ -111,8 +103,6 @@ describe('compareDocumentModels', () => {
       paragraph('p9', 'Inserted middle.', { sourceParaId: 'aa09' }),
       paragraph('p2', 'Last.', { sourceParaId: 'aa02' }),
     ])
-    // A positional zip would report p2 modified and a new tail — the real
-    // alignment reports exactly one added paragraph.
     expect(compareDocumentModels(base, target).entries).toEqual([
       {
         type: 'added',
@@ -148,9 +138,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('reads a replacement recorded as a tracked delete and insert in place', () => {
-    // A stored version's runs hold neither the deleted text nor the inserted
-    // text: the revision lives in `changes`. Comparing the runs alone would
-    // report the figure that went and lose the figure that replaced it.
     const base = model([
       paragraph('p1', 'Pay not less than 60,000 units.', {
         sourceParaId: 'aa01',
@@ -213,8 +200,6 @@ describe('compareDocumentModels', () => {
         { kind: 'same', text: ' units.' },
       ],
     })
-    // The revision records differ too, which the package entry states on its
-    // own; the paragraph redline above is what a reader reads.
     expect(entries[1]).toEqual({ type: 'package', area: 'revisions' })
   })
 
@@ -224,7 +209,6 @@ describe('compareDocumentModels', () => {
       paragraph('p2', 'Beta.', { sourceParaId: 'aa02' }),
       paragraph('p3', 'Gamma.', { sourceParaId: 'aa03' }),
     ])
-    // Gamma moves from last to first.
     const target = model([
       paragraph('p3', 'Gamma.', { sourceParaId: 'aa03' }),
       paragraph('p1', 'Alpha.', { sourceParaId: 'aa01' }),
@@ -242,12 +226,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('reports a reorder without durable ids as remove plus add', () => {
-    // Neither side carries `w14:paraId`; this is the pre-canonicalisation
-    // corpus the fallback tiers exist for. Identical text pairs inverted
-    // across the texts (Alpha at (0,1), Beta at (1,0)); the loser of the
-    // crossing must demote to unmatched and report remove+add. Emitting
-    // the base-sorted union instead reported two bare additions, and the
-    // moved text's removal was suppressed entirely.
     const base = model([paragraph('p1', 'Alpha.'), paragraph('p2', 'Beta.')])
     const target = model([paragraph('q2', 'Beta.'), paragraph('q1', 'Alpha.')])
     expect(compareDocumentModels(base, target).entries).toEqual([
@@ -298,10 +276,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('keeps an in-gap reorder between anchors honest', () => {
-    // Anchored ends, an unanchored middle pair swapped: the identical-text
-    // pass pairs the middle inverted inside one gap. The alignment must
-    // still report the moved paragraph's removal; before monotonic
-    // enforcement this emitted a single bare 'added' and nothing else.
     const base = model([
       paragraph('h', 'Head.', { sourceParaId: 'hh' }),
       paragraph('p1', 'Middle one.'),
@@ -333,12 +307,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('does not claim a reordered edited paragraph as both added and modified', () => {
-    // Overlap pairs are chosen by score, not position, so an edited swap
-    // pairs inverted the same way identical text does. One side of the
-    // crossing wins and reports modified; the loser is an honest
-    // remove+add. Previously every target index below a pair's targetIndex
-    // emitted 'added' even when it was itself paired, so a paragraph
-    // counted twice, once added and once modified.
     const base = model([
       paragraph('p1', 'The claimant seeks damages for breach.'),
       paragraph('p2', 'The defendant denies all liability entirely.'),
@@ -368,9 +336,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('demotes an inverted duplicate-text pair instead of hiding the move', () => {
-    // Occurrence pairing is monotonic within one repeated text but inverts
-    // across texts: 'Same.' pairs (0,0) and (2,1), 'Mid.' pairs (1,2). The
-    // dropped side reports as remove+add, not a lone bare addition.
     const base = model([
       paragraph('p1', 'Same.'),
       paragraph('p2', 'Mid.'),
@@ -441,8 +406,6 @@ describe('compareDocumentModels', () => {
       paragraph('p1', 'Heading'),
       paragraph('p2', 'Body text.'),
     ])
-    // The heading keeps its text; a brand-new paragraph carries no durable
-    // id and no matching text, so it is an add — not a "modified heading".
     const target = model([
       paragraph('p9', 'Different text entirely.'),
       paragraph('p1', 'Heading'),
@@ -460,11 +423,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('still aligns an edit across the w14 canonicalisation boundary', () => {
-    // The uploaded v1 predates `canonicaliseParagraphIdentities`, so its
-    // paragraphs carry no durable ids while v2's all do. Id keys can never
-    // match here; identical text pairs the unchanged paragraphs and word
-    // overlap pairs the edited one — otherwise the whole document would
-    // report as remove+add.
     const base = model([
       paragraph('p1', 'IN THE HIGH COURT OF JUSTICE'),
       paragraph('p2', "KING'S BENCH DIVISION"),
@@ -492,8 +450,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('does not similarity-pair unrelated text below the overlap bar', () => {
-    // Only 'The claim' survives — below the common-word and overlap minimums,
-    // so this is an honest delete+insert, not a fabricated 'modified'.
     const base = model([paragraph('p1', 'The claim fails.')])
     const target = model([
       paragraph('q1', 'The claim succeeds beyond doubt entirely.'),
@@ -521,10 +477,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('reports a one-sided story part its paragraphs cannot', () => {
-    // A part existing on only one side reports its paragraphs as added or
-    // removed, but a paragraph-less part (a header that is only a table,
-    // or an empty part) produced no entry at all; the byte-difference
-    // note was the only sign. The part itself reports in both directions.
     const body = [paragraph('p1', 'Body.', { sourceParaId: 'a' })]
     const header = story([], {
       partName: 'word/header1.xml',
@@ -550,8 +502,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('does not double-report a one-sided story part that has paragraphs', () => {
-    // The paragraph entries already say the part appeared; a bare
-    // paragraph-carrying part needs no extra story entry.
     const body = [paragraph('p1', 'Body.', { sourceParaId: 'a' })]
     const target = model(body)
     target.stories.push(
@@ -587,9 +537,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('flags truncation when the overflowing difference is a modified pair', () => {
-    // Past the cap the word diff is skipped work, but the pair still counts:
-    // a text difference after a full entry list must set entriesTruncated
-    // even though no entry was ever built for it.
     const filler = Array.from(
       { length: DOCUMENT_COMPARISON_ENTRY_MAX_COUNT },
       (_, index) => paragraph(`n${index}`, `New ${index}.`),
@@ -612,9 +559,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('does not flag truncation for identical pairs beyond the cap', () => {
-    // The early exit must still tell a real difference from an unchanged
-    // pair: an exact-cap result with an identical tail is complete, not
-    // truncated.
     const filler = Array.from(
       { length: DOCUMENT_COMPARISON_ENTRY_MAX_COUNT },
       (_, index) => paragraph(`n${index}`, `New ${index}.`),
@@ -632,9 +576,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('pairs duplicate identical paragraphs by occurrence, not uniqueness', () => {
-    // Real documents are full of empty spacer paragraphs. Requiring a text to
-    // be gap-unique left every one of them unmatched, so even a version
-    // compared to itself reported page after page of remove+add noise.
     const paragraphs = [
       paragraph('p1', 'Heading', { sourceParaId: 'a1' }),
       paragraph('p2', ''),
@@ -644,7 +585,6 @@ describe('compareDocumentModels', () => {
     ]
     const result = compareDocumentModels(model(paragraphs), model(paragraphs))
     expect(result.entries).toEqual([])
-    // And a genuine extra spacer still reports as exactly one added entry.
     const withExtra = model([...paragraphs, paragraph('p6', '')])
     const diff = compareDocumentModels(model(paragraphs), withExtra)
     expect(diff.entries).toEqual([
@@ -689,12 +629,6 @@ describe('compareDocumentModels', () => {
     expect(second).toEqual(first)
   })
 
-  /**
-   * Independent oracle for a `modified` entry: rejoining every segment that
-   * is not an insertion must rebuild the base text verbatim, and every
-   * segment that is not a removal must rebuild the target — whether the diff
-   * was word-level or the bounded coarse fallback.
-   */
   function expectReconstructed(
     entry: DocumentComparisonEntry,
     baseText: string,
@@ -716,10 +650,6 @@ describe('compareDocumentModels', () => {
   }
 
   it('collapses a dense rewrite inside the segment bound', () => {
-    // Two differing words between each shared word stay under the word-diff
-    // token limit (479 tokens), so the LCS path runs — and fragments into 480
-    // segments, past the contract bound. The producer must fall back to the
-    // coarse form rather than emit a response the schema rejects.
     const baseWords: string[] = []
     const targetWords: string[] = []
     for (let index = 0; index < 80; index += 1) {
@@ -738,8 +668,6 @@ describe('compareDocumentModels', () => {
       DOCUMENT_COMPARISON_SEGMENT_MAX_COUNT,
     )
     expect(documentComparisonEntrySchema.safeParse(entry).success).toBe(true)
-    // The fallback is lossless: every real change still reports, and the
-    // segments carry the full before and after text.
     expectReconstructed(entry, baseText, targetText)
     expect(entry.segments.some((segment) => segment.kind === 'removed')).toBe(
       true,
@@ -750,10 +678,6 @@ describe('compareDocumentModels', () => {
   })
 
   it('stays inside the contract bounds under a seeded rewrite fuzz', () => {
-    // Deterministic LCG: the same corpus every run, so a failure reproduces
-    // exactly. Paragraphs are ~200-280 words from a shared 40-word
-    // vocabulary — coincidental matches fragment the token-level diff far
-    // past the segment bound, which is how the original defect escaped.
     let state = 0x9e3779b9
     const next = () => {
       state = (Math.imul(state, 1664525) + 1013904223) >>> 0
@@ -786,7 +710,6 @@ describe('compareDocumentModels', () => {
         }
       }
     }
-    // The corpus is pointless if no paragraph ever pairs as modified.
     expect(modifiedCount).toBeGreaterThan(0)
   })
 })

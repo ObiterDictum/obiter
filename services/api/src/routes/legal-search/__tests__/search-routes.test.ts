@@ -7,13 +7,7 @@ const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory that
-// awaited its own specifier re-entered the in-flight mock registration and
-// deadlocked under bun's module registry.
 const obiterSearchClientModule = { ...(await import('@obiter/search-client')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterSearchClientKeys = Object.fromEntries(
   Object.keys(await import('@obiter/search-client')).map((key) => [
     key,
@@ -30,9 +24,6 @@ mock.module('@obiter/search-client', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { createLegalSearchRoutes } = await import('../search-routes')
 
 const env = createTestApiEnv()

@@ -4,35 +4,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'bun:test'
 
-/**
- * Guards the CPU-only ONNX Runtime install that this API's detection depends on.
- *
- * `onnxruntime-node`'s postinstall fetches the optional CUDA and TensorRT
- * execution providers (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux
- * x64 unless it is told to skip them. Detection loads with `device: 'cpu'`, so
- * no surface here consumes them.
- *
- * Under Bun there is no install setting to carry: Bun runs a dependency's
- * lifecycle scripts only for trusted dependencies, `onnxruntime-node` is not
- * in Bun's default-trusted set, and the workspace does not trust it. The
- * postinstall therefore never runs — for a developer install or an image
- * build alike — and there is nothing like the old repo-root `.npmrc` to copy
- * into a stage. Each assertion below pins one link of that chain; losing any
- * one is silent: the package becomes trusted, an image opts it in, or the
- * lockfile stops being the install's source of truth. Detection would then
- * degrade to heuristics with no obvious cause, or every cold install would
- * silently grow a ~343 MB payload nothing uses.
- *
- * The CPU libraries ship inside the package tarball and are placed whether or
- * not the postinstall runs, so nothing here asserts on payload files: a GPU
- * host that deliberately trusts the package stays a supported configuration.
- */
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 const readRepoFile = (relativePath: string) =>
   readFileSync(join(repoRoot, relativePath), 'utf8')
 
-/** Dockerfiles in the workspace, so a future API image is covered too. */
 function workspaceDockerfiles(): string[] {
   return ['apps', 'packages', 'services', 'infra'].flatMap((group) =>
     readdirSync(join(repoRoot, group), { withFileTypes: true })
@@ -47,11 +23,6 @@ interface Instruction {
   value: string
 }
 
-/**
- * Dockerfile instructions with `\` line continuations joined and comment-only
- * lines dropped, so a multi-line RUN is analysed as one command and a mention
- * of `bun install` in a comment is not mistaken for an instruction.
- */
 function dockerfileInstructions(source: string): Instruction[] {
   const instructions: Instruction[] = []
   let pending = ''
@@ -72,15 +43,8 @@ function dockerfileInstructions(source: string): Instruction[] {
 
 const unquote = (token: string) => token.replace(/^["']+|["',]+$/g, '')
 
-/**
- * Command wrappers and env assignments that may precede the real command, so
- * `CI=1 bun install` counts as `bun install` in command position while a
- * quoted mention such as `echo "bun install"` does not — splitting that line
- * into tokens must not turn an argument into a command.
- */
 const commandWrappers = new Set(['env', 'command', 'time', 'sudo', 'exec'])
 
-/** Tokens of one shell segment, quotes stripped, empty tokens dropped. */
 function shellTokens(segment: string): string[] {
   return segment
     .split(/\s+/)
@@ -88,10 +52,6 @@ function shellTokens(segment: string): string[] {
     .filter((token) => token.length > 0)
 }
 
-/**
- * Index of the real command after any wrappers and env assignments, or -1 for
- * an empty segment.
- */
 function commandIndex(tokens: string[]): number {
   let i = 0
   while (
@@ -104,7 +64,6 @@ function commandIndex(tokens: string[]): number {
   return i < tokens.length ? i : -1
 }
 
-/** Unwrap a JSON exec form to its shell string, or return the text as-is. */
 function commandBody(run: string): string {
   const command = run.trim()
   if (!command.startsWith('[')) return command
@@ -115,10 +74,6 @@ function commandBody(run: string): string {
   }
 }
 
-/**
- * True when a RUN body invokes `bun install` (or its alias `i`) in command
- * position. `bun --bun run …`, a quoted mention, and a comment do not count.
- */
 function runsBunInstall(run: string): boolean {
   for (const segment of commandBody(run).split(/&&|\|\||[;&|()\n]/)) {
     const tokens = shellTokens(segment)
@@ -132,12 +87,6 @@ function runsBunInstall(run: string): boolean {
   return false
 }
 
-/**
- * True when a RUN body opts onnxruntime-node into its lifecycle script: the
- * trust command in command position, or the GPU environment switch its
- * postinstall reads. Both are the GPU-host opt-in and neither may reach an
- * image.
- */
 function optsIntoGpuProviders(run: string): boolean {
   const command = commandBody(run)
   if (/ONNXRUNTIME_NODE_INSTALL_CUDA/.test(command)) return true
@@ -157,13 +106,6 @@ function optsIntoGpuProviders(run: string): boolean {
 const copiesBunLock = (copyValue: string) =>
   copyValue.split(/\s+/).some((token) => token.split('/').pop() === 'bun.lock')
 
-/**
- * Stages that run `bun install` before the root `bun.lock` is copied into
- * them. A `COPY` in a later stage does not satisfy an earlier one, and a stage
- * built `FROM` another stage inherits what that stage had copied: without the
- * lockfile a `--frozen-lockfile` install cannot run at all, so this keeps the
- * image's dependency graph pinned to the reviewed lockfile.
- */
 function stagesMissingBunLock(dockerfile: string): string[] {
   const finalStageState = new Map<string, boolean>()
   const violations: string[] = []
@@ -188,7 +130,6 @@ function stagesMissingBunLock(dockerfile: string): string[] {
   return violations
 }
 
-/** Stages whose RUN bodies opt onnxruntime-node into the GPU provider fetch. */
 function stagesOptingIntoGpu(dockerfile: string): string[] {
   const violations: string[] = []
   let stageName = ''
@@ -220,9 +161,6 @@ describe('CPU-only ONNX Runtime install', () => {
   })
 
   it('relies on Bun default-deny: the package is not default-trusted', () => {
-    // The structural heart of the policy: if a future Bun release starts
-    // trusting onnxruntime-node by default, this fails before any install
-    // silently grows the ~343 MB provider payload.
     const output = execFileSync('bun', ['pm', 'default-trusted'], {
       cwd: repoRoot,
       encoding: 'utf8',

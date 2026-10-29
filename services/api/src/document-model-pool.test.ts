@@ -47,11 +47,6 @@ class FakeWorker {
   }
 }
 
-// SAFETY: the pool depends only on the worker surface modelled above; the
-// double stands in for the thread boundary so dispatch, crash, queueing and
-// shutdown scheduling can be asserted deterministically. The real thread
-// boundary is covered by the document-model-store tests, which load actual
-// models through actual workers.
 function asWorker(fake: FakeWorker): Worker {
   return fake as unknown as Worker
 }
@@ -78,9 +73,6 @@ function makePool(
 
 const task = { kind: 'parse', json: '{}' } as const
 
-// Real spinning threads created by the deadline tests are tracked so a
-// pre-fix run (no deadline yet) cannot leave one burning a core after the
-// test times out.
 const spawnedReal: Worker[] = []
 
 afterEach(async () => {
@@ -115,7 +107,6 @@ describe('DocumentModelWorkerPool', () => {
 
     fakes[0]!.reply({ status: 'failed' })
     await expect(first).resolves.toEqual({ status: 'failed' })
-    // The queued third task takes the freed slot; no third worker appears.
     expect(fakes).toHaveLength(2)
     expect(fakes[0]!.sent).toHaveLength(2)
 
@@ -133,8 +124,6 @@ describe('DocumentModelWorkerPool', () => {
     await expect(pending).rejects.toThrow('worker exploded')
     expect(fakes[0]!.terminated).toBe(1)
 
-    // A crashed worker also reports an exit; the slot is already gone, so the
-    // second event must not reject anything or terminate twice.
     fakes[0]!.emit('exit', 1)
 
     const next = pool.run(task)
@@ -192,7 +181,6 @@ describe('DocumentModelWorkerPool', () => {
       return asWorker(fake)
     }, 2)
     const first = pool.run({ kind: 'parse', json: '{"w":1}' })
-    // The first worker is busy, so this run needs a spawn: it throws.
     const second = pool.run({ kind: 'parse', json: '{"w":2}' })
 
     await expect(second).rejects.toThrow('could not be spawned')
@@ -217,8 +205,6 @@ describe('DocumentModelWorkerPool', () => {
     const dead = pool.run({ kind: 'parse', json: '{"w":2}' })
     await expect(dead).rejects.toThrow('could not be spawned')
 
-    // Spawn recovers. The next live task must be the first thing dispatched
-    // to the new worker, not the already-rejected waiter left behind.
     const live = pool.run({ kind: 'parse', json: '{"w":3}' })
     expect(calls).toBe(3)
     expect(fakes).toHaveLength(2)
@@ -247,14 +233,11 @@ describe('DocumentModelWorkerPool', () => {
     const queued = pool.run({ kind: 'parse', json: '{"w":2}' })
     void queued.catch(() => undefined)
 
-    // drop() calls pump() from inside this listener. In the API process an
-    // escaped throw here is an uncaughtException and the process exits.
     expect(() =>
       fakes[0]!.emit('error', new Error('worker exploded')),
     ).not.toThrow()
     await expect(queued).rejects.toThrow('could not be spawned')
     await expect(first).rejects.toThrow('worker exploded')
-    // Failure containment must not retry spawns inside the same event.
     expect(calls).toBe(2)
   })
 
@@ -279,13 +262,10 @@ describe('DocumentModelWorkerPool', () => {
     void third.catch(() => undefined)
     void fifth.catch(() => undefined)
 
-    // A drop while waiters queue hits the first failing spawn: contained.
     expect(() => fakes[0]!.emit('error', new Error('w1 crashed'))).not.toThrow()
     await expect(first).rejects.toThrow('w1 crashed')
     await expect(third).rejects.toThrow('could not be spawned')
 
-    // The reply path then dispatches from the queue and needs another spawn:
-    // this throw must stay inside the message listener too.
     expect(() => fakes[1]!.reply({ status: 'invalid' })).not.toThrow()
     await expect(second).resolves.toEqual({ status: 'invalid' })
     await expect(fifth).rejects.toThrow('could not be spawned')
@@ -302,8 +282,6 @@ describe('DocumentModelWorkerPool', () => {
     await expect(hung).rejects.toThrow('did not respond within 50 ms')
     expect(fakes[0]!.terminated).toBe(1)
 
-    // Every later signal for the dead task is a no-op: no second settle,
-    // no second terminate, no throw.
     fakes[0]!.emit('exit', 1)
     fakes[0]!.emit('error', new Error('late death'))
     fakes[0]!.reply({ status: 'invalid' })
@@ -326,8 +304,6 @@ describe('DocumentModelWorkerPool', () => {
       () => {
         calls += 1
         if (calls === 1) {
-          // A parser that spins instead of throwing: no message will ever
-          // come back without intervention.
           const worker = new Worker('for (;;);', { eval: true })
           worker.on('exit', () => markExited?.())
           spawnedReal.push(worker)

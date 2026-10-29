@@ -8,9 +8,6 @@ describe('classifyLegislationCitation', () => {
   it.each(['constructor', '__proto__', 'toString', 'valueOf'])(
     'does not treat the inherited Object property %s as an alias',
     (query) => {
-      // `actAliases` used to be an object literal, so `actAliases['constructor']`
-      // resolved to `Object` and was truthy, throwing in normalizeActTitle for
-      // the bare query `constructor`. An inherited name must be unrecognised.
       expect(classifyLegislationCitation(query, directory).kind).toBe(
         'unrecognised',
       )
@@ -86,10 +83,6 @@ describe('classifyLegislationCitation', () => {
   })
 
   it('reports an unresolved Act-shaped title without claiming it is not held', () => {
-    // A failed title lookup proves only that no exact title key matched: the
-    // directory is partial and the fold is imperfect, so it cannot prove the
-    // Act is absent. The honest state suppresses unrelated keyword provisions
-    // but makes no claim about the Act itself.
     expect(
       classifyLegislationCitation('s 6 Imaginary Act 1998', directory),
     ).toEqual({
@@ -105,9 +98,6 @@ describe('classifyLegislationCitation', () => {
   })
 
   it('never derives not_held from a failed title lookup alone', () => {
-    // Finding 1 root defect: byNormalizedTitle returning no rows was treated
-    // as proof the Act does not exist. Build a directory whose title map is
-    // empty for a title-shaped query and prove the outcome is not `not_held`.
     const emptyTitleDirectory = createActDirectory([
       {
         actType: 'ukpga',
@@ -126,8 +116,6 @@ describe('classifyLegislationCitation', () => {
   })
 
   it('treats a prose clause ending in an Act citation as a subject query', () => {
-    // Finding 3: a sentence that merely ends in a citation is not a
-    // whole-title request. It must stay eligible for keyword search.
     expect(
       classifyLegislationCitation(
         'defences under the Children Act 1989',
@@ -143,8 +131,6 @@ describe('classifyLegislationCitation', () => {
   })
 
   it('does not treat an underspecified Act fragment as a title request', () => {
-    // "Act 2020" carries no title words, so it cannot support a not-held
-    // assertion or an exact-title claim.
     expect(classifyLegislationCitation('Act 2020', directory)).toEqual({
       kind: 'unrecognised',
     })
@@ -156,7 +142,6 @@ describe('classifyLegislationCitation', () => {
     ).toEqual({
       kind: 'unrecognised',
     })
-    // A phrase that merely shares a word with a title is not an Act citation.
     expect(classifyLegislationCitation('proportionality', directory)).toEqual({
       kind: 'unrecognised',
     })
@@ -172,9 +157,6 @@ describe('classifyLegislationCitation', () => {
         title: 'Renters’ Rights Act 2025',
       },
     ])
-    // The stored title carries U+2019; the straight apostrophe is what a UK
-    // keyboard produces. Both must resolve, or one form merely shifts the
-    // miss to the other apostrophe.
     for (const query of [
       'Renters’ Rights Act 2025',
       "Renters' Rights Act 2025",
@@ -198,8 +180,6 @@ describe('classifyLegislationCitation', () => {
         title: 'High Speed Rail (West Midlands – Crewe) Act 2021',
       },
     ])
-    // The stored title carries an en dash; pasted text carries a hyphen and
-    // a non-breaking space. Both sides fold through the same map.
     const outcome = classifyLegislationCitation(
       'High Speed Rail (West Midlands\u00A0- Crewe) Act 2021',
       stored,
@@ -227,9 +207,6 @@ describe('classifyLegislationCitation', () => {
   })
 
   it('resolves every canonical short title whose stored title carries (repealed)', () => {
-    // Finding 1: the stored title carries a terminal status annotation the
-    // canonical citation never does, so the canonical title answered "not
-    // held" while the chapter citation resolved the same document.
     const repealed = createActDirectory([
       {
         actType: 'ukpga',
@@ -290,9 +267,6 @@ describe('classifyLegislationCitation', () => {
   })
 
   it('resolves reported punctuation and wording variants of held titles', () => {
-    // Orthographic variants lawyers actually type: a dropped apostrophe, a
-    // dropped or spaced hyphen, '&' typed as 'and', and a dropped 'etc'.
-    // None may answer "not held" for an Act the corpus holds.
     const variants = createActDirectory([
       {
         actType: 'ukpga',

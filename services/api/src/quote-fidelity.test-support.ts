@@ -7,13 +7,6 @@ import type {
 } from '@obiter/verification-core'
 import type { QuoteCheckResult, QuoteFidelityRequest } from './quote-fidelity'
 
-/**
- * Shared fixtures for the quote-fidelity tests. The injected fake answers the
- * real queries the store issues; the real-database inserters write the same
- * shapes the store reads. Keeping both here means the fake and the fixtures
- * cannot drift from each other unnoticed.
- */
-
 const subject: VerificationSubject = {
   documentId: 'd-4',
   versionId: 'v-1',
@@ -33,9 +26,6 @@ export function request(
   return { subject, quote: quote(quoteText), normalizedCitation }
 }
 
-/** The findings of a batch, so a test asserts on findings rather than unwrapping
- * the per-request result at every call site. A rejection is a test failure:
- * use `rejections` where the test expects one. */
 export function findings(
   results: readonly QuoteCheckResult[],
 ): VerificationFinding[] {
@@ -47,8 +37,6 @@ export function findings(
   })
 }
 
-/** The rejection reasons of a batch, `null` where a candidate produced a
- * finding, so a test can assert the full shape in input order. */
 export function rejections(
   results: readonly QuoteCheckResult[],
 ): Array<string | null> {
@@ -57,8 +45,6 @@ export function rejections(
   )
 }
 
-/** Each candidate's status state or rejection reason, in input order, so a test
- * can assert a whole batch in one comparison. */
 export function outcomes(results: readonly QuoteCheckResult[]): string[] {
   return results.map((result) =>
     result.outcome === 'finding' ? result.finding.status.state : result.reason,
@@ -88,7 +74,6 @@ interface ParagraphFixture {
 
 export interface AuthorityFixture {
   id: string
-  /** Overrides the stored document id, to exercise identity mismatch. */
   documentId?: string
   withdrawn?: boolean
   malformed?: boolean
@@ -108,9 +93,6 @@ export interface ActFixture {
   number: number
   title: string
   provisions: ProvisionFixture[]
-  /** A store defect: the row asked for under `asked` comes back claiming the
-   * key it was requested by but carrying `returned`'s label path and text, and
-   * optionally another Act's identity. */
   mislabelledProvision?: {
     asked: string
     returned: string
@@ -291,8 +273,6 @@ export function fakeQuotePool(options: {
     queryCount: () => calls.length,
   }
 }
-
-// --- real database fixtures ---
 
 export interface JudgmentFixture {
   id: string

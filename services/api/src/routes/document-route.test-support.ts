@@ -115,8 +115,6 @@ export class TestDatabase {
       throw new Error('Unexpected database query.')
     }
 
-    // The route's external pg boundary uses only query and connect; implementing
-    // the rest of Pool would obscure the gate behaviour this fake exercises.
     return {
       query,
       connect: async () => ({

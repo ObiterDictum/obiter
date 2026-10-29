@@ -165,9 +165,6 @@ describe('matter workspace database operations', () => {
     const parentLock = calls[1]
     expect(parentLock[0]).toContain('deleted_at is null')
     expect(parentLock[0]).toContain('for update')
-    // The lock statement must carry no access predicate; if it did, a blocked
-    // FOR UPDATE would authorise on the pre-wait snapshot. The re-check below
-    // is the only place matter_shares may be evaluated.
     expect(parentLock[0]).not.toContain('matter_shares')
     expect(parentLock[0]).not.toContain('created_by')
     expect(parentLock[1]).toEqual(['mtr_1', 'org_1'])
@@ -193,7 +190,6 @@ describe('matter workspace database operations', () => {
       'a'.repeat(64),
       'synced',
       'usr_1',
-      // E50 lineage column: null for an initial upload.
       null,
     ])
     expect(versionParams?.[7]).toBe(
@@ -320,7 +316,6 @@ describe('matter workspace database operations', () => {
     })
     expect(result?.documents).toHaveLength(1)
     expect(result?.runs).toEqual([{ id: 'red_1' }])
-    // Lock, then cascade in order, then one audit row per deleted entity.
     expect(
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
@@ -408,7 +403,6 @@ describe('matter workspace database operations', () => {
       if (text === 'begin' || text === 'rollback') {
         return { rows: [] }
       }
-      // FOR UPDATE finds no live row.
       if (text.includes('for update')) {
         return { rows: [] }
       }
@@ -454,7 +448,6 @@ describe('matter workspace database operations', () => {
         text.startsWith('update matter_documents') ||
         text.startsWith('update redaction_runs')
       ) {
-        // Cascade-restore matches deleted_at = T; none in this fixture.
         return { rows: [] }
       }
       if (text.includes('insert into audit_logs')) {
@@ -476,7 +469,6 @@ describe('matter workspace database operations', () => {
       status: 'active',
       deletedAt: null,
     })
-    // Lock parent, restore parent, (no children matched), one audit row, commit.
     expect(
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
@@ -548,10 +540,6 @@ describe('matter workspace database operations', () => {
   })
 
   it('cascade-restore matches children by the parent deleted_at timestamp (provenance)', async () => {
-    // Provenance rule: only children whose deleted_at equals the parent's
-    // deleted_at are revived. An individually-deleted child (different
-    // timestamp) must stay deleted. The mock returns the parent timestamp T;
-    // the child UPDATE must predicate on that exact value ($3 = T).
     const parentDeletedAt = '2026-02-01T00:00:00.000Z'
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
@@ -590,8 +578,6 @@ describe('matter workspace database operations', () => {
     const runRestore = calls.find(([sql]) =>
       sql.includes('update redaction_runs'),
     )
-    // The child restore predicates on the parent's deleted_at (param $3),
-    // NOT a blanket "deleted_at is not null" — that is the provenance rule.
     expect(docRestore?.[0]).toMatch(/deleted_at = \$3::timestamptz/)
     expect(docRestore?.[0]).not.toMatch(/deleted_at is not null/)
     expect(docRestore?.[1]?.[2]).toBe(parentDeletedAt)
@@ -599,9 +585,6 @@ describe('matter workspace database operations', () => {
     expect(runRestore?.[0]).toContain('document.deleted_at is null')
     expect(runRestore?.[0]).toContain('document_id is null')
     expect(runRestore?.[1]?.[2]).toBe(parentDeletedAt)
-    // Precision guard: the lock selects deleted_at::text so the timestamp can
-    // round-trip with full microsecond fidelity. Selecting it as a Date would
-    // drop microseconds and the equality match would silently match 0 rows.
     expect(lock?.[0]).toMatch(/deleted_at::text/)
   })
 
@@ -687,7 +670,6 @@ describe('createOrganisationForUser', () => {
       if (sql === 'begin' || sql === 'rollback') {
         return { rows: [] }
       }
-      // SELECT ... FOR UPDATE returns zero rows — the user does not exist.
       if (sql.includes('select "organisationId"')) {
         return { rows: [] }
       }
@@ -710,7 +692,6 @@ describe('createOrganisationForUser', () => {
     const sequence = calls.map(([sql]) => sql)
     expect(sequence).toContain('rollback')
     expect(sequence).not.toContain('commit')
-    // Must not have created an orphan organisation or audit row.
     expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(
       false,
     )
@@ -800,7 +781,6 @@ describe('createOrganisationForUser', () => {
       sql.includes('insert into organisations'),
     )
     expect(insert?.[1]?.[0]).toBe('Acme Law')
-    // Single-use: the stash is cleared on assignment.
     expect(
       calls.some(
         ([sql]) =>
@@ -823,7 +803,6 @@ describe('createOrganisationForUser', () => {
             {
               organisationId: null,
               role: null,
-              // Invisible-only name: fails the shared Cf-strip validation.
               pendingOrganisationName: '\u200b\u200c',
             },
           ],
@@ -965,12 +944,6 @@ describe('createOrganisationForUser', () => {
 })
 
 describe('updateDocumentExtraction', () => {
-  // This layer persists verbatim by design: curation of raw parser
-  // diagnostics into user-facing sentences happens at the call site
-  // (routes/documents.ts, pinned in documents-upload.test.ts). These tests
-  // pin that what the caller passes is exactly what gets stored — no
-  // transformation that could smuggle raw diagnostics back in — and that an
-  // absent reason falls back to the generic sentence.
   function extractionPool() {
     const calls: QueryCall[] = []
     const pool = {

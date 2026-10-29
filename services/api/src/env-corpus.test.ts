@@ -1,14 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { readApiEnv } from './env'
 
-/**
- * Focused matrix for the corpus connection variables, kept out of `env.test.ts`
- * because it is a two-dimensional matrix (variable x spelling) and that file is
- * already large. It covers two rules: a corpus URL must be a PostgreSQL URL
- * naming one database, and under `NODE_ENV=test` it must resolve to the test
- * database's parsed identity, not its exact string.
- */
-
 const originalEnv = { ...process.env }
 
 const TEST_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
@@ -46,8 +38,6 @@ function seedTestEnv() {
   process.env.TEST_DATABASE_URL = testDatabaseUrl
 }
 
-/** Parse one corpus variable on its own, with a valid reader when the variable
- * under test is the writer, so only the value under test can fail. */
 function readCorpus(key: CorpusKey, value: string, testMode: boolean) {
   if (testMode) {
     seedTestEnv()

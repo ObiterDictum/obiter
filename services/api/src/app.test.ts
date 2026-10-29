@@ -26,9 +26,6 @@ const detectRedactionSpansMock = vi.hoisted(() =>
   })),
 )
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterSearchClientModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/search-client')).map((key) => [
     key,
@@ -41,9 +38,6 @@ mock.module('@obiter/search-client', () =>
     (() => searchClientMock)(),
   ),
 )
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const redactionDetectionModuleKeys = Object.fromEntries(
   Object.keys(await import('./redaction-detection')).map((key) => [
     key,
@@ -62,9 +56,6 @@ mock.module('./redaction-detection', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 import type { Auth, ErrorBody } from './app-test-support'
 const { createConnectedPool, createHybridPool, createPool, testEnv } =
   await import('./app-test-support')
@@ -126,10 +117,6 @@ describe('createApiApp', () => {
       pool,
       { auth },
     ).request('/api/health')
-    // Still no paths or build metadata outside development. The corpus mode is
-    // a boolean derived from configuration, so it is safe in any environment
-    // and it is the only way to tell a misconfigured deployment from a working
-    // one without reading the process environment.
     expect(await productionHealth.json()).toEqual({
       status: 'ok',
       service: 'obiter-api',
@@ -157,8 +144,6 @@ describe('createApiApp', () => {
       corpus: { colocated: true, readOnly: false },
     })
 
-    // No entry point declared one (a test building the app directly), so the
-    // body stays minimal rather than guessing a runtime.
     const undeclared = await createApiApp(testEnv, pool, { auth }).request(
       '/api/health',
     )
@@ -218,9 +203,6 @@ describe('createApiApp', () => {
       },
     }).request('/api/health')
 
-    // `readOnly: false` with `colocated: false` is the only mode with a
-    // dedicated writer: the process can persist hydration and reads do not
-    // share the application database.
     expect(await response.json()).toMatchObject({
       corpus: { colocated: false, readOnly: false },
     })
@@ -288,15 +270,11 @@ describe('createApiApp', () => {
         corpus: { read: corpusPool, write: null },
       }).request('/api/search/documents/uksc-2024-3')
 
-      // Corpus-only: the API answers a miss honestly and never reaches Find
-      // Case Law, whatever the corpus write capability is.
       expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({
         error: { code: 'document_not_found' },
       })
       expect(upstreamCalls).toEqual([])
-      // Neither pool is ever asked to store a fetched document, and nothing is
-      // indexed.
       expect(appQuery).not.toHaveBeenCalled()
       expect(corpusQuery).not.toHaveBeenCalledWith(
         expect.stringContaining('insert into legal_source_documents'),
@@ -474,7 +452,6 @@ describe('createApiApp', () => {
   })
 
   it('returns the user with organisation null for an org-less session at /api/me', async () => {
-    // A freshly registered user has no organisation until they create one.
     const auth = {
       api: {
         getSession: async () => ({
@@ -687,8 +664,6 @@ describe('createApiApp', () => {
     await expect(response.json()).resolves.toMatchObject({
       organisation: { id: 'org_new', name: 'Acme Law' },
     })
-    // The name is trimmed before insert, and an audit row is written in the
-    // same transaction as the org insert + user update.
     const insertOrg = queries.find((q) =>
       String((q as unknown[])[0]).includes('insert into organisations'),
     ) as unknown[] | undefined
@@ -770,9 +745,6 @@ describe('createApiApp', () => {
   })
 
   it('rejects a name made only of zero-width / format characters', async () => {
-    // \u200b (zero-width space), \u200d (zero-width joiner), \u202e (RLO
-    // override) are all category Cf: trim() leaves them, so without stripping
-    // they would pass as a non-empty (but invisible) organisation name.
     const auth = {
       api: {
         getSession: async () => ({
@@ -1069,7 +1041,6 @@ describe('createApiApp', () => {
             ],
           }
         }
-        // Cascade-restore matches deleted_at = T; no children in this fixture.
         if (
           sql.includes('update matter_documents') ||
           sql.includes('update redaction_runs')
@@ -1169,9 +1140,6 @@ describe('createApiApp', () => {
   })
 
   it('audits an org-less sign-out with a null organisation_id', async () => {
-    // Consistent with the nullable audit_logs.organisation_id (migration 0009)
-    // and the org-less auth sign-in/sign-up audit rows: an org-less user who
-    // signs out must still produce an audit row.
     const queries: unknown[] = []
     const auth = {
       api: {
@@ -1218,10 +1186,6 @@ describe('createApiApp', () => {
   })
 
   it('does not serve a second Meilisearch-shaped GET search route', async () => {
-    // GET /api/search was Meilisearch-only with no product caller and a
-    // second validation shape beside POST /api/search/fetch. It was deleted
-    // with the Postgres query tier so the route layer cannot reintroduce
-    // the split; this pins the deletion.
     const auth = {
       api: {
         getSession: async () => null,
@@ -1532,8 +1496,6 @@ describe('createApiApp', () => {
             return { rows: [sourceRun] }
           if (text.includes('run.replaces_run_id')) return { rows: [] }
           if (text.includes('insert into redaction_runs')) {
-            // Reconstruct the created row from the mocked insert params; the
-            // params are unknown at this boundary, so cast to the row types.
             const values = params as unknown[]
             return {
               rows: [
@@ -1696,7 +1658,6 @@ describe('createApiApp', () => {
     expect(response.status).toBe(400)
     const body = (await response.json()) as ErrorBody
     expect(body.error.code).toBe('validation_failed')
-    // A wrapped library failure must not reach the client verbatim.
     expect(body.error.message).toBe(
       'Document text could not be read for redaction.',
     )
@@ -1823,17 +1784,12 @@ function finalizedRunRow(
   }
 }
 
-/** A valid, text-free PDF the fake renderer can return for rasterization. */
 async function blankRendererPdf() {
   const document = await PDFDocument.create()
   document.addPage([200, 200])
   return new Uint8Array(await document.save())
 }
 
-/**
- * Fake sandbox renderer at the HTTP client's boundary. It records the sanitized
- * .docx it receives so a test can assert the burn happened before rendering.
- */
 function fakeDocxRenderer(onDocx?: (bytes: Buffer) => void): RedactionRenderer {
   return {
     renderDocxToPdf: async (docxBytes) => {
@@ -1964,7 +1920,6 @@ describe('createApiApp redaction review reads', () => {
     expect(((await unauthenticated.json()) as ErrorBody).error.code).toBe(
       'unauthenticated',
     )
-    // Auto-provisioned personal workspace, then unknown run → 404 (not 403).
     expect(organisationless.status).toBe(404)
     expect(((await organisationless.json()) as ErrorBody).error.code).toBe(
       'redaction_run_not_found',
@@ -2788,8 +2743,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(((await response.json()) as ErrorBody).error).toMatchObject({
       code: 'redaction_secure_pdf_failed',
     })
-    // No silent downgrade: neither an output nor a text fallback is written,
-    // so the run stays unfinalized and cannot be shared.
     expect(textOutputWrites).toBe(0)
     expect(binaryOutputWrites).toBe(0)
     expect(log).toHaveBeenCalledWith(
@@ -2867,8 +2820,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       return { response, outputWrites: () => outputWrites }
     }
 
-    // Stale stored text that predates footnote extraction still refuses: the
-    // guard stays live for runs extracted before E43.
     const refused = await finalizeWithSource(
       'letter-footnotes-numbering.docx',
       'Synthetic text.',
@@ -2880,7 +2831,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
     expect(refused.outputWrites()).toBe(0)
 
-    // Fresh extraction carries the note bodies, so the same source finalizes.
     const { extractRedactionContent: extractDocumentContent } =
       await import('./redaction-extraction')
     const footnotesSource = await readFile(
@@ -3042,9 +2992,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     finalized = true
     expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(1)
-    // The burn happens before the render hop: the sanitized .docx the renderer
-    // receives no longer carries the accepted name, and the published output
-    // is the rasterized image-only PDF, not the .docx.
     expect(renderedDocx).not.toBeNull()
     const zip = await JSZip.loadAsync(renderedDocx ?? Buffer.alloc(0))
     for (const name of Object.keys(zip.files)) {
@@ -3052,7 +2999,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       const content = await (zip.file(name)?.async('string') ?? '')
       expect(content, `redacted name survives in ${name}`).not.toContain(target)
     }
-    // Numbering, footnote references, and footnote bodies survive the burn.
     const documentXml = await (zip.file('word/document.xml')?.async('string') ??
       '')
     expect(documentXml).toContain('[REDACTED]')
@@ -3069,8 +3015,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         .subarray(0, 5)
         .toString('latin1'),
     ).toBe('%PDF-')
-    // The object key carries stable ids only: no client, matter or source
-    // filename can leak through storage layout.
     expect(writtenKey).toMatch(/^org\/org_1\/outputs\/out_[0-9a-f-]{36}$/u)
     expect(writtenKey).not.toContain('letter-footnotes-numbering')
     expect(persistedSummary).toMatchObject({
@@ -3093,9 +3037,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   })
 
   it('finalizes a pseudonymised PDF source as editable token text, never a rasterized PDF', async () => {
-    // A rasterized cover is not an editable token copy, and this branch used to
-    // render black bars (with a wrong `[REDACTED]` label). Pseudonymised output
-    // must stay text tokens so it is distinct from a hard redaction.
     const sourcePdf = await PDFDocument.create()
     sourcePdf.addPage([200, 200])
     const sourceBytes = Buffer.from(await sourcePdf.save())
@@ -3231,9 +3172,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
 
   it('fails visibly with no output when .docx burn refuses tracked-change text', async () => {
     const { default: JSZip } = await import('jszip')
-    // The deletion duplicates live text exactly, so coverage passes it as
-    // examined — but the burn still refuses the residual tracked copy of
-    // the accepted span and falls back to text output.
     const target = 'Cartwright'
     const text = `${target} attended.`
     const zip = new JSZip()
@@ -3363,7 +3301,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(((await response.json()) as ErrorBody).error).toMatchObject({
       code: 'redaction_secure_pdf_failed',
     })
-    // No silent downgrade: no text fallback, no output, no finalized run.
     expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(0)
     expect(persistedSummary).toBeNull()
@@ -3372,7 +3309,6 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       expect.objectContaining({ category: 'docx_burn_failed' }),
     )
     log.mockRestore()
-    // Only the stable category and mode cross into audit metadata.
     expect(auditMetadata).toEqual([
       { outputMode: 'redacted', failureCategory: 'docx_burn_failed' },
     ])
@@ -3787,79 +3723,30 @@ describe('createApiApp soft-delete write races', () => {
 })
 
 describe('createApiApp deletion authorization', () => {
-  it('rejects matter deletion by a member with 403 forbidden', async () => {
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => ({ rows: [] })),
-      { auth: authWithRole('member') },
-    )
-    const response = await app.request('/api/matters/mtr_1', {
-      method: 'DELETE',
-    })
-    expect(response.status).toBe(403)
-    expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
-  })
+  const routes = [
+    { path: '/api/matters/mtr_1', method: 'DELETE' },
+    { path: '/api/matters/mtr_1/restore', method: 'PATCH' },
+    { path: '/api/documents/doc_1', method: 'DELETE' },
+    { path: '/api/documents/doc_1/restore', method: 'PATCH' },
+    { path: '/api/redaction-runs/red_1', method: 'DELETE' },
+    { path: '/api/redaction-runs/red_1/restore', method: 'PATCH' },
+  ]
 
-  it('rejects matter restore by a member with 403 forbidden', async () => {
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => ({ rows: [] })),
-      { auth: authWithRole('member') },
-    )
-    const response = await app.request('/api/matters/mtr_1/restore', {
-      method: 'PATCH',
-    })
-    expect(response.status).toBe(403)
-    expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
-  })
+  for (const { path, method } of routes) {
+    it(`rejects ${method} ${path} by a member with 403 forbidden`, async () => {
+      const app = createApiApp(
+        testEnv,
+        createConnectedPool(async () => ({ rows: [] })),
+        { auth: authWithRole('member') },
+      )
+      const response = await app.request(path, { method })
 
-  it('rejects document deletion by a member with 403 forbidden', async () => {
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => ({ rows: [] })),
-      { auth: authWithRole('member') },
-    )
-    const response = await app.request('/api/documents/doc_1', {
-      method: 'DELETE',
+      expect(response.status).toBe(403)
+      expect(((await response.json()) as ErrorBody).error.code).toBe(
+        'forbidden',
+      )
     })
-    expect(response.status).toBe(403)
-  })
-
-  it('rejects redaction run deletion by a member with 403 forbidden', async () => {
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => ({ rows: [] })),
-      { auth: authWithRole('member') },
-    )
-    const response = await app.request('/api/redaction-runs/red_1', {
-      method: 'DELETE',
-    })
-    expect(response.status).toBe(403)
-  })
-
-  it('rejects document restore by a member with 403 forbidden', async () => {
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => ({ rows: [] })),
-      { auth: authWithRole('member') },
-    )
-    const response = await app.request('/api/documents/doc_1/restore', {
-      method: 'PATCH',
-    })
-    expect(response.status).toBe(403)
-  })
-
-  it('rejects redaction run restore by a member with 403 forbidden', async () => {
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => ({ rows: [] })),
-      { auth: authWithRole('member') },
-    )
-    const response = await app.request('/api/redaction-runs/red_1/restore', {
-      method: 'PATCH',
-    })
-    expect(response.status).toBe(403)
-  })
+  }
 })
 
 describe('createApiApp restore routes', () => {
@@ -4025,7 +3912,6 @@ describe('createApiApp deletion cascade and idempotence', () => {
         queries.push(args)
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-        // FOR UPDATE finds no live row (matter already deleted).
         if (sql.includes('for update')) return { rows: [] }
         return { rows: [] }
       }),
@@ -4253,7 +4139,6 @@ describe('createApiApp deleted-run audit access shape', () => {
       testEnv,
       createPool(async (sql) => {
         if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
-          // Default includeDeleted=false filters the soft-deleted row out.
           return { rows: [] }
         }
         return { rows: [] }

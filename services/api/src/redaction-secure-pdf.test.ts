@@ -59,13 +59,10 @@ describe('buildSecurePdfFromText', () => {
       'Alice Smith signed the deed.\n[REDACTED] followed.',
     )
     expect(bytes.byteLength).toBeGreaterThan(0)
-    // pdf.js may detach the buffer it is given, so hand it a copy.
     const extracted = await extractText(Uint8Array.from(bytes), {
       mergePages: true,
     })
     expect(extracted.text.trim()).toBe('')
-    // The marker is painted as a bar, so neither the marker nor source text is
-    // extractable.
     expect(extracted.text).not.toContain('[REDACTED]')
     expect(extracted.text).not.toContain('Alice')
   })
@@ -133,9 +130,6 @@ describe('validateSecurePdf', () => {
   })
 
   it('refuses a PDF whose bytes still carry accepted source text', async () => {
-    // Append the accepted string as a PDF comment. The rasterized pages are
-    // unchanged, so the page checks and text extraction pass; only the raw byte
-    // scan catches it, which is the leak this gate exists for.
     const base = await buildSecurePdfFromText('clean')
     const text = Buffer.from(base)
     const marker = Buffer.from('%Alice Smith\n')
@@ -242,8 +236,6 @@ describe('validateSecurePdf', () => {
   })
 
   it('refuses a font dictionary reached only through an indirect reference', async () => {
-    // A plain `resources.get('/Font')` would see a PDFRef, treat it as an empty
-    // font set, and publish a text layer. Resolving the reference refuses it.
     const base = await buildSecurePdfFromText('clean')
     const document = await PDFDocument.load(base)
     const page = document.getPages()[0]!
@@ -259,8 +251,6 @@ describe('validateSecurePdf', () => {
   })
 
   it('resolves an image dictionary reached only through an indirect reference', async () => {
-    // The mirror of the font case: an indirect /XObject is a rasterized page,
-    // not a missing one, so it must pass rather than be read as absent.
     const base = await buildSecurePdfFromText('clean')
     const document = await PDFDocument.load(base)
     const page = document.getPages()[0]!

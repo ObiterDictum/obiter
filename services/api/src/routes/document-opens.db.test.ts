@@ -10,13 +10,6 @@ import {
   seedMatter,
 } from './document-write-share-revocation.test-support'
 
-/**
- * "Continue where you left off" is one row per (document, person) and it is not
- * an access grant: recording an open needs the document read permission, and the
- * read skips a document the person can no longer reach. Both halves run the real
- * routes against a real database.
- */
-
 const pool: Pool = createTestPool()
 
 function documentsApp(user: AuthzUser, requestId = 'req_opens') {

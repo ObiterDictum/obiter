@@ -1,11 +1,5 @@
 import { vi } from '../../../../scripts/test/vitest-compat'
 
-/**
- * Shared fixtures and boundary helpers for the changelog route suites. The
- * route is anonymous, so its traffic bound is proved with a mocked GitHub
- * boundary and a controllable clock; no helper touches the network.
- */
-
 export const START = 1_000_000
 
 export const release = {

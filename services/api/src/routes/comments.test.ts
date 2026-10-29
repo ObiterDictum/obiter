@@ -183,8 +183,6 @@ describe('document comment routes', () => {
       resolvedAt: '2026-08-10T14:00:00.000Z',
       updatedAt: '2026-08-10T14:00:00.000Z',
     })
-    // The second call already found the comment resolved: nothing changed,
-    // so nothing is audited.
     expect(database.audits.map(({ action }) => action)).toEqual([
       'document.comment_resolve',
     ])
@@ -809,8 +807,6 @@ describe('document comment routes', () => {
 
   it('marks a product comment anchorResolved false when the model moved past it', async () => {
     const database = new TestDatabase({ access: 'edit' })
-    // Anchor beyond the model paragraph's length: still listed, honestly
-    // flagged unresolved rather than re-anchored or dropped.
     database.seedComment({ startOffset: 500, endOffset: 900 })
 
     const response = await routeApp(database).app.request(
@@ -850,7 +846,6 @@ describe('document comment routes', () => {
         error: { code: 'comment_client_key_conflict' },
       })
     }
-    // Neither conflicting submit wrote a row, audited, or replaced the first.
     expect(database.comments.size).toBe(1)
     expect(database.audits.map(({ action }) => action)).toEqual([
       'document.comment_create',
@@ -866,8 +861,6 @@ describe('document comment routes', () => {
       anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
       clientKey: 'submit-1',
     })
-    // endParagraphId naming the start paragraph stores identically to an
-    // absent one, so the retry is the same intent — a replay, not a conflict.
     const retried = await createComment(app, {
       body: 'Same intent',
       anchor: {
@@ -886,11 +879,6 @@ describe('document comment routes', () => {
 
   it('does not replay a comment client key whose stored row is another organisation', async () => {
     const database = new TestDatabase({ access: 'edit' })
-    // The document foreign key pins a stored row's organisation, so this
-    // state is unreachable through the API; seeding it directly proves the
-    // replay SELECT is organisation-scoped. Without the filter the replay
-    // returns this row (same payload), disclosing another organisation's
-    // comment.
     database.seedComment({
       id: 'cmt_other_org',
       organisationId: 'org_other',
@@ -908,7 +896,6 @@ describe('document comment routes', () => {
       clientKey: 'shared-key',
     })
 
-    // Fail closed rather than replay a row outside the caller's organisation.
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('cmt_other_org')
     expect(database.comments.size).toBe(1)
@@ -937,7 +924,6 @@ describe('document comment routes', () => {
   it('does not replay a reply client key whose stored row is another organisation', async () => {
     const database = new TestDatabase({ access: 'edit' })
     const parent = database.seedComment()
-    // Same unreachable state as the comment case above, seeded directly.
     database.seedReply({
       id: 'cmtr_other_org',
       organisationId: 'org_other',
@@ -1068,8 +1054,6 @@ describe('document comment routes', () => {
       }>
       orphanedReplies: Array<{ id: string }>
     }
-    // Only the fingerprint-matched reply threads; a mismatched or unverified
-    // identity orphans honestly rather than attaching to the w:id slot.
     expect(body.importedComments).toEqual([
       expect.objectContaining({
         id: 'ooxml-3',
@@ -1094,8 +1078,6 @@ describe('document comment routes', () => {
     await expect(resolved.json()).resolves.toMatchObject({
       comment: { replies: [{ body: 'Thread reply' }] },
     })
-    // The replies came from the transaction's own thread read; the route must
-    // not re-list comments after commit to assemble the response.
     expect(
       database.queries.some((sql) => sql.includes('comment_id = $1')),
     ).toBe(true)

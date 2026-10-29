@@ -13,14 +13,6 @@ import {
   type CitationCandidate,
 } from './citation-resolution'
 
-/**
- * Injected-pool fixtures for the citation-resolution tests. The fake answers
- * the two real queries the resolver issues, filtering the candidate lookup the
- * way the SQL year predicate and the exact fold do, so a test failure points at
- * the orchestration rather than at a fake that agrees with anything. The live
- * pipeline helper at the end is what the database tests use.
- */
-
 export function citationOf(rawText: string): CitationInput {
   return {
     rawText,
@@ -31,8 +23,6 @@ export function citationOf(rawText: string): CitationInput {
 export interface AuthorityRow extends QueryResultRow {
   documentId: string
   neutralCitation: string
-  /** Projected into `provider_json`, the column the store reads withdrawal
-   * from, so resolution exercises the same live/withdrawn rule as the record. */
   withdrawn?: boolean
 }
 
@@ -56,8 +46,6 @@ const actRow = (number: number, title: string): ActRow => ({
   extent: '',
 })
 
-/** Titles chosen so each fold under test (case, quote, hyphen, `(repealed)`,
- * alias) has exactly one stored Act to converge on. */
 const actRows: ActRow[] = [
   actRow(1, 'Test Authority Act 2066'),
   actRow(2, 'Duplicate Title Act 2066'),
@@ -147,12 +135,6 @@ export async function outcomeOf(
   return result!.resolution.outcome
 }
 
-/**
- * The documented pipeline against a live pool: resolve the raw candidate, then
- * check the identity resolution produced. `checkAuthorityExistence` runs its own
- * lookup, so a test asserts the full V3 to V2 hand-off rather than a stitched
- * copy of it.
- */
 export function createResolutionPipeline(
   pool: Pick<Pool, 'query'>,
   subject: VerificationSubject,

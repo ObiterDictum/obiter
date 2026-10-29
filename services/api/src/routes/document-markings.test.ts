@@ -10,12 +10,6 @@ import {
 } from './document-edit.test-support'
 import { createRouteApp } from './document-route.test-support'
 
-/**
- * Markings are an immutable-version mutation: every change commits a new
- * version of the OOXML package (custom.xml carries the values), gated like
- * an edit — matter edit access, named base version, stale-base conflict,
- * audit. These tests run the real route against the shared edit harness.
- */
 function routeApp(
   database: EditDatabase,
   storage = new EditStorage(),
@@ -78,17 +72,12 @@ describe('POST /api/documents/:id/markings', () => {
     })
     expect(database.transactionCommands).toEqual(['begin', 'commit'])
 
-    // The committed object is a real package: re-parse the stored bytes and
-    // read the markings back out of docProps/custom.xml.
     const version = database.versions.get(body.versionId)
     expect(version).toBeDefined()
     const written = storage.binary.get(version!.object_key)
     expect(written).toBeDefined()
     const reparsed = await parseDocx(written!)
     expect(reparsed.model.markings).toEqual(MARKINGS)
-    // Content is untouched — the mutation only writes custom properties.
-    // Re-serialising canonicalises generated paragraph ids, so compare the
-    // paragraph text, not idents or byte offsets.
     const storyText = (model: {
       stories: { paragraphs: { runs: { text: string }[] }[] }[]
     }) =>
@@ -175,9 +164,6 @@ describe('POST /api/documents/:id/markings', () => {
   })
 
   it('preserves an unknown stored document kind through a flag toggle', async () => {
-    // A kind written by a newer deployment is not in this build's list; the
-    // wire schema accepts any stored string so a Draft toggle does not erase
-    // it. The audit metadata keeps the opaque string.
     const database = new EditDatabase()
     const { app } = routeApp(database)
     const response = await app.request(
@@ -211,8 +197,6 @@ describe('POST /api/documents/:id/markings', () => {
     expect(database.transactionCommands).not.toContain('commit')
     expect(database.versions.size).toBe(1)
     expect(database.currentVersionId).toBe('ver_1')
-    // The committed bytes were staged in storage but the head never moved
-    // and no version row exists — an orphan object is inert.
     expect(database.audits).toEqual([])
   })
 })

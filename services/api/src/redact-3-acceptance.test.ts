@@ -137,8 +137,6 @@ describe('Redact 3 delivered acceptance criteria', () => {
     ])
 
     expect(report.redactionRunSummary.totalSpans).toBe(detection.spans.length)
-    // The exported schedule is a file that leaves the firm's screens: it names
-    // what was decided, never the words that were removed.
     const schedule = scheduleLines(report).join('\n')
     expect(schedule).toContain('Obiter redaction schedule')
     for (const span of detection.spans)

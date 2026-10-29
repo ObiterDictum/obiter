@@ -33,9 +33,6 @@ const typed = `${sourceRun.text} tailword`
 const tailFrom = prefix.length + sourceRun.text.length + 1
 const tailTo = prefix.length + typed.length
 
-// E44 API leg: typed text and the emphasis on it arrive as two operations in
-// one request. The pair used to be rejected as an invalid document edit; the
-// version must now be written atomically with both effects.
 describe('POST /api/documents/:id/edit typed text plus formatting', () => {
   it('saves the typed text and its emphasis in one immutable version', async () => {
     const database = new EditDatabase()

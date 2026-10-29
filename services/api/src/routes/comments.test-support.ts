@@ -67,7 +67,6 @@ const commentModel = {
 
 export const cachedCommentModelJson = JSON.stringify(commentModel)
 
-/** A model variant carrying package-imported comments for reply/list tests. */
 export function cachedCommentModelJsonWith(
   comments: DocumentImportedComment[],
 ) {
