@@ -22,10 +22,12 @@ import { settledRequestGapMs, type Db } from './bulk-ingest'
  *
  * A row is work only while `metadata_fetched_at` is NULL, and every write is
  * an idempotent UPDATE keyed by `document_id`, so an interrupted run resumes
- * where it stopped and a repeated run changes nothing. A row whose judgment
- * carries neither field is stamped too: the absence was read, not assumed.
- * A row whose fetch failed is left unstamped, so it is retried rather than
- * recorded as empty.
+ * where it stopped and a repeated run changes nothing. Newest first, because
+ * those are the judgments a reader opens while an older backfill is pending;
+ * the order is a total one, so a re-run neither skips nor repeats a row.
+ * A row whose judgment carries neither field is stamped too: the absence was
+ * read, not assumed. A row whose fetch failed is left unstamped, so it is
+ * retried rather than recorded as empty.
  *
  * Bounded on purpose. `--limit` is required: the full re-crawl is a separate,
  * deliberate run, not something an accidental invocation starts.
@@ -139,7 +141,7 @@ export async function backfillPublishedMetadata(
       select document_id, summary_json->>'court' as court, xml_uri, source_uri
       from legal_source_documents
       where metadata_fetched_at is null
-      order by document_id
+      order by summary_json->>'dateDecided' desc nulls last, document_id
       limit $1
     `,
     [options.limit],

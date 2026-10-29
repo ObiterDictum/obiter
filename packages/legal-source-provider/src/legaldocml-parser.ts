@@ -114,6 +114,34 @@ function normalise(text: string) {
   return decodeHtml(text).replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Inline text, without the separator `collectText` puts between child
+ * elements. A press summary is styled with a `<span>` per phrase, so the
+ * block-level collector would render `(the “ CLRA ”)`; a `<br/>` is the one
+ * inline break that is a space.
+ */
+function collectInlineText(nodes: OrderedNode[]): string {
+  let text = ''
+
+  for (const node of nodes) {
+    for (const key of Object.keys(node)) {
+      if (key === attributeKey) continue
+      if (key === '#text') {
+        text += String(node[key] ?? '')
+        continue
+      }
+      if (key.startsWith('@')) continue
+      if (key === 'br') {
+        text += ' '
+        continue
+      }
+      text += collectInlineText(childrenOf(node, key))
+    }
+  }
+
+  return text
+}
+
 const skipNum: ReadonlySet<string> = new Set(['num'])
 const skipNothing: ReadonlySet<string> = new Set()
 
@@ -293,7 +321,7 @@ export function extractLegalDocMlJudges(xml: string): string[] {
           continue
         const children = childrenOf(node, key)
         if (key === 'judge') {
-          const name = normalise(collectText(children, skipNothing))
+          const name = normalise(collectInlineText(children))
           if (name && !names.includes(name)) names.push(name)
           continue
         }
@@ -334,7 +362,7 @@ export function extractLegalDocMlPressSummary(
           continue
         const children = childrenOf(node, key)
         if (key === 'p') {
-          const text = normalise(collectText(children, skipNothing))
+          const text = normalise(collectInlineText(children))
           if (text) paragraphs.push(text)
           continue
         }

@@ -1874,6 +1874,64 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
+  it('serves the bench and the published summary from the stored row', async () => {
+    searchClientMock.getDocument.mockResolvedValue({ ...hit, paragraphs: [] })
+    const base = createInMemoryLegalAuthoritySourceStore()
+    const provider = {
+      documentUri: '/uksc/2024/3',
+      sourceUri: '/uksc/2024/3',
+      xmlUri: '/uksc/2024/3/data.xml',
+      pdfUri: null,
+      contentHash: 'abc123',
+      rawAtomEntry: '<entry />',
+    }
+    const store = {
+      ...base,
+      get: async () => ({
+        summary: { ...hit },
+        provider,
+        judges: [
+          {
+            name: 'Lord Briggs',
+            source: 'fcl_metadata' as const,
+            field: 'legaldocml:judge',
+          },
+        ],
+        publishedSummary: {
+          paragraphs: ['This appeal concerns the right to manage.'],
+          source: 'fcl_metadata' as const,
+          field: 'legaldocml:press-summary',
+          sourceUrl:
+            'https://caselaw.nationalarchives.gov.uk/uksc/2024/3/press-summary',
+        },
+      }),
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      judges: ['Lord Briggs'],
+      summary: {
+        kind: 'press_summary',
+        paragraphs: ['This appeal concerns the right to manage.'],
+        sourceUrl:
+          'https://caselaw.nationalarchives.gov.uk/uksc/2024/3/press-summary',
+      },
+    })
+  })
+
+  it('serves an empty bench and no summary when the row carries neither', async () => {
+    searchClientMock.getDocument.mockResolvedValueOnce({ ...hit, paragraphs: [] })
+    const app = createAuthenticatedProxyApp()
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ judges: [], summary: null })
+  })
+
   it('returns a withdrawn document with a banner and no full text', async () => {
     // The derived index still holds a stale copy; Postgres is the record, so
     // the banner wins over the stale indexed full text.
