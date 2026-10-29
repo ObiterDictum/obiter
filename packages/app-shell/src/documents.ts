@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import type {
+  CitationTargetsResponse,
   DocumentOpenResponse,
   RecentlyOpenedDocumentResponse,
 } from '@obiter/contracts'
@@ -76,6 +77,7 @@ export const documentsKeys = {
   detail: (documentId: string) =>
     [...documentsKeys.all, 'detail', documentId] as const,
   recentlyOpened: () => [...documentsKeys.all, 'recently-opened'] as const,
+  citationTargets: () => [...documentsKeys.all, 'citation-targets'] as const,
 }
 
 export function documentsNeedStatusPoll(
@@ -146,6 +148,24 @@ export function useRecentlyOpenedDocument(options?: { enabled?: boolean }) {
   })
 }
 
+/** The documents "Cite in document" offers, newest first. */
+export function citationTargetsQueryOptions() {
+  return queryOptions({
+    queryKey: documentsKeys.citationTargets(),
+    queryFn: async () => {
+      const response = await apiFetch<CitationTargetsResponse>(
+        '/api/documents/citation-targets',
+      )
+      return response.documents
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useCitationTargets() {
+  return useQuery(citationTargetsQueryOptions())
+}
+
 /**
  * Record that the document on screen is the one this person opened. Opening a
  * document is a navigation event, not a render value, so it is reported once
@@ -160,10 +180,16 @@ export function useRecordDocumentOpen(documentId: string) {
       apiFetch<DocumentOpenResponse>(`/api/documents/${id}/opened`, {
         method: 'POST',
       }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
+    onSuccess: () => {
+      // Both lists are "documents this person opened", so one open reorders
+      // each of them.
+      void queryClient.invalidateQueries({
         queryKey: documentsKeys.recentlyOpened(),
-      }),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: documentsKeys.citationTargets(),
+      })
+    },
   })
 
   useEffect(() => {

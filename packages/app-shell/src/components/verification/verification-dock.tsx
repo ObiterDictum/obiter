@@ -4,11 +4,12 @@ import { Button, Skeleton, StatusDot } from '@obiter/ui'
 import type { VerificationFindingView } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {
+  formatRunTime,
   verificationCountsLabel,
   verificationFailureLabel,
   verificationFailureTitle,
   verificationFindingCounts,
-  verificationRunTime,
+  verificationRunTimestamp,
   verificationSummaryCounts,
   verificationStateLabel,
   verificationStoredVersionNote,
@@ -183,7 +184,7 @@ export function VerificationDock({
             : null}
           {run ? (
             <span className="ml-auto text-caption text-subtle">
-              {verificationRunTime(run)}
+              {formatRunTime(verificationRunTimestamp(run))}
             </span>
           ) : null}
         </div>

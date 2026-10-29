@@ -15,6 +15,7 @@ import {
   useTrackedChangeDecision,
 } from '../../document-workspace-api'
 import { revealParagraph, withCaretRefocus } from './document-actions'
+import { usePendingCitation } from './use-pending-citation'
 import { DocxWorkspaceDesk } from './docx-workspace-desk'
 import {
   DocxWorkspaceChrome,
@@ -31,7 +32,6 @@ import {
   useWorkspaceSurface,
   useWorkspaceView,
 } from './use-workspace-view'
-import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
@@ -109,7 +109,6 @@ export function DocxWorkspace({
 
   const [zoom, setZoom] = useState(100)
   const panels = useWorkspacePanels()
-  const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
   // An unsaved flip lives in the draft bundle: a remount keeps it, a version
   // write (save, decision or markings) carries it, a reload drops it.
@@ -298,6 +297,10 @@ export function DocxWorkspace({
   const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = withCaretRefocus(save.reload)
   const exports = documentExportHandlers(documentId, filename, setBanner)
+  const citation = usePendingCitation(documentId, (text) => {
+    if (selectedParagraphId)
+      insertAuthority(text, legalTools.citationStyle === 'house')
+  })
   // Either narrows the canvas, so opening one closes the other.
   function togglePanel(panel: WorkspacePanel) {
     if (navOpen) toggleNavPane()
@@ -316,7 +319,11 @@ export function DocxWorkspace({
     commentCount: commentsPanel.threadCount,
     changeCount: changesQuery.data?.changes.length ?? 0,
     insert,
-    onInsertAuthority: () => setInsertAuthorityOpen(true),
+    onInsertAuthorityText: (text) =>
+      insertAuthority(text, legalTools.citationStyle === 'house'),
+    canInsertAuthority:
+      selectedParagraphId !== null ||
+      (model !== undefined && Boolean(documentStory(model)?.paragraphs[0])),
     citationStyle: legalTools.citationStyle,
     onCitationStyle: legalTools.onCitationStyle,
     setZoom,
@@ -413,6 +420,8 @@ export function DocxWorkspace({
               requests={requests}
               selectionActive={selectionActive}
               onCommentSelection={() => togglePanel('comments')}
+              citation={citation}
+              citationCanInsert={selectedParagraphId !== null}
             />
             <DocxWorkspaceDesk
               compareOpen={compareOpen}
@@ -477,17 +486,6 @@ export function DocxWorkspace({
                 closeEditingStory()
                 selectParagraph(paragraphId)
               }}
-            />
-            <InsertAuthorityDialog
-              open={insertAuthorityOpen}
-              onOpenChange={setInsertAuthorityOpen}
-              disabled={
-                !selectedParagraphId && !documentStory(model)?.paragraphs[0]
-              }
-              citationStyle={legalTools.citationStyle}
-              onInsert={(citation) =>
-                insertAuthority(citation, legalTools.citationStyle === 'house')
-              }
             />
           </>
         ) : null}

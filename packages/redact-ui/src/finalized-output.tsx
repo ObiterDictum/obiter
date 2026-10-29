@@ -39,25 +39,45 @@ const downgradeCopy = {
     'The formatted document could not be produced, so a plain-text file was provided instead. Do not serve this file without checking it first.',
 } satisfies Record<string, string>
 
+/** What the file is, from the type the output actually carries. */
+function formatLabel(mimeType: string, securePdf: boolean) {
+  if (mimeType === DOCX_MIME) return 'Word document (.docx)'
+  if (mimeType === 'application/pdf')
+    return securePdf ? 'PDF, image-only pages' : 'PDF'
+  return 'Plain text (.txt)'
+}
+
 /** The export contents, stated from the fields the output actually carries. */
 function exportContents(
   run: RedactionRun,
   mimeType: string,
   securePdf: boolean,
 ) {
-  if (run.summary.outputMode === 'pseudonymised')
+  if (run.summary.outputMode === 'pseudonymised') {
+    const editable = mimeType === DOCX_MIME
     return {
-      heading: 'Pseudonymised editable copy',
-      format: 'Word document (.docx), editable',
-      contents:
-        'Detected names and other personal details are replaced with consistent category tokens so the document stays editable. It is not a disclosure-safe copy: the token map that reverses it stays restricted and audited.',
+      heading: editable ? 'Pseudonymised editable copy' : 'Pseudonymised copy',
+      format: editable
+        ? `${formatLabel(mimeType, securePdf)}, editable`
+        : formatLabel(mimeType, securePdf),
+      contents: editable
+        ? 'Detected names and other personal details are replaced with consistent category tokens so the document stays editable. It is not a disclosure-safe copy: the token map that reverses it stays restricted and audited.'
+        : 'Detected names and other personal details are replaced with consistent category tokens. A text copy loses the document’s formatting. It is not a disclosure-safe copy: the token map that reverses it stays restricted and audited.',
     }
+  }
   if (mimeType === DOCX_MIME)
     return {
       heading: 'Redacted Word document',
-      format: 'Word document (.docx)',
+      format: formatLabel(mimeType, securePdf),
       contents:
         'Accepted text is replaced and the document keeps its formatting. Do not treat a Word copy as disclosure-safe: check every page before serving it.',
+    }
+  if (mimeType !== 'application/pdf')
+    return {
+      heading: 'Redacted output',
+      format: formatLabel(mimeType, securePdf),
+      contents:
+        'This copy is plain text: the document’s formatting is not in it. Check every page of the source before sharing it, and finalise again if you need a disclosure-safe copy.',
     }
   if (!securePdf)
     return {

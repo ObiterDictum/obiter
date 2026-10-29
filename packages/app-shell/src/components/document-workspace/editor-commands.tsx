@@ -57,7 +57,9 @@ export type EditorChromeProps = InsertRibbonProps & {
   onToggleChanges: () => void
   onToggleAuthorities: () => void
   onToggleInfo?: () => void
-  onInsertAuthority: () => void
+  onInsertAuthorityText: (citation: string) => void
+  /** Whether a citation has somewhere to go: a caret or a first paragraph. */
+  canInsertAuthority: boolean
   citationStyle: CitationStyle
   onCitationStyle?: (style: CitationStyle) => void
   legalChecks?: {
@@ -105,6 +107,7 @@ export type EditorChromeActions = {
   openTable: () => void
   openLink: () => void
   openCrossReference: () => void
+  openAuthority: () => void
   closeStory: () => void
 }
 
@@ -431,7 +434,7 @@ export function editorMenus(
               stayOpen: true,
               opensSurface: true,
               label: 'Insert authority',
-              run: props.onInsertAuthority,
+              run: actions.openAuthority,
             },
             {
               id: 'table-of-authorities',

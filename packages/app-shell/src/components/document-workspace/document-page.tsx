@@ -1,14 +1,17 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { documentPrintPageRule } from '../../document-print'
 import { A4_HEIGHT_PX, A4_WIDTH_PX } from '../../document-page-units'
 
 export function DocumentDesk({
   children,
   overlay,
+  deskRef,
 }: {
   children: ReactNode
   /** Painted against the scroll box itself, not the centred content column. */
   overlay?: ReactNode
+  /** The scroll box, for a caller that fits its content to the width. */
+  deskRef?: RefObject<HTMLDivElement | null>
 }) {
   // The inner column is `w-max`: when the paper is wider than the canvas the
   // column grows to the paper instead of centring an over-wide box, so the
@@ -17,6 +20,7 @@ export function DocumentDesk({
   // direct child so the marker layer's measured offsets keep the desk origin.
   return (
     <div
+      ref={deskRef}
       data-document-desk
       className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
     >

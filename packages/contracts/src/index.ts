@@ -387,6 +387,30 @@ export const documentOpenResponseSchema = z.object({
 })
 export type DocumentOpenResponse = z.infer<typeof documentOpenResponseSchema>
 
+/**
+ * A document "Cite in document" can offer: one the person has opened, newest
+ * first, with what the editor needs before the citation can go there — the
+ * stored file type, and whether the person may edit the matter it belongs to.
+ * A row is not an access grant; the read is gated by the matter boundary.
+ */
+export const citationTargetSchema = z.object({
+  documentId: z.string().min(1),
+  matterId: z.string().min(1),
+  matterName: z.string().min(1),
+  filename: z.string().min(1),
+  fileType: z.string().min(1),
+  openedAt: z.string().datetime({ offset: true }),
+  canEdit: z.boolean(),
+})
+export type CitationTarget = z.infer<typeof citationTargetSchema>
+
+export const citationTargetsResponseSchema = z.object({
+  documents: z.array(citationTargetSchema),
+})
+export type CitationTargetsResponse = z.infer<
+  typeof citationTargetsResponseSchema
+>
+
 export const redactionFinalizeInputSchema = z.object({
   outputMode: outputModeSchema,
   degradedDetectionAcknowledged: z.boolean().optional(),
