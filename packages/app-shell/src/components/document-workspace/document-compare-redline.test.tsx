@@ -6,7 +6,10 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { DocumentComparisonView } from './document-compare-redline'
+import {
+  DocumentComparisonView,
+  comparisonPageZoom,
+} from './document-compare-redline'
 
 afterEach(cleanup)
 
@@ -98,5 +101,25 @@ describe('DocumentComparisonView', () => {
     expect(
       screen.getAllByText(/The Supplier shall supply not less than/u).length,
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('comparisonPageZoom', () => {
+  it('keeps the reading size when the desk has room for the paper', () => {
+    // 1440px window, sidebar and the docked Differences panel removed.
+    expect(comparisonPageZoom(808)).toBe(90)
+  })
+
+  it('shrinks the paper to the desk a docked panel leaves at 1024px', () => {
+    // 1024px window: 252px sidebar and a 380px panel leave ~390px of desk.
+    // At 90% the A4 sheet is 715px and runs under the panel, so the whole
+    // sheet has to fit the desk instead.
+    const zoom = comparisonPageZoom(392)
+    expect(zoom).toBeLessThan(90)
+    expect(Math.round((794 * zoom) / 100)).toBeLessThanOrEqual(392 - 64)
+  })
+
+  it('never shrinks below a size the sheet can still be read at', () => {
+    expect(comparisonPageZoom(120)).toBe(40)
   })
 })

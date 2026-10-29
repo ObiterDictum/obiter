@@ -361,7 +361,6 @@ export function editorMenus(
           commands: [
             {
               id: 'footnote',
-              stayOpen: true,
               label: story === 'footnotes' ? 'Close footnotes' : 'Footnote',
               pressed: story === 'footnotes',
               disabled:
@@ -369,6 +368,9 @@ export function editorMenus(
                 (story !== 'footnotes' &&
                   Boolean(structure.footnoteUnavailable)),
               disabledReason: structure?.footnoteUnavailable,
+              // Not `stayOpen`: opening or closing the notes pane is a move to
+              // the notes, so the menu closes and the caret goes there — the
+              // toggle is not one a reader repeats from the same menu.
               run: () => {
                 if (story === 'footnotes') actions.closeStory()
                 else structure?.onInsertFootnote()
