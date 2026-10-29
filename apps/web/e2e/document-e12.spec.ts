@@ -366,7 +366,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
   })
   await expect(returnButton).toBeVisible({ timeout: 60_000 })
   await returnButton.click()
-  await expect(page.getByText('Returned to document')).toBeVisible({
+  await expect(page.getByText('Saved to the matter')).toBeVisible({
     timeout: 30_000,
   })
   await expect(page.getByText(/Saved as version \d+ of the/)).toBeVisible()
