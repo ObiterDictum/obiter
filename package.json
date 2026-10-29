@@ -16,7 +16,7 @@
     "dev:web": "bun run --filter @obiter/web --if-present dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "oxlint && eslint .",
+    "lint": "oxlint && eslint . && bun scripts/lint/check-comments.mjs",
     "prefetch:rampart": "bun scripts/prefetch-rampart-model.ts",
     "bench:guard": "bun scripts/bench-guard.ts",
     "perf:bundle-budget": "bun scripts/perf/bundle-budget.mjs",

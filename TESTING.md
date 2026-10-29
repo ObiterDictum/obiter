@@ -10,6 +10,15 @@ Use this file to decide what verification is required before considering a chang
 - Verification should be proportionate to risk.
 - Legal-critical paths need stronger verification than cosmetic changes.
 
+## Tests Are the Specification
+
+The code has no comments (RULES.md), so its rules live in test names.
+
+- Each test name states one rule in plain English, as a line of the spec would: `decodes &amp; last so an encoded entity is never decoded twice`, `a grantee with view access cannot save a source`. Never `works`, `handles X`, `edge case` or a ticket number alone.
+- Group a behaviour's rules under a `describe` named for it.
+- Before changing a file, read the test names beside it: `grep -n "it(\|test(\|describe(" <file>.test.ts`.
+- A new rule gets a test named after it; a test that proves a rule gets a name that says so. A rule nothing can test (performance, an external service) goes in `docs/specs`.
+
 ## Minimum Standard
 
 For most changes, do all applicable items:
