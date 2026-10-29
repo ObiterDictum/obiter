@@ -122,6 +122,19 @@ describe('planDocumentSave addressability', () => {
     expect(plan.covered).toEqual([])
   })
 
+  it('does not treat an empty added-text list as a slot', () => {
+    const state: DraftState = {
+      ...emptyDraftState(),
+      extraRuns: { p1: [] },
+    }
+
+    const plan = planDocumentSave(model(['p1']), state)
+
+    expect(plan.operations).toEqual([])
+    expect(plan.covered).toEqual([])
+    expect(plan.blocked).toEqual([])
+  })
+
   it('reports covered slots for everything it can send', () => {
     const state: DraftState = {
       ...emptyDraftState(),
