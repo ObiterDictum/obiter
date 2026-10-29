@@ -1,13 +1,5 @@
 export { readInitialSearchQuery, readSearchErrorMessage, isTextEntryTarget }
 
-/**
- * Names the failure the API reported so the error panel never shows a
- * generic message for a specific outage. The error code is read from the
- * body, not the status alone: a 503 can name the search index or the
- * legal-source store, and only the code says which one is down. A 503 with
- * no recognised code is an infrastructure outage, and is reported as one
- * rather than blamed on a provider the corpus-only API never calls.
- */
 async function readSearchErrorMessage(response: Response): Promise<string> {
   if (response.status === 429) {
     return 'Search is busy. Try again shortly.'

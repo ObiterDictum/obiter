@@ -6,9 +6,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { ToastProvider } from '@obiter/ui'
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -32,16 +29,11 @@ mock.module('@tanstack/react-router', () =>
           {children}
         </a>
       ),
-      // "Cite in document" navigates; the source page never reads the
-      // router's location.
       useNavigate: () => () => undefined,
     }))(),
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { LegislationProvisionView } = await import('./LegislationProvisionView')
 
 const CURRENT_PAYLOAD = {
@@ -88,8 +80,6 @@ function renderView(path: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
-  // The page's source actions confirm with a toast, so the provider the frame
-  // mounts is here too.
   return render(
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
@@ -200,9 +190,7 @@ describe('LegislationProvisionView', () => {
 
     renderView('ukpga/2010/15/section/13')
 
-    // The Act's own heading for the section, not just its number.
     expect(await screen.findByText('Direct discrimination')).toBeTruthy()
-    // The number shown is the level's own: (1), (6), (a).
     expect(
       screen.getByRole('link', { name: 's. 13(1) of this provision' }),
     ).toBeTruthy()
@@ -212,9 +200,7 @@ describe('LegislationProvisionView', () => {
     expect(
       screen.getByText('A person (A) discriminates against another (B).'),
     ).toBeTruthy()
-    // A withheld level keeps its number and loses its wording.
     expect(screen.getByText(/Wording withheld/)).toBeTruthy()
-    // The retrieval date is the recorded one, not the "not recorded" warning.
     expect(screen.getByText(/Retrieved 6 Sept 2026/)).toBeTruthy()
   })
 

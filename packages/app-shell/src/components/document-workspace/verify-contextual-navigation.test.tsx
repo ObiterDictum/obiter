@@ -1,6 +1,4 @@
 import '@obiter/test-dom'
-// Moving between findings, reaching the ones the document cannot show, the
-// keyboard path, the responsive fallback and the stored-version boundary.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import {
@@ -27,7 +25,6 @@ describe('contextual verification evidence', () => {
     await waitFor(() => {
       expect(panel.textContent).toContain('[2012] UKSC 40')
     })
-    // The document target follows the selection.
     await waitFor(() => {
       const active = document.querySelector('[data-verification-active]')
       expect(active?.getAttribute('data-verification-paragraph-id')).toBe('p2')
@@ -68,14 +65,9 @@ describe('contextual verification evidence', () => {
     await screen.findByRole('dialog')
     fireEvent.click(screen.getAllByRole('button', { name: 'All findings' })[0]!)
     const index = await screen.findByRole('dialog')
-    // A real pointerdown, not a click: the panel's dismissal listener must not
-    // treat the modal index as outside it. The modal aria-hides the panel while
-    // it is open, so assert the element survives rather than staying exposed.
     fireEvent.pointerDown(index)
     expect(document.querySelector('[data-verification-panel]')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'All findings' })).toBeTruthy()
-    // Escape inside the index closes only the index; the panel returns with the
-    // same finding selected.
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: 'All findings' })).toBeNull()
@@ -109,8 +101,6 @@ describe('contextual verification evidence', () => {
     await screen.findByRole('dialog')
     expect(document.querySelector('[data-verification-active]')).toBeTruthy()
     view.rerender(workspaceElement('doc_2'))
-    // The panel and the active marker from document A must not survive into
-    // document B, even though the finding and paragraph ids overlap.
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.querySelector('[data-verification-active]')).toBeNull()
   })

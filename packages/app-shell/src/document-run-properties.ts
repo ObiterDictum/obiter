@@ -8,39 +8,13 @@ import {
 import { decodeXmlReferences, findXmlTagEnd } from '@obiter/ooxml'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 
-/**
- * One interpretation of a run's `w:rPr` flags and values, shared by the paint
- * layer, the control-state reader and the saved-history reader so the toolbar
- * cannot report a state the document does not paint or undo.
- *
- * Two rules keep the reads honest:
- *
- * - A tracked change stores its history in a nested `w:rPrChange/w:rPr`, so the
- *   current properties are read after that subtree is dropped. Reading the
- *   fragments wholesale finds a historical element when the current one is
- *   absent and reports a value the document no longer has.
- * - A flag is off for `0`, `false` and `off`, and an enum value is matched
- *   case-insensitively to the contract's canonical option. Word's own writer
- *   may spell these differently from the contract.
- */
-
 const RUN_HISTORY_ELEMENTS = new Set(['rPrChange'])
 const PARAGRAPH_HISTORY_ELEMENTS = new Set(['rPrChange', 'pPrChange'])
 
-/**
- * The run properties with any tracked history removed. A tracked change
- * stores a nested historical `w:rPr` under `w:rPrChange`, so the current
- * properties are read after that element is spliced out.
- */
 export function withoutTrackedRunProperties(xml: string): string {
   return withoutTrackedHistory(xml, RUN_HISTORY_ELEMENTS)
 }
 
-/**
- * The same read for paragraph-level fragments: a `w:pPrChange` holds the
- * previous `w:pPr` — including the paragraph-mark `w:rPr` — so it is history
- * exactly as `w:rPrChange` is for a run.
- */
 export function withoutTrackedParagraphProperties(xml: string): string {
   return withoutTrackedHistory(xml, PARAGRAPH_HISTORY_ELEMENTS)
 }
@@ -52,16 +26,6 @@ type ScannedTag = {
   selfClosing: boolean
 }
 
-/**
- * Splice the tracked-change elements out of a fragment by scanning tags
- * quote-aware rather than pairing by indexOf — a `/>` open drops only its own
- * tag, a paired open drops to its own depth-matched close, and an unclosed
- * change consumes the fragment's tail because everything after its open is
- * inside the element. A `>` inside an attribute value never ends a tag. A
- * tag-strip regex would be the incomplete-sanitization shape CodeQL flags, so
- * the scan is index-based on the shared `findXmlTagEnd` lexer. Malformed tags
- * that never close keep the remainder verbatim: their extent is unknowable.
- */
 function withoutTrackedHistory(
   xml: string,
   names: ReadonlySet<string>,
@@ -86,11 +50,6 @@ function withoutTrackedHistory(
   }
 }
 
-/**
- * The position one past the matching close of the element whose open tag ends
- * at `openEnd`, or the fragment's end when the element never closes — an
- * unclosed change wraps the rest of the fragment, which is all history.
- */
 function changeElementEnd(
   xml: string,
   openEnd: number,
@@ -116,7 +75,6 @@ function changeElementEnd(
   }
 }
 
-/** The tag or construct opening at `index` ends here; undefined when unclosed. */
 function tagEnd(xml: string, index: number): number | undefined {
   if (xml.startsWith('<!--', index)) return markerEnd(xml, '-->', index + 4)
   if (xml.startsWith('<![CDATA[', index))
@@ -156,21 +114,12 @@ function xmlPrefix(xml: string): string {
   return xml.match(/<([A-Za-z_][\w.-]*):/u)?.[1] ?? 'w'
 }
 
-/**
- * An attribute's value, matched only at an attribute boundary so a name that
- * merely ends in `val` (`w:interval`, `x:val`) cannot answer for `w:val`.
- */
 function wordAttr(attrs: string | undefined, name: string, prefix: string) {
   return attrs?.match(
     new RegExp(`(?:^|\\s)(?:${prefix}:)?${name}="([^"]+)"`, 'i'),
   )?.[1]
 }
 
-/**
- * The attributes of the first `<prefix:localName>` tag. The tag end is scanned
- * quote-aware because `>` is legal inside an attribute value; an unclosed tag
- * reads as absent.
- */
 function tagAttrs(
   xml: string,
   prefix: string,
@@ -205,7 +154,6 @@ function optionOf<T extends string>(
   return options.find((option) => option.toLowerCase() === lower) ?? null
 }
 
-/** A run flag: `null` when the current `rPr` does not set it. */
 export function runFlag(xml: string, localName: string): boolean | null {
   const current = withoutTrackedRunProperties(xml)
   const prefix = xmlPrefix(current)
@@ -214,7 +162,6 @@ export function runFlag(xml: string, localName: string): boolean | null {
   return value !== '0' && value !== 'false' && value !== 'off'
 }
 
-/** Underline is a value, not a toggle: `none` is the explicit release. */
 export function runUnderline(xml: string): boolean | null {
   const current = withoutTrackedRunProperties(xml)
   const prefix = xmlPrefix(current)
@@ -241,7 +188,6 @@ export function runVertAlign(xml: string): VertAlignValue | null {
   )
 }
 
-/** The run's named font, read from `w:rFonts`, or null when it is inherited. */
 export function runFontFamily(xml: string): string | null {
   const current = withoutTrackedRunProperties(xml)
   const prefix = xmlPrefix(current)
@@ -256,7 +202,6 @@ export function runFontFamily(xml: string): string | null {
     : null
 }
 
-/** The run's size in half-points, the unit the edit contract carries. */
 export function runFontSize(xml: string): number | null {
   const current = withoutTrackedRunProperties(xml)
   const prefix = xmlPrefix(current)
@@ -270,12 +215,6 @@ export function runFontSize(xml: string): number | null {
     : null
 }
 
-/**
- * Decodes XML attribute references, returning null when the value is not a
- * well-formed attribute value. The reference decoder is the shared OOXML lexer
- * one; a malformed reference is exotic source content, so dropping only the
- * property keeps the reader and the draft that consumes it from failing on it.
- */
 function decodeAttributeReferences(value: string): string | null {
   try {
     return decodeXmlReferences(value)
@@ -284,10 +223,6 @@ function decodeAttributeReferences(value: string): string | null {
   }
 }
 
-/**
- * The run's colour as the contract spells it: `auto` or six upper-case hex
- * digits, so a select's options compare against one canonical form.
- */
 export function runColour(xml: string): string | null {
   const current = withoutTrackedRunProperties(xml)
   const prefix = xmlPrefix(current)

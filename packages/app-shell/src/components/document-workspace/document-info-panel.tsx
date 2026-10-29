@@ -8,7 +8,6 @@ import type {
 import { formatBytes, formatDateTime } from '../../format'
 import { RedactedMark } from '../../redacted-mark'
 
-/** The product's name for a stored file type, not the raw MIME. */
 function fileTypeLabel(fileType: string) {
   switch (fileType.toLowerCase()) {
     case 'docx':
@@ -22,12 +21,6 @@ function fileTypeLabel(fileType: string) {
   }
 }
 
-/**
- * The `?` panel: everything the editor header used to carry as loose metadata.
- * It reads the document the route already loaded, so opening it costs no
- * request, and it keeps the version list where the person asked for details
- * rather than above the page.
- */
 export function DocumentInfoPanel({
   open,
   onClose,
@@ -41,7 +34,6 @@ export function DocumentInfoPanel({
   onClose: () => void
   popout?: PanelPopout
   document: MatterDocumentRecord
-  /** The matter's name and reference, as a node: only the route has them. */
   matterLink?: ReactNode
   versions: DocumentVersionRecord[]
   onViewVersion?: (versionId: string) => void

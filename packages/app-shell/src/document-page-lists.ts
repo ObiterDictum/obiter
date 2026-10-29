@@ -21,8 +21,6 @@ export function documentListMarkers(
   model: DocumentModelWire,
 ): Map<string, ListMarker> {
   const markers = new Map<string, ListMarker>()
-  // A numbering instance restarts inside each story — the body and each
-  // header/footer number independently — so the counters are per story.
   for (const story of editableStories(model)) {
     const counters = new Map<string, number[]>()
     for (const paragraph of story.paragraphs) {
@@ -84,9 +82,6 @@ export function paragraphNumPr(
 function numPrFromXml(
   xml: string,
 ): { numId: string; ilvl: number } | undefined {
-  // A tracked pPrChange stores the previous numbering inside itself; the same
-  // current-versus-history read as the face so a foreign change cannot paint
-  // a marker the paragraph no longer has.
   const block = withoutTrackedParagraphProperties(xml).match(
     /<w:numPr\b[\s\S]*?<\/w:numPr>/i,
   )?.[0]
@@ -120,10 +115,6 @@ function nextCounters(
 ): number[] {
   const values = [...(counters.get(numberingId) ?? [])]
   while (values.length <= ilvl) values.push(0)
-  // The parser folds a per-level `w:startOverride` into the level's own
-  // `start`, so that value is the only correct restart for this level. The
-  // instance-level `startOverride` is its first override at any level and
-  // would apply another level's restart here.
   const start = level.start ?? 1
   values[ilvl] = (values[ilvl] || start - 1) + 1
   values.length = ilvl + 1

@@ -55,8 +55,6 @@ const model: DocumentModelWire = {
   },
 }
 
-/** The five runs `insertPageNumber` stores: the result run holds no text —
- * the instruction resolves at paint time. */
 function storedPageFieldRuns(prefix: string) {
   return [
     {
@@ -103,7 +101,6 @@ describe('an open margin story', () => {
     const band = screen.getByLabelText('Document header')
     expect(band.querySelector('[data-paragraph-id="h1"]')).not.toBeNull()
     expect(within(band).getByLabelText('Paragraph text')).toBeTruthy()
-    // The body keeps painting but holds no editable field.
     const body = screen.getByLabelText('Document body')
     expect(body.textContent).toContain('Body text')
     expect(body.querySelector('textarea')).toBeNull()
@@ -165,7 +162,6 @@ describe('an open margin story', () => {
     const band = screen.getByLabelText('Document header')
     expect(band.textContent).toContain('Running head')
     expect(band.querySelector('textarea')).toBeNull()
-    // The read-only band takes no pointer events.
     expect(band.className).toContain('pointer-events-none')
   })
 
@@ -198,8 +194,6 @@ describe('an open margin story', () => {
         editing
       />,
     )
-    // Clicking inside the editable band but below its paragraphs lands on the
-    // nearest editable paragraph, never on the body.
     const band = screen.getByLabelText('Document header')
     fireEvent.click(band, { clientX: 24, clientY: 400 })
     expect(selected).toEqual(['h1'])
@@ -225,8 +219,6 @@ describe('an open margin story', () => {
       clientY: 12,
     })
     expect(exited).toBe(true)
-    // The focused margin field may reseat its caret on blur first; the click
-    // still ends on the body paragraph.
     expect(selected.at(-1)).toBe('p1')
   })
 })

@@ -7,15 +7,6 @@ import {
 
 export const MEASURE_FONT = 'Calibri, "Segoe UI", "Liberation Sans", sans-serif'
 
-/**
- * One row of the browser's visual line model: it carries the display code units
- * `[from, to)` a textarea paints on that row. A hard break terminates the row
- * it ends rather than displaying, so the row it terminates ends one code unit
- * before the next row starts. The offset that renders at a row's visual end is
- * `to`, owned by this row when the next row starts after it (hard break) or it
- * is the final row, and owned by the next row when they share a soft-wrap
- * boundary.
- */
 export type WrappedLine = {
   text: string
   from: number
@@ -23,15 +14,12 @@ export type WrappedLine = {
 }
 
 export type TakeFragmentResult = {
-  /** Display code units placed, so the block slice is `[offset, offset + shown)`. */
   shown: number
-  /** Code units consumed, so the next fragment resumes at `offset + consumed`. */
   consumed: number
   heightPx: number
   padLeftPx: number
   padRightPx: number
   lines: number
-  /** Every row of the text is placed, the trailing empty one included. */
   complete: boolean
   skipTo?: number
 }
@@ -45,11 +33,6 @@ export function takeFragment(input: {
   fontSize: number
   fontFamily?: string
   indent: number
-  /**
-   * Line 1's extra offset: positive for `w:firstLine`, negative for `w:hanging`.
-   * It applies to the paragraph's first row only, which is the fragment's first
-   * row only when the fragment starts at the paragraph's first code unit.
-   */
   textIndentPx?: number
   column: ColumnFrame
   frame: ContentFrame
@@ -73,8 +56,6 @@ export function takeFragment(input: {
   let padRightPx = 0
   let lines = 0
   let padsLocked = false
-  // A textarea paints an empty row after a trailing break. It consumes no code
-  // units, so the loop needs its own flag to place it rather than `offset`.
   let trailingRow = input.text.endsWith('\n')
   while (offset < input.text.length || trailingRow) {
     const inset = lineInset(
@@ -110,8 +91,6 @@ export function takeFragment(input: {
     padRightPx = inset.padRightPx
     padsLocked = true
     if (offset < input.text.length) {
-      // The paragraph's first row carries the first-line indent, so it wraps
-      // against whatever width that leaves; every later row keeps the body edge.
       const firstRow = input.offset === 0 && lines === 0
       const width = Math.max(
         1,
@@ -134,7 +113,6 @@ export function takeFragment(input: {
       shown = offset - input.offset + display
       offset += taken
     } else {
-      // The empty row after a trailing break sits at the end of the text.
       shown = offset - input.offset
       trailingRow = false
     }
@@ -148,8 +126,6 @@ export function takeFragment(input: {
     padLeftPx,
     padRightPx,
     lines,
-    // An unplaced trailing row is not a finished paragraph even though the
-    // code units are exhausted, so the caller advances the page for it.
     complete: !trailingRow && offset >= input.text.length,
   }
 }
@@ -169,8 +145,6 @@ export function countLines(
       text,
       offset,
       fontSizePx,
-      // Line 1 is the one the first-line indent narrows, exactly as in
-      // `takeFragment`, so a keep or widow decision counts the rows that paint.
       Math.max(1, widthPx - (offset === 0 ? textIndentPx : 0)),
       fontFamily,
     )
@@ -178,22 +152,9 @@ export function countLines(
     offset += taken
     lines += 1
   }
-  // A trailing break opens a further empty row, so the paragraph is one row
-  // taller than its break-terminated segments.
   return Math.max(1, lines) + (text.endsWith('\n') ? 1 : 0)
 }
 
-/**
- * Line 1's indent for one paragraph block's wrap. `bodyEdge` is true when the
- * block begins on the body edge rather than at the paragraph's first code unit:
- * a list, whose marker carries the indent as its own marker column; a
- * continuation; or the block a page break inside the paragraph opens, which the
- * layout reports with `continuation` false and an offset above zero. The paint
- * applies the same number as CSS `text-indent`, which is why it is read from the
- * face rather than passed in, and the editor's textarea has to state it as well
- * because a form control resets `text-indent` and would otherwise start line 1
- * on the body edge.
- */
 export function firstLineIndentPx(
   face: ParagraphFace,
   bodyEdge: boolean,
@@ -201,14 +162,6 @@ export function firstLineIndentPx(
   return bodyEdge ? 0 : paragraphTextIndentPx(face)
 }
 
-/**
- * Display spans for a paragraph in the browser's visual line model: one row per
- * hard-break segment plus soft wraps, and the empty row a trailing break opens.
- * A row's `to` excludes the newline that terminates it, so a hard break leaves
- * a one code unit gap before the next row while a soft wrap shares its
- * boundary, which `lineIndex` in `paragraph-arrow.ts` relies on to decide caret
- * ownership at a break.
- */
 export function wrapLines(
   text: string,
   fontSizePx: number,
@@ -224,8 +177,6 @@ export function wrapLines(
       text,
       offset,
       fontSizePx,
-      // The paint shifts line 1 by the first-line indent, so the row the editor
-      // and the caret model believe in has to be the narrower one.
       Math.max(1, widthPx - (offset === 0 ? textIndentPx : 0)),
       fontFamily,
     )
@@ -239,7 +190,6 @@ export function wrapLines(
     })
     offset += taken
   }
-  // The projection owns the caret offset a textarea shows at `text.length`.
   if (text.endsWith('\n')) {
     lines.push({ text: '', from: text.length, to: text.length })
   }
@@ -263,8 +213,6 @@ export function takeLine(
   }
   const first = haystack[0]
   if (first && textWidthPx(first, fontSizePx, fontFamily) > widthPx) {
-    // The character overflows on its own. It still holds its row, and a newline
-    // directly after it terminates that row rather than opening an empty one.
     return newline === 1 ? 2 : 1
   }
   let lo = 1
@@ -300,10 +248,6 @@ function textWidthPx(
   if (!text) return 0
   const ctx = measureContext()
   if (ctx) {
-    // Assigning `ctx.font` parses the CSS font shorthand and re-resolves the
-    // fallback stack every time, and line wrapping measures the same font
-    // thousands of times per layout (tens of thousands on a long document), so
-    // assign only when the font actually changes.
     const font = `${fontSizePx}px ${fontFamily}`
     if (measuredFont !== font) {
       ctx.font = font
@@ -316,7 +260,6 @@ function textWidthPx(
 }
 
 let measureCtx: CanvasRenderingContext2D | null | undefined
-/** The font `measureCtx` currently carries, so it is not re-parsed per call. */
 let measuredFont = ''
 
 function measureContext(): CanvasRenderingContext2D | null {

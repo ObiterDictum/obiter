@@ -64,8 +64,6 @@ const model: DocumentModelWire = {
   },
 }
 
-/** The hit endpoints as plain tuples — an independent oracle of where the
- * range lands, not a re-run of the matching code. */
 const ends = (hits: readonly FindHit[]) =>
   hits.map((hit) => [hit.from, hit.to] as const)
 
@@ -116,60 +114,41 @@ describe('find in text', () => {
       { start: 9, end: 12 },
     ])
     expect(findInText('cat\nend', 'cat', whole)).toEqual([{ start: 0, end: 3 }])
-    // Non-ASCII punctuation and currency are boundaries, not word letters.
     expect(findInText('£cat—x', 'cat', whole)).toEqual([{ start: 1, end: 4 }])
     expect(findInText('cat5 _cat', 'cat', whole)).toEqual([])
   })
 
   it('folds and composes Unicode without splitting clusters', () => {
-    // Decomposed 'e'+́ matches a composed query, covering both code units.
     expect(findInText('café au lait', 'café', OPTIONS)).toEqual([
       { start: 0, end: 5 },
     ])
     expect(findInText('café au lait', 'café', OPTIONS)).toEqual([
       { start: 0, end: 4 },
     ])
-    // …but the accented letter is not the unaccented one.
     expect(findInText('café', 'cafe', OPTIONS)).toEqual([])
-    // Astral code points are single letters: a hit covers both surrogate
-    // units, and offsets stay UTF-16-exact around it.
     expect(findInText('a𝕏b', '𝕏', OPTIONS)).toEqual([{ start: 1, end: 3 }])
     expect(findInText('a𝕏b', 'b', OPTIONS)).toEqual([{ start: 3, end: 4 }])
-    // Turkish İ folds to 'i' + combining dot: 'i' matches, and the hit maps
-    // to the whole stored letter rather than half its fold.
     expect(findInText('İstanbul', 'i', OPTIONS)).toEqual([{ start: 0, end: 1 }])
-    // …and a composed 'İ' query folds to the same two units, matching the
-    // stored cluster but never a bare 'i' — the fold tail must participate.
     expect(findInText('İstanbul', 'İ', OPTIONS)).toEqual([{ start: 0, end: 1 }])
     expect(findInText('istanbul', 'İ', OPTIONS)).toEqual([])
-    // Folding is locale-independent: dotless ı and I stay different letters.
     expect(findInText('istanbul', 'I', OPTIONS)).toEqual([{ start: 0, end: 1 }])
     expect(findInText('ıstanbul', 'I', OPTIONS)).toEqual([])
-    // …and there is no multi-letter expansion: 'ß' is only 'ß', never 'ss'.
     expect(findInText('straße', 'ss', OPTIONS)).toEqual([])
     expect(findInText('strasse', 'ß', OPTIONS)).toEqual([])
   })
 
   it('folds the Greek final sigma the same on both sides', () => {
-    // A case-insensitive query identical to the stored text must find it —
-    // 'ΟΔΟΣ' ends in a sigma whose whole-string fold is 'ς' while a bare
-    // cluster folds to 'σ', and the two sides once disagreed into a miss.
     expect(findInText('ΟΔΟΣ', 'ΟΔΟΣ', OPTIONS)).toEqual([{ start: 0, end: 4 }])
-    // Final sigma, medial sigma and capital sigma are the same letter for
-    // matching, in both directions.
     expect(findInText('ΟΔΟΣ', 'οδος', OPTIONS)).toEqual([{ start: 0, end: 4 }])
     expect(findInText('οδος', 'ΟΔΟΣ', OPTIONS)).toEqual([{ start: 0, end: 4 }])
     expect(findInText('οδοσ', 'ΟΔΟΣ', OPTIONS)).toEqual([{ start: 0, end: 4 }])
     expect(findInText('ς', 'Σ', OPTIONS)).toEqual([{ start: 0, end: 1 }])
     expect(findInText('Σ', 'ς', OPTIONS)).toEqual([{ start: 0, end: 1 }])
-    // Whole word still reads the stored letters: 'οδος' is only a prefix
-    // of 'ΟΔΟΣΑ', but the whole word inside a sentence matches.
     const whole = { matchCase: false, wholeWord: true }
     expect(findInText('ΟΔΟΣΑ', 'οδος', whole)).toEqual([])
     expect(findInText('η ΟΔΟΣ μου', 'οδος', whole)).toEqual([
       { start: 2, end: 6 },
     ])
-    // Match case keeps the forms distinct.
     expect(
       findInText('ΟΔΟΣ', 'οδος', { matchCase: true, wholeWord: false }),
     ).toEqual([])
@@ -180,8 +159,6 @@ describe('find in text', () => {
 
   it('keeps word edges honest around combining marks and astral letters', () => {
     const whole = { matchCase: false, wholeWord: true }
-    // 'é' inside a longer word is not a whole-word hit — a combining mark at
-    // the edge is still part of the word, stored composed or decomposed.
     expect(findInText('bést bést', 'é', whole)).toEqual([])
     expect(findInText('the é best', 'é', whole)).toEqual([{ start: 4, end: 5 }])
     expect(findInText('𝕏 b', 'b', whole)).toEqual([{ start: 3, end: 4 }])
@@ -278,8 +255,6 @@ describe('find in document', () => {
         { paragraphId: 'p2', offset: 5 },
       ],
     ])
-    // The break belongs to the hit: each covered paragraph reports its slice,
-    // and the replaced range covers the break too.
     expect(hits[0]?.segments).toEqual([
       { paragraphId: 'p1', start: 6, end: 11 },
       { paragraphId: 'p2', start: 0, end: 5 },
@@ -359,7 +334,6 @@ describe('find in document', () => {
         },
       ],
     }
-    // The cell's own text is findable…
     expect(
       ends(findInDocument(withTable, state({}, [], [], {}), 'cell')),
     ).toEqual([
@@ -368,7 +342,6 @@ describe('find in document', () => {
         { paragraphId: 'para-w14-CELLOO01', offset: 4 },
       ],
     ])
-    // …but a query cannot bridge the container edges into reading order.
     expect(findInDocument(withTable, state({}, [], [], {}), 'in cell')).toEqual(
       [],
     )
@@ -399,9 +372,6 @@ describe('find in document', () => {
       ],
     ])
 
-    // Backspace-join moves the lower paragraph's run into the upper
-    // paragraph's extraRuns; its text must be findable with the offset the
-    // editor renders at.
     expect(
       ends(
         findInDocument(
@@ -419,7 +389,6 @@ describe('find in document', () => {
       ],
     ])
 
-    // extraRuns text also honours drafts on the extra run.
     expect(
       ends(
         findInDocument(

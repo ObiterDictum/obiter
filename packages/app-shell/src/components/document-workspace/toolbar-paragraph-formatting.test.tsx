@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * E3 paragraph formatting: Align left/centre/right/justify, Line spacing and
- * the Layout Indent control must apply to every paragraph the target covers,
- * paint the same paragraph layout the save sends, and move in one history step.
- * The effective readers and the save-plan slot live in
- * document-paragraph-format.test.ts; this is the mounted-control surface.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -60,13 +53,6 @@ function save(editAsync: ReturnType<typeof vi.fn>) {
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
-/**
- * Line spacing and Indent are Base UI Selects; applying one is a browser
- * journey and is covered end to end by document-paragraph-formatting.spec.ts,
- * which asserts the painted and stored values in a fresh context. The mounted
- * assertions here cover the controls that are plain buttons.
- */
-
 describe('the paragraph formatting controls', () => {
   it('applies an alignment, paints it, and saves one operation', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
@@ -110,8 +96,6 @@ describe('the paragraph formatting controls', () => {
     openRibbonTab('Home')
     clickParagraph('p1')
 
-    // A paragraph-format change has a tracked pPrChange writer, so unlike a
-    // partial run range it is recorded rather than refused.
     expect(control('Align right').disabled).toBe(false)
     fireEvent.click(control('Align right'))
     expect(pressed('Align right')).toBe('true')

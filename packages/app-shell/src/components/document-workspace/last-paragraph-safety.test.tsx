@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * E0: the editor must never reach a zero-paragraph state. These component
- * regressions pin the Delete paragraph availability, its accessible reason,
- * and that a refused deletion leaves no dirty document behind. The domain
- * matrix lives in document-edits.test.ts; this file proves the ribbon and the
- * caret-facing behaviour the save path depends on.
- */
 import { fireEvent } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { LAST_PARAGRAPH_MESSAGE } from '../../document-edits'
@@ -18,11 +11,6 @@ import {
 import { commandDisabled, commandReason } from './editor-test-commands'
 import { bodyField, clickParagraph } from './paragraph-selection-harness'
 
-/**
- * The Edit menu's Delete paragraph row. Base UI marks a menu item unavailable
- * with `aria-disabled`, and carries the reason as a description beside the
- * row rather than in its name.
- */
 function deleteButton() {
   return command('Delete paragraph')
 }
@@ -37,7 +25,6 @@ function renderedParagraphCount(): number {
   ).size
 }
 
-/** The paragraph the caret currently holds, from the workspace's own marker. */
 function selectedParagraphId(): string | null {
   return (
     document
@@ -60,7 +47,6 @@ describe('last-paragraph deletion safety', () => {
     const button = deleteButton()
     expect(commandDisabled(button)).toBe(true)
     expect(commandReason(button)).toBe(LAST_PARAGRAPH_MESSAGE)
-    // The refused control cannot make the document dirty, so Save stays off.
     expect(saveButton()).toHaveProperty('disabled', true)
   })
 
@@ -81,14 +67,10 @@ describe('last-paragraph deletion safety', () => {
     clickParagraph('p1')
     expect(commandDisabled(deleteButton())).toBe(true)
 
-    // A pending inserted paragraph is an effective paragraph, so the guard
-    // lifts as soon as the second paragraph exists.
     fireEvent.click(command('Insert paragraph'))
     expect(renderedParagraphCount()).toBe(2)
     expect(commandDisabled(deleteButton())).toBe(false)
 
-    // Deleting the pending insert is safe and returns the document to one
-    // effective paragraph, so the control disables again.
     fireEvent.click(deleteButton())
     expect(renderedParagraphCount()).toBe(1)
     expect(commandDisabled(deleteButton())).toBe(true)
@@ -102,8 +84,6 @@ describe('last-paragraph deletion safety', () => {
 
     fireEvent.click(deleteButton())
 
-    // One paragraph survives, it holds the caret, and the deletion is a real
-    // pending operation the Save can persist.
     expect(renderedParagraphCount()).toBe(1)
     expect(selectedParagraphId()).toBe('p1')
     expect(bodyField().value).toBe('Hello')
@@ -121,7 +101,6 @@ describe('last-paragraph deletion safety', () => {
     clickParagraph('p2')
     fireEvent.click(deleteButton())
 
-    // Only p1 is left, and the control is unavailable for it.
     expect(commandDisabled(deleteButton())).toBe(true)
     expect(commandReason(deleteButton())).toBe(LAST_PARAGRAPH_MESSAGE)
     expect(renderedParagraphCount()).toBe(1)

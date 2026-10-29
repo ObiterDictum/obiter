@@ -29,8 +29,6 @@ import {
   type CaseLawParagraph,
 } from './case-law-document-query'
 
-// Kept on this module's surface for importers that expect the view and its
-// query together; the query itself is owned by case-law-document-query.
 export { caseLawDocumentQueryOptions }
 export type { CaseLawDocumentResponse } from './case-law-document-query'
 
@@ -94,9 +92,6 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
         paragraph.text.toLowerCase().includes(trimmedCaseQuery.toLowerCase()),
       )
     : paragraphs
-  // A heading the court numbered can repeat a paragraph's number. The first
-  // holder in the whole judgment keeps the anchor, so ids stay unique and a
-  // deep link lands on the same paragraph whether or not a search is active.
   const anchorOwners = new Map<number, string>()
   for (const paragraph of paragraphs) {
     if (!anchorOwners.has(paragraph.paragraphNumber))
@@ -310,10 +305,6 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   )
 }
 
-/**
- * The court's own published summary, quoted whole. Labelled with what was
- * published and where, so it cannot be mistaken for an Obiter headnote.
- */
 function PublishedSummaryCard({
   summary,
   courtLabel,
@@ -347,7 +338,6 @@ function PublishedSummaryCard({
   )
 }
 
-/** Exhaustive by type: a new published summary kind cannot ship unlabelled. */
 const publishedSummaryLabels = {
   press_summary: 'Press summary',
 } satisfies Record<CaseLawSummaryResponse['kind'], string>

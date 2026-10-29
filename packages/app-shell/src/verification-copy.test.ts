@@ -63,8 +63,6 @@ describe('finding state wording', () => {
     ).toBe('Authority is held in the stored sources')
   })
 
-  // A finding that needs review states its limit once, in the explanation the
-  // check wrote; a second sentence saying the same thing was noise on the card.
   it('adds no second sentence to a finding that needs review', () => {
     for (const reviewReason of [
       'citation_unresolved',
@@ -88,7 +86,6 @@ describe('finding state wording', () => {
         authorityName: 'Wood v Capita Insurance Services Ltd',
       }),
     ).toBe('Wood v Capita Insurance Services Ltd [2017] UKSC 24')
-    // No stored title: the citation is shown alone rather than a name invented.
     expect(
       verificationAuthority({
         authorityLabel: '[2099] UKSC 9',
@@ -167,11 +164,9 @@ describe('finding state wording', () => {
     expect(verificationDismissalRecord(dismissal, 'usr_1')).toBe(
       `Dismissed by you · ${formatRunTime(dismissal.dismissedAt)}`,
     )
-    // A colleague reads the decider's name, not "another reviewer".
     expect(verificationDismissalRecord(dismissal, 'usr_2')).toBe(
       `Dismissed by Priya Shah · ${formatRunTime(dismissal.dismissedAt)}`,
     )
-    // A name the organisation no longer holds is not replaced by an id or a guess.
     expect(
       verificationDismissalRecord(
         { ...dismissal, dismissedByName: null },

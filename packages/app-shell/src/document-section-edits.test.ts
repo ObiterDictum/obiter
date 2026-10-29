@@ -72,7 +72,6 @@ describe('section format controls', () => {
     const flipped = toggleSectionOrientation(withSize, model)
     expect(flipped.section.orientation).toBe('landscape')
     expect(flipped.section.pageSize).toEqual({ width: 16_838, height: 11_906 })
-    // A draft that carries only an orientation leaves the size to the writer.
     const orientationOnly = toggleSectionOrientation(emptyFormatDrafts, model)
     expect(orientationOnly.section.pageSize).toBeUndefined()
     expect(sectionDraftFields(orientationOnly.section)).toEqual({
@@ -268,8 +267,6 @@ describe('section pagination', () => {
         },
       ],
     }
-    // The recorded section is history, so the body stays one section:
-    // anything else registers a phantom break at p1 and splits the pages.
     expect(layoutDocument(withHistory)).toHaveLength(1)
   })
 
@@ -283,7 +280,6 @@ describe('section pagination', () => {
     )
     expect(painted?.preservedXmlFragments.join('')).toContain('<w:sectPr')
     expect(withBreakDrafts(base, [])).toBe(base)
-    // A page break is laid out at its offset, not appended to the paragraph.
     expect(
       withBreakDrafts(base, [
         { id: 'b2', paragraphId: 'p1', offset: 0, kind: 'page' },
@@ -303,9 +299,6 @@ describe('section pagination', () => {
     const painted = doubled.stories[0]?.paragraphs.find(
       (item) => item.id === 'p2',
     )
-    // The writer refuses a second section break on the same paragraph, so the
-    // preview must register exactly one section or later sections' geometry
-    // index shifts.
     expect(
       painted?.preservedXmlFragments.join('').match(/<w:sectPr\b/gu),
     ).toHaveLength(1)
@@ -313,9 +306,6 @@ describe('section pagination', () => {
   })
 
   it('merges a pending section break into an existing paragraph properties fragment', () => {
-    // The writer inserts the section into the paragraph's live `w:pPr`, so the
-    // painted model must merge there too instead of appending a second
-    // properties fragment the save would never produce.
     const base = modelWithParagraphFragments({
       p1: ['<w:pPr><w:jc w:val="center"/></w:pPr>'],
     })
@@ -329,15 +319,12 @@ describe('section pagination', () => {
       fragments.find((fragment) => /<w:pPr\b/u.test(fragment)) ?? ''
     expect(properties).toContain('<w:jc w:val="center"/>')
     expect(properties).toContain('<w:sectPr')
-    // `w:sectPr` is last in `CT_PPr`, after `w:jc`.
     expect(properties.indexOf('<w:sectPr')).toBeGreaterThan(
       properties.indexOf('<w:jc'),
     )
   })
 
   it('leaves a paragraph that already ends a section unpainted', () => {
-    // The writer refuses a second section on this paragraph, so painting one
-    // would register a phantom section the save never writes.
     const existing =
       '<w:pPr><w:sectPr><w:pgSz w:w="8000" w:h="6000"/><w:pgMar w:top="720"/></w:sectPr></w:pPr>'
     const base = modelWithParagraphFragments({ p1: [existing], p2: [] })
@@ -351,7 +338,6 @@ describe('section pagination', () => {
     expect(
       paragraph?.preservedXmlFragments.join('').match(/<w:sectPr\b/gu),
     ).toHaveLength(1)
-    // The existing section and the body-level section: no phantom third.
     expect(documentSections(painted)).toHaveLength(2)
   })
 
@@ -371,7 +357,6 @@ describe('section pagination', () => {
     expect(first.paragraph.id).toBe('p1')
     expect(first.from).toBe(0)
     expect(first.to).toBe(2)
-    // The remainder of p1 and the following paragraph start the new sheet.
     const second = pages[1]?.blocks
     const secondParagraphs = (second ?? []).flatMap((block) =>
       block.type === 'paragraph' ? [block.paragraph.id] : [],
@@ -389,7 +374,6 @@ describe('section pagination', () => {
   })
 
   it('paints two page breaks on one paragraph in text order, not insertion order', () => {
-    // 'p1' is 'text': out-of-order drafts 3 then 1 must still split at 1 first.
     const pages = layoutDocument(model(['p1']), undefined, [], {}, undefined, [
       { id: 'b1', paragraphId: 'p1', offset: 3, kind: 'page' },
       { id: 'b2', paragraphId: 'p1', offset: 1, kind: 'page' },
@@ -414,8 +398,6 @@ describe('section pagination', () => {
       { type: 'set_section_properties', margins: { top: 720 } },
       { type: 'insert_section_break', paragraphId: 'p1' },
     ])
-    // Paint seeds the same geometry: formattedModel applies the section draft
-    // before the break is folded, so both paths read the new margins.
     const painted = withBreakDrafts(
       formattedModel(model, state.format),
       state.breaks,

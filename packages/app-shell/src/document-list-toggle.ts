@@ -28,11 +28,6 @@ export function findNumberingInstance(
   return model.numbering.find((item) => item.numberingId === numberingId)
 }
 
-/**
- * The numbering instance a list kind is applied from. Several instances can
- * match one kind; the lowest numeric id wins, with a lexical tie-break, so the
- * choice is stable regardless of the order the document declares them in.
- */
 export function pickNumberingId(
   model: DocumentModelWire,
   kind: ListKind,
@@ -56,12 +51,6 @@ export function paragraphListKind(
   return numberingKind(instance?.levels)
 }
 
-/**
- * The existing instance a restart should reuse: same abstract numbering as the
- * source and a pure start override for the target level and value. Mirrors the
- * server's `resolveParagraphNumbering` so the draft names the instance the save
- * will resolve to rather than the source it started from.
- */
 export function findRestartInstance(
   model: Pick<DocumentModelWire, 'numbering'>,
   source: DocumentNumberingWire,
@@ -77,12 +66,6 @@ export function findRestartInstance(
   )
 }
 
-/**
- * The start override the target's list effectively carries: the pending draft
- * wins, otherwise the override the instance declares for the level the
- * paragraph actually uses. `undefined` means the paragraph is not a list, its
- * numbering definition is missing, or that level is not restarted.
- */
 export function paragraphStartOverride(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -100,12 +83,6 @@ export function paragraphStartOverride(
   return levelStartOverride(instance.sourceFragment, numPr.ilvl ?? 0)
 }
 
-/**
- * One list toggle for a whole target. If every paragraph already carries the
- * kind, the click removes it from all of them; otherwise every target becomes
- * that kind. A mixed selection therefore never both adds and removes in one
- * click, which per-paragraph toggling would do.
- */
 export function toggleParagraphListOnTargets(
   format: FormatDrafts,
   model: DocumentModelWire,

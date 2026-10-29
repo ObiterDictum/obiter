@@ -24,11 +24,6 @@ import type {
 } from '../../documents'
 import type { DocumentModelWire } from '@obiter/contracts'
 
-/**
- * The panels docked beside the paper, one at a time. Each is non-modal: the
- * document stays visible and editable, so a reader can check a comment or a
- * citation and go straight back to the text without dismissing anything.
- */
 export function WorkspaceSidePanels({
   panel,
   onClose,
@@ -59,9 +54,7 @@ export function WorkspaceSidePanels({
 }: {
   panel: WorkspacePanel | null
   onClose: () => void
-  /** The pop-out state of the panel being rendered. */
   popout: (panel: WorkspacePanel) => PanelPopout
-  /** Absent outside the document route, where no detail was loaded. */
   info?: {
     document: MatterDocumentRecord
     versions: DocumentVersionRecord[]
@@ -84,9 +77,7 @@ export function WorkspaceSidePanels({
   onResolveComment: (commentId: string) => void
   onReopenComment: (commentId: string) => void
   onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void
-  /** The shared review state the chrome also uses; required with the panel. */
   changeReview: ChangeReview
-  /** Comment threads, merged into the review list in document order. */
   reviewComments: {
     comments: DocumentComment[]
     importedComments: DocumentImportedCommentThread[]
@@ -96,7 +87,6 @@ export function WorkspaceSidePanels({
   onRevealReviewComment: (comment: DocumentComment) => void
   authorities: AuthorityHit[]
   onSelectAuthority: (paragraphId: string) => void
-  /** The check derivations, or null while the model loads. */
   legalChecks: {
     references: ReturnType<typeof checkCrossReferences>
     terms: ReturnType<typeof checkDefinedTerms>

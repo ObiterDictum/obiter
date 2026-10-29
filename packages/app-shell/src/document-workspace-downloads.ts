@@ -24,7 +24,6 @@ export function useDocumentImageUrls(
   const signature = partNames
     .map((partName) => `${partName}=${urls[partName] ?? ''}`)
     .join('|')
-  // Revoke blob URLs that are no longer used; keep URLs whose part is unchanged.
   useEffect(() => {
     const next = { ...urls }
     for (const [partName, url] of Object.entries(held.current)) {
@@ -43,18 +42,6 @@ export function useDocumentImageUrls(
 
 const BROWSER_IMAGE = /^image\/(png|jpeg|gif|bmp|webp|svg\+xml)$/
 
-/**
- * Media parts are fetched as bytes and rendered from a blob URL, never by
- * pointing an element at the API URL. The media endpoint serves stored
- * document parts as `Content-Disposition: attachment` under a `sandbox` CSP,
- * so navigating that URL downloads rather than renders. Keeping the fetch here
- * preserves display; setting `src` to the API path directly would break the
- * image, and reverting the endpoint to inline would re-open stored XSS.
- *
- * SVG is allowed through because an `<img>` never executes script in an SVG it
- * loads. Do not move these bytes into an `<object>`, `<embed>`, `<iframe>` or
- * `innerHTML`, all of which do.
- */
 async function loadDocumentImage(
   documentId: string,
   partName: string,
@@ -92,13 +79,6 @@ export async function fetchDocumentExport(
   }
 }
 
-/**
- * The download name the server put on a binary response. `filename*` (RFC
- * 5987) is authoritative because it is the only field that carries a
- * non-ASCII name exactly; the quoted `filename` is the ASCII fallback. A
- * header the parser cannot decode yields null rather than a guessed name —
- * the caller falls back to its own title.
- */
 export function contentDispositionFilename(headers: Headers): string | null {
   const value = headers.get('content-disposition')
   if (!value) return null
@@ -116,7 +96,6 @@ export function contentDispositionFilename(headers: Headers): string | null {
   return bare?.[1]?.trim() || null
 }
 
-/** Raw source bytes for any ready version: the download path behind every viewer. */
 export async function fetchDocumentDownload(
   documentId: string,
   versionId?: string,

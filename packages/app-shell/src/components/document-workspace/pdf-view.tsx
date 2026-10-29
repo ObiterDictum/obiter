@@ -4,15 +4,6 @@ import { Button } from '@obiter/ui'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { pdfSliceBounds, type PdfFindHit } from '../../document-find'
 
-/**
- * The stored PDF layout, one page at a time. The segment index is built once
- * per view so a page turn is O(segments on that page), not a scan of the
- * whole document: a 500-page layout's `segments` array is walked exactly
- * once, and only the current page's spans ever mount — the DOM the browser
- * lays out is bounded by a page, not by the document. Find highlights follow
- * the same bound: hits were computed once over the whole text, and only the
- * current page's slices mount.
- */
 export function DocumentPdfPages({
   view,
   pageIndex,
@@ -24,8 +15,6 @@ export function DocumentPdfPages({
   pageIndex: number
   onPageIndexChange: (index: number) => void
   zoom: number
-  /** The find hit set and the active index; only the current page's slices
-   * ever render, the active one prominent and scrolled into view. */
   find?: { hits: readonly PdfFindHit[]; active: number }
 }) {
   const { layout, text } = view
@@ -90,8 +79,6 @@ export function DocumentPdfPages({
   const jump = (input: HTMLInputElement) => {
     const target = +input.value
     if (!Number.isInteger(target) || target < 1 || target > lastIndex + 1) {
-      // A refused jump resets the field to the page being shown — leaving
-      // the refused number displayed claims a page the viewer is not on.
       input.value = String(pageIndex + 1)
       return
     }

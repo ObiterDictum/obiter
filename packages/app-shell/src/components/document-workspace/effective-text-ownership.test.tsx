@@ -1,10 +1,4 @@
 import '@obiter/test-dom'
-/*
- * A text draft and a pending range emphasis must describe one string.
- * Range emphasis used to slice the stored run and leave the original run id
- * on the first slice only, so the whole draft was painted onto that slice
- * and the stored tail was appended: `Hello!` became `Hello!llo`.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -117,8 +111,6 @@ describe('text draft and range emphasis share one string', () => {
     const painted = formattedModel(model, format).stories[0]?.paragraphs[0]
     if (!painted) throw new Error('painted paragraph missing')
     const effective = effectiveParagraph(painted, { 'p1-r': 'Hello!' })
-    // The rejected reading applies `Hello!` to the slice that kept `p1-r`
-    // and then appends the stored tail `llo`.
     expect(paragraphPlainText(effective)).toBe('Hello!')
     expect(paragraphPlainText(effective)).not.toBe('Hello!llo')
   })

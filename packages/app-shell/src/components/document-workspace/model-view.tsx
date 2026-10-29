@@ -39,13 +39,6 @@ import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { PageMarginBand, type EditableMargin } from './page-margin-band'
 import { useMarginEdit } from './use-margin-edit'
 
-/**
- * The omitted-prop defaults for the structural draft inputs. A `[]` in the
- * signature would mint a fresh array on every render and re-derive this page's
- * whole derived set for a caller that omits the prop, with no warning: the
- * `derived` memo below is keyed on those identities, so they have to survive a
- * render that changes nothing structural. Nothing in this module mutates them.
- */
 const NO_INSERTS: LocalInsert[] = []
 const NO_DELETED_PARAGRAPH_IDS: string[] = []
 const NO_EXTRA_RUNS: ExtraRuns = {}
@@ -87,9 +80,6 @@ export function DocumentModelPage({
   marginEditing,
   onExitMarginEditing,
   onOpenNoteEditing,
-  /** The continuous web view: no margin bands, and the root measures the
-   * flow's content rather than a paper box. The workspace closes any open
-   * margin story before switching, so `marginEditing` never meets this. */
   chromeless = false,
 }: {
   model: DocumentModelWire
@@ -103,7 +93,6 @@ export function DocumentModelPage({
     direction: 'forward' | 'backward',
   ) => void
   drafts?: Record<string, string>
-  /** Pending range emphasis, in the same offsets as the text drafts. */
   emphasis?: readonly PendingEmphasis[]
   onRunTextChange?: (runId: string, text: string) => void
   editing?: boolean
@@ -111,7 +100,6 @@ export function DocumentModelPage({
   currentUserId?: string
   inserts?: LocalInsert[]
   deletedParagraphIds?: string[]
-  /** Text held outside the painted runs, which the layout merges back in. */
   extraRuns?: ExtraRuns
   onInsertTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
@@ -124,35 +112,22 @@ export function DocumentModelPage({
   pageBlocks?: LaidOutBlock[]
   pageFloats?: PageFloat[]
   pageTextBoxes?: PageTextBox[]
-  /** The section's own page geometry, when the paginator knows it. A section
-   * whose geometry differs from the body must be framed with its own box, not
-   * the body-level one. */
   pageLayout?: {
     box: PageBox
     frame: ContentFrame
     columns: ColumnFrame[]
-    /** The web flow's real content height, when the unbounded frame set it. */
     contentPx?: number
   }
   pageNumber?: number
-  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
   pageReferences?: ReadonlyMap<string, number>
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
-  /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
-  /** The header/footer story open for editing, resolved on this model. While
-   * set the body is inert and the matching margin band renders editable. */
   marginEditing?: DocumentStoryWire
-  /** A click on the body while a margin story is open closes the story, the
-   * way Word leaves header editing — the click then lands as a body caret. */
   onExitMarginEditing?: () => void
-  /** A click on a painted footnote body opens the footnotes story with the
-   * caret on that paragraph — the inverse of `onExitMarginEditing`. */
   onOpenNoteEditing?: (paragraphId: string) => void
-  /** Drop the margin bands and measure the flow's content, for the web view. */
   chromeless?: boolean
 }) {
   const derived = useMemo(() => {
@@ -172,9 +147,6 @@ export function DocumentModelPage({
           : []
       }),
     )
-    // A paragraph outside the body renders inside another story's part, so
-    // its story has to travel with the element: verification locations are
-    // story-scoped, and a paragraph id alone is not unique.
     const storyOf = paragraphStoryResolver(model)
     return {
       story,
@@ -198,9 +170,6 @@ export function DocumentModelPage({
 
   const { order, neighbors } = useMemo(() => {
     const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
-    // One resolver over the story's flow order per model. Building it inside
-    // the per-paragraph render walked the whole document for every paragraph
-    // and made a render O(n^2) on a long document.
     const neighbors = paragraphNeighborResolver({
       model,
       extraRuns,
@@ -224,9 +193,6 @@ export function DocumentModelPage({
     drafts,
     extraRuns,
   )
-  // A click only places the caret inside the story open for editing: while a
-  // margin story is open the body stays inert, and while it is not the margin
-  // paragraphs are read-only paint.
   const editableIds = useMemo(
     () => new Set(marginEdit ? marginEdit.order : order),
     [marginEdit, order],
@@ -246,8 +212,6 @@ export function DocumentModelPage({
   const gap =
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
 
-  // The fields every block context on this page shares — the body column and
-  // the editable margin band differ only in the story they bind.
   const sharedCtx = {
     model,
     pendingRedlines,
@@ -285,9 +249,6 @@ export function DocumentModelPage({
     pageNumber,
     pageReferences,
   }
-  // While a margin story is open the body keeps painting exactly as before
-  // but takes no caret, edits, or selection; the band holding the story gets
-  // the full block context instead.
   const editableMargin: EditableMargin | undefined =
     marginEdit && marginEditing
       ? {

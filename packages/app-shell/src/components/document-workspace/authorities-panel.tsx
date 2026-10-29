@@ -5,20 +5,11 @@ import { useVerificationWorkspace } from '../verification/verification-context'
 
 type AuthorityGroup = {
   citation: string
-  /** The stored source's own name, when a check or the store holds one. */
   name: string | null
   hits: AuthorityHit[]
   finding: VerificationFindingView | undefined
 }
 
-/**
- * The list of authorities: distinct citations in the document, each once,
- * with its case name where the stored source carries one, how often it is
- * cited, and the Verify state of its finding. The join is strict: a finding
- * only counts for a citation it names, in the paragraph the citation sits in,
- * so a covered entry is never mistaken for checked work it was not. A
- * citation the run did not cover says so rather than borrowing a clean state.
- */
 export function DocumentAuthoritiesPanel({
   citations,
   onSelect,
@@ -27,8 +18,6 @@ export function DocumentAuthoritiesPanel({
   onSelect: (paragraphId: string) => void
 }) {
   const verification = useVerificationWorkspace()
-  // First occurrence order keeps the list stable while the document is
-  // edited; grouping is by the citation text itself.
   const groups: AuthorityGroup[] = []
   for (const hit of citations) {
     const group = groups.find((item) => item.citation === hit.citation)
@@ -103,11 +92,6 @@ export function DocumentAuthoritiesPanel({
   )
 }
 
-/**
- * Whether the finding's excerpt names this citation — a bounded match, so
- * `[2024] UKSC 3` does not borrow the finding `[2024] UKSC 31` produced in
- * the same paragraph.
- */
 function excerptNamesCitation(excerpt: string, citation: string) {
   let index = excerpt.indexOf(citation)
   while (index !== -1) {
@@ -131,10 +115,6 @@ const STATE_LABELS = {
   review_required: 'Needs review',
 } satisfies Record<VerificationFindingView['state'], string>
 
-/**
- * One authority: its name with the citation, the count, and one Verify state
- * for the whole entry — never the citation repeated once per occurrence.
- */
 function AuthorityRow({
   group,
   onSelect,

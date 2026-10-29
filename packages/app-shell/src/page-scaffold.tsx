@@ -4,20 +4,13 @@ import { ContentFrame } from './content-frame'
 
 export interface PageScaffoldProps {
   title: ReactNode
-  /** A quiet line above the title: today's date, a client, a reference. */
   eyebrow?: ReactNode
-  /** One line under the title: what the page is for, in a lawyer's terms. */
   description?: ReactNode
   actions?: ReactNode
   children: ReactNode
   className?: string
 }
 
-/**
- * PageScaffold — the page title, description and header actions, on the frame's
- * content column. Screens compose it instead of building their own heading, so
- * every page starts on the same left edge with the same type and spacing.
- */
 export function PageScaffold({
   title,
   eyebrow,

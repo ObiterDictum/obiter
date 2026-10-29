@@ -7,11 +7,6 @@ const searchTips = [
   { label: 'Keyword', example: 'no oral modification' },
 ]
 
-/**
- * The idle desk. It shows only stored state (recent queries) and the court
- * filters the API accepts; there are no suggested authorities presented as
- * corpus content.
- */
 export function SearchLanding({
   courtLabel,
   courtShortcuts,

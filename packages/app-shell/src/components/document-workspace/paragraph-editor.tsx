@@ -84,10 +84,7 @@ export function ParagraphEditor({
   const display = (at: number) => projection?.toDisplay(at) ?? at
   const inputText = (value: string) => projection?.edit(value) ?? value
   const field = useRef<HTMLTextAreaElement>(null)
-  // IME composition owns key events until it ends; intercepting them loses text.
   const composing = useRef(false)
-  // Ignore late select events from our own DOM writes, which could otherwise
-  // resurrect a model selection already cleared by Escape.
   const written = useRef<{ from: number; to: number } | null>(null)
   const clearColumn = () => clearVerticalColumn(verticalCaret)
   const selectionFrom = selection?.range?.from
@@ -106,10 +103,6 @@ export function ParagraphEditor({
     direction: selectionDirection,
   })
 
-  /** Sends a paste or drop payload through the same path, reporting whether the
-   * event was ours: a live document selection always is (an empty payload is a
-   * refused replacement), a caret paste only when there is text and a handler,
-   * so the native insert stays untouched otherwise. */
   function applyPayload(node: HTMLTextAreaElement, data: string): boolean {
     const from = editable(node.selectionStart)
     const to = editable(node.selectionEnd)
@@ -127,8 +120,6 @@ export function ParagraphEditor({
     anchor: number
     focus: number
   } {
-    // Where the moving end is depends on which way the last extension went;
-    // the textarea tracks that in selectionDirection.
     const backward = node.selectionDirection === 'backward'
     return backward
       ? {
@@ -141,10 +132,6 @@ export function ParagraphEditor({
         }
   }
 
-  /**
-   * Apply non-keyboard input as a document-range replacement. A DOM change
-   * that only removed text cannot express that intent and is refused.
-   */
   function applyDomInput(next: string) {
     if (!selection?.active) return
     const diff = textDiff(text, next)
@@ -163,13 +150,8 @@ export function ParagraphEditor({
       value={projection?.text ?? text}
       rows={1}
       onChange={(event) => {
-        // Any text input, including a paste or an IME commit, ends the run.
         clearColumn()
-        // A composition's own changes are not the commit; the commit arrives
-        // at compositionEnd and is applied once from there.
         if (composing.current) return
-        // With a document selection the change is a replacement of the whole
-        // range, not an edit of one paragraph of it.
         if (selection?.active) {
           applyDomInput(inputText(event.target.value))
           return
@@ -181,13 +163,8 @@ export function ParagraphEditor({
         // SAFETY: onBeforeInput fires only for DOM beforeinput events whose nativeEvent is an InputEvent; inputType and data fall back to empty when absent, so a non-conforming event returns early below.
         const input = event.nativeEvent as InputEvent
         const inputType = input.inputType ?? ''
-        // The composition's own text is not the commit and must not be
-        // intercepted while the IME still owns the field.
         if (inputType === 'insertCompositionText') return
         if (!inputType.startsWith('insert')) return
-        // A paste, drop or replacement that reached the input layer rather
-        // than a key event still replaces the document selection. Formatted
-        // paste carries its text on the data transfer rather than data.
         event.preventDefault()
         const data =
           input.data ?? input.dataTransfer?.getData('text/plain') ?? ''
@@ -195,8 +172,6 @@ export function ParagraphEditor({
         else selection.onRejectInput()
       }}
       onFocus={() => {
-        // Only the paragraph a vertical move was destined for inherits the
-        // run's column; any other focus starts a fresh editing session.
         if (!consumeVerticalDelivery(verticalCaret, paragraphId)) clearColumn()
         if (onFocusParagraph) onFocusParagraph()
         else onSelect()
@@ -208,28 +183,19 @@ export function ParagraphEditor({
       onCompositionEnd={(event) => {
         composing.current = false
         clearColumn()
-        // The composition commits once, here. A document selection is replaced
-        // by the committed text; without one the normal change path applies it.
         if (selection?.active)
           applyDomInput(inputText(event.currentTarget.value))
       }}
       onDrop={(event) => {
         const data = event.dataTransfer?.getData('text/plain') ?? ''
-        // A drop carries the same payload a paste does, so it takes the same
-        // path: a multi-line payload splits into paragraphs instead of being
-        // written into one textarea as hard breaks.
         if (!applyPayload(event.currentTarget, data)) return
         event.preventDefault()
       }}
       onDragOver={(event) => {
-        // The drop is ours whenever this field can paste at all; refusing the
-        // default keeps the browser from inserting into one paragraph.
         if (selection?.active || selection?.onPasteText) event.preventDefault()
       }}
       onMouseDown={() => {
         clearColumn()
-        // A press collapses the document selection; the drag that follows is
-        // mirrored from the textarea as it changes.
         selection?.onClear()
       }}
       onKeyDown={(event) => {
@@ -243,8 +209,6 @@ export function ParagraphEditor({
           event.key === 'ArrowUp' || event.key === 'ArrowDown'
             ? event.key
             : null
-        // Every key that is not a plain vertical arrow ends the column run.
-        // Shift/Ctrl/Alt/Meta arrows keep their own rules below.
         if (!verticalKey) clearColumn()
         if (
           moveInlineSelection(event, {
@@ -264,8 +228,6 @@ export function ParagraphEditor({
             selection.onCollapse('focus')
             return
           }
-          // With no live selection, Escape leaves the paragraph: the card's
-          // second half. The draft is untouched, so no unsaved work is lost.
           if (selection?.onEscapeBlur) {
             event.preventDefault()
             selection.onEscapeBlur()
@@ -282,8 +244,6 @@ export function ParagraphEditor({
           selection.onSelectAll()
           return
         }
-        // Collapse the model before a native shortcut can move the DOM caret,
-        // keeping both selection owners at the same endpoint.
         if (
           selection?.active &&
           (arrow != null || lineJump) &&
@@ -308,10 +268,6 @@ export function ParagraphEditor({
           return
         }
         if (selection?.active && printableKey(event)) {
-          // Typing over a document selection is a model replacement. It is
-          // intercepted on the key press rather than on beforeinput because
-          // React synthesises beforeinput from composition and textInput, so
-          // it cannot be trusted to see every keystroke before the DOM changes.
           event.preventDefault()
           selection.onReplaceRange(event.key)
           return
@@ -343,12 +299,8 @@ export function ParagraphEditor({
           onDelete(start)
           return
         }
-        // Ctrl/Alt/Meta keep platform shortcuts such as word moves and
-        // line/document jumps; a document selection does not change them.
         if (event.ctrlKey || event.altKey || event.metaKey) return
         if (selection?.active && !event.shiftKey) {
-          // A plain arrow collapses the document selection to the end it
-          // points at, the way it collapses a native one.
           if (!arrow) return
           event.preventDefault()
           selection.onCollapse(
@@ -357,8 +309,6 @@ export function ParagraphEditor({
           return
         }
         if (!arrow) return
-        // A model-owned selection carries its own focus; only a selection made
-        // natively in the textarea has to be read out of the DOM.
         const moving =
           selection?.active && selectionFocus != null
             ? { anchor: selectionFocus, focus: selectionFocus }
@@ -382,10 +332,6 @@ export function ParagraphEditor({
             if (verticalKey) clearColumn()
             return
           }
-          // With no document selection yet, the textarea extends natively
-          // inside the paragraph; the run's column is still retained so a
-          // later crossing lands on it. Once the model owns a selection, every
-          // step goes through it so the DOM can never drift from the model.
           if (step.paragraphId === paragraphId && !selection.active) return
           event.preventDefault()
           if (verticalKey) {
@@ -412,8 +358,6 @@ export function ParagraphEditor({
           next,
         })
         if (!step) {
-          // A vertical press that cannot cross paragraphs ends the run rather
-          // than holding a column for a move that never happened.
           if (verticalKey) clearColumn()
           return
         }
@@ -429,10 +373,6 @@ export function ParagraphEditor({
         onMoveCaret(step.paragraphId, step.offset)
       }}
       onPaste={(event) => {
-        // An empty or text-less clipboard payload (an image-only copy, a
-        // format-only clipboard) must not replace a live selection with an
-        // empty string, which would read as an accidental delete. Whitespace
-        // and newlines are meaningful text and pass the length check.
         const data = event.clipboardData?.getData('text/plain') ?? ''
         if (!applyPayload(event.currentTarget, data)) return
         event.preventDefault()
@@ -458,7 +398,6 @@ export function ParagraphEditor({
       onClick={(event) => {
         event.stopPropagation()
         clearColumn()
-        // Breaks and formatting must target the clicked caret.
         onSelect(editable(event.currentTarget.selectionStart))
       }}
       onSelect={(event) => {
@@ -477,9 +416,6 @@ export function ParagraphEditor({
       className={cn(
         'block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit',
         'caret-black border-0 outline-none focus-visible:ring-0',
-        // The run overlay paints the document selection; the textarea's own
-        // ::selection is painted the same colour so the focused paragraph and
-        // its neighbours read as one highlight.
         'selection:bg-[#b8d4f5]',
         style?.height == null && 'field-sizing-content',
         className,

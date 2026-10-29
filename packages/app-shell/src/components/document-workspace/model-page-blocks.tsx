@@ -37,11 +37,6 @@ import { PageTable } from './page-table'
 import { PendingInsert } from './pending-insert'
 import { PageDrawing } from './page-drawing'
 
-/**
- * What one laid-out block needs to render itself: the model, the draft state
- * the workspace is editing, and the document selection so an unselected block
- * still paints its selected segments.
- */
 export type BlockContext = {
   model: DocumentModelWire
   pendingRedlines?: PendingRedlines
@@ -74,24 +69,16 @@ export type BlockContext = {
   listMarkers: ReturnType<typeof documentListMarkers>
   noteMarks: Map<string, { mark: string; kind: NoteKind }>
   noteParagraphIds: Set<string>
-  /** The part name of the footnotes story open for editing, while one is:
-   * a note paragraph only becomes editable inside that story's entries,
-   * never as body text. */
   editableNotePart?: string
   storyOf: (paragraphId: string) => { kind: string; partName: string }
   columnWidthPx: number
-  /** The page this context renders: resolves `PAGE` fields in stored runs. */
   pageNumber?: number
-  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
   pageReferences?: ReadonlyMap<string, number>
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
-  /** Pending hyperlink ranges and cross-reference markers, by paragraph. */
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
   neighbors?: ParagraphNeighborResolver
   onFocusParagraph?: (paragraphId: string) => void
-  /** A plain-arrow crossing. Distinct from a click, which may place the caret
-   * in a table cell that the selection flow does not cover. */
   onMoveCaret?: (paragraphId: string, offset: number) => void
 }
 
@@ -235,10 +222,7 @@ export function renderBlock(
       verticalCaret={ctx.verticalCaret}
       editing={
         ctx.noteParagraphIds.has(paragraph.id)
-          ? // A note body paints in the body flow but belongs to its notes
-            // story: it is editable only while that story is open, the same
-            // open/close contract the margin band keeps.
-            ctx.editableNotePart === ctx.storyOf(paragraph.id).partName
+          ? ctx.editableNotePart === ctx.storyOf(paragraph.id).partName
           : ctx.editing
       }
       presence={ctx.presence}
@@ -265,12 +249,6 @@ export function renderBlock(
   ]
 }
 
-/**
- * Page-level floats and text boxes: absolutely positioned on top of the laid
- * out body, so they travel with the page rather than with a block. Text boxes
- * are not editable, but a model selection can cover their paragraphs, so they
- * paint the derived segment like any other paragraph.
- */
 export function PageOverlays({
   floats,
   textBoxes,

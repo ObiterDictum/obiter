@@ -126,8 +126,6 @@ describe('planParagraphDeletion', () => {
   })
 
   it('selects a rendered survivor when the insert anchor is pending-deleted', () => {
-    // insert-1 sits after p1, and p1 is already pending deletion, so the anchor
-    // does not render. The survivor must come from the effective flow instead.
     const plan = planParagraphDeletion(
       model(['p1', 'p2']),
       { inserts: [insert], deletedParagraphIds: ['p1'] },
@@ -147,8 +145,6 @@ describe('planParagraphDeletion', () => {
   })
 
   describe('field-boundary deletions', () => {
-    // p2 holds the field's begin/separate, p4 its end — p3 carries a
-    // result but no marker.
     const field = {
       headId: 'p2',
       tailId: 'p4',
@@ -197,11 +193,6 @@ describe('planParagraphDeletion', () => {
   })
 
   describe('a wire without field metadata', () => {
-    // The model a server that predates field metadata serves: the same
-    // wire minus the keys the parser now guarantees. Serialising then
-    // deleting keeps the fixture a genuine legacy response — keys absent,
-    // not empty arrays — standing in for the response `apiFetch` trusts
-    // without schema-checking it.
     const legacyModel = (ids: readonly string[]): DocumentModelWire => {
       const legacy = JSON.parse(JSON.stringify(model(ids))) as {
         stories: Record<string, unknown>[]

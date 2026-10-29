@@ -140,8 +140,6 @@ describe('withStructuralDrafts', () => {
     const fragment = story?.preservedXmlFragments[0] ?? ''
     expect(fragment).toContain('<w:tbl')
 
-    // The writer's own fragment binds the folded cell wires through the same
-    // `para-w14-` ids a reparse would allocate.
     const blocks = storyBlocks(story)
     expect(blocks.map((block) => block.type)).toEqual([
       'paragraph',
@@ -173,8 +171,6 @@ describe('withStructuralDrafts', () => {
       tableDraft('s2', 'p1'),
     ])
     const blocks = storyBlocks(requiredStory(folded))
-    // The separator paragraph sits between the tables, as it serialises —
-    // two adjacent `w:tbl` elements would merge on reload.
     expect(blocks.map((block) => block.type)).toEqual([
       'paragraph',
       'table',
@@ -206,14 +202,10 @@ describe('withStructuralDrafts', () => {
     expect(fragments).toHaveLength(1)
     expect(fragments[0]).toContain('<w:drawing')
 
-    // The drawing run is zero-length between the head and the tail — the same
-    // split the writer performs on save.
     const runs = target?.runs ?? []
     expect(runs.map((run) => run.text)).toEqual(['Hello ', '', 'world'])
     expect(runs[1]?.preservedXmlFragments[0]).toContain('r:embed=')
 
-    // The pending relationship resolves through the same lookup a reloaded
-    // image uses, to the part name `pendingImageUrls` keys its blob by.
     const partName = imagePartNameForDrawing(
       fragments[0] ?? '',
       'word/document.xml',
@@ -231,11 +223,7 @@ describe('withStructuralDrafts', () => {
       drafts,
     )
     const runs = requiredStory(folded).paragraphs[0]?.runs ?? []
-    // The offset addresses effective text, so the drawing lands inside the
-    // typed replacement — the same split the writer's pending overlay makes.
     expect(runs.map((run) => run.text)).toEqual(['Hello ', '', 'brave world'])
-    // Neither half keeps `p1-r`: the drafts map would repaint the full
-    // replacement text on it.
     expect(runs[0]?.id).not.toBe('p1-r')
     expect(runs[2]?.id).not.toBe('p1-r')
     expect(
@@ -293,8 +281,6 @@ describe('structural draft persistence', () => {
       drafts: { 'p1-r': 'typed text' },
       structures: [
         tableDraft('s1', 'p1'),
-        // A malformed slot: the dimension bound was not enforced when this
-        // payload was written. It must not take the typed draft down with it.
         { ...imageDraft('s2', 'p1', 3), heightPx: 12_000_000 },
       ],
     }
@@ -321,8 +307,6 @@ describe('structural save planning', () => {
       deletedParagraphIds: ['p2'],
     })
     const types = plan.operations.map((operation) => operation.type)
-    // The image anchors a paragraph the same batch deletes, so it is held
-    // back rather than silently dropped; the table and the insert save.
     expect(types).toEqual([
       'insert_paragraph_after',
       'insert_table',
@@ -396,8 +380,6 @@ describe('structural save planning', () => {
       model([paragraph('p1', ''), paragraph('p2')]),
       state,
     )
-    // The anchor is deleted and reinserted by the same batch, so the
-    // structural insertion cannot ride it — it is held back honestly.
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['structure'])
     expect(plan.operations.map((operation) => operation.type)).toEqual([
       'insert_paragraph_after',
@@ -523,7 +505,6 @@ describe('documentStructureToolbar', () => {
         selectionRange: { paragraphId: 'p1', from: 0, to: 4 },
       }).api.definedTermUnavailable,
     ).toContain('tracked')
-    // A selection whose text cannot name a term is refused with a reason.
     const unnameable = toolbar({
       model: model([paragraph('p1', '— — —')]),
       selectionActive: true,
@@ -534,8 +515,6 @@ describe('documentStructureToolbar', () => {
   })
 
   it('refuses a splice inside a run a pending mark cuts, not inside a covered one', () => {
-    // Runs 'aaaa' 'bbbb' 'cccc': the mark [4,11) covers run 2 whole and cuts
-    // run 3. A field inside run 2 composes; inside run 3 it cannot fold.
     const multi = model([
       {
         id: 'p1',
@@ -574,8 +553,6 @@ describe('documentStructureToolbar', () => {
         preservedXmlFragments: [],
       },
     ])
-    // A second mark inside the first mark's run writes an overlapping
-    // replacement; one over the other run composes.
     const shared = toolbar({
       model: multi,
       structures: [definedTermDraft('s1', 'p1', 0, 2)],
@@ -636,8 +613,6 @@ describe('documentStructureToolbar', () => {
 
 describe('scaleImageInsertSize', () => {
   it('clamps both dimensions to the contract maximum', () => {
-    // The 1×20000 regression: scaling to the page column does not shrink the
-    // height, so it must be clamped on its own.
     expect(scaleImageInsertSize(1, 20_000)).toEqual({
       widthPx: 1,
       heightPx: DOCUMENT_EDIT_IMAGE_DIMENSION_MAX,
@@ -646,7 +621,6 @@ describe('scaleImageInsertSize', () => {
       widthPx: 600,
       heightPx: 400,
     })
-    // Every admitted size still parses as a draft.
     for (const size of [
       scaleImageInsertSize(1, 20_000),
       scaleImageInsertSize(1200, 800),

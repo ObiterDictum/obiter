@@ -16,18 +16,13 @@ import {
 type Box = { left: number; top: number; width: number; height: number }
 
 type PlacedFinding = {
-  /** The findings that share this place in the document, in list order. A
-   * citation produces both a resolution check and an existence check, and two
-   * markers on one range would hide each other. */
   findings: VerificationFindingView[]
-  /** The most serious outcome at this place, which is what the marker shows. */
   finding: VerificationFindingView
   target: Extract<FindingTarget, { kind: 'mapped' }>
   boxes: Box[]
   marker: { left: number; top: number }
 }
 
-/** Worst outcome first, so one marker for one place never understates it. */
 type FindingStateRank = { [K in VerificationFindingView['state']]: number }
 
 const stateRank: FindingStateRank = {
@@ -43,7 +38,6 @@ function worstOf(findings: VerificationFindingView[]) {
   )
 }
 
-/** A shape per outcome, so state never depends on colour alone. */
 function OutcomeGlyph({ state }: { state: VerificationFindingView['state'] }) {
   switch (state) {
     case 'clear':
@@ -95,12 +89,6 @@ function boxTone(state: VerificationFindingView['state']) {
   }
 }
 
-/**
- * A flat signature of what was measured. It exists so a provider re-render that
- * produces the same positions does not write state again: measurement depends
- * on object identities a refetch may replace, and an unguarded write would
- * re-render, re-measure and never settle.
- */
 function placementSignature(placed: PlacedFinding[]) {
   return placed
     .map(
@@ -123,16 +111,6 @@ function renderedSignature(
   return `${visiblePart}|${reasonPart}`
 }
 
-/**
- * Findings drawn over the page. Markers live in their own absolutely positioned
- * layer, so opening, closing or re-anchoring the evidence panel cannot reflow,
- * resize or push the document: the page is measured and decorated, never
- * inserted into.
- *
- * Every position is read from the rendered page after commit. That is a real
- * browser boundary (layout is browser state, not React state), so the effect is
- * deliberate and its observer is cleaned up.
- */
 export function VerificationMarkerLayer({
   model,
 }: {
@@ -148,8 +126,6 @@ export function VerificationMarkerLayer({
   const targets = verification?.targets
   const setRendered = verification?.setRendered
 
-  // Re-measure when the page reflows: zoom, image or font loading, and a
-  // re-laid-out document all change the box of the scroll content.
   useEffect(() => {
     const desk = layer.current?.closest('[data-document-desk]')
     const content = desk?.firstElementChild
@@ -192,8 +168,6 @@ export function VerificationMarkerLayer({
         } => item.result.kind === 'attached',
       )
       for (const item of decisions) {
-        // Record why rather than dropping silently: the panel and the index
-        // must state the renderer's limit, not call it a text change.
         if (item.result.kind === 'unavailable')
           reasons.set(item.finding.id, item.result.reason)
       }
@@ -220,8 +194,6 @@ export function VerificationMarkerLayer({
           width: rect.width,
           height: rect.height,
         })),
-        // Just clear of the checked text and lifted above the baseline, so the
-        // marker does not sit on the words it annotates.
         marker: {
           left: last.right - originLeft + 1,
           top: last.top - originTop - 7,
@@ -233,10 +205,6 @@ export function VerificationMarkerLayer({
       lastSignature.current = signature
       setPlaced(next)
     }
-    // Only the ids the layer actually drew are "in the document", and every
-    // mapped finding the page could not draw carries its real reason. The two
-    // are written together so no render can pair one document's markers with
-    // another's reasons.
     const visible = new Set(
       next.flatMap((item) => item.findings.map((finding) => finding.id)),
     )
@@ -247,8 +215,6 @@ export function VerificationMarkerLayer({
     }
   }, [targets, findings, revision, model, setRendered])
 
-  // Keeping the selection visible must not move the caret: the marker is
-  // scrolled, the paragraph editor keeps its selection.
   const activeId = verification?.activeId
   const activeMarker = activeId ? verification?.markerFor(activeId) : null
   useEffect(() => {

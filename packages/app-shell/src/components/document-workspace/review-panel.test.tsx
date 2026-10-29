@@ -96,14 +96,11 @@ const moveNote =
 
 function openReviewPanel() {
   openRibbonTab('Review')
-  // The Changes row is a toggle in the Review menu: it keeps the menu open,
-  // so the menu is dismissed before the list is read.
   fireEvent.click(menuItem(/^Changes/))
   fireEvent.keyDown(document, { key: 'Escape' })
   return screen.getByRole('complementary', { name: 'Changes and comments' })
 }
 
-/** The row whose text names the change, so a selector never picks another. */
 function row(panel: HTMLElement, text: string) {
   const found = within(panel)
     .getAllByRole('listitem')
@@ -126,8 +123,6 @@ describe('review panel', () => {
 
     expect(panel.textContent).toContain('2 changes · 1 move · 1 comment')
     expect(panel.textContent).toContain(moveNote)
-    // Selection reaches tracked changes only: the move has no checkbox, and a
-    // comment is never a row in this list at all.
     const checkboxLabels = within(panel)
       .getAllByRole('checkbox')
       .map((box) => box.getAttribute('aria-label'))
@@ -148,8 +143,6 @@ describe('review panel', () => {
     })
     const panel = openReviewPanel()
 
-    // Two wire changes, one row: the move is never a silent insertion and
-    // deletion pair, and the count says so.
     expect(panel.textContent).toContain('1 change · 1 move')
     expect(within(panel).getAllByRole('listitem')).toHaveLength(2)
     fireEvent.click(
@@ -192,7 +185,6 @@ describe('review panel', () => {
     fireEvent.click(
       within(panel).getByRole('button', { name: 'Accept 2 changes' }),
     )
-    // The undecidable move is not in the selection and never reaches the wire.
     expect(decide).toHaveBeenCalledWith(
       {
         baseVersionId: 'ver_1',
@@ -215,8 +207,6 @@ describe('review panel', () => {
       within(panel).getByRole('button', { name: 'Reject 2 changes' }),
     )
 
-    // Nothing has been decided yet: the bar states the count and what the
-    // decision does to the stored document before it runs.
     expect(decide).not.toHaveBeenCalled()
     const confirm = within(panel).getByRole('alert')
     expect(confirm.textContent).toContain(
@@ -289,9 +279,6 @@ describe('review panel', () => {
       within(row(panel, 'added words')).getByRole('button', { name: 'Accept' }),
     )
 
-    // The sentence belongs to the banner above the document, once; the
-    // panel's disabled controls carry the short why as their tooltip rather
-    // than repeating the paragraph in the bar.
     await waitFor(() =>
       expect(
         within(row(panel, 'added words'))
@@ -319,9 +306,6 @@ describe('review panel', () => {
     const accept = within(row(panel, 'added words')).getByRole('button', {
       name: 'Accept',
     })
-    // The row's control carries the short why as its tooltip; the decision bar
-    // does the same for its own Accept/Reject once the row is current, so the
-    // barrier is never a paragraph repeated in two places.
     expect(accept.getAttribute('title')).toBe(reason)
     fireEvent.click(
       within(row(panel, 'added words')).getByRole('button', {

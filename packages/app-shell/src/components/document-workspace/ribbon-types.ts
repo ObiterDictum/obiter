@@ -16,24 +16,17 @@ import type { FindMatchOptions } from '../../document-find'
 
 export type DocumentFormatToolbar = {
   paragraphStyleId: string
-  /** True when the target paragraphs do not all carry one style. */
   paragraphStyleMixed: boolean
   paragraphStyles: ReadonlyArray<{ styleId: string; name: string }>
-  /** The alignment every target paragraph agrees on, or null when mixed. */
   alignment: AlignmentValue | null
-  /** A line-spacing option value, or '' when mixed or not an option. */
   lineSpacing: string
-  /** The indent kind every target agrees on, or null when mixed. */
   indentKind: IndentKind | null
   bold: boolean
   italic: boolean
   underline: boolean
   strikethrough: boolean
-  /** The direct font family the covered runs agree on, or null when unset. */
   fontFamily: string | null
-  /** The direct size in half-points, the contract's unit, or null when unset. */
   fontSize: number | null
-  /** The direct colour as `auto` or six hex digits, or null when unset. */
   colour: string | null
   highlight: HighlightValue | null
   vertAlign: VertAlignValue | null
@@ -41,18 +34,14 @@ export type DocumentFormatToolbar = {
   canOutdent: boolean
   canContinue: boolean
   canRestart: boolean
-  /** True when every numbered target carries a start override. */
   listRestarted: boolean
   listKind: ListKind | null
   canApplyBullet: boolean
   canApplyNumber: boolean
   canApplyMultilevel: boolean
-  /** The page-margin preset every target agrees on, or '' when custom/mixed. */
   marginsKind: SectionMarginsKind
   orientation: 'portrait' | 'landscape'
-  /** The page-size preset the section matches, or '' when custom. */
   pageSizeKind: PageSizeKind
-  /** Set when tracked changes are on: page setup is not recorded as tracked. */
   layoutUnavailable?: string
   onParagraphStyle: (styleId: string | null) => void
   onAlignment: (alignment: AlignmentValue) => void
@@ -80,32 +69,16 @@ export type DocumentFormatToolbar = {
   onPageSize: (kind: PageSizeKind) => void
 }
 
-/**
- * The Layout ribbon's classification controls (E12): Document type, Draft,
- * Privileged and Without prejudice. A change commits a new immutable version
- * server-side, so the controls are disabled while unsaved work would leave
- * the base version behind — the reason is published like the other ribbons'.
- */
 export type DocumentMarkingsToolbar = {
-  /** The stored markings, including a kind this ribbon does not list. */
   markings: DocumentMarkingsWire
-  /** The reason no marking change can commit, published on the controls. */
   unavailable?: string
-  /** True while a markings commit is in flight. */
   pending: boolean
-  /** `null` clears the stored kind. Unknown values never reach this. */
   onDocumentKind: (kind: string | null) => void
   onToggleDraft: () => void
   onTogglePrivileged: () => void
   onToggleWithoutPrejudice: () => void
 }
 
-/**
- * The clipboard controls' availability and handlers. Copy and cut need a live
- * document selection; paste needs an editable document. A disabled control
- * carries the reason its accessible name publishes, so the state is announced
- * rather than only implied by a greyed button.
- */
 export type DocumentClipboardToolbar = {
   canCopy: boolean
   canCut: boolean
@@ -118,109 +91,43 @@ export type DocumentClipboardToolbar = {
   onPaste: () => void
 }
 
-/**
- * The Insert ribbon's structural controls: a table after the caret's
- * paragraph and a picture at the caret. A disabled control carries the reason
- * its accessible name publishes, matching the other ribbons' availability
- * messaging.
- */
 export type DocumentStructureToolbar = {
-  /** The reason a table cannot be inserted at the caret, when it cannot. */
   tableUnavailable?: string
-  /** The reason a picture cannot be inserted at the caret, when it cannot. */
   pictureUnavailable?: string
-  /** The reason no selection can take a hyperlink, when it cannot. */
   linkUnavailable?: string
-  /** The reason no cross-reference can be inserted, when it cannot. */
   crossReferenceUnavailable?: string
-  /** The reason the selection cannot take a defined-term mark, when it cannot. */
   definedTermUnavailable?: string
-  /** The reason no page number can be inserted at the caret, when it cannot. */
   pageNumberUnavailable?: string
-  /** The reason no footnote can be inserted at the caret, when it cannot. */
   footnoteUnavailable?: string
-  /** The reason no table of contents can be inserted at the caret, when it
-   * cannot. */
   tableOfContentsUnavailable?: string
-  /** The reason no table of authorities can be inserted at the caret, when
-   * it cannot. */
   tableOfAuthoritiesUnavailable?: string
-  /** The reason the table of authorities under the caret cannot update,
-   * when it cannot. */
   tableOfAuthoritiesUpdateUnavailable?: string
-  /** The paragraphs a cross-reference can point at, in story order. */
   crossReferenceTargets: ReadonlyArray<{ id: string; label: string }>
-  /** The non-body story open for editing, when one is — pressed state for
-   * the Header and Footer buttons. */
   editingStoryKind?: 'header' | 'footer' | 'footnotes'
-  /** The reason the header cannot be opened for editing, when it cannot. */
   headerUnavailable?: string
-  /** The reason the footer cannot be opened for editing, when it cannot. */
   footerUnavailable?: string
-  /** Opens the final section's header or footer — or the footnotes story —
-   * for editing; the body is inert until the story closes. A named paragraph
-   * lands the caret there instead of the story's first. */
   onOpenStory: (
     kind: 'header' | 'footer' | 'footnotes',
     selectId?: string,
   ) => void
-  /** Returns the caret to the body, closing the open margin story. */
   onCloseStory: () => void
   onInsertTable: (rows: number, columns: number) => void
-  /** Applies a pending hyperlink to the current selection's range. */
   onInsertLink: (target: string) => StructuralInsertOutcome
-  /** Holds a pending cross-reference at the caret to the target paragraph. */
   onInsertCrossReference: (targetParagraphId: string) => StructuralInsertOutcome
-  /** Holds a pending defined-term mark over the selection's range. */
   onMarkDefinedTerm: () => void
-  /** Holds a pending `PAGE` field at the caret in the active story. */
   onInsertPageNumber: () => void
-  /**
-   * Holds a pending `TOC` field at the body caret: the folded model grows
-   * the entry paragraphs the save writes.
-   */
   onInsertTableOfContents: () => void
-  /**
-   * Holds a pending `TOA` field at the body caret: the folded model grows
-   * the mark runs, bookmarks and entry paragraphs the save writes.
-   */
   onInsertTableOfAuthorities: () => void
-  /**
-   * Holds a pending refresh of the stored `TOA` field under the caret:
-   * the folded model rewrites its generated paragraphs in place.
-   */
   onUpdateTableOfAuthorities: () => void
-  /**
-   * Holds a pending footnote reference at the body caret and opens the
-   * footnotes story so the note's text is typed into its folded body.
-   */
   onInsertFootnote: () => void
-  /** Opens the picture file picker; the picked file becomes the insertion. */
   onInsertPicture: () => void
-  /**
-   * The hidden file input the Picture button forwards clicks to. Mounted by
-   * the ribbon so the picked file becomes the insertion.
-   */
   picturePicker?: ReactNode
 }
 
-/**
- * The tracked-change review controls the Review ribbon exposes. The workspace
- * derives every availability answer once (`useChangeReview`) and shares it
- * with the Changes panel, so the two surfaces cannot disagree about whether a
- * decision can run or which change is current.
- */
 export type DocumentReviewToolbar = {
-  /** The reason no decision can run, published on disabled controls. */
   unavailable?: string
-  /** The reason bulk Accept/Reject all is unavailable, when it is. */
   bulkUnavailable?: string
-  /** The reason single-change Accept/Reject is unavailable, when it is. */
   targetUnavailable?: string
-  /**
-   * Listed changes the engine can never decide. Bulk labels say "supported"
-   * when this is non-zero because the excluded changes stay in the document.
-   */
   undecidableCount: number
   canPrevious: boolean
   canNext: boolean
@@ -235,15 +142,11 @@ export type DocumentReviewToolbar = {
 export type DocumentFindToolbar = {
   query: string
   matchLabel: string
-  /** The literal-match options the hits were computed with; both are explicit
-   * toggles in the find group. */
   options: FindMatchOptions
   onQuery: (query: string) => void
   onToggleOption: (key: 'matchCase' | 'wholeWord') => void
   onNext: () => void
   onPrevious: () => void
-  /** The replace controls; absent on a read-only surface like the PDF view,
-   * which offers find without a replace it could never honour. */
   replace?: string
   canReplace?: boolean
   onReplace?: (value: string) => void
@@ -251,5 +154,4 @@ export type DocumentFindToolbar = {
   onReplaceAll?: () => void
 }
 
-/** The legal-checks section a ribbon can open. */
 export type LegalChecksFocus = 'terms' | 'references'

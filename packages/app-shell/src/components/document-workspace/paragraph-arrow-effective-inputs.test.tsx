@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * E61: the caret must read the paragraph the layout painted. Two inputs the
- * pagination path merges in are invisible to a stored-only reading: text an
- * edit holds in `extraRuns`, and a pending paragraph format. ArrowLeft into
- * such a paragraph used to land at offset 0 instead of its visible end, and
- * vertical moves resolved columns against lines that were never painted.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -33,7 +26,6 @@ function field(): HTMLTextAreaElement {
   return editor
 }
 
-/** Body p0 'head', p1 with no stored runs, p2 'world', p3 'tail'. */
 function joinModel(): DocumentModelWire {
   return multiParagraphModel([
     paragraph('p0', 'head'),
@@ -43,19 +35,14 @@ function joinModel(): DocumentModelWire {
   ])
 }
 
-/** Click the first paragraph so the workspace holds a caret to move. */
 function focusFirstParagraph() {
   fireEvent.click(screen.getByText('head'))
 }
 
 function joinP2IntoP1() {
-  // p0 -> p1 (empty) -> p2; the empty p1 owns no stored runs.
   fireEvent.keyDown(field(), { key: 'ArrowDown' })
   fireEvent.keyDown(field(), { key: 'ArrowDown' })
   expect(field().value).toBe('world')
-  // Backspace at offset 0 joins p2 into p1. The text has no home among p1's
-  // stored runs, so the edit holds it in `extraRuns`; layout, save and the
-  // caret all read it as p1's visible text.
   field().setSelectionRange(0, 0)
   fireEvent.keyDown(field(), { key: 'Backspace' })
   expect(field().value).toBe('world')
@@ -67,7 +54,6 @@ describe('ArrowLeft into a paragraph whose visible text is an extra run', () => 
     focusFirstParagraph()
     joinP2IntoP1()
 
-    // p1 -> p3, then ArrowLeft back across the paragraph break.
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     expect(field().value).toBe('tail')
     fireEvent.keyDown(field(), { key: 'ArrowLeft' })
@@ -80,7 +66,6 @@ describe('ArrowLeft into a paragraph whose visible text is an extra run', () => 
     focusFirstParagraph()
     joinP2IntoP1()
 
-    // Typing extends the joined paragraph beyond its stored runs.
     fireEvent.change(field(), { target: { value: 'worlds' } })
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     field().setSelectionRange(0, 0)
@@ -88,7 +73,6 @@ describe('ArrowLeft into a paragraph whose visible text is an extra run', () => 
     expect(field().value).toBe('worlds')
     expect(field().selectionStart).toBe(6)
 
-    // Undo rewinds the typed text; the join itself is a separate operation.
     fireEvent.click(command('Undo'))
     expect(field().value).toBe('world')
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
@@ -104,7 +88,6 @@ describe('ArrowLeft into a paragraph whose visible text is an extra run', () => 
       versionId: 'ver_2',
       versionNumber: 2,
     })
-    // The refetched document carries the join as a stored run on p1.
     const refetched = multiParagraphModel([
       paragraph('p0', 'head'),
       paragraph('p1', 'world'),
@@ -158,8 +141,6 @@ function formatDrafts(paragraphId: string): FormatDrafts {
 }
 
 describe('vertical moves follow the lines the pending format paints', () => {
-  // Small enough that the 4pt face fits one line where the stored 11pt face
-  // wraps to two: the two readings disagree about which line is the last.
   const LONG = Array.from(
     { length: 6 },
     () => 'alpha bravo charlie delta',
@@ -189,7 +170,6 @@ describe('vertical moves follow the lines the pending format paints', () => {
       paragraphFace(storedP1, model.styles).run.fontSizePx ?? 16,
       frame.widthPx,
     )
-    // The fixture only proves anything while the two readings differ.
     expect(paintedLines.length).toBe(1)
     expect(storedLines.length).toBeGreaterThan(1)
 
@@ -201,14 +181,10 @@ describe('vertical moves follow the lines the pending format paints', () => {
     fireEvent.click(paragraphEl)
     fireEvent.click(command('Small'))
 
-    // Cross into p2 horizontally first, which places the caret at offset 0
-    // and starts a fresh vertical column rather than retaining one.
     field().setSelectionRange(LONG.length, LONG.length)
     fireEvent.keyDown(field(), { key: 'ArrowRight' })
     expect(field().value).toBe('tail')
     expect(field().selectionStart).toBe(0)
-    // Back up at column 0. The column resolves against the neighbour's line
-    // model: the one painted here, or the stored 11pt one on the defect.
     fireEvent.keyDown(field(), { key: 'ArrowUp' })
     expect(field().value).toBe(LONG)
     expect(field().selectionStart).toBe(0)

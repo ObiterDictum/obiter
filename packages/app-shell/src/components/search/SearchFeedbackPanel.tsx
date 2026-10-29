@@ -5,8 +5,6 @@ interface SearchFeedbackPanelProps {
     label: string
     onClick: () => void
   }
-  /** Public sources to continue the search in, so an empty answer is a route
-   * onward rather than a dead end. */
   searchLinks?: Array<{ label: string; href: string }>
   body: string
   eyebrow: string

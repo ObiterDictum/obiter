@@ -5,11 +5,6 @@ import type { DocumentPdfViewResponse } from '@obiter/contracts'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import { DocumentPdfPages } from './pdf-view'
 
-/**
- * A stored layout whose segments alternate across three pages. Each page's
- * text ends with a sentinel the tests use to prove only the current page's
- * spans ever mount — the DOM work is bounded by a page, not the document.
- */
 function viewWith(pages: number): DocumentPdfViewResponse {
   const segments: DocumentPdfViewResponse['layout']['segments'] = []
   let text = ''
@@ -116,8 +111,6 @@ describe('DocumentPdfPages', () => {
     fireEvent.change(jump, { target: { value: '9' } })
     fireEvent.keyDown(jump, { key: 'Enter' })
     expect(onPageIndexChange).not.toHaveBeenCalled()
-    // A refused entry restores the page being shown rather than leaving a
-    // number displayed that names no mounted page.
     expect(jump).toHaveProperty('value', '3')
 
     fireEvent.change(jump, { target: { value: 'page two' } })

@@ -127,11 +127,6 @@ export function marginBandHeights(model: DocumentModelWire): MarginBandHeights {
   return { headerPx, footerPx }
 }
 
-/**
- * A margin story carrying inline revisions paints its paragraphs in full
- * instead of the condensed letterhead, which would drop the revision text.
- * Paint and band sizing must agree, so both read this one predicate.
- */
 export function marginStoryRevised(
   story: DocumentStoryWire,
   changes: readonly DocumentChangeWire[],
@@ -152,8 +147,6 @@ function storyBandHeight(
     .filter((block) => block.type === 'table')
     .map((block) => block.table)
   const edgePx = story.kind === 'header' ? box.headerPx : 0
-  // Revised margins use ordinary paint instead of the condensed letterhead.
-  // Reserve that same stacked text/image flow or the fixed band clips it.
   const revised = marginStoryRevised(story, model.changes)
   const widthPx = Math.max(1, box.widthPx - box.margin.left - box.margin.right)
   const paintedHeight = revised

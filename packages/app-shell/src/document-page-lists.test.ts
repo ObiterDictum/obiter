@@ -150,8 +150,6 @@ describe('documentListMarkers', () => {
         { ilvl: 2, start: 5, numFmt: 'decimal', lvlText: '%3.' },
       ],
     }
-    // The instance's first override is at ilvl 2; p1 and p3 sit at ilvl 0 and
-    // must keep counting from the abstract start.
     const markers = documentListMarkers(model)
     expect(markers.get('p1')?.text).toBe('1.')
     expect(markers.get('p3')?.text).toBe('2.')

@@ -7,13 +7,6 @@ import {
   paragraph,
 } from './docx-workspace-harness'
 
-/*
- * E47: pressing Enter mid-paragraph must leave the second half painted in the
- * pending paragraph, editable, and in the draft. The split state was already
- * covered by document-edits.test.ts; this covers the rendered surface the card
- * recorded (an empty paragraph with no editor), which only the mount can show.
- */
-
 const PLAIN =
   '1. I, Margaret Ellison, of 14 Hartley Terrace, London SW1A 1AA, was born on 3 March 1965.'
 const PLAIN_LEFT = PLAIN.slice(0, 30)
@@ -60,7 +53,6 @@ describe('E47 mid-paragraph Enter', () => {
     ) as HTMLTextAreaElement
     expect(pending.value).toBe(PLAIN_RIGHT)
     expect(pending).toBe(document.activeElement)
-    // The new paragraph is its own block between the two stored paragraphs.
     const ids = paragraphIds()
     expect(ids[0]).toBe('p1')
     expect(ids[1]).not.toBe('p2')

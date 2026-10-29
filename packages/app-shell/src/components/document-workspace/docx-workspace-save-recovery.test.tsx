@@ -42,9 +42,6 @@ describe('E45 a rejected save must not poison later saves', () => {
       paragraphId: 'p1',
       styleId: STYLE_ID,
     })
-    // Every addressed node must exist on the server. The unsaved paragraph has
-    // no server id, so a separate set_paragraph_style for it is unaddressable
-    // and would fail this and every later save.
     for (const operation of operations ?? []) {
       const addressed =
         'paragraphId' in operation
@@ -61,10 +58,6 @@ describe('E45 a rejected save must not poison later saves', () => {
   })
 
   it('saves later valid work when the server rejects one change in the batch', async () => {
-    // Models the server's atomic batch rule: the delete operation is rejected
-    // while the typed text in the same batch is valid and must still reach the
-    // server. The document holds two paragraphs so the client itself keeps the
-    // deletion valid (E0 refuses deleting the final paragraph).
     const saved: string[] = []
     const editAsync = vi.fn(
       async (input: { operations: DocumentEditOperation[] }) => {
@@ -113,8 +106,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     })
     expect(editAsync).toHaveBeenCalledTimes(1)
 
-    // The refused slot is still pending, so the retry carries it. When the
-    // resend commits the banner clears and the save reports clean.
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
     expect(editAsync.mock.calls[1]?.[0].operations).toEqual([
@@ -146,8 +137,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
-    // The user keeps typing while the request is in flight. That text was not
-    // in the request, so the successful response must not clear it.
     fireEvent.change(bodyEditor(), { target: { value: 'Hello second' } })
     await act(async () => {
       resolveFirst({
@@ -176,7 +165,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
 
-    // Ctrl+S bypasses the disabled Save button.
     const shell = document.getElementById('document-workspace')
     if (!shell) throw new Error('expected the workspace shell')
     fireEvent.keyDown(shell, { key: 's', ctrlKey: true })
@@ -239,8 +227,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     expect(editAsync).toHaveBeenCalledTimes(1)
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
-    // The slot was refused again and is still pending: the banner stays up
-    // and the workspace never reports the save as clean.
     expect(screen.getByText(/stays in your drafts/i)).toBeTruthy()
     expect(saveState()).toBe('unsaved')
     expect(screen.queryByText(/could not be identified/i)).toBeNull()
@@ -264,8 +250,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     openReviewTab()
     fireEvent.click(command('Save'))
 
-    // The batch is refused; containment retries without the table and the
-    // typed text commits.
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
     await waitFor(() =>
       expect(screen.getByText(/rejected a table/i)).toBeTruthy(),
@@ -276,8 +260,6 @@ describe('E45 a rejected save must not poison later saves', () => {
       contained?.some((operation) => operation.type === 'insert_table'),
     ).toBe(false)
 
-    // The refused slot stays pending: the next save resends it rather than
-    // letting the partial commit read as a clean save with the table gone.
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(3))
     const retried = editAsync.mock.calls[2]?.[0].operations
@@ -286,8 +268,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     ).toBe(true)
     expect(screen.getByText(/rejected a table/i)).toBeTruthy()
 
-    // The discard affordance drops only the refused slot; the save is clean
-    // only once nothing remains pending.
     fireEvent.click(command('Discard rejected change'))
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
     fireEvent.click(
@@ -356,9 +336,6 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
-    // The same rejected slot is extended while the request is in flight.
-    // Keeping the refused slot pending must keep the newer typing editable,
-    // not swallow it.
     fireEvent.change(bodyEditor(), {
       target: { value: 'Hello doomed plus newer typing' },
     })
@@ -391,14 +368,11 @@ describe('E45 a rejected save must not poison later saves', () => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy(),
     )
 
-    // The slot is edited after the refusal: discarding the refused work must
-    // not take typing the rejection never saw with it.
     fireEvent.change(bodyEditor(), {
       target: { value: 'Hello doomed plus newer typing' },
     })
     fireEvent.click(command('Discard rejected change'))
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
-    // The copy does not promise a deletion: an edited slot is kept.
     expect(
       within(screen.getByRole('dialog')).getByText(
         /edited it since the rejection/i,

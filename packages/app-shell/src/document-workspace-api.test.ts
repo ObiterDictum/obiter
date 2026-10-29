@@ -11,9 +11,6 @@ const api = vi.hoisted(() => ({
   apiFetchBlobResult: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('./api')) }
 mock.module('./api', () => ({
   ...apiModule,
@@ -22,9 +19,6 @@ mock.module('./api', () => ({
   apiFetchBlobResult: api.apiFetchBlobResult,
 }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   documentCommentsQueryOptions,
   documentModelQueryOptions,
@@ -130,9 +124,6 @@ describe('useDocumentImageUrls', () => {
       )
     })
     expect(createObjectURL).toHaveBeenCalled()
-    // The bytes must come through the media endpoint, which serves them as an
-    // attachment under a sandbox CSP. Rendering from a blob URL is what keeps
-    // display working without pointing an element at that URL.
     expect(api.apiFetchBlob).toHaveBeenCalledWith(
       '/api/documents/doc_1/media?part=word%2Fmedia%2Flogo.png',
     )

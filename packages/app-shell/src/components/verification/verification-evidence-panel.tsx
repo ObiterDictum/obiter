@@ -25,14 +25,6 @@ import {
   verificationUnmappedLabel,
 } from '../../verification-copy'
 
-/**
- * The contextual evidence panel. It floats above the document page in a
- * non-modal popover: no focus trap, no scroll lock, no backdrop, so the page
- * behind it stays readable and scrollable while a reviewer reads the evidence.
- *
- * Source passages are loaded on demand from the checked finding, and the
- * checked stored version is always named.
- */
 export function VerificationEvidencePanel() {
   const verification = useVerificationWorkspace()
   const titleId = useId()
@@ -47,23 +39,13 @@ export function VerificationEvidencePanel() {
   const anchorRef = useRef(anchor)
   anchorRef.current = anchor
 
-  // Dismissal outside the panel is one rule for both placements, and it never
-  // moves focus. Escape is the same rule for every focus position, including a
-  // marker that never took focus, and it restores focus to what opened the
-  // panel. Document-level listeners are a browser boundary with cleanup.
   const panelOpen = verification?.panelOpen ?? false
   const indexOpen = verification?.indexOpen ?? false
   useEffect(() => {
-    // While the modal findings index is open it owns dismissal: it is not
-    // "outside" the panel, and Escape belongs to the dialog. Registering the
-    // listeners only outside the index keeps one Escape from closing two
-    // surfaces.
     if (!panelOpen || indexOpen) return
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
-      // The panel, the markers and the document-level control are all part of
-      // the same interaction: a click there retargets it, it does not dismiss.
       if (
         target.closest(
           '[data-verification-panel],[data-verification-marker],[data-verification-controls]',
@@ -133,11 +115,6 @@ export function VerificationEvidencePanel() {
       open
       onOpenChange={(open, details) => {
         if (open) return
-        // The panel owns its dismissal. Base UI's dismissals are cancelled and
-        // the document listener below performs the one rule (a real click
-        // outside the panel, markers or controls, or Escape, both restoring
-        // focus). Without this, opening the modal findings index counts as an
-        // outside press and silently destroys the panel it was opened from.
         details.cancel()
       }}
     >
@@ -164,12 +141,6 @@ export function VerificationEvidencePanel() {
   )
 }
 
-/**
- * Why the page did not draw this finding. A stored-model mapping that the page
- * did not render is reported with the renderer's own reason: a hard break, a
- * range split across fragments, or an anchor the page did not paint are not
- * changes to the document's text.
- */
 function unmappedReasonFor(
   verification: VerificationWorkspaceValue,
   finding: VerificationFindingView,

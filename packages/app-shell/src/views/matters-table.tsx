@@ -16,11 +16,6 @@ import type { MatterRecord } from '../matters'
 import { matterInitials } from '../matters'
 import { openWorkParts, type MatterRow } from './matters-rows'
 
-/**
- * The matter's initials tile: the client reference's letters where there is a
- * reference, else the name's. Decorative, hidden from assistive technology —
- * the name always sits beside it.
- */
 export function MatterTile({ matter }: { matter: MatterRecord }) {
   return (
     <span
@@ -32,12 +27,6 @@ export function MatterTile({ matter }: { matter: MatterRecord }) {
   )
 }
 
-/**
- * The matters table. Every value comes from the API or from the runs the shell
- * already reads: the matter's own fields, its documents, and the attention items
- * Home ranks. The title is the row's control, so the preview is reachable from
- * the keyboard as well as the mouse.
- */
 export function MattersTable({
   rows,
   selectedId,
@@ -47,7 +36,6 @@ export function MattersTable({
   rows: MatterRow[]
   selectedId: string | null
   onSelect: (matterId: string) => void
-  /** The runs behind open work could not be read: say so rather than guess. */
   openWorkUnavailable: boolean
 }) {
   return (

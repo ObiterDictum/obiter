@@ -33,12 +33,6 @@ export interface VerifyPart {
   tone: NonNullable<StatusDotProps['tone']>
 }
 
-/**
- * A document's Verify state as quiet status words. The same words appear in the
- * matter's document table and in the list's preview, so a document never reads
- * differently in the two places. A run on an earlier version says so: it says
- * nothing about the text on screen.
- */
 function documentVerifyParts(state: DocumentVerificationState): VerifyPart[] {
   if (state.status === 'pending')
     return [{ label: 'Checking…', tone: 'neutral' }]
@@ -59,8 +53,6 @@ function documentVerifyParts(state: DocumentVerificationState): VerifyPart[] {
     case 'completed': {
       const parts: VerifyPart[] = []
       const { flaggedCount } = run.summary
-      // A check that did not run is still waiting on a person, so the table
-      // folds it into review the way the attention queue does.
       const reviewRequiredCount =
         run.summary.reviewRequiredCount + run.summary.notCheckedCount
       if (flaggedCount > 0) {
@@ -86,11 +78,6 @@ function documentVerifyParts(state: DocumentVerificationState): VerifyPart[] {
   }
 }
 
-/**
- * A document's Redact state: the newest run on it, in the same words Redact uses
- * for a run's own status. A run started from Redact as a standalone job is not
- * attached to a document, so it never appears here.
- */
 function documentRedactPart(run: RedactionRunListItem): VerifyPart {
   switch (run.status) {
     case 'failed':
@@ -110,7 +97,6 @@ function documentRedactPart(run: RedactionRunListItem): VerifyPart {
   }
 }
 
-/** The newest run per document, from the run list the shell already reads. */
 function latestRunsByDocument(
   runs: RedactionRunListItem[],
 ): Map<string, RedactionRunListItem> {
@@ -125,7 +111,6 @@ function latestRunsByDocument(
   return latest
 }
 
-/** The document glyph, the same in the table and in the list's preview. */
 export function DocumentIcon() {
   return (
     <span
@@ -137,7 +122,6 @@ export function DocumentIcon() {
   )
 }
 
-/** A document's Verify state as status words, for a table cell or a preview row. */
 function VerifyWords({
   parts,
   className,
@@ -156,11 +140,6 @@ function VerifyWords({
   )
 }
 
-/**
- * The matter's documents: one row each, the current version, its Verify state
- * and an open action. Row heights are the primitive's 52px minimum and the
- * action sits in a table cell of its own, so the dividers run the full row.
- */
 export function MatterDocumentsTable({
   matterId,
   documents,
@@ -178,9 +157,6 @@ export function MatterDocumentsTable({
     useRedactionRunsList().data?.runs ?? [],
   )
 
-  // Nothing to tabulate yet: an empty table said "No documents yet" in one grey
-  // line, which is a dead end in the place a matter starts. The page takes a
-  // dropped file too (MatterDropZone).
   if (!loading && !error && files.length === 0) {
     return (
       <EmptyState

@@ -23,12 +23,6 @@ import {
 } from '../../document-word-edits'
 import type { ParagraphWordEdit } from './model-paragraph'
 
-/**
- * The document-edit operations that record one history step and commit one
- * draft state. They live apart from `useWorkspaceDrafts`, which is already at
- * the source ceiling, and take the live state through a getter so each reads
- * the latest bundle rather than a render-stale closure.
- */
 export function createWorkspaceDraftEdits({
   getModel,
   getState,
@@ -60,16 +54,10 @@ export function createWorkspaceDraftEdits({
       commitEditor(result)
       return { status: 'applied', caret: result.caret }
     }
-    // No result means the edit could not join a neighbour; say which boundary
-    // refused it rather than leaving the keystroke silent.
     const refusal = wordEditJoinRefusal(model, getState(), edit)
     return refusal ? { status: 'refused', refusal } : null
   }
 
-  /**
-   * Replaces a selection that spans paragraphs. It is one draft-state change,
-   * so a rejected or impossible range leaves the document exactly as it was.
-   */
   function replaceDocumentRange(
     model: DocumentModelWire,
     from: { paragraphId: string; offset: number },
@@ -83,7 +71,6 @@ export function createWorkspaceDraftEdits({
     return result.caret
   }
 
-  /** Enter over a selection: collapse the range, then split where it was. */
   function splitDocumentRange(
     model: DocumentModelWire,
     from: { paragraphId: string; offset: number },
@@ -102,13 +89,6 @@ export function createWorkspaceDraftEdits({
     return result.caret
   }
 
-  /**
-   * Replaces one find hit — `which` indexes the hit list — or every hit for
-   * 'all'. The hits are re-derived from the live state with the same query
-   * and options the find field is showing, so a render-stale offset can never
-   * reach the document; the batch is one history step, and a refused range
-   * leaves the draft untouched.
-   */
   function replaceHits(
     model: DocumentModelWire,
     story: DocumentStoryWire | undefined,
@@ -146,17 +126,6 @@ export function createWorkspaceDraftEdits({
     return result.caret
   }
 
-  /**
-   * `insertText` with a formatting draft over the inserted range in the same
-   * history step — the citation style's italic form. The range addresses
-   * post-insert effective text, which is what the save writer's
-   * `set_run_emphasis` resolves.
-   *
-   * A paragraph that exists only as a pending insert cannot carry run
-   * emphasis anywhere in the editor (the Bold button reads the same
-   * boundary), so the draft is not written there: it would only surface as a
-   * blocked slot at save. The citation still lands as plain text.
-   */
   function insertStyledText(
     model: DocumentModelWire,
     paragraphId: string,
@@ -198,8 +167,6 @@ export function createWorkspaceDraftEdits({
     return result.caret
   }
 
-  /** A paste is one edit and one history step, however many paragraphs it
-   * creates; the pure splitter supplies the resulting state. */
   function paste(
     model: DocumentModelWire,
     target: PasteTarget,
@@ -234,8 +201,6 @@ export function createWorkspaceDraftEdits({
     if (plan.kind === 'refused')
       return { status: 'refused', reason: plan.reason, selectId: null }
     if (plan.kind === 'unchanged') return { status: 'deleted', selectId: null }
-    // The invariant is checked before this checkpoint, so a refused deletion
-    // leaves no undo entry and no pending edit operation behind.
     checkpoint()
     setState((current) => ({ ...current, ...plan.state }))
     return { status: 'deleted', selectId: plan.selectId }
@@ -254,9 +219,6 @@ export function createWorkspaceDraftEdits({
   }
 }
 
-/** A pure insertion of text that a keystroke can have produced is typing; a
- * multi-character or range-affecting replace, a delete, a split and a hard
- * break are all structural and get their own history step. */
 function historyEditOf(edit: ParagraphWordEdit): HistoryEdit {
   if (
     edit.type === 'replace' &&

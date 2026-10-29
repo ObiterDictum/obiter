@@ -329,7 +329,6 @@ describe('stepping the focus through arrow geometry', () => {
 })
 
 describe('stepping across astral characters', () => {
-  // 'a' + emoji (two code units) + 'b', so the pair occupies offsets 1..3.
   const astral = `a\u{1f600}b`
 
   it('steps over a whole surrogate pair moving right', () => {
@@ -411,8 +410,6 @@ function hasLoneSurrogate(value: string): boolean {
 }
 
 describe('vertical movement across astral characters', () => {
-  // 'xy' hard-breaks to 'ab🙂c'; the pair occupies offsets 5..7, so the visual
-  // column counted in code units can point at the low surrogate.
   const text = `xy\nab\u{1f600}c`
 
   it('resolves a retained column inside a pair to the pair start', () => {

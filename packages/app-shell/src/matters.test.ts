@@ -8,15 +8,9 @@ import { ApiError } from './api'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('./api')) }
 mock.module('./api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { documentsKeys } = await import('./documents')
 const {
   matterQueryOptions,

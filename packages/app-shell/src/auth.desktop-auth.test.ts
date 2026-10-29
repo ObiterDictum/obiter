@@ -2,9 +2,6 @@ import '@obiter/test-dom'
 import { afterEach, describe, expect, it, mock as bunMock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 
-// Generation bump replaces the old module-registry reset (?gen= query busts
-// the cache); the better-auth registrations above persist for the file,
-// exactly as the old hoisted mocks did.
 let moduleGen = 0
 
 const mock = vi.hoisted(() => ({

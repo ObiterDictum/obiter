@@ -6,12 +6,6 @@ import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from '../api'
 
-/**
- * The Organisation section: rename, who may perform it, the read-only context,
- * the members and invites panel, and creation for a user with no organisation.
- * Permissions are asserted here and again server-side in
- * `services/api/src/account.db.test.ts`.
- */
 const mocks = vi.hoisted(() => ({
   useCurrentUser: vi.fn(),
   useCreateOrganisation: vi.fn(),
@@ -21,9 +15,6 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const organisationMembershipModuleKeys = Object.fromEntries(
   Object.keys(await import('../organisation-membership')).map((key) => [
     key,
@@ -52,9 +43,6 @@ mock.module('../organisation-membership', () =>
   ),
 )
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('../current-user')) }
 mock.module('../current-user', () => ({
   ...currentUserModule,
@@ -64,15 +52,9 @@ mock.module('../current-user', () => ({
   useUpdateProfile: mocks.useUpdateProfile,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
 mock.module('../auth', () => ({ ...authModule, useAuth: mocks.useAuth }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const tanstackReactRouterModule = {
   ...(await import('@tanstack/react-router')),
 }
@@ -81,9 +63,6 @@ mock.module('@tanstack/react-router', () => ({
   useNavigate: () => mocks.navigate,
 }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   MEMBER_ME,
   ORGLESS_ME,
@@ -156,7 +135,6 @@ describe('SettingsRouteView — organisation', () => {
     const organisation = await openSection('Organisation')
 
     expect(readOnlyValue(organisation, 'Your role')).toBe('Owner')
-    // A raw organisation id is an internal identifier: it is not shown.
     expect(within(organisation).queryByText('Organisation ID')).toBeNull()
     expect(within(organisation).queryByText('org_1')).toBeNull()
   })

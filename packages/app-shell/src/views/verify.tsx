@@ -43,22 +43,9 @@ const filterLabels = {
   match: 'Matches',
 } satisfies Record<VerifyFilter, string>
 
-/**
- * Verify: every finding in the organisation, grouped by matter and then by
- * document, with the version each result checked and the state of a run that has
- * not finished. The counts stay apart — a match is not an approval, a check that
- * did not run is not a pass, and a dismissed finding is a person's decision
- * rather than a clean result.
- */
 export function VerifyRouteView() {
   const { data: me } = useCurrentUser()
-  // `/api/me` is a suspense query, so a real render has `me`; the branch is
-  // explicit so an unresolved account is never treated as organisationless.
   const hasOrganisation = me?.organisation != null
-  // A disabled infinite query stays `isPending` forever, so an organisationless
-  // account would show a permanent loading skeleton. The query is only enabled
-  // once an organisation exists and the view no longer reads its pending state
-  // in that case.
   const runs = useOrganisationVerificationRuns(hasOrganisation)
   const matters = useMattersList({ enabled: hasOrganisation })
   const documents = useVerificationRunDocuments(runs.runs)

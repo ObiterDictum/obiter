@@ -11,11 +11,6 @@ import {
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from '../api'
 
-/**
- * The Account section: the display name the user can change, and the identity
- * facts they cannot. The cache contract behind the save is pinned separately in
- * `settings-cache.test.tsx`, which drives the real mutation.
- */
 const mocks = vi.hoisted(() => ({
   useCurrentUser: vi.fn(),
   useCreateOrganisation: vi.fn(),
@@ -25,9 +20,6 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const organisationMembershipModuleKeys = Object.fromEntries(
   Object.keys(await import('../organisation-membership')).map((key) => [
     key,
@@ -56,9 +48,6 @@ mock.module('../organisation-membership', () =>
   ),
 )
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('../current-user')) }
 mock.module('../current-user', () => ({
   ...currentUserModule,
@@ -68,15 +57,9 @@ mock.module('../current-user', () => ({
   useUpdateProfile: mocks.useUpdateProfile,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
 mock.module('../auth', () => ({ ...authModule, useAuth: mocks.useAuth }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const tanstackReactRouterModule = {
   ...(await import('@tanstack/react-router')),
 }
@@ -85,9 +68,6 @@ mock.module('@tanstack/react-router', () => ({
   useNavigate: () => mocks.navigate,
 }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { OWNER_ME, idleMutation, renderSettings } =
   await import('./settings-test-support')
 
@@ -117,8 +97,6 @@ describe('SettingsRouteView — account', () => {
 
     expect(within(account).getByLabelText('Name')).toBeTruthy()
     expect(within(account).getByText('owner@obiter.dev')).toBeTruthy()
-    // The role belongs to Organisation, where it can change: Account states it
-    // once and nowhere else.
     expect(within(account).queryByText('Your role')).toBeNull()
     expect(within(account).queryByText('Owner')).toBeNull()
     expect(

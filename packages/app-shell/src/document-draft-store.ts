@@ -35,14 +35,6 @@ export {
   type RecoverableDraft,
 } from './document-draft-identity'
 
-/**
- * Browser persistence for unsaved document drafts.
- *
- * Draft payloads are privileged matter text. They are keyed by organisation,
- * user, document and a unique draft id; a per-tab writer id is stored only as
- * an occupant, never as the only way to find the payload. Document ids are
- * globally unique (`matter_documents.id` is a primary key).
- */
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000
 
 export type { HeldChange } from './document-draft-schema'
@@ -97,7 +89,6 @@ export function listDocumentDrafts(
   return listed
 }
 
-/** Parked drafts and abandoned writers only; a live sibling tab is not offered. */
 export function listRecoverableDocumentDrafts(
   storage: DraftStorage,
   scope: DraftScope,
@@ -265,7 +256,6 @@ export function clearDocumentDraft(storage: DraftStorage, scope: DraftScope) {
   listDocumentDrafts(storage, scope)
 }
 
-/** Removes only parked drafts for this document; live work stays. */
 export function discardDocumentDrafts(
   storage: DraftStorage,
   scope: DraftScope,

@@ -4,11 +4,6 @@ import { useState, type DragEvent, type ReactNode } from 'react'
 import { blankDocumentFile } from '../document-blank'
 import { useUploadMatterDocument } from '../documents'
 
-/**
- * The one upload path into a matter, shared by the list's preview and the
- * matter page. The document list is invalidated by the mutation, so the new
- * document appears in the table that asked for it.
- */
 function useMatterDocumentUpload(matterId: string) {
   const upload = useUploadMatterDocument(matterId)
   const { toast } = useToast()
@@ -34,11 +29,6 @@ function useMatterDocumentUpload(matterId: string) {
   return { pending: upload.isPending, send }
 }
 
-/**
- * Uploading by dropping a file on the matter. It is the same path as the
- * buttons (same mutation, same toast, same invalidation), because a second
- * upload path is a second set of failures to keep correct.
- */
 export function MatterDropZone({
   matterId,
   children,
@@ -64,13 +54,9 @@ export function MatterDropZone({
       }}
       onDragOver={(event) => {
         if (!carriesFiles(event)) return
-        // Without this the browser navigates to the dropped file instead.
         event.preventDefault()
       }}
       onDragLeave={(event) => {
-        // Leaving for a child element is not leaving the page. relatedTarget is
-        // null when the pointer leaves the window entirely, which contains()
-        // answers false for.
         const next = event.relatedTarget
         if (next instanceof Node && event.currentTarget.contains(next)) return
         setDragging(false)
@@ -139,7 +125,6 @@ export function MatterUploadButton({
   )
 }
 
-/** "New document": a blank Word file, uploaded through the same path. */
 export function NewDocumentButton({ matterId }: { matterId: string }) {
   const { pending, send } = useMatterDocumentUpload(matterId)
   const { toast } = useToast()
@@ -152,7 +137,6 @@ export function NewDocumentButton({ matterId }: { matterId: string }) {
         void blankDocumentFile()
           .then(send)
           .catch((error: unknown) => {
-            // Only the local OOXML build can fail here, before any upload.
             toast({
               title: 'Could not create the document',
               description:

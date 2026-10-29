@@ -10,21 +10,12 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 
-/**
- * The caret model must place one row per hard-break segment and one empty row
- * after a trailing break, because that is what the browser textarea renders:
- * `text.split('\n')` is the browser's own row list, and the caret at
- * `text.length` sits on the empty row that trailing break opens.
- */
-
 const FONT = 16
-// A width no line can reach: each hard-break segment is exactly one row.
 const NO_WRAP = 10_000_000
 
 const rowsOf = (text: string, widthPx = NO_WRAP): WrappedLine[] =>
   wrapLines(text, FONT, widthPx)
 
-/** The smallest width at which `text` fits on exactly one row. */
 function exactWidth(text: string): number {
   let width = 1
   while (takeLine(text, 0, FONT, width) < text.length) width += 1
@@ -57,20 +48,14 @@ describe('the trailing empty row', () => {
       { text: 'alpha', from: 0, to: 5 },
       { text: '', from: 6, to: 6 },
     ])
-    // The caret at text.length renders on the empty row, column 0.
     expect(visualColumn(lines, 6)).toBe(0)
-    // The newline slot at 5 stays the display end of 'alpha'.
     expect(visualColumn(lines, 5)).toBe(5)
-    // Up from the trailing row reaches the row above: the caret there sits at
-    // the retained column 0, which is that row's first code unit.
     expect(
       offsetVertically({ key: 'ArrowUp', offset: 6, lines, column: 0 }),
     ).toBe(0)
     expect(
       offsetVertically({ key: 'ArrowUp', offset: 6, lines, column: 5 }),
     ).toBe(5)
-    // Down from the hard-break slot reaches the empty row, not the paragraph
-    // below it.
     expect(
       offsetVertically({ key: 'ArrowDown', offset: 5, lines, column: 5 }),
     ).toBe(6)
@@ -79,9 +64,7 @@ describe('the trailing empty row', () => {
   it('keeps ArrowUp on the immediately preceding line', () => {
     const lines = rowsOf('alpha\n')
     const state = createVerticalCaretColumn()
-    // Up from the trailing row lands on the line above, not past it.
     expect(verticalMove({ state, lines, offset: 6, key: 'ArrowUp' })).toBe(0)
-    // Up again leaves the paragraph.
     expect(
       offsetVertically({ key: 'ArrowUp', offset: 0, lines, column: 0 }),
     ).toBeUndefined()
@@ -173,7 +156,6 @@ describe('the trailing empty row', () => {
     expect(visualColumn(lines, text.length)).toBe(0)
     const above = lines[lines.length - 2]!
     expect(above.to).toBe(text.length - 1)
-    // Column 0 of the row above is its first code unit.
     expect(
       offsetVertically({
         key: 'ArrowUp',
@@ -279,7 +261,6 @@ describe('the desired column at the trailing row', () => {
     expect(offset).toBe(81)
     offset = verticalMove({ state, lines, offset, key: 'ArrowUp' })!
     expect(offset).toBe(40)
-    // The run still carries column 40 across the paragraph boundary.
     expect(
       offsetAfterArrow({
         key: 'ArrowDown',
@@ -296,11 +277,8 @@ describe('the desired column at the trailing row', () => {
     const long = `${'a'.repeat(80)}\n`
     const lines = rowsOf(long)
     const state = createVerticalCaretColumn()
-    // Start at column 40 of the long line and move down onto the empty row.
     let offset = verticalMove({ state, lines, offset: 40, key: 'ArrowDown' })!
     expect(offset).toBe(81)
-    // Carry the run into a paragraph whose only line above the empty row is
-    // short: the caret clamps to that line's end.
     const short = 'ab\n'
     const shortLines = rowsOf(short)
     offset = verticalMove({
@@ -317,7 +295,6 @@ describe('the desired column at the trailing row', () => {
       key: 'ArrowDown',
     })!
     expect(offset).toBe(3)
-    // The run still holds column 40, so leaving the paragraph lands there.
     expect(
       offsetAfterArrow({
         key: 'ArrowDown',

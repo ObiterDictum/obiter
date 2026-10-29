@@ -1,11 +1,6 @@
 import { command, commandOrNull } from './editor-test-commands'
 
 import '@obiter/test-dom'
-// The E45 recovery save owner and the V5 verification gate meet at one
-// boundary: `DocxWorkspace` publishes its unsaved state, `VerificationRunPanel`
-// reads it. These tests mount both inside the real provider, so a save owner
-// that reports clean while work is still off-server fails here rather than in
-// a user's verification run.
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -19,13 +14,7 @@ const runsHook = vi.hoisted(() => ({
   latestVerificationRun: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('../../documents')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../documents')).map((key) => [key, undefined]),
 )
@@ -38,13 +27,7 @@ mock.module('../../documents', () =>
     })(),
   ),
 )
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const verificationRunsModule = { ...(await import('../../verification-runs')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const verificationRunsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../verification-runs')).map((key) => [
     key,
@@ -67,16 +50,9 @@ mock.module('../../verification-runs', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { bodyEditor, mountSaveDocumentWorkspace, saveState, validationFailed } =
   await import('./docx-workspace-save-harness')
 
-/**
- * The whole document workspace, so the unsaved gate is exercised against the
- * real provider boundary the dock reads rather than a panel mounted beside it.
- */
 function mountGate(options: {
   editAsync?: ReturnType<typeof vi.fn>
   paragraphs?: readonly string[]
@@ -85,7 +61,6 @@ function mountGate(options: {
 }
 
 function verifyButton() {
-  // The header's check control; the panel's own control is inside the dock.
   return command('Check citations') as HTMLButtonElement
 }
 
@@ -148,9 +123,6 @@ describe('V5 verification gate against the E45 save owner', () => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
 
-    // The refused slot stays pending, so the workspace reports unsaved rather
-    // than clean and Save stays live to retry it. A clean signal here would
-    // let verification run against a stored version missing the user's edit.
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     expect(saveButton().disabled).toBe(false)
     expect(verifyButton().disabled).toBe(true)
@@ -202,8 +174,6 @@ describe('V5 verification gate against the E45 save owner', () => {
         return { documentId: 'doc_1', versionId: 'ver_2', versionNumber: 2 }
       },
     )
-    // Two stored paragraphs so the client keeps the deletion valid; it is the
-    // server that rejects it, which is what leaves the save partly covered.
     mountGate({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
@@ -213,9 +183,6 @@ describe('V5 verification gate against the E45 save owner', () => {
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync.mock.calls.length).toBeGreaterThan(1))
 
-    // The typed text reached the server; the deletion stayed pending after
-    // the refusal. The editor is still not on the stored version, so
-    // verification stays disabled.
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     expect(verifyButton().disabled).toBe(true)
     expect(screen.getByText(/Save before verification/)).toBeTruthy()
@@ -261,8 +228,6 @@ describe('V5 verification gate against the E45 save owner', () => {
     await waitFor(() => expect(verifyButton().disabled).toBe(false))
 
     fireEvent.click(command('Verify citations'))
-    // The entry only reveals the one control that owns the action, so it stays
-    // enabled with nothing to decide and cannot start a duplicate run.
     expect(
       await screen.findByRole('region', { name: 'Verification' }),
     ).toBeTruthy()
@@ -285,8 +250,6 @@ describe('V5 verification gate against the E45 save owner', () => {
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    // While the status itself loads there is nothing to start: the header
-    // says so instead of offering a control it cannot honour.
     expect(commandOrNull('Check citations')).toBeNull()
     expect(screen.getAllByText(/Checking…/).length).toBeGreaterThan(0)
   })

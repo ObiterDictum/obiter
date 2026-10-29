@@ -21,9 +21,6 @@ const mocks = vi.hoisted(() => ({
   resetPassword: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const authModuleKeys = Object.fromEntries(
   Object.keys(await import('./auth')).map((key) => [key, undefined]),
 )
@@ -124,7 +121,6 @@ describe('ResetPasswordRouteView — token failure vs retryable failure', () => 
     await waitFor(() => {
       expect(screen.getByText('Password too long')).toBeTruthy()
     })
-    // The form is still present — the user can retry with the same token.
     expect(screen.queryByText('Request a new reset link')).toBeNull()
     expect(screen.getByLabelText('New password')).toBeTruthy()
   })
@@ -154,7 +150,6 @@ describe('ResetPasswordRouteView — token failure vs retryable failure', () => 
         screen.getByText(/Check your connection and try again/),
       ).toBeTruthy()
     })
-    // submitting reset to false (W2): the button is not stuck disabled.
     expect(
       (
         screen.getByRole('button', {
@@ -217,13 +212,11 @@ describe('ResetPasswordRouteView — client validation and in-flight guard', () 
     fireEvent.change(cf, { target: { value: 'newpassword123' } })
     const form = cf.closest('form')!
     fireEvent.submit(form)
-    fireEvent.submit(form) // in-flight second submit — must be a no-op
+    fireEvent.submit(form)
 
-    // Let the first call resolve.
     await waitFor(() => expect(mocks.resetPassword).toHaveBeenCalledTimes(1))
     resolveFirst({ ok: true })
 
-    // Even after settling, only the first submit ran.
     await waitFor(() => expect(mocks.resetPassword).toHaveBeenCalledTimes(1))
   })
 })

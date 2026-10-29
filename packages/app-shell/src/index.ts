@@ -1,9 +1,3 @@
-/**
- * @obiter/app-shell public surface. See docs/specs/app-shell/contract.md for the
- * frozen contract (the parts the Redact track builds against).
- */
-
-// Data + auth helpers (contract §3)
 export { apiFetch, apiFetchBlob, ApiError } from './api'
 export {
   setServerRequestGetter,
@@ -30,7 +24,6 @@ export {
   prefetchInviteAcceptData,
 } from './route-loaders'
 
-// Live-surface data (M2): real matters + documents via TanStack Query.
 export {
   mattersListQueryOptions,
   matterQueryOptions,
@@ -63,7 +56,6 @@ export {
 
 export { setAppTheme, useAppTheme, THEME_STORAGE_KEY } from './use-app-theme'
 
-// Layout primitives
 export { AppShellLayout } from './frame'
 export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 export {
@@ -74,7 +66,6 @@ export {
   type ShellFailure,
 } from './shell-states'
 
-// Route views
 export { SignInRouteView } from './views/sign-in'
 export { SignUpRouteView } from './views/sign-up'
 export { AcceptInviteRouteView } from './views/accept-invite'
@@ -89,7 +80,6 @@ export { DocumentDetailLayoutView } from './views/document-detail'
 export { caseResultLocation } from './case-navigation'
 export { provisionResultLocation } from './legislation-navigation'
 
-// Search surfaces (M3 restyle; logic unchanged)
 export {
   CaseLawDocumentView,
   caseLawDocumentQueryOptions,

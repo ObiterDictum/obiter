@@ -20,12 +20,6 @@ export interface SearchFacetsProps {
   onClear: () => void
 }
 
-/**
- * Facets over the fields the search answer actually carries: the served
- * source type, each judgment's court, and its decided date. No counts are
- * shown because the API returns a page, not aggregates; a count here would
- * describe the page and read as the corpus.
- */
 export function SearchFacets({
   response,
   filters,

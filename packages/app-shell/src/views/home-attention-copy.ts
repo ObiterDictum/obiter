@@ -6,13 +6,6 @@ import {
 import { formatDateTime } from '../format'
 import type { AttentionItem, AttentionSummary } from './home-attention'
 
-/*
- * The words the dashboard uses for a queued item. Kept apart from the model so
- * the ranking can be tested without the copy, and the copy changed without
- * touching a comparator.
- */
-
-/** The header line. It counts what is on the queue and nothing else. */
 export function attentionSummaryText(summary: AttentionSummary): string {
   if (summary.total === 0) return 'Nothing needs your attention right now.'
   const parts: string[] = []
@@ -42,11 +35,6 @@ function list(parts: string[]) {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
-/**
- * Why this row is here. It never repeats the filename: the row's meta line
- * already names the document, and two copies of a filename on one card is the
- * same fact stated twice.
- */
 export function attentionReason(item: AttentionItem): string {
   const kind = item.kind
   switch (kind) {
@@ -116,11 +104,6 @@ export function attentionStatus(item: AttentionItem): AttentionStatus {
   }
 }
 
-/**
- * The sentence under the title. A Verify item explains the finding the API
- * returned; until that page of findings arrives (or if it fails) it states the
- * run's own counts, so the row never goes blank or invents a reason.
- */
 export function attentionExplanation(
   item: AttentionItem,
   finding?: VerificationFindingView | null,
@@ -183,7 +166,6 @@ export function attentionMeta(item: AttentionItem): string {
   }
 }
 
-/** The first finding worth showing: a proved mismatch outranks a maybe. */
 export function topUnresolvedFinding(
   findings: VerificationFindingView[],
 ): VerificationFindingView | null {

@@ -52,7 +52,6 @@ export interface LegalSearchResult {
   canonicalUrl?: string
   evidenceIds?: string[]
   matchReason?: LegalSearchMatchReason
-  /** Relation to the recognised citation; absent unless the query was one. */
   citationMatch?: LegalSearchCitationMatch
   retrievalPath?: LegalSearchRetrievalPath
   retrievalRank?: number
@@ -91,7 +90,6 @@ interface LegalSearchFetchGroup {
 export interface LegalSearchFetchResponse {
   hits: LegalSearchResult[]
   groups?: LegalSearchFetchGroup[]
-  /** Statute-shaped queries lead with legislation; omitted otherwise. */
   primaryGroup?: 'judgments' | 'legislation'
   cached: boolean
   indexedCount: number
@@ -99,7 +97,6 @@ export interface LegalSearchFetchResponse {
   estimatedTotalHits?: number
   hydrationQueued?: boolean
   outcome?: LegalSearchOutcome
-  /** Citation honesty; absent for responses that predate it. */
   citation?: LegalSearchCitation
   diagnostics?: {
     exactLookupSearched?: boolean
@@ -107,38 +104,17 @@ export interface LegalSearchFetchResponse {
     storedSourceSearched?: boolean
     liveProviderSearched?: boolean
     storedOnlyBrowse?: boolean
-    /** True when an older client requested foreground live results but this
-     * corpus-only API served stored records only. */
     foregroundLiveIgnored?: boolean
     citationRecognised?: boolean
     citationStatus?: LegalSearchCitationStatus
     storedIndexStatus?: 'ok' | 'unavailable'
-    /** Response diagnostics.legislationSearched: true only when the
-     * legislation half completed successfully — it ran and neither its store
-     * nor its keyword engine failed — not merely when it was attempted. A
-     * failed half is named by legislationSearchFailed instead. */
     legislationSearched?: boolean
-    /** True when the legislation half failed: its store or keyword engine
-     * did not answer. Never set from a completed zero-hit search. */
     legislationSearchFailed?: boolean
-    /** True when the judgment half failed: the exact-lookup leg rejected, or
-     * the stored index outage left no judgment result while another half
-     * still answered. */
     judgmentSearchFailed?: boolean
-    /** Set when the legislation half recognised a citation but served no
-     * group: an unheld chapter or provision. Names what was asked for so the
-     * page reads as not held. */
     legislationNote?: string
-    /** True when the note above is an authoritative not-held verdict rather
-     * than an outage or an unresolved-title suppression. */
     legislationNotHeld?: boolean
-    /** True when the query looked like a whole Act title but no exact title
-     * key matched. Suppresses keyword provisions without claiming absence. */
     legislationTitleUnresolved?: boolean
-    /** True when more than one stored Act satisfies the query. */
     legislationAmbiguous?: boolean
-    /** A held Act whose schedule citation names no schedule. Presence is the
-     * diagnostic; the corrective example and Act are data, not prose. */
     legislationScheduleGuidance?: LegislationScheduleGuidance
   }
 }
@@ -190,25 +166,12 @@ export type LegalSearchState =
       outcome?: LegalSearchOutcome
       hydrationQueued?: boolean
       browse?: LegalSearchBrowseContext
-      /** 1-based queued-poll count for the progress line. */
       hydrationAttempt?: number
-      /** True once the bounded hydration recheck gives up waiting. */
       hydrationExpired?: boolean
-      /** Response diagnostics.legislationNote, so the empty copy names the
-       * unheld Act instead of claiming a judgment was sought. */
       legislationNote?: string
-      /** Response diagnostics.legislationNotHeld: the note is an authoritative
-       * verdict, not an outage. */
       legislationNotHeld?: boolean
-      /** Response diagnostics.legislationTitleUnresolved: a whole-title
-       * request no exact title key matched. */
       legislationTitleUnresolved?: boolean
-      /** Response diagnostics.legislationAmbiguous: more than one stored Act
-       * satisfies the query. */
       legislationAmbiguous?: boolean
-      /** Response diagnostics.legislationScheduleGuidance: a schedule
-       * citation that names a paragraph but no schedule, with the
-       * parser-compatible example and the Act context to resubmit it. */
       legislationScheduleGuidance?: LegislationScheduleGuidance
     }
   | { status: 'error'; query: string; message: string }

@@ -17,10 +17,6 @@ function legislationHits(
   return response.groups?.flatMap((group) => group.hits) ?? []
 }
 
-/**
- * Display order of the two federated groups. Ranking inside each group is
- * unchanged; this only swaps which heading comes first.
- */
 export function searchResultRows(
   response: LegalSearchFetchResponse,
 ): SearchResultRow[] {
@@ -37,7 +33,6 @@ export function searchResultRows(
   return [...judgments, ...legislation]
 }
 
-/** The visible rows after the type facet. It filters the served answer only. */
 export function filterSearchResultRows(
   rows: SearchResultRow[],
   type: SearchResultType,
@@ -87,11 +82,6 @@ export function formatResultSummary(
   }`
 }
 
-/**
- * Source attribution read from each hit's retrievalPath, never assumed.
- * The corpus-only API serves `stored_*` paths; `live_provider` is retained
- * so a genuinely live hit (an older cached response) is still labelled.
- */
 function formatResultSource(response: LegalSearchFetchResponse) {
   const paths = new Set(
     response.hits.map((hit) => hit.retrievalPath).filter(Boolean),

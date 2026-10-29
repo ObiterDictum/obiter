@@ -21,9 +21,6 @@ const mocks = vi.hoisted(() => ({
   requestPasswordReset: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const authModuleKeys = Object.fromEntries(
   Object.keys(await import('./auth')).map((key) => [key, undefined]),
 )
@@ -78,7 +75,6 @@ describe('ForgotPasswordRouteView — submit failure resets the pending state', 
         screen.getByText(/Check your connection and try again/),
       ).toBeTruthy()
     })
-    // submitting returned to false: the button is not stuck disabled.
     expect(
       (
         screen.getByRole('button', {

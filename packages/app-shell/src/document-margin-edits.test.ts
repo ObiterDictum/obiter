@@ -31,7 +31,6 @@ function paragraph(id: string, text: string) {
   }
 }
 
-/** A body with a header and a footer story, as the parser emits them. */
 const model: DocumentModelWire = {
   version: 1,
   stories: [
@@ -131,7 +130,6 @@ describe('margin story flow', () => {
     expect(
       storyFlowParagraphIds(editingStoryFor(model, 'header'), inserts, []),
     ).toEqual(['h1', 'insert-1'])
-    // The body's flow does not claim the margin-anchored insert.
     expect(
       storyFlowParagraphIds(editingStoryFor(model, 'document'), inserts, []),
     ).toEqual(['p1', 'p2'])
@@ -151,8 +149,6 @@ describe('the last-paragraph invariant per story', () => {
     const inserts = [
       { clientId: 'insert-1', afterParagraphId: 'h1', text: 'Typed' },
     ]
-    // Deleting the stored header paragraph first leaves the insert holding
-    // the story; the insert's own deletion is then refused.
     expect(paragraphDeletionRefusal(model, inserts, ['h1'], 'insert-1')).toBe(
       'last-paragraph',
     )

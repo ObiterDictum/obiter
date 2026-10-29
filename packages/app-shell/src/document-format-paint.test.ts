@@ -25,8 +25,6 @@ describe('painted list restart without an abstract numbering', () => {
       },
     ],
     styles: [],
-    // The instance names no `w:abstractNumId`, which the server rejects for a
-    // restart (`resolveParagraphNumbering` throws `invalid-document-edit`).
     numbering: [
       {
         numberingId: '1',
@@ -51,7 +49,6 @@ describe('painted list restart without an abstract numbering', () => {
     const second = model.stories[0]?.paragraphs[1]
     if (!second) throw new Error('test target paragraph is missing.')
     const format = restartList(emptyFormatDrafts, model, second)
-    // The draft still records the intent; the preview must simply not claim it.
     expect(format.numbering.p2).toEqual({
       numId: '1',
       ilvl: 0,
@@ -65,8 +62,6 @@ describe('painted list restart without an abstract numbering', () => {
     expect(
       painted.stories[0]?.paragraphs[1]?.preservedXmlFragments.join(''),
     ).toContain('<w:numId w:val="1"/>')
-    // Without a synthesised instance the counter continues 1., 2. instead of
-    // restarting at 1. as it would if the save accepted the draft.
     expect(documentListMarkers(painted).get('p2')?.text).toBe('2.')
   })
 })

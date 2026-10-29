@@ -3,12 +3,6 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import { apiUrl, resolvePackagedApiOrigin } from './api-url'
 import type { DesktopBridge } from './desktop-bridge'
 
-/**
- * apiUrl() has three branches: packaged renderer (absolute, from the preload
- * bridge), browser (relative, proxied/same-origin), and SSR (absolute, from
- * env). The bridge is additive: web and dev-desktop never set it, so they keep
- * the relative behaviour. These tests pin that contract.
- */
 type WindowWithBridge = Window & { obiterDesktop?: DesktopBridge }
 
 describe('apiUrl', () => {

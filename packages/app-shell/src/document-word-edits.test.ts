@@ -78,11 +78,6 @@ describe('applyDeleteBackward', () => {
   })
 
   it('refuses a join on a wire served without field metadata', () => {
-    // A pre-field-metadata model cannot prove the joined-away paragraph
-    // carries no stored field marker, and a server that old has no
-    // writer-side split check either — so the join refuses rather than
-    // risking a field split. Removing the field keys keeps the fixture a
-    // genuine legacy response, not empty arrays.
     const legacy = JSON.parse(JSON.stringify(twoParagraphs)) as {
       stories: Record<string, unknown>[]
     }
@@ -97,7 +92,6 @@ describe('applyDeleteBackward', () => {
         offset: 0,
       }),
     ).toBeUndefined()
-    // An in-run deletion removes no paragraph, so it still applies.
     expect(
       applyDeleteBackward(wire, emptyEditorState(), {
         paragraphId: 'p2',
@@ -169,8 +163,6 @@ describe('applyDeleteForward', () => {
 })
 
 describe('field-boundary joins', () => {
-  // p2 holds the field's begin/separate, p4 its end; joining deletes the
-  // joined paragraph's element wholesale.
   const fieldModel: DocumentModelWire = {
     version: 1,
     stories: [
@@ -215,22 +207,18 @@ describe('field-boundary joins', () => {
   }
 
   it('refuses to join away a paragraph holding only one boundary', () => {
-    // Backspace at the start of the tail would merge it into p3 and drop
-    // the field's `end` while `begin` survives — the join is refused.
     expect(
       applyDeleteBackward(fieldModel, emptyEditorState(), {
         paragraphId: 'p4',
         offset: 0,
       }),
     ).toBeUndefined()
-    // The same hold applies in the other direction: joining the head away.
     expect(
       applyDeleteForward(fieldModel, emptyEditorState(), {
         paragraphId: 'p1',
         offset: 2,
       }),
     ).toBeUndefined()
-    // A delete inside the text — no join — is unaffected.
     expect(
       applyDeleteForward(fieldModel, emptyEditorState(), {
         paragraphId: 'p1',

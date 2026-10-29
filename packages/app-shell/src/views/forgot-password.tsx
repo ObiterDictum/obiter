@@ -10,10 +10,6 @@ import {
   AuthLayout,
 } from './auth-layout'
 
-/**
- * Forgot-password request screen. Calls the better-auth reset request
- * endpoint, which never reveals whether the email exists.
- */
 export function ForgotPasswordRouteView() {
   const { requestPasswordReset } = useAuth()
   const [email, setEmail] = useState('')

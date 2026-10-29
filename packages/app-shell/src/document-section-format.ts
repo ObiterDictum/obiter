@@ -10,10 +10,6 @@ import { xmlNumber, xmlTagAttrs } from './document-page-units'
 import type { BreakDraft } from './document-edits'
 import type { FormatDrafts, SectionDraft } from './document-format-types'
 
-/**
- * Word's standard page-setup presets, in twips. `header`/`footer` are the
- * distance from the page edge to the header/footer, not to the body text.
- */
 export const SECTION_MARGINS_OPTIONS = [
   {
     value: 'normal',
@@ -90,11 +86,6 @@ export function hasSectionDraft(section: SectionDraft): boolean {
   )
 }
 
-/**
- * The assigned contract fields of a pending section draft, omitting the ones
- * it leaves alone. `undefined` when the draft carries nothing, so the save
- * emits no operation for a cleared entry.
- */
 export function sectionDraftFields(section: SectionDraft) {
   if (!hasSectionDraft(section)) return undefined
   return {
@@ -112,9 +103,6 @@ export function sectionFormatState(
 ): SectionFormatState {
   const fields = sectionDraftFields(section)
   const base = documentSectionXml(model)
-  // The toolbar reads a painted model that already carries the draft; applying
-  // it again here is idempotent and keeps the reader correct for a caller that
-  // passes the unpainted model.
   const xml = fields
     ? patchSectionPropertiesXml(base || '<w:sectPr/>', fields)
     : base
@@ -143,10 +131,6 @@ export function setSectionMarginsDraft(
   }
 }
 
-/**
- * Records a page size oriented to the section's current orientation, and
- * restates that orientation, so the explicit size and `w:orient` cannot drift.
- */
 export function setSectionPageSizeDraft(
   format: FormatDrafts,
   model: DocumentModelWire,
@@ -168,7 +152,6 @@ export function setSectionPageSizeDraft(
   }
 }
 
-/** Flips portrait/landscape, swapping any explicit page size with it. */
 export function toggleSectionOrientation(
   format: FormatDrafts,
   model: DocumentModelWire,
@@ -188,11 +171,6 @@ export function toggleSectionOrientation(
   }
 }
 
-/**
- * The painted story fragments for the document section, with the pending draft
- * applied, so pagination and the layout controls read the section the same way
- * the save will write it.
- */
 export function paintSectionFragments(
   fragments: readonly string[],
   section: SectionDraft,
@@ -220,14 +198,6 @@ function orientSize(
     : { width: low, height: high }
 }
 
-/**
- * A copy of the model with pending section breaks folded into the paragraphs
- * they address, so the paginator sees a section break's paragraph-level
- * `w:sectPr` before the save writes it. Page breaks consume no text offset and
- * are laid out at their caret offset by `layoutDocument`, so they are not
- * appended here. Returns the same model when there is nothing to fold, so
- * pagination memoisation still holds.
- */
 export function withBreakDrafts(
   model: DocumentModelWire,
   breaks: readonly BreakDraft[],
@@ -240,8 +210,6 @@ export function withBreakDrafts(
     list.push(item)
     byParagraph.set(item.paragraphId, list)
   }
-  // A section break's new section inherits the final section, exactly as the
-  // writer seeds it, so the painted first section does not jump to defaults.
   const bodySection = documentSectionXml(model)
   const instruction = bodySection || '<w:sectPr/>'
   return {
@@ -253,9 +221,6 @@ export function withBreakDrafts(
         paragraphs: story.paragraphs.map((paragraph) => {
           const list = byParagraph.get(paragraph.id)
           if (!list || list.length === 0) return paragraph
-          // The writer refuses a section break on a paragraph that already
-          // ends a section, so painting one would register a phantom section
-          // the save never writes.
           if (
             paragraph.preservedXmlFragments.some(
               (fragment) => activeSectionXml(fragment).length > 0,
@@ -263,11 +228,6 @@ export function withBreakDrafts(
           ) {
             return paragraph
           }
-          // Merge the section into the paragraph's existing `w:pPr`, exactly
-          // as the writer does, instead of appending a second properties
-          // fragment the save would never produce. Two pending breaks on one
-          // paragraph still paint one fragment, so they cannot register a
-          // phantom section and skew the geometry index for later sections.
           const index = paragraph.preservedXmlFragments.findIndex((fragment) =>
             /<w:pPr\b/u.test(fragment),
           )

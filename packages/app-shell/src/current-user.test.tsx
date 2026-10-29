@@ -8,16 +8,11 @@ import type { MeResponse } from '@obiter/contracts'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-// The real module's export names, available as undefined, so bun's
-// static link check accepts imports the mock does not override.
 const apiKeys = Object.fromEntries(
   Object.keys(await import('./api')).map((key) => [key, undefined]),
 )
 mock.module('./api', () => Object.assign({ ...apiKeys }, api))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { currentUserQueryOptions, useCreateOrganisation } =
   await import('./current-user')
 
@@ -71,7 +66,6 @@ describe('useCreateOrganisation', () => {
       expect(org).toMatchObject({ id: 'org_new', name: 'Acme Law' })
     })
 
-    // The cache reflects the created organisation without a refetch.
     await waitFor(() => {
       const cached = client.getQueryData<MeResponse>(['current-user'])
       expect(cached?.organisation).toMatchObject({

@@ -6,15 +6,6 @@ import type { ReviewItem } from './review-items'
 import { itemKindLabel, itemLead } from './review-items'
 import { reviewerStyle } from './reviewer-identity'
 
-/**
- * The decision bar for one row. It is the fixed footer of the panel, so the
- * Accept and Reject for the row under review never scroll away from the row
- * itself, and every control here goes through the same review state the
- * chrome and the row buttons use.
- *
- * With no current row the bar names that state and offers navigation only:
- * an Accept that could not run reads as enabled whenever it is styled like one.
- */
 export function ReviewDecisionBar({
   item,
   location,
@@ -29,12 +20,10 @@ export function ReviewDecisionBar({
   onAccept,
   onReject,
 }: {
-  /** The row under review; absent until one is chosen. */
   item?: ReviewItem
   location?: string
   position: number
   total: number
-  /** Why a decision cannot run on this row, or null when it can. */
   reason: string | null | undefined
   pending: boolean
   canPrevious: boolean
@@ -150,14 +139,6 @@ export function ReviewDecisionBar({
   )
 }
 
-/**
- * The bulk bar. It states the exact number of changes a decision will affect
- * before it runs, and it can only ever hold tracked changes: the panel offers
- * no checkbox on a comment or on a move no decision can run on. Rejection asks
- * once more, because a decision writes an immutable version — and says what
- * that costs and keeps, with the version numbers rather than "cannot be
- * undone", which was not true: the earlier version stays available.
- */
 export function ReviewBulkBar({
   count,
   versionNumber,
@@ -167,9 +148,7 @@ export function ReviewBulkBar({
   onClear,
 }: {
   count: number
-  /** The version on screen; the decision saves the next one. */
   versionNumber?: number
-  /** Why the selection cannot be decided, or null when it can. */
   reason: string | null
   onAccept: () => void
   onReject: () => void

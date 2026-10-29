@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * E4 lists and styles: the Styles gallery must not fake chips when a document
- * has no paragraph styles, a real style must apply and save, and the Restart
- * numbering control must apply a start override that reaches the save. The
- * projection and save-plan details live in document-format-edits.test.ts and
- * document-list-toggle.test.ts; this is the mounted-control surface.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -75,15 +68,11 @@ describe('the Styles gallery and list restart controls', () => {
     })
     clickParagraph('p1')
 
-    // The picker is a Base UI Select now; its disabled state is on the
-    // combobox trigger and the reason is its surrounding title, so the
-    // control keeps one name whatever state it is in.
     const select = screen.getByRole('combobox', { name: 'Paragraph style' })
     expect(select).toHaveProperty('disabled', true)
     expect(select.closest('[title]')?.getAttribute('title')).toBe(
       'This document has no paragraph styles.',
     )
-    // The old fallback advertised Normal/Heading 1/Quote as pending UI.
     expect(screen.queryByRole('button', { name: /Heading 1/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Quote/ })).toBeNull()
   })
@@ -95,8 +84,6 @@ describe('the Styles gallery and list restart controls', () => {
 
     const quote = command('Quote')
     fireEvent.click(quote)
-    // A style is a radio choice in the Format menu: the current style is
-    // checked, and the others in its group are not.
     expect(quote.getAttribute('aria-checked')).toBe('true')
     expect(command('Heading 1').getAttribute('aria-checked')).toBe('false')
 

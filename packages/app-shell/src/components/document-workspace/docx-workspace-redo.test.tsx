@@ -1,10 +1,4 @@
 import '@obiter/test-dom'
-/*
- * Redo is the reverse of the in-memory undo history. These regressions mount
- * the real workspace and drive the toolbar and shortcuts, so a redo that
- * silently restored the wrong draft, dropped the branch on a new edit, or
- * crossed documents would fail here rather than in a reviewer's browser.
- */
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -31,10 +25,6 @@ function field(): HTMLTextAreaElement {
   return editor
 }
 
-/**
- * The authoritative lineage a text-only save of `r1` in `p1` returns: no
- * structural slots, but the run keeps its result address.
- */
 function textEditLineage() {
   return {
     version: 1 as const,
@@ -84,7 +74,6 @@ function twoParagraphs() {
   ])
 }
 
-/** The default one-paragraph fixture with the run id the workspace types into. */
 function helloModel(text: string): DocumentModelWire {
   return multiParagraphModel([
     {
@@ -95,11 +84,6 @@ function helloModel(text: string): DocumentModelWire {
   ])
 }
 
-/**
- * A stand-in for the server, holding the paragraphs a save has committed.
- * Applying each successful request's operations turns a slot a later save
- * resends into a visible duplicate paragraph, not merely a second request.
- */
 function serverParagraphs(editAsync: ReturnType<typeof vi.fn>) {
   const paragraphs: Array<{ id: string; text: string }> = [
     { id: 'p1', text: 'Hello' },
@@ -145,7 +129,6 @@ describe('DocxWorkspace redo', () => {
     mountWorkspace({})
     selectBodyParagraph()
 
-    // Nothing has been undone, so there is no branch to redo into.
     expect(redoButton()).toHaveProperty('disabled', true)
     fireEvent.change(field(), { target: { value: 'Hello world' } })
     expect(field().value).toBe('Hello world')
@@ -196,7 +179,6 @@ describe('DocxWorkspace redo', () => {
     expect(field().value).toBe('Hello a c')
     expect(redoButton()).toHaveProperty('disabled', true)
 
-    // The shortcut is inert once the branch is gone, not just the button.
     fireEvent.keyDown(field(), { key: 'z', ctrlKey: true, shiftKey: true })
     expect(field().value).toBe('Hello a c')
   })
@@ -229,7 +211,6 @@ describe('DocxWorkspace redo', () => {
     )
     fireEvent.change(pending, { target: { value: 'World' } })
 
-    // Undo is per edit, so the text rewinds first and the split second.
     fireEvent.click(undoButton())
     expect(
       screen.getByLabelText<HTMLTextAreaElement>('Pending paragraph text')
@@ -239,7 +220,6 @@ describe('DocxWorkspace redo', () => {
     expect(screen.queryByLabelText('Pending paragraph text')).toBeNull()
     expect(field().value).toBe('Hello')
 
-    // Redo restores the split, then the text typed into it.
     fireEvent.click(redoButton())
     expect(
       screen.getByLabelText<HTMLTextAreaElement>('Pending paragraph text')
@@ -283,12 +263,9 @@ describe('DocxWorkspace redo', () => {
     fireEvent.click(undoButton())
     expect(document.querySelector('[data-paragraph-id="p2"]')).toBeTruthy()
 
-    // The caret sits on the stored paragraph the redo is about to delete.
     clickParagraph('p2')
     fireEvent.click(redoButton())
 
-    // Focus must not fall to body: the join target survives and takes the
-    // caret, so the next typed character lands in the merged paragraph.
     expect(document.querySelector('[data-paragraph-id="p2"]')).toBeNull()
     const editor = field()
     expect(document.activeElement).toBe(editor)
@@ -325,7 +302,6 @@ describe('DocxWorkspace redo', () => {
     fireEvent.keyDown(field(), { key: 'y', ctrlKey: true })
     expect(field().value).toBe('Hello')
 
-    // An edit that was never undone is not a redo branch either.
     fireEvent.change(field(), { target: { value: 'Hello world' } })
     expect(field().value).toBe('Hello world')
     expect(redoButton()).toHaveProperty('disabled', true)
@@ -346,7 +322,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
 
     fireEvent.change(field(), { target: { value: 'Hello world' } })
     fireEvent.click(undoButton())
-    // Undone back to the saved content: there is nothing for save to send.
     expect(saveButton()).toHaveProperty('disabled', true)
 
     fireEvent.click(redoButton())
@@ -390,8 +365,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
       ).toBeTruthy()
     })
 
-    // The failed request sent nothing, so the edit is still unsaved and the
-    // redo branch must not have swallowed it.
     expect(field().value).toBe('Hello world')
     expect(saveButton()).toHaveProperty('disabled', false)
 
@@ -408,8 +381,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
     mountWorkspace({ editAsync })
     selectBodyParagraph()
 
-    // Insert a paragraph, then type into it so Undo has a text step while the
-    // insert itself stays in the draft state.
     fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Second' },
@@ -420,8 +391,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
         .value,
     ).toBe('')
 
-    // The save covers the insert. Redoing restores the snapshot that still
-    // holds it, and a second save would insert a duplicate paragraph.
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
     expect(persisted.map((item) => item.text)).toEqual(['Hello', ''])
@@ -472,9 +441,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
     const editAsync = vi.fn().mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          // The commit lands before the reloaded model does; the model then
-          // holds the version the request sent. The response carries the
-          // authoritative lineage the API returns for the accepted batch.
           resolveFirst = () => {
             version = 2
             savedText = 'Hello first'
@@ -501,9 +467,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
-    // A second edit lands while the request is in flight. It was not in the
-    // request, so the response must neither drop it nor clear the history it
-    // just recorded.
     fireEvent.change(field(), { target: { value: 'Hello second' } })
     await act(async () => {
       resolveFirst()
@@ -551,8 +514,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
-    // The request carried the second edit, not the first, so stepping back to
-    // the first must leave it editable as unsent work.
     fireEvent.click(undoButton())
     expect(field().value).toBe('Hello first')
     await act(async () => {
@@ -566,8 +527,6 @@ describe('DocxWorkspace redo and save boundaries', () => {
 
     expect(field().value).toBe('Hello first')
     expect(saveButton()).toHaveProperty('disabled', false)
-    // The redo branch this undo created still holds the saved edit, so the
-    // save boundary drops it rather than letting a redo resend it.
     expect(redoButton()).toHaveProperty('disabled', true)
     fireEvent.click(undoButton())
     expect(field().value).toBe('Hello')

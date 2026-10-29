@@ -9,11 +9,6 @@ import {
   SectionHeading,
 } from './settings-fields'
 
-/**
- * The security section: password change through the existing better-auth
- * boundary. The current password is verified server-side, and the client
- * checks are a courtesy that the API repeats.
- */
 export function SecuritySection({ active }: { active: boolean }) {
   const { changePassword } = useAuth()
   const submittingRef = useRef(false)
@@ -60,8 +55,6 @@ export function SecuritySection({ active }: { active: boolean }) {
         newPassword,
       })
       if (!result.ok) {
-        // The hook maps the machine code to user-facing text, so an unmapped
-        // failure still reads as a retryable message rather than API detail.
         setError(result.message ?? 'Could not change your password. Try again.')
         currentRef.current?.focus()
         return

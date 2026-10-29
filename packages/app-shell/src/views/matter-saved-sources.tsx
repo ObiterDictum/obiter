@@ -11,11 +11,6 @@ import {
   useSavedMatterSources,
 } from '../saved-sources'
 
-/**
- * The sources kept with this matter: what the Search page's "Save to matter"
- * filed, listed where the matter lives. A row links back to the stored source;
- * removing it only unsaves the entry, never the corpus record.
- */
 export function MatterSavedSources({ matterId }: { matterId: string }) {
   const saved = useSavedMatterSources(matterId)
   if (saved.isPending) {

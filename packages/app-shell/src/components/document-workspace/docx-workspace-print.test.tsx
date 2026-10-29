@@ -21,7 +21,6 @@ describe('DocxWorkspace print', () => {
     expect(button).toHaveProperty('disabled', false)
     fireEvent.click(button)
     expect(print).toHaveBeenCalledTimes(1)
-    // Printing is not the DOCX export and never reaches the server.
     expect(fetchDocumentExport).not.toHaveBeenCalled()
     print.mockRestore()
   })
@@ -40,9 +39,6 @@ describe('DocxWorkspace print', () => {
     })
     selectBodyParagraph('Alpha')
 
-    // Unsaved text in the focused paragraph is painted by the run overlay the
-    // print stylesheet keeps, even though the editor field itself is the
-    // transparent textarea.
     const editor = screen.getByLabelText('Paragraph text')
     fireEvent.change(editor, { target: { value: 'Alpha edited' } })
     expect(
@@ -59,16 +55,12 @@ describe('DocxWorkspace print', () => {
     fireEvent.click(command('Print'))
 
     expect(print).toHaveBeenCalledTimes(1)
-    // The edited paragraph is now painted statically, still carrying the draft.
     expect(
       document.querySelector('[data-document-desk]')?.textContent,
     ).toContain('Alpha edited')
-    // The pending insert is mirrored as static content for the printed sheet,
-    // where a form control is not reliable.
     expect(
       document.querySelector('[data-document-desk]')?.textContent,
     ).toContain('Inserted paragraph')
-    // Printing neither saves nor clears any draft.
     expect(editAsync).not.toHaveBeenCalled()
     expect(
       screen.getByLabelText<HTMLTextAreaElement>('Pending paragraph text')
@@ -123,7 +115,6 @@ describe('DocxWorkspace print', () => {
     openRibbonTab('View')
     fireEvent.click(command('Web layout'))
 
-    // The web flow's internal frame is unbounded; it must never reach @page.
     expect(
       document.querySelector('style[data-document-print]')?.textContent,
     ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
@@ -152,7 +143,6 @@ describe('DocxWorkspace print', () => {
     fireEvent.click(command('Print'))
 
     expect(print).toHaveBeenCalledTimes(1)
-    // The dialog saw paginated paper sheets, not the continuous web sheet.
     expect(
       document.querySelectorAll('[data-document-sheet].bg-white').length,
     ).toBeGreaterThan(1)
@@ -160,7 +150,6 @@ describe('DocxWorkspace print', () => {
       document.querySelector('[data-document-sheet].bg-transparent'),
     ).toBeNull()
 
-    // The platform's afterprint hands the user's view back.
     fireEvent(window, new Event('afterprint'))
     const restored = document.querySelector('[data-document-sheet]')
     expect(restored?.className).toContain('bg-transparent')
@@ -172,7 +161,6 @@ describe('DocxWorkspace print', () => {
     openRibbonTab('View')
     fireEvent.click(command('Web layout'))
 
-    // Ctrl+P / menu print dispatch beforeprint without touching the ribbon.
     fireEvent(window, new Event('beforeprint'))
     expect(
       document.querySelectorAll('[data-document-sheet].bg-white').length,
@@ -201,8 +189,6 @@ describe('DocxWorkspace print', () => {
       expect(
         screen.getByText('Printing is not available in this environment.'),
       ).toBeTruthy()
-      // No dialog opened, so no afterprint will arrive — the view must not
-      // strand the user in print layout.
       expect(
         document.querySelector('[data-document-sheet]')?.className,
       ).toContain('bg-transparent')

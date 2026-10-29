@@ -6,25 +6,12 @@ import {
   type ArrowNeighbor,
 } from './paragraph-arrow'
 
-/**
- * The caret model must place one row per hard-break segment and one empty row
- * after a trailing break, because that is what the browser textarea renders.
- * `text.split('\n')` is the browser's own row list, and the caret at
- * `text.length` sits on the empty row that trailing break opens.
- */
-
 const FONT = 16
-// A width no line can reach: each hard-break segment is exactly one row.
 const NO_WRAP = 10_000_000
 
 const rowsOf = (text: string, widthPx = NO_WRAP): WrappedLine[] =>
   wrapLines(text, FONT, widthPx)
 
-/**
- * The last offset a row owns. A soft wrap shares its boundary with the row
- * below, so the boundary offset belongs to that row and this one ends one code
- * unit earlier; a hard break or the final row owns its end outright.
- */
 function ownedEnd(lines: WrappedLine[], index: number): number {
   const line = lines[index]!
   const next = lines[index + 1]
@@ -145,8 +132,6 @@ describe('trailing-row property matrix', () => {
           const soft = next.from === line.to
           const lineWidth = line.to - line.from
           const nextWidth = next.to - next.from
-          // Stay strictly inside a soft-wrapped row on both sides: its end is
-          // owned by the row below.
           const maxColumn = Math.min(
             soft ? lineWidth - 1 : lineWidth,
             following && following.from === next.to ? nextWidth - 1 : nextWidth,
@@ -180,7 +165,6 @@ describe('trailing-row property matrix', () => {
       for (const width of WIDTHS) {
         const lines = rowsOf(text, width)
         expect(lines[lines.length - 1]?.from).toBe(text.length)
-        // Every row except the last stays inside the paragraph.
         for (let index = 0; index < lines.length - 1; index += 1) {
           const line = lines[index]!
           const offset = ownedEnd(lines, index)

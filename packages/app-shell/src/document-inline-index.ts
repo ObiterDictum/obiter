@@ -24,12 +24,6 @@ function indexChanges(changes: readonly DocumentChangeWire[]) {
   return paragraphs
 }
 
-/**
- * Models and their change lists are immutable; share one index across layout
- * and paint instead of filtering every change per paragraph. Joins out of a
- * revised paragraph are refused, so no revision follows its runs into another
- * paragraph before save.
- */
 export function paragraphChanges(
   paragraph: DocumentParagraphWire,
   changes: readonly DocumentChangeWire[],
@@ -61,7 +55,6 @@ export function paragraphPartName(
   return index.get(paragraph)
 }
 
-/** The changes a stored paragraph carries in its own story. */
 export function storedParagraphChanges(
   model: DocumentModelWire,
   paragraph: DocumentParagraphWire,
@@ -73,11 +66,6 @@ export function storedParagraphChanges(
   )
 }
 
-/**
- * A run-less paragraph holding revisions has no ordinary run to write into,
- * and the writer refuses to delete or replace a paragraph carrying tracked
- * markup, so it offers no editable surface until its changes are decided.
- */
 export function revisionOnlyParagraph(
   model: DocumentModelWire,
   paragraph: DocumentParagraphWire,

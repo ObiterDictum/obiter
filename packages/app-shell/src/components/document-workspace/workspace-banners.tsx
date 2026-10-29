@@ -3,12 +3,6 @@ import { ConflictBanner } from './workspace-chrome'
 import type { useDocumentSave } from './use-document-save'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 
-/**
- * The ribbon's status strip: save state, the stale-version conflict, the
- * remote-edit conflict, the transient notice, and the off-screen selection
- * announcement. Extracted from `docx-workspace.tsx`, which is at the source
- * ceiling; the workspace owns the state and the reload/caret wrappers.
- */
 export function WorkspaceBanners({
   save,
   drafts,

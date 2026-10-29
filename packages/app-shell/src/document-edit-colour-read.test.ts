@@ -93,8 +93,6 @@ describe('run colour canonicalisation', () => {
         runs: [{ text: 'x', colour: 'FF0000' }],
       },
     ])
-    // The canonical form the read produces is exactly what the write contract
-    // accepts, so a lower-case source never reaches the server raw.
     expect(DOCUMENT_EDIT_COLOUR_PATTERN.test('FF0000')).toBe(true)
   })
 })

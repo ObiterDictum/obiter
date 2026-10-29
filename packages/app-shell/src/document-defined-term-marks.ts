@@ -8,25 +8,11 @@ import {
 import { documentStory } from './document-model-text'
 import type { StructuralDraft } from './document-structural-drafts'
 
-/**
- * The mark reader half of the defined-term check: where `_Def_` bookmarks
- * and pending drafts resolve to normalised term words. A stored mark's
- * words come out of its bookmark name — the wire keeps no offset for a
- * paragraph-level fragment, so the name is the only place they survive.
- * A pending mark's words come out of `marked`, the text it covered at
- * creation — never the range's current slice, which typing may have moved
- * different words under.
- */
-
 export type Mark = {
-  /** The draft's id for a pending mark; the bookmark's `w:id` for a stored
-   * one — unique per mark, for finding ids. */
   id: string
   words: string[]
   paragraphId: string
   pending: boolean
-  /** The range's current slice no longer reads `marked` — the mark cannot
-   * save and the check must say so rather than name the drifted text. */
   drifted: boolean
 }
 
@@ -44,7 +30,6 @@ export function wordTokens(text: string) {
   return text.toLowerCase().match(WORD) ?? []
 }
 
-/** How many times `term` appears as a word sequence in `tokens`. */
 export function countOccurrences(
   tokens: readonly string[],
   term: readonly string[],
@@ -113,16 +98,10 @@ export function collectMarks(
         words,
         paragraphId: structure.paragraphId,
         pending: true,
-        // A paragraph that has gone entirely is the partition's finding,
-        // not a text drift.
         drifted: covered !== undefined && covered !== structure.marked,
       })
     }
   }
-  // Unpaired halves matter for `_Def_` marks; other bookmark families are the
-  // cross-reference check's to report. A `bookmarkEnd` carries no name, so an
-  // end cannot be told apart as a term mark — only a dangling `_Def_` start
-  // is reportable.
   const unpaired: Array<{ paragraphId: string; id: string }> = []
   for (const [id, paragraphId] of definedStarted) {
     if (!ended.has(id)) unpaired.push({ paragraphId, id })

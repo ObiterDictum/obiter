@@ -5,15 +5,6 @@ import { refocusCaretBeforeFlight } from './document-actions'
 import type { DocumentMarkingsToolbar } from './ribbon-types'
 import type { useDocumentSave } from './use-document-save'
 
-/**
- * The Layout ribbon's classification controls. A marking change commits a new
- * immutable version server-side (`document.markings`), so it shares the save
- * state machine's barriers with tracked-change decisions: unsaved, blocked,
- * stale or failed work names its reason on the disabled controls rather than
- * landing a write against the wrong base. The stored kind is passed through
- * verbatim — a kind this ribbon does not list still shows and survives a flag
- * toggle, because the wire carries it as a plain string.
- */
 export function useDocumentMarkings({
   documentId,
   matterId,
@@ -28,7 +19,6 @@ export function useDocumentMarkings({
   matterId: string
   model: DocumentModelWire | undefined
   baseVersionId: string
-  /** The current track-changes toggle, including an unsaved flip. */
   trackChanges: boolean
   save: ReturnType<typeof useDocumentSave>
   onSaved: (versionId: string) => void
@@ -38,9 +28,6 @@ export function useDocumentMarkings({
   if (!model) return undefined
 
   const status = save.saveState.status
-  // A pending toggle flip is not a barrier: the committed version carries it
-  // on `trackRevisions`, so marking cannot strand it the way a base-version
-  // write would strand real unsaved edits.
   const unavailable =
     model.markings.unreadable === true
       ? 'The stored markings could not be read; marking this copy is disabled.'
@@ -58,15 +45,10 @@ export function useDocumentMarkings({
 
   const commit = (markings: DocumentMarkingsWire) => {
     if (unavailable) return
-    // The committed version disables the controls mid-flight; hand focus back
-    // to the caret first so it cannot drop to document.body.
     refocusCaretBeforeFlight()
     update.mutate(
       {
         baseVersionId,
-        // Same omit rule as the save paths: only a pending flip is sent, so
-        // a markings write cannot revert a collaborator's toggle by echoing
-        // the value this tab loaded with.
         ...(trackChanges !== model.trackRevisions
           ? { trackRevisions: trackChanges }
           : {}),
@@ -75,8 +57,6 @@ export function useDocumentMarkings({
       {
         onSuccess: (data) => onSaved(data.versionId),
         onError: (error) => {
-          // A stale base is the same conflict a save reports; share its
-          // banner so the reload affordance appears in one place.
           if (error instanceof ApiError && error.code === 'conflict_detected')
             save.markStale()
           else
@@ -90,8 +70,6 @@ export function useDocumentMarkings({
     )
   }
   const markings = model.markings
-  // The write payload is the strict wire shape — the `unreadable` state flag
-  // never rides into a commit.
   const write = (
     patch: Partial<DocumentMarkingsWire>,
   ): DocumentMarkingsWire => ({

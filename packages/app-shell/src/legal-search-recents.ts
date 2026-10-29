@@ -1,12 +1,3 @@
-/*
- * Recent legal-search queries, read from and written to sessionStorage.
- *
- * These live outside views/LegalSearchView because the app frame and Home both
- * render the recent-query list. Importing them from the view would pull the
- * whole search UI (command bar, results list, filter popovers) into the shared
- * navigation chunks that every route loads, for two functions that only touch
- * a string in sessionStorage.
- */
 export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
 
 const legalSearchRecentSearchesKey = 'obiter.search.recentSearches'

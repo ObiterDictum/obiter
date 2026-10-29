@@ -78,8 +78,6 @@ describe('MatterOverview', () => {
     expect(within(details).getByText('Corporate')).toBeTruthy()
     expect(within(details).getByText('1 Oct 2026')).toBeTruthy()
     expect(within(details).getByText('26 Oct 2026')).toBeTruthy()
-    // No client, contact or fee earner: the API returns no names for them, and
-    // the rail does not invent one.
     expect(within(details).queryByText(/Client/)).toBeNull()
     expect(within(details).queryByText(/Fee earner/)).toBeNull()
   })

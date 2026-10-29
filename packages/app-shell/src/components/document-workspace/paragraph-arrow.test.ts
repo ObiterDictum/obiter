@@ -25,8 +25,6 @@ describe('visualColumn', () => {
   })
 
   it('keeps a hard-break newline code unit with the line it terminates', () => {
-    // A hard break leaves line 0's `to` on the newline, one short of line 1's
-    // `from`; a caret at that offset still renders at the end of line 0.
     const wrapped = lines([0, 10], [11, 20])
     expect(visualColumn(wrapped, 10)).toBe(10)
     expect(visualColumn(wrapped, 11)).toBe(0)
@@ -200,8 +198,6 @@ describe('vertical caret delivery', () => {
     const state = createVerticalCaretColumn()
     armVerticalDelivery(state, { paragraphId: 'p2', offset: 40 })
     expect(consumeVerticalDelivery(state, 'p3')).toBe(false)
-    // The mismatch spent the transition, so the intended destination cannot
-    // pick it up later either.
     expect(consumeVerticalDelivery(state, 'p2')).toBe(false)
   })
 

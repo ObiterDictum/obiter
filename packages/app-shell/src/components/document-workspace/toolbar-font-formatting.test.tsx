@@ -1,12 +1,4 @@
 import '@obiter/test-dom'
-/*
- * The Font family, Font size, Font colour and Clear formatting controls must
- * read the same effective text and projected emphasis the editor paints and the
- * save plan sends, and Clear formatting must release every direct property
- * through one set_run_emphasis operation. This is the character-formatting
- * completion slice; Bold/Italic/Underline live in toolbar-emphasis-state.test.tsx
- * and Strike/Highlight/VertAlign in toolbar-character-formatting.test.tsx.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -93,15 +85,6 @@ function save(editAsync: ReturnType<typeof vi.fn>) {
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
-/*
- * The font family, size and colour controls are Base UI Selects. Opening one
- * is a browser journey (a portaled listbox, a row under the pointer), so
- * applying a value is covered end to end by document-font-formatting.spec.ts,
- * which also reloads the stored version in a fresh context. What jsdom proves
- * here is everything around that: the values a stored run reads back as, the
- * selection-driven Clear formatting write, and the history and tracking
- * behaviour of the controls that are plain buttons.
- */
 describe('the font formatting controls', () => {
   it('reads the stored font values back on a fresh model', () => {
     mountWorkspace({ models: { doc_1: decoratedModel() } })
@@ -109,14 +92,10 @@ describe('the font formatting controls', () => {
     nativeSelect(0, 5)
     openRibbonTab('Home')
 
-    // The select shows the option label a reader picked, and the stored run
-    // is the only source of it: nothing was chosen in this session.
     expect(fontSelect('Font').textContent).toBe('Georgia')
     expect(fontSelect('Font size').textContent).toBe('14')
     expect(fontSelect('Font colour').textContent).toBe('Red')
     expect(spanOf('p1', 'Hello')?.style.fontFamily ?? '').toContain('Georgia')
-    // 28 half-points paints at 14pt, which the face reports in px at its own
-    // scale — the stored label is what the control must show.
     expect(spanOf('p1', 'Hello')?.style.fontSize ?? '').toContain('px')
   })
 
@@ -140,11 +119,6 @@ describe('the font formatting controls', () => {
     nativeSelect(0, 5)
     openRibbonTab('Home')
 
-    // The contract's `auto` is not one of the five hex swatches and has no
-    // option of its own. A browser leaves a select whose value matches no
-    // option blank, so the control must be given the Automatic value — the
-    // mapping is the testable part, since React coerces an unmatched value to
-    // the first option and hides the difference here.
     expect(fontColourSelectValue('auto')).toBe('')
     expect(fontColourSelectValue('FF0000')).toBe('FF0000')
     expect(fontColourSelectValue(null)).toBe('')
@@ -209,8 +183,6 @@ describe('the font formatting controls', () => {
   })
 
   it('queues the font controls and clear formatting under track changes', async () => {
-    // A mid-run selection is recorded as w:rPrChange, so every character
-    // control stays live with tracking on and queues its range operation.
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
     fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))

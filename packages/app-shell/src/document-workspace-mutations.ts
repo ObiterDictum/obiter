@@ -62,8 +62,6 @@ export function useCreateDocumentComment(documentId: string) {
 export function useReplyDocumentComment(documentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    // `commentId` is either a product `cmt_` id or an imported `ooxml-` thread
-    // head; the route tells them apart by prefix.
     mutationFn: (input: {
       commentId: string
       reply: DocumentCommentReplyCreateRequest
@@ -122,7 +120,6 @@ export function useEditDocument(
         body: JSON.stringify(input),
       }),
     onSuccess: (_saved, input) => {
-      // Local recovery must acknowledge the commit before any refetch can delay it.
       onCommitted?.(input)
       return invalidateWorkspace(queryClient, documentId, matterId)
     },
@@ -169,7 +166,6 @@ export function useCollaborationMerge(
         { method: 'POST', body: JSON.stringify(input) },
       ),
     onSuccess: (_saved, input) => {
-      // Local recovery must acknowledge the commit before any refetch can delay it.
       onCommitted?.(input)
       return invalidateWorkspace(queryClient, documentId, matterId)
     },

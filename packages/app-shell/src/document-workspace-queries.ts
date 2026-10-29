@@ -11,9 +11,6 @@ import type {
 import { apiFetch } from './api'
 import { documentsKeys } from './documents'
 
-// A historical version's reads are cached under the version id, never under
-// the current key — a selected version must not render cached current content
-// nor leak its own content into the current view.
 const CURRENT_VERSION_KEY = 'current'
 
 export const workspaceKeys = {
@@ -60,7 +57,6 @@ export const workspaceKeys = {
     [...documentsKeys.all, 'compare', documentId] as const,
 }
 
-/** The `?versionId=` selector the version-aware read routes share. */
 export function versionQuery(versionId: string | undefined) {
   return versionId === undefined
     ? ''
@@ -212,8 +208,6 @@ export function useDocumentCompare(
       baseVersionId ?? '',
       targetVersionId ?? '',
     ),
-    // The pair is only fetched once both sides are picked; '' never reaches
-    // the API because a disabled query never runs its queryFn.
     enabled: baseVersionId !== undefined && targetVersionId !== undefined,
   })
 }

@@ -12,9 +12,7 @@ export interface RecentDocument {
   matterName: string
   filename: string
   updatedAt: string
-  /** The Redact run that produced the version, when Redact made it. */
   redaction: VersionRedaction | null
-  /** When that version was created: the moment Redact produced the copy. */
   versionCreatedAt: string
 }
 
@@ -23,7 +21,6 @@ export interface MatterSummary {
   name: string
   clientReference: string
   updatedAt: string
-  /** Null while the document list is still loading or failed. */
   documentCount: number | null
 }
 
@@ -182,7 +179,6 @@ export function YourMattersCard({
   )
 }
 
-/** A count that is still loading is left out rather than shown as zero. */
 function matterLines(matter: MatterSummary) {
   const documents =
     matter.documentCount === null

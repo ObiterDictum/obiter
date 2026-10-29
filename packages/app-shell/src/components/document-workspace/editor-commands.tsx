@@ -14,7 +14,6 @@ import { revealDocumentRedactionRuns } from './document-actions'
 
 type EditorMenuId = 'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
 
-/** One row a menu, the command palette and the toolbar can each offer. */
 export type EditorCommand = {
   id: string
   label: string
@@ -22,14 +21,11 @@ export type EditorCommand = {
   shortcut?: string
   hint?: string
   pressed?: boolean
-  /** Set on a radio choice: the row is one of a mutually exclusive set. */
   checked?: boolean
   disabled?: boolean
   disabledReason?: string
   soon?: boolean | string
-  /** A state the user flips repeatedly keeps the menu open. */
   stayOpen?: boolean
-  /** The command opens a surface that takes focus of its own (dialog, panel). */
   opensSurface?: boolean
   run?: () => void
 }
@@ -40,7 +36,6 @@ export type EditorMenu = {
   groups: ReadonlyArray<{ label: string; commands: EditorCommand[] }>
 }
 
-/** Everything the chrome needs; it is the old ribbon's prop set, unchanged. */
 export type EditorChromeProps = InsertRibbonProps & {
   canEdit: boolean
   trackChanges: boolean
@@ -58,7 +53,6 @@ export type EditorChromeProps = InsertRibbonProps & {
   onToggleAuthorities: () => void
   onToggleInfo?: () => void
   onInsertAuthorityText: (citation: string) => void
-  /** Whether a citation has somewhere to go: a caret or a first paragraph. */
   canInsertAuthority: boolean
   citationStyle: CitationStyle
   onCitationStyle?: (style: CitationStyle) => void
@@ -90,16 +84,13 @@ export type EditorChromeProps = InsertRibbonProps & {
   onToggleNavPane: () => void
   spelling: boolean
   onToggleSpelling: () => void
-  /** Opens the version comparison surface; absent without two versions. */
   onOpenCompare?: () => void
-  /** The one availability answer for starting a verification run. */
   verify?: { available: boolean; reason: string; pending: boolean }
   onSave: () => void
   canSave: boolean
   saveReason?: string
 }
 
-/** The chrome's own surfaces, which are not commands but hold them. */
 export type EditorChromeActions = {
   openFormatting: () => void
   openFind: () => void
@@ -368,9 +359,6 @@ export function editorMenus(
                 (story !== 'footnotes' &&
                   Boolean(structure.footnoteUnavailable)),
               disabledReason: structure?.footnoteUnavailable,
-              // Not `stayOpen`: opening or closing the notes pane is a move to
-              // the notes, so the menu closes and the caret goes there — the
-              // toggle is not one a reader repeats from the same menu.
               run: () => {
                 if (story === 'footnotes') actions.closeStory()
                 else structure?.onInsertFootnote()
@@ -854,7 +842,6 @@ export function editorMenus(
   return menus
 }
 
-/** The command list a palette searches: every command, in menu order. */
 export function editorCommandList(menus: readonly EditorMenu[]) {
   return menus.flatMap((menu) =>
     menu.groups.flatMap((group) =>
@@ -863,11 +850,6 @@ export function editorCommandList(menus: readonly EditorMenu[]) {
   )
 }
 
-/**
- * A paragraph style's stored `w:name` is often the lower-case identifier Word
- * writes internally ("heading 1", "header"). Display tidies it; the id the
- * style is applied by stays exactly as stored.
- */
 export function styleDisplayName(name: string, styleId: string) {
   const label = name.trim() === '' ? styleId : name.trim()
   if (label !== label.toLowerCase()) return label
@@ -905,8 +887,6 @@ function markingsCommands(
     stayOpen: true,
   }
   const stored = markings?.markings.documentKind
-  // A kind this build does not list is still offered as itself: the stored
-  // value must never vanish from the choices that describe it.
   const kinds: ReadonlyArray<{ value: string; label: string }> =
     stored && !DOCUMENT_KINDS.some((kind) => kind.value === stored)
       ? [...DOCUMENT_KINDS, { value: stored, label: stored }]

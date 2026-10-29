@@ -12,11 +12,6 @@ import {
 } from '@testing-library/react'
 import { ToastProvider } from '@obiter/ui'
 
-// The view renders <Link to="/search"> and reads useNavigate-free; mock the
-// router pieces it touches so the test does not need a full router tree.
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -40,16 +35,11 @@ mock.module('@tanstack/react-router', () =>
           {children}
         </a>
       ),
-      // "Cite in document" navigates; the source page never reads the
-      // router's location.
       useNavigate: () => () => undefined,
     }))(),
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { CaseLawDocumentView } = await import('./CaseLawDocumentView')
 
 const DOCUMENT_PAYLOAD = {
@@ -60,8 +50,6 @@ const DOCUMENT_PAYLOAD = {
     court: 'uksc',
     dateDecided: '2024-01-31',
     sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
-    // Stored as LegalDocML parses it: the court's `<num>` in paragraphNumber,
-    // not in the text, and not equal to the paragraph's position.
     paragraphs: [
       {
         id: 'p1',
@@ -87,7 +75,6 @@ function jsonResponse(body: unknown): Response {
 
 function mockFetch(): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: string) => {
-    // The view's queryFn fetches `/api/search/documents/:caseId`.
     if (
       url.includes(`/api/search/documents/${encodeURIComponent('uksc-2024-3')}`)
     ) {
@@ -102,18 +89,10 @@ function mockFetch(): ReturnType<typeof vi.fn> {
   return fetchMock
 }
 
-/**
- * CaseLawDocumentView uses useSuspenseQuery, which suspends until the query
- * resolves. Wrap it in a Suspense boundary so the render can complete: while
- * suspended the fallback shows, and once the query resolves the content appears.
- * Callers use findBy* (which awaits the suspended content) rather than getBy*.
- */
 function renderView(caseId = 'uksc-2024-3') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
-  // The page's source actions file against a matter and confirm with a toast,
-  // so the provider the frame mounts is here too.
   return render(
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
@@ -139,20 +118,16 @@ describe('CaseLawDocumentView', () => {
     mockFetch()
     renderView()
 
-    // findBy* awaits the Suspense boundary resolving.
     const documentLandmark = await screen.findByRole('document')
     expect(documentLandmark).toBeTruthy()
 
-    // Header (rendered once in the case metadata, once in the judgment body).
     expect(
       (await screen.findAllByText('Potanina v Potanin')).length,
     ).toBeGreaterThan(0)
     expect(
       (await screen.findAllByText(/\[2024\] UKSC 3/)).length,
     ).toBeGreaterThan(0)
-    // The readable court label for 'uksc' resolves to 'UKSC'.
     expect((await screen.findAllByText(/UKSC/)).length).toBeGreaterThan(0)
-    // The header formats the date; 2024-01-31 should appear somewhere.
     expect((await screen.findAllByText(/31 Jan 2024/)).length).toBeGreaterThan(
       0,
     )
@@ -192,8 +167,6 @@ describe('CaseLawDocumentView', () => {
       screen.getAllByText('The National Archives (Find Case Law)').length,
     ).toBeGreaterThan(0)
     expect(screen.getAllByText('Retrieval date not recorded').length).toBe(1)
-    // The payload carries no judge or party fields; the page must not invent
-    // them from the title.
     expect(screen.queryByText('Judges')).toBeNull()
     expect(screen.queryByText('Panel')).toBeNull()
   })
@@ -223,8 +196,6 @@ describe('CaseLawDocumentView', () => {
     expect(
       screen.getByText('Coram: Lord Reed, President · Lord Briggs · Lady Rose'),
     ).toBeTruthy()
-    // Labelled with what was published and by whom, so it is not read as an
-    // Obiter headnote.
     expect(screen.getByText(/Press summary, UK Supreme Court/)).toBeTruthy()
     expect(
       screen.getByText('This appeal concerns the right to manage.'),
@@ -259,8 +230,6 @@ describe('CaseLawDocumentView', () => {
     renderView()
 
     await screen.findByRole('document')
-    // The corpus read this judgment on this date: it is shown, not replaced
-    // by the "not recorded" warning.
     expect(screen.getByText('Retrieved 6 Sept 2026')).toBeTruthy()
     expect(screen.queryByText('Retrieval date not recorded')).toBeNull()
   })
@@ -270,8 +239,6 @@ describe('CaseLawDocumentView', () => {
       'fetch',
       vi.fn<typeof fetch>().mockRejectedValue(new Error('network down')),
     )
-    // A Find Case Law slug names the source even though the record failed to
-    // load, so the failure page is not a dead end.
     renderView('uksc/2024/3')
 
     expect(

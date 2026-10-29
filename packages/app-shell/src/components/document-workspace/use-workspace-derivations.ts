@@ -70,63 +70,22 @@ type DraftState = Pick<
   | 'setStructures'
 >
 
-/**
- * The workspace's derived document artefacts: the painted model, its
- * pagination, the authority index and the document's image URLs.
- *
- * Every one of these is a full pass over the document — `formattedModel`
- * rebuilds every paragraph, `layoutDocument` re-wraps and repaginates every
- * line (measuring each through the canvas), `documentImagePartNames` scans every
- * paragraph's XML and `extractAuthorities` scans the whole flow. They are pure
- * functions of the model and the draft state, but the workspace re-renders
- * several times per keystroke and again whenever a query settles, presence
- * updates or a panel toggles. Recomputing them inline on every render meant a
- * 500-paragraph document was repaginated 4.3 times per keystroke and 12 times
- * when the document opened, and the large majority of those passes ran on input
- * that had not changed.
- *
- * Memoising on the values each function actually reads makes a re-render that
- * changes nothing document-related cost nothing document-related. The draft
- * state keeps its identity unless the field it holds changes, so a keystroke
- * repaginates exactly once and a render that arrives unchanged resolves to the
- * previous pages.
- */
 export type WorkspaceDerivations = {
   painted: DocumentModelWire | undefined
   pendingRedlines: PendingRedlines | undefined
   pages: LaidOutPage[]
-  /** The document's stored page box — the paper `@page` declares, independent
-   * of which layout view is painted. */
   printBox: PageBox | undefined
   authorities: AuthorityHit[]
   imageUrls: Record<string, string>
-  /** Set when the effective document holds one paragraph, so Delete paragraph
-   * can explain why it is unavailable. `flowParagraphIds` is the same
-   * derivation the deletion operation and the save plan use. */
   deleteParagraphReason: string | undefined
-  /** The Insert ribbon's break and structural controls. */
   insert: InsertRibbonProps
-  /**
-   * Pending hyperlink ranges and cross-reference markers, grouped by the
-   * paragraph they paint over, in painted-text offsets.
-   */
   linkOverlays: ReadonlyMap<string, ParagraphLinkOverlay>
-  /**
-   * The stored-markup legal checks: cross-reference fields against the
-   * document's bookmarks, and `_Def_` defined-term marks against the body's
-   * effective text. `null` while the model is loading.
-   */
   legalChecks: {
     references: ReturnType<typeof checkCrossReferences>
     terms: ReturnType<typeof checkDefinedTerms>
   } | null
 }
 
-/** The disabled reason Delete paragraph shows for `paragraphId`, or undefined
- * when the deletion is allowed. The refusal names a last-paragraph invariant;
- * a paragraph the stored model does not claim and no pending insert owns —
- * a folded table or note paragraph — belongs to a pending structure and is
- * removed with that insertion instead. */
 function deleteReasonForParagraph(
   model: DocumentModelWire,
   inserts: readonly LocalInsert[],
@@ -165,28 +124,14 @@ export function useWorkspaceDerivations({
   documentId: string
   model: DocumentModelWire | undefined
   drafts: DraftState
-  /** Print layout when omitted; the continuous web flow while set. The pages
-   * memo below depends on it, so a view switch repaginates once. */
   flow?: DocumentLayoutFlow
-  /**
-   * The legal-checks panel's open state: the stored-markup checks are a
-   * whole-document scan that only the panel reads, so they run when it is
-   * open and report `null` — "checks unavailable" — when it is closed.
-   */
   legalChecksOpen: boolean
-  /** The caret state the Insert ribbon's availability derives from. */
   insert: {
     caret: FormatTarget
     offset: number | null
     trackChanges: boolean
     onImageError: (message: string) => void
-    /** The story open for editing — the margin controls' pressed state and
-     * the story the last-paragraph rule is measured on. Undefined means the
-     * body. */
     editingStory?: DocumentStoryWire
-    /** The paragraph Delete paragraph targets — the caret's owner — so its
-     * disabled reason can name the invariant that refuses it, including a
-     * note entry's last paragraph inside a story that keeps others. */
     paragraphId: string | null
     margin: {
       editingKind: 'document' | 'header' | 'footer' | 'footnotes'
@@ -202,12 +147,6 @@ export function useWorkspaceDerivations({
     () => (model ? formattedModel(model, drafts.format) : undefined),
     [model, drafts.format],
   )
-  // The deleted sets the batch resolves to, computed once for every surface:
-  // `effective` is what the writer will treat as gone (the applied marks plus
-  // the runless paragraphs a pending replacement deletes implicitly), which
-  // the structural fold, the Insert ribbon and the authorities index all read;
-  // `applied` is only the outright deletes, which the page paint uses because
-  // a replaced paragraph still shows its typed text.
   const deletions = useMemo(
     () =>
       model
@@ -227,12 +166,6 @@ export function useWorkspaceDerivations({
       drafts.drafts,
     ],
   )
-  // Pending tables and pictures fold into the painted model through the same
-  // wire mutations — and the same `structure-xml` builders — the save writers
-  // produce, so `storyBlocks`, `paragraphImageXml` and `PageDrawing` render
-  // them through the code a reloaded document uses. With no pending
-  // structures the fold returns `formatted` unchanged, so a keystroke keeps
-  // the block partition memoised below.
   const structured = useMemo(
     () =>
       formatted
@@ -253,23 +186,14 @@ export function useWorkspaceDerivations({
         : undefined,
     [structured, model, insert.trackChanges, drafts.state, saveOperations],
   )
-  // The story's block partition is a pure function of the painted model, so it
-  // is scanned once per model rather than once per pagination pass.
   const blocks = useMemo(() => {
     const story = structured ? documentStory(structured) : undefined
     return story ? storyBlocks(story) : []
   }, [structured])
-  // Pending breaks are structure, not text: they are folded into a copy of the
-  // painted model so pagination sees the same page and section breaks the save
-  // will write, without changing what the page renders.
   const broken = useMemo(
     () => (painted ? withBreakDrafts(painted, drafts.breaks) : undefined),
     [painted, drafts.breaks],
   )
-  // Pagination is the expensive derivation, so it is memoised rather than run
-  // on every render; it reruns only when one of its inputs changes — the
-  // broken model, the block partition, the draft text, the pending inserts and
-  // runs, the page breaks, or the layout flow.
   const pages = useMemo(
     () =>
       broken
@@ -295,10 +219,6 @@ export function useWorkspaceDerivations({
       pendingRedlines,
     ],
   )
-  // The `@page` rule is the document's own stored page setup — the first
-  // section's box, exactly as the print flow's first page carries it. Deriving
-  // it from the model, not from `pages`, keeps the web flow's unbounded
-  // internal frame from leaking into the print contract.
   const printBox = useMemo<PageBox | undefined>(
     () =>
       broken
@@ -306,15 +226,11 @@ export function useWorkspaceDerivations({
         : undefined,
     [broken],
   )
-  // Read from the model alone, so a keystroke that only changes draft text
-  // does not rescan the package's parts.
   const imageParts = useMemo(
     () => (model ? documentImagePartNames(model) : []),
     [model],
   )
   const fetchedImageUrls = useDocumentImageUrls(documentId, imageParts)
-  // A pending picture's bytes live in the draft, not the package: its blob URL
-  // is keyed by the pending part name the folded relationship resolves to.
   const pendingUrls = useMemo(
     () => pendingImageUrls(drafts.structures),
     [drafts.structures],
@@ -325,14 +241,10 @@ export function useWorkspaceDerivations({
       for (const url of Object.values(created)) URL.revokeObjectURL(url)
     }
   }, [pendingUrls])
-  // Memoised for cost: without it the spread allocates a fresh map on every
-  // render, including caret and selection renders that change neither input.
   const imageUrls = useMemo(
     () => ({ ...fetchedImageUrls, ...pendingUrls }),
     [fetchedImageUrls, pendingUrls],
   )
-  // Memoised for cost: `extractAuthorities` walks the whole model plus the
-  // pending drafts, which must not rerun on caret and selection renders.
   const authorities = useMemo(
     () =>
       model
@@ -346,11 +258,6 @@ export function useWorkspaceDerivations({
         : [],
     [model, drafts.drafts, drafts.inserts, deletions, drafts.extraRuns],
   )
-  // The citations a table of authorities captures, computed by the same
-  // owner the save partition reads — pending styles and effective
-  // deletions applied — so the ribbon's disabled reason and the
-  // partition's block read one answer, and the update control names the
-  // same field the save's `fields` map finds.
   const toaFacts = useMemo<TableOfAuthoritiesFacts>(() => {
     if (!model) {
       return {
@@ -374,18 +281,10 @@ export function useWorkspaceDerivations({
     drafts.extraRuns,
     drafts.format.paragraphStyles,
   ])
-  // Links and field markers carry no model change, so they are grouped into
-  // an overlay map here rather than folded like a table. The painted model
-  // feeds the marker labels so a reference names the target's current text.
   const linkOverlays = useMemo(
     () => structuralLinkOverlays(painted, drafts.structures),
     [painted, drafts.structures],
   )
-  // The legal checks read the stored model plus pending structure — the same
-  // paragraphs and fields the save will write — so `effective` deletions are
-  // what count as gone, matching the writer's answer. They run only while
-  // the panel is open: both checks scan every stored field and `_Def_`
-  // bookmark in the document, and nothing else consumes the result.
   const legalChecks = useMemo(
     () =>
       model && legalChecksOpen

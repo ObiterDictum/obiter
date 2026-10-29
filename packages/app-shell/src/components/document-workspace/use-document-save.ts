@@ -24,11 +24,6 @@ import { refocusCaretBeforeFlight } from './document-actions'
 import { blockedHistoryMessage, messageFor } from './document-save-messages'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 
-/**
- * How many slots the containment pass removes, one at a time, looking for the
- * batch the server will accept. A rejected batch writes no version, so probing
- * costs requests but never history; the cap keeps that bounded.
- */
 const MAX_ISOLATION_ATTEMPTS = 12
 
 export type SaveState =
@@ -51,17 +46,6 @@ const EMPTY_PLAN: SavePlan = {
 
 const NO_REFUSED: readonly DraftSlot[] = []
 
-/**
- * The save state machine for the DOCX workspace.
- *
- * E45: a rejected operation used to stay in the draft state, so every later
- * save recomputed and resent it and legitimate work never reached the server.
- * Here a batch is planned from addressable slots only; a rejected batch is
- * contained by retrying without one slot at a time until the rest commits.
- * The refused slot then stays pending in the drafts — still painted, still
- * resent by the next save — with a banner naming it, so a refused batch can
- * never read as a successful save with an operation quietly dropped.
- */
 export function useDocumentSave({
   documentId,
   matterId,
@@ -105,11 +89,6 @@ export function useDocumentSave({
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
-  /**
-   * Slots a refused batch identified as the cause; they stay pending. `sent`
-   * is the state the refused request was planned from, so discarding can
-   * clear only what the server saw and keep typing done after the refusal.
-   */
   const [refused, setRefused] = useState<{
     slots: readonly DraftSlot[]
     sent: DraftState
@@ -120,14 +99,9 @@ export function useDocumentSave({
     () => (model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN),
     [model, drafts.state],
   )
-  // An unsaved toggle flip is real unsaved state: `w:trackRevisions` persists
-  // with the next committed version — a save, a decision or a markings write —
-  // never by claiming "saved" meanwhile.
   const togglePending = model ? trackChanges !== model.trackRevisions : false
   const dirty =
     plan.operations.length > 0 || plan.rejections.length > 0 || togglePending
-  /** Unsaved work a decision or markings commit would not carry: edits,
-   *  rejections and everything else the version boundary could strand. */
   const editsPending =
     plan.operations.length > 0 ||
     plan.rejections.length > 0 ||
@@ -136,8 +110,6 @@ export function useDocumentSave({
     drafts.held.length > 0 ||
     drafts.recoverable.length > 0 ||
     Boolean(drafts.staleDraft)
-  // The boundary window is part of "a save is still landing": `save()` refuses
-  // a second request while it lasts, so an enabled button would be inert.
   const saving =
     editDocument.isPending ||
     mergeDocument.isPending ||
@@ -161,17 +133,12 @@ export function useDocumentSave({
     })
   }
 
-  /** One request. Returns the version the server committed. */
   async function sendBatch(
     operations: SavePlan['operations'],
     covered: readonly DraftSlot[],
     sent: DraftState,
   ) {
     pendingBatch.current = { covered, sent }
-    // The toggle field is sent only while a flip is pending: an explicit
-    // value persists it, an omitted one leaves the stored setting — so a
-    // stale tab cannot silently revert a collaborator's toggle by echoing
-    // the value it loaded with.
     const flip = togglePending ? { trackChanges } : {}
     const collaborators = presence.some((item) => item.userId !== currentUserId)
     if (collaborators || remoteChange) {
@@ -228,10 +195,6 @@ export function useDocumentSave({
     lineage?: DocumentVersionLineage,
   ) {
     onSaved(versionId)
-    // Advances the history baseline as well as clearing the covered slots: a
-    // snapshot taken while they were pending can never be replayed, and undo
-    // still reverses a saved edit against the document the save produced. The
-    // server's lineage is the authoritative identity for that translation.
     if (model)
       drafts.commitSaveBoundary(
         covered,
@@ -252,14 +215,6 @@ export function useDocumentSave({
     }
   }
 
-  /**
-   * Removes one slot at a time and retries the rest, so a change the server
-   * will not accept cannot block the batch's other work. The isolated slot
-   * stays in the drafts — pending, still painted, and resent by the next
-   * save, where it often lands alone and succeeds — and the refused banner
-   * names it with a discard affordance, so a refused batch can never report
-   * success while an operation quietly disappears.
-   */
   async function containRejection(
     source: DocumentModelWire,
     candidates: readonly DraftSlot[],
@@ -280,9 +235,6 @@ export function useDocumentSave({
           attempt.covered,
           without,
         )
-        // The candidate is left out of `without` only for this request; it
-        // was never cleared from the draft state, so it stays pending while
-        // the rest of the batch commits.
         commit(
           attempt.covered,
           without,
@@ -310,13 +262,6 @@ export function useDocumentSave({
     return false
   }
 
-  /**
-   * A flight must hand DOM focus back to the caret's field while a control
-   * still holds it: `setFailure(null)` unmounts a focused Retry and `saving`
-   * disables a focused Save, dropping focus to `document.body` and losing
-   * the typed burst. Doing it at the only point a flight can begin covers
-   * every entry point by construction.
-   */
   function startFlight() {
     refocusCaretBeforeFlight()
     inFlight.current = true
@@ -326,27 +271,12 @@ export function useDocumentSave({
 
   async function save() {
     if (!model) return
-    // A save whose lineage could not be reconciled leaves the history baseline
-    // unresolved. Writing again could duplicate the covered work or retarget a
-    // reversal, so the only safe action is to reload and discard.
     if (drafts.lineageUnresolved) return
-    // A committed save whose result model has not reloaded yet is an unresolved
-    // baseline: a second save would address the pre-save model and duplicate or
-    // retarget the covered work.
     if (drafts.boundaryPending) return
-    // Ctrl+S bypasses the disabled Save button, so two saves could otherwise
-    // run against one base version and duplicate every insert in the batch.
     if (inFlight.current) return
     const sent = drafts.state
     const current = planDocumentSave(model, sent)
-    // A tracked reversal is a decision version, not an edit. Send rejections
-    // only when no edit operations are pending; otherwise save the edits first
-    // and leave the rejection in state so neither is silently lost.
     if (current.operations.length === 0 && current.rejections.length > 0) {
-      // Every pending group is one decision batch: the decision route is
-      // all-or-nothing against one base version, so sending the groups
-      // sequentially would commit the first and conflict the rest. One call
-      // makes a multi-operation history step an atomic unit, or blocks whole.
       const changeIds = [
         ...new Set(
           current.rejections.flatMap((rejection) => rejection.changeIds),
@@ -375,15 +305,8 @@ export function useDocumentSave({
           action: 'reject',
           changeIds,
           ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
-          // The decision commits a version, so a pending toggle flip rides on
-          // it rather than being silently dropped; an unpended toggle sends
-          // nothing, the same omit rule the edit and merge requests apply.
           ...(togglePending ? { trackRevisions: trackChanges } : {}),
         })
-        // A decision version carries no lineage, and the rejected change id is
-        // consumed, so the pre-edit snapshots cannot be replayed safely. The
-        // rejection slots are cleared and Redo is deliberately unavailable
-        // rather than targeting an obsolete id.
         drafts.clearSlots(
           current.rejections.map((rejection) => ({
             kind: 'tracked-reject' as const,
@@ -393,8 +316,6 @@ export function useDocumentSave({
           sent,
         )
         drafts.resetHistoryAfterDecision()
-        // Hold saves until the decision version's model reloads, so the next
-        // edit is not planned against pre-decision run ids under the new base.
         drafts.markDecisionCommitted(saved.versionId, saved.versionNumber)
         onSaved(saved.versionId)
         setFailure(null)
@@ -428,8 +349,6 @@ export function useDocumentSave({
         return
       }
       if (error instanceof ApiError && error.code === 'validation_failed') {
-        // Most recent slots first: the change that was just made is the most
-        // likely to address something the server no longer has.
         const isolated = await containRejection(
           model,
           [...current.covered].reverse(),
@@ -479,14 +398,10 @@ export function useDocumentSave({
     save: () => void save(),
     retry: () => void save(),
     reload: () => void reload(),
-    /** A decision route's 409 lands here too: the stale banner is shared. */
     markStale: () => setStale(true),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
     discardRefused: () => {
-      // Only slots unchanged since the refused request was planned clear:
-      // a slot the user edited after the refusal keeps the newer work, the
-      // same way the held path kept the live state when the slot moved.
       if (refused) drafts.clearSlots(refused.slots, refused.sent)
       setRefused(null)
     },

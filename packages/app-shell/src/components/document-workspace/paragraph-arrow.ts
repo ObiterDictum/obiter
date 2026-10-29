@@ -25,24 +25,14 @@ export type ArrowNeighbor = {
   id: string
   text: string
   lines: WrappedLine[]
-  /** A pending inserted paragraph: a neighbour for the caret, not for the
-   * selection, which the workspace refuses to extend into. */
   insert?: boolean
 }
 
-/**
- * The visual column a run of plain ArrowUp/ArrowDown presses is trying to
- * hold. It lives above the paragraph textarea so the remount when the caret
- * crosses into another paragraph does not lose it. Any other interaction
- * clears it.
- */
 export type VerticalCaretColumn = {
   column: number | null
-  /** The one destination a vertical move may hand the column to on focus. */
   pending: VerticalCaretDelivery | null
 }
 
-/** The paragraph a vertical move is about to focus, and where in it. */
 export type VerticalCaretDelivery = {
   paragraphId: string
   offset: number
@@ -52,7 +42,6 @@ export function createVerticalCaretColumn(): VerticalCaretColumn {
   return { column: null, pending: null }
 }
 
-/** Arm the one-shot delivery for the paragraph a vertical move will focus. */
 export function armVerticalDelivery(
   state: VerticalCaretColumn | undefined,
   delivery: VerticalCaretDelivery,
@@ -61,11 +50,6 @@ export function armVerticalDelivery(
   state.pending = delivery
 }
 
-/**
- * Whether `delivery` is the exact transition the pending move armed. A
- * programmatic selection that lands elsewhere, or at another offset of the
- * same paragraph, is not the transition and must end the run.
- */
 export function isVerticalDelivery(
   state: VerticalCaretColumn | undefined,
   delivery: VerticalCaretDelivery,
@@ -76,11 +60,6 @@ export function isVerticalDelivery(
   )
 }
 
-/**
- * Consume the pending delivery on focus. Returns true only for the intended
- * destination; any other paragraph clears the run. Either way the transition
- * is spent, so it cannot leak into a later movement.
- */
 export function consumeVerticalDelivery(
   state: VerticalCaretColumn | undefined,
   paragraphId: string,
@@ -91,16 +70,11 @@ export function consumeVerticalDelivery(
   return intended
 }
 
-/** The visual (wrapped-line) column the caret sits at. */
 export function visualColumn(lines: WrappedLine[], offset: number): number {
   const line = lines[lineIndex(lines, offset)]
   return line ? Math.max(0, offset - line.from) : offset
 }
 
-/**
- * Establish the run's column on the first press, then read it back. A short
- * destination line clamps the caret, never the retained column.
- */
 export function retainVerticalColumn(
   state: VerticalCaretColumn | undefined,
   lines: WrappedLine[],
@@ -119,7 +93,6 @@ export function clearVerticalColumn(
   state.pending = null
 }
 
-/** The offset above or below with the caret at the retained visual column. */
 export function offsetVertically(input: {
   key: 'ArrowUp' | 'ArrowDown'
   offset: number
@@ -162,22 +135,6 @@ export function offsetAfterArrow(input: {
   }
 }
 
-/**
- * The visual line that owns `offset`, following the projection convention
- * `wrapLines` encodes: each line carries the display code units `[from, to)`
- * and the newline of a hard break is dropped between lines. That leaves two
- * boundary shapes, and ownership follows where the caret renders:
- *
- * - a soft wrap shares its boundary (`line.to === next.from`), so the offset
- *   is the next line's column 0;
- * - a hard break sits its newline at `line.to` and starts the next line at
- *   `line.to + 1`, so the newline slot belongs to the line it terminates and
- *   the caret stays at that line's visual end rather than skipping forward.
- *
- * The final line owns any offset at or past its end, which clamps a caret
- * pushed beyond the text and puts the empty row a trailing hard break opens at
- * `text.length` on the line that draws it.
- */
 function lineIndex(lines: WrappedLine[], offset: number): number {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
@@ -189,15 +146,6 @@ function lineIndex(lines: WrappedLine[], offset: number): number {
   return Math.max(0, lines.length - 1)
 }
 
-/**
- * The offset a retained visual column resolves to on a line, clamped to the
- * line. Columns are counted in the same UTF-16 code units as the model and the
- * edit operations, so on a line holding an astral character a column can point
- * at the low half of a surrogate pair, where no caret can sit. Such a column
- * resolves to the pair's start: the pair is one glyph, the two boundaries are
- * equidistant, and rounding down (not up) is what keeps the desired column
- * (E34) and the line's ownership (E54/E56) without ever splitting the pair.
- */
 function offsetOnLine(line: WrappedLine | undefined, column: number): number {
   if (!line) return column
   const candidate = Math.min(line.from + column, line.to)
@@ -205,9 +153,6 @@ function offsetOnLine(line: WrappedLine | undefined, column: number): number {
   if (local < line.text.length && isLowSurrogate(line.text.charCodeAt(local))) {
     return Math.max(0, candidate - 1)
   }
-  // A wrap that ends between a pair's halves leaves the line's `to` on the low
-  // surrogate, so the offset the column resolves to belongs to the line's end
-  // and is not a valid caret position. Step back onto the high surrogate.
   if (
     candidate === line.to &&
     isHighSurrogate(line.text.charCodeAt(line.text.length - 1))
@@ -228,38 +173,21 @@ function isLowSurrogate(code: number): boolean {
 export type ParagraphNeighborResolver = (
   paragraphId: string,
   wrapWidthPx?: number,
-  /** The caller's current draft map, so a stable resolver still reads fresh
-   * text without being rebuilt on every keystroke. */
   drafts?: Record<string, string>,
 ) => { previous?: ArrowNeighbor; next?: ArrowNeighbor }
 
-/** The painted model the layout placed, the edits held outside its runs, and
- * the text drafts: the inputs a neighbour's text and metrics come from. */
 type NeighborSource = {
   model: DocumentModelWire
   drafts?: Record<string, string>
   extraRuns?: ExtraRuns
   inserts: LocalInsert[]
   paragraphs: DocumentParagraphWire[]
-  /** The flow order to resolve neighbours in. The body's order is derived
-   * when absent; a margin story passes its own so the caret never steps out
-   * of the story it is editing. */
   order?: string[]
 }
 
-/**
- * A resolver over the story's flow order. The order and its index are built
- * once, so resolving a paragraph's neighbours is a lookup rather than a walk
- * of the whole document. The previous shape called `flowParagraphIds` per
- * paragraph during rendering, which made a render O(n^2); this keeps that out
- * of the render path while the wrap and face work still happens only for the
- * paragraph that actually asks for a neighbour.
- */
 export function paragraphNeighborResolver(
   ctx: NeighborSource & { deletedParagraphIds: string[] },
 ): ParagraphNeighborResolver {
-  // A revision-only paragraph mounts no editor, so stepping into it would
-  // drop keyboard focus; arrows pass over it as they pass revision-only rows.
   const readOnly = new Set(
     ctx.paragraphs
       .filter((paragraph) => revisionOnlyParagraph(ctx.model, paragraph))
@@ -302,11 +230,7 @@ function arrowNeighbor(
     : undefined
   const fontSizePx = face?.run.fontSizePx ?? 16
   const list = paragraph ? paragraphListIndent(paragraph, ctx.model) : undefined
-  // The caret model has to break rows where the paint does, so a paragraph's
-  // first block loses the same first-line indent that narrows the painted row.
   const firstLinePx = face ? firstLineIndentPx(face, Boolean(list)) : 0
-  // Without a column width the projection still owns the break structure: a
-  // row per hard-break segment, and the empty row a trailing break opens.
   const lines = wrapLines(
     text,
     fontSizePx,

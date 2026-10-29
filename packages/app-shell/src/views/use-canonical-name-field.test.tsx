@@ -4,16 +4,6 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
-/**
- * The form-state policy itself, driven without the product forms so the cases
- * the UI cannot produce (a response that arrives after a newer canonical value,
- * a response that outlives the identity it was sent for) can be exercised
- * directly.
- *
- * The saved baseline is asserted behaviourally rather than through a new
- * getter: dirtying the field and pressing Reset is the user-visible meaning of
- * "the baseline", and it keeps the hook's surface honest.
- */
 interface Deferred<T> {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -90,7 +80,6 @@ describe('useCanonicalNameField', () => {
     fireEvent.change(nameInput(), { target: { value: 'Submitted Name' } })
     click('save')
 
-    // A newer authoritative value lands while the request is still in flight.
     view.rerender(
       <Harness identity="usr_1" canonical="Renamed Elsewhere" save={save} />,
     )
@@ -99,10 +88,8 @@ describe('useCanonicalNameField', () => {
       pending.resolve('Submitted Name')
     })
 
-    // The response is older than the value now on screen: it must not win.
     expect(nameInput().value).toBe('Renamed Elsewhere')
 
-    // ...and the baseline is the newer value too, so Reset agrees.
     fireEvent.change(nameInput(), { target: { value: 'A newer draft' } })
     click('reset')
     expect(nameInput().value).toBe('Renamed Elsewhere')
@@ -122,7 +109,6 @@ describe('useCanonicalNameField', () => {
     })
 
     expect(nameInput().value).toBe('Typed During Flight')
-    // The successful save is still the baseline, so Reset discards the draft.
     click('reset')
     expect(nameInput().value).toBe('Submitted Name')
   })
@@ -160,7 +146,6 @@ describe('useCanonicalNameField', () => {
     )
     expect(nameInput().value).toBe('Other User Name')
 
-    // The response belonged to the previous identity and must be ignored.
     await act(async () => {
       pending.resolve('Draft For Old User')
     })

@@ -48,8 +48,6 @@ function fieldRun(id: string, fragments: string[]) {
   return { id, text: '', preservedXmlFragments: fragments }
 }
 
-/** The generated heading wire — the field's `begin`, instruction and
- * `separate` ahead of its result text, as `toaHeadingParagraphWire` builds. */
 function fieldHead(id: string): DocumentParagraphWire {
   return {
     id,
@@ -83,7 +81,6 @@ function fieldEntry(id: string, citation: string): DocumentParagraphWire {
   }
 }
 
-/** The tail wire — the field's `end` run ahead of the anchor's rest text. */
 function fieldTail(id: string, text: string): DocumentParagraphWire {
   return {
     id,
@@ -96,7 +93,6 @@ function fieldTail(id: string, text: string): DocumentParagraphWire {
   }
 }
 
-/** A citing wire carrying its stored `TA` mark runs after the citation. */
 function citingWithMark(id: string, citation: string): DocumentParagraphWire {
   return {
     id,
@@ -140,14 +136,6 @@ function model(
   }
 }
 
-/**
- * The `fields` metadata the parser would emit for these fixtures: a
- * stack-paired scan of each wire's `fldChar` and `instrText` fragments, so
- * the hand-built stories carry the same pairings a real parse produces.
- * `rangeReplaceable` mirrors the emitted generated-TOA shape — `begin`
- * leading the head, `end` leading a different tail — which every fixture
- * here builds; the foreign-shape cases override it.
- */
 function storyFields(paragraphs: DocumentParagraphWire[]): DocumentFieldWire[] {
   const TOKEN =
     /<w:fldChar w:fldCharType="(begin|separate|end)"\/>|<w:instrText[^>]*>([\s\S]*?)<\/w:instrText>/gu
@@ -436,8 +424,6 @@ describe('table-of-authorities refresh partition', () => {
       deletedParagraphIds: ['tail'],
       structures: [refreshDraft('s1', 'head')],
     })
-    // The tail carries the field's `end`: removing it alone is refused, so
-    // the field survives intact and the queued refresh keeps.
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['delete'])
     expect(plan.blocked[0]?.reason).toContain('only be removed as a whole')
     expect(plan.operations).toEqual([
@@ -446,9 +432,6 @@ describe('table-of-authorities refresh partition', () => {
   })
 
   it('blocks appended text that would drop a runless boundary paragraph', () => {
-    // A runless paragraph holding a boundary marker is not deleted by a
-    // mark here — the batch replaces the empty element when appended text
-    // lands, an implicit delete the writer's `deletedIds` still collects.
     const paragraphs = [
       paragraph('p0', 'Keep.'),
       { id: 'head', runs: [], preservedXmlFragments: [] },
@@ -485,9 +468,6 @@ describe('table-of-authorities refresh partition', () => {
   })
 
   it('blocks the appended text too when a runless boundary paragraph is also marked', () => {
-    // Blocking only the delete mark still lets the implicit replacement
-    // drop the element — the appended text is the second removal path and
-    // must be held back with it, or the batch 400s on every retry.
     const paragraphs = [
       paragraph('p0', 'Keep.'),
       { id: 'head', runs: [], preservedXmlFragments: [] },
@@ -564,7 +544,6 @@ describe('table-of-authorities refresh fold', () => {
     ])
     const painted = withStructuralDrafts(stored, [refreshDraft('s1', 'head')])
     const paragraphs = painted.stories[0]?.paragraphs ?? []
-    // The stored head and entry wires are gone; the tail stays.
     expect(paragraphs.some((paragraph) => paragraph.id === 'head')).toBe(false)
     expect(paragraphs.some((paragraph) => paragraph.id === 'e1')).toBe(false)
     expect(paragraphs.some((paragraph) => paragraph.id === 'tail')).toBe(true)
@@ -586,14 +565,11 @@ describe('table-of-authorities refresh fold', () => {
       '[2019] EWCA Civ 12',
       '[2020] UKSC 1',
     ])
-    // The stored mark is not duplicated: the citing wire still carries
-    // exactly one `TA` instruction for the citation.
     const paintedCiting = paragraphs.find((paragraph) => paragraph.id === 'c1')
     const marks = (paintedCiting?.runs ?? []).filter((run) =>
       run.preservedXmlFragments.join('').includes(' TA \\l "'),
     )
     expect(marks).toHaveLength(1)
-    // The new citation gets its own mark.
     const paintedNew = paragraphs.find((paragraph) => paragraph.id === 'new')
     expect(
       (paintedNew?.runs ?? []).some((run) =>
@@ -706,9 +682,6 @@ describe('table of authorities update ribbon', () => {
   })
 
   it('reports the pending edit a stale queued refresh cannot survive', () => {
-    // A held refresh plus typed text inside the field: the save would hold
-    // the refresh back, so the field is not "already queued" — the reason
-    // is the pending edit the partition would report.
     const paragraphs = [
       paragraph('c1', 'Cited [2020] UKSC 1.'),
       fieldHead('head'),
@@ -730,8 +703,6 @@ describe('table of authorities update ribbon', () => {
       fieldEntry('e1', '[2020] UKSC 1'),
       fieldTail('tail', 'rest'),
     ]
-    // A field whose stored shape the in-place rewrite does not compose —
-    // the parser's shape proof fails, so `rangeReplaceable` is false.
     const foreign = storyFields(paragraphs).map((field) =>
       field.headId === 'head' ? { ...field, rangeReplaceable: false } : field,
     )

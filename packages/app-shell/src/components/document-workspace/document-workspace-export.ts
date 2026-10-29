@@ -3,17 +3,6 @@ import { fetchDocumentExport } from '../../document-workspace-api'
 import { refocusCaretBeforeFlight } from './document-actions'
 import { mutationError } from './workspace-chrome'
 
-/**
- * Exports the stored document as DOCX and returns the message to show, or null
- * when nothing needs saying. Split from `docx-workspace.tsx`, which is at the
- * source ceiling; the caller owns the banner state.
- *
- * The saved name comes from the response's own Content-Disposition so a
- * non-ASCII filename the server normalised lands as the exact name the server
- * chose; the document's display name is only the fallback. `shareSafe` asks
- * for the metadata-stripped variant — the server refuses with a reason rather
- * than emit a file it cannot prove clean.
- */
 async function exportDocumentAsDocx(
   documentId: string,
   filename: string,
@@ -35,12 +24,6 @@ async function exportDocumentAsDocx(
   }
 }
 
-/**
- * The ribbon's two export entries. Each refocuses the caret before the
- * flight — a download that never resolves would otherwise leave focus on a
- * control the workspace may unmount — and reports the server's message, or
- * the mutation's refusal, through the workspace's notice slot.
- */
 export function documentExportHandlers(
   documentId: string,
   filename: string,

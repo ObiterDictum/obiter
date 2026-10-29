@@ -15,11 +15,6 @@ const MODES = [
   { value: 'magic-link' as const, label: 'Email link' },
 ]
 
-/**
- * Sign-in against the auth API (better-auth email/password + magic link).
- * Account creation lives on /sign-up. The frame renders this route bare; on
- * success the user is sent to Home.
- */
 export function SignInRouteView({
   platform: _platform,
 }: {

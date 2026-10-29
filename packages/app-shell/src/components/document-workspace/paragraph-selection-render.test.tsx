@@ -127,7 +127,6 @@ describe('painting a document selection', () => {
         p3: { from: 0, to: 0 },
       },
     )
-    // The empty paragraph paints one blank row; the other two cover no text.
     expect(container.querySelectorAll('[data-selected-text]')).toHaveLength(1)
     expect(selectedText('p2')).toBe('\u00a0')
   })
@@ -135,8 +134,6 @@ describe('painting a document selection', () => {
   it('splits a wrapped paragraph mark across its visual rows', () => {
     const text = 'lorem ipsum dolor sit amet '.repeat(4).trim()
     const model = doc(para('p1', text))
-    // The range is chosen from the rendered rows, so the test does not depend
-    // on where the projection decides to wrap.
     const probe = renderPage(model, {})
     const rows = [...probe.querySelectorAll('[data-line-from]')]
     cleanup()
@@ -165,8 +162,6 @@ describe('painting a document selection', () => {
     })
     const rows = [...container.querySelectorAll('[data-line-from]')]
     expect(rows).toHaveLength(2)
-    // The newline slot at offset 3 belongs to the first row, so the range
-    // paints from the second row's start.
     expect(rows[0]?.querySelector('[data-selected-text]')).toBeNull()
     expect(selectedText('p1')).toBe('tw')
   })
@@ -193,7 +188,6 @@ describe('painting a document selection', () => {
         continuation: true,
       },
     ])
-    // Each block paints only the part of the range inside its own slice.
     expect(container.querySelectorAll('[data-selected-text]')).toHaveLength(2)
     expect(selectedText('p1')).toBe('lph')
   })
@@ -205,7 +199,6 @@ describe('painting a document selection', () => {
     )
     expect(container.querySelectorAll('[data-selected-text]')).toHaveLength(1)
     expect(selectedText('p2')).toBe('')
-    // The page chrome carries no selection marks either.
     expect(
       container.querySelectorAll(
         '[aria-label="Document body"] [data-selected-text]',

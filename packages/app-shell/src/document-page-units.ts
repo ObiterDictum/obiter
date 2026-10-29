@@ -10,7 +10,6 @@ export function twipToPx(twips: number): number {
   return (twips * PX_PER_INCH) / TWIPS_PER_INCH
 }
 
-/** The inverse of `twipToPx`, rounded to the integer twips the edit contract allows. */
 export function pxToTwip(px: number): number {
   return Math.round((px * TWIPS_PER_INCH) / PX_PER_INCH)
 }
@@ -52,12 +51,6 @@ export function xmlInner(xml: string, localName: string): string | undefined {
   )?.[1]
 }
 
-/**
- * The first start tag with the given qualified name, isolated from the rest of
- * the fragment. Reading attributes from one short tag avoids the polynomial
- * backtracking of a single regex whose `[^>]*` gaps repeatedly scan a long
- * attribute list looking for a missing `x`/`y`/`cx`/`cy`.
- */
 export function xmlStartTag(
   xml: string,
   qualifiedName: string,
@@ -65,7 +58,6 @@ export function xmlStartTag(
   return xml.match(new RegExp(`<${qualifiedName}\\b[^>]*>`, 'i'))?.[0]
 }
 
-/** A non-negative integer attribute read from an isolated start tag. */
 export function xmlDigitAttr(
   tag: string | undefined,
   name: string,

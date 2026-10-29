@@ -11,26 +11,12 @@ import { DocumentModelPage } from './components/document-workspace/model-view'
 
 export type { LaidOutPage }
 
-/**
- * Paginates one DOCX model with the workspace's own engine. The document
- * workspace wraps the same call in draft state and TanStack Query; the
- * redaction renderer worker calls it directly, so both paint one pagination
- * implementation rather than a server-side reimplementation that would break
- * lines differently from the browser.
- */
 export function layoutDocumentPages(model: DocumentModelWire): LaidOutPage[] {
   return layoutDocument(model)
 }
 
 const NO_SELECTION = () => undefined
 
-/**
- * Read-only pages for a document model. The workspace's interactive props are
- * omitted rather than stubbed with behaviour: no caret, selection, presence,
- * draft, insert or tracked-change editing path is reachable, so the painted
- * page is exactly what the engine laid out. `pages` is passed in so the caller
- * measures the same layout it renders.
- */
 export function StaticDocumentPages({
   model,
   pages,

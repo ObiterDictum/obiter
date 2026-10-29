@@ -4,23 +4,10 @@ import type { LaidOutPage } from './document-page-blocks'
 
 const BOOKMARK_NAME = /<w:bookmarkStart\b[^>]*\bw:name="([^"]+)"/gu
 
-/**
- * The page each stored or folded bookmark resolves to, keyed by its
- * `w:name` — the map a `PAGEREF` instruction resolves through at paint.
- * Names come from `w:bookmarkStart` fragments on paragraph wires and runs
- * (paragraph-level preserved children are where the writers put them);
- * pages come from the same laid-out blocks the column renders, so a stored
- * or pending `TOC` entry and its `PAGE` twin agree on numbering. A
- * paragraph the layout skipped — inside a deleted block or a story page
- * the engine does not paginate — resolves to no page and paints nothing.
- */
 export function pageReferenceMap(
   model: DocumentModelWire,
   pages: readonly LaidOutPage[],
 ): ReadonlyMap<string, number> {
-  // First wins: a paragraph split across a page break lays out one block
-  // per page, but its bookmark sits on the page the paragraph opens on —
-  // the page `PAGEREF` must name.
   const pageOf = new Map<string, number>()
   pages.forEach((page, index) => {
     for (const block of page.blocks) {
