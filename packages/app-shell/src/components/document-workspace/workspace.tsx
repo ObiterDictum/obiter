@@ -136,7 +136,12 @@ function DocumentWorkspaceBody({
           documentId={documentId}
           filename={version.filename}
           layout={layout}
-          mark={<RedactedMark redaction={version.redaction} producedAt={version.createdAt} />}
+          mark={
+            <RedactedMark
+              redaction={version.redaction}
+              producedAt={version.createdAt}
+            />
+          }
         />
       </VerifiedViewer>
     )
@@ -150,7 +155,12 @@ function DocumentWorkspaceBody({
           versionNumber={version.versionNumber}
           layout={layout}
           headerLinks={headerLinks}
-          mark={<RedactedMark redaction={version.redaction} producedAt={version.createdAt} />}
+          mark={
+            <RedactedMark
+              redaction={version.redaction}
+              producedAt={version.createdAt}
+            />
+          }
         />
       </VerifiedViewer>
     )

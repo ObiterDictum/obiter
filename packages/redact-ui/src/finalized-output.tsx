@@ -479,8 +479,7 @@ export function FinalizedOutput({
               <Button
                 variant="secondary"
                 loading={
-                  schedule.isPending &&
-                  schedule.variables === 'json-shareable'
+                  schedule.isPending && schedule.variables === 'json-shareable'
                 }
                 disabled={schedule.isPending}
                 onClick={() => exportSchedule('json-shareable')}
@@ -494,8 +493,8 @@ export function FinalizedOutput({
             </div>
             <p className="text-caption text-subtle">
               The shareable JSON holds the counts, categories, decisions,
-              reviewers and the output’s SHA-256 — never the words removed
-              or the source filename — so it can be given to the other side.
+              reviewers and the output’s SHA-256 — never the words removed or
+              the source filename — so it can be given to the other side.
             </p>
             {schedule.error ? (
               <p className="text-meta text-danger" role="alert">

@@ -29,7 +29,9 @@ export function RedactedMark({
   )
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" aria-label={line} />}>
+      <TooltipTrigger
+        render={<span className="inline-flex" aria-label={line} />}
+      >
         {redaction.canOpen ? (
           <Link
             to="/redact/$runId"
