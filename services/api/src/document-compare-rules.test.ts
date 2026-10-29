@@ -76,6 +76,29 @@ function model(
 }
 
 describe('document comparison rules', () => {
+  it('reports target stories before stories present only in the base', () => {
+    const base = model([], {
+      stories: [
+        story([paragraph('p1', 'Removed')], {
+          partName: 'word/footer1.xml',
+          kind: 'footer',
+        }),
+      ],
+    })
+    const target = model([], {
+      stories: [
+        story([paragraph('q1', 'Added')], {
+          partName: 'word/header1.xml',
+          kind: 'header',
+        }),
+      ],
+    })
+
+    expect(
+      compareDocumentModels(base, target).entries.map(({ type }) => type),
+    ).toEqual(['added', 'removed'])
+  })
+
   it('excludes whitespace from paragraph similarity scoring', () => {
     const base = model([paragraph('p1', 'one two three four five')])
     const target = model([paragraph('q1', 'one  two  three  six  seven')])
