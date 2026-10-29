@@ -86,8 +86,6 @@ describe('psql command bounds', () => {
   })
 
   it('bounds a runaway result rather than returning a truncated one', () => {
-    // A writer that respects backpressure blocks once the pipe fills, so the
-    // output cap is what ends it rather than the child running out of memory.
     const writeForever =
       'const chunk="0123456789".repeat(6554);' +
       'const w=()=>{while(process.stdout.write(chunk)){}process.stdout.once("drain",w)};w()'

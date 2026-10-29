@@ -7,11 +7,6 @@ import { parseDocx } from '../../packages/ooxml/src/parse'
 import { resolveRelationshipTarget } from '../../packages/ooxml/src/parts/rels'
 import { paragraphOutlineLevel } from '../../packages/ooxml/src/table-of-contents-entries'
 
-/**
- * An OOXML-level semantic summary of an exported package: the counts and text
- * that say what survived the round-trip. Deliberately not a visual claim —
- * what Word renders is an operator observation, not a field here.
- */
 export type Summary = {
   bodyText: string
   paragraphs: number
@@ -26,31 +21,10 @@ export type Summary = {
   trackedChanges: number
   footnotes: number
   endnotes: number
-  /**
-   * Every package part with the role the parser gave it — the identities the
-   * preservation check diffs. A bare count cannot tell a dropped part from
-   * an added one, and a producer's own metadata parts (docProps/app.xml is
-   * the Word evidence this harness requires) are additions to record, not
-   * failures.
-   */
   packageParts: { name: string; role: SourcePartRole }[]
-  /**
-   * Every relationship's semantic binding — source part, type, resolved
-   * target and external flag. The relationship id is deliberately absent:
-   * producers renumber ids on save, and the binding is the identity, not
-   * its numbering.
-   */
   relationships: string[]
 }
 
-/**
- * The document story's text, whitespace-normalised. The word-step's
- * relatedness check compares this against the cycle-1 export: a file with
- * different body text is a different document, however it was produced.
- * Accepts any carrier of a model's stories — a parsed package or a model
- * response — so the cycle-2 edit oracle can derive its expectation from the
- * served model with the same normalisation the export summary applies.
- */
 export function documentBodyText(doc: {
   model: Pick<DocumentModelWire, 'stories'>
 }): string {
@@ -64,9 +38,6 @@ export function documentBodyText(doc: {
 
 function relationshipEntry(rel: DocumentRelationshipWire): string {
   const external = rel.targetMode?.toLowerCase() === 'external'
-  // Internal targets normalise to their part name so equivalent spellings
-  // compare equal. A target that will not resolve keeps its raw spelling:
-  // the entry's job is identity, and the raw spelling is still that.
   let target = rel.target
   if (!external) {
     try {
@@ -129,12 +100,6 @@ export function compare(
   const checks: { name: string; pass: boolean; detail: string }[] = []
   const push = (name: string, pass: boolean, detail: string) =>
     checks.push({ name, pass, detail })
-  // With a cycle-2 edit applied, the export's body text is not expected to
-  // equal cycle 1's: it is expected to equal the pre-edit text with exactly
-  // the declared operation's change. The named check is the proof the edit
-  // reached the export — a missing edit, a stale-version export or a wrong
-  // run all produce body text that is not the expectation. Every other
-  // check stays a cycle-1 identity comparison.
   const bodyExpectation = expected?.bodyText
   const bodyPass = second.bodyText === (bodyExpectation ?? first.bodyText)
   push(
@@ -177,9 +142,6 @@ export function compare(
     )
   }
 
-  // Package-part preservation is an identity check, not a count: equal
-  // counts can hide a dropped part behind an added one, so the diff runs on
-  // part names and the preservation roles the parser assigned.
   const secondParts = new Map(
     second.packageParts.map((part) => [part.name, part.role]),
   )
@@ -199,11 +161,6 @@ export function compare(
       : lost.join('; '),
   )
 
-  // Additions are directional: a passive part the producer added — Word's
-  // docProps/app.xml is the evidence this harness requires — is recorded by
-  // name, while an addition that takes an active role (story, styles,
-  // numbering, relationships, content-types) changes the document's
-  // structure and fails.
   const firstNames = new Set(first.packageParts.map((part) => part.name))
   const added = second.packageParts.filter((part) => !firstNames.has(part.name))
   const unexpected = added.filter((part) => part.role !== 'opaque')
@@ -217,13 +174,6 @@ export function compare(
     ].join('; ') || 'none',
   )
 
-  // Bindings are a multiset, not a set: two Relationship elements may carry
-  // the same source part, type and target under different ids — ids are
-  // excluded because producers renumber them, so the duplicates compare
-  // equal only in their multiplicities. A set diff would mask a dropped or
-  // added copy. The check proves the binding inventory, not reference
-  // integrity: a body r:id left naming a renumbered-away id still dangles,
-  // and this comparison cannot see that.
   const relCounts = (entries: string[]) => {
     const counts = new Map<string, number>()
     for (const entry of entries) {

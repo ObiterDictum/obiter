@@ -1,7 +1,3 @@
-/*
- * Tests for desktop build measurement: what is read from disk, what a missing or
- * corrupt artifact does, and how measured bytes are compared with ceilings.
- */
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -90,7 +86,6 @@ test('measures every bucket and excludes the manifest from the payload', async (
     expect(buckets.lazyChunks.bytes).toBe(1000)
     expect(buckets.main).toEqual({ bytes: 1000, fileCount: 1 })
     expect(buckets.preload).toEqual({ bytes: 1000, fileCount: 1 })
-    // Nine shipped files: index.html (1 B), six renderer assets, main and preload.
     expect(buckets.payload).toEqual({ bytes: 8001, fileCount: 9 })
   })
 })

@@ -1,16 +1,5 @@
-/*
- * The psql boundary: one subprocess per statement, SQL on stdin so no fixture
- * value ever reaches argv, credentials only in the environment.
- *
- * Synchronous and bounded. The queries run outside the measured window, but a
- * wedged query (lock wait, dead backend) must still fail the run rather than
- * block the event loop until SIGKILL, and a runaway aggregate must not exhaust
- * memory. Both limits are applied here so provisioning and verification share
- * one rule.
- */
 import { execFileSync } from 'node:child_process'
 
-/** The failure type every psql-backed operation throws, with a stable code. */
 export class ProvisionError extends Error {
   constructor(code, message) {
     super(message)
@@ -22,7 +11,6 @@ export class ProvisionError extends Error {
 export const PSQL_TIMEOUT_MS = 15_000
 export const PSQL_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 
-/** PG* environment from a connection URL: no credential ever reaches argv. */
 export function psqlEnvironment(databaseUrl, baseEnv = process.env) {
   const parsed = new URL(databaseUrl)
   return {
@@ -39,11 +27,6 @@ export function psqlEnvironment(databaseUrl, baseEnv = process.env) {
   }
 }
 
-/**
- * psql, with the SQL on stdin so no fixture value ever reaches argv. `SIGKILL`
- * is the kill signal because psql does not answer a polite term while the
- * driver is blocked.
- */
 export function defaultRunner(
   sql,
   environment,
@@ -93,7 +76,6 @@ export function createQuerier({
   const environment = psqlEnvironment(databaseUrl, baseEnv)
   const execute = run ?? defaultRunner
   return {
-    /** Rows from a `json_agg` query; empty array when nothing matched. */
     rows(sql) {
       const text = execute(sql, environment)
       return JSON.parse(text.trim() === '' ? 'null' : text.trim()) ?? []

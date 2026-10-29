@@ -1,26 +1,11 @@
-/*
- * Browser-side editor interaction probes.
- *
- * Kept out of the CLI so the measurement rules can be read without the target
- * lifecycle around them. `openEditor` is the shared preamble: paint, then a
- * click that makes a paragraph genuinely editable, then one keystroke the field
- * has to accept. Everything here measures the editor the product actually
- * ships; nothing is stubbed.
- */
 import { COLLECT_INIT_SCRIPT } from './page-metrics.mjs'
 
 export const PARAGRAPH = '[data-paragraph-id]'
 export const FIELD = 'textarea[aria-label="Paragraph text"]'
 
-// Typed verbatim in every sample so Before and After pay the same edit cost.
 export const TYPED =
   'The parties agree that the boundary line runs as shown on the plan. '
 
-/**
- * Per-keystroke latency: keydown to the second animation frame after keyup,
- * which is when the edit has been laid out and painted. The same probe also
- * records frame gaps for scrolling.
- */
 export const TYPING_PROBE = () => {
   window.__lat = []
   window.__frames = []
@@ -72,15 +57,6 @@ export function summarise(values) {
   }
 }
 
-/**
- * Poll the paragraph field until a predicate holds on its value, resolving
- * false when the bound expires.
- *
- * The poll re-resolves the field from Node on every pass rather than running
- * inside one `evaluate`: an edit re-renders the paragraph and can replace the
- * field element, which turns an in-page poll into an "element is not attached"
- * rejection that reads as "the edit never landed".
- */
 async function waitForFieldValue(page, predicate, want, timeoutMs) {
   const deadline = Date.now() + timeoutMs
   for (;;) {
@@ -95,14 +71,6 @@ async function waitForFieldValue(page, predicate, want, timeoutMs) {
   }
 }
 
-/**
- * Wait until the editor has focused the paragraph field itself. The editor
- * focuses it from an effect after the paragraph selection re-renders, so typing
- * as soon as the element exists races that effect and the keystrokes go to
- * whatever held focus before. Forcing focus is not equivalent: the editor's own
- * `onFocus` resets caret state, and calling `focus()` from the probe moves the
- * caret in a way a user's click would not.
- */
 async function waitForFocus(page, field, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs
   for (;;) {
@@ -119,10 +87,6 @@ const changedFrom = (value, before) => value !== before
 const contains = (value, want) => value.includes(want)
 
 export function makeProbes({ webUrl, fixtures, authState, browser }) {
-  // The context is registered with the sample's ownership ledger as soon as it
-  // exists, so a probe abandoned at the bound still has it closed and awaited
-  // by the caller. A probe that fails before its own `finally` runs is covered
-  // by the ledger for the same reason.
   async function newPage(ownership) {
     const context = await ownership.create(() =>
       browser.newContext({
@@ -134,9 +98,6 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
     return { context, page: await context.newPage() }
   }
 
-  // Release only after a confirmed close: a close that throws leaves the
-  // context owned, so the caller's abandon() retries it and reports the failure
-  // instead of assuming cleanup happened.
   async function closePage(ownership, context) {
     await context.close()
     ownership.release(context)
@@ -152,11 +113,6 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
       timeout: 180_000,
     })
     const paintedMs = Date.now() - started
-    // Genuinely editable, not merely painted: a paragraph accepts focus and a
-    // keystroke changes the field, which is what a user's first edit depends
-    // on. The click is forced because a document that is still relaying out
-    // never reports a stable box, and waiting for one would skip the very
-    // interval being measured.
     await page
       .locator(PARAGRAPH)
       .nth(2)
@@ -234,16 +190,6 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
     }
   }
 
-  /**
-   * Save round-trip and persisted reload.
-   *
-   * The edit is produced the same way the typing probe produces one — the same
-   * `openEditor` preamble, then typed text — and the save is triggered from the
-   * toolbar's Save control rather than a keyboard shortcut, so the measurement
-   * covers the control a user presses. The marker is lower-case for the same
-   * reason the typing payload is: mixed-case keystrokes go through modifier
-   * handling that is not what this probe is measuring.
-   */
   async function saveSample(documentId, ownership) {
     const { context, page } = await newPage(ownership)
     try {
@@ -270,8 +216,6 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
         timeout: 180_000,
       })
       const reloadStarted = Date.now()
-      // The saved text must still be there after a reload. Search every
-      // paragraph: the edit lands at the caret.
       const paragraphs = await page
         .locator(PARAGRAPH)
         .allInnerTexts()

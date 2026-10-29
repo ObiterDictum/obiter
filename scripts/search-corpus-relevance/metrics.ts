@@ -23,13 +23,6 @@ export interface CaseResult {
   query: string
   returnedIds: string[]
   returnedHitCount: number
-  /**
-   * Labelled citing hits exempted from absent scoring. An anonymous
-   * recognised-citation query honestly serves stored judgments that cite
-   * the absent citation (citationMatch 'citing', status not_held); those
-   * are the distinguished not-held-with-citing answer, not false positives
-   * claiming to be the judgment, so they score and count separately here.
-   */
   exemptLabelledCitingCount: number
   ranks: Array<number | null>
   recall: number | null
@@ -142,12 +135,6 @@ export interface AbsentScoringSplit {
   exemptLabelledCitingCount: number
 }
 
-/**
- * Splits an absent query's served hits into scoring ids and exempt citing
- * ids. Only hits the API explicitly labels `citing` are exempt: exact,
- * none, and unlabeled hits (pre-label servers) still count, so a broken
- * phrase lookup that serves keyword neighbours keeps failing loudly.
- */
 export function splitAbsentScoringIds(
   hits: ReadonlyArray<{ id: string; citationMatch?: string | null }>,
 ): AbsentScoringSplit {
@@ -186,11 +173,6 @@ export function aggregateMetrics(
   }
 }
 
-/**
- * Compare a run to the committed baseline. Rank and hit-count ceilings fail
- * on regression only: a better rank or a quieter decoy is an improvement and
- * must not fail the instrument (P13).
- */
 export function regressionFailures(
   baseline: CorpusRelevanceBaseline,
   metrics: CorpusRelevanceMetrics,

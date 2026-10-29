@@ -1,16 +1,5 @@
-/**
- * The redaction renderer's HTTP contract, kept free of server dependencies so
- * a caller (the API finalize path) can import it without pulling in Chromium
- * or Playwright. The renderer service itself imports the same codes.
- */
 import { RENDERER_LIMITS } from './limits'
 
-/**
- * Worst-case wall clock for one `POST /render` from admission to PDF, derived
- * from the worker's own bounds: a queue wait, then the layout and PDF passes.
- * A client must allow at least this long before giving up, or it can abort a
- * render the worker would still have completed. Kept in sync with `limits.ts`.
- */
 export const REDACTION_RENDERER_WORST_CASE_MS =
   RENDERER_LIMITS.queueWaitTimeoutMs + RENDERER_LIMITS.renderTimeoutMs * 2
 
@@ -51,10 +40,8 @@ export class RedactionRendererError extends Error {
 }
 
 export interface RedactionRendererClientConfig {
-  /** Origin of the private renderer service, for example `http://127.0.0.1:8790`. */
   baseUrl: string
   fetchImpl?: typeof fetch
-  /** Whole-request budget. Defaults to the worker's worst case. */
   timeoutMs?: number
 }
 
@@ -85,8 +72,6 @@ export function createRedactionRendererClient(
         const response = await fetchImpl(renderUrl, {
           method: 'POST',
           headers: { 'content-type': REDACTION_RENDER_DOCX_CONTENT_TYPE },
-          // Copy into a plain ArrayBuffer-backed view: `BodyInit` rejects a
-          // buffer that could be shared, and the caller's bytes may be pooled.
           body: new Uint8Array(docx),
           signal: controller.signal,
         })

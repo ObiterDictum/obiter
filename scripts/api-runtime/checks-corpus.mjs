@@ -1,21 +1,3 @@
-/*
- * Corpus-mode boots for the runtime harness.
- *
- * The main run sets no corpus variables: that is the compatibility mode, where
- * the corpus is the application database, and its health report is asserted
- * there. These boots prove the other configured modes on the same adapter,
- * because the mode follows configuration provenance rather than URL equality:
- * pointing the corpus variables at this task's own database must still report
- * a separate, non-colocated corpus, and only a process given the writer
- * variable may report a writable one.
- *
- * The corpus URLs always name this task's database (the harness's own guard
- * already refused anything else), so a boot never reads or writes a shared
- * corpus, and the writer boot's capability lands on the task database only.
- * Routing and no-fallback proofs live in the unit suites (database-pools,
- * env-corpus, proxy-routes); what is asserted here is that each adapter boots
- * each mode, serves through it, and reports it identically.
- */
 import { childEnvironment } from './config.mjs'
 import { proveSession } from './fixtures.mjs'
 import {
@@ -54,11 +36,6 @@ async function bootWith({
   return server
 }
 
-/**
- * Start one adapter in the given corpus configuration, assert the mode it
- * reports, prove a session through it, and stop it. Every boot is stopped even
- * when its check fails, so a failed mode cannot leave a process behind.
- */
 async function checkMode({
   name,
   expectedCorpus,
@@ -100,11 +77,6 @@ async function checkMode({
   }
 }
 
-/**
- * A writer without a reader must refuse to boot on both adapters: the
- * forbidden read-application-write-corpus topology cannot be constructed, and
- * the refusal is the environment boundary speaking, not a crash.
- */
 async function checkWriterWithoutReader({
   runtime,
   worktreeRoot,

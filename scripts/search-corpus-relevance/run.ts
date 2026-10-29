@@ -1,14 +1,3 @@
-/**
- * Served-path relevance suite. Hits POST /api/search/fetch against the local
- * product corpus. Not a CI gate: CI has no 37k-document index. Run before and
- * after ranking changes:
- *
- *   bun run benchmark:search-corpus
- *
- * Requires GET /api/search/readiness to report ready with the baseline
- * document count, and Postgres to hold the same corpus. Do not ingest while
- * measuring.
- */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { corpusRelevanceBaseline } from './baseline'

@@ -1,36 +1,4 @@
 #!/usr/bin/env node
-/*
- * Ingress and rollback harness for the API runtime.
- *
- * This file starts and removes the disposable stack and then hands control to
- * the checks. It runs the shipped `infra/traefik/entrypoints.yml` fragment
- * verbatim in a disposable Traefik (pinned to the image Dokploy installs), puts
- * the real Bun and Node API images behind it, and proves over the proxy:
- *
- *   - Bun answers /api/health and an authenticated /api/me through Traefik;
- *   - a real DOCX and a multi-MiB text document upload and download through it;
- *   - a slow reader receives the whole body (writeTimeout is disabled);
- *   - a 25 MiB upload at a deliberately slow rate completes inside readTimeout;
- *   - a request header over the configured limit is refused by the proxy;
- *   - a SIGTERM sent mid-upload drains: the process is still running at the
- *     signal, the upload completes, and the container exits 0;
- *   - the route is switched Bun -> Node -> Bun with health and auth re-proved,
- *     and both images name the same product commit;
- *   - a short-timeout control proxy proves the timeouts bite at the configured
- *     value, so the shipped values are load-bearing rather than merely present.
- *
- * Everything is task-owned and removed at the end: one docker network, six
- * containers, and a temporary directory. No shared container, port or database
- * is touched, and no request leaves this machine; the Traefik containers run
- * without the Docker socket.
- *
- *   bun scripts/api-ingress/ingress.mjs \
- *     --bun-image obiter-api-bun:ingress \
- *     --node-image obiter-api-node:ingress
- *
- * See README.md for the image build commands, the check list and what is out
- * of scope.
- */
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -73,9 +41,6 @@ const DOCX_FILE = join(
   'services/api/test-fixtures/upload-corpus/letter-plain.docx',
 )
 
-// The image Dokploy pulls for a fresh install, pinned by tag and digest. A
-// digest mismatch means the tag was repointed and the harness's evidence no
-// longer describes the artifact under test.
 const TRAEFIK_IMAGE = 'traefik:v3.6.25'
 const TRAEFIK_DIGEST =
   'sha256:31267173a15b4944e797a76ffd9c419707c8d8b32fe5b610f80cd0cfa05f372d'
@@ -86,9 +51,6 @@ const DB_NAME = 'obiter_api_ingress'
 const DB_PASSWORD = 'obiter'
 const API_PORT = 8787
 const ORIGIN_PORT = 8788
-// Larger than the combined client, proxy and socket buffers, so a paused reader
-// leaves the API and Traefik genuinely mid-write rather than having already
-// buffered the whole body.
 const LARGE_TXT_BYTES = 16 * 1024 * 1024
 
 function usage() {
@@ -162,12 +124,6 @@ function recorder() {
   }
 }
 
-/**
- * Remove every resource this run created, in reverse creation order, then the
- * scratch directory. A resource that was never created is skipped. Anything
- * that still exists and cannot be removed is returned, so the caller can report
- * it and exit non-zero rather than claim a clean teardown.
- */
 export async function teardownResources({
   resources,
   scratch,
@@ -211,8 +167,6 @@ async function main() {
     node: `ingress-node-${tag}`,
   }
   const created = []
-  // Register before `docker run`: a container that is created but never starts
-  // (a bad port mapping, a failed start) still exists and must be removed.
   const startTracked = (options) => {
     created.push({ type: 'container', name: options.name })
     return startContainer(options)
@@ -223,7 +177,6 @@ async function main() {
   try {
     await mkdir(dynamicDir, { recursive: true })
 
-    // --- preconditions -----------------------------------------------------
     report.group('preconditions')
     for (const image of [args.bunImage, args.nodeImage]) {
       if (!imageExists(image)) {
@@ -257,7 +210,6 @@ async function main() {
     const docx = await readFile(DOCX_FILE)
     const largeText = proxy.syntheticText(LARGE_TXT_BYTES)
 
-    // --- disposable stack --------------------------------------------------
     report.group('disposable stack')
     networkCreate(network)
     created.push({ type: 'network', name: network })
@@ -299,7 +251,6 @@ async function main() {
       `port ${postgresPort}`,
     )
 
-    // Traefik: the shipped fragment verbatim, file provider, no docker socket.
     const traefikPort = await proxy.freePort()
     await writeFile(
       join(scratch, 'traefik.yml'),
@@ -348,8 +299,6 @@ async function main() {
       MEILISEARCH_SEARCH_API_KEY: 'obiter-api-ingress-meili-key-0123456789',
       MEILISEARCH_ADMIN_API_KEY: 'obiter-api-ingress-meili-key-0123456789',
       LEGAL_AUTHORITIES_INDEX: 'legal_authorities',
-      // Required in production for DOCX hard-redaction finalize. Unreachable on
-      // purpose here: this harness never finalizes a DOCX hard redaction.
       OBITER_REDACTION_RENDERER_URL: 'http://renderer.invalid:8790',
     }
     startTracked({
@@ -363,9 +312,6 @@ async function main() {
     const databaseUrl = `postgres://obiter:${DB_PASSWORD}@127.0.0.1:${postgresPort}/${DB_NAME}`
     const ids = fixtureIds(newRunTag())
     const provisionFixtures = () => {
-      // The schema exists only after the API has booted and migrated, so the
-      // fixtures are written from inside the checks, after the first health
-      // check, not before the stack is up.
       const target = resolveDatabaseTarget({ databaseUrl })
       createQuerier({ databaseUrl: target.url }).exec(provisionSql(ids))
     }
@@ -401,7 +347,6 @@ async function main() {
       provisionFixtures,
     })
 
-    // --- the timeouts are load-bearing: short-config control --------------
     const shortYaml = entrypointsYaml
       .replaceAll('readTimeout: 300s', 'readTimeout: 5s')
       .replaceAll('writeTimeout: 0s', 'writeTimeout: 5s')

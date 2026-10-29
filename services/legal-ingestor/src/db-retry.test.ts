@@ -63,8 +63,6 @@ describe('withConcurrencyRetry', () => {
   })
 
   it('gives up at the elapsed bound before the attempt bound', async () => {
-    // A zero ceiling makes the first failure the last: the point is that the
-    // elapsed bound is consulted at all, without depending on wall-clock time.
     const operation = vi.fn(async () => {
       throw pgError('40001')
     })

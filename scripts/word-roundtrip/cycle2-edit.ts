@@ -9,20 +9,6 @@ export type Cycle2EditPlan = {
   expectedBodyText: string
 }
 
-/**
- * The single deterministic edit cycle 2 applies through the real edit API
- * between the Word-labelled upload and the second export: one
- * `replace_run_text` appending a marker to the first plainly editable body
- * run. "Plainly editable" means outside every stored field's carrier
- * paragraphs and outside tracked-change markup — the targets an untracked
- * text replacement cannot disturb.
- *
- * `expectedBodyText` is the comparison oracle: the served model's body text
- * with only the addressed run's text changed. It is derived from the input
- * document and the declared operation, never from the exported output, so a
- * missing edit, a stale-version export or an edit landing on the wrong run
- * all produce an export that fails the expectation.
- */
 export function planCycle2Edit(
   model: DocumentModelWire,
 ): Cycle2EditPlan | null {

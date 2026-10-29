@@ -1,14 +1,3 @@
-/*
- * Task-owned fixtures for the API runtime harness. The database-target guard
- * that keeps them out of every other database lives in `database-target.mjs`.
- *
- * The sessions are ordinary `sessions` rows written with psql and validated by
- * better-auth on each request — not an auth bypass. Every route that mints a
- * session needs email (sign-up verification, magic link, reset), which this
- * harness must never trigger, so the row is provisioned directly and then
- * proved by `GET /api/me` before any check trusts it. That proof is also what
- * ties the database psql writes to the database the API reads.
- */
 import { randomBytes } from 'node:crypto'
 import { FixtureRefusal } from './database-target.mjs'
 
@@ -27,8 +16,6 @@ export function fixtureIds(tag) {
       `Run tag "${tag}" is not a lowercase alphanumeric tag; refusing to build fixture SQL from it.`,
     )
   }
-  // No dot in the token: better-auth reads a dotted value as a signed payload
-  // and answers 401 rather than a distinguishable error.
   const token = (label) =>
     `apirt${label}${tag}${randomBytes(16).toString('hex')}`
   return {
@@ -55,11 +42,6 @@ function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`
 }
 
-/**
- * Two tenants in one transaction: the measured one and the one whose matter
- * every cross-tenant check must be refused. Both get a matter so the refusal
- * cannot be blamed on the matter being absent.
- */
 export function provisionSql(ids) {
   return `
 begin;
@@ -121,10 +103,6 @@ select coalesce(json_agg(row_to_json(r)), '[]'::json)::text from (
 ) r`.trim()
 }
 
-/**
- * Prove the provisioned session and, when asked, create the run's matter
- * through the product's own route so the fixture travels the real boundary.
- */
 export async function proveSession({ origin, ids, fetchImpl = fetch }) {
   const response = await fetchImpl(`${origin}/api/me`, {
     headers: { Authorization: `Bearer ${ids.sessionToken}` },

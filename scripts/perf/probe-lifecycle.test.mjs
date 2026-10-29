@@ -1,18 +1,3 @@
-/*
- * Lifecycle regressions for the bounded editor-interaction samples.
- *
- * The defect these pin: `bounded()` used to win its race by rejecting and walk
- * away, leaving the abandoned probe's page and browser context repaginating
- * while later samples were measured in the same browser. The retained
- * `after-typing-large` run is the evidence — samples 0 and 1 exceeded the 300 s
- * bound, and samples 2 to 4 then could not finish `page.goto` within 30 s.
- *
- * The "close was called" assertion this does not make: the owned resource is a
- * real child process, and the evidence is that the process is actually gone
- * before the next sample starts. A second process that the ledger does not own
- * stays alive throughout, which is the check that an abandoned sample never
- * closes something it did not create.
- */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -85,13 +70,11 @@ test('a timed-out probe stops its owned worker before the next sample starts', a
   assert.equal(result.aborted, null)
   assert.equal(result.rows.length, 1)
   assert.equal(result.rows[0].index, 1)
-  // The close is awaited, and it happened before the second probe was entered.
   assert.deepEqual(events, [
     'closing owned',
     'closed owned',
     'sample2 ownedAlive=false',
   ])
-  // A process the ledger never owned is untouched.
   assert.equal(running(unowned.pid), true)
   await stopWorker(unowned)
 })
@@ -161,8 +144,6 @@ test('a sample that leaves browser work open is dropped and stops the campaign',
       calls += 1
       return { ok: true }
     },
-    // Stands in for the browser: the second sample is reported as leaving work
-    // behind, so its row is not retained and the third never runs.
     confirmIdle: () => calls !== 2,
   })
 
@@ -174,9 +155,6 @@ test('a sample that leaves browser work open is dropped and stops the campaign',
   assert.match(result.aborted, /stopping the campaign/)
 })
 
-// The interaction runner puts its browser in the owned-server ledger so an
-// interrupt tears it down with the spawned servers. `stopOwned` is the same
-// path the SIGINT/SIGTERM handler uses, so this is the interruption case.
 test('a registered resource is stopped with the owned servers', async () => {
   const owned = spawnWorker()
   const unowned = spawnWorker()
@@ -190,11 +168,6 @@ test('a registered resource is stopped with the owned servers', async () => {
   await stopWorker(unowned)
 })
 
-// Playwright browsers are not installed in CI (there is no `playwright install`
-// step), so the real-browser proof runs where they are and is skipped with a
-// printed note where they are not. The child-process proof above is the
-// CI-gated one; this is the end-to-end check that a browser context really
-// stops.
 const hasBrowser = existsSync(chromium.executablePath() ?? '')
 const browserTest = hasBrowser ? test : test.skip
 if (!hasBrowser) {
@@ -218,9 +191,6 @@ browserTest(
           const page = await context.newPage()
           await page.goto('about:blank')
           if (contexts.length === 1)
-            // The renderer's main thread is the work the bound has to stop, so
-            // this evaluate never resolves and the sample can only end on the
-            // bound.
             await page.evaluate(() => {
               for (;;) {}
             })

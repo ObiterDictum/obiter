@@ -30,11 +30,6 @@ export interface ServedLegislationHit {
   title: string
 }
 
-/**
- * Search-time parameters the measured server reported applying. These are
- * request-time values, so no index setting reveals them: the only honest
- * source is the server that sent them.
- */
 export interface ObservedSearchParameters {
   matchingStrategy: string
   rankingScoreThreshold: number | null
@@ -55,21 +50,11 @@ export interface ApiProvenance {
   commitSha: string | null
 }
 
-/**
- * The checkout that executes the benchmark, as distinct from the API it
- * measures. The two can be different commits, and a report that records only
- * one of them reads as authoritative for code the other never ran.
- */
 export interface RunnerProvenance {
   checkoutRoot: string | null
   commitSha: string | null
 }
 
-/**
- * The provenance block written to the report. Every SHA is named by owner:
- * there is deliberately no ownerless `commitSha`, because a reader cannot tell
- * which of the two identities an unqualified field would describe.
- */
 export interface ReportProvenance {
   runnerCheckoutRoot: string | null
   runnerCommitSha: string | null
@@ -149,12 +134,6 @@ export async function readReadiness(apiBase: string): Promise<SearchReadiness> {
   }
 }
 
-/**
- * The judgment and legislation corpora have separate indexes and separate
- * readiness entries; measuring with an unready or resized legislation index
- * would record numbers from a corpus the expectations were not written
- * against.
- */
 export function assertReadyLegislationIndex(
   readiness: SearchReadiness,
   indexName: string,
@@ -202,15 +181,6 @@ export async function readApiProvenance(
   }
 }
 
-/**
- * The runner's own commit, read from the checkout that is executing the suite.
- * Resolve it once at the command boundary, never per case: it cannot change
- * during a run, and re-reading git 77 times would only add ways to fail.
- *
- * Nulls mean the identity could not be established (no git metadata); they are
- * never filled in from the measured API, which would attribute the runner's
- * behaviour to a server that did not run it.
- */
 export async function readRunnerProvenance(
   cwd: string = process.cwd(),
 ): Promise<RunnerProvenance> {
@@ -234,12 +204,6 @@ export async function readRunnerProvenance(
   }
 }
 
-/**
- * Fail before measuring when the runner identity is unavailable. A report with
- * a null `runnerCommitSha` and a populated `apiCommitSha` would look complete
- * while silently attributing the run to the server's checkout, so run.ts
- * refuses instead of writing one.
- */
 export function assertRunnerProvenance(provenance: RunnerProvenance) {
   if (!provenance.commitSha) {
     throw new Error(
@@ -248,11 +212,6 @@ export function assertRunnerProvenance(provenance: RunnerProvenance) {
   }
 }
 
-/**
- * Join the two identities into the report block. The mapping is pure so the
- * report shape is pinned by a test rather than by the run that happens to
- * write it.
- */
 export function legislationReportProvenance(
   runner: RunnerProvenance,
   api: ApiProvenance,
@@ -265,11 +224,6 @@ export function legislationReportProvenance(
   }
 }
 
-/**
- * The settings a run was measured under. Only the fields this package
- * defines are parsed; anything else the server reports is not part of the
- * contract and is not carried into the report.
- */
 export interface LiveIndexSettings {
   searchableAttributes: string[] | null
   filterableAttributes: string[] | null
@@ -354,12 +308,6 @@ export function readAppliedSearchParameters(
   return { matchingStrategy, rankingScoreThreshold }
 }
 
-/**
- * Sends one query through the served path and reads the legislation group
- * only. Judgment hits share the response and are none of this suite's
- * business; a query the judgment half answers well must not inflate a
- * legislation score, or the reverse.
- */
 export async function fetchLegislationSearch(
   apiBase: string,
   query: string,
@@ -414,8 +362,6 @@ export async function fetchLegislationSearch(
     legislationTitleUnresolved:
       diagnostics?.legislationTitleUnresolved === true,
     legislationAmbiguous: diagnostics?.legislationAmbiguous === true,
-    // Only what the server reported. The suite's own constants are not
-    // evidence: the server may be running a different checkout.
     searchParameters: readAppliedSearchParameters(
       diagnostics?.legislationSearchParameters,
     ),
@@ -445,12 +391,6 @@ function lines(output: string) {
     .filter(Boolean)
 }
 
-/**
- * Every held expectation must exist in Postgres (the record), and every
- * absent expectation must be absent from it. An expectation that has quietly
- * drifted is worse than no expectation: it scores the engine against a
- * corpus that no longer matches.
- */
 export async function verifyLegislationExpectations(databaseUrl: string) {
   assertProductDatabaseUrl(databaseUrl)
   const heldIds = [
@@ -549,11 +489,6 @@ async function absentViolation(
 
 export interface LegislationRunOutcome {
   results: CaseResult[]
-  /**
-   * The parameters the measured server reported applying, null when it
-   * reported none. Null is not silently recorded as a configuration: run.ts
-   * refuses to write a report without it.
-   */
   searchParameters: ObservedSearchParameters | null
 }
 

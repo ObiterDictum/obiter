@@ -1,20 +1,5 @@
-/*
- * The real transport: one authenticated multipart upload, and one read-only
- * probe request that stands in for a user doing something else while
- * extraction runs.
- *
- * Kept apart from the driver so every timing and accounting decision lives in
- * `runner.mjs` and this file only moves bytes.
- */
-
 const UPLOAD_PATH = /^\/api\/matters\/([^/]+)\/documents$/
 
-/**
- * `GET /api/matters` is the probe rather than `/api/health`: it is the list
- * query the matters page issues on load, it touches Postgres, and it shares the
- * API's event loop with extraction. A health endpoint that walks no data would
- * show almost nothing.
- */
 export const PROBE_PATH = '/api/matters'
 
 export function createHttpTransport({

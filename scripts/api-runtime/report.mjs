@@ -1,10 +1,3 @@
-/*
- * Result collection for the runtime harness.
- *
- * A check either passes or fails and carries the observed detail that justified
- * it, so a failing run explains itself from its own output rather than needing a
- * reproduction.
- */
 export function createRecorder() {
   const results = []
   let group = 'general'

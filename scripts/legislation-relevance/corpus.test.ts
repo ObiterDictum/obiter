@@ -28,10 +28,6 @@ afterEach(() => {
 
 describe('legislation relevance corpus boundary', () => {
   it('observes an ambiguous legislation terminal from the served response', async () => {
-    // The serve path answers an ambiguous title with no legislation group at
-    // all (the emitted `groups` array is empty, so the key is absent) and no
-    // not-held verdict. Reading only the other two flags would record the
-    // response as an ordinary empty keyword result.
     stubFetch({
       outcome: 'legislation_ambiguous',
       diagnostics: {
@@ -85,7 +81,6 @@ describe('legislation relevance corpus boundary', () => {
         rankingScoreThreshold: 0.35,
       }),
     ).toEqual({ matchingStrategy: 'all', rankingScoreThreshold: 0.35 })
-    // An explicit null is a real value: the server applied no floor.
     expect(
       readAppliedSearchParameters({
         matchingStrategy: 'all',
@@ -95,8 +90,6 @@ describe('legislation relevance corpus boundary', () => {
   })
 
   it('rejects a report that does not state what it applied', () => {
-    // A missing field is not "no floor". An absent observation must stay
-    // absent so run.ts refuses, rather than being recorded as a condition.
     expect(readAppliedSearchParameters(undefined)).toBe(null)
     expect(readAppliedSearchParameters(null)).toBe(null)
     expect(readAppliedSearchParameters({ matchingStrategy: 'all' })).toBe(null)
@@ -122,7 +115,6 @@ describe('legislation relevance report provenance', () => {
     expect(provenance.apiCommitSha).toBe('231508a')
     expect(provenance.runnerCheckoutRoot).toBe('/src/runner')
     expect(provenance.apiCheckoutRoot).toBe('/src/api')
-    // Neither SHA may be collapsed into an ownerless field.
     expect(provenance.runnerCommitSha).not.toBe(provenance.apiCommitSha)
     expect('commitSha' in provenance).toBe(false)
   })
@@ -132,8 +124,6 @@ describe('legislation relevance report provenance', () => {
       { checkoutRoot: '/src/runner', commitSha: 'a96918c' },
       { checkoutRoot: '/src/api', commitSha: 'a96918c' },
     )
-    // Equal-by-coincidence is still labelled twice; the report never infers
-    // one from the other.
     expect(provenance.runnerCommitSha).toBe('a96918c')
     expect(provenance.apiCommitSha).toBe('a96918c')
     expect(provenance.runnerCheckoutRoot).toBe('/src/runner')
@@ -141,7 +131,6 @@ describe('legislation relevance report provenance', () => {
   })
 
   it('cannot let missing runner provenance masquerade as API provenance', async () => {
-    // A runner with no git metadata records null, not the API's SHA.
     const unavailable = legislationReportProvenance(
       { checkoutRoot: null, commitSha: null },
       { checkoutRoot: '/src/api', commitSha: '231508a' },
@@ -152,8 +141,6 @@ describe('legislation relevance report provenance', () => {
     expect(() =>
       assertRunnerProvenance({ checkoutRoot: null, commitSha: null }),
     ).toThrow(/runner commit/i)
-    // Reading a directory that is not a git checkout yields no identity at
-    // all rather than borrowing one.
     const observed = await readRunnerProvenance(tmpdir())
     expect(observed.commitSha).toBe(null)
     expect(observed.checkoutRoot).toBe(null)

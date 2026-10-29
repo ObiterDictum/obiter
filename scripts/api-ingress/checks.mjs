@@ -1,16 +1,3 @@
-/*
- * The checks the ingress harness runs, in the order they must run.
- *
- * `runThroughProxyChecks` drives the real images behind the disposable proxy:
- * health, authentication, uploads, streaming, the proxy limits, the runtime
- * rollback and graceful shutdown. `runTimeoutControlChecks` runs against a
- * second proxy configured with 5s timeouts, to prove the shipped values are
- * load-bearing rather than merely present.
- *
- * Lifecycle (starting containers, switching the route) stays in ingress.mjs and
- * arrives here as callbacks, so a check never has to know how a container is
- * started or removed.
- */
 import { setTimeout as sleep } from 'node:timers/promises'
 
 import { bearer, multipartBody } from '../api-runtime/http.mjs'
@@ -81,8 +68,6 @@ export async function runThroughProxyChecks(ctx) {
     `status=${health.status} runtime=${health.runtime}`,
   )
 
-  // The fixtures need the schema, which the API applies at boot, so they are
-  // written after the first health check rather than before the stack starts.
   await ctx.provisionFixtures()
 
   const me = await proxy.apiRequest({
@@ -140,9 +125,6 @@ export async function runThroughProxyChecks(ctx) {
     )
   }
 
-  // A body large enough to still be writing when SIGTERM arrives, so the
-  // graceful-shutdown check is not satisfied by a download that finished
-  // before the signal.
   const largeUpload = await uploadDocument({
     proxy,
     port: traefikPort,
@@ -161,9 +143,6 @@ export async function runThroughProxyChecks(ctx) {
   )
 
   if (largeDocumentId) {
-    // The multi-MiB body arrives in many chunks, so this is where a browsing
-    // pause actually forces socket backpressure; the DOCX above is too small
-    // for its chunk count to mean anything.
     const largeDownload = await proxy.readSlowly({
       port: traefikPort,
       path: `/api/documents/${largeDocumentId}/download`,
@@ -263,9 +242,6 @@ export async function runThroughProxyChecks(ctx) {
       'no large document to stream through shutdown',
     )
   } else {
-    // An upload is in flight while its body is still arriving, unlike a
-    // download, which Traefik can buffer to completion before the signal. The
-    // signal is sent mid-body and the request must still finish.
     const boundary = `----obiteringressshutdown${Date.now()}`
     const body = multipartBody({
       boundary,
@@ -300,8 +276,6 @@ export async function runThroughProxyChecks(ctx) {
         latestSent = sent
       },
     })
-    // A timer rather than a progress callback decides when to signal, so an
-    // upload that finishes early leaves no promise pending.
     const signalTimer = setTimeout(() => {
       if (latestSent >= body.byteLength) return
       signalled = true
@@ -310,8 +284,6 @@ export async function runThroughProxyChecks(ctx) {
         `[shutdown] SIGTERM mid-upload: ${sentAtSignal}/${body.byteLength} bytes sent`,
       )
       lifecycle.signalBun()
-      // A request with no in-flight work would let the process exit; if the
-      // container is still running after the signal, it is draining.
       setTimeout(() => {
         stillDraining = lifecycle.bunRunning()
       }, 400)

@@ -342,7 +342,6 @@ describe('provisionFixtures', () => {
     }
   }
 
-  /** Records the order the API saw, so "prove before create" is asserted. */
   function recordingFetchImpl(options = {}) {
     const calls = []
     const inner = fetchImpl(options)
@@ -370,7 +369,6 @@ describe('provisionFixtures', () => {
     })
     expect(q.executed).toHaveLength(1)
     expect(sqlNotified).toBe(1)
-    // A matter that was never created is a matter that never needs cleaning up.
     expect(calls).toEqual(['me', 'matter'])
     expect(provisioned.matterId).toBe('mtr_created')
     expect(provisioned.sessionToken).toBe(ids.sessionToken)

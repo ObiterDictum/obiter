@@ -8,14 +8,11 @@ export interface CaseQueryBaseline {
 
 export interface LegislationRelevanceBaseline {
   expectedCaseCount: number
-  /** Live legislation_provisions index documentCount this baseline was taken at. */
   expectedIndexDocumentCount: number
   heldRecall: number
-  /** Mean precision over complete-answer (exact) held cases only. */
   heldPrecision: number
   absentPrecision: number
   mrr: number
-  /** Held cases that returned an authoritative not-held claim. Must be 0. */
   heldNotHeldViolations: number
   byQuery: Record<string, CaseQueryBaseline>
 }
@@ -26,19 +23,12 @@ export interface LegislationRelevanceMetrics {
   heldPrecision: number | null
   absentPrecision: number | null
   mrr: number | null
-  /** Supporting splits: exact cases are the ones precision is computed over. */
   exactHeldRecall: number | null
   subjectRecall: number | null
-  /** Held cases that returned diagnostics.legislationNotHeld. Must be 0. */
   heldNotHeldViolations: number
-  /** Cases whose result was the unresolved-title suppression. Reported
-   * separately so it is never counted as an authoritative not-held success. */
   unresolvedTitleCases: number
-  /** Absent cases answered with an authoritative not-held claim. */
   absentAuthoritativeNotHeld: number
-  /** Absent cases answered with the unresolved-title suppression. */
   absentTitleUnresolved: number
-  /** Absent cases answered with an ambiguous-title terminal. */
   absentAmbiguous: number
 }
 
@@ -48,12 +38,6 @@ export interface CaseResult {
   category: LegislationRelevanceCase['category']
   scoring: LegislationRelevanceCase['scoring']
   query: string
-  /**
-   * Canonical `documentIdentity/labelPath` served in the legislation group.
-   * The served id differs by retrieval path (Postgres exact hits keep the
-   * slash path, index keyword hits are hyphenated), so scoring reads the two
-   * fields that are stable across both.
-   */
   returnedIds: string[]
   returnedHitCount: number
   ranks: Array<number | null>
@@ -62,11 +46,8 @@ export interface CaseResult {
   mrr: number | null
   outcome: string | null
   legislationNote: string | null
-  /** The API marked this a not-held verdict. */
   legislationNotHeld: boolean
-  /** The API marked this an unresolved whole-title request. */
   legislationTitleUnresolved: boolean
-  /** The API marked this an ambiguous title served by more than one Act. */
   legislationAmbiguous: boolean
   failureLabels: string[]
   searchErrorMessage?: string
@@ -92,12 +73,6 @@ export function canonicalLegislationId(hit: {
   return labelPath ? `${identity}/${labelPath}` : identity
 }
 
-/**
- * A subject expectation names a provision; a returned subsection of that
- * provision answers the same query, so the comparison is by subtree. An exact
- * expectation is one entity and compares by equality, so a neighbouring
- * provision counts as the false positive it is.
- */
 export function matchesExpected(
   returnedId: string,
   expectedId: string,
@@ -151,10 +126,6 @@ export function scoreCase(
     searchErrorMessage: options.searchErrorMessage,
   }
 
-  // A control query's right answer is a negative: it must not assert not-held
-  // or claim an exact title it could not resolve. Ambiguity is another
-  // unsupported legislation terminal, not a not-held verdict. Hit count is not
-  // scored, so a growing result set is not a control failure.
   if (testCase.kind === 'control') {
     if (legislationNotHeld) failureLabels.push('control_false_not_held')
     if (legislationTitleUnresolved)
@@ -173,10 +144,6 @@ export function scoreCase(
   if (testCase.kind === 'absent') {
     const noiseFree = returnedIds.length === 0
     if (!noiseFree) failureLabels.push('absent_hits')
-    // An ambiguous terminal is the polarity opposite of an absent expectation:
-    // it asserts more than one stored Act satisfied the title, where absence
-    // was just verified. It is neither a not-held verdict nor an unresolved
-    // title, so it gets its own label rather than borrowing either.
     if (legislationAmbiguous) failureLabels.push('absent_ambiguous')
     return {
       ...base,
@@ -188,8 +155,6 @@ export function scoreCase(
     }
   }
 
-  // The false not-held is the defect this suite exists to catch: a held
-  // expectation must never receive an authoritative not-held verdict.
   if (legislationNotHeld) failureLabels.push('held_false_not_held')
   if (legislationTitleUnresolved) failureLabels.push('held_title_unresolved')
   if (legislationAmbiguous) failureLabels.push('held_ambiguous')
@@ -279,11 +244,6 @@ export function aggregateMetrics(
   }
 }
 
-/**
- * Compare a run to the committed baseline. Rank and hit-count ceilings fail
- * on regression only: a better rank or a quieter absent query is an
- * improvement and must not fail the instrument.
- */
 export function regressionFailures(
   baseline: LegislationRelevanceBaseline,
   metrics: LegislationRelevanceMetrics,
@@ -350,10 +310,6 @@ export function regressionFailures(
     if (result.failureLabels.includes('search_error')) {
       failures.push(`search_error:${result.id}`)
     }
-    // The explicit invariant, one branch per case kind rather than a shared
-    // negation. An absent case is the only kind for which an authoritative
-    // not-held is the correct answer; held and control must make no
-    // unsupported legislation claim, and each terminal names which one fired.
     if (result.kind === 'held') {
       if (result.legislationNotHeld) {
         failures.push(`false_not_held:${result.id}`)
@@ -366,9 +322,6 @@ export function regressionFailures(
       }
     }
     if (result.kind === 'absent' && result.legislationAmbiguous) {
-      // The absent expectation was verified against Postgres, so an ambiguous
-      // terminal means the expectation drifted or the classifier over-folded.
-      // Both are loud failures, never a silent pass.
       failures.push(`absent_ambiguous:${result.id}`)
     }
     if (result.kind === 'control') {

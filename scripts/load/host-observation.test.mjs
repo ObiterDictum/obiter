@@ -8,8 +8,6 @@ import {
 } from './host-observation.mjs'
 import { TargetRefusal } from './target.mjs'
 
-// Captured `systemctl --user list-units 'obiter*' --state running --no-legend
-// --plain` output: three units, one of them the lane under test.
 const SYSTEMCTL_OUTPUT = [
   'obiter-api.service               loaded active running Obiter API (shared dev server, port 8787)',
   'obiter-lane-editor-api.service   loaded active running Obiter lane editor API (port 8790)',

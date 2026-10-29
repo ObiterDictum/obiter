@@ -1,10 +1,3 @@
-/*
- * The graceful-shutdown check, which ends the server it inspects.
- *
- * A real download is left in flight, SIGTERM is delivered, and the in-flight
- * response must still complete with its whole body before the process exits 0
- * and releases the port. Runs last for a runtime because it stops the server.
- */
 import { request as httpRequest } from 'node:http'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { logText, portIsReleased, signalAndWait } from './lifecycle.mjs'

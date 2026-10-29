@@ -11,44 +11,20 @@ import {
 import { readLegalIngestorEnv } from './env'
 import { settledRequestGapMs, type Db } from './bulk-ingest'
 
-/**
- * Backfills the two fields the judgment page shows but Obiter may not derive
- * from the judgment: the bench and the court's published press summary.
- *
- * Licence boundary (see the migration and docs/data-and-compliance.md): both
- * are read only from Find Case Law's published structured metadata — the
- * LegalDocML `<judge>` elements and the separate press-summary document that
- * links back through `<uk:summaryOf>`. Nothing here reads judgment prose.
- *
- * A row is work only while `metadata_fetched_at` is NULL, and every write is
- * an idempotent UPDATE keyed by `document_id`, so an interrupted run resumes
- * where it stopped and a repeated run changes nothing. Newest first, because
- * those are the judgments a reader opens while an older backfill is pending;
- * the order is a total one, so a re-run neither skips nor repeats a row.
- * A row whose judgment carries neither field is stamped too: the absence was
- * read, not assumed. A row whose fetch failed is left unstamped, so it is
- * retried rather than recorded as empty.
- *
- * Bounded on purpose. `--limit` is required: the full re-crawl is a separate,
- * deliberate run, not something an accidental invocation starts.
- */
-
 const maxAttemptsPerRow = 5
 const maxRetryAfterMs = 5 * 60 * 1000
 
+// Legal: Find Case Law's Open Justice Licence excludes computational analysis; the bench and summary come only from published metadata, never judgment prose.
 export interface MetadataBackfillReport {
   dryRun: boolean
   limit: number
-  /** Rows awaiting these fields when the run started. */
   pending: number
   documentIds: string[]
   fetched: number
   judgesFound: number
   summaryFound: number
-  /** Fetched rows that carried neither field. */
   none: number
   failed: Array<{ documentId: string; reason: string }>
-  /** Rows still awaiting these fields when the run finished. */
   remaining: number
 }
 
@@ -94,11 +70,6 @@ function retryAfterMs(value: string | null) {
   return Math.min(seconds * 1000, maxRetryAfterMs)
 }
 
-/**
- * Every request, not every row, waits the settled gap: one row can spend three
- * (LegalDocML, the judgment page, the press summary). The shared limiter is
- * charged by the provider itself, so pacing here is only the gap.
- */
 function pacedFetch(deps: MetadataBackfillDeps): ProviderFetch {
   return async (input, init) => {
     await deps.sleep(deps.gapMs)
@@ -187,9 +158,6 @@ export async function backfillPublishedMetadata(
       continue
     }
 
-    // An unreadable body is final: the provider answered and what it sent
-    // cannot be read, so a retry cannot change the outcome. Record the
-    // absence rather than re-fetching it on every later run.
     if (result.status === 'skipped' && result.reason === 'unparsable') {
       await deps.pool.query(
         `

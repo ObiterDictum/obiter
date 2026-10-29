@@ -1,10 +1,3 @@
-/*
- * Transaction, streaming, verification and inference checks for one runtime.
- *
- * These are the behaviours a socket-layer change could quietly break: a write
- * that stops being atomic, a stream that stops draining, a model that silently
- * degrades to heuristics. No timing threshold is asserted.
- */
 import { createHash } from 'node:crypto'
 import { Agent, request as httpRequest } from 'node:http'
 import { performance } from 'node:perf_hooks'
@@ -26,7 +19,6 @@ import {
   readyDocumentSql,
 } from './fixtures.mjs'
 
-/** A distinctive string in the inference body; it must never reach the logs. */
 const INFERENCE_MARKER = 'obiter-inference-marker-do-not-log'
 
 function sha256(buffer) {
@@ -205,7 +197,6 @@ async function checkUploadAndStreaming(ctx) {
   )
 }
 
-/** Read a response with pauses, so socket backpressure must drain, not drop. */
 function readSlowly({ port, path, headers, pauseMs }) {
   return new Promise((resolve) => {
     const started = performance.now()
@@ -237,7 +228,6 @@ function readSlowly({ port, path, headers, pauseMs }) {
   })
 }
 
-/** Destroy the socket after the first body byte; the server must not crash. */
 function abortMidDownload({ port, path, headers }) {
   return new Promise((resolve) => {
     const request = httpRequest(
@@ -360,8 +350,6 @@ async function checkInference(ctx) {
     `status=${response.status} detectionMode=${body?.run?.detectionMode ?? 'none'} spans=${spans}`,
   )
 
-  // Checked here rather than earlier so the submitted body has actually been
-  // through the server before the logs are read.
   const logged = server.lines.map((entry) => entry.line).join('\n')
   recorder.record(
     'no submitted document text reaches the logs',
@@ -374,9 +362,6 @@ async function checkSearchRoutes(ctx) {
   const { origin, recorder } = ctx
   recorder.group('search routes')
 
-  // Public by product policy (no session), bounded timeout, live probe of both
-  // product indexes. The response may report ready/empty/missing/unreachable;
-  // what must hold is the 200 envelope with no database or credential detail.
   const readiness = await getJson(`${origin}/api/search/readiness`)
   const readinessText = JSON.stringify(readiness.body ?? null)
   recorder.record(
@@ -389,12 +374,6 @@ async function checkSearchRoutes(ctx) {
     { readinessStatus: readiness.body?.status ?? null },
   )
 
-  // Anonymous fetch is stored-only by product policy: it must not queue
-  // hydration or call the provider, so this can never write the corpus or the
-  // index. 200 with the fetch envelope when the index answers; the documented
-  // 503 search_unavailable when it does not (the harness runs with placeholder
-  // keys against whatever engine is local, and CI's Bun job has no engine).
-  // The observed status is recorded for the cross-runtime parity comparison.
   const fetchSearch = await fetch(`${origin}/api/search/fetch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -1,36 +1,3 @@
-/**
- * Legislation relevance suite. Measures POST /api/search/fetch on the
- * legislation_provisions corpus and reports held recall, held precision,
- * absent precision, and MRR — the four numbers the judgment corpus suite
- * (scripts/search-corpus-relevance) measures, kept deliberately separate
- * because a short provision and a long judgment are not the same ranking
- * problem.
- *
- * Not a CI gate: CI has no 185k-document provision index and no
- * legislation corpus in Postgres. Run before and after any ranking change to
- * the legislation index, the provision serve path, or the relevance floor:
- *
- *   LEGISLATION_RELEVANCE_API_BASE=http://127.0.0.1:8789 bun run benchmark:legislation-corpus
- *
- * The suite reads the served path, not the raw index, so the citation
- * classification and the Postgres exact path are inside the measurement: a
- * bare Act title is answered by the Act document (since #184), and measuring
- * the index directly would score a result set no caller receives.
- *
- * Point LEGISLATION_RELEVANCE_API_BASE at the API serving the checkout under
- * test. The report records two identities, printed to stderr as well: the
- * runner checkout's own commit, and the measured API's /api/health provenance.
- * They can differ, and each is named by owner, because a suite run against a
- * stale server - or a report whose runner commit is missing - reads as
- * authoritative and is not. The run refuses when the runner commit cannot be
- * established. The report records the search-time parameters the server reports
- * applying, and the run refuses when the server reports none: matchingStrategy
- * is request-time, so nothing else can reveal it and this checkout's constant
- * would mislabel the run. It refuses to measure unless
- * GET /api/search/readiness reports the legislation index ready at the baseline
- * document count, and it re-checks every held id and every absent expectation
- * against Postgres first. Do not rebuild the index while it is running.
- */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { legislationRelevanceBaseline } from './baseline'
@@ -101,9 +68,6 @@ async function main() {
   const indexName = defaultLegislationIndexName()
   const databaseUrl = defaultDatabaseUrl()
 
-  // The runner identity is resolved once, at the command boundary, before a
-  // single case is measured. It cannot change during the run and a failure to
-  // read it must stop the run rather than produce an ambiguous report.
   const runnerProvenance = await readRunnerProvenance()
   assertRunnerProvenance(runnerProvenance)
 
@@ -154,21 +118,11 @@ async function main() {
     benchmark: 'legislation-relevance',
     generatedAt: new Date().toISOString(),
     apiBase,
-    // Two identities, each named by owner. `runnerCommitSha` is the checkout
-    // that scored the cases; `apiCommitSha` is the server that answered them.
     provenance: legislationReportProvenance(runnerProvenance, apiProvenance),
     index: index.index,
     indexDocumentCount: index.documentCount,
     topK: legislationRelevanceTopK,
-    // What the measured server reported applying, not this checkout's
-    // configured constants. matchingStrategy is request-time, so no index
-    // setting reveals it, and the server may be running a different checkout:
-    // an asserted constant would misstate a run against a pre-#184 server as
-    // having used 'all'.
     searchParameters,
-    // What the shared index actually has. Fetched from Meilisearch, so it is
-    // observed rather than declared, but it is index-time only — it cannot
-    // reveal the request-time parameters above.
     liveIndexSettings,
     metrics,
     metricsByCategory: metricsByCategory(results),

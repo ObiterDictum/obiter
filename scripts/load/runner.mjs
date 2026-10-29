@@ -1,17 +1,3 @@
-/*
- * The bounded load driver.
- *
- * One cell = one fixture size at one concurrency. Cells run in the order given
- * (1, then 2, then 4) and each is refused before it starts if the machine has no
- * headroom left, so escalation is gated on observation rather than assumption.
- * There is no ramp loop and no "until it breaks": the request count, the
- * concurrency and the wall clock are all fixed before the first request, and any
- * breached bound stops the run instead of extending it.
- *
- * The transport, the observer and the clock are injected. That is what lets the
- * accounting, the bounds and the cancellation be tested without a server, and it
- * keeps every timing decision in this file rather than in the HTTP layer.
- */
 import { classifyProbeResult, classifyUploadResult } from './metrics.mjs'
 import {
   aggregate,
@@ -21,10 +7,6 @@ import {
 } from './bounds.mjs'
 import { summariseCell } from './cell-summary.mjs'
 
-/**
- * Run the cell list. Returns observations, never a verdict: the CLI owns the
- * exit code so exactly one place decides what a run's result means.
- */
 export async function runLoad({
   cells,
   transport,
@@ -124,10 +106,6 @@ export async function runLoad({
     cancelled: signal?.aborted === true,
   }
 
-  /**
-   * Resource sampling for a bounded window. Used for both the load and the
-   * recovery window so "during" and "after" are measured the same way.
-   */
   async function sampleWindow({ durationMs, sink, stopSignal }) {
     if (!observer) return
     const endsAt = now() + durationMs
@@ -139,7 +117,6 @@ export async function runLoad({
     }
   }
 
-  /** One probe cadence; the loop is self-scheduling so probes never pile up. */
   async function runProbePhase({ phase, cell, durationMs, stopSignal }) {
     const endsAt = now() + durationMs
     while (now() < endsAt && !stopSignal?.aborted) {
@@ -185,8 +162,6 @@ export async function runLoad({
     let issued = 0
     let nextIndex = 0
 
-    // The tick loop runs alongside the workers: a breach stops issuing new
-    // requests while the in-flight ones are still allowed to answer.
     const tick = setInterval(() => {
       if (abortReason) return
       const breach = evaluateBounds(
@@ -287,7 +262,6 @@ async function safeCall(call) {
   }
 }
 
-/** An external abort and a per-request timeout both have to reach the transport. */
 function timeoutSignal(outerSignal, timeoutMs) {
   const signals = [AbortSignal.timeout(timeoutMs)]
   if (outerSignal) signals.push(outerSignal)

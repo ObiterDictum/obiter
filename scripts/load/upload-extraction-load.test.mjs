@@ -185,8 +185,6 @@ describe('contention guard', () => {
       [neighbour('obiter-api.service', null)],
     )
     expect(entry.cpuMsDuringWindow).toBeNull()
-    // Unknown is not evidence of contention, and it is not evidence of a quiet
-    // box either: the report keeps it null so a reader can tell the difference.
     expect(
       contendedUnits([neighbour('obiter-api.service', null)], [], 1000),
     ).toEqual([])
@@ -374,8 +372,6 @@ describe('refusal reporting', () => {
           join(scratch, 'target-refusal.json'),
           '--expect-checkout',
           root,
-          // Skips the git lookup in `headSha`, which a scratch directory is
-          // not and which would only add stderr noise.
           '--expect-commit',
           'deadbeef',
         ],
@@ -404,8 +400,6 @@ describe('refusal reporting', () => {
 
   it('fails clearly on stderr when the report cannot be written', async () => {
     const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
-    // The refusal is still the failure the exit code reflects; the write
-    // failure is surfaced on stderr rather than replacing it.
     await expect(
       main({
         argv: ['--out', '/tmp/q3-unwritable.json', '--ramp', '8'],

@@ -1,21 +1,3 @@
-/*
- * Which API this load run is allowed to measure, and proof that it belongs to
- * this lane.
- *
- * A load harness that measures the wrong server produces confident numbers for
- * someone else's code, and the shared stack on 3000/8787 is the natural
- * accident: it answers on the default ports from a different worktree. So the
- * targets come from the lane's own bounded resolver
- * (`apps/web/lane-target.mjs`, the same one the e2e suite uses), the shared
- * ports are refused, the origin must be loopback, the resolved database must
- * be this lane's, and `/api/health` provenance must name this checkout and
- * commit before a single upload is sent.
- *
- * The database name is resolved from the lane's `.env`, not from the API: the
- * API does not report its database, so the tie is proved instead by the
- * provisioned session — a token written into that database must authenticate
- * against that API or the run stops. See `provision.mjs`.
- */
 import { readFile } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import {
@@ -35,17 +17,6 @@ export class TargetRefusal extends Error {
 export const STORAGE_ROOT_KEY = 'OBITER_STORAGE_ROOT'
 const DEFAULT_STORAGE_ROOT_NAME = '.obiter-storage'
 
-/**
- * The storage root the API writes to, resolved the way the API resolves it:
- * `OBITER_STORAGE_ROOT` from the process environment first (a lane `.env` is
- * loaded into that environment) then its `.obiter-storage` default, both
- * relative to the API package directory the lane's unit starts it from.
- *
- * The resolved root must stay inside the lane worktree. Verification reads
- * object keys this run generated, and a root outside the worktree is the shared
- * stack's or another lane's storage, so verifying there would confirm another
- * writer's objects across a boundary this harness exists to keep.
- */
 export function resolveStorageRoot({ worktreeRoot, configured = null }) {
   const value = typeof configured === 'string' ? configured.trim() : ''
   const apiDirectory = join(worktreeRoot, 'services', 'api')
@@ -63,7 +34,6 @@ export function resolveStorageRoot({ worktreeRoot, configured = null }) {
   return resolved
 }
 
-/** `lane-security` owns the `obiter_lane_security` database. */
 export function expectedLaneDatabase(worktreeRoot) {
   const folder = basename(worktreeRoot)
   if (!folder.startsWith('lane-'))
@@ -94,11 +64,6 @@ export function databaseNameFromUrl(url) {
   return name
 }
 
-/**
- * Minimal `KEY=value` reader for a lane `.env`. The process environment wins,
- * matching `loadLocalEnvFile`'s documented rule in `services/api/src/env.ts`
- * so the harness and the API resolve the same value from the same file.
- */
 export function readEnvAssignment(text, key, processEnv = {}) {
   if (processEnv[key]) return processEnv[key]
   for (const rawLine of text.split('\n')) {
@@ -115,9 +80,7 @@ export function readEnvAssignment(text, key, processEnv = {}) {
   return null
 }
 
-/** Loopback only: a non-local origin may be shared or a live environment. */
 export function assertLoopbackOrigin(origin) {
-  // `new URL` keeps the brackets on an IPv6 literal, so compare both forms.
   const host = new URL(origin).hostname.replace(/^\[|\]$/g, '')
   if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1')
     throw new TargetRefusal(
@@ -126,10 +89,6 @@ export function assertLoopbackOrigin(origin) {
     )
 }
 
-/**
- * Resolve and prove the whole target chain. Throws `TargetRefusal` rather than
- * returning a partially verified target.
- */
 export async function resolveLoadTarget({
   worktreeRoot = WORKTREE_ROOT,
   expectCommit,
@@ -146,9 +105,6 @@ export async function resolveLoadTarget({
     })
     assertLaneTargets(targets, { reuseExistingServer: true })
   } catch (error) {
-    // The lane resolver and the shared-port guard throw plain errors, but both
-    // are refusals: a shared port or an unparseable port means the target is
-    // not this lane's, and a refusal has to exit 2 rather than 3.
     throw new TargetRefusal(
       'lane_target_invalid',
       error instanceof Error ? error.message : String(error),

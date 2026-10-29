@@ -27,11 +27,6 @@ type RenderSurface = {
   root: ReturnType<typeof createRoot>
 }
 
-/**
- * One root for the life of the page. A fresh root per render leaks detached
- * roots and their handlers in the long-lived worker, and `resetPage()` clears
- * `document.body`, so re-attach the same container instead of replacing it.
- */
 let surface: RenderSurface | undefined
 
 function ensureSurface(): RenderSurface {
@@ -44,14 +39,12 @@ function ensureSurface(): RenderSurface {
   return surface
 }
 
-/** Two frames: one for the commit, one for the painted pixels `page.pdf` captures. */
 function nextPaint(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   })
 }
 
-/** A data-URL image can still be decoding when the commit paints. */
 async function imagesSettled(): Promise<void> {
   await Promise.all(
     Array.from(document.images).map((image) =>

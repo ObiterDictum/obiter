@@ -1,16 +1,3 @@
-/*
- * Preflight regressions for the editor-interaction runner.
- *
- * A missing fixture id used to reach the browser as `/matters/undefined/...`
- * and end as a 180 s selector timeout, and a target the signed-in user could
- * not read did the same. These pin the two failures separately: the local key
- * check that runs before a browser exists, and the authenticated reachability
- * check that runs before any probe.
- *
- * The reachability cases go through a real HTTP listener rather than a stubbed
- * response object, because the thing under test is how a status code from the
- * API is turned into a named refusal.
- */
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { afterAll, test } from 'bun:test'
@@ -33,7 +20,6 @@ afterAll(async () => {
   )
 })
 
-/** A real HTTP boundary, reached exactly as the harness's API client reaches it. */
 async function apiStub(statusByPath) {
   const server = createServer((req, res) => {
     const status = statusByPath[req.url] ?? 500
@@ -44,7 +30,6 @@ async function apiStub(statusByPath) {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   return {
     apiUrl: `http://127.0.0.1:${server.address().port}`,
-    // Same shape as Playwright's APIResponse, which the CLI passes in.
     get: (url) =>
       fetch(url).then((response) => ({
         status: () => response.status,

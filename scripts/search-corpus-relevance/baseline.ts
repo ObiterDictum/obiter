@@ -1,17 +1,11 @@
 import type { CorpusRelevanceBaseline } from './metrics'
 
-// Observed floors from POST /api/search/fetch on the product corpus at
-// documentCount 37938. Failures stay in the set; ranking work tightens
-// these numbers rather than deleting the cases. heldPrecision moved with
-// the case set (49 to 50 held): the added Donoghue query serves 1 held hit
-// in 20, and every pre-existing case measured byte-identical before/after.
 export const corpusRelevanceBaseline: CorpusRelevanceBaseline = {
   expectedCaseCount: 64,
   expectedDocumentCount: 37938,
   heldRecall: 1,
   heldPrecision: 0.5332,
   absentPrecision: 1,
-  // Ratchet of the measured post-#170 floor (was 0.9371). Not a relaxation.
   mrr: 0.9383,
   byQuery: {
     'party-okpabi': { recall: 1, ranks: [1], returnedHitCount: 20 },

@@ -1,27 +1,3 @@
-/*
- * The database-target guard for the API runtime harness.
- *
- * The harness boots the real API, and the API applies migrations to whatever
- * DATABASE_URL names at boot. A guard that accepts a lane's *development*
- * database is therefore a guard that migrates it, which is what happened on
- * `obiter_lane_security` before this was written. These tests prove the refusal
- * happens before any connection, process spawn or fixture write, that a plain
- * name is not proof a host is ours, and that the URL the guard validates is the
- * URL the launched API receives.
- *
- * The regression this file exists for is the port split: pg resolves a missing
- * port from the ambient PGPORT while psql is pinned to 5432, so a validated
- * portless URL could send the API child's migrations to a cluster the guard
- * never checked. `pgEffectiveParameters` runs the real `pg` client in a child
- * of `services/api` (where the dependency resolves) so the assertion is the
- * driver's own resolution, not a reimplementation. `psqlEnvironment` is the
- * exact environment the fixtures are provisioned with.
- *
- * The last suite runs the real entry point with the process-spawning commands
- * (bun, node, psql, python3, git) replaced by canaries, so a rejected target
- * provably reaches none of them. The accepted-target control proves the canary
- * fires when the run does proceed, so the negative result is not vacuous.
- */
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -35,9 +11,6 @@ import { childProcessEnvironment } from './lifecycle.mjs'
 const WORKTREE_ROOT = join(import.meta.dir, '..', '..')
 const databaseUrl = (name) => `postgres://obiter:obiter@localhost:5432/${name}`
 
-// The real `pg` client's resolved parameters for a connection string, printed
-// by a child of services/api so the workspace dependency resolves. `extraEnv`
-// emulates an ambient PG* variable reaching the driver.
 const PG_PARAMS_SCRIPT = `
 import pg from 'pg'
 const client = new pg.Client({ connectionString: process.argv[1] })
@@ -63,9 +36,6 @@ function pgEffectiveParameters(url, extraEnv = {}) {
   return JSON.parse(result.stdout.trim())
 }
 
-// Process-spawning commands replaced by canaries, so a rejected target can be
-// shown to reach none of them. Placed outside the suite because a `describe`
-// body is not async.
 const canaryScratch = await mkdtemp(join(tmpdir(), 'obiter-runtime-canary-'))
 const canary = join(canaryScratch, 'spawned.log')
 for (const command of ['bun', 'node', 'psql', 'python3', 'git']) {
@@ -118,14 +88,11 @@ describe('refused targets', () => {
       'postgres://obiter@localhost:5432/obiter_test',
       'database_password_missing',
     ],
-    // Bracketed IPv6 is accepted by WHATWG URL but dialable by neither pg nor
-    // psql, so it is refused rather than accepted and then unreachable.
     [
       'a bracketed IPv6 host',
       'postgres://obiter:obiter@[::1]:5432/obiter_test',
       'database_not_loopback',
     ],
-    // Anything in the query reaches pg and psql differently, target key or not.
     [
       'a host query override',
       `${databaseUrl('obiter_test')}?host=db.internal`,
@@ -151,7 +118,6 @@ describe('refused targets', () => {
       `${databaseUrl('obiter_test')}?sslmode=require`,
       'database_url_query_override',
     ],
-    // psql reads the pathname literally; the API driver decodes it.
     [
       'a percent-encoded name',
       databaseUrl('obiter%5Flane%5Fsecurity'),
@@ -168,7 +134,6 @@ describe('refused targets', () => {
       databaseUrl('obiter_test/extra'),
       'database_name_invalid',
     ],
-    // Shared, cluster and lane development databases are never targets.
     [
       'the shared product database',
       databaseUrl('obiter'),
@@ -307,7 +272,6 @@ describe('the canonical target is what pg and psql actually resolve', () => {
     const target = resolveDatabaseTarget({
       databaseUrl: 'postgres://obiter:obiter@localhost/obiter_test',
     })
-    // The regression: pre-fix, target.url was portless and pg dialled PGPORT.
     expect(pgEffectiveParameters(target.url, { PGPORT: '59999' }).port).toBe(
       5432,
     )
@@ -407,8 +371,6 @@ describe('argument parsing and launch propagation', () => {
       target,
       storageRoot: '/tmp/obiter-api-runtime-test-storage',
     })
-    // startServer merges `{ ...process.env, ...environment }` via
-    // childProcessEnvironment, so reproduce it with conflicting ambient values.
     const ambient = {
       DATABASE_URL: databaseUrl('obiter_lane_security'),
       PGHOST: 'wrong.internal',
@@ -429,12 +391,10 @@ describe('argument parsing and launch propagation', () => {
     expect(child.PGDATABASE).toBe('obiter_api_runtime_test')
     expect(child.PGUSER).toBe('obiter')
     expect(child.PGPASSWORD).toBe('obiter')
-    // Inherited libpq variables the guard did not set are removed outright.
     for (const key of ['PGSERVICE', 'PGHOSTADDR', 'PGPASSFILE', 'PGSSLMODE']) {
       expect(child[key]).toBeUndefined()
     }
     expect(child.PATH).toBe('/bin')
-    // The compatibility corpus mode must not inherit an ambient corpus URL.
     expect(child.CORPUS_DATABASE_URL).toBe('')
     expect(child.CORPUS_WRITE_DATABASE_URL).toBe('')
   })
@@ -478,8 +438,6 @@ describe('refusal happens before any process, connection or mutation', () => {
       ],
       {
         cwd: WORKTREE_ROOT,
-        // Contain the child's own mkdtemp scratch in this suite's directory, so
-        // a control run that fails after validation does not leak one.
         env: {
           PATH: canaryScratch,
           HOME: process.env.HOME,
@@ -536,8 +494,6 @@ describe('refusal happens before any process, connection or mutation', () => {
     const result = runHarness(['--runtime', 'node', '--database-url', url])
     expect(result.status).toBe(2)
     expect(result.stderr).toContain(`${code}:`)
-    // No shim ran: no psql (connection), no bun/node (API boot and migration),
-    // no python3 (fixtures), no git. Nothing reached the target.
     expect(await canaryLines()).toEqual([])
   })
 

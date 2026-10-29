@@ -1,11 +1,3 @@
-/*
- * The safety bounds that stop a load run, and the running totals they are
- * evaluated against.
- *
- * Resource bounds live in one place so the same rule both gates escalation
- * between cells and stops a cell mid-flight (P3: a guard on one path is a guard
- * on neither).
- */
 import { countByCategory, summarise } from './metrics.mjs'
 
 const MEGABYTE = 1024 * 1024
@@ -26,15 +18,11 @@ export const DEFAULT_BOUNDS = {
   tickIntervalMs: 250,
   idleMs: 3000,
   recoveryMs: 5000,
-  // Another lane on the same four vCPUs makes a capacity number unusable, so
-  // contention is a bound with a value, not a footnote. Measured over a short
-  // quiet check before the load, and again across the whole window.
   neighbourWindowMs: 2500,
   maxNeighbourCpuMs: 1000,
   maxWindowNeighbourCpuMs: 5000,
 }
 
-/** The first breached resource bound, or null. */
 export function resourceBreach(resources, bounds) {
   if (!resources) return null
   const { hostAvailableBytes, diskFreeBytes, apiAnonGrowthBytes } = resources
@@ -65,11 +53,6 @@ export function resourceBreach(resources, bounds) {
   return null
 }
 
-/**
- * The first breached bound of any kind, or null. Latency and error-rate bounds
- * are gated on a sample count so a single slow first request cannot abort a
- * cell before it has measured anything.
- */
 export function evaluateBounds(state, bounds) {
   if (state.elapsedMs >= bounds.maxCellDurationMs)
     return {
@@ -103,7 +86,6 @@ function bytesToMb(bytes) {
   return Math.round((bytes / MEGABYTE) * 10) / 10
 }
 
-/** Running totals the bounds are evaluated against. */
 export function aggregate(cellUploads, elapsedMs, resources) {
   const counts = countByCategory(cellUploads)
   const failures = countFailures(counts)

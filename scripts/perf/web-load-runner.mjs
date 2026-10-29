@@ -1,42 +1,4 @@
 #!/usr/bin/env node
-/*
- * Production page-load measurement runner.
- *
- * Measures a running web target with a headless Chromium on fixed journeys and
- * writes one sanitised JSON report. It is explicit about the conditions it can
- * tell apart, because conflating them is how a measurement ends up proving the
- * wrong thing:
- *
- *   --cache cold|warm     a fresh browser context per sample (empty HTTP cache)
- *                         versus re-navigating inside one context
- *   --nav hard|client     page.goto versus clicking the in-app link
- *   --emulate-network     none, or a labelled CDP profile (fast3g, slow4g)
- *   --serve-prod <dir>    start apps/web/serve.mjs behind a local gateway that
- *                         mirrors production's same-origin /api split
- *   --ssr-port <port>     the internal serve.mjs listener (default 3102); set
- *                         it so two runs never contend for one port
- *
- * It refuses to measure unless it can attribute the run: the API's /api/health
- * must name the expected checkout, and the served web artifact must match the
- * build provenance written into its dist (commit, clean state, integrity).
- * Runner, artifact and API identities are recorded separately because a current
- * checkout does not prove the bytes being served were built from it.
- *
- * Every sample is gated on the journey's final path and route-ready control; a
- * redirect to sign-in, an error screen or a wrong document fails the journey and
- * is recorded rather than reported under the target's name. Public journeys need
- * no credentials; authenticated ones need Q18_PERF_EMAIL/Q18_PERF_PASSWORD and
- * their fixtures. Nothing read from the environment enters the report.
- *
- * Usage:
- *   Q18_PERF_EMAIL=... Q18_PERF_PASSWORD=... \
- *     node scripts/perf/web-load-runner.mjs \
- *       --serve-prod /path/to/worktree --expect-artifact-commit <sha> \
- *       --web-url http://localhost:3002 --api-url http://localhost:8789 \
- *       --expect-checkout /path/to/worktree \
- *       --fixtures scripts/perf/fixtures.example.json \
- *       --journeys sign-in,home,matters --samples 5 --out /tmp/perf.json
- */
 import { execFileSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -78,8 +40,6 @@ const navMode = arg('nav', 'hard')
 const network = arg('emulate-network', 'none')
 const journeyIds = arg('journeys')
 const fixturesPath = arg('fixtures')
-// The internal SSR port is overridable so two runs (or a test) never contend
-// for the same listener.
 const ssrPort = Number(arg('ssr-port', '3102'))
 const email = process.env.Q18_PERF_EMAIL
 const password = process.env.Q18_PERF_PASSWORD
@@ -97,7 +57,6 @@ if (serveProd && !expectArtifactCommit && !allowUnverifiedArtifact)
 if (!Number.isInteger(ssrPort) || ssrPort <= 0 || ssrPort > 65535)
   throw new Error('--ssr-port must be an integer in 1-65535')
 
-/** The harness's own checkout, recorded so a report names what ran the run. */
 function runnerIdentity() {
   const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
   const git = (args) => {
@@ -118,7 +77,6 @@ function runnerIdentity() {
   }
 }
 
-/** Fail loudly rather than polling an API target whose identity is unknown. */
 async function assertApiIdentity({ apiUrl, expectCheckout }) {
   const healthUrl = `${apiUrl}/api/health`
   const res = await fetch(healthUrl).catch((error) => {
@@ -152,7 +110,6 @@ async function assertWebRenders({ webUrl }) {
     throw new Error('web target did not render the sign-in page')
 }
 
-/** Build provenance the running process loaded (serve.mjs holds it in memory). */
 async function servedProvenance(webUrl) {
   const res = await fetch(`${webUrl}/.well-known/obiter-build`).catch(
     () => null,
@@ -161,12 +118,6 @@ async function servedProvenance(webUrl) {
   return res.json().catch(() => null)
 }
 
-/**
- * Pin the artifact being served, not just the checkout it sits in. The marker is
- * verified against the bytes on disk and against what the running server
- * reported, so a stale Before dist under an After checkout, a dist replaced
- * after startup, or a dirty build presented as clean all refuse to measure.
- */
 async function assertArtifactIdentity({
   serveProd,
   webUrl,
@@ -217,7 +168,6 @@ async function assertTargetIdentity(config) {
   return { runner: runnerIdentity(), api, artifact }
 }
 
-/** One sample, gated on landing on the journey that was asked for. */
 async function sample({ context, journey, fixtures }) {
   const page = await context.newPage()
   const targetPath = resolvePath(journey.path, fixtures)
@@ -332,11 +282,6 @@ async function main() {
   const failures = []
   let browser = null
   try {
-    // Validate the fixture placeholders before starting a browser: a missing id
-    // would otherwise measure /matters// and report it as a fast page. Only the
-    // journeys that can actually be measured are run; the browser is not
-    // started at all when none survive, which keeps a fixture error from
-    // leaving an owned server behind without a measurement to attribute it to.
     const measurable = []
     for (const journey of journeys) {
       try {
@@ -352,9 +297,6 @@ async function main() {
 
     if (measurable.length > 0) {
       browser = await chromium.launch()
-      // Credentials are only required by journeys that need them, so a
-      // public-only run (sign-in, and any future public route) measures without
-      // them.
       let auth = { state: 'not-needed', storageState: null, error: null }
       if (measurable.some(journeyNeedsAuth)) {
         try {
@@ -396,8 +338,6 @@ async function main() {
         const context =
           cacheMode === 'warm' ? await browser.newContext(contextOptions) : null
         if (context) await context.addInitScript(COLLECT_INIT_SCRIPT)
-        // Warm the cache with one navigation; failures here are recorded by the
-        // measured samples below rather than aborting the whole run.
         if (context) {
           try {
             await sample({ context, journey, fixtures })

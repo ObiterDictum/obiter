@@ -80,10 +80,6 @@ describe('corpus relevance metrics', () => {
   })
 
   it('exempts only labelled citing hits from absent scoring', () => {
-    // The honest not-held-with-citing answer serves stored judgments that
-    // cite the absent citation; those must not read as false positives.
-    // Exact, none, and unlabeled hits still count, so a broken phrase
-    // lookup serving keyword neighbours keeps failing loudly.
     expect(
       splitAbsentScoringIds([
         { id: 'ewca-civ-2005-420', citationMatch: 'citing' },

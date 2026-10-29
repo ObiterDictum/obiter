@@ -2,10 +2,6 @@ import { describe, expect, it } from 'bun:test'
 
 import { teardownResources } from './ingress.mjs'
 
-/**
- * A teardown with injected docker operations, so the failure paths can be
- * exercised without starting a container or touching the host.
- */
 function harness({
   existing = [],
   failRemoval = [],

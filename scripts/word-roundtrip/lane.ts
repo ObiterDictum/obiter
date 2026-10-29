@@ -1,17 +1,3 @@
-/**
- * The endpoints and database the word-roundtrip harness is allowed to touch.
- *
- * The harness creates a synthetic account, verifies it with psql, and uploads
- * and exports documents. Every step must hit one explicitly selected isolated
- * lane: a run that resolved the shared dev stack would create `word-rt-*`
- * users and matters in the shared `obiter` database — the failure
- * `apps/web/journey-target.mjs` documents. So there is no default here: both
- * origins must be loopback, neither may sit on a shared dev port, `--db-name`
- * must name a `*_test` database that the API itself reports it is bound to,
- * and the API's development provenance must name this checkout at HEAD.
- */
-// The same local-env parser the API, ingestor and Vite use — the .mjs
-// resolves through its checked-in local-env.d.mts declarations.
 import { resolveLocalEnvFile } from '../../packages/config/src/local-env.mjs'
 import {
   headSha,
@@ -30,12 +16,6 @@ export type LaneContext = {
   webOrigin: string
   databaseName: string
   headSha: string
-  /**
-   * The provenance the API itself served when asked for its bound database,
-   * recorded for the manifest. verifyServedCheckout already proved these
-   * equal this checkout at HEAD; recording what the server reported keeps the
-   * manifest's provenance server-attested rather than flag-attested.
-   */
   api: {
     commitSha: string | null
     checkoutRoot: string | null
@@ -53,7 +33,6 @@ type ServedHealth = {
   provenance?: ServedProvenance
 }
 
-/** A parsed loopback origin that is not the shared dev stack. */
 export function isolatedOrigin(raw: string, label: string): URL {
   let url: URL
   try {
@@ -94,10 +73,6 @@ export function isolatedOrigin(raw: string, label: string): URL {
   return url
 }
 
-/**
- * The psql verification and the API must agree on one task-owned `*_test`
- * database. Without the flag nothing proves where sign-up writes.
- */
 export function testDatabaseName(raw: string | undefined): string {
   if (raw === undefined || raw === '') {
     throw new Error(
@@ -137,27 +112,14 @@ async function servedApiProvenance(
         'dropped between checks — restart the lane.',
     )
   }
-  // A body of any non-object shape — null included — cannot prove the write
-  // target; the caller reports absent provenance as an unprovable target
-  // rather than crashing on `health.provenance`.
   if (typeof body !== 'object' || body === null) return undefined
   // SAFETY: every ServedProvenance field is optional and read through
-  // optional chaining — a malformed body lands on `undefined`, which the
-  // caller refuses as an unprovable write target.
   const provenance = (body as ServedHealth).provenance
   return typeof provenance === 'object' && provenance !== null
     ? provenance
     : undefined
 }
 
-/**
- * Validate the run's targets end to end: loopback, non-shared ports, a
- * `*_test` database, and proof — through the same verifyServedCheckout the
- * Playwright lane uses — that the API and web server both serve this
- * checkout at HEAD. Then the API's self-reported database must equal
- * --db-name, or the flag would attest to a write target the server does not
- * share.
- */
 export async function resolveLane(
   input: {
     api: string
@@ -166,9 +128,6 @@ export async function resolveLane(
   },
   deps: { fetchImpl?: LaneFetch } = {},
 ): Promise<LaneContext> {
-  // The HTTP boundary is the only injected seam: tests stand in for the
-  // lane's servers while every comparison this function composes runs for
-  // real.
   const fetchImpl = deps.fetchImpl ?? fetch
   const api = isolatedOrigin(input.api, 'API')
   const web = isolatedOrigin(input.web, 'Web')

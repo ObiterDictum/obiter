@@ -1,10 +1,3 @@
-/*
- * What one run will do, decided before any request is sent.
- *
- * `parseArgs`, `buildCells` and the report-path rule are pure: the plan a run
- * executes can be asserted in a test, and the bounds that keep a plan small are
- * enforced here rather than discovered mid-run.
- */
 import { resolve, sep } from 'node:path'
 import { DEFAULT_BOUNDS } from './bounds.mjs'
 
@@ -101,7 +94,6 @@ export function parseArgs(argv) {
   return { ...options, bounds }
 }
 
-/** Cells are the size × concurrency product, in escalation order, bounded. */
 export function buildCells({ sizes, ramp, requests, durationMs }) {
   if (sizes.length === 0) throw new UsageError('--sizes selected no fixture')
   if (ramp.length === 0) throw new UsageError('--ramp selected no concurrency')
@@ -136,7 +128,6 @@ export function buildCells({ sizes, ramp, requests, durationMs }) {
   return cells
 }
 
-/** Reports stay out of the repository: they are run dumps, not source. */
 export function assertOutPathOutsideCheckout(outPath, worktreeRoot) {
   const resolved = resolve(outPath)
   if (resolved === worktreeRoot || resolved.startsWith(`${worktreeRoot}${sep}`))

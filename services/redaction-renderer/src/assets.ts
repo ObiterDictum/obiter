@@ -2,12 +2,6 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/**
- * The browser assets the worker injects into Chromium: the bundled
- * app-shell page renderer (an IIFE exposing `window.__obiterRenderDocument`)
- * and the compiled Tailwind stylesheet the app-shell page components assume.
- * `scripts/build-render-assets.ts` writes both; the runtime only reads them.
- */
 export interface RendererAssets {
   script: string
   css: string

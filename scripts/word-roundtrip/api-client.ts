@@ -7,12 +7,6 @@ import {
   type DocumentModelWire,
 } from '../../packages/contracts/src/document-model'
 
-/**
- * Thin real-API client for the round-trip: sign-up/sign-in, matter and
- * document upload, readiness polling, model read, edit and export. Every
- * call goes through the authenticated cookie the sign-in returned — no
- * fixtures, no bypass.
- */
 export type RoundtripClient = {
   createAccount(input: {
     email?: string
@@ -118,16 +112,12 @@ export function createClient(opts: {
       })
       if (!response.ok) fail(`matter create failed: ${await response.text()}`)
       // SAFETY: the response shape is checked through the optional chain and
-      // the missing-id branch fails the run below — the cast only narrows to
-      // what the API contract already guarantees.
       const body = (await response.json()) as { matter?: { id?: string } }
       return body.matter?.id ?? fail('matter create returned no id')
     },
 
     async upload(cookie, matterId, name, bytes) {
       const form = new FormData()
-      // A fresh typed array: readFileSync's Buffer can share a pooled buffer,
-      // and sending the pool would corrupt the upload.
       form.set(
         'file',
         new File([new Uint8Array(bytes)], name, {
@@ -157,7 +147,6 @@ export function createClient(opts: {
           fail(`document status failed: ${await response.text()}`)
         }
         // SAFETY: `versions` is read through `(body.versions ?? [])` and every
-        // absent or malformed shape fails the ready poll below.
         const body = (await response.json()) as {
           versions?: {
             documentStatus?: string

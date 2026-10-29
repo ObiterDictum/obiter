@@ -17,9 +17,6 @@ import {
   type IngestDocument,
 } from './legislation-clml'
 
-// Year feeds page at 20 entries: page 1 of 2020 ends at c.10, so a scope
-// that reads only the first page silently drops c.1-9. This pins the
-// two-page walk contract (collect across rel=next, then dedupe by number).
 describe('year feed paging', () => {
   const page = (ids: string, next: string | null) => `<?xml version="1.0"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -175,8 +172,6 @@ describe('upsertLegislationDocument transaction', () => {
             if (text === 'BEGIN') begins += 1
             if (text === 'ROLLBACK') rollbacks += 1
             if (text === 'COMMIT') commits += 1
-            // The deadlock arrives from a statement inside the transaction,
-            // as it does in production, not from the connection.
             if (
               attempt === 1 &&
               text.includes('insert into legislation_documents')
@@ -192,8 +187,6 @@ describe('upsertLegislationDocument transaction', () => {
 
     await upsertLegislationDocument(pool, doc)
 
-    // A second transaction, not a resumed one: the first was rolled back, so
-    // the retry begins again from the document row.
     expect(connects).toBe(2)
     expect(begins).toBe(2)
     expect(rollbacks).toBe(1)
@@ -225,9 +218,6 @@ describe('upsertLegislationDocument transaction', () => {
   })
 
   it('persists the extraction-completeness note on the document row', async () => {
-    // Declared 2 P1s, one addressable row and one textless addressable
-    // P1: the stored note flags the unexplained row-less P1 so a
-    // mismatch is auditable per Act instead of failing the document.
     const gappy: IngestDocument = {
       ...doc,
       declaredProvisions: 2,
@@ -316,7 +306,6 @@ describe('ingestYear with mocked fetch', () => {
     [10, 11, 12],
     'https://www.legislation.gov.uk/ukpga/2020/data.feed?page=2',
   )
-  // Page 2 repeats c.12: the scope must dedupe it, not ingest it twice.
   const page2 = feed([12, 1, 2], null)
 
   const xmlResponse = (xml: string) =>
@@ -388,12 +377,8 @@ describe('ingestYear with mocked fetch', () => {
     expect(first.provisionsStored).toBe(5)
     expect(first.skippedUnchanged).toBe(0)
     expect(first.failed).toBe(0)
-    // Each mock body declares its one P1 and yields one row: no mismatch.
     expect(first.provisionCountMismatches).toEqual([])
 
-    // Re-run re-fetches every body and compares hashes: nothing re-stores,
-    // everything reports skipped-unchanged. The old row-presence skip would
-    // have fetched zero bodies here.
     dataXmlFetches.length = 0
     const second = await ingestYear(deps, 2020)
     expect(second.actsListed).toBe(5)
@@ -430,10 +415,6 @@ describe('ingestYear with mocked fetch', () => {
   })
 
   it('re-derives the count note when content is unchanged', async () => {
-    // Act 7 is already stored with this exact body (hash match) but
-    // carries a stale loud note from the old check. The re-ingest must
-    // report skipped-unchanged for the provisions yet clear the note,
-    // or a fixed check would never go quiet on healthy documents.
     const inner = createMockPool()
     const body = clmlFor(7)
     inner.docs.set('ukpga/2020/7', sha256Hex(body))
@@ -467,8 +448,6 @@ describe('ingestYear with mocked fetch', () => {
       title: 'Act 7',
     })
     expect(outcome.status).toBe('skipped-unchanged')
-    // The mock body declares its one P1 and yields one row: healthy, so
-    // the refresh writes back the quiet (empty) note.
     const refresh = updates.find((call) =>
       call.text.includes('update legislation_documents'),
     )
@@ -476,13 +455,6 @@ describe('ingestYear with mocked fetch', () => {
   })
 })
 
-/**
- * Security fix: the effects pass is staged BEFORE any row write. The
- * replacement deletes and recreates every provision row, so a failed or
- * unreadable feed must never leave servable flags behind (a row must not
- * land servable before its effects state is known), and --force-reparse
- * must re-store AND re-run the pass.
- */
 describe('ingestOneAct effects staging and --force-reparse', () => {
   const identity = 'ukpga/2020/1'
   const clmlBody = (sections: number[]) =>
@@ -497,7 +469,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
       .join('') +
     `</Legislation>`
 
-  /** One feed page with one unapplied effect per path. */
   const effectsFeed = (unapplied: string[]) =>
     `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata">` +
     unapplied
@@ -566,10 +537,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
             }
             if (text.includes('insert into legislation_provisions')) {
               events.push('insert')
-              // Column order of the insert: id, document_identity,
-              // label_path, label, heading, parent_label_path, kind, extent,
-              // provision_text, own_text, source_hash, doc_order,
-              // has_unapplied_effects, effects_checked_at.
               insertedRows.push({
                 labelPath: values?.[2] as string,
                 hasUnappliedEffects: values?.[12] as boolean,
@@ -611,9 +578,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
   }
 
   it('--force-reparse re-stores an unchanged Act and re-runs the pass', async () => {
-    // Stored hash matches the current body, so the normal path would skip;
-    // the forced path re-stores and recomputes flags from the feed (the
-    // old true on section/1 clears, the new section/2 reads as amended).
     const body = clmlBody([1, 2])
     const pool = createPool(
       [
@@ -670,7 +634,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
     expect(outcome.status).toBe('failed')
     if (outcome.status !== 'failed') return
     expect(outcome.reason).toContain('effects pass failed')
-    // The known-good rows and their withheld flag are untouched.
     expect(pool.events).toEqual([])
     expect(pool.insertedRows).toEqual([])
   })
@@ -696,8 +659,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
     }) as unknown as typeof fetch
     const outcome = await ingestOneAct(depsFor(pool, fetchImpl, true), actRef)
     expect(outcome.status).toBe('stored')
-    // 404 is "no information", not "no effects": section/1 keeps its true
-    // flag and the new section/2 defaults to withheld rather than servable.
     expect(pool.insertedRows).toEqual([
       {
         labelPath: 'section/1',
@@ -713,8 +674,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
   })
 
   it('--skip-effects never lands unchecked new rows servable', async () => {
-    // Brand-new Act with no stored rows and no effects pass: every row is
-    // withheld, never servable-by-default from the column default.
     const body = clmlBody([1, 2])
     const pool = createPool([], null)
     const fetchImpl = (async (url: unknown) => {
@@ -755,11 +714,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
   })
 
   it('a legacy unchecked false row never survives a reparse as servable', async () => {
-    // Migration-default rows (or pre-effects inserts) carry
-    // has_unapplied_effects=false with effects_checked_at=null: never
-    // checked, so not known-good. When the effects pass cannot run, the
-    // rewrite must not preserve that false — the row withholds (flag
-    // true, timestamp still null) until a real check replaces it.
     const body = clmlBody([1])
     const pool = createPool(
       [
@@ -790,13 +744,6 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
   })
 })
 
-/**
- * Fail-closed paging (second security review): only a FIRST-page 404 may
- * mean "no feed". A later-page 404, a non-OK page, a cycling rel=next
- * walk, or a feed longer than the 100-page cap must abort by throwing —
- * never return a partial effect set, which would clear the withheld flags
- * of provisions whose effects live on unread pages.
- */
 describe('readUnappliedEffects fail-closed paging', () => {
   const identity = 'ukpga/2020/1'
   const base =
@@ -864,9 +811,6 @@ describe('readUnappliedEffects fail-closed paging', () => {
   })
 
   it('a later-page 404 after earlier pages read aborts instead of returning a partial set', async () => {
-    // Review repro: page 1 carries rel=next and no effects, page 2 404s.
-    // Old code broke out and returned the page-1 set non-null, rewriting
-    // every flag servable. Now the mid-walk 404 throws and nothing writes.
     const fetchImpl = (async (url: unknown) => {
       const href = String(url)
       if (href === base) return httpResponse(200, feedPage(`${base}?page=2`))
@@ -878,8 +822,6 @@ describe('readUnappliedEffects fail-closed paging', () => {
   })
 
   it('aborts at the 100-page cap instead of silently truncating', async () => {
-    // Review repro: 100 chained pages each promising another returned a
-    // non-null (partial) set under the old cap-break. Now the cap aborts.
     const fetchImpl = (async (url: unknown) => {
       const href = String(url)
       const page = Number(/page=(\d+)$/.exec(href)?.[1] ?? '1')
@@ -894,7 +836,6 @@ describe('readUnappliedEffects fail-closed paging', () => {
     const fetchImpl = (async (url: unknown) => {
       const href = String(url)
       if (href === base) return httpResponse(200, feedPage(`${base}?page=2`))
-      // Page 2 points back at itself: an instant cycle.
       return httpResponse(200, feedPage(`${base}?page=2`))
     }) as unknown as typeof fetch
     await expect(readUnappliedEffects(depsFor(fetchImpl), doc)).rejects.toThrow(

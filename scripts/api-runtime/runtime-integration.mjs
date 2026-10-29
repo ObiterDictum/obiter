@@ -1,26 +1,4 @@
 #!/usr/bin/env node
-/*
- * API runtime integration harness.
- *
- * Boots the real API entry points — native `Bun.serve` and the Node
- * `@hono/node-server` rollback path — against one task-owned database and
- * drives the production behaviour checks over HTTP. This is the evidence that
- * the shipped Bun server works, not that a Node test suite does.
- *
- *   node scripts/api-runtime/runtime-integration.mjs \
- *     --runtime both \
- *     --database-url postgres://obiter:obiter@localhost:5432/obiter_api_runtime
- *
- * Exits 0 only when every check passes on every requested runtime and the two
- * runtimes agree where they are expected to. Fixtures are scoped to a per-run
- * tag; the storage root is a task-owned temporary directory that is removed at
- * the end. Audit rows and database fixtures are left in place by design — the
- * target database must be this task's, and deleting audit history is not a
- * cleanup this harness is allowed to perform.
- *
- * See README.md for the check list, the safety guards and what it does not
- * cover.
- */
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -112,8 +90,6 @@ async function runRuntime({
     await waitForHealth(server, { expectedRuntime: runtime })
     querier.exec(provisionSql(ids))
     await proveSession({ origin: server.origin, ids })
-    // The inference check needs the model, which loads asynchronously at boot.
-    // Waiting here keeps that check about inference rather than about timing.
     await waitForLog(server, MODEL_READY, { timeoutMs: 120_000 })
 
     await runIdentityChecks(ctx)
@@ -129,9 +105,6 @@ async function runRuntime({
       expectedBytes: fixture.bytes,
     })
 
-    // The main run proved the compatibility corpus mode; these boots prove the
-    // configured modes on this adapter. They start their own servers on fresh
-    // ports after the main server has drained, so nothing overlaps.
     await runCorpusModeChecks({
       runtime,
       worktreeRoot: WORKTREE_ROOT,
@@ -146,8 +119,6 @@ async function runRuntime({
     bootError = error
   }
 
-  // The shutdown check normally ends the process; anything still running here
-  // is a failed drain or a boot failure, and must not outlive the run.
   if (server.child.exitCode === null) await stopServer(server)
 
   if (bootError) {
@@ -169,21 +140,11 @@ async function runRuntime({
   return { runtime, checks, ids, bootError }
 }
 
-/**
- * Where the two runtimes must agree. Malformed multipart is pinned at 400
- * validation_failed in checks-identity.mjs itself (P1.41), so agreement on a
- * status is not enough and is no longer asserted here. The fields below are
- * outcomes the contract fixes and the adapters must not differ on.
- */
 function parityFailures(results) {
   if (results.length < 2) return []
   const [first, second] = results
   const failures = []
 
-  // One application behind two sockets: where a status is recorded for both
-  // runtimes it must be identical, whether or not the value itself is the one
-  // a given environment expects (search answers 503 without a reachable
-  // index; content validation rejects the under-cap non-DOCX body).
   for (const key of ['searchFetchStatus', 'underCapStatus']) {
     const valueOf = (result) => {
       const observed = result.checks.find(

@@ -3,12 +3,6 @@ export type CorpusRelevanceKind = 'held' | 'absent'
 export type CorpusRelevanceCategory =
   'party_name' | 'neutral_citation' | 'document_id'
 
-/**
- * Courts the expectation is drawn from. UKSC, UKPC and both Court of Appeal
- * divisions are complete in this corpus and will not grow; High Court is
- * 2020-onward and will gain pre-2020 material later. Absent UKHL citations
- * are not a Find Case Law court in this ingest.
- */
 export type CorpusCourtFamily =
   'uksc' | 'ukpc' | 'ewca-civ' | 'ewca-crim' | 'ukhl' | 'ewhc'
 
@@ -24,7 +18,6 @@ export interface CorpusRelevanceCase {
   kind: CorpusRelevanceKind
   category: CorpusRelevanceCategory
   query: string
-  /** Held: document ids that must appear. Absent: empty. */
   expectedIds: string[]
   courtFamily: CorpusCourtFamily
 }
@@ -105,9 +98,6 @@ const partyHeld = held('party_name', [
     ['ewca-civ-2020-1295'],
     'ewca-civ',
   ],
-  // Misspelled party query: the EWCA title shares two of three terms while
-  // apex-court bodies merely mention the name, so the title-partial tier
-  // must lift it above body mentions (Finding 1 gate).
   [
     'party-donoghue-stevnson',
     'Donoghue v Stevnson',

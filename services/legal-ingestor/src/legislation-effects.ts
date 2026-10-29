@@ -1,28 +1,5 @@
-/**
- * Pure parser for the legislation.gov.uk affected-changes feed behind
- * `/changes/affected/{type}/{year}/{number}/data.feed`.
- *
- * One feed page carries up to 50 entries (`results-count=50`); further pages
- * follow `rel="next"` links. The server offers no per-provision filter, so
- * callers page through the whole feed and filter client-side on the
- * `ukm:AffectedProvisions/ukm:Section` references of each `ukm:Effect`.
- * A filtered query (e.g. `?affected-provision=s.40`) is silently ignored:
- * the whole-Act feed returns, and 16 of its effects were once misread as
- * s.40's. Only Section URIs scoped to the requested document attribute an
- * effect to a provision.
- * The `Applied` attribute on `ukm:Effect` is the source of truth: the HTML
- * yet-to-be-applied heading is whole-Act level (verified identical whether
- * the query names an amended or an unamended section), so it cannot answer
- * a per-provision question and is never read here.
- *
- * No network, no storage. Fetching and paging live in legislation-ingest.ts.
- */
-
 export interface LegislationEffectReference {
-  /** Hyphen form from ukm:Section Ref, e.g. section-182-4. */
   ref: string
-  /** Label path from the Section URI suffix, e.g. section/182/4. Null when
-   * the URI is absent or names a different document. */
   labelPath: string | null
   display: string
 }
@@ -38,7 +15,6 @@ export interface LegislationEffect {
 
 export interface ParsedEffectsFeed {
   effects: LegislationEffect[]
-  /** Absolute URL of the rel="next" page, or null on the last page. */
   nextPageUrl: string | null
 }
 
@@ -48,7 +24,6 @@ function readAttribute(tag: string, name: string): string | null {
 }
 
 function decodeXmlEntities(value: string): string {
-  // &amp; decodes last: a single pass must not turn `&amp;lt;` into `<`.
   return value
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -144,13 +119,6 @@ function isPathOrAncestor(candidate: string, provision: string): boolean {
   )
 }
 
-/**
- * Unapplied effects touching a provision, matched client-side. Matching is
- * bidirectional on the label path: an amendment to s. 13 makes s. 13(2)
- * stale, and an amendment to s. 13(2)(a) makes the served s. 13 text stale.
- * Either direction withholds the text, so uncertainty always resolves
- * towards the amended-not-held state, never towards serving text.
- */
 export function unappliedEffectsForProvision(
   effects: LegislationEffect[],
   labelPath: string,

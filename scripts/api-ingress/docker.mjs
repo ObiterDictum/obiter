@@ -1,13 +1,3 @@
-/*
- * Docker CLI boundary for the ingress harness.
- *
- * Every container this starts is task-named and removed at teardown. Nothing
- * here touches the shared dev stack: no existing container is inspected,
- * stopped or renamed, and no host port outside the task's own ephemeral
- * loopback allocations is bound. Traefik runs without the Docker socket,
- * because the routes under test come from the file provider — the disposable
- * proxy has no authority over any other container.
- */
 import { spawn, spawnSync } from 'node:child_process'
 
 export class DockerError extends Error {
@@ -18,7 +8,6 @@ export class DockerError extends Error {
   }
 }
 
-/** One docker invocation. Args are passed directly, never through a shell. */
 export function docker(args, { input, timeoutMs = 180_000 } = {}) {
   const result = spawnSync('docker', args, {
     input,
@@ -42,7 +31,6 @@ export function docker(args, { input, timeoutMs = 180_000 } = {}) {
   return result.stdout ?? ''
 }
 
-/** A docker invocation whose failure is an expected answer, not an error. */
 export function dockerQuiet(args, options) {
   try {
     return docker(args, options)
@@ -55,15 +43,10 @@ export function networkCreate(name) {
   docker(['network', 'create', name])
 }
 
-/**
- * Remove the network. Throws when Docker refuses, so teardown can report the
- * failure instead of treating an active-endpoint error as success.
- */
 export function networkRemove(name) {
   docker(['network', 'rm', name], { timeoutMs: 60_000 })
 }
 
-/** True when a resource with this name exists, for teardown to skip. */
 export function networkExists(name) {
   return dockerQuiet(['network', 'inspect', name]) !== null
 }
@@ -113,11 +96,6 @@ export function containerRunning(name) {
   )
 }
 
-/**
- * Send one signal without blocking. A synchronous stop would stall the caller,
- * which must keep reading a response the container is draining, so the signal
- * is delivered from a child process and awaited.
- */
 export function signalContainer(name, signal = 'SIGTERM') {
   return new Promise((resolveSignal) => {
     const child = spawn('docker', ['kill', '--signal', signal, name], {
@@ -128,7 +106,6 @@ export function signalContainer(name, signal = 'SIGTERM') {
   })
 }
 
-/** Wait for a container to leave the running state after a signal. */
 export async function waitForContainerExit(name, timeoutMs = 40_000) {
   await waitFor(() => (containerRunning(name) ? null : true), {
     timeoutMs,
@@ -136,20 +113,14 @@ export async function waitForContainerExit(name, timeoutMs = 40_000) {
   })
 }
 
-/**
- * Remove the container and its anonymous volumes. Throws when Docker refuses,
- * so teardown can report the failure instead of claiming a clean run.
- */
 export function removeContainer(name) {
   docker(['rm', '-f', '-v', name], { timeoutMs: 60_000 })
 }
 
-/** True when a container with this name exists, for teardown to skip. */
 export function containerExists(name) {
   return dockerQuiet(['inspect', name]) !== null
 }
 
-/** The `org.opencontainers.image.revision` label, or null when unlabelled. */
 export function imageRevision(image) {
   const value = dockerQuiet([
     'image',
@@ -162,7 +133,6 @@ export function imageRevision(image) {
   return trimmed === '' || trimmed === '<no value>' ? null : trimmed
 }
 
-/** The first RepoDigest, which pins a pulled image by content. */
 export function imageDigest(image) {
   const value = dockerQuiet([
     'image',
@@ -179,7 +149,6 @@ export function imageExists(image) {
   return dockerQuiet(['image', 'inspect', image]) !== null
 }
 
-/** Poll `predicate` until it returns a truthy value or the deadline passes. */
 export async function waitFor(
   predicate,
   { timeoutMs, intervalMs = 500, label = 'condition' },
