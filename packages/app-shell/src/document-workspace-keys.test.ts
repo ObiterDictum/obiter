@@ -55,6 +55,35 @@ describe('document workspace keys', () => {
     expect(focusFind).toHaveBeenCalledTimes(1)
   })
 
+  it('fires a review letter only when focus is not in a text field', () => {
+    const review = {
+      onAccept: vi.fn(),
+      onReject: vi.fn(),
+      onNext: vi.fn(),
+      onPrevious: vi.fn(),
+    }
+    const bare = (key: string, target?: EventTarget) => ({
+      key,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: vi.fn(),
+      target,
+    })
+
+    handleDocumentWorkspaceKeys(bare('a'), { review })
+    expect(review.onAccept).toHaveBeenCalledTimes(1)
+
+    const input = document.createElement('input')
+    document.body.append(input)
+    const typed = bare('a', input)
+    handleDocumentWorkspaceKeys(typed, { review })
+
+    expect(review.onAccept).toHaveBeenCalledTimes(1)
+    expect(typed.preventDefault).not.toHaveBeenCalled()
+  })
+
   it('does not treat redo as undo when no redo handler is wired', () => {
     const undo = vi.fn()
     handleDocumentWorkspaceKeys(event('z', { shiftKey: true }), {
