@@ -8,6 +8,7 @@ import {
   buildVerifyGroups,
   findingMatchesFilter,
   groupMatchesFilter,
+  sortFindings,
   verifyFilterCounts,
 } from './verify-groups'
 
@@ -129,6 +130,49 @@ describe('buildVerifyGroups', () => {
   })
 })
 
+describe('sortFindings', () => {
+  // The list is read from the top: a possible error first, then what only a
+  // person can judge, then the matches that need no reading.
+  it('ranks flagged first, then review-required, then matches', () => {
+    const matched = finding({
+      id: 'clear',
+      location: { paragraphId: 'p4', start: 40, end: 50 },
+    })
+    const review = finding({
+      id: 'review',
+      state: 'review_required',
+      location: { paragraphId: 'p3', start: 30, end: 40 },
+    })
+    const flagged = finding({
+      id: 'flagged',
+      state: 'flagged',
+      location: { paragraphId: 'p2', start: 20, end: 30 },
+    })
+    expect(
+      sortFindings([matched, review, flagged]).map((item) => item.id),
+    ).toEqual(['flagged', 'review', 'clear'])
+  })
+
+  // Two findings of one state keep the document's own order, so reading down
+  // the list does not jump backwards and forwards through the file.
+  it('keeps the document order inside one state', () => {
+    const later = finding({
+      id: 'later',
+      state: 'flagged',
+      location: { paragraphId: 'p2', start: 200, end: 210 },
+    })
+    const earlier = finding({
+      id: 'earlier',
+      state: 'flagged',
+      location: { paragraphId: 'p1', start: 10, end: 20 },
+    })
+    expect(sortFindings([later, earlier]).map((item) => item.id)).toEqual([
+      'earlier',
+      'later',
+    ])
+  })
+})
+
 describe('verify filters', () => {
   const dismissed = finding({
     id: 'vf_dismissed',
@@ -136,6 +180,7 @@ describe('verify filters', () => {
     dismissal: {
       reason: 'Quoted directly.',
       dismissedBy: 'usr_1',
+      dismissedByName: 'Priya Shah',
       dismissedAt: '2026-10-26T09:02:00.000Z',
     },
   })

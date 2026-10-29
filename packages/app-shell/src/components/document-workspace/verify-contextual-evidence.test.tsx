@@ -17,7 +17,8 @@ describe('contextual verification evidence', () => {
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('[2012] UKSC 7')
     expect(panel.textContent).toContain('Citation matches checked source')
-    expect(panel.textContent).toContain('stored version ver_1')
+    // The version is named by number when it is known, never by its id.
+    expect(panel.textContent).toContain('Checked the stored version.')
   })
 
   it('opens a quotation finding from the document', async () => {

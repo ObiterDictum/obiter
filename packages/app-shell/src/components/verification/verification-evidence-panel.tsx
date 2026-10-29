@@ -100,7 +100,7 @@ export function VerificationEvidencePanel() {
       titleId={titleId}
       position={`${verification.activeIndex + 1} of ${total}`}
       storedVersionNote={verificationStoredVersionNote(
-        verification.checkedVersionId ?? 'unknown',
+        verification.checkedVersionNumber,
         { unsaved: verification.dirty, stale: verification.stale },
       )}
       unmappedReason={unmappedReasonFor(verification, finding)}

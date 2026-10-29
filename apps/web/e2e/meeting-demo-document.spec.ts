@@ -38,7 +38,9 @@ async function seedDocument(page: Page, request: APIRequestContext) {
   await page.getByLabel('Password').click()
   await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
+  // Navigation is client-side: the router changes the path without a document
+  // load, so wait for the path itself rather than for a navigation.
+  await page.waitForFunction(() => !location.pathname.startsWith('/sign-in'), {
     timeout: 15_000,
   })
   await page.waitForLoadState('networkidle')
@@ -236,7 +238,7 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
   expect(marker.right).toBeLessThanOrEqual(marker.clientWidth + 1)
 })
 
-test('the finalized output and its controls fit a 390px viewport', async ({
+test('the finalised output and its controls fit a 390px viewport', async ({
   page,
   request,
 }) => {
@@ -248,41 +250,79 @@ test('the finalized output and its controls fit a 390px viewport', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
-  await expect(
-    page.getByRole('button', { name: 'Finalize', exact: true }),
-  ).toBeVisible({ timeout: 30_000 })
+  const listbox = page.locator('[role="listbox"]')
+  await expect(listbox).toBeVisible({ timeout: 30_000 })
 
-  // Finalize with every acknowledgement the run asks for.
-  await page.getByRole('button', { name: 'Finalize', exact: true }).click()
+  // Every span has to carry a decision before the run can be finalised, so the
+  // reviewer records one for each. The list shortcuts act on the selected span,
+  // and ArrowDown moves to the next, exactly as a person would work the queue.
+  const progress = page.getByText(/of \d+ detected spans decided/)
+  await expect(progress).toBeVisible({ timeout: 30_000 })
+  const decided = async () => {
+    const match = (await progress.innerText()).match(/(\d+) of (\d+)/)
+    return match
+      ? { done: Number(match[1]), total: Number(match[2]) }
+      : { done: 0, total: 0 }
+  }
+  await expect.poll(async () => (await decided()).total).toBeGreaterThan(0)
+  await listbox.focus()
+  for (let guard = 0; guard < 40; guard += 1) {
+    const before = await decided()
+    if (before.done >= before.total) break
+    await listbox.press('Enter')
+    await expect
+      .poll(async () => (await decided()).done)
+      .toBeGreaterThan(before.done)
+    await listbox.press('ArrowDown')
+  }
+  const complete = await decided()
+  expect(complete.done).toBe(complete.total)
+
+  // Finalise through the real gates: the reviewer confirms the page review, and
+  // acknowledges a limited detection mode where the run used one.
+  await page.getByRole('button', { name: 'Finalise', exact: true }).click()
+  const dialog = page.getByRole('dialog')
   await expect(
-    page.getByRole('heading', { name: 'Finalize redaction output' }),
+    dialog.getByRole('heading', { name: 'Finalise this redaction?' }),
   ).toBeVisible()
-  const acknowledgements = page.getByRole('checkbox')
-  for (let index = 0; index < (await acknowledgements.count()); index += 1)
+  const acknowledgements = dialog.getByRole('checkbox')
+  for (let index = 0; index < (await acknowledgements.count()); index += 1) {
     await acknowledgements.nth(index).check()
-  await page.getByRole('button', { name: 'Create secure PDF' }).click()
-  await expect(page.getByText('Finalized', { exact: true })).toBeVisible({
-    timeout: 30_000,
-  })
+  }
+  await dialog
+    .getByRole('button', {
+      name: /^Finalise (redacted PDF|pseudonymised copy)$/,
+    })
+    .click()
+  await expect(
+    page.getByRole('heading', { name: 'Redaction finalised' }),
+  ).toBeVisible({ timeout: 60_000 })
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForTimeout(300)
 
   const layout = await page.evaluate(() => {
     const doc = document.documentElement
-    const output = document.querySelector('[aria-label="Redaction output"]')
-    const queue = document.querySelector('[aria-label="Review queue"]')
-    const outputRect = output?.getBoundingClientRect()
-    const queueRect = queue?.getBoundingClientRect()
+    const output = document.querySelector('[aria-labelledby="finalised-copy"]')
+    const rect = output?.getBoundingClientRect()
     return {
       pageOverflow: doc.scrollWidth - doc.clientWidth,
-      outputHeight: outputRect?.height ?? 0,
-      outputBottom: outputRect?.bottom ?? 0,
-      queueTop: queueRect?.top ?? 0,
+      outputHeight: rect?.height ?? 0,
+      outputRight: rect?.right ?? 0,
+      clientWidth: doc.clientWidth,
     }
   })
   expect(layout.pageOverflow).toBeLessThanOrEqual(0)
-  // The queue starts at or below the finalized card: it cannot cover it.
-  expect(layout.outputBottom).toBeLessThanOrEqual(layout.queueTop + 1)
+  // The disclosure copy is the reason for the screen: it stays on the page, at
+  // full height, rather than being squeezed to nothing on a narrow viewport.
   expect(layout.outputHeight).toBeGreaterThan(200)
+  expect(layout.outputRight).toBeLessThanOrEqual(layout.clientWidth + 1)
+
+  // Its controls are reachable at 390px without leaving the viewport.
+  const download = page.getByRole('button', { name: /^Download/ }).first()
+  await expect(download).toBeVisible()
+  const box = await download.boundingBox()
+  expect(box, 'the download control has no box').not.toBeNull()
+  expect(box!.x).toBeGreaterThanOrEqual(-1)
+  expect(box!.x + box!.width).toBeLessThanOrEqual(391)
 })

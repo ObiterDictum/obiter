@@ -445,6 +445,31 @@ export type RedactionReturnResponse = z.infer<
   typeof redactionReturnResponseSchema
 >
 
+/**
+ * Filing a finalized run's copy into a matter. A run that is not linked to a
+ * document has no version to return to, so the copy becomes version 1 of a new
+ * document in the matter the reviewer chooses.
+ */
+export const redactionSaveToMatterRequestSchema = z
+  .object({ matterId: z.string().min(1).max(255) })
+  .strict()
+export type RedactionSaveToMatterRequest = z.infer<
+  typeof redactionSaveToMatterRequestSchema
+>
+
+export const redactionSaveToMatterResponseSchema = z
+  .object({
+    status: z.enum(['saved', 'already_saved']),
+    matterId: z.string().min(1),
+    documentId: z.string().min(1),
+    versionId: z.string().min(1),
+    versionNumber: z.number().int().positive(),
+  })
+  .strict()
+export type RedactionSaveToMatterResponse = z.infer<
+  typeof redactionSaveToMatterResponseSchema
+>
+
 export type Tone = 'ink' | 'sage' | 'amber' | 'rust'
 
 export function createCanonicalCasePath(input: {
