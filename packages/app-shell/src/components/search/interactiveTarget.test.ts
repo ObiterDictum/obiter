@@ -45,8 +45,6 @@ describe('isInteractiveTarget', () => {
       <a id="anchor" href="/case/example"><span id="label">Example</span></a>
     `)
 
-    // A keydown inside a control often targets a nested span or icon, not
-    // the control itself; the predicate must walk up to the control.
     expect(isInteractiveTarget(host.querySelector('#icon'))).toBe(true)
     expect(isInteractiveTarget(host.querySelector('#glyph'))).toBe(true)
     expect(isInteractiveTarget(host.querySelector('#label'))).toBe(true)

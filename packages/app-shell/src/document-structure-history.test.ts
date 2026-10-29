@@ -80,7 +80,6 @@ const structureSlot = (draft: StructuralDraft): DraftSlot => ({
   structureKind: draft.kind,
 })
 
-/** The save boundary one stored structure produces: its slot, its sent state. */
 const structureBoundary = (draft: StructuralDraft) => ({
   covered: [structureSlot(draft)],
   sent: { ...emptyDraftState(), structures: [draft] },
@@ -143,20 +142,12 @@ describe('translateSnapshot structure slots', () => {
       sent,
       fromModel,
     })
-    // The table is on disk now, so its pending slot clears — but the
-    // unrelated typed draft rides through instead of dying with the snapshot.
     expect(translated).not.toBeNull()
     expect(translated?.structures).toEqual([])
     expect(translated?.drafts).toEqual({ 'p1-r': 'typed elsewhere' })
   })
 
   it('translates a snapshot predating a saved table', () => {
-    // This test asserted `null` while the predating case was a per-kind
-    // exception list: the block was itself the defect, because one refused
-    // snapshot fails the whole boundary and blocks every later save. No
-    // operation removes a stored table, so the predating state asks for
-    // nothing it could express — the table is baseline content the restored
-    // state stays consistent with, and undo simply has no removal to offer.
     const translated = translateSnapshot(emptyDraftState(), {
       covered: [slot],
       sent,
@@ -167,8 +158,6 @@ describe('translateSnapshot structure slots', () => {
   })
 
   it('translates a snapshot predating a saved picture', () => {
-    // Same rule as the table: the vocabulary has no removal for a stored
-    // drawing, so the snapshot survives instead of blocking the boundary.
     const image = imageDraft('s1', 'p1')
     const translated = translateSnapshot(
       emptyDraftState(),
@@ -189,9 +178,6 @@ describe('translateSnapshot structure slots', () => {
   })
 
   it('still blocks a snapshot predating a saved link', () => {
-    // The one kind the vocabulary can remove: `set_hyperlink`'s nullable
-    // target unwraps a stored link, so the pre-link state is expressible and
-    // a boundary that does not emit that removal must not claim it.
     const link = linkDraft('s1', 'p1')
     expect(
       translateSnapshot(emptyDraftState(), structureBoundary(link)),
@@ -199,10 +185,6 @@ describe('translateSnapshot structure slots', () => {
   })
 
   it('translates a snapshot predating a saved page-number field', () => {
-    // One instance of the general rule: no operation removes a stored field
-    // splice, so the page number stays baseline content — the predating
-    // snapshot survives translation rather than blocking the whole boundary,
-    // the same treatment a saved break gives it.
     const translated = translateSnapshot(
       emptyDraftState(),
       structureBoundary(pageNumberDraft('pn1', 'p1')),
@@ -212,10 +194,6 @@ describe('translateSnapshot structure slots', () => {
   })
 
   it('translates a snapshot predating a saved footnote', () => {
-    // The same rule, with the covered list a real footnote save produces:
-    // the structure slot and the deferred note-text runs, which the
-    // predating snapshot does not hold. The reference and its note entry
-    // stay baseline content and undo simply offers no removal.
     const noteParagraph = footnoteNoteParagraphId({ id: 'fn1' })
     const footnote = footnoteDraft('fn1', 'p1')
     const footnoteSent: DraftState = {
@@ -251,10 +229,6 @@ describe('translateSnapshot structure slots', () => {
 describe('history stacks across a structure save', () => {
   it('reports unsupported and keeps every snapshot, including unrelated history', () => {
     const { result } = renderHook(() => useWorkspaceDraftHistory())
-    // A link is the one structure kind whose predating snapshot still
-    // blocks, so its boundary is what proves the translate stays
-    // all-or-nothing: the older snapshot predates the link draft but
-    // carries typed text; the newer holds the saved link as pending work.
     const link = linkDraft('s1', 'p1')
     const boundary = structureBoundary(link)
     const predating: DraftState = {
@@ -278,8 +252,6 @@ describe('history stacks across a structure save', () => {
     })
     expect(outcome.value?.translated).toBe(false)
 
-    // Transactional: neither stack was rewritten or dropped. Undo still
-    // restores the link-holding snapshot, then the text-only one.
     const captured: { value: DraftState | null } = { value: null }
     act(() => {
       captured.value = result.current.stepBack(emptyDraftState())

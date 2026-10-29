@@ -21,9 +21,6 @@ const matters = vi.hoisted(() => ({ useMatter: vi.fn() }))
 const nav = vi.hoisted(() => ({ useNavigate: vi.fn() }))
 const toast = vi.hoisted(() => ({ useToast: vi.fn() }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('./documents')) }
 mock.module('./documents', () => ({
   ...documentsModule,
@@ -31,9 +28,6 @@ mock.module('./documents', () => ({
   useDeleteDocument: docs.useDeleteDocument,
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const componentsDocumentWorkspaceWorkspaceModuleKeys = Object.fromEntries(
   Object.keys(await import('./components/document-workspace/workspace')).map(
     (key) => [key, undefined],
@@ -43,8 +37,6 @@ mock.module('./components/document-workspace/workspace', () =>
   Object.assign(
     { ...componentsDocumentWorkspaceWorkspaceModuleKeys },
     (() => ({
-      // The editor has its own tests; this file checks the route picks the
-      // right surface for the URL's matter.
       DocumentWorkspace: (props: {
         version?: { filename?: string } | null
         document?: { id?: string }
@@ -63,23 +55,12 @@ mock.module('./matters', () => ({
   useMatter: matters.useMatter,
 }))
 
-// The former vi.mock('./components/verification-run-panel') is gone: that
-// module does not exist and nothing under src imports it, so vitest tolerated
-// a dead mock while bun resolves the specifier and fails the file. Removing it
-// changes no behaviour.
-
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('./current-user')) }
 mock.module('./current-user', () => ({
   ...currentUserModule,
   useCurrentUser: currentUser.useCurrentUser,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const tanstackReactRouterModule = {
   ...(await import('@tanstack/react-router')),
 }
@@ -88,18 +69,12 @@ mock.module('@tanstack/react-router', () => ({
   useNavigate: nav.useNavigate,
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const obiterUiModule = { ...(await import('@obiter/ui')) }
 mock.module('@obiter/ui', () => ({
   ...obiterUiModule,
   useToast: toast.useToast,
 }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { DocumentDetailLayoutView } = await import('./views/document-detail')
 
 function sampleDocumentDetail(matterId: string): DocumentDetailResponse {
@@ -206,8 +181,6 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-workspace-stub]')).not.toBeNull()
     })
-    // The editor owns the filename and version header now, not a page title
-    // above it; the redaction-runs contract region stays below the editor.
     expect(container.querySelector('[data-workspace-stub]')?.textContent).toBe(
       'brief.pdf',
     )
@@ -228,7 +201,6 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
         screen.getByText('This document belongs to a different matter'),
       ).toBeTruthy()
     })
-    // The metadata region must not render under the wrong matter.
     expect(container.querySelector('h2')?.textContent).not.toBe(
       'Document details',
     )

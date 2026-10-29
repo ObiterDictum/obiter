@@ -18,10 +18,6 @@ import {
   suspendDocumentDraftWrites,
 } from './document-draft-store'
 
-/**
- * Current-user data is always backed by the authenticated `GET /api/me` API.
- * A 401 is surfaced to the frame, which redirects protected routes to sign-in.
- */
 export function currentUserQueryOptions() {
   return queryOptions({
     queryKey: ['current-user'],
@@ -34,8 +30,6 @@ export function currentUserQueryOptions() {
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           suspendDocumentDraftWrites()
-          // Only the remembered user: a shared browser may hold another
-          // account's recoverable drafts, and a 401 must not wipe those.
           clearStoredDocumentDrafts()
         }
         throw error
@@ -55,13 +49,6 @@ export interface CreateOrganisationResult {
   organisation?: CurrentOrganisation
 }
 
-/**
- * Creates the signed-in user's organisation via POST /api/organisations.
- * On success, the current-user cache is updated immediately with the created
- * organisation (role becomes 'owner') so Settings flips from the create form
- * to the organisation summary without waiting for a refetch, and the query is invalidated
- * to reconcile with the server.
- */
 export function createOrganisationMutationOptions(): MutationOptions<
   CurrentOrganisation,
   ApiError,
@@ -80,8 +67,6 @@ export function createOrganisationMutationOptions(): MutationOptions<
       return result.organisation
     },
     onSuccess: (organisation) => {
-      // Merge the created organisation into the cached /api/me so the UI
-      // reflects it immediately; the role of the creating user is 'owner'.
       queryClient.setQueryData<MeResponse>(['current-user'], (prev) =>
         prev ? { user: { ...prev.user, role: 'owner' }, organisation } : prev,
       )
@@ -94,13 +79,6 @@ export function useCreateOrganisation() {
   return useMutation(createOrganisationMutationOptions())
 }
 
-/**
- * Updates the signed-in account's own display name via PATCH /api/me. The API
- * scopes the write to the session's user, so no id is sent. The canonical user
- * the server stored replaces the cached one, then the query is invalidated so
- * every /api/me consumer reconciles with the server rather than with the value
- * the form typed.
- */
 export function useUpdateProfile() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -120,13 +98,6 @@ export function useUpdateProfile() {
   })
 }
 
-/**
- * Owner-only rename via PATCH /api/organisations, which is scoped to the
- * caller's own organisation. The client sends no organisation id: an id in the
- * request could only be meant to address someone else's tenant. Merges the
- * renamed organisation into the cached /api/me so Settings and Home reflect it
- * immediately, then invalidates to reconcile with the server.
- */
 export function useRenameOrganisation() {
   const queryClient = useQueryClient()
   return useMutation({

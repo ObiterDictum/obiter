@@ -5,11 +5,6 @@ import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-/**
- * `useAuth().changePassword`. Split out of `auth.test.tsx` so the password
- * change has its own suite and neither file sits over the size ceiling. The
- * form that calls it is covered in `views/settings-security.test.tsx`.
- */
 const mock = vi.hoisted(() => ({
   signInEmail: vi.fn(),
   signUpEmail: vi.fn(),
@@ -37,9 +32,6 @@ bunMock.module('better-auth/client/plugins', () => ({
 
 const { changePasswordFn, useSession, refetch } = mock
 
-// auth.ts captures createAuthClient at module scope, so it must evaluate
-// after the registrations above (bun does not hoist mock.module the way
-// vi.mock was hoisted).
 const { useAuth } = await import('./auth')
 
 function createWrapper(client: QueryClient) {
@@ -76,8 +68,6 @@ describe('useAuth — change password', () => {
     expect(changePasswordFn).toHaveBeenCalledWith({
       currentPassword: 'current-secret',
       newPassword: 'replacement-secret',
-      // Other sessions are revoked so a stolen session stops working, which
-      // matches revokeSessionsOnPasswordReset for the reset path.
       revokeOtherSessions: true,
     })
     expect(outcome).toEqual({ ok: true })

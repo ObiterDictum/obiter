@@ -29,11 +29,6 @@ import {
   type StoryBlock,
 } from './document-page-tables'
 
-/**
- * The shapes a paginated page is made of, and how a paragraph or a table is
- * placed into it. `layoutDocument` walks the story and drives the session.
- */
-
 export type LaidOutParagraph = {
   type: 'paragraph'
   paragraph: DocumentParagraphWire
@@ -62,23 +57,14 @@ export type LaidOutPage = {
   blocks: LaidOutBlock[]
   floats: PageFloat[]
   textBoxes: PageTextBox[]
-  /** The flow height the laid-out blocks actually reach. Only the continuous
-   * web flow sets it: its page frame is unbounded so the pagination rules
-   * never advance, and the render needs the real content measure back. */
   contentPx?: number
 }
 
-/**
- * The pagination cursor: the page being filled, the current column, how far
- * down it the flow has reached, and whether it is already a broken column.
- */
 export type PageSession = {
   page: LaidOutPage
   col: number
   y: number
   broken: boolean
-  /** A pending page break ended the last paragraph, so the empty sheet it
-   * opened must be kept even though no block follows it yet. */
   trailingBreak: boolean
 }
 
@@ -93,7 +79,6 @@ export function layoutParagraph(
   session: PageSession,
   column: () => ColumnFrame,
   advance: () => void,
-  /** Effective-text offsets of pending page breaks in this paragraph. */
   pageBreaks: readonly number[] = [],
   pendingRedlines?: PendingRedlines,
 ): void {
@@ -110,9 +95,6 @@ export function layoutParagraph(
     pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
   )
   const text = projection.text
-  // A stored break is addressed by text offset exactly like a pending one, so
-  // both merge into one ordered set. Only the pending path used to split, which
-  // left a reloaded break rendering as a single sheet.
   const breaks = [
     ...new Set(
       [...pageBreaks, ...storedPageBreakOffsets(paragraph)].map((at) =>
@@ -126,8 +108,6 @@ export function layoutParagraph(
   const list = paragraphListIndent(paragraph, model)
   const indent =
     (list?.leftPx ?? face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
-  // A list's marker carries its own hanging indent, so line 1 already aligns
-  // with the marker and a second first-line indent would move it twice.
   const textIndentPx = firstLineIndentPx(face, Boolean(list))
   const imagePx = Math.max(
     0,
@@ -161,10 +141,6 @@ export function layoutParagraph(
   }
 
   while (!complete) {
-    // A pending page break forces a new sheet at its offset. Truncating the
-    // text at the next break makes this fragment stop there; the advance below
-    // then starts the new sheet, so the break lands at the caret rather than
-    // after the whole paragraph.
     const nextBreak = breaks.find((at) => at > offset)
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : (face.marginTopPx ?? 0)
@@ -213,7 +189,6 @@ export function layoutParagraph(
     }
     if (fragment.lines === 0 && text.length > 0) {
       if (session.y === 0) {
-        // No row fits at the top of a page: step one code unit on, or stop.
         if (offset >= text.length) break
         offset += 1
         continue
@@ -233,8 +208,6 @@ export function layoutParagraph(
       placed = false
       continue
     }
-    // The block draws exactly the rows placed here, so a break that ends its
-    // last row is resumed by the next fragment rather than drawn by this one.
     session.page.blocks.push({
       type: 'paragraph',
       paragraph,
@@ -255,8 +228,6 @@ export function layoutParagraph(
     complete = fragment.complete
     continuation = true
     if (fragment.complete && nextBreak !== undefined) {
-      // The break is at (or before) the end of the text: finish the paragraph
-      // on the current sheet, then open the next one so the break shows.
       complete = nextBreak >= text.length
       advance()
       placed = false
@@ -289,13 +260,6 @@ function placeAnchors(
   }
 }
 
-/**
- * Effective-text offsets of the page breaks already stored in a paragraph. A
- * break run between text runs maps to the offset the text before it ends at;
- * `w:pageBreakBefore` (and a paragraph-level break) maps to the paragraph
- * start. A break inside a run that still carries text is addressed at that
- * run's start, the only boundary the run list can recover.
- */
 function storedPageBreakOffsets(paragraph: DocumentParagraphWire): number[] {
   const offsets: number[] = []
   const paragraphXml = paragraph.preservedXmlFragments.join('')

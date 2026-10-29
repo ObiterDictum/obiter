@@ -10,32 +10,17 @@ import {
   type ParagraphFace,
 } from './document-page-style'
 
-/** Pixels per centimetre at the renderer's 96 CSS px per inch. */
 export const RULER_CM_PX = 96 / 2.54
 
-/**
- * The page geometry the ruler measures: the section's sheet, the content
- * frame inside its margins, and the column the measured paragraph flows in.
- */
 export type RulerGeometry = {
   box: PageBox
   frame: ContentFrame
   column: ColumnFrame
 }
 
-/**
- * The indent markers, in pixels from the column's left edge. A list
- * paragraph's markers come from the numbering level — its text sits at
- * `leftPx` and its marker hangs at `leftPx - hangingPx` — while a plain
- * paragraph's come from the pPr `w:ind` values the face resolved, matching
- * the padding and text-indent the block paints.
- */
 export type RulerMarkers = {
-  /** Left edge of the paragraph's text block. */
   leftPx: number
-  /** First-line edge: the hanging marker for a list or hanging indent. */
   firstLinePx: number
-  /** Right edge of the paragraph's text block. */
   rightPx: number
 }
 
@@ -54,10 +39,6 @@ export function rulerMarkers(input: {
   }
 }
 
-/**
- * A tick on the ruler: half-centimetre marks, labelled in centimetres at each
- * whole mark so the strip reads the same measure Word shows.
- */
 export type RulerTick = {
   positionPx: number
   label?: string
@@ -81,26 +62,14 @@ function centimetres(px: number): string {
   return (px / RULER_CM_PX).toFixed(1)
 }
 
-/**
- * What the ruler strip paints: the page geometry plus the caret paragraph's
- * resolved face and list indent.
- */
 export type RulerContext = {
   geometry: RulerGeometry
   face?: ParagraphFace
   list?: { leftPx: number; hangingPx: number }
 }
 
-/**
- * The page holding the caret supplies the measure — its own section box,
- * frame and column — and the caret paragraph's resolved indents become the
- * markers. A caret outside the body (a margin story, a painted note) owns no
- * column block, so the ruler falls back to the first page's frame and claims
- * no paragraph indents rather than guessing them.
- */
 export function rulerContextFor(input: {
   pages: readonly LaidOutPage[]
-  /** The painted model: stored runs plus folded drafts. */
   painted?: DocumentModelWire
   paragraphId: string | null
 }): RulerContext | undefined {
@@ -143,7 +112,6 @@ export function rulerContextFor(input: {
   }
 }
 
-/** The ruler's spoken summary: real measurements, never placeholder values. */
 export function rulerLabel(input: {
   geometry: RulerGeometry
   markers: RulerMarkers

@@ -6,11 +6,6 @@ import {
   requestCitation,
 } from './pending-citation'
 
-/**
- * The handoff from a source page to the document it will be typed into. It is
- * per document and per tab: a request for one document is invisible to another,
- * and answering it removes it rather than leaving a bar to reappear later.
- */
 beforeEach(() => {
   window.sessionStorage.clear()
 })

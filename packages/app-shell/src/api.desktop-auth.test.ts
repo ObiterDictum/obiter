@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { clearDesktopAuthToken } from './lib/auth-token'
 
-// Generation bump replaces the old module-registry reset: the ?gen= query
-// gives each test a freshly evaluated ./api module.
 let moduleGen = 0
 
 const bridge = {
@@ -17,9 +15,6 @@ const bridge = {
 }
 
 afterEach(async () => {
-  // Clear while the bridge is still present: clearDesktopAuthToken returns
-  // early without one, and bun has no module-registry reset for the token
-  // module's renderer-memory cache.
   await clearDesktopAuthToken()
   vi.restoreAllMocks()
   moduleGen++

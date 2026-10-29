@@ -1,11 +1,6 @@
 import type { DocumentReviewToolbar } from './ribbon-types'
 import type { ChangeReview } from './use-change-review'
 
-/**
- * The ribbon's tracked-change controls, mapped from the one review derivation
- * the changes panel also reads, so the two surfaces cannot disagree about the
- * active change or what is decidable.
- */
 export function changeReviewToolbar(
   review: ChangeReview,
 ): DocumentReviewToolbar {

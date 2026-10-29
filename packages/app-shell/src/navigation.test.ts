@@ -52,8 +52,6 @@ describe('breadcrumbTrail', () => {
   })
 
   it('names the source a judgment or provision page is showing', () => {
-    // Search › the source, so a reader who lands from a link knows what is
-    // open without scrolling to the title.
     expect(
       breadcrumbTrail(
         '/case/rock-advertising-v-mwb-business-exchanges',
@@ -74,8 +72,6 @@ describe('breadcrumbTrail', () => {
       { label: 'Search', to: '/search' },
       { label: 's. 13 · Equality Act 2010' },
     ])
-    // Until the source's own query answers, the trail is the plain module
-    // crumb rather than a slug-derived guess.
     expect(breadcrumbTrail('/case/rock-advertising', null, null)).toEqual([
       { label: 'Search' },
     ])

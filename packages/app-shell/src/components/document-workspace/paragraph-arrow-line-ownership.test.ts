@@ -9,15 +9,6 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 
-/**
- * `wrapLines` gives each visual line the display code units `[from, to)` and
- * drops the newline of a hard break. A soft wrap therefore shares its boundary
- * (`line.to === next.from`), while a hard break leaves `next.from === line.to + 1`
- * and the newline code unit at `line.to` owned by the line it terminates.
- * These tests pin that convention through the public caret helpers.
- */
-
-// No soft wrapping: each hard-break segment is exactly one visual line.
 const NO_WRAP = 10_000_000
 const FONT = 16
 
@@ -49,9 +40,6 @@ function requireLine(line: WrappedLine | undefined): WrappedLine {
 }
 
 describe('hard-break line ownership', () => {
-  // 'tiny' hard-breaks to an 80-character line, which hard-breaks to a
-  // 14-character line. Offsets: line 0 [0,4] newline at 4; line 1 [5,85]
-  // newline at 85; line 2 [86,100].
   const text = `tiny\n${'a'.repeat(80)}\n${'b'.repeat(14)}`
   const hard = () => wrapLines(text, FONT, NO_WRAP)
 
@@ -63,13 +51,9 @@ describe('hard-break line ownership', () => {
       { text: 'b'.repeat(14), from: 86, to: 100 },
     ])
     const state = createVerticalCaretColumn()
-    // Caret near column 40 of the 80-character line.
     const up = verticalMove({ state, lines, offset: 45, key: 'ArrowUp' })
-    // Clamps to the visual end of the short hard-break line, keeping column 40.
     expect(up).toBe(4)
     const down = verticalMove({ state, lines, offset: up!, key: 'ArrowDown' })
-    // The immediately adjacent long line at the retained column, not the
-    // paragraph end past a skipped visual line.
     expect(down).toBe(45)
   })
 
@@ -103,11 +87,8 @@ describe('hard-break line ownership', () => {
 
   it('owns the newline code unit with the line it terminates', () => {
     const lines = hard()
-    // Offset 4 is the newline after 'tiny': visually the end of line 0.
     expect(visualColumn(lines, 4)).toBe(4)
-    // Offset 5 is the first code unit of the next line: column 0.
     expect(visualColumn(lines, 5)).toBe(0)
-    // Offset 85 is the newline after the 80-character line.
     expect(visualColumn(lines, 85)).toBe(80)
     expect(visualColumn(lines, 86)).toBe(0)
   })
@@ -153,16 +134,12 @@ describe('hard-break line ownership', () => {
   })
 
   it('treats a CRLF hard break like LF for the line after the newline', () => {
-    // The DOCX text projection emits '\n'; a CRLF string handed straight to
-    // the pure projection keeps '\r' as a display code unit.
     const lines = wrapLines('ab\r\ncd', FONT, NO_WRAP)
     expect(lines).toEqual([
       { text: 'ab\r', from: 0, to: 3 },
       { text: 'cd', from: 4, to: 6 },
     ])
-    // The line-terminating code unit belongs to the line it ends.
     expect(visualColumn(lines, 3)).toBe(3)
-    // The first code unit after the line break starts the next line.
     expect(visualColumn(lines, 4)).toBe(0)
     expect(
       offsetVertically({ key: 'ArrowDown', offset: 3, lines, column: 3 }),
@@ -239,7 +216,6 @@ describe('hard-break line ownership', () => {
     const lines = hard()
     const above = { id: 'above', text: 'zzzz', lines: spans([0, 4]) }
     const below = { id: 'below', text: 'yyyy', lines: spans([0, 4]) }
-    // Up from the newline at the end of 'tiny' enters the paragraph above.
     expect(
       offsetAfterArrow({
         key: 'ArrowUp',
@@ -250,7 +226,6 @@ describe('hard-break line ownership', () => {
         previous: above,
       }),
     ).toEqual({ paragraphId: 'above', offset: 4 })
-    // Down from the final line enters the paragraph below.
     expect(
       offsetAfterArrow({
         key: 'ArrowDown',
@@ -261,7 +236,6 @@ describe('hard-break line ownership', () => {
         next: below,
       }),
     ).toEqual({ paragraphId: 'below', offset: 4 })
-    // Down from a mid-paragraph line stays inside the paragraph when it can.
     expect(
       offsetAfterArrow({
         key: 'ArrowDown',
@@ -414,7 +388,6 @@ describe('generated line-ownership matrix', () => {
         const line = requireLine(lines[index])
         const next = requireLine(lines[index + 1])
         expect(next.from).toBe(line.to + 1)
-        // Hard break: the newline slot belongs to the line it terminates.
         expect(visualColumn(lines, line.to)).toBe(lineWidth(line))
         expect(visualColumn(lines, next.from)).toBe(0)
       }

@@ -44,8 +44,6 @@ const FONT_FACES = [
   'Courier New',
 ].map((name) => ({ value: name, label: name }))
 
-// The contract carries a font size in half-points, so the option value is
-// twice the point label the user sees.
 const FONT_SIZES = [
   '8',
   '9',
@@ -61,7 +59,6 @@ const FONT_SIZES = [
   '36',
 ].map((size) => ({ value: String(Number(size) * 2), label: size }))
 
-// Hex without the leading `#`, matching the contract's colour pattern.
 const FONT_COLOURS = [
   { value: '000000', label: 'Black' },
   { value: 'C00000', label: 'Dark red' },
@@ -93,20 +90,10 @@ const DOCUMENT_KINDS = [
   { value: 'order', label: 'Order' },
 ]
 
-/**
- * The contract's `auto` is an explicit direct colour, not the absent one: the
- * select shows it as Automatic rather than a value no option matches (which
- * renders blank in a browser).
- */
 export function fontColourSelectValue(colour: string | null | undefined) {
   return colour === 'auto' ? '' : (colour ?? '')
 }
 
-/**
- * The stored kind first: a kind this deployment does not list still shows as
- * itself rather than snapping the select to a value it never chose, and the
- * user can clear it or re-pick without the stored value being lost on sight.
- */
 function documentKindOptions(kind: string | null) {
   const options: Array<{ value: string; label: string }> = [
     { value: '', label: 'No type set' },
@@ -118,12 +105,6 @@ function documentKindOptions(kind: string | null) {
   return options
 }
 
-/**
- * The formatting panel the Format menu and the toolbar open: every control
- * that needs a value to choose, which a menu row cannot carry. It is a
- * non-modal popover, so the caret and the selection stay where they were while
- * a font or a margin is picked, and the change still lands on that selection.
- */
 export function EditorFormattingPanel({
   open,
   onOpenChange,
@@ -144,10 +125,6 @@ export function EditorFormattingPanel({
     <Popover
       open={open}
       onOpenChange={(next, details) => {
-        // A value control inside the panel opens its own portaled listbox, so
-        // the press that picks an option is reported as an outside press. It
-        // is inside this surface in every way that matters: closing here would
-        // dismiss the panel at the moment the choice lands.
         if (
           !next &&
           (details.reason === 'outside-press' || details.reason === 'focus-out')
@@ -260,8 +237,6 @@ export function EditorFormattingPanel({
                     value={format?.lineSpacing ?? ''}
                     options={LINE_SPACING_OPTIONS}
                     disabled={!editing}
-                    // No direct spacing means the style's own single spacing;
-                    // naming it keeps the control from reading "Select…".
                     placeholder="Single"
                     onChange={(value) => format?.onLineSpacing(value)}
                   />

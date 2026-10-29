@@ -77,22 +77,12 @@ function flagOnCoveredRuns(
   runs: DocumentParagraphWire['runs'],
   flag: 'bold' | 'italic' | 'underline' | 'strikethrough',
 ) {
-  // The covered runs come from the projected effective paragraph, so their
-  // XML already carries every pending answer in application order: run-level
-  // drafts in the base, then the range drafts. Reading the XML is reading
-  // exactly what paint decides; a pending entry consulted out of order could
-  // disagree with the slice it is read for.
   return (
     runs.length > 0 &&
     runs.every((run) => runFlagOn(run.preservedXmlFragments.join(''), flag))
   )
 }
 
-/**
- * The value every covered run agrees on, or `null` when they disagree or none
- * is covered. A value control (highlight, vertical align) uses this so a mixed
- * selection reads unpressed and one click makes it uniform.
- */
 function uniformCoveredValue<T>(
   runs: DocumentParagraphWire['runs'],
   read: (xml: string) => T,
@@ -104,21 +94,6 @@ function uniformCoveredValue<T>(
     : null
 }
 
-// e40-selection-format-state: pressed flags follow the covered runs, not runs[0]
-// e42-painted-format-control: cover painted splits, not the unsplit source paragraph
-// e70-effective-format-control: cover the effective text the paint path paints,
-// not the stored paragraph the drafts have not been applied to
-/**
- * The runs a selection covers, across every paragraph it spans. One range per
- * paragraph, in document order; a collapsed range (from === to) is the run the
- * caret sits in, which is how the caret case addresses its formatting.
- *
- * The paragraph is derived exactly as the editor paints it: format drafts
- * applied, then the join's appended runs and text drafts, then pending range
- * emphasis projected over that string. A selection carrying only unsaved
- * characters covers no stored run, so reading the stored paragraph left the
- * control reporting "off" while the screen and the save said "on".
- */
 function coveredRuns(
   model: DocumentModelWire,
   ranges: ReadonlyArray<{ paragraphId: string; from: number; to: number }>,
@@ -142,14 +117,12 @@ function coveredRuns(
   })
 }
 
-/** Every distinct paragraph a selection covers, in the order given. */
 export function selectedParagraphIds(
   ranges: ReadonlyArray<{ paragraphId: string }>,
 ): string[] {
   return [...new Set(ranges.map((range) => range.paragraphId))]
 }
 
-/** The numbering instance a target names, including its pending draft. */
 function numberedInstance(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -164,21 +137,11 @@ export function formatControlState(
   format: FormatDrafts,
   paragraphId: string | null,
   ranges: ReadonlyArray<{ paragraphId: string; from: number; to: number }> = [],
-  /**
-   * The ranges that carry text to format. A selection of only paragraph
-   * breaks covers paragraphs but no code units, and addressing a paragraph
-   * mark is not something the edit contract can express, so those ranges are
-   * excluded rather than silently formatting a whole run under them.
-   */
   emphasisRanges: ReadonlyArray<{
     paragraphId: string
     from: number
     to: number
   }> = ranges,
-  /**
-   * The text drafts and a join's appended runs. A selection carries offsets
-   * in that effective text, so the cover and the flags must read it too.
-   */
   drafts?: Record<string, string>,
   extraRuns?: ExtraRuns,
 ) {
@@ -204,10 +167,6 @@ export function formatControlState(
     ),
   )
   const paragraphIds = selectedParagraphIds(ranges)
-  // A multi-paragraph selection whose paragraphs do not all carry one style is
-  // a defined mixed state: no chip is pressed and the select does not falsely
-  // show one paragraph's style. A pending insert's style lives only in the
-  // format drafts until the insert is saved, so the draft is read for it too.
   const paragraphStyleIds = paragraphIds.map((id) =>
     effectiveParagraphStyleId(model, format, id),
   )
@@ -220,14 +179,10 @@ export function formatControlState(
     const item = selectedParagraph(model, id)
     return item ? [item] : []
   })
-  // Restart acts on every stored target paragraph, not just the caret's, so
-  // the control is available when any target names a valid numbering instance.
   const numberedTargets = targetParagraphs.filter((item) =>
     Boolean(numberedInstance(model, format, item)),
   )
   const canRestart = numberedTargets.length > 0
-  // Pressed only when every numbered target carries an override, so a mixed
-  // selection reads unpressed and one click makes the whole selection restart.
   const listRestarted =
     numberedTargets.length > 0 &&
     numberedTargets.every((item) => {
@@ -238,9 +193,6 @@ export function formatControlState(
   return {
     paragraph,
     paragraphIds,
-    // A pending insert is not part of the stored story, so its style lives only
-    // in the format drafts until the insert is saved. Report it so the style
-    // control shows the chosen style instead of "No direct style".
     paragraphStyleId,
     paragraphStyleMixed,
     paragraphStyles: paragraphStyleOptions(model),
@@ -251,9 +203,6 @@ export function formatControlState(
     italic: flagOnCoveredRuns(covered, 'italic'),
     underline: flagOnCoveredRuns(covered, 'underline'),
     strikethrough: flagOnCoveredRuns(covered, 'strikethrough'),
-    // A font control reads the value every covered run agrees on, like
-    // highlight and vertical align: a mixed selection reads unset so one
-    // choice makes it uniform. Null means no direct value or a disagreement.
     fontFamily: uniformCoveredValue(covered, runFontFamily),
     fontSize: uniformCoveredValue(covered, runFontSize),
     colour: uniformCoveredValue(covered, runColour),
@@ -274,7 +223,6 @@ export function formatControlState(
   }
 }
 
-/** The style a paragraph effectively carries, including a pending style draft. */
 function effectiveParagraphStyleId(
   model: DocumentModelWire,
   format: FormatDrafts,

@@ -1,13 +1,4 @@
 import '@obiter/test-dom'
-// Cached-document continuation failure, through the real infinite query. A
-// document that was opened before has its findings pages in the query cache; a
-// continuation (or a refetch of pages already loaded) that fails must be
-// disclosed, must not hide the findings that did load, and must be retryable
-// without duplicating findings, losing the selection, or reloading the page.
-//
-// The provider's findings hook is NOT mocked here: `apiFetch` is the only
-// network boundary, so only the real keyset walk and the real query cache are
-// under test.
 import { createElement, type PropsWithChildren } from 'react'
 import {
   cleanup,
@@ -29,13 +20,7 @@ import type {
 import { verificationFindingsQueryKey } from '../../verification-runs'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('../../api')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const apiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../api')).map((key) => [key, undefined]),
 )
@@ -50,13 +35,7 @@ mock.module('../../api', () =>
 )
 
 const documentHook = vi.hoisted(() => ({ useDocument: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('../../documents')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../documents')).map((key) => [key, undefined]),
 )
@@ -71,15 +50,9 @@ mock.module('../../documents', () =>
 )
 
 const modelHook = vi.hoisted(() => ({ useDocumentModel: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentWorkspaceApiModule = {
   ...(await import('../../document-workspace-api')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentWorkspaceApiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-workspace-api')).map((key) => [
     key,
@@ -96,9 +69,6 @@ mock.module('../../document-workspace-api', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { VerificationWorkspaceProvider } =
   await import('../verification/verification-context')
 const { VerificationDock } = await import('../verification/verification-dock')
@@ -162,8 +132,6 @@ function run(): VerificationRun {
   }
 }
 
-/** The mutable network boundary: the same URL can succeed, then fail, then
- * recover, exactly as a flaky continuation does in the browser. */
 const network = {
   failContinuation: true,
   failFirstPage: false,
@@ -178,8 +146,6 @@ function pageFor(
     return Promise.resolve({ runs: [run()], nextCursor: null })
   }
   if (url.includes('cursor=page-2')) {
-    // A continuation failure is a rejected network boundary and must be
-    // disclosed rather than silently leaving the loaded pages as the run.
     return network.failContinuation
       ? Promise.reject(new Error('the continuation request failed'))
       : Promise.resolve({ run: run(), findings: pageTwo, nextCursor: null })
@@ -276,39 +242,28 @@ describe('cached-document findings failure', () => {
     seedPartialCache(client)
     mount(client)
 
-    // The failure is disclosed even though page one is already cached, and the
-    // retry is a real, named control rather than only a "Load more".
     await waitForContinuationFailure()
     const region = verificationRegion()
-    // The server-computed total is still shown; the summary is not derived from
-    // the loaded page.
     expect(region.textContent).toContain('4 match the checked source')
 
     fireEvent.click(
       within(region).getByRole('button', { name: 'All findings' }),
     )
     const dialog = await screen.findByRole('dialog')
-    // Retry lives in the surface that lists findings, next to the failure.
     const retry = within(dialog).getByRole('button', { name: /retry/i })
-    // The findings that did load are preserved rather than replaced by the
-    // error, and the run is not presented as complete.
     expect(within(dialog).getByText('Explanation 1')).toBeTruthy()
     expect(within(dialog).getByText('Explanation 2')).toBeTruthy()
     expect(dialog.textContent).not.toContain('found nothing to list')
 
-    // Recovery: the same query appends the missing page.
     network.failContinuation = false
     fireEvent.click(retry)
     await waitFor(() => {
       expect(within(dialog).getByText('Explanation 3')).toBeTruthy()
     })
     expect(within(dialog).getByText('Explanation 4')).toBeTruthy()
-    // No duplicates and the counts are stable.
     expect(within(dialog).getAllByText('Explanation 1')).toHaveLength(1)
     expect(within(dialog).getAllByText('Explanation 4')).toHaveLength(1)
     expect(within(dialog).queryByRole('alert')).toBeNull()
-    // The continuation was retried with the same cursor, not restarted from
-    // the first page.
     expect(
       network.calls.filter((url) => url.includes('cursor=page-2')),
     ).toHaveLength(2)
@@ -335,15 +290,12 @@ describe('cached-document findings failure', () => {
     const dockRetry = within(verificationRegion()).getByRole('button', {
       name: /retry/i,
     })
-    // A real pointer press on Retry must not count as an outside press: the
-    // panel's document-level dismissal has to leave the selection open.
     fireEvent.pointerDown(dockRetry)
     expect(panel.isConnected).toBe(true)
     fireEvent.click(dockRetry)
     await waitFor(() => {
       expect(within(verificationRegion()).queryByRole('alert')).toBeNull()
     })
-    // Selection survives the recovery; the panel is not closed or retargeted.
     expect(panel.textContent).toContain('Authority 1')
     expect(panel.textContent).toContain('1 of 4')
   })
@@ -353,7 +305,6 @@ describe('cached-document findings failure', () => {
     seedCompleteCache(client)
     mount(client)
 
-    // The mount refetch of the cached pages fails on the continuation.
     await waitForContinuationFailure()
     const region = verificationRegion()
     expect(within(region).getByRole('button', { name: /retry/i })).toBeTruthy()
@@ -362,7 +313,6 @@ describe('cached-document findings failure', () => {
       within(region).getByRole('button', { name: 'All findings' }),
     )
     const dialog = await screen.findByRole('dialog')
-    // Both cached pages are still listed while the refetch failure is shown.
     expect(within(dialog).getByText('Explanation 3')).toBeTruthy()
 
     network.failContinuation = false
@@ -384,7 +334,6 @@ describe('cached-document findings failure', () => {
         within(verificationRegion()).getByRole('alert').textContent,
       ).toContain('the findings request failed')
     })
-    // Nothing loaded is never presented as a completed empty run.
     expect(verificationRegion().textContent).not.toContain(
       'found nothing to list',
     )

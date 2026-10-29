@@ -18,12 +18,6 @@ import { VerifyDismissDialog } from './verify-dismiss-dialog'
 import { VerifyFinding } from './verify-finding'
 import { useVerificationWorkspace } from './verification-context'
 
-/**
- * Every finding in the open document's run, including the ones the page cannot
- * mark beside the text, each with the reason it is not drawn there. It reads the
- * same run and the same words as the Verify page, so a finding dismissed here is
- * dismissed there.
- */
 export function VerificationFindingsIndex({
   open,
   onOpenChange,
@@ -32,7 +26,6 @@ export function VerificationFindingsIndex({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** When the parent renders the dismiss dialog itself, hand the finding up. */
   onDismiss?: (finding: VerificationFindingView) => void
   currentUserId?: string
 }) {

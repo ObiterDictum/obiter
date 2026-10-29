@@ -14,8 +14,6 @@ import type { AuthorityHit } from '../../document-authorities'
 import { DocxDesk } from './docx-desk'
 import { DocxModelPages } from './docx-model-pages'
 import { WorkspaceSidePanels } from './workspace-side-panels'
-// Comparison is a rare, read-only surface of its own; keeping it out of the
-// editor's eager graph keeps the desktop renderer's first paint small.
 const DocumentCompareRedline = lazy(() =>
   import('./document-compare-redline').then((module) => ({
     default: module.DocumentCompareRedline,
@@ -27,12 +25,6 @@ type ModelPagesProps = Omit<
   'onExitMarginEditing' | 'onOpenNoteEditing'
 >
 
-/**
- * The desk half of the DOCX workspace: the pages, the ruler, the navigation
- * pane and the docked panels. Extracted so `docx-workspace.tsx` keeps to the
- * request and review state it owns; every value here is one the workspace
- * already derived, and nothing in this file decides behaviour.
- */
 export function DocxWorkspaceDesk({
   compareOpen,
   onCloseCompare,

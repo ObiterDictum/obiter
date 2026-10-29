@@ -23,11 +23,6 @@ import {
 import { formatDate, initialsOf } from '../format'
 import { ErrorNotice } from './settings-fields'
 
-/**
- * Members and invites, for the roles that may manage them. Fetched when the
- * Organisation section is opened rather than on every Settings render.
- */
-
 export function OrganisationPeople({
   organisationId,
   role,
@@ -36,13 +31,10 @@ export function OrganisationPeople({
 }: {
   organisationId: string
   role: 'owner' | 'admin'
-  /** The caller's own member id: you cannot remove yourself from here. */
   selfId: string
   active: boolean
 }) {
   const canRemove = role === 'owner'
-  // Member and invite lists are fetched when the section is opened, not on
-  // every Settings render.
   const members = useOrganisationMembers(organisationId, { enabled: active })
   const invites = useOrganisationInvites(organisationId, { enabled: active })
   const invite = useCreateOrganisationInvite(organisationId)
@@ -50,9 +42,6 @@ export function OrganisationPeople({
   const remove = useRemoveOrganisationMember(organisationId)
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('member')
-  // One action error for the panel, cleared when any later action starts or
-  // succeeds: a message about an operation the user has moved on from must not
-  // stay on screen beside a later success (S16).
   const [actionError, setActionError] = useState<string | null>(null)
 
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
@@ -102,8 +91,6 @@ export function OrganisationPeople({
       {actionError ? <ErrorNotice message={actionError} /> : null}
 
       {members.data && members.data.length > 0 ? (
-        // The table is wider than a narrow viewport; it scrolls inside its own
-        // box rather than widening the page.
         <div className="overflow-x-auto">
           <Table className="min-w-[32rem]">
             <THead>

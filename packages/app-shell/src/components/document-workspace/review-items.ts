@@ -1,37 +1,18 @@
 import type { DocumentChangeWire } from '@obiter/contracts'
 
-/**
- * One row of the review panel. A move is a row, not two: the engine names the
- * halves of a decidable move by a mutual `pairId` and decides the group as one,
- * so a panel that listed them separately would offer two decisions over one
- * outcome — and, for the replacement Word writes as an insert plus a delete,
- * would hide the move behind a silent pair.
- */
 export type ReviewItem =
   | { kind: 'change'; id: string; change: DocumentChangeWire }
   | {
       kind: 'move'
       id: string
-      /** The move's revisions; one when the parser could not pair the halves. */
       members: DocumentChangeWire[]
-      /** The revision the row reads its author, date and text from. */
       lead: DocumentChangeWire
     }
 
-/**
- * The panel's rows, in document order. A move half the parser could not pair
- * carries no `pairId` (the wire only resolves one for a decidable pair), so it
- * stays its own row — labelled as a move, never as an insert or a delete,
- * because the panel cannot honestly claim which half belongs with which.
- */
 export function reviewItems(
   changes: readonly DocumentChangeWire[],
 ): ReviewItem[] {
   const byId = new Map(changes.map((change) => [change.id, change]))
-  // `pairId` is mutual but not total: Word names a move by its range
-  // containers, so one move can hold several wrappers whose pair ids point at
-  // a shared half. Linking both ends and claiming each component keeps the
-  // whole move in one row.
   const links = new Map<string, string[]>()
   for (const change of changes) {
     const partner =
@@ -71,12 +52,6 @@ export function reviewItems(
   return mergeUnpairedMoves(items)
 }
 
-/**
- * The parser names a move's halves by a mutual `pairId`; without one, each
- * half arrives as its own row and the panel showed the same words twice with
- * no explanation. Two unpairable halves carrying the same text are one move
- * the engine cannot decide here, so they read as one row that says why.
- */
 function mergeUnpairedMoves(items: ReviewItem[]): ReviewItem[] {
   const merged: ReviewItem[] = []
   for (const item of items) {
@@ -104,18 +79,12 @@ function mergeUnpairedMoves(items: ReviewItem[]): ReviewItem[] {
   return merged
 }
 
-/** Every wire id a decision on this row has to name. */
 export function itemChangeIds(item: ReviewItem) {
   return item.kind === 'change'
     ? [item.change.id]
     : item.members.map((m) => m.id)
 }
 
-/**
- * A move whose halves the parser never paired — one half on its own, or two
- * halves that carry the same text instead of a mutual `pairId`. No decision
- * can run on it, so the row states that rather than offering Accept/Reject.
- */
 export function itemUnpairable(item: ReviewItem) {
   return (
     item.kind === 'move' &&
@@ -123,11 +92,6 @@ export function itemUnpairable(item: ReviewItem) {
   )
 }
 
-/**
- * Whether the engine can decide this row at all. A move whose halves the
- * parser never paired is decided as a pair or not at all, so merging the two
- * display rows must not make one decidable.
- */
 export function itemDecidable(item: ReviewItem) {
   if (item.kind === 'change') return item.change.undecidable === undefined
   if (
@@ -138,19 +102,14 @@ export function itemDecidable(item: ReviewItem) {
   return item.members.every((member) => member.undecidable === undefined)
 }
 
-/** The revision the row is about, for its author, date and text. */
 export function itemLead(item: ReviewItem) {
   return item.kind === 'change' ? item.change : item.lead
 }
 
 export type ReviewCounts = {
-  /** Rows that are a single revision: insertions, deletions, formatting. */
   changes: number
-  /** Rows that are a move, paired or not. */
   moves: number
-  /** Move rows no decision can run on. */
   manualMoves: number
-  /** Rows of any kind no decision can run on. */
   undecidable: number
 }
 
@@ -168,17 +127,10 @@ function plural(count: number, one: string, many = `${one}s`) {
   return `${String(count)} ${count === 1 ? one : many}`
 }
 
-/**
- * The counts line the panel leads with. Changes, comments and moves are counted
- * apart because they are decided apart: a bulk decision reaches changes only,
- * and a move no decision can run on is never folded into their number.
- */
 export function reviewCountsLabel(counts: ReviewCounts, comments: number) {
   const parts = [plural(counts.changes, 'change')]
   if (comments > 0) parts.push(plural(comments, 'comment'))
   if (counts.moves > 0) {
-    // A move no decision can run on is the one count a reader must not miss,
-    // so it is named in the same line rather than left for the list to show.
     parts.push(
       counts.manualMoves === counts.moves
         ? `${plural(counts.moves, 'move')} requiring manual review`
@@ -191,7 +143,6 @@ export function reviewCountsLabel(counts: ReviewCounts, comments: number) {
   return parts.join(' · ')
 }
 
-/** What the row is, in the words the reason and the decision bar share. */
 export function itemKindLabel(item: ReviewItem) {
   if (item.kind === 'move') {
     const { lead } = item
@@ -209,8 +160,6 @@ export function itemKindLabel(item: ReviewItem) {
     case 'property':
       return 'Formatting'
     case 'move':
-      // A move is always a move row; this only keeps the switch exhaustive
-      // over the wire's own union.
       return 'Move'
   }
 }

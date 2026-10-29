@@ -5,17 +5,10 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { layoutDocument } from './document-page-engine'
+import { textParagraph as paragraph } from './document-wire-test-support'
 
 const A4_LETTER =
   '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>'
-
-function paragraph(id: string, text: string): DocumentParagraphWire {
-  return {
-    id,
-    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
-    preservedXmlFragments: [],
-  }
-}
 
 function modelOf(
   paragraphs: DocumentParagraphWire[],
@@ -66,7 +59,6 @@ describe('layoutDocument web flow', () => {
     expect(page?.box.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 })
     expect(page?.columns).toEqual([{ left: 0, widthPx: 500 }])
     expect(page?.blocks).toHaveLength(40)
-    // The flow records the height its content filled, not the frame bound.
     expect(page?.contentPx).toBeGreaterThan(0)
     expect(page?.contentPx).toBeLessThan(10_000)
   })

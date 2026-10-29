@@ -11,13 +11,11 @@ import {
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
 
-/** The selected result as evidence: source text with its pinpoint, never a summary. */
 export function SearchPreview({
   row,
   embedded = false,
 }: {
   row: SearchResultRow | undefined
-  /** In a drawer the panel already owns the surface and its heading. */
   embedded?: boolean
 }) {
   if (!row) {

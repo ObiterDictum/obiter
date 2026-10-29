@@ -2,13 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import type { RedactionRunStatus } from '@obiter/contracts'
 import { apiFetch } from './api'
 
-/** Shared with @obiter/redact-ui so list caches stay coherent. */
 export const redactionRunsQueryKey = ['redaction-runs'] as const
 
-/** List payload fields used by shell chrome (home / mode rail). */
 export interface RedactionRunListItem {
   id: string
-  /** Absent for a run started as a standalone job rather than on a document. */
   documentId?: string | null
   sourceFilename: string
   status: RedactionRunStatus
@@ -34,10 +31,6 @@ export interface RedactionRunListItem {
   }
 }
 
-/**
- * Lightweight redaction-run list for shell chrome (mode rail + home desk).
- * Same query key as redact-ui so opening Redact does not refetch from scratch.
- */
 export function useRedactionRunsList(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: redactionRunsQueryKey,
@@ -48,19 +41,12 @@ export function useRedactionRunsList(options?: { enabled?: boolean }) {
   })
 }
 
-/** Spans nobody has decided yet, or null when the summary does not say. */
 export function undecidedSpanCount(
   summary: RedactionRunListItem['summary'],
 ): number | null {
   return summary?.byDecision?.undecided ?? summary?.unreviewedCount ?? null
 }
 
-/**
- * A run waiting on a person: one that failed, or one in review with a span
- * still undecided. The single definition the sidebar count and the Home queue
- * share, so the two can never disagree about what is pending. A run with every
- * span decided needs finalising, not a decision, so it belongs to Redact only.
- */
 export function redactionRunNeedsDecision(
   run: Pick<RedactionRunListItem, 'status' | 'summary'>,
 ): boolean {

@@ -406,8 +406,6 @@ it('refuses a range that would remove a revised paragraph, not one inside it', (
   const at = (paragraphId: string, offset = 1) => ({ paragraphId, offset })
   const range = (from: string, to: string) =>
     documentRangeRefusal(model, emptyEditorState(), at(from), at(to, 3))
-  // The writer cannot delete a revised middle paragraph or join a revised
-  // tail away, so nothing may change before the save refuses.
   expect(
     applyReplaceDocumentRange(
       model,

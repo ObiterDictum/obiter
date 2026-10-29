@@ -10,12 +10,6 @@ import {
 } from '../../document-page-engine'
 import { paragraphNeighborResolver } from './paragraph-arrow'
 
-/**
- * The open margin story laid out like the body column: draft and extra-run
- * merges applied, pending inserts woven in, arrows and paragraph ops scoped
- * to its own flow order. Kept out of the page component so the body path
- * pays nothing when no margin story is open.
- */
 export function useMarginEdit(
   marginEditing: DocumentStoryWire | undefined,
   model: DocumentModelWire,

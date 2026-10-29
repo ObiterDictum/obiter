@@ -46,10 +46,6 @@ function ActContentsItem({
   node: LegislationActContentsNode
   documentIdentity: string
 }) {
-  // Container rows (Part, Chapter, Schedule, crossheading) render as
-  // headings with their children nested beneath; provision rows are links
-  // to their provision pages. Indentation comes from the tree itself,
-  // never from label-path depth.
   if (isContainerKind(node.kind)) {
     return (
       <li>

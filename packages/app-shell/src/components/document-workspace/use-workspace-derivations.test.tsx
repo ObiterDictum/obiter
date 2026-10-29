@@ -14,6 +14,7 @@ import { emptyDraftState, planDocumentSave } from '../../document-save-plan'
 import type { StructuralDraft } from '../../document-structural-drafts'
 import type { BreakDraft } from '../../document-draft-state'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
+import { wireModel as model } from '../../document-wire-test-support'
 
 function paragraph(
   id: string,
@@ -28,35 +29,6 @@ function paragraph(
   }
 }
 
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
-  }
-}
-
 const tocDraft = (id: string, paragraphId: string): StructuralDraft => ({
   id,
   kind: 'table-of-contents',
@@ -64,12 +36,6 @@ const tocDraft = (id: string, paragraphId: string): StructuralDraft => ({
   offset: 0,
 })
 
-/**
- * Renders the real derivations the workspace paints and disables controls
- * from, so a test reads the same `painted` model and the same ribbon
- * availability a user sees — the surfaces that drifted from the save in
- * every round of this defect class.
- */
 function derivations(
   base: DocumentModelWire,
   drafts: {
@@ -138,10 +104,6 @@ function tocEntries(painted: DocumentModelWire | undefined) {
 
 describe('workspace derivations shared deletions', () => {
   it('paints only the entry a batch-kept field will capture', () => {
-    // A runless heading carrying typed text is deleted by the batch's
-    // implicit replacement: the paint must show the field the save sends —
-    // capturing the surviving heading alone — not an entry over a paragraph
-    // the batch removes.
     const base = model([
       paragraph('h1', '', 'Heading1'),
       paragraph('h2', 'Surviving', 'Heading1'),
@@ -165,17 +127,10 @@ describe('workspace derivations shared deletions', () => {
       offset: 0,
     })
     expect(tocEntries(derived.painted)).toEqual(['Surviving'])
-    // The ribbon counts the surviving heading too, so the control stays
-    // enabled for another field rather than reporting none.
     expect(derived.insert.structure.tableOfContentsUnavailable).toBeUndefined()
   })
 
   it('agrees across save, paint and ribbon when every delete is refused', () => {
-    // Every body paragraph is marked for deletion and every mark is refused
-    // by the emptied-story guard: the batch deletes nothing, so the field
-    // saves with the heading still captured. The paint and the ribbon must
-    // read the same applied set — the raw marks would drop the heading the
-    // save keeps.
     const base = model([
       paragraph('h1', 'Overview', 'Heading1'),
       paragraph('p3', 'x'),

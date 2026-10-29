@@ -106,8 +106,6 @@ describe('rulerMarkers', () => {
       },
     } as DocumentModelWire
     const face = paragraphFace(model.stories[0]!.paragraphs[0]!, model.styles)
-    // The style's hanging indent reaches the face, so the marker hangs left of
-    // the text block rather than sitting on it.
     expect(face.indentHangingPx).toBe(16)
     expect(rulerMarkers({ columnWidthPx: 602, face }).firstLinePx).toBe(32 - 16)
   })

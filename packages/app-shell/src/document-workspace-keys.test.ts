@@ -71,8 +71,6 @@ describe('document workspace keys', () => {
     const redo = vi.fn()
     const handlers = { save, undo, redo }
 
-    // AltGr reports as Ctrl+Alt on Windows, so any Alt-combined chord is a
-    // character shortcut for the layout, not a document command.
     const altSave = event('s', { altKey: true })
     handleDocumentWorkspaceKeys(altSave, handlers)
     handleDocumentWorkspaceKeys(event('z', { altKey: true }), handlers)
@@ -86,7 +84,6 @@ describe('document workspace keys', () => {
     expect(redo).not.toHaveBeenCalled()
     expect(altSave.preventDefault).not.toHaveBeenCalled()
 
-    // The intended bindings still route.
     handleDocumentWorkspaceKeys(event('s'), handlers)
     handleDocumentWorkspaceKeys(event('z'), handlers)
     handleDocumentWorkspaceKeys(event('y'), handlers)
@@ -142,8 +139,6 @@ describe('document workspace keys', () => {
     expect(fromPage.preventDefault).toHaveBeenCalled()
     expect(print).toHaveBeenCalledTimes(1)
 
-    // Ctrl+P inside the find or comments field is still a print request, not a
-    // text-editing command, so it must not be treated as a foreign field.
     const fromField = event('p', {
       target: document.createElement('textarea'),
     })
@@ -220,7 +215,6 @@ describe('document workspace keys', () => {
         expect(keyEvent.preventDefault).not.toHaveBeenCalled()
       }
     }
-    // Ctrl+Shift+B is a browser chord, not the document's Bold.
     const shiftB = event('b', { shiftKey: true })
     handleDocumentWorkspaceKeys(shiftB, handlers)
     expect(shiftB.preventDefault).not.toHaveBeenCalled()
@@ -231,8 +225,6 @@ describe('document workspace keys', () => {
 
   it('does not claim B/I/U when the matching toggle is unavailable', () => {
     const boldEvent = event('b')
-    // The caller omits the handler for a tracked partial-range refusal, so the
-    // keystroke falls through rather than being swallowed.
     handleDocumentWorkspaceKeys(boldEvent, { save: vi.fn() })
     expect(boldEvent.preventDefault).not.toHaveBeenCalled()
   })

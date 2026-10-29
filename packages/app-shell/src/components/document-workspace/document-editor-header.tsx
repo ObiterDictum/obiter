@@ -28,17 +28,9 @@ export type HeaderSaveInput = {
 
 type HeaderSave = {
   label: string
-  /** `null` draws no dot: an ongoing state has nothing to confirm. */
   tone: 'success' | 'warning' | 'danger' | null
 }
 
-/**
- * The one save-state sentence the editor header shows, derived from the save
- * machine rather than stored. Every state the workspace can reach is named,
- * including the two it can reach on its own — no network, and a newer version
- * on the server — so the header never reads "Saved" while work is unaccounted
- * for. `versionLabel` is the version the text on screen was last saved as.
- */
 export function headerSaveState({
   state,
   versionLabel,
@@ -58,12 +50,8 @@ export function headerSaveState({
     case 'saving':
       return { label: 'Saving…', tone: null }
     case 'failed':
-      // One line: the header has room for a status, not a sentence, and a
-      // wrapped label read as a stray separator at the start of line two.
       return { label: 'Save failed — not on the server', tone: 'danger' }
     case 'stale':
-      // The banner below the chrome already says this once, with Reload; the
-      // header only stops claiming the work is saved.
       return { label: '', tone: null }
     case 'blocked':
       return {
@@ -77,12 +65,6 @@ export function headerSaveState({
   }
 }
 
-/**
- * The editor's own header: what this document is, where it sits, whether the
- * work on screen is on the server, what is being checked, and the panel and
- * action controls. The back and matter links arrive as nodes because only the
- * route knows the router.
- */
 function DocumentEditorHeader({
   filename,
   versionLabel,
@@ -109,10 +91,8 @@ function DocumentEditorHeader({
   onToggleTrackChanges?: () => void
   verify?: ReactNode
   saveButton?: ReactNode
-  /** Redact's mark for the version on screen; nothing for an ordinary one. */
   mark?: ReactNode
   infoOpen?: boolean
-  /** Absent where the route did not load the document detail to show. */
   onToggleInfo?: () => void
   back?: ReactNode
   matterLink?: ReactNode
@@ -150,11 +130,7 @@ function DocumentEditorHeader({
               </StatusDot>
             )}
           </span>
-          {/* The top bar's breadcrumb already names the matter at compact
-              widths, so the header keeps one sub-line there. The status and
-              the matter share one line: the matter truncates rather than
-              wrapping, because a wrapped line would start with the dot that
-              only separates it from the status. */}
+
           {matterLink ? (
             <span className="flex min-w-0 items-center gap-2 max-compact:hidden">
               <span aria-hidden>·</span>
@@ -187,9 +163,6 @@ function DocumentEditorHeader({
           </Tooltip>
         ) : null}
         {trackChanges === undefined || !onToggleTrackChanges ? null : (
-          // One tracking control, in the header: a real switch with the
-          // visible pill and wording inside it, so assistive technology reads
-          // on/off rather than a pressed button and the toolbar keeps no copy.
           <Switch
             label="Track changes"
             checked={trackChanges}
@@ -219,11 +192,6 @@ function DocumentEditorHeader({
   )
 }
 
-/**
- * The DOCX editor's header: the save machine and the panel state wired to the
- * presentational header above. Kept here so `docx-workspace.tsx` stays within
- * its source ceiling and the save-state wording has one home.
- */
 export function DocxEditorHeader({
   filename,
   versionNumber,
@@ -292,10 +260,6 @@ export function DocxEditorHeader({
         </>
       }
       saveButton={
-        // preventDefault keeps the caret in the editor while the save flight
-        // runs, so keystrokes typed during it still land. Keyboard activation
-        // instead leaves focus here; the save path hands it back before
-        // `saving` disables the control and the browser drops focus to body.
         <span onMouseDown={(event) => event.preventDefault()}>
           <Button
             size="sm"

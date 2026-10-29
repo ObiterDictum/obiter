@@ -60,10 +60,6 @@ const MODE_HITS: AppSearchHit[] = [
   },
 ]
 
-/**
- * App-wide top-bar search. Types in the compact field; when the query no longer
- * fits, a floating expanded composer opens directly below.
- */
 export function AppSearchField() {
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -98,8 +94,6 @@ export function AppSearchField() {
         floatInputRef.current?.focus()
         return
       }
-      // The compact field has no box at narrow widths, so the shortcut opens the
-      // composer there instead of focusing an invisible input.
       if (!inputRef.current || inputRef.current.offsetParent === null) {
         setFocused(true)
         setOpenedExpanded(true)
@@ -209,19 +203,12 @@ export function AppSearchField() {
           'flex h-[30px] items-center gap-2 rounded-md border border-line bg-surface pr-1 pl-3',
           'transition-[border-color,box-shadow] duration-150 ease-out',
           'hover:border-line-strong',
-          // Keyboard focus must be visible on the field itself, not only as a
-          // border colour change. `has-[:focus-visible]` keeps the ring on the
-          // box that is the field's visual, matching the Button convention.
           'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
-          // At 1024 and below search is an icon: a 240px field would squeeze the
-          // breadcrumb into an ellipsis.
           'max-compact:w-8 max-compact:justify-center max-compact:border-0 max-compact:bg-transparent max-compact:pr-0 max-compact:pl-0',
           focused && 'border-line-strong',
         )}
         onSubmit={onCompactSubmit}
       >
-        {/* Narrow widths have no room for a field, so a real button opens the
-            same composer the field would. */}
         <button
           type="button"
           aria-label="Search Obiter"
@@ -272,9 +259,6 @@ export function AppSearchField() {
 
       {expanded ? (
         <div
-          // Fixed and centred on the viewport: the compact field now sits at the
-          // right of the bar, so anchoring the panel to the field pushed it past
-          // a 768px viewport. The width already caps to `100vw - 2rem`.
           className="fixed top-12 left-1/2 z-50 w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2"
           role="dialog"
           aria-label="Expanded search"

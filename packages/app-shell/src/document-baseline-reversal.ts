@@ -46,15 +46,6 @@ export function sectionReversal(
   }
 }
 
-/**
- * The paragraph layout a reversal restates. `source` is the answer to restore
- * (the snapshot's pending layout, or the save's own for comparison), `stored`
- * is the direct pre-save layout it falls back to, and `sent` names the families
- * the save wrote and so must be reversed. A family the paragraph did not carry
- * before is released with an explicit null, and every `w:ind` attribute is
- * named because the writer merges `w:ind`: a partial object would let an
- * attribute the save added survive its own reversal.
- */
 export function reversalParagraphFormat(
   source: ParagraphFormatDraft | undefined,
   stored: ParagraphFormatDraft,
@@ -75,9 +66,6 @@ export function reversalParagraphFormat(
       : {}),
     ...(sent.lineSpacing !== undefined
       ? {
-          // A pre-save spacing with no rule cannot clear a rule the save added:
-          // the contract's `lineSpacingSchema` has no nullable `lineRule`. E3
-          // only ever writes `auto` (the default), so the UI cannot reach it.
           lineSpacing:
             source?.lineSpacing !== undefined
               ? source.lineSpacing
@@ -97,7 +85,6 @@ export function reversalParagraphFormat(
   }
 }
 
-/** Whether two complete reversal layouts name the same paragraph layout. */
 export function sameParagraphFormat(
   a: ParagraphFormatDraft,
   b: ParagraphFormatDraft,
@@ -132,7 +119,6 @@ function sameIndentation(
   )
 }
 
-/** Adds a tracked-change rejection group once, keyed by its change ids. */
 export function addTrackedRejection(
   state: DraftState,
   ooxmlIds: string[],
@@ -149,7 +135,6 @@ export function addTrackedRejection(
     })
     return
   }
-  // A later translation of the same change may add the shell removal.
   if (!removeParagraphIds?.length) return
   const existing = state.trackedRejections.find((group) => group.key === key)
   if (existing && !existing.removeParagraphIds?.length) {
@@ -157,7 +142,6 @@ export function addTrackedRejection(
   }
 }
 
-/** The pre-save character formatting of a run, for a formatting reversal. */
 export function preEmphasisForRun(
   model: DocumentModelWire,
   runId: string,
@@ -169,7 +153,6 @@ export function preEmphasisForRun(
   return null
 }
 
-/** The pre-save formatting at the start of a range, for a range reversal. */
 export function preEmphasisForRange(
   model: DocumentModelWire,
   paragraphId: string,
@@ -205,11 +188,6 @@ function emphasisOf(fragments: readonly string[]): PendingEmphasis {
   }
 }
 
-/**
- * Rebuilds a paragraph the save deleted, from the model that still held it.
- * The restored paragraph is an ordinary pending insert, so the next save sends
- * one insertion and the persisted document has exactly one copy.
- */
 export function restoreInsert(
   baseline: SaveBaseline,
   paragraphId: string,
@@ -221,17 +199,9 @@ export function restoreInsert(
   return {
     clientId: pendingDeletedParagraphId(paragraphId),
     // SAFETY: the guard above returns unless `anchor` or `beforeAnchor` is set,
-    // so a missing anchor here means `beforeAnchor` is a string.
     afterParagraphId: anchor ?? (beforeAnchor as string),
     ...(beforeAnchor ? { beforeParagraphId: beforeAnchor } : {}),
     text: paragraphPlainText(paragraph),
     runs: paragraph.runs.map((run) => ({ ...run })),
   }
 }
-
-/**
- * Resolves the placeholders a pre-reload translation left behind now that the
- * saved model names the result content. An identity the model still cannot
- * name is kept, never dropped, so the caller can tell that the reversal cannot
- * be represented and block instead of silently losing it.
- */

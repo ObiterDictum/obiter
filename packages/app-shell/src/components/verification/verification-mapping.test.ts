@@ -177,8 +177,6 @@ describe('resolveFindingTarget', () => {
   })
 
   it('keeps paragraph ids scoped to their own story', () => {
-    // Both stories hold a paragraph called `p1`; the footnote finding must stay
-    // in the footnote story rather than landing on the body paragraph.
     const target = resolveFindingTarget(
       finding({
         excerpt: '[2014] UKSC 8',

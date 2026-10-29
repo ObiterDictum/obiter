@@ -21,7 +21,6 @@ function NavigationGuard({ atRisk }: { atRisk: boolean }) {
     enableBeforeUnload: atRisk,
     withResolver: true,
   })
-  // Finish the pending router navigation when an in-flight save makes leaving safe.
   useEffect(() => {
     if (!atRisk && blocker.status === 'blocked') blocker.proceed()
   }, [atRisk, blocker.status, blocker.proceed])

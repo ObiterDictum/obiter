@@ -34,6 +34,7 @@ import {
   wordEditJoinRefusal,
   type EditorState,
 } from './document-word-edits'
+import { bodyStory } from './document-wire-test-support'
 
 const footnoteDraft = (
   id: string,
@@ -84,20 +85,6 @@ function model(stories: DocumentStoryWire[]): DocumentModelWire {
   }
 }
 
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
-  return {
-    partName: 'word/document.xml',
-    kind: 'document',
-    paragraphs,
-    preservedXmlFragments: [],
-    fields: [],
-    unanchoredFieldParagraphIds: [],
-  }
-}
-
-/** A notes story holding a separator and one two-paragraph entry, as the
- * parser emits them: one fragment per note element, the paragraphs sliced
- * in `w:p` order. */
 function footnotesStory(): DocumentStoryWire {
   return {
     partName: 'word/footnotes.xml',
@@ -126,7 +113,6 @@ describe('folded footnote drafts', () => {
     expect(runs.map((run) => run.text)).toEqual(['Hello ', '', 'world'])
     const ref = runs[1]
     expect(ref?.preservedXmlFragments[0]).toContain('<w:footnoteReference')
-    // The mark paints through the same stored-reference path a reparse reads.
     const noteRef = runNoteRefs(
       ref?.preservedXmlFragments.join('') ?? '',
       ref?.id ?? '',
@@ -135,7 +121,6 @@ describe('folded footnote drafts', () => {
 
     const story = folded.stories.find((item) => item.kind === 'footnotes')
     expect(story).toBeDefined()
-    // A created part carries the separator entries the writer emits.
     expect(
       story?.preservedXmlFragments.some((fragment) =>
         fragment.includes('w:type="separator"'),
@@ -172,7 +157,6 @@ describe('folded footnote drafts', () => {
     const base = model([bodyStory([paragraph('p1', 'text')]), existing])
     const folded = withStructuralDrafts(base, [footnoteDraft('s1', 'p1', 2)])
     const story = folded.stories.find((item) => item.kind === 'footnotes')
-    // The stored entries keep their order; the pending entry lands last.
     expect(story?.paragraphs.map((item) => item.id)).toEqual([
       'sep',
       'n2a',
@@ -192,7 +176,6 @@ describe('folded footnote drafts', () => {
     const refs = body?.paragraphs[0]?.runs.flatMap((run) =>
       runNoteRefs(run.preservedXmlFragments.join(''), run.id),
     )
-    // Stored ids run to 2, so the pending pair takes 3 and 4 in draft order.
     expect(refs?.map((ref) => ref.noteId)).toEqual(['3', '4'])
   })
 
@@ -248,8 +231,6 @@ describe('pending note text', () => {
       },
       'new-id',
     )
-    // No insert is minted: the note paragraph has no stored anchor, so Enter
-    // writes `\n` into the pending runs like Shift+Enter in a stored one.
     expect(split?.state.inserts).toEqual([])
     expect(
       (split?.state.extraRuns[noteId] ?? []).map((run) => run.text).join(''),
@@ -334,10 +315,6 @@ describe('footnote save partitioning', () => {
       model([bodyStory([paragraph('p1', 'text')]), header]),
       state,
     )
-    // The note text lives and dies with its structure: both are held back
-    // rather than one shipping and the other silently dropping, and the
-    // deferred slot discloses the structure's own reason — not a guessed
-    // missing-anchor one.
     expect(plan.operations).toEqual([])
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual([
       'structure',
@@ -366,8 +343,6 @@ describe('footnote save partitioning', () => {
       model([bodyStory([paragraph('p1', 'text'), paragraph('p2')])]),
       state,
     )
-    // A second block cause than the story check: the deferred slot must
-    // carry this reason, not fall back to a guessed missing-anchor one.
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual([
       'structure',
       'extra-runs',
@@ -389,8 +364,6 @@ describe('footnote save partitioning', () => {
       model([bodyStory([paragraph('p1', 'text')]), footnotesStory()]),
       { ...emptyDraftState(), structures: [draft] },
     )
-    // A restored draft the ribbon never got to refuse is still held back
-    // here rather than failing the whole save at the writer.
     expect(plan.operations).toEqual([])
     expect(plan.blocked.map((item) => item.slot.kind)).toEqual(['structure'])
     expect(plan.blocked[0]?.reason).toBe(
@@ -412,8 +385,6 @@ describe('footnote save partitioning', () => {
       model([bodyStory([paragraph('p1', 'text')])]),
       state,
     )
-    // No structure owns the id, so the runs partition like any other
-    // unaddressable edit — disclosed, not sent.
     expect(partition.blocked.map((item) => item.slot.kind)).toEqual([
       'extra-runs',
     ])
@@ -428,9 +399,7 @@ describe('note entry boundaries', () => {
     expect(paragraphDeletionRefusal(noted(), [], [], 'sep')).toBe(
       'last-note-paragraph',
     )
-    // The entry with two paragraphs survives losing one.
     expect(paragraphDeletionRefusal(noted(), [], [], 'n2a')).toBeNull()
-    // ...but not losing both.
     expect(paragraphDeletionRefusal(noted(), [], ['n2b'], 'n2a')).toBe(
       'last-note-paragraph',
     )
@@ -440,14 +409,11 @@ describe('note entry boundaries', () => {
     const emptied = emptiedParagraphDeletes(noted(), [], ['sep', 'n2a', 'n2b'])
     expect(emptied.get('sep')).toBe(LAST_NOTE_PARAGRAPH_MESSAGE)
     expect(emptied.get('n2a')).toBe(LAST_NOTE_PARAGRAPH_MESSAGE)
-    // Deleting only one of the entry's two leaves a survivor.
     expect(emptiedParagraphDeletes(noted(), [], ['n2a']).has('n2a')).toBe(false)
   })
 
   it('refuses a join that crosses a note entry boundary', () => {
     const state = emptyEditorState()
-    // Backspace at the start of a note's first paragraph would merge the
-    // separator entry's paragraph into it — a different `w:footnote`.
     expect(
       wordEditJoinRefusal(noted(), state, {
         type: 'deleteBackward',
@@ -455,7 +421,6 @@ describe('note entry boundaries', () => {
         offset: 0,
       }),
     ).toBe('structure')
-    // Inside the entry the join composes.
     expect(
       wordEditJoinRefusal(noted(), state, {
         type: 'deleteBackward',
@@ -570,8 +535,6 @@ describe('the footnote insert control', () => {
       bodyStory([paragraph('p1', 'text')]),
       footnotesStory(),
     ])
-    // The ribbon applies the writer's story-kind rule: a note has no page
-    // for the field to resolve, so the refusal names the real reason.
     const { api } = toolbar({ paragraphId: 'n2a' }, notes)
     expect(api.pageNumberUnavailable).toBe(
       'A page number needs a page of its own: the body, a header or a footer.',
@@ -589,8 +552,6 @@ describe('the footnote insert control', () => {
   it('refuses a second splice inside the run an earlier footnote opened', () => {
     const { api, structures } = toolbar({ offset: 1 })
     expect(api.insertFootnote().inserted).toBe(true)
-    // The first reference poisons the run it landed in; a splice at the same
-    // paragraph but strictly inside that run cannot compose.
     const again = toolbar({ offset: 3, structures })
     expect(again.api.footnoteUnavailable).toContain('footnote')
   })

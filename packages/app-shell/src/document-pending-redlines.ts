@@ -10,7 +10,6 @@ import {
 import type { DraftState } from './document-draft-state'
 import { planDocumentSave } from './document-save-plan'
 
-/** Local paint descriptors never enter model storage or review decisions. */
 export type PendingInlineChange = DocumentChangeWire & {
   pending?: {
     from: number

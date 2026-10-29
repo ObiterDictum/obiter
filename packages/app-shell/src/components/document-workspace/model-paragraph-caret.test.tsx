@@ -165,8 +165,6 @@ function Harness({
   )
 }
 
-// The retained column lives above the paragraph textarea so it survives the
-// remount when a vertical arrow crosses into another paragraph.
 const sticky = createVerticalCaretColumn
 
 function wrappedLines(paragraph: DocumentParagraphWire, widthPx: number) {
@@ -249,7 +247,6 @@ describe('run formatting when the caret is elsewhere', () => {
   })
 })
 
-/** A paragraph carrying a direct `w:firstLine`, in twips (720 = 48 CSS px). */
 function indentedParagraph(id: string, text: string): DocumentParagraphWire {
   return {
     id,
@@ -279,13 +276,8 @@ describe('paragraph editor alignment', () => {
       />,
     )
     const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
-    // The paragraph container carries the indent and the painted runs sit in
-    // the same space, so a padding here would drift the textarea's text — and
-    // with it the native caret and the wrapping — away from the paint.
     expect(field.style.paddingLeft).toBe('0px')
     expect(field.style.paddingRight).toBe('0px')
-    // A form control resets `text-indent`, so the editor must carry the
-    // paragraph's own rather than inherit it.
     expect(field.style.textIndent).toBe('')
     const paragraph = document.querySelector('[data-paragraph-id="p1"]')
     if (!(paragraph instanceof HTMLElement)) {
@@ -317,9 +309,6 @@ describe('paragraph editor alignment', () => {
     if (!(paragraph instanceof HTMLElement)) {
       throw new Error('expected a paragraph')
     }
-    // The paragraph carries the indent, and the textarea repeats it because a
-    // form control resets `text-indent` rather than inheriting it: without
-    // this the caret sits behind the painted glyphs on line 1.
     expect(paragraph.style.textIndent).toBe('48px')
     expect(field.style.textIndent).toBe('48px')
   })
@@ -357,8 +346,6 @@ describe('paragraph editor alignment', () => {
     if (!(paragraph instanceof HTMLElement)) {
       throw new Error('expected a paragraph')
     }
-    // A list's indent is the marker column the row lays out, so the face's
-    // first-line indent applies to neither the container nor the textarea.
     expect(paragraph.style.textIndent).toBe('0px')
     expect(field.style.textIndent).toBe('0px')
   })
@@ -1127,9 +1114,6 @@ describe('sticky desired column across consecutive vertical arrows', () => {
 })
 
 describe('first-line indent and the paragraph opening block', () => {
-  // A short first word, so the indent moves the break rather than only
-  // shortening a row that already fits: `takeLine` keeps an overflowing first
-  // word on its row, so a one-word row would break in the same place either way.
   const TEXT = 'go alpha bravo charlie delta echo foxtrot'
 
   function block(from: number, continuation: boolean) {
@@ -1153,9 +1137,6 @@ describe('first-line indent and the paragraph opening block', () => {
     )
   }
 
-  // The component wraps at the face's own size, which falls back to the line
-  // height rather than to a bare 16px, so the expectation is read from the same
-  // face instead of assumed.
   const FACE_SIZE =
     paragraphFace(indentedParagraph('p1', TEXT), []).run.fontSizePx ??
     paragraphLineHeightPx(paragraphFace(indentedParagraph('p1', TEXT), []))
@@ -1166,8 +1147,6 @@ describe('first-line indent and the paragraph opening block', () => {
     return Number(row.dataset.lineTo)
   }
 
-  /** The first painted row's own `text-indent`: the wrapper inherits the
-   * paragraph's, so each row states whether it keeps it. */
   function rowIndent(): string {
     const row = document.querySelector('[data-line-from]')
     if (!(row instanceof HTMLElement)) throw new Error('expected a wrapped row')
@@ -1181,21 +1160,15 @@ describe('first-line indent and the paragraph opening block', () => {
 
   it('carries the indent on the paragraph opening block, in the wrap and the textarea', () => {
     block(0, false)
-    // The textarea's CSS and the row the editor draws are the same rule.
     expect(firstRowEnd()).toBeLessThan(
       wrapLines(TEXT, FACE_SIZE, wrapWidthPx)[0].to,
     )
     expect(textIndent()).toBe('48px')
-    // The opening block keeps the wrapper's inherited indent.
     expect(rowIndent()).toBe('')
     cleanup()
   })
 
   it('leaves a block that starts mid-paragraph on the body edge', () => {
-    // A page break inside the paragraph opens a block with from > 0 and the
-    // layout's continuation flag false. It resumes on the body edge, so its
-    // first row is a body row: pagination already wrapped it that way, and a
-    // narrowed first row here would draw a row pagination never reserved.
     block(10, false)
     expect(textIndent()).toBe('0px')
     expect(rowIndent()).toBe('0px')

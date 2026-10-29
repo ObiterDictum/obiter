@@ -37,15 +37,9 @@ const hooks = vi.hoisted(() => ({
   fetchDocumentExport: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentWorkspaceApiModule = {
   ...(await import('../../document-workspace-api')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentWorkspaceApiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-workspace-api')).map((key) => [
     key,
@@ -77,13 +71,7 @@ mock.module('../../document-workspace-api', () =>
   ),
 )
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('../../current-user')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const currentUserModuleKeys = Object.fromEntries(
   Object.keys(await import('../../current-user')).map((key) => [
     key,
@@ -100,14 +88,8 @@ mock.module('../../current-user', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { DocumentWorkspace } = await import('./workspace')
 
-// The two documents deliberately share paragraph and run ids. The original
-// browser report had the previous document's draft rendered over the next
-// document's paragraph because the ids collided positionally.
 function model(runs: Array<[string, string]>): DocumentModelWire {
   const paragraphs: DocumentParagraphWire[] = [
     {
@@ -272,7 +254,6 @@ function openReviewTab() {
   openRibbonTab('Review')
 }
 
-/** Selects the shared first paragraph and types a replacement into it. */
 function editSharedParagraph(text: string) {
   fireEvent.click(screen.getByText('Alpha first'))
   fireEvent.change(bodyEditor(), { target: { value: text } })
@@ -283,8 +264,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-// Unsaved drafts are persisted per tab, so each test starts without the
-// previous test's draft of the same document.
 beforeEach(() => {
   window.localStorage.clear()
   window.sessionStorage.clear()
@@ -325,7 +304,6 @@ describe('document-scoped editor state', () => {
 
     switchTo(view, 'doc_b')
 
-    // B shares the paragraph id A deleted, so a leaked mask would hide it.
     expect(screen.getByText('Beta first')).toBeTruthy()
     expect(screen.getByText('Beta tail')).toBeTruthy()
   })
@@ -339,13 +317,9 @@ describe('document-scoped editor state', () => {
     await waitFor(() => {
       expect(document.querySelector('[aria-current="true"]')).toBeNull()
     })
-    // No paragraph is selected, so B mounts no caret-holding editor and cannot
-    // consume A's restoreCaret.
     expect(screen.queryByLabelText('Paragraph text')).toBeNull()
     expect(screen.getByText('Beta first')).toBeTruthy()
 
-    // B derives its own caret from B: selecting B's shared paragraph opens an
-    // editor holding B's text, not A's draft or restored offset.
     fireEvent.click(screen.getByText('Beta first'))
     expect(bodyEditor().value).toBe('Beta first')
   })
@@ -374,8 +348,6 @@ describe('document-scoped editor state', () => {
     openReviewTab()
     fireEvent.click(command('Save'))
 
-    // A leaked draft or emphasis would make B dirty and send A's operations
-    // to the API under B's document and base version.
     expect(editAsync).not.toHaveBeenCalled()
     expect(mergeAsync).not.toHaveBeenCalled()
   })
@@ -386,14 +358,11 @@ describe('document-scoped editor state', () => {
     expect(screen.queryByText('Alpha first')).toBeNull()
 
     switchTo(view, 'doc_b')
-    // B shares the paragraph id and must never render A's draft.
     expect(screen.queryByText('Alpha edited')).toBeNull()
     expect(screen.getByText('Beta first')).toBeTruthy()
 
     switchTo(view, 'doc_a')
 
-    // E45: returning to A restores its unsaved draft from this tab rather than
-    // destroying typed work. It is still unsaved, so the workspace says so.
     expect(screen.getByText('Alpha edited')).toBeTruthy()
     expect(
       document
@@ -406,13 +375,10 @@ describe('document-scoped editor state', () => {
     const { view } = mount('doc_a')
     editSharedParagraph('Alpha edited')
     fireEvent.click(command('Undo'))
-    // A now holds a redo branch for the edit it just stepped back from.
     expect(command('Redo')).toHaveProperty('disabled', false)
 
     switchTo(view, 'doc_b')
 
-    // B is its own document with no branch of A's, and redo must not apply
-    // A's undone edit under B.
     expect(screen.getByText('Beta first')).toBeTruthy()
     const redo = command('Redo')
     expect(redo).toHaveProperty('disabled', true)
@@ -435,7 +401,6 @@ describe('document-scoped editor state', () => {
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
-    // A's save is still in flight when the workspace switches to B.
     switchTo(view, 'doc_b')
     await act(async () => {
       resolveSave({
@@ -445,7 +410,6 @@ describe('document-scoped editor state', () => {
       })
     })
 
-    // B's own document and history are untouched by A's commit.
     expect(screen.getByText('Beta first')).toBeTruthy()
     expect(screen.getByText('Beta tail')).toBeTruthy()
     expect(screen.queryByText('Alpha edited')).toBeNull()

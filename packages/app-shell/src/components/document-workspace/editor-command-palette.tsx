@@ -13,12 +13,6 @@ import { editorCommandList } from './editor-commands'
 
 type Hit = { menu: EditorMenu; group: string; command: EditorCommand }
 
-/**
- * The command palette: every editor command by name, reachable from the
- * keyboard without learning where it lives. It searches the same command list
- * the menus are built from, so a command added to a menu is searchable here in
- * the same change — there is no second inventory to keep in step.
- */
 export function EditorCommandPalette({
   open,
   onOpenChange,
@@ -159,10 +153,6 @@ const SHORTCUTS: ReadonlyArray<{ keys: string[]; action: string }> = [
   { keys: ['K', '↑'], action: 'Previous change' },
 ]
 
-/**
- * The shortcut help lives in the palette, where a reader already looks for
- * commands. Review letters only fire outside the document and fields.
- */
 function ShortcutHelp() {
   return (
     <dl

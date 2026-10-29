@@ -2,26 +2,14 @@ import type { DocumentModelWire } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
 import type { StructuralDraft } from './document-structural-drafts'
 
-/**
- * What the run overlay needs to paint the pending link, defined-term and
- * cross-reference drafts over one paragraph. A link or a defined-term mark
- * is a range painted on the covered text; a cross-reference is a zero-width
- * marker at its offset, labelled with the target's current text so the chip
- * reads like the resolved field without entering the editable stream.
- */
 export type ParagraphLinkOverlay = {
   links: Array<{ from: number; to: number; target: string }>
-  /** Pending defined-term marks: painted as a range, no text change. */
   marks: Array<{ from: number; to: number }>
   fieldMarkers: Array<{ offset: number; label: string }>
 }
 
-/** The longest text a cross-reference chip or chooser row carries. */
 const CROSS_REFERENCE_LABEL_MAX_LENGTH = 60
 
-/** The label a cross-reference draft points at: the target's text, trimmed.
- * A target that is no longer in the story gets a distinct label — the chip
- * must read as unresolvable, not as pointing at a genuinely empty paragraph. */
 export function crossReferenceTargetLabel(
   model: DocumentModelWire | undefined,
   targetParagraphId: string,
@@ -37,12 +25,6 @@ export function crossReferenceTargetLabel(
     : text
 }
 
-/**
- * Groups the pending link and cross-reference drafts by the paragraph they
- * paint over. Ranges and offsets are in the paragraph's painted text — the
- * same coordinates the selection and the folded picture already use — so the
- * overlay aligns without remapping.
- */
 export function structuralLinkOverlays(
   model: DocumentModelWire | undefined,
   structures: readonly StructuralDraft[],

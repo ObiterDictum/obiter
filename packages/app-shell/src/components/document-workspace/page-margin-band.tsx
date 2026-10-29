@@ -48,12 +48,6 @@ import { PageDrawing } from './page-drawing'
 import { PageTable } from './page-table'
 import { renderBlock, type BlockContext } from './model-page-blocks'
 
-/**
- * The header/footer story open for editing on this page: its laid-out blocks
- * and the render context `renderBlock` needs — the same machinery the body
- * column uses, so the band edits through `ModelParagraph` rather than a
- * second editor.
- */
 export type EditableMargin = {
   partName: string
   blocks: LaidOutBlock[]
@@ -91,8 +85,6 @@ export function PageMarginBand({
   className?: string
   pageNumber?: number
   heightPx?: number
-  /** The story open for editing; painted through the editable path even when
-   * it holds no visible content, so an empty header still takes the caret. */
   editable?: EditableMargin
 }) {
   const effective = useMemo(
@@ -158,12 +150,6 @@ export function PageMarginBand({
   )
 }
 
-/**
- * The open margin story, painted with the same block renderer the body uses.
- * Every paragraph shows — including empty ones, which the read-only band
- * hides — so the caret has somewhere to land; a letterhead or footer shape
- * band reads as its plain paragraphs while it is being edited.
- */
 function EditableMarginStory({
   editable,
   inset,

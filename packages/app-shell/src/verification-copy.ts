@@ -44,12 +44,6 @@ export function verificationTypeLabel(type: VerificationFindingType) {
   }
 }
 
-/**
- * The finding's outcome in the words the reviewer needs. "Citation matches
- * checked source" is only ever said for a citation check that ran and found the
- * authority, and a quotation's match is its own claim: a check that confirmed
- * nothing must never read as approval.
- */
 export function verificationStateLabel(
   finding: Pick<VerificationFindingView, 'type' | 'state'>,
 ) {
@@ -97,8 +91,6 @@ export function verificationStateTone(state: VerificationFindingState) {
   }
 }
 
-/** What the check compared, stated before its result so a reader can see the
- * scope of the claim rather than inferring it from the outcome. */
 export function verificationWhatCompared(type: VerificationFindingType) {
   switch (type) {
     case 'citation_resolution':
@@ -114,12 +106,6 @@ export function verificationWhatCompared(type: VerificationFindingType) {
   }
 }
 
-/**
- * The one limit a reader must know beyond the check's own explanation. A
- * finding that needs review already states its limit in `explanation`, in the
- * words of the check that reached it, so adding a second sentence here said the
- * same thing twice; the note is kept only where nothing else says it.
- */
 export function verificationUncertainty(
   finding: Pick<VerificationFindingView, 'state'>,
 ) {
@@ -128,12 +114,6 @@ export function verificationUncertainty(
     : null
 }
 
-/**
- * The authority a finding was attributed to, as a citation is read aloud: the
- * case name when the stored source carries one, then the citation. The name is
- * never derived from the citation itself, so a source with no stored title is
- * shown as the citation alone.
- */
 export function verificationAuthority(
   finding: Pick<VerificationFindingView, 'authorityName' | 'authorityLabel'>,
 ) {
@@ -142,11 +122,6 @@ export function verificationAuthority(
     : finding.authorityLabel
 }
 
-/**
- * Why a finding is not shown beside document text. Each value states a limit of
- * the evidence, never an outcome, so a reviewer reads it as "look here" rather
- * than "nothing to see".
- */
 export function verificationUnmappedLabel(reason: UnmappedReason) {
   switch (reason) {
     case 'story_not_in_document':
@@ -181,8 +156,6 @@ export type VerificationFindingCounts = {
   total: number
 }
 
-/** Counts per outcome, computed from the findings themselves so the page, the
- * filters and the editor panel cannot disagree about the same run. */
 export function verificationFindingCounts(
   findings: readonly VerificationFindingView[],
 ): VerificationFindingCounts {
@@ -204,9 +177,6 @@ export function verificationFindingCounts(
   return counts
 }
 
-/** The run summary as the separate parts a reviewer reads. A dismissed finding
- * is still listed under its outcome; it is counted apart because a person has
- * already decided it, and the outcome counts never double as a to-do list. */
 export function verificationSummaryCounts(
   summary: VerificationRunSummary,
 ): VerificationFindingCounts {
@@ -225,8 +195,6 @@ export function verificationSummaryCounts(
   }
 }
 
-/** "1 flagged · 2 need review · 1 not checked · 7 match", each part present
- * only when it is non-zero. */
 export function verificationCountsLabel(counts: VerificationFindingCounts) {
   const parts: string[] = []
   if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
@@ -243,13 +211,6 @@ export function verificationCountsLabel(counts: VerificationFindingCounts) {
   return parts.length > 0 ? parts.join(' · ') : 'No findings'
 }
 
-/**
- * The moment a run's label describes. `completed_at` is written for both a
- * completed and a failed run (the moment the terminal transition was
- * recorded), so it describes a failure truthfully rather than showing when the
- * run was requested. A live run has no completion time: it is placed by when it
- * started, or when it was created if no executor has picked it up.
- */
 export function verificationRunTimestamp(run: VerificationRun) {
   switch (run.status) {
     case 'completed':
@@ -265,11 +226,6 @@ export function verificationRunTimestamp(run: VerificationRun) {
   }
 }
 
-/**
- * The time label for a run, with the verb its state earned. A surface that
- * already names the state beside it uses `verificationRunTimestamp` instead:
- * "Checked · version 2 … Completed 29 Oct" says the same event twice.
- */
 export function verificationRunTime(run: VerificationRun) {
   const time = formatRunTime(verificationRunTimestamp(run))
   switch (run.status) {
@@ -287,7 +243,6 @@ export function verificationRunTime(run: VerificationRun) {
   }
 }
 
-/** One date and time format across the product: 26 Oct 2026, 14:32. */
 export function formatRunTime(value: string) {
   return new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
@@ -299,8 +254,6 @@ export function formatRunTime(value: string) {
   }).format(new Date(value))
 }
 
-/** The short headline of a failure. The reason itself is
- * `verificationFailureLabel`, which says what was and was not recorded. */
 export function verificationFailureTitle(code: VerificationFailureCode) {
   switch (code) {
     case 'model_unavailable':
@@ -335,11 +288,6 @@ export function verificationFailureLabel(code: VerificationFailureCode) {
   }
 }
 
-/**
- * Which version a result is about, and whether that is the version stored now.
- * Named in one place so the list, the panel and the chip cannot disagree about
- * whether the check still covers the document.
- */
 export function verificationVersionNote(
   checkedVersion: number | undefined,
   currentVersion: number | undefined,
@@ -354,12 +302,6 @@ export function verificationVersionNote(
   return `Checked ${checked}. Version ${String(currentVersion)} is stored now, so this result covers the earlier text, not the current one.`
 }
 
-/**
- * The stored-version boundary, stated wherever evidence is shown. A reader must
- * never take a checked result as covering work that has not been saved. The
- * version is named by its number, as every other surface names it: an internal
- * version id is not something a lawyer can match to the file in front of them.
- */
 export function verificationStoredVersionNote(
   versionNumber: number | undefined,
   options: { unsaved: boolean; stale: boolean },
@@ -380,12 +322,6 @@ export function verificationStoredVersionNote(
   return parts.join(' ')
 }
 
-/**
- * Who dismissed a finding, by their member name. The id is the recorded fact
- * and the name is resolved beside it for the matter's own readers, so a name
- * that no longer resolves (the account left the organisation) falls back to
- * "another reviewer" rather than to an internal id or an invented name.
- */
 export function verificationDismissalRecord(
   dismissal: VerificationFindingDismissal,
   currentUserId: string | undefined,

@@ -69,19 +69,12 @@ export function documentDraftTabId(storage: DraftStorage | null) {
       const created = newTabId()
       storage.setItem(WRITER_SESSION_KEY, created)
       return created
-    } catch {
-      // Fall through to a per-page id when sessionStorage is unavailable.
-    }
+    } catch {}
   }
   memoryTabId ??= newTabId()
   return memoryTabId
 }
 
-/**
- * Forks a copied session identity before this tab writes. A live claim from
- * another instance means Duplicate Tab cloned sessionStorage; the original
- * draft is left untouched.
- */
 export function resolveDocumentDraftWriter(
   session: DraftStorage | null,
   local: DraftStorage | null,
@@ -98,10 +91,7 @@ export function resolveDocumentDraftWriter(
     const forked = newTabId()
     try {
       session?.setItem(WRITER_SESSION_KEY, forked)
-    } catch {
-      // Session storage refused the fork; still return a distinct writer id
-      // so this instance does not write the original payload key.
-    }
+    } catch {}
     writeClaim(local, forked, instanceId, now)
     return forked
   }
@@ -127,9 +117,7 @@ export function releaseDocumentDraftWriterClaim(
   if (!claim || claim.instanceId !== instanceId) return
   try {
     local?.removeItem(claimKey(writerId))
-  } catch {
-    // Expiry still bounds a claim that cannot be removed.
-  }
+  } catch {}
 }
 
 export function writerIsLive(
@@ -153,9 +141,7 @@ export function allKeys(storage: DraftStorage) {
 export function removeKey(storage: DraftStorage, key: string) {
   try {
     storage.removeItem(key)
-  } catch {
-    // Expiry still bounds anything left behind.
-  }
+  } catch {}
 }
 
 function readClaim(storage: DraftStorage | null, writerId: string) {
@@ -186,9 +172,7 @@ function writeClaim(
   if (!storage) return
   try {
     storage.setItem(claimKey(writerId), JSON.stringify({ instanceId, at: now }))
-  } catch {
-    // A missing claim makes a later tab treat this writer as abandoned.
-  }
+  } catch {}
 }
 
 export function newTabId() {
@@ -209,9 +193,7 @@ export function writeRegistry(
       registryKey(organisationId, userId, documentId),
       JSON.stringify({ schemaVersion: DOCUMENT_DRAFT_SCHEMA_VERSION, entries }),
     )
-  } catch {
-    // Payloads remain the source of truth.
-  }
+  } catch {}
 }
 
 export function clearDocumentDraftsMatching(
@@ -229,9 +211,7 @@ export function clearDocumentDraftsMatching(
         storage.removeItem(key)
       }
     }
-  } catch {
-    // Best effort: expiry still bounds anything left behind.
-  }
+  } catch {}
 }
 
 export function keyIncludesUser(key: string, userId: string) {

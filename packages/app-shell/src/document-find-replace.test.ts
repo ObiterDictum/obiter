@@ -86,9 +86,6 @@ describe('replaceFindHits', () => {
   })
 
   it('replaces a folded Greek hit at its real range', () => {
-    // The hit the fold derives must rewrite the stored letters, not the
-    // folded ones — 'οδος' matches 'ΟΔΟΣ' and the replacement lands where
-    // the stored word sits.
     const greek = base([paragraph('p1', 'Η ΟΔΟΣ κλείνει')])
     const state = emptyEditorState()
     const hits = findInDocument(greek, state, 'οδος')
@@ -125,18 +122,12 @@ describe('replaceFindHits', () => {
       newId,
     )
     if (result.status !== 'applied') throw new Error('expected applied')
-    // 'Hello ' + 'done' + ' again': the break is covered by the hit, so the
-    // paragraphs join — the same range a cross-paragraph selection replace
-    // produces.
     expect(blockText(spread, result.state, 'p1')).toBe('Hello done again')
     expect(result.state.deletedParagraphIds).toEqual(['p2'])
     expect(result.caret).toEqual({ paragraphId: 'p1', offset: 10 })
   })
 
   it('refuses the whole batch before any write when a cross-paragraph range cannot join', () => {
-    // The second hit's tail carries a character style the save cannot
-    // restate over a join, so the pre-check refuses the batch — and nothing
-    // may have changed.
     const styled = base([
       paragraph('p1', 'Alpha end'),
       paragraph('p2', 'start beta', { styleId: 'Emphasis' }),
@@ -156,9 +147,6 @@ describe('replaceFindHits', () => {
       paragraph('p2', 'start beta'),
       paragraph('p3', 'gamma tail'),
     ])
-    // Both hits cover a break and neither pre-check refuses; 'all' applies
-    // them from the end of the document so the earlier join cannot shift the
-    // later one.
     const hits = [hit(['p1', 5], ['p2', 5]), hit(['p2', 5], ['p3', 5])]
     const result = replaceFindHits(
       spread,
@@ -169,18 +157,11 @@ describe('replaceFindHits', () => {
       newId,
     )
     if (result.status !== 'applied') throw new Error('expected applied')
-    // The end hit joins p2/p3 first, then the earlier hit joins p1 into that
-    // join, so p2's tail after its first five characters comes along.
     expect(blockText(spread, result.state, 'p1')).toBe('Alpha-- tail')
     expect(result.state.deletedParagraphIds).toEqual(['p3', 'p2'])
   })
 
   it('refuses the whole batch when a join makes a later join unstatable', () => {
-    // Each hit applies alone, but 'all' goes from the end: p3's styled runs
-    // join into the empty p2 first (legal), and the p1←p2 join is then
-    // refused because p2 carries runs the save cannot restate over a join.
-    // A batch that passed every pre-check can still refuse part-way, so the
-    // whole batch refuses and nothing is written.
     const spread = base([
       paragraph('p1', 'Alpha end'),
       { id: 'p2', runs: [], preservedXmlFragments: [] },

@@ -67,8 +67,6 @@ describe('reviewItems', () => {
   })
 
   it('pairs every wrapper of one move, not only the first pair', () => {
-    // Word groups a move by its named range containers: each wrapper points at
-    // one half of the other side, so a two-wrapper move is four wire changes.
     const items = reviewItems([
       moveFrom('from_a', 'to_a'),
       moveTo('to_a', 'from_a'),
@@ -82,10 +80,6 @@ describe('reviewItems', () => {
   })
 
   it('keeps an unpairable move half a move, never an insert or a delete', () => {
-    // The parser only resolves `pairId` for a pair it can decide, so a half it
-    // could not pair carries no link. The row is still a move, and it says it
-    // cannot be paired rather than claiming a direction the panel cannot
-    // place against the other half.
     const items = reviewItems([insertion('chg_ins'), moveFrom('chg_stray')])
     expect(items.map((item) => item.kind)).toEqual(['change', 'move'])
     expect(itemKindLabel(items[1]!)).toBe("Move · can't be paired")

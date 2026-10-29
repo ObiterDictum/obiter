@@ -36,16 +36,6 @@ import {
 import { reviewerStyle } from './reviewer-identity'
 import { ReviewBulkBar, ReviewDecisionBar } from './review-bars'
 
-/**
- * The review panel: tracked changes, moves and comment threads in one list, in
- * document order, with the decision bar for the row under review. It is
- * presentation and wiring over `useChangeReview` — deciding, the save barriers
- * and the request are that state's, so the panel and the chrome cannot
- * disagree about what a decision means right now.
- *
- * Selection lives here and nowhere else: it holds row ids of decidable rows,
- * and a bulk decision sends the wire ids of the rows it names.
- */
 export function DocumentReviewPanel({
   review,
   comments,
@@ -59,9 +49,7 @@ export function DocumentReviewPanel({
   review: ChangeReview
   comments: DocumentComment[]
   importedComments: DocumentImportedCommentThread[]
-  /** The model the locations and context lines are read from. */
   model?: DocumentModelWire
-  /** The version on screen, named by the bulk rejection's warning. */
   currentVersionNumber?: number
   onRevealComment: (comment: DocumentComment) => void
   onClose: () => void
@@ -86,8 +74,6 @@ export function DocumentReviewPanel({
       itemChangeIds(row.item).includes(review.activeChangeId ?? ''),
   )
   const active = activeIndex >= 0 ? rows[activeIndex] : undefined
-  // Decided rows leave the list, so a stale id in the selection can no longer
-  // reach a decision: the selection is read through the rows that still exist.
   const selectedItems = rows.filter(
     (row) =>
       row.kind === 'change' &&
@@ -115,13 +101,11 @@ export function DocumentReviewPanel({
     })
   }
 
-  /** Selecting a row reveals it in the document. */
   function goToRow(row: ReviewRow) {
     if (row.kind === 'comment') {
       if (row.imported) return
       const comment = row.comment
       // SAFETY: reviewRows sets `imported` false only for product comments,
-      // which are the only ones with an anchor the workspace can reveal.
       onRevealComment(comment as DocumentComment)
       return
     }
@@ -130,7 +114,6 @@ export function DocumentReviewPanel({
     if (index >= 0) review.goTo(index)
   }
 
-  /** Moves the review to the next row that can be decided or read. */
   function step(direction: -1 | 1) {
     const from =
       activeIndex >= 0 ? activeIndex : direction === 1 ? -1 : rows.length
@@ -158,9 +141,6 @@ export function DocumentReviewPanel({
       onClose={onClose}
       popout={popout}
       footer={
-        // One bar at a time: a selection says what the bulk action will do,
-        // and hides the per-change bar that would otherwise sit beside an
-        // enabled-looking Accept for a change the reader did not select.
         bulkActive ? (
           <ReviewBulkBar
             count={selectedItems.length}
@@ -210,9 +190,6 @@ export function DocumentReviewPanel({
             <SegmentedControl<ReviewFilter>
               label="Filter changes and comments"
               value={filter}
-              // A filter that hid a selected row would let a bulk decision run
-              // on something the reader cannot see, so changing it clears the
-              // selection rather than warning about it.
               onChange={(next) => {
                 setFilter(next)
                 setSelected(new Set())
@@ -275,9 +252,6 @@ export function DocumentReviewPanel({
                 )
               }
               const undecidable = !itemDecidable(row.item)
-              // A move no decision can run on is one row that says who, what
-              // moved and why it cannot be decided here — not a move row with
-              // a second "moved from" line and a pair of dead buttons.
               const unpairable = itemUnpairable(row.item)
               const leadChange = itemLead(row.item)
               const reason = undecidable
@@ -464,7 +438,6 @@ function CommentRow({
   )
 }
 
-/** The changed words themselves, marked the way the page marks them. */
 function ChangeText({ item }: { item: ReviewItem }) {
   const lead = itemLead(item)
   if (!lead.text) {

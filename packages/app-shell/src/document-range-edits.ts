@@ -22,19 +22,8 @@ import {
 } from './document-word-edits'
 import { writeRange } from './document-write-runs'
 
-/** Why a document range cannot be replaced. `structure` means the range would
- * cross a paragraph that is not ordinary body text (a table cell, say), which
- * the editor cannot paint and a join would corrupt. `join-formatting` means the
- * surviving tail cannot be restated on save, so the join is refused rather than
- * painting formatting persistence would discard. `tracked-change` means a
- * paragraph the range removes holds revisions the writer will not delete. */
 export type DocumentRangeRefusal = JoinRefusal
 
-/**
- * The reason `applyReplaceDocumentRange` would refuse this range, or null when
- * it can apply. The caret uses this to say why a range edit was refused instead
- * of failing silently; the apply function calls it so the two cannot disagree.
- */
 export function documentRangeRefusal(
   model: DocumentModelWire,
   state: EditorState,
@@ -62,16 +51,9 @@ export function documentRangeRefusal(
     if (!body.has(id) && !insertIds.has(id)) return 'structure'
   }
   if (startIndex !== endIndex) {
-    // The range deletes every paragraph strictly between the endpoints and
-    // joins the tail paragraph away: each loses its whole element, so a
-    // stored field boundary inside one — but not all of them — would leave
-    // `fldChar` markers Word can never pair.
     const removed = order
       .slice(startIndex + 1, endIndex + 1)
       .filter((id) => body.has(id))
-    // The writer refuses to delete a paragraph holding tracked markup, and a
-    // revision-only head has no run to join into; refuse before the canvas
-    // paints a removal the save cannot make.
     const first = editableParagraph(model, from.paragraphId)
     if (
       removed.some((id) => holdsTrackedChanges(model, id)) ||
@@ -94,18 +76,6 @@ export function documentRangeRefusal(
   return null
 }
 
-/**
- * Replaces the range between two paragraph endpoints with plain text, spanning
- * as many paragraphs as the range covers. It is composed from the existing
- * single-paragraph operations rather than a new document rewrite: the first
- * paragraph keeps everything before the range, the last keeps everything after
- * it, every paragraph selected whole between them is deleted, and the two
- * survivors are joined the way Backspace-at-start joins them. The batch
- * therefore serialises as ordinary replace_run_text and delete_paragraph
- * operations, and a range that cannot be resolved mutates nothing. A range that
- * would cross a structural paragraph, or move runs the save cannot restate, is
- * refused up front by `documentRangeRefusal`.
- */
 export function applyReplaceDocumentRange(
   model: DocumentModelWire,
   state: EditorState,
@@ -171,13 +141,6 @@ export function applyReplaceDocumentRange(
   }
 }
 
-/**
- * Enter over a range: the range collapses first, then the merged paragraph
- * splits where the range was, so Enter replaces a selection with a paragraph
- * break the way a word processor does. Both steps run on one state so the
- * split sees the join; two separate calls would plan the split from the state
- * before the deletion.
- */
 export function applySplitOverDocumentRange(
   model: DocumentModelWire,
   state: EditorState,
@@ -195,7 +158,6 @@ export function applySplitOverDocumentRange(
   )
 }
 
-/** Drops everything from `offset` to the end of the paragraph. */
 function trimSuffix(
   model: DocumentModelWire,
   state: EditorState,
@@ -216,7 +178,6 @@ function trimSuffix(
   )
 }
 
-/** Drops everything before `offset` in the paragraph. */
 function trimPrefix(
   model: DocumentModelWire,
   state: EditorState,
@@ -237,11 +198,6 @@ function trimPrefix(
   )
 }
 
-/**
- * Deletes a paragraph the selection covers whole. A pending inserted paragraph
- * is removed from the insert list; a stored one is marked deleted and any runs
- * a previous edit appended to it are dropped, so nothing of it can reappear.
- */
 function removeParagraph(state: EditorState, paragraphId: string): EditorState {
   const removed = removeInsert(state.inserts, paragraphId)
   if (removed) return { ...state, inserts: removed.inserts }

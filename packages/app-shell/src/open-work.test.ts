@@ -43,8 +43,6 @@ function items(sources: {
 }
 
 describe('open work', () => {
-  // The sidebar said 9 while Home said 6 because one counted re-runs and the
-  // other counted runs. A document is checked once, however often it was run.
   it('counts one document once, from its newest run', () => {
     const older = run({ id: 'vrun_older', createdAt: '2026-10-01T09:00:00Z' })
     const newer = run({
@@ -59,7 +57,6 @@ describe('open work', () => {
         dismissedCount: 0,
       },
     })
-    // Newest first, as the API sends them.
     const runs = [newer, older]
     expect(latestRunsPerDocument(runs)).toEqual([newer])
     expect(
@@ -69,8 +66,6 @@ describe('open work', () => {
   })
 
   it('stops counting a finding a person has dismissed', () => {
-    // The run summary already reports a dismissed finding apart from its open
-    // counts, so the rule must not add it back.
     const dismissed = run({
       id: 'vrun_dismissed',
       summary: {
@@ -128,7 +123,6 @@ describe('open work', () => {
     ).toBe(0)
   })
 
-  // The header, the sidebar badge and the queue are three views of one number.
   it('summarises the queue as the same count the badge shows', () => {
     const runs = [
       run({ id: 'vrun_one' }),

@@ -1,7 +1,3 @@
-/**
- * Resolves a legislation search hit into a TanStack Router location.
- * Uses the splat `/ln/$` so the URL keeps the official identity path.
- */
 export type ProvisionResultLocation = {
   to: '/ln/$'
   params: { _splat: string }

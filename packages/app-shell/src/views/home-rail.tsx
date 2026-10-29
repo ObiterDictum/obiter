@@ -12,9 +12,7 @@ export interface RecentDocument {
   matterName: string
   filename: string
   updatedAt: string
-  /** The Redact run that produced the version, when Redact made it. */
   redaction: VersionRedaction | null
-  /** When that version was created: the moment Redact produced the copy. */
   versionCreatedAt: string
 }
 
@@ -23,7 +21,6 @@ export interface MatterSummary {
   name: string
   clientReference: string
   updatedAt: string
-  /** Null while the document list is still loading or failed. */
   documentCount: number | null
 }
 
@@ -54,9 +51,6 @@ export function RecentDocumentsCard({
               key={document.documentId}
               className="[&+li]:border-t [&+li]:border-line"
             >
-              {/* The mark links to the run, so it sits beside the row's own
-                  link rather than inside it: an anchor inside an anchor is not
-                  a control a browser can follow. */}
               <div className="flex min-h-row items-center gap-3 px-6 py-4 hover:bg-hover">
                 <Link
                   to="/matters/$matterId/documents/$documentId"
@@ -79,9 +73,7 @@ export function RecentDocumentsCard({
                     >
                       {document.filename}
                     </span>
-                    {/* One line, as the mock-up has it: a wrapped matter name
-                      made every row two lines taller and pushed the date out of
-                      sight. The full name stays available as a tooltip. */}
+
                     <span
                       className="mt-1 block truncate text-meta text-muted"
                       title={document.matterName}
@@ -182,7 +174,6 @@ export function YourMattersCard({
   )
 }
 
-/** A count that is still loading is left out rather than shown as zero. */
 function matterLines(matter: MatterSummary) {
   const documents =
     matter.documentCount === null

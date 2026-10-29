@@ -19,12 +19,6 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
     : ''
 }
 
-/**
- * Landing page for organisation invite emails. Signed-out users are sent to
- * sign-up with the token preserved; signed-in users POST /api/invites/accept.
- * Organisation and inviter names come from GET /api/invites/preview, loaded
- * in the route loader via ensureQueryData.
- */
 export function AcceptInviteRouteView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -220,17 +214,10 @@ function classifyAcceptFailure(caught: unknown): AcceptFailure {
 interface FailureCopy {
   title: string
   body: string
-  /** What to do next, when the page knows something useful beyond the body. */
   next?: string
-  /** Whether a fresh invitation is the way out. */
   newInvite?: boolean
 }
 
-/**
- * What happened, in the invite's own terms. A failed invite is not a stack trace
- * and not one red line: the page says what the link was, what went wrong and
- * which of the two ways out applies.
- */
 function failureCopy(failure: AcceptFailure): FailureCopy {
   switch (failure.kind) {
     case 'missing_token':

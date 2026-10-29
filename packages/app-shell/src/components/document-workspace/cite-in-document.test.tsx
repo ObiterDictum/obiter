@@ -10,13 +10,6 @@ import {
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
-/*
- * "Cite in document": a source page leaves the citation for one document and
- * the editor asks where it goes. Nothing is written until Insert, the insertion
- * is the document's own (so track changes decides whether it is tracked), and
- * both answers drop the request.
- */
-
 const CITATION = 'Wood v Capita Insurance Services Ltd [2017] UKSC 24'
 const TEXT = 'Order 60,000'
 

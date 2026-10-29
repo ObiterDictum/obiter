@@ -33,15 +33,6 @@ import {
   tableOfAuthoritiesUpdateBlock,
 } from './document-toa-availability'
 
-/**
- * The structural half of the save partition: every pending structure is
- * refused here for every reason the ribbon and the writer would refuse
- * it — a missing or deleted anchor, an anchor in the wrong story, a
- * conflicting pending mark, a changed marked range — so a stale draft is
- * held back with the disclosure reason rather than reaching a batch the
- * server must reject. Surviving structures join `keep.structures` in
- * order, which the mark-conflict checks read as pending state.
- */
 export function partitionStructureSlots({
   model,
   state,
@@ -65,12 +56,6 @@ export function partitionStructureSlots({
   blocked: BlockedDraft[]
   blockedStructureReasons: Map<string, string>
 }) {
-  // The table-of-contents facts the shared refusal predicate reads, computed
-  // lazily so a save holding no such draft does not re-parse the tables. The
-  // heading set is the painted view restricted to stored paragraphs: a
-  // paragraph deleted earlier in the batch is gone, and a `set_paragraph_style`
-  // the same batch carries is already applied — the writer sees both when it
-  // captures entries, so a freshly styled heading must count.
   let tocFacts:
     | { cellIds: ReadonlySet<string>; headings: DocumentParagraphWire[] }
     | undefined
@@ -89,10 +74,6 @@ export function partitionStructureSlots({
     }
     return tocFacts
   }
-  // The table-of-authorities facts the shared refusal predicate reads,
-  // computed lazily like the contents facts. A paragraph that only a
-  // pending insert owns cannot carry the mark or bookmark, so it is
-  // never among the scanned paragraphs.
   const tableOfAuthoritiesFacts = createTableOfAuthoritiesFacts({
     model,
     batchDeletions,
@@ -100,10 +81,6 @@ export function partitionStructureSlots({
     extraRuns: keep.extraRuns,
     paragraphStyles: state.format.paragraphStyles,
   })
-  // Paragraphs a kept table-of-authorities refresh will rewrite: a
-  // structure anchored inside that range would be silently replaced, so it
-  // is held back rather than composed. Insert anchors are resolved lazily
-  // — a save holding no refresh draft never walks the chain.
   const refreshCovered = new Set<string>()
   let insertAnchors: Set<string> | undefined
   const storyParagraphs = documentStory(model)?.paragraphs ?? []
@@ -113,11 +90,6 @@ export function partitionStructureSlots({
       structure.kind === 'cross-reference' &&
       (!paragraphIds.has(structure.targetParagraphId) ||
         batchDeletions.has(structure.targetParagraphId))
-    // A footnote's reference lives in the body alone: an anchor in any other
-    // editable story is a placement the writer must reject, so it is blocked
-    // here rather than sent to fail. A page number carries the same rule
-    // against a note-story anchor — the `PAGE` field only resolves in the
-    // body, a header or a footer.
     const anchorStoryKind = paragraphStoryKind.get(structure.paragraphId)
     const nonBodyAnchor =
       (structure.kind === 'footnote' ||
@@ -131,15 +103,7 @@ export function partitionStructureSlots({
       structure.kind === 'page-number' &&
       anchorStoryKind !== undefined &&
       !PAGE_STORY_KINDS.has(anchorStoryKind)
-    // Same-paragraph pairs a writer cannot compose (a link rewrites whole
-    // runs; a field splice poisons its run for a second splice) are held back
-    // like `replacedEmptyAnchors`, so they are disclosed rather than failing
-    // the whole request.
     const wire = paragraphWires.get(structure.paragraphId)
-    // A reloaded table-of-contents draft is refused for every reason the
-    // ribbon would refuse the insertion now: the shared wire-level predicate
-    // keeps the two surfaces from drifting, and anything it cannot see — an
-    // anchor inside `w:sdt` content — stays the writer's last line.
     const tableOfContentsBlock =
       structure.kind === 'table-of-contents' && wire !== undefined
         ? (tableOfContentsAnchorBlock(
@@ -152,12 +116,6 @@ export function partitionStructureSlots({
             model.changes,
           ))
         : undefined
-    // A reloaded table-of-authorities draft is refused for every reason the
-    // ribbon would refuse the insertion now — same shared-predicate
-    // arrangement as the contents table — plus the mark-level conflicts the
-    // ribbon cannot know: a citing paragraph whose mark offset lands inside
-    // a stored `w:hyperlink` or a pending mark the field cannot compose
-    // with holds the whole draft, the way the writer's refusal would.
     const tableOfAuthoritiesBlock =
       structure.kind === 'table-of-authorities' && wire !== undefined
         ? tableOfAuthoritiesPartitionBlock({
@@ -170,11 +128,6 @@ export function partitionStructureSlots({
             structures: keep.structures,
           })
         : undefined
-    // A reloaded refresh draft is refused for every reason the ribbon
-    // would refuse the update now: the field it names must still be a
-    // stored `TOA` head, and nothing pending may touch the range the
-    // writer rewrites. The block also catches a second refresh queued on
-    // the same field.
     const refreshField =
       structure.kind === 'table-of-authorities-refresh'
         ? tableOfAuthoritiesFacts().fields.get(structure.paragraphId)
@@ -210,10 +163,6 @@ export function partitionStructureSlots({
               breaks: state.breaks,
               insertAnchors: insertAnchors ?? new Set(),
               structures: keep.structures,
-              // A refresh draft counts as queued only once it has itself
-              // survived the partition — `keep` holds exactly those — so a
-              // stale duplicate cannot masquerade as the field's owner and
-              // a second draft on one field is still refused.
               queuedRefresh:
                 refreshField !== undefined &&
                 keep.structures.some(
@@ -223,8 +172,6 @@ export function partitionStructureSlots({
                 ),
             })
         : undefined
-    // A structure anchored inside a field a kept refresh rewrites would be
-    // silently replaced along with the generated paragraphs.
     const coveredByRefresh =
       refreshCovered.has(structure.paragraphId) ||
       (structure.kind === 'cross-reference' &&
@@ -238,12 +185,6 @@ export function partitionStructureSlots({
           structure,
         )
       : undefined
-    // A defined-term draft's identity is the words it covered, not the
-    // range: typing earlier in the paragraph can move different text under
-    // the same offsets, and the writer would then mark and name words the
-    // user never selected. The batch's effective text must still read
-    // `marked` at `[from, to)` — the same check the writer's name
-    // derivation silently depends on, made honest.
     const definedTermDrift =
       structure.kind === 'defined-term' &&
       wire !== undefined &&

@@ -9,15 +9,9 @@ import type { ReactNode } from 'react'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('./api')) }
 mock.module('./api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   mattersKeys,
   mattersListQueryOptions,
@@ -80,7 +74,6 @@ describe('useCreateMatter', () => {
       }),
     })
 
-    // The new matter should be in the detail cache, and the list invalidated.
     await waitFor(() => {
       expect(client.getQueryData(mattersKeys.detail('mtr_new'))).toMatchObject({
         id: 'mtr_new',
@@ -127,7 +120,6 @@ describe('useMattersList — happy path with the real query', () => {
       wrapper: createWrapper(client),
     })
 
-    // Prime the same options the route loader uses, then assert the hook sees it.
     await client.ensureQueryData(mattersListQueryOptions())
 
     await waitFor(() => {

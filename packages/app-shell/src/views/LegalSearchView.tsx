@@ -37,8 +37,6 @@ export {
 } from '../legal-search-state'
 export { courtOptionGroups, getCourtLabel }
 
-// Re-exported for existing importers. The implementations live outside this
-// module so a case view can select paragraphs without pulling in the search UI.
 export {
   selectJudgmentParagraphs,
   selectParagraphExcerpts,

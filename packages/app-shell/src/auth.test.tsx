@@ -29,9 +29,6 @@ bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
 
-// The SUT captures createAuthClient at module scope, so it must evaluate
-// after the registrations above (vitest's vi.mock was hoisted; this is the
-// bun equivalent).
 const { useAuth } = await import('./auth')
 
 const {
@@ -290,7 +287,6 @@ describe('useAuth — sign-in success/failure', () => {
 
 describe('useAuth — registration with email verification', () => {
   it('reports verificationRequired when sign-up does not establish a session', async () => {
-    // With requireEmailVerification enabled, better-auth returns { token: null, user }.
     signUpEmail.mockResolvedValueOnce({
       error: null,
       data: { token: null, user: { id: 'usr_2' } },
@@ -392,7 +388,6 @@ describe('useAuth — signOut clears the current-user cache', () => {
     })
 
     expect(signOutFn).toHaveBeenCalledOnce()
-    // The cache is cleared so a fresh sign-in never reads the previous user.
     expect(client.getQueryData(['current-user'])).toBeUndefined()
   })
 

@@ -5,24 +5,8 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { layoutDocument } from './document-page-engine'
+import { textParagraph as paragraph } from './document-wire-test-support'
 
-/*
- * A page break is addressed by the text offset it sits at, whether it is still
- * pending in a draft or already stored in the model. The stored path used to
- * advance the whole paragraph, so a reloaded mid-paragraph break rendered as a
- * single sheet and disagreed with the editor that produced it.
- */
-
-function paragraph(id: string, text: string): DocumentParagraphWire {
-  return {
-    id,
-    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
-    preservedXmlFragments: [],
-  }
-}
-
-/** A paragraph as it reloads after a break was written mid-run: a standalone
- * break run between the text before and after the break. */
 function storedBreakParagraph(
   id: string,
   before: string,
@@ -103,11 +87,6 @@ describe('stored page breaks', () => {
   })
 
   it('opens the post-break block on the body edge, whatever the continuation flag', () => {
-    // The block after a mid-paragraph break has from > 0 while the layout's
-    // continuation flag is false, so a first-line indent cannot be gated on
-    // that flag: the editor would narrow a row pagination wrapped at body width
-    // and draw a row the layout never reserved. The gate is the offset, and this
-    // pins the shape it has to read.
     const indented: DocumentParagraphWire = {
       ...storedBreakParagraph('p1', 'abcdefghij', 'klmnopqrst'),
       preservedXmlFragments: ['<w:pPr><w:ind w:firstLine="720"/></w:pPr>'],

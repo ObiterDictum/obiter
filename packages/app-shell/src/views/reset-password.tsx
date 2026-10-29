@@ -5,9 +5,6 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
 import { AuthFoot, AuthForm, AuthHeading, AuthLayout } from './auth-layout'
 
-/**
- * Reset-password screen. The reset email links here with ?token=.
- */
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
   const { resetPassword } = useAuth()

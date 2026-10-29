@@ -39,8 +39,6 @@ it('bounds layout cost as both paragraph and revision counts grow', async () => 
   await measure(100, 10)
   const small = await measure(500, 10)
   const large = await measure(2000, 20)
-  // Count input reads instead of asserting wall time on the shared CI host.
-  // The old per-paragraph filter reads every change for every paragraph.
   expect(small.paragraphReads).toBeLessThanOrEqual(small.changes * 4)
   expect(large.paragraphReads).toBeLessThanOrEqual(large.changes * 4)
 })

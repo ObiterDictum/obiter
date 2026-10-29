@@ -20,10 +20,6 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
     : ''
 }
 
-/**
- * Self-serve registration. Verification is required, so success ends on a
- * check-your-email state rather than a session.
- */
 export function SignUpRouteView() {
   const navigate = useNavigate()
   const { signUpWithEmail, resendVerificationEmail } = useAuth()
@@ -46,10 +42,6 @@ export function SignUpRouteView() {
       setError('Name is required.')
       return
     }
-    // Invitees join the inviting organisation, so they never name one.
-    // Everyone else names their new workspace here — this is the only
-    // moment the name can be captured before product surfaces
-    // auto-provision a default-named workspace.
     const trimmedOrgName = token ? '' : organisationName.trim()
     if (!token && !trimmedOrgName) {
       setError('Organisation name is required.')
@@ -66,10 +58,6 @@ export function SignUpRouteView() {
     setSubmitting(true)
     try {
       const trimmedEmail = email.trim()
-      // An invitee who already registered should sign in — better-auth's
-      // duplicate sign-up response is indistinguishable from a fresh one
-      // ("check your email" with no email actually sent). Undetermined →
-      // proceed with normal sign-up rather than blocking.
       if (
         token &&
         (await checkInviteAccountExists(token, trimmedEmail)) === true

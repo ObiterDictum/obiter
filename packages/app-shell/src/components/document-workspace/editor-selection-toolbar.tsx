@@ -3,12 +3,6 @@ import { ChatText, Scales, TextB, TextItalic } from '@phosphor-icons/react'
 import { EditorIconButton } from './editor-controls'
 import type { DocumentFormatToolbar } from './ribbon-types'
 
-/**
- * The toolbar that follows a text selection: the four things a reader most
- * often wants to do to a phrase without leaving it. It floats above the
- * selection and never takes the selection away — every control prevents the
- * pointer default, so the document keeps its range and the command lands on it.
- */
 export function EditorSelectionToolbar({
   visible,
   format,
@@ -26,9 +20,6 @@ export function EditorSelectionToolbar({
     left: number
     top: number
   } | null>(null)
-  // The browser's selection rectangle is not React state: it changes on
-  // pointer and key movement the document handles itself, so the toolbar reads
-  // it from the selection and re-reads it when the selection moves.
   useLayoutEffect(() => {
     if (!visible) {
       setPosition(null)
@@ -38,8 +29,6 @@ export function EditorSelectionToolbar({
       const selection = window.getSelection()
       if (!selection || selection.rangeCount === 0) return
       const range = selection.getRangeAt(0)
-      // The test DOM has no layout: a range there reports no rectangle, so the
-      // toolbar stays hidden rather than throwing on a method it lacks.
       if (typeof range.getBoundingClientRect !== 'function') return
       const rect = range.getBoundingClientRect()
       if (rect.width === 0 && rect.height === 0) return

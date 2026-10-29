@@ -57,9 +57,6 @@ export function blockRuns(
   if (insert) return insertRuns(insert)
   const paragraph = editableParagraph(model, paragraphId)
   if (!paragraph) {
-    // A folded paragraph exists only in the painted model — a pending
-    // footnote's note body. Its runs live entirely in extraRuns, which is
-    // where `writeRuns` stores them.
     return state.extraRuns[paragraphId] ?? []
   }
   const extras = state.extraRuns[paragraphId] ?? []
@@ -165,7 +162,6 @@ export function applyDeleteForward(
   return joinIntoPrevious(model, state, nextId)
 }
 
-/** The paragraph after `paragraphId` in its story's editable flow, if any. */
 function nextParagraphId(
   model: DocumentModelWire,
   state: EditorState,
@@ -270,25 +266,12 @@ export function joinIntoPrevious(
   }
 }
 
-/** `tracked-change` means a paragraph the join or range would remove holds
- * stored revisions, whose element the writer refuses to delete. */
 export type JoinRefusal = 'structure' | 'join-formatting' | 'tracked-change'
 
-/** The outcome of a word edit: it applied (with the caret to place), or it
- * could not join a neighbour for a stated structural/formatting reason. */
 export type WordEditOutcome =
   | { status: 'applied'; caret: EditorCaret }
   | { status: 'refused'; refusal: JoinRefusal }
 
-/**
- * The reason a join into the paragraph before `paragraphId` is refused, or
- * null when it can proceed. This is the shared structural boundary a range
- * edit and a single-caret delete both pass through: only ordinary body
- * paragraphs (or a pending insert) may join, so a table cell or text-box
- * paragraph cannot be bridged, and a tail whose runs the save cannot restate
- * is refused before any draft state changes. A paragraph with no previous
- * neighbour has nothing to join and is not a refusal.
- */
 export function paragraphJoinRefusal(
   model: DocumentModelWire,
   state: EditorState,
@@ -309,21 +292,12 @@ export function paragraphJoinRefusal(
   const inserts = new Set(state.inserts.map((item) => item.clientId))
   const joinable = (id: string) => body.has(id) || inserts.has(id)
   if (!joinable(paragraphId) || !joinable(previousId)) return 'structure'
-  // The save deletes the joined paragraph's element, which the writer refuses
-  // while it holds tracked markup, and its revisions would leave the canvas
-  // until reload. A revision-only head has no run to fold the tail into. A
-  // plain tail joining a revised head folds into its last run, ahead of any
-  // trailing revision, which is where the canvas already paints it.
   const into = editableParagraph(model, previousId)
   if (
     holdsTrackedChanges(model, paragraphId) ||
     (into && revisionOnlyParagraph(model, into))
   )
     return 'tracked-change'
-  // A join erases the joined paragraph's element and every marker it
-  // carries: the moved runs restate only text on save, so a stored field's
-  // boundary inside it is lost while the rest survives. Removing the field
-  // whole — every boundary paragraph already marked — still composes.
   if (
     fieldBoundarySplitIds(
       model,
@@ -342,9 +316,6 @@ export function paragraphJoinRefusal(
       previousId,
     )
   ) {
-    // A join may not cross a note's `w:p` boundary: merging a neighbour's
-    // runs would move text between entries, and merging into a separator
-    // entry would write a real note onto markup the format reserves.
     return 'structure'
   }
   const head = blockRuns(model, state, previousId)
@@ -353,7 +324,6 @@ export function paragraphJoinRefusal(
   return null
 }
 
-/** Whether a stored paragraph carries revisions in its own story. */
 export function holdsTrackedChanges(
   model: DocumentModelWire,
   paragraphId: string,
@@ -362,12 +332,6 @@ export function holdsTrackedChanges(
   return !!paragraph && storedParagraphChanges(model, paragraph).length > 0
 }
 
-/**
- * The reason a word edit cannot join, or null when it does not attempt a join
- * or the join is safe. Backspace joins the paragraph before the caret and
- * Delete joins the paragraph after it, so the target is resolved the same way
- * the two delete edits resolve it.
- */
 export function wordEditJoinRefusal(
   model: DocumentModelWire,
   state: EditorState,
@@ -422,9 +386,6 @@ export function applyWordEdit(
     return applyDeleteForward(model, state, caret)
   }
   if (edit.type === 'split') {
-    // A folded paragraph — a pending footnote's note body — has no stored
-    // anchor for a paragraph split, so Enter carries a line break into its
-    // text instead of minting an insert that cannot save.
     if (
       !editableParagraph(model, edit.paragraphId) &&
       !state.inserts.some((item) => item.clientId === edit.paragraphId)

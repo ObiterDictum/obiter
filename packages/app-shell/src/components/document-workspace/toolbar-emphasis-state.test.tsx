@@ -1,13 +1,4 @@
 import '@obiter/test-dom'
-/*
- * The Bold, Italic and Underline controls must read the same effective text
- * and projected emphasis the editor paints and the save plan sends.
- *
- * They read the stored paragraph instead. Selecting only an unsaved appended
- * character therefore covered no stored run: the button stayed unpressed while
- * the character painted and saved bold, a second click re-applied the emphasis
- * instead of releasing it, and one Undo could not restore a coherent state.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -43,7 +34,6 @@ function pressed(name: string): string | null {
   return control(name).getAttribute('aria-pressed')
 }
 
-/** The painted run spans of one paragraph, from the projection paint uses. */
 function paintedSpans(paragraphId: string): HTMLElement[] {
   const root = document.querySelector(
     `[data-paragraph-id="${paragraphId}"] [data-paragraph-text]`,
@@ -91,7 +81,6 @@ function typeHelloBang() {
   fireEvent.change(bodyField(), { target: { value: 'Hello!' } })
 }
 
-/** A drag's press ends the live selection before the new range mirrors. */
 function dragSelect(from: number, to: number) {
   fireEvent.mouseDown(bodyField())
   return nativeSelect(from, to)
@@ -142,7 +131,6 @@ describe('toolbar state reads the effective paragraph', () => {
     expect(weightOf('p1', '!')).not.toBe('700')
 
     await save(editAsync)
-    // One entry, restated off: the save projection no longer holds bold [5,6).
     expect(emphasisOperations(editAsync)).toEqual([
       {
         type: 'set_run_emphasis',
@@ -281,8 +269,6 @@ describe('toolbar state reads the effective paragraph', () => {
     nativeSelect(5, 6)
     fireEvent.click(control('Bold'))
     expect(pressed('Bold')).toBe('true')
-    // A formatting toggle records an undo step; it does not itself create a
-    // redo branch, which only an undo produces.
     expect(control('Redo').disabled).toBe(true)
   })
 
@@ -337,8 +323,6 @@ describe('toolbar state reads the effective paragraph', () => {
     })
     clickParagraph('p1')
     fireEvent.change(bodyField(), { target: { value: emoji } })
-    // The selection starts inside the surrogate pair; the stored range is
-    // widened to the whole character, and the pressed state reads that range.
     nativeSelect(3, 4)
 
     fireEvent.click(control('Bold'))

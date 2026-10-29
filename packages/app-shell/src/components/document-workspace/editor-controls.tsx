@@ -12,13 +12,6 @@ import {
   cn,
 } from '@obiter/ui'
 
-/**
- * Why a control cannot run right now: the `soon` reason (a literal one or the
- * generic not-available wording), or the reason it is disabled. A control's
- * name is its command name wherever it is offered; the reason is a description
- * beside it, never part of the name, so "Accept change" keeps that name in a
- * menu row, a tooltip and a screen reader alike.
- */
 function controlReason(
   soon: boolean | string | undefined,
   disabled: boolean | undefined,
@@ -35,12 +28,10 @@ export type EditorControl = {
   disabled?: boolean
   soon?: boolean | string
   disabledReason?: string
-  /** How a pressed toggle should read; `pressed` is the fallback. */
   hint?: string
   onClick?: () => void
 }
 
-/** A toolbar icon button: the compact measure of the old ribbon control. */
 export function EditorIconButton({
   label,
   pressed,
@@ -81,7 +72,6 @@ export function EditorIconButton({
   )
 }
 
-/** A short text button, for commands whose name is clearer than an icon. */
 export function EditorTextButton({
   label,
   pressed,
@@ -113,11 +103,6 @@ export function EditorTextButton({
   )
 }
 
-/**
- * A dropdown on the shared Base UI Select. `label` is the control's
- * accessible name; there is no visible label in the toolbar beside it — the
- * choices themselves say what they are.
- */
 export function EditorSelect({
   label,
   value,
@@ -136,7 +121,6 @@ export function EditorSelect({
   soon?: boolean | string
   disabledReason?: string
   onChange?: (value: string) => void
-  /** Shown for a value no option names; the current option label otherwise. */
   placeholder?: string
   className?: string
 }) {
@@ -162,16 +146,8 @@ export function EditorSelect({
   )
 }
 
-/** How a menu row behaves: a command, an on/off toggle, or a radio choice. */
 export type EditorMenuItemKind = 'action' | 'toggle' | 'radio'
 
-/**
- * One menu row, built on the Base UI menu item so the menu keeps real
- * `menuitem`, `menuitemcheckbox` and `menuitemradio` semantics: arrow keys,
- * typeahead, the checked state and Escape-back-to-trigger all come from the
- * primitive. The visible label is always the command's name; a reason the row
- * cannot run is a second line described by the row, not appended to its name.
- */
 export function EditorMenuItem({
   label,
   icon,
@@ -235,8 +211,6 @@ export function EditorMenuItem({
     </>
   )
   const shared = {
-    // A real button element so the row activates and focuses like one; the
-    // role stays the menu role Base UI gives it.
     render: <button type="button" />,
     nativeButton: true,
     'aria-label': label,

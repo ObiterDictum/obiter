@@ -43,48 +43,24 @@ export {
 export type { RunEditProperties } from './document-edit-operations'
 export type { BreakDraft } from './document-draft-state'
 
-/** The one user-facing reason a final-paragraph deletion is refused. */
 export const LAST_PARAGRAPH_MESSAGE =
   'A document must contain at least one paragraph.'
 
-/** The same reason scoped to a single footnote or endnote entry. */
 export const LAST_NOTE_PARAGRAPH_MESSAGE =
   'A note must contain at least one paragraph.'
 
-/** The reason a pending structure's folded paragraph cannot be deleted: it is
- * removed with its insertion, not by deleting a paragraph. */
 export const PENDING_STRUCTURE_MESSAGE =
   'A pending insertion is removed with Undo, not Delete paragraph.'
 
-/** The one user-facing reason a field-boundary paragraph deletion is
- * refused: dropping some — but not all — of a stored field's boundary
- * markers leaves `fldChar` runs Word can never pair. */
 export const FIELD_BOUNDARY_MESSAGE =
   'This paragraph belongs to a stored field that can only be removed as a whole.'
 
-/** The one user-facing reason a removal is refused when the wire cannot
- * account for stored fields at all: a story served without `fields` or
- * `unanchoredFieldParagraphIds` came from a server that predates the
- * metadata — and the writer-side split check — so nothing client-side can
- * prove a removal there leaves the document's field markers balanced. */
 export const FIELD_METADATA_MESSAGE =
   'This document was loaded without its stored-field data, so paragraph removal is not supported.'
 
-/** The refusal a paragraph-deletion request can report: `last-paragraph` is
- * the story-level invariant, `last-note-paragraph` the same rule scoped to a
- * single footnote or endnote entry, `field-boundary` a partial removal of a
- * stored field's boundary markers, `field-metadata` a story served without
- * field metadata at all — a pre-field-metadata server where no removal is
- * provably balanced. */
 export type ParagraphDeletionRefusal =
   'last-paragraph' | 'last-note-paragraph' | 'field-boundary' | 'field-metadata'
 
-/** Whether the wire accounts for the story's stored fields. The schema
- * requires both keys, so their absence means the model came from a server
- * that predates field metadata — not a story that holds none — and no
- * removal inside it can be proven to keep `fldChar` markers balanced:
- * tracked and unmodelled markup hides markers the wire drops, and the old
- * server has no writer-side split check either. */
 function storyFieldMetadataKnown(story: DocumentStoryWire): boolean {
   return (
     Array.isArray(story.fields) &&
@@ -92,29 +68,10 @@ function storyFieldMetadataKnown(story: DocumentStoryWire): boolean {
   )
 }
 
-/** The outcome a paragraph-deletion request reports to the editor. A refusal is
- * typed so callers translate it rather than matching an English message, and so
- * the last-paragraph invariant has one name across the ribbon, the deletion
- * operation and the save plan. */
 export type ParagraphDeletionOutcome =
   | { status: 'deleted'; selectId: string | null }
   | { status: 'refused'; reason: ParagraphDeletionRefusal; selectId: null }
 
-/**
- * The paragraph ids inside `removedIds` whose removal would split a stored
- * field, keyed to the refusal reason. Deleting a paragraph removes its
- * element whole, so a `w:fldChar` or `w:fldSimple` boundary marker inside
- * it vanishes while the field's other markers survive — markup Word can
- * never pair. A field whose markers are all inside the removed set dies
- * whole and stays balanced; anything less refuses each covered id, for
- * explicit marks and the runless paragraphs a pending replacement removes
- * alike. The marker sets come from the parser's `story.fields`, so this is
- * the same pairing the writer's batch validation applies — including the
- * unanchored fields whose markers reach markup the model never carried.
- * A story served without the metadata — a pre-field-metadata server's
- * model — cannot prove any removal safe, so every stored-paragraph removal
- * in it refuses rather than guessing field-free.
- */
 export function fieldBoundaryRefusals(
   model: DocumentModelWire,
   removedIds: ReadonlySet<string>,
@@ -149,7 +106,6 @@ export function fieldBoundaryRefusals(
   return refusals
 }
 
-/** Whether `removedIds` would leave a stored field half-removed. */
 export function fieldBoundarySplitIds(
   model: DocumentModelWire,
   removedIds: ReadonlySet<string>,
@@ -157,20 +113,12 @@ export function fieldBoundarySplitIds(
   return fieldBoundaryRefusals(model, removedIds).size > 0
 }
 
-/** Why deleting `paragraphId` is refused, or null when the effective document
- * still keeps at least one paragraph. `flowParagraphIds` is the single
- * derivation of that effective flow: it counts stored paragraphs, adds pending
- * inserts and drops paragraphs already marked for deletion, so the ribbon, the
- * deletion operation and the save plan cannot diverge on what remains. */
 export function paragraphDeletionRefusal(
   model: DocumentModelWire,
   inserts: readonly LocalInsert[],
   deletedParagraphIds: readonly string[],
   paragraphId: string,
 ): ParagraphDeletionRefusal | null {
-  // The invariant holds inside the story the paragraph belongs to: a header
-  // with no block-level child is as invalid as an empty body. A pending
-  // insert's story is the one its anchor chain resolves to.
   const insert = inserts.find((item) => item.clientId === paragraphId)
   const anchorId = insert
     ? resolveInsertAnchor(
@@ -182,9 +130,6 @@ export function paragraphDeletionRefusal(
   const story = editableStoryOf(model, anchorId)
   const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
   if (!order.includes(paragraphId)) return null
-  // A stored paragraph in a story served without field metadata cannot be
-  // removed at all — nothing on the wire says where its field markers
-  // hide. A pending insert is not stored markup, so it still goes freely.
   if (
     story !== undefined &&
     story.paragraphs.some((paragraph) => paragraph.id === paragraphId) &&
@@ -192,20 +137,12 @@ export function paragraphDeletionRefusal(
   ) {
     return 'field-metadata'
   }
-  // A paragraph holding part of a stored field's boundary cannot go alone:
-  // the field's other markers survive and Word can never pair them. Marks
-  // already made count toward coverage, so removing the field whole —
-  // every boundary paragraph at once — still composes.
   if (
     fieldBoundarySplitIds(model, new Set([...deletedParagraphIds, paragraphId]))
   ) {
     return 'field-boundary'
   }
   if (isNoteStory(story)) {
-    // The invariant also holds inside each note entry: a `w:footnote` with no
-    // `w:p` child is invalid, so deleting the last surviving paragraph of an
-    // entry is refused even while the story still has others. An insert joins
-    // the entry its anchor resolves into, so it counts as a survivor.
     const entryIndex = noteEntryResolver(
       story,
       inserts,
@@ -220,14 +157,6 @@ export function paragraphDeletionRefusal(
   return order.length <= 1 ? 'last-paragraph' : null
 }
 
-/**
- * Maps each pending delete that would leave an editable story — or a note
- * entry inside one — without a surviving paragraph to the reason the save
- * plan blocks it. `inserts`/`deletedParagraphIds` are the batch's kept
- * values, so a kept insert anchored inside an entry counts as a survivor.
- * The client guard already stops the editor creating this state; this is
- * the same rule restated for a restored or constructed draft.
- */
 export function emptiedParagraphDeletes(
   model: DocumentModelWire,
   inserts: readonly LocalInsert[],
@@ -244,9 +173,6 @@ export function emptiedParagraphDeletes(
       }
     }
     if (!isNoteStory(story)) continue
-    // The same rule inside each note entry: a `w:footnote` or `w:endnote`
-    // whose surviving `w:p` count would drop to zero cannot be saved, so
-    // the deletes that empty it are blocked like an emptied story.
     const groups = noteEntryGroups(story)
     const flow = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
     const entryIndex = noteEntryResolver(story, inserts, realIds)
@@ -263,40 +189,11 @@ export function emptiedParagraphDeletes(
   return deletes
 }
 
-/**
- * The deleted sets a batch resolves to, computed once so every surface reads
- * the same answer instead of deriving its own piece of it.
- *
- * `emptied` names the marks the emptied-story guard refuses, keyed to its
- * reason. `split` names the removals the field-boundary guard refuses the
- * same way — explicit marks and the runless paragraphs a pending
- * replacement drops, so the partition can block whichever slot carries the
- * removal. `applied` is the marks the save will actually write:
- * `deletedParagraphIds` minus both refusals — a refused mark keeps its
- * paragraph painted and addressable. `effective` adds the runless
- * paragraphs a pending replacement deletes implicitly
- * (`replacedEmptyParagraphIds`): no draft marks them, but the writer's
- * `deletedIds` collects their `delete_paragraph` ops all the same, so a
- * structural check that reads only the marks disagrees with the writer.
- *
- * Surfaces asking "does this paragraph still paint or still hold text" read
- * `applied`; surfaces asking "is this paragraph gone after the batch" read
- * `effective`.
- */
 export type BatchParagraphDeletions = {
-  /** The marks the emptied-story guard refuses, keyed to the refusal reason. */
   emptied: ReadonlyMap<string, string>
-  /** The removals the field-boundary guard refuses: a delete mark or a
-   * runless paragraph's implicit removal would drop some but not all of a
-   * stored field's boundary markers. */
   split: ReadonlyMap<string, string>
-  /** The runless paragraphs a pending `extraRuns` replacement removes
-   * implicitly — an `insert_paragraph_after` plus a `delete_paragraph` with
-   * no delete mark — so a removal guard reads them as deletions too. */
   implicit: ReadonlySet<string>
-  /** The deletions the batch will write: marks minus the refused ones. */
   applied: ReadonlySet<string>
-  /** Everything the writer treats as gone: `applied` plus implicit replaces. */
   effective: ReadonlySet<string>
 }
 

@@ -133,12 +133,10 @@ describe('open work', () => {
     ])
     const first = grouped.get('mtr_1')
     if (!first) throw new Error('expected open work for the first matter')
-    // Findings, not rows: the flag and the two review-required citations.
     expect(first.total).toBe(3)
     expect(first.flaggedFindings).toBe(1)
     expect(first.reviewFindings).toBe(2)
     expect(first.redactionDecisions).toBe(0)
-    // An item with no matter (a run removed from its matter) is not attributed.
     expect(grouped.get('mtr_2')?.total).toBe(1)
   })
 

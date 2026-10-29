@@ -1,10 +1,3 @@
-/**
- * The document workspace's API surface, re-exported from its owners so the
- * module specifier stays stable for components and test mocks:
- * reads live in `document-workspace-queries`, writes in
- * `document-workspace-mutations`, and binary fetches in
- * `document-workspace-downloads`.
- */
 export {
   workspaceKeys,
   versionQuery,

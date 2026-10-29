@@ -27,7 +27,6 @@ function model() {
   ])
 }
 
-/** Selects p1 offset 4 to p2 offset 2, leaving the caret in p2. */
 function selectAcrossBoundary() {
   clickParagraph('p1')
   nativeSelect(4, 5)
@@ -53,7 +52,6 @@ describe('selection scope', () => {
     rerenderWorkspace(view, 'doc_2')
     expect(selectionStatus()).toBe('')
     expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)
-    // A paragraph of the new document is not silently partially selected.
     expect(selectedText('q1')).toBe('')
     expect(editAsync).not.toHaveBeenCalled()
   })
@@ -63,8 +61,6 @@ describe('selection scope', () => {
     const view = mountWorkspace({ models, editAsync: vi.fn() })
     selectAcrossBoundary()
 
-    // The reopened version keeps the paragraph ids but its first paragraph is
-    // shorter, so the anchor is clamped rather than left past its end.
     models.doc_1 = multiParagraphModel([
       paragraph('p1', 'Al'),
       paragraph('p2', 'Br'),

@@ -9,12 +9,6 @@ import type {
 import { apiFetch, ApiError } from './api'
 import { declaredFileType } from './file-type'
 
-/**
- * Real document domain types, mirroring the wire shapes returned by the
- * documents API (metadata-only: filename, hash, size, version, status — no file
- * bytes are ever received or stored).
- */
-
 export type DocumentStatus =
   'queued' | 'processing' | 'ready' | 'failed' | 'needs_review'
 
@@ -39,15 +33,9 @@ export interface DocumentVersionRecord {
   createdBy: string
   createdAt: string
   updatedAt: string
-  /** Set when Redact produced this version; null for ordinary versions. */
   redaction?: VersionRedaction | null
 }
 
-/**
- * Where a Redact-produced version came from. `canOpen` is the server's answer to
- * whether this reader may open the run: a standalone run's copy can be filed
- * into a matter whose other members cannot open the run itself.
- */
 export interface VersionRedaction {
   runId: string
   producedBy: string | null
@@ -82,7 +70,6 @@ export interface DocumentUploadResponse {
   version: DocumentVersionRecord
 }
 
-/** Query key factory for documents. */
 export const documentsKeys = {
   all: ['documents'] as const,
   byMatter: (matterId: string) =>
@@ -104,7 +91,6 @@ export function documentsNeedStatusPoll(
   )
 }
 
-/** Documents list for a matter (metadata only). */
 export function matterDocumentsQueryOptions(matterId: string) {
   return queryOptions({
     queryKey: documentsKeys.byMatter(matterId),
@@ -119,18 +105,11 @@ export function matterDocumentsQueryOptions(matterId: string) {
   })
 }
 
-/**
- * A 404 from the document boundary is definitive: the document is missing,
- * deleted, or on another organisation's tenant, and the API conceals which. No
- * retry can change that answer, so only genuinely transient failures (network,
- * 5xx, storage unavailable) get the library's limited retries.
- */
 export function retryDocumentLookup(failureCount: number, error: Error) {
   if (error instanceof ApiError && error.status === 404) return false
   return failureCount < 3
 }
 
-/** A single document with all its versions. */
 export function documentQueryOptions(documentId: string) {
   return queryOptions({
     queryKey: documentsKeys.detail(documentId),
@@ -140,7 +119,6 @@ export function documentQueryOptions(documentId: string) {
   })
 }
 
-/** The document this person opened most recently, or null before the first one. */
 export function recentlyOpenedDocumentQueryOptions() {
   return queryOptions({
     queryKey: documentsKeys.recentlyOpened(),
@@ -161,7 +139,6 @@ export function useRecentlyOpenedDocument(options?: { enabled?: boolean }) {
   })
 }
 
-/** The documents "Cite in document" offers, newest first. */
 export function citationTargetsQueryOptions() {
   return queryOptions({
     queryKey: documentsKeys.citationTargets(),
@@ -179,13 +156,6 @@ export function useCitationTargets() {
   return useQuery(citationTargetsQueryOptions())
 }
 
-/**
- * Record that the document on screen is the one this person opened. Opening a
- * document is a navigation event, not a render value, so it is reported once
- * per document id from an effect — the one place a lifecycle hook is the honest
- * way to say "this happened". The write is fire-and-forget: the dashboard line
- * it feeds is a convenience, and a failure must not interrupt reading.
- */
 export function useRecordDocumentOpen(documentId: string) {
   const queryClient = useQueryClient()
   const { mutate } = useMutation({
@@ -194,8 +164,6 @@ export function useRecordDocumentOpen(documentId: string) {
         method: 'POST',
       }),
     onSuccess: () => {
-      // Both lists are "documents this person opened", so one open reorders
-      // each of them.
       void queryClient.invalidateQueries({
         queryKey: documentsKeys.recentlyOpened(),
       })
@@ -249,11 +217,6 @@ export function useUploadMatterDocument(matterId: string) {
   })
 }
 
-/**
- * Soft-delete a document and its redaction runs (owner/admin only). On success
- * the detail is removed from cache and the parent matter's document list is
- * invalidated so the document disappears on next read.
- */
 export function useDeleteDocument() {
   const queryClient = useQueryClient()
   return useMutation({

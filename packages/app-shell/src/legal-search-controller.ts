@@ -231,8 +231,6 @@ export function useLegalSearch() {
       if (searchRequestId.current !== requestId) return
       if (abortController.current === requestAbortController)
         abortController.current = null
-      // Federated groups count as results: a legislation-only answer has
-      // an empty judgment hits array by design, never interleaved into it.
       const groupHitCount = (body.groups ?? []).reduce(
         (sum, group) => sum + group.hits.length,
         0,
@@ -249,10 +247,6 @@ export function useLegalSearch() {
         keepSearchInputFocused()
         return
       }
-      // Empty: carry legislationNote so an unheld Act is named rather than
-      // reported as a missing judgment. A queued outcome rechecks on a bound
-      // (timer-driven from this handler, not a fetching effect) and expires
-      // plainly at the bound instead of spinning forever.
       const legislationNote = body.diagnostics?.legislationNote
       const legislationNotHeld = body.diagnostics?.legislationNotHeld === true
       const legislationTitleUnresolved =
@@ -400,11 +394,6 @@ export function useLegalSearch() {
     setRecentSearches([])
   }
 
-  // A corrective resubmission changes the search, so it must change the
-  // command bar with it: results for the suggested citation beside the
-  // original underspecified one leave Enter in the input rerunning the stale
-  // query. runSearch is passed the query explicitly, so syncing the input
-  // here starts no second request.
   function resubmitQuery(nextQuery: string) {
     setQuery(nextQuery)
     void runSearch(nextQuery)

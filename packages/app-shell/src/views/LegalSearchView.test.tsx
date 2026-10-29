@@ -8,9 +8,6 @@ const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -55,9 +52,6 @@ mock.module('@tanstack/react-router', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   LEGAL_SEARCH_DEBOUNCE_MS,
   LEGAL_SEARCH_HYDRATION_MAX_POLLS,
@@ -84,7 +78,6 @@ function createDeferredResponse(): DeferredResponse {
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
-  // Polling mocks reuse this response; a real Response body is single-use.
   return {
     ok: status < 400,
     status,
@@ -118,10 +111,6 @@ function createSearchResponse(
   })
 }
 
-/**
- * The JSON body of a search response, loose enough for a test to assemble
- * only the fields the assertion needs.
- */
 interface SearchResponseBody {
   hits: unknown[]
   cached: boolean
@@ -334,7 +323,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     container = mount()
 
     expect(container.textContent).toContain('Search judgments')
-    // Naming the stored source is not a claim that a provider is contacted.
     expect(container.textContent).toContain(
       'The National Archives (Find Case Law)',
     )
@@ -387,17 +375,12 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    // The legislation half recognised the Act and served nothing: the panel
-    // must name the Act, not report a missing judgment citation.
     expect(container.textContent).toContain('Legislation not held')
     expect(container.textContent).toContain('Children Act 1989 is not held.')
     expect(container.textContent).not.toContain('No judgment held')
   })
 
   it('surfaces an unresolved legislation title even when the outcome is no_match', async () => {
-    // Finding 2: the signed-in foreground branch answered no_match without
-    // consulting the legislation half, so this verdict vanished. The flag
-    // must drive the copy regardless of the generic outcome.
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         hits: [],
@@ -456,10 +439,6 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('polls a queued verdict query and keeps the verdict after the poll expires', async () => {
-    // Finding 2: the API now returns hydration_queued with the verdict in
-    // diagnostics while a job is pending. The client must keep polling, and
-    // when the bounded recheck expires it must show the legislation verdict,
-    // not the generic "Still no match after rechecks" copy.
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         hits: [],
@@ -483,7 +462,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    // The verdict is visible while the poll runs.
     expect(container.textContent).toContain('No exact legislation title match')
 
     for (
@@ -550,7 +528,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    // The corrective is visible while the poll runs, and the poll still runs.
     expect(container.textContent).toContain('Schedule 1 paragraph 2')
     expect(container.textContent).not.toContain('Still no match after rechecks')
 
@@ -568,7 +545,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(fetchMock).toHaveBeenCalledTimes(
       LEGAL_SEARCH_HYDRATION_MAX_POLLS + 1,
     )
-    // Expiry must not swap the corrective for contradictory copy.
     expect(container.textContent).toContain('Schedule 1 paragraph 2')
     expect(container.textContent).not.toContain('Still no match after rechecks')
   })
@@ -608,8 +584,6 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('never advertises Find Case Law discovery for a stored-only miss', async () => {
-    // The corpus-only API cannot consult a provider, so a stale or hostile
-    // diagnostics.liveProviderSearched must not make the page claim it did.
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         hits: [],
@@ -632,7 +606,6 @@ describe('LegalSearchView debounce lifecycle', () => {
       'No stored source matches "zxqwv neverseen"',
     )
     expect(container.textContent).not.toContain('Find Case Law')
-    // A dead end becomes a route onward: both public sources, with the query.
     const elsewhere = Array.from(
       container.querySelectorAll<HTMLAnchorElement>(
         'a[href*="nationalarchives"], a[href*="legislation.gov.uk/search"]',
@@ -669,8 +642,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain(
       'No stored legal source holds "[2023] EWCA Civ 123" as a judgment.',
     )
-    // No provider jargon: the corpus is all that was searched, and the copy
-    // names the next step instead of what did not happen.
     expect(container.textContent).not.toContain('Providers were not consulted')
     expect(container.textContent).toContain(
       'Check the citation, or search by party name instead.',
@@ -849,7 +820,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     if (!dateFromInput || !dateToInput)
       throw new Error('Date filters were not rendered')
 
-    // The date fields take dd/mm/yyyy, not the ISO value the filter holds.
     await changeSearchInput(dateFromInput, '01/01/2024')
     await changeSearchInput(dateToInput, '31/12/2024')
     await act(async () => {
@@ -858,7 +828,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     expect(container.textContent).toContain('Supreme Court')
-    // The chip reads the same dd/mm/yyyy the field takes.
     expect(container.textContent).toContain('From 01/01/2024')
     expect(container.textContent).toContain('To 31/12/2024')
 
@@ -1027,8 +996,6 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('names the wait on rate-limited search instead of a generic failure', async () => {
-    // 429 is a rate-limit signal, not a specific outage; the panel must say
-    // busy, not failed, and must not imply a provider fetch.
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse(
         {
@@ -1142,7 +1109,6 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain(
       'Legal search could not be completed because part of the search failed. Try again later.',
     )
-    // A request that never completed must not render an empty-state negative.
     expect(container.textContent).not.toContain('No stored legal source holds')
     expect(container.textContent).not.toContain('No stored legislation matches')
   })
@@ -1260,9 +1226,6 @@ describe('LegalSearchView interactive targets and query resync', () => {
     }
   }
 
-  // The schedule corrective renders above judgment results when the search
-  // half answered, and inside the empty panel when it did not. Both carry the
-  // same "Use this citation" button.
   function resultsWithScheduleGuidance(): SearchResponseBody {
     return {
       hits: [createTwoResultHits()[0]],
@@ -1307,10 +1270,6 @@ describe('LegalSearchView interactive targets and query resync', () => {
   }
 
   it('leaves Enter on the focused schedule resubmit button to the button', async () => {
-    // Browser finding: the results-surface corrective renders while
-    // `state.status === 'results'`, so the window keydown handler treated
-    // Enter on the focused button as "open the selected result" and
-    // suppressed the button's own activation.
     const { fetchMock, container: host } = await renderWithResponse(
       resultsWithScheduleGuidance(),
     )
@@ -1330,14 +1289,10 @@ describe('LegalSearchView interactive targets and query resync', () => {
       button.dispatchEvent(enter)
     })
 
-    // Enter belongs to the button: not suppressed, and the selected result
-    // row must not open instead.
     expect(enter.defaultPrevented).toBe(false)
     expect(routerMocks.navigate).not.toHaveBeenCalled()
     expect(fetchMock.mock.calls.length).toBe(requestsBeforeEnter)
 
-    // jsdom does not synthesise the browser's Enter activation, so fire the
-    // click the browser would: the resubmit happens exactly once.
     await act(async () => {
       button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -1400,8 +1355,6 @@ describe('LegalSearchView interactive targets and query resync', () => {
       resultLink?.dispatchEvent(enter)
     })
 
-    // A nested icon/span must not be mistaken for the non-interactive result
-    // surface: the link owns Enter, the global shortcut stays out of it.
     expect(enter.defaultPrevented).toBe(false)
     expect(routerMocks.navigate).not.toHaveBeenCalled()
   })
@@ -1426,8 +1379,6 @@ describe('LegalSearchView interactive targets and query resync', () => {
     await clickButton(container, 'Use this citation')
     await flushMicrotasks()
 
-    // One request for the corrective: syncing the input must not fire a
-    // second, transient search of its own.
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(getSearchInput(container).value).toBe(correctedQuery)
     const resubmit = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined
@@ -1435,8 +1386,6 @@ describe('LegalSearchView interactive targets and query resync', () => {
       query: correctedQuery,
     })
 
-    // Enter in the input afterwards reruns the corrected query, not the
-    // underspecified one the command bar used to show.
     await submitSearchForm(container)
     await flushMicrotasks()
     expect(fetchMock).toHaveBeenCalledTimes(3)

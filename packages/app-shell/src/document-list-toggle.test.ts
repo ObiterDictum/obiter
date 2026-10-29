@@ -200,7 +200,6 @@ describe('list toggle', () => {
         ...model.numbering.slice(1),
       ],
     }
-    // The instance's first override is at ilvl 2, so ilvl 0 must not read it.
     expect(
       paragraphStartOverride(perLevel, emptyFormatDrafts, paragraph('p0', 0)),
     ).toBeUndefined()
@@ -231,8 +230,6 @@ describe('list toggle', () => {
         },
       ],
     }
-    // The self-closing override at ilvl 0 has no start, so the ilvl-2 value
-    // must not be read for it.
     expect(
       paragraphStartOverride(overridden, emptyFormatDrafts, paragraph('p0', 0)),
     ).toBeUndefined()

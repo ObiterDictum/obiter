@@ -28,15 +28,9 @@ const hooks = vi.hoisted(() => ({
   useUpdateDocumentMarkings: vi.fn(),
   fetchDocumentExport: vi.fn(),
 }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentWorkspaceApiModule = {
   ...(await import('../../document-workspace-api')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentWorkspaceApiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-workspace-api')).map((key) => [
     key,
@@ -73,13 +67,7 @@ const edits = vi.hoisted(() => ({
   downloadBlob: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentEditsModule = { ...(await import('../../document-edits')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentEditsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-edits')).map((key) => [
     key,
@@ -96,13 +84,7 @@ mock.module('../../document-edits', () =>
   ),
 )
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('../../current-user')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const currentUserModuleKeys = Object.fromEntries(
   Object.keys(await import('../../current-user')).map((key) => [
     key,
@@ -119,13 +101,8 @@ mock.module('../../current-user', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { DocxWorkspace } = await import('./docx-workspace')
 
-// Only the individual mocks are re-exported: a `vi.hoisted` binding cannot be
-// exported directly, but a reference to one of its properties can.
 export const fetchDocumentExport = hooks.fetchDocumentExport
 export const downloadBlob = edits.downloadBlob
 
@@ -237,11 +214,6 @@ export function multiParagraphModel(
   }
 }
 
-/**
- * Body p1, a two-cell table, then body p4. The cell paragraphs are part of the
- * story's paragraph list (as a parsed table is) but not of its body flow, which
- * is exactly the boundary the document selection must not cross.
- */
 export function tabledBodyModel(
   before = 'Alpha',
   after = 'Delta',
@@ -272,12 +244,7 @@ function withTable(model: DocumentModelWire): DocumentModelWire {
   }
 }
 
-/**
- * A live document source, so a test can make a save reload the model the way
- * the real `/model` route does (new version, re-parsed identities) instead of
- * pinning one immutable fixture for the whole mount.
- */
-export type WorkspaceModelSource = (id: string) => {
+type WorkspaceModelSource = (id: string) => {
   versionId: string
   versionNumber: number
   model: DocumentModelWire
@@ -290,30 +257,21 @@ export function mountWorkspace(
     modelFor?: WorkspaceModelSource
     editAsync?: ReturnType<typeof vi.fn>
     mergeAsync?: ReturnType<typeof vi.fn>
-    /** Drives the tracked-change decision path a saved tracked undo uses. */
     decideAsync?: ReturnType<typeof vi.fn>
-    /** The decision mutation's failed-write state, as a rejected request leaves it. */
     decideError?: Error | null
-    /** Drives the markings commit; default is an idle mutation. */
     markingsAsync?: ReturnType<typeof vi.fn>
-    /** The changes the tracked-changes query returns. */
     changes?: import('@obiter/contracts').DocumentChangeWire[]
-    /** Simulates the reload query failing, so a pending baseline cannot resolve. */
     modelError?: () => boolean
-    /** Overrides the comments list the panel is fed. */
     comments?: {
       comments?: import('@obiter/contracts').DocumentComment[]
       importedComments?: import('@obiter/contracts').DocumentImportedCommentThread[]
       orphanedReplies?: import('@obiter/contracts').DocumentCommentReply[]
     }
-    /** Drives the comment mutations; each defaults to an idle mutation. */
     createComment?: ReturnType<typeof vi.fn>
     replyComment?: ReturnType<typeof vi.fn>
     resolveComment?: ReturnType<typeof vi.fn>
     reopenComment?: ReturnType<typeof vi.fn>
-    /** Overrides the signed-in user's id and organisation role. */
     user?: { id?: string; role?: 'owner' | 'admin' | 'member' }
-    /** Leaves a citation for this document, as a source page does. */
     pendingCitation?: string
   } = {},
 ) {
@@ -379,8 +337,6 @@ export function mountWorkspace(
   hooks.useTrackedChangeDecision.mockReturnValue(
     idleMutation({
       error: options.decideError ?? null,
-      // The review hook dispatches through `mutate` with result callbacks;
-      // the tracked-undo save path uses `mutateAsync`. One mock serves both.
       mutate: (input: unknown, callbacks?: unknown) =>
         options.decideAsync?.(input, callbacks),
       mutateAsync: options.decideAsync ?? vi.fn(),
@@ -389,8 +345,6 @@ export function mountWorkspace(
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
   hooks.useUpdateDocumentMarkings.mockReturnValue(
     idleMutation({
-      // The markings hook dispatches through `mutate` with result callbacks,
-      // the same dispatch shape as the tracked-change decision hook.
       mutate: (input: unknown, callbacks?: unknown) =>
         options.markingsAsync?.(input, callbacks),
     }),
@@ -410,8 +364,6 @@ export function mountWorkspace(
   )
 }
 
-// Switches an already-mounted workspace to another document, mirroring the
-// same component instance receiving new props.
 export function rerenderWorkspace(
   view: ReturnType<typeof render>,
   documentId: string,
@@ -431,8 +383,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-// Unsaved drafts are persisted per tab, so each test starts without the
-// previous test's draft of the same document.
 beforeEach(() => {
   window.localStorage.clear()
   window.sessionStorage.clear()

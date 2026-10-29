@@ -5,11 +5,6 @@ import { formatDate } from '../format'
 import type { MatterRecord } from '../matters'
 import { openWorkParts, type MatterOpenWork } from './matters-rows'
 
-/**
- * The matter's details and what is waiting in it. Facts come from the matter
- * record; open work is the same attention items Home ranks, counted for this
- * matter alone, so the rail and the queue never disagree.
- */
 export function MatterOverview({
   matter,
   openWork,
@@ -51,8 +46,6 @@ export function MatterOverview({
             </p>
           ) : (
             <div className="flex flex-col gap-3">
-              {/* The same words as the document row and the list's preview, so
-                  open work reads the same wherever it is counted. */}
               <ul className="flex flex-col gap-2">
                 {openWorkParts(openWork).map((part) => (
                   <li key={part.label}>

@@ -199,7 +199,6 @@ describe('checkDefinedTerms', () => {
         marked: 'Hourly Rate',
       },
     ]
-    // p1 'The Hourly Rate applies.' [4,15) covers 'Hourly Rate'
     const check = checkDefinedTerms(
       model(
         paragraph('p1', 'The Hourly Rate applies.'),
@@ -218,9 +217,6 @@ describe('checkDefinedTerms', () => {
   })
 
   it('flags a pending mark whose covered text drifted after it was made', () => {
-    // The mark bound 'Hourly Rate' at [4,15); a typed draft has since
-    // changed what that range covers. The finding names the term, not the
-    // text now under it — and the save partition must not emit the op.
     const structures: StructuralDraft[] = [
       {
         id: 'd1',
@@ -264,7 +260,6 @@ describe('checkDefinedTerms', () => {
       model(paragraph('p1', 'The Hourly Rate applies.')),
       {
         ...emptyDraftState(),
-        // Typing earlier in the paragraph shifted the range's contents.
         drafts: { 'p1-r1': 'See the Hourly Rate applies.' },
         structures: [draft],
       },

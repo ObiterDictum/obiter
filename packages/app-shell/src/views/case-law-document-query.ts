@@ -1,11 +1,3 @@
-/*
- * Case-law document data: the response shape and the query that fetches it.
- *
- * These live apart from views/CaseLawDocumentView so the `/cases/$caseId`
- * redirect route can resolve an id to its canonical slug without importing the
- * view. While both routes imported the view module the bundler shared it across
- * two dynamic routes and hoisted it into the entry chunk every route preloads.
- */
 import { queryOptions } from '@tanstack/react-query'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { apiUrl } from '../lib/api-url'
@@ -35,15 +27,9 @@ export interface CaseLawWithdrawnNotice {
 
 export interface CaseLawDocumentResponse {
   document: CaseLawDocument
-  /** True only when each `paragraphNumber` is the court's own, never a count. */
   courtParagraphNumbers?: boolean
-  /** When the corpus read this judgment's metadata: the retrieval date the
-   * page shows. Absent when the record does not carry it. */
   acquiredAt?: string | null
-  /** The bench, from the source's published metadata. Empty when the source
-   * publishes none; the page then shows no panel. */
   judges?: string[]
-  /** The court's own published summary, quoted. Null when there is none. */
   summary?: CaseLawSummaryResponse | null
   withdrawn?: CaseLawWithdrawnNotice
 }
@@ -51,9 +37,6 @@ export interface CaseLawDocumentResponse {
 export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
     queryKey: ['case-law-document', caseId],
-    // Withdrawal banners must appear without a reload: never serve this
-    // from cache on mount, so a judgment withdrawn since the last visit
-    // revalidates and the banner renders on fresh data.
     staleTime: 0,
     retry: 1,
     refetchOnMount: 'always',

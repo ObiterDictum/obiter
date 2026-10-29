@@ -1,8 +1,4 @@
 import '@obiter/test-dom'
-// Shared support for the contextual verification suites. It owns the workspace
-// hook mocks, the synthetic finding fixtures and the mount helper, so the two
-// suites can each read as the behaviour they cover instead of restating setup.
-// It is deliberately not named `*.test.*`: only the suites are collected.
 import { createElement, type PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -32,15 +28,9 @@ const modelHook = vi.hoisted(() => ({
   usePresenceUpdate: vi.fn(),
   fetchDocumentExport: vi.fn(),
 }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentWorkspaceApiModule = {
   ...(await import('../../document-workspace-api')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentWorkspaceApiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-workspace-api')).map((key) => [
     key,
@@ -73,13 +63,7 @@ mock.module('../../document-workspace-api', () =>
 )
 
 const userHook = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const currentUserModule = { ...(await import('../../current-user')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const currentUserModuleKeys = Object.fromEntries(
   Object.keys(await import('../../current-user')).map((key) => [
     key,
@@ -97,13 +81,7 @@ mock.module('../../current-user', () =>
 )
 
 const documentHook = vi.hoisted(() => ({ useDocument: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('../../documents')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../documents')).map((key) => [key, undefined]),
 )
@@ -123,13 +101,7 @@ const runsHook = vi.hoisted(() => ({
   useVerificationFindings: vi.fn(),
   latestVerificationRun: vi.fn(),
 }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const verificationRunsModule = { ...(await import('../../verification-runs')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const verificationRunsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../verification-runs')).map((key) => [
     key,
@@ -153,15 +125,9 @@ mock.module('../../verification-runs', () =>
 )
 
 const draftHook = vi.hoisted(() => ({ useDocumentDraftStatus: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentDraftStatusModule = {
   ...(await import('./document-draft-status')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentDraftStatusModuleKeys = Object.fromEntries(
   Object.keys(await import('./document-draft-status')).map((key) => [
     key,
@@ -181,9 +147,6 @@ mock.module('./document-draft-status', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { DocumentWorkspace } = await import('./workspace')
 
 const CITATION_PARAGRAPH = 'See Anderson v Shetland [2012] UKSC 7 on fairness.'
@@ -320,8 +283,6 @@ export function unmappableFinding(): VerificationFindingView {
 
 const HARD_BREAK_TEXT = 'Line one\nLine two'
 
-/** A finding whose recorded excerpt contains a hard break. The model range is
- * byte-identical, but the page does not paint the newline as text. */
 export function hardBreakFinding(): VerificationFindingView {
   return finding({
     id: 'vf_hb',
@@ -398,8 +359,6 @@ function wrapper({ children }: PropsWithChildren) {
   )
 }
 
-/** The workspace element the suites render, exposed so a test can rerender the
- * same pane with a different document id. */
 export function workspaceElement(documentId: string) {
   return <DocumentWorkspace documentId={documentId} version={version()} />
 }
@@ -415,12 +374,10 @@ function idleMutation() {
 
 let storedVersionId = 'ver_1'
 
-/** The stored version the open document reports, for stale-evidence cases. */
 export function setStoredVersionId(id: string) {
   storedVersionId = id
 }
 
-/** Report unsaved editor work, as the E45 save owner would. */
 export function setUnsavedWork(dirty: boolean) {
   draftHook.useDocumentDraftStatus.mockReturnValue({ dirty })
 }
@@ -502,8 +459,6 @@ export function mount(
     findings,
   })
   const result = render(workspaceElement(documentId), { wrapper })
-  // Findings live in the docked Verify panel now, not a strip above the page:
-  // open it through the header chip so the suites exercise the real control.
   fireEvent.click(screen.getByRole('button', { name: /^Verify:/ }))
   return result
 }

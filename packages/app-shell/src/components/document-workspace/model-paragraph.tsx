@@ -105,10 +105,6 @@ export function ModelParagraph({
   selected: boolean
   onSelectParagraph: (paragraphId: string, offset?: number) => void
   drafts?: Record<string, string>
-  /**
-   * Pending range emphasis, in effective-text offsets. Applied after the
-   * text draft so a slice cannot be replaced by the whole draft.
-   */
   emphasis?: readonly PendingEmphasis[]
   onRunTextChange?: (runId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
@@ -142,16 +138,11 @@ export function ModelParagraph({
   wrapWidthPx?: number
   continuation?: boolean
   pageStart?: boolean
-  /** The page this block paints on: resolves `PAGE` fields in stored runs. */
   pageNumber?: number
-  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
   pageReferences?: ReadonlyMap<string, number>
   listMarker?: ListMarker
   noteMark?: string
   noteKind?: NoteKind
-  /** The story this paragraph belongs to as rendered. Paragraph ids are only
-   * unique inside their story, so verification anchoring needs the story on the
-   * element, not only the paragraph. */
   story?: { kind: string; partName: string }
   linkOverlay?: ParagraphLinkOverlay
 }) {
@@ -205,10 +196,6 @@ export function ModelParagraph({
     : undefined
   const linePx = paragraphLineHeightPx(face)
   const images = continuation ? [] : paragraphInlineXml(paragraph)
-  // A block that places the paragraph's final row reaches the end of the text;
-  // a block that stops at a hard break ends one code unit before it. The caret
-  // at that break's offset still renders at the end of this block's last row,
-  // so this block owns it rather than the fragment that resumes after it.
   const ownsBreak = end < fullText.length && fullText[end] === '\n'
   const restore =
     restoreCaret?.paragraphId === paragraph.id &&
@@ -221,9 +208,6 @@ export function ModelParagraph({
       (ownsBreak && restoreCaret.offset === end))
       ? restoreCaret.offset - start
       : undefined
-  // Wrapping measures every line through the canvas. An unchanged paragraph's
-  // slice text is an equal string, so the measurement survives the keystroke
-  // even though the paragraph object was rebuilt.
   const faceCss = paragraphCss(face)
   const onBodyEdge = continuation || start > 0 || Boolean(listMarker)
   const lines = useMemo(
@@ -244,8 +228,6 @@ export function ModelParagraph({
     (restore !== undefined ||
       restoreCaret == null ||
       restoreCaret.paragraphId !== paragraph.id)
-  // Only the paragraph holding the caret reads a neighbour, and the resolver
-  // only then wraps the neighbour's text. Everything else pays a lookup.
   const adjacent =
     editing && holdsCaret && neighbors
       ? neighbors(paragraph.id, wrapWidthPx, drafts)
@@ -254,11 +236,6 @@ export function ModelParagraph({
     ? Math.max(0, listMarker.leftPx - listMarker.hangingPx)
     : (face.indentLeftPx ?? 0)
   const markerWidth = listMarker?.hangingPx ?? 0
-  // The focused editor paints the document selection through the same run
-  // overlay the static paint uses, so a selection reads alike in every
-  // paragraph. A block only shows the part of the segment that it owns, so the
-  // range is clamped to this block: the paint reads it in paragraph-model
-  // offsets and the editor in block-local ones.
   const paintSelection: ParagraphSelectionRange | undefined = selectionSegment
     ? {
         from: Math.max(selectionSegment.from, start),
@@ -276,9 +253,6 @@ export function ModelParagraph({
       ? {
           ...selectionHandlers,
           range: localSelection ?? null,
-          // The workspace places the caret at the focus endpoint, so its
-          // slice-local offset is the moving end while this paragraph holds
-          // the caret. Another paragraph of the same block never does.
           focus:
             selectionHandlers.active &&
             restoreCaret?.paragraphId === paragraph.id
@@ -418,7 +392,6 @@ export function ModelParagraph({
         >
           {editing &&
           holdsCaret &&
-          // Same rule as revisionOnlyParagraph, on this story's own bucket.
           !(paragraph.runs.length === 0 && bucket.length > 0) ? (
             <>
               <div

@@ -9,19 +9,10 @@ import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
 import { Sidebar } from './sidebar'
 import { TopBar } from './top-bar'
 
-// The Agent is an on-demand surface with no shared state, so its panel — and
-// the docked-panel placement machinery it drags in — stays out of the entry
-// graph the shell pays for on every page.
 const AgentPanel = lazy(() =>
   import('./agent-panel').then((module) => ({ default: module.AgentPanel })),
 )
 
-/**
- * App frame. Gates the shell on a real better-auth session: unauthenticated
- * users are redirected to /sign-in. Auth routes render bare (no workspace
- * chrome). The authenticated frame is one labelled sidebar, a thin top bar for
- * breadcrumbs, search and the account, and the scrolling content column.
- */
 export function AppShellLayout({
   children,
   platform,
@@ -73,8 +64,6 @@ function AuthenticatedFrame({
   const [agentOpen, setAgentOpen] = useState(false)
   const agentTriggerRef = useRef<HTMLButtonElement>(null)
 
-  // Closing the panel returns focus to the row that opened it, so a keyboard
-  // user is never dropped back at the top of the document.
   function closeAgent() {
     setAgentOpen(false)
     agentTriggerRef.current?.focus()

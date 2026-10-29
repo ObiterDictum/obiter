@@ -1,8 +1,3 @@
-/**
- * Scrolls the focused editor's line into view inside the document desk. Split
- * from `paragraph-editor.tsx` so the editor component stays under the source
- * ceiling; the editor re-exports it for existing callers.
- */
 export function revealTypingLine(node: HTMLElement) {
   const page = node.closest('[data-document-page]')
   if (page instanceof HTMLElement) {

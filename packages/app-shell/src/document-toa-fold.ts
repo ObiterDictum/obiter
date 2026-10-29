@@ -29,14 +29,6 @@ type ToaRefreshDraft = StructuralDraft & {
   kind: 'table-of-authorities-refresh'
 }
 
-/**
- * The pending-fold state for `TOA` drafts: the `_ToA` bookmark name and
- * `w:id` allocators, seeded from the names and ids the painted model
- * already holds — the same scheme `createTableOfContentsFold` runs for
- * `_Toc`, in its own family so the two never share an index. A citing
- * paragraph that already carries a `_ToA` fragment reuses its name,
- * matching the writer's `ensureParagraphBookmark` reuse.
- */
 export function createTableOfAuthoritiesFold(
   model: DocumentModelWire,
   drafts: Record<string, string>,
@@ -66,12 +58,6 @@ export function createTableOfAuthoritiesFold(
     }
   }
 
-  /**
-   * One citing paragraph's bookmark name: an existing `_ToA` name on the
-   * wire when it has one, otherwise a freshly allocated pair — returned as
-   * fragments for the caller to attach, since folded wires are replaced
-   * rather than mutated.
-   */
   const bookmarkFor = (paragraph: DocumentParagraphWire) => {
     const own = [
       ...paragraph.preservedXmlFragments,
@@ -94,15 +80,6 @@ export function createTableOfAuthoritiesFold(
     }
   }
 
-  /**
-   * The citations the fold captures — the shared grammar the writer's
-   * `tableOfAuthoritiesCitations` applies — over the painted paragraphs'
-   * effective text so a typed draft already shows in the mark it will be
-   * spliced after. A paragraph marked for deletion is skipped, matching
-   * the writer's `deletedIds` exclusion, and the generated result styles
-   * the collector refuses keep a pending entry paragraph out of its own
-   * table.
-   */
   const citations = (paragraphs: readonly DocumentParagraphWire[]) =>
     tableOfAuthoritiesCitations(
       paragraphs.filter((paragraph) => !deletedIds.has(paragraph.id)),
@@ -110,13 +87,6 @@ export function createTableOfAuthoritiesFold(
         paragraph.runs.map((run) => drafts[run.id] ?? run.text).join(''),
     )
 
-  /**
-   * The `TA` marks the painted model folds for one citation set —
-   * `spliceRunAtOffset` per occurrence, the wire counterpart of the
-   * writer's mark pass. `skipMarked` is the refresh path's deduplication:
-   * an occurrence already carrying its mark — stored or folded by an
-   * earlier draft — is left alone so a refresh cannot accrete marks.
-   */
   const foldMarks = (
     paragraphs: DocumentParagraphWire[],
     draftId: string,
@@ -156,13 +126,6 @@ export function createTableOfAuthoritiesFold(
     }
   }
 
-  /**
-   * The `_ToA` bookmark names the entries reference, one per citing
-   * paragraph — an existing name on the wire when it has one — and the
-   * fresh fragments each paragraph still needs, applied after the fold's
-   * paragraph splices so a citing paragraph that was the anchor lands
-   * them on the head wire.
-   */
   const bookmarksFor = (
     paragraphs: readonly DocumentParagraphWire[],
     entries: readonly { paragraphIds: readonly string[] }[],
@@ -198,15 +161,6 @@ export function createTableOfAuthoritiesFold(
   }
 
   return {
-    /**
-     * Splices one pending `TOA` into `paragraphs` — the wire counterpart
-     * of the writer's mark pass and `</w:p>`-level splice. The hidden
-     * `TA` mark runs fold into every citing paragraph first, the
-     * anchor's runs then split at the effective-text offset, and the
-     * heading plus one entry wire per distinct citation land between the
-     * head and a tail that opens with the field `end` run — the shape
-     * the serialised output produces.
-     */
     insert(
       paragraphs: DocumentParagraphWire[],
       draft: ToaDraft,
@@ -220,8 +174,6 @@ export function createTableOfAuthoritiesFold(
       const { occurrences, entries } = citations(paragraphs)
       if (entries.length === 0) return false
 
-      // The marks fold before the split, so a citation in the anchor
-      // paragraph's head or tail lands in the wire its offset belongs to.
       foldMarks(paragraphs, draft.id, occurrences, false)
       const bookmarksById = bookmarksFor(paragraphs, entries)
       const toaEntries: ToaEntry[] = entries.map((entry) => ({
@@ -286,18 +238,6 @@ export function createTableOfAuthoritiesFold(
       return true
     },
 
-    /**
-     * Rewrites a stored `TOA` field's generated paragraphs in place —
-     * the wire counterpart of the update writer's range replacement.
-     * The draft names the paragraph holding the field's `begin`: the
-     * paragraphs up to the one holding its `end` are replaced by a
-     * rebuilt heading and entries, marks fold only where an occurrence
-     * is not already marked, and the tail keeps its `end` run and text.
-     * The field the draft names comes from the parser's stored metadata —
-     * the same pairing and shape the writer proves — so a draft whose
-     * field is gone, foreign-shaped, or cannot survive the writer's
-     * contract folds nothing and stays pending.
-     */
     refresh(paragraphs: DocumentParagraphWire[], draft: ToaRefreshDraft) {
       const field = tableOfAuthoritiesFields(documentStory(model)).get(
         draft.paragraphId,
@@ -347,16 +287,6 @@ export function createTableOfAuthoritiesFold(
   }
 }
 
-/**
- * Whether the citation at `end` already carries its `TA` mark in the
- * painted wires: the mark runs carry no text, so the check walks runs at
- * and after the citation's end offset — an `offset` landing inside a
- * run's text has no mark (the splice that placed one would have split the
- * run), and the first run with text past the point bounds the scan. The
- * match is on the parsed instruction, the writer's own rule, so a mark
- * split across `instrText` runs or written by another tool counts the
- * same.
- */
 function hasAuthorityMarkAtWire(
   wire: DocumentParagraphWire,
   end: number,

@@ -15,13 +15,6 @@ import {
 } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
 
-/**
- * Better-auth client for the browser. The API mounts better-auth at /api/auth/*
- * with email/password and magic-link enabled (services/api/src/auth.ts). In dev
- * the Vite proxy forwards /api to the API; in production it is same-origin. In
- * the packaged Electron renderer the API is cross-scheme, so the main-process
- * API origin (exposed via the preload bridge) takes precedence.
- */
 function authBaseURL(): string {
   if (typeof window !== 'undefined') {
     return resolvePackagedApiOrigin() ?? window.location.origin
@@ -68,18 +61,10 @@ export interface SignUpEmailInput {
   email: string
   password: string
   callbackURL?: string
-  /**
-   * Organisation name typed at sign-up. Stored server-side on the user row
-   * (better-auth additional field) and consumed by the first organisation
-   * provisioning — no client stash, so verification on another device
-   * still provisions the typed name. Omitted for invitees, who join the
-   * inviting organisation.
-   */
   pendingOrganisationName?: string
 }
 
 export interface UseAuthReturn {
-  /** Present when better-auth has established a real session. */
   session: AuthSessionPresence | null
   isPending: boolean
   signInWithEmail: (
@@ -101,12 +86,6 @@ export interface UseAuthReturn {
     token: string,
     newPassword: string,
   ) => Promise<{ ok: boolean; message?: string; code?: string }>
-  /**
-   * Changes the signed-in account's password. The current password is verified
-   * by better-auth server-side; every other session is revoked and the current
-   * one is replaced, so a stolen session stops working. Desktop gets the
-   * replacement bearer token from the response header, which the client stores.
-   */
   changePassword: (input: {
     currentPassword: string
     newPassword: string
@@ -118,20 +97,11 @@ export interface UseAuthReturn {
   signOut: () => Promise<void>
 }
 
-/** Structural session type; the shell only checks presence. */
 interface AuthSessionPresence {
   user: { id: string; email?: string }
   session: { id: string }
 }
 
-/**
- * User-facing text for a rejected password change. The transport message is
- * deliberately not passed through: it is an API error string ("Invalid
- * password", "Internal error") and an unexpected failure must not surface
- * internal detail. `code` selects a message and is never echoed, and no branch
- * contains either password. An unmapped code reads as a retryable failure,
- * which is the honest description of a state the client cannot explain.
- */
 function changePasswordMessage(code: string | undefined): string {
   switch (code) {
     case 'INVALID_PASSWORD':
@@ -147,27 +117,14 @@ function changePasswordMessage(code: string | undefined): string {
   }
 }
 
-/**
- * useAuth — the shell's auth surface. Wraps the better-auth React client so
- * feature UIs never call better-auth directly.
- */
 export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
   const queryClient = useQueryClient()
 
-  /**
-   * After a successful credential exchange the HTTP session cookie exists, but
-   * `useSession()` may still report null until its store is refetched. Both
-   * platforms navigate client-side after auth, so AppShellLayout would bounce
-   * back to /sign-in without this refresh. A failed session GET must not undo
-   * a successful credential exchange — the cookie is already set.
-   */
   async function refreshSessionAfterAuth() {
     try {
       await realSession.refetch()
-    } catch {
-      // Best-effort: cookie is set; a later render/refetch can pick up session.
-    }
+    } catch {}
   }
 
   async function signInWithEmail(input: SignInEmailInput) {
@@ -189,9 +146,6 @@ export function useAuth(): UseAuthReturn {
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Sign-up failed.' }
     }
-    // With requireEmailVerification enabled, sign-up does not establish a
-    // session — better-auth returns { token: null, user } and sends a
-    // verification email instead. No session means no auto sign-in yet.
     if (!result.data?.token) {
       return {
         ok: true,
@@ -246,24 +200,12 @@ export function useAuth(): UseAuthReturn {
     try {
       await clearDesktopAuthToken()
     } finally {
-      // Unsaved document drafts are matter text keyed to the signed-in user;
-      // they must not survive into the next session on this machine. A failed
-      // sign-out leaves the session valid, so drafts stay. Another user's
-      // recoverable drafts on a shared browser are left alone.
       suspendDocumentDraftWrites()
       if (userId) clearStoredDocumentDraftsForUser(userId)
       queryClient.clear()
     }
   }
 
-  /**
-   * better-auth's change-password endpoint verifies the current password and
-   * hashes the new one server-side; nothing here touches password material
-   * beyond passing it through. `revokeOtherSessions` matches the reset path's
-   * policy so an attacker holding a stolen session cookie is signed out.
-   * better-auth deletes every session, then issues a new one for this client,
-   * which is why the session store is refetched: the old session id is gone.
-   */
   async function changePassword(input: {
     currentPassword: string
     newPassword: string
@@ -286,13 +228,6 @@ export function useAuth(): UseAuthReturn {
     return { ok: true }
   }
 
-  // better-auth 1.6.x password reset: POST /request-password-reset never
-  // reveals whether the email exists (it returns the same message and runs a
-  // timing-attack mitigation). The reset link is derived server-side from the
-  // token and always points at the configured web origin (OBITER_WEB_ORIGIN),
-  // so the client does not — and must not — pass a redirectTo. Under the
-  // desktop renderer the window origin is a custom scheme, which better-auth
-  // would reject and which could not open in a browser anyway.
   async function requestPasswordReset(email: string) {
     const result = await authClient.requestPasswordReset({ email })
     if (result.error) {
@@ -311,9 +246,6 @@ export function useAuth(): UseAuthReturn {
   async function resetPassword(token: string, newPassword: string) {
     const result = await authClient.resetPassword({ token, newPassword })
     if (result.error) {
-      // Surface better-auth's error code (e.g. INVALID_TOKEN,
-      // PASSWORD_TOO_LONG) so the reset screen can distinguish a dead token
-      // from a retryable validation/server failure.
       return {
         ok: false,
         message: result.error.message ?? 'Could not reset your password.',

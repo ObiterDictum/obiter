@@ -71,10 +71,8 @@ export function DocxWorkspace({
   versionId: string
   matterId: string
   filename: string
-  /** The stored version the workspace opened, for the header's save label. */
   versionNumber?: number
   layout?: DocumentWorkspaceLayout
-  /** The detail the route already loaded; absent outside the document route. */
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
   back?: React.ReactNode
@@ -110,8 +108,6 @@ export function DocxWorkspace({
   const [zoom, setZoom] = useState(100)
   const panels = useWorkspacePanels()
   const legalTools = useLegalToolsState(documentId)
-  // An unsaved flip lives in the draft bundle: a remount keeps it, a version
-  // write (save, decision or markings) carries it, a reload drops it.
   const trackChanges =
     drafts.trackChangesFlip !== undefined &&
     drafts.trackChangesFlip !== (model?.trackRevisions ?? false)
@@ -156,7 +152,6 @@ export function DocxWorkspace({
     onSaved: handleSaved,
   })
 
-  // Verification reads the stored version, so unsaved work keeps it disabled.
   usePublishDocumentDirty(save.saveState.status !== 'saved')
 
   const caret = useWorkspaceCaret({ documentId, model, drafts })
@@ -190,7 +185,6 @@ export function DocxWorkspace({
     redoDocument,
   } = caret
 
-  // One review derivation feeds the chrome and the panel: one active target.
   const changeReview = useChangeReview({
     documentId,
     model,
@@ -212,7 +206,6 @@ export function DocxWorkspace({
   })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
-  // Markings commit an immutable version, so they share the save barriers.
   const markings = useDocumentMarkings({
     documentId,
     matterId,
@@ -223,7 +216,6 @@ export function DocxWorkspace({
     onSaved: (version) => setSavedVersion({ documentId, versionId: version }),
     onNotice: setBanner,
   })
-  // The toolbar acts on the selection's ranges, else the caret's paragraph.
   const formatTarget: FormatTarget = selectionActive
     ? { kind: 'selection', ranges: [...selectionSegments.values()] }
     : {
@@ -289,11 +281,8 @@ export function DocxWorkspace({
   const transientBanner = printBanner ?? save.notice ?? banner
   const { format, outline, ruler, onView, onSelectOutline } = surface
   const pageZoom = pageZoomFor(zoom, columnWidth, printBox?.widthPx ?? 794)
-  // Each of these can disable or unmount the focused control mid-step, so they
-  // share the caret-refocus wrapper: focus lands on the caret's field first.
   const undo = withCaretRefocus(undoDocument)
   const redo = withCaretRefocus(redoDocument)
-  // forPrint repaginates first, so printing from web layout uses paper sheets.
   const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = withCaretRefocus(save.reload)
   const exports = documentExportHandlers(documentId, filename, setBanner)
@@ -301,7 +290,6 @@ export function DocxWorkspace({
     if (selectedParagraphId)
       insertAuthority(text, legalTools.citationStyle === 'house')
   })
-  // Either narrows the canvas, so opening one closes the other.
   function togglePanel(panel: WorkspacePanel) {
     if (navOpen) toggleNavPane()
     panels.toggle(panel)
@@ -481,7 +469,6 @@ export function DocxWorkspace({
               }
               authorities={authorities}
               legalChecks={legalChecks}
-              // Leave margin editing first, or the caret parks in the body.
               onSelectAuthority={(paragraphId) => {
                 closeEditingStory()
                 selectParagraph(paragraphId)

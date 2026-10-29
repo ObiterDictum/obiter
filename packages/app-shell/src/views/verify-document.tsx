@@ -39,12 +39,6 @@ function checkedVersionNumber(
     : undefined
 }
 
-/**
- * One document's run and findings. The row states the run's state in words; the
- * body lists what the check found, each finding with its source, its pinpoint
- * and what it did not establish. A failure, a stale result and a result that
- * stopped part-way are all said plainly rather than dressed as completion.
- */
 export function VerifyDocument({
   group,
   filter,
@@ -61,9 +55,6 @@ export function VerifyDocument({
   const [dismissing, setDismissing] = useState<VerificationFindingView | null>(
     null,
   )
-  // Matches are the bulk of a healthy run and the least urgent to read, so they
-  // are folded behind one line rather than pushing the findings that need a
-  // person off the first screen.
   const [matchesShown, setMatchesShown] = useState(false)
   const filename =
     identity.status === 'available'
@@ -328,7 +319,6 @@ export function VerifyDocument({
   )
 }
 
-/** The version a failed run was bound to, in words. */
 function failedVersionLabel(
   run: VerificationRun,
   identity: RunDocumentIdentity,
@@ -342,7 +332,6 @@ function failedVersionLabel(
     : `version ${String(number)}`
 }
 
-/** The run's state as a sentence, from the summary the server computed. */
 function runStateSentence(
   run: VerificationRun,
   summary: ReturnType<typeof verificationSummaryCounts> | null,
