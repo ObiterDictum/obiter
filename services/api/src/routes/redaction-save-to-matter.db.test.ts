@@ -63,6 +63,53 @@ async function seedStandaloneRun(seed: Seed): Promise<StandaloneSeed> {
   return { ...seed, runId, outputId, outputKey }
 }
 
+async function seedLinkedRun(seed: Seed): Promise<StandaloneSeed> {
+  const runId = `red_linked_${seed.documentId}`
+  const outputId = `out_linked_${seed.documentId}`
+  const outputKey = `org/${seed.orgId}/matters/${seed.matterId}/outputs/${outputId}`
+  await pool.query(
+    `insert into outputs (
+       id, organisation_id, matter_id, document_id, document_version_id,
+       output_type, status, object_key, created_by, created_at, updated_at
+     ) values ($1, $2, $3, $4, $5, 'redaction_output', 'ready', $6, $7,
+       now(), now())`,
+    [
+      outputId,
+      seed.orgId,
+      seed.matterId,
+      seed.documentId,
+      seed.versionId,
+      outputKey,
+      seed.ownerId,
+    ],
+  )
+  await pool.query(
+    `insert into redaction_runs (
+       id, organisation_id, matter_id, document_id, document_version_id,
+       source_filename, status, policy_mode, spans_json, decisions_json,
+       output_id, summary_json, detection_mode, created_by,
+       created_at, updated_at
+     ) values ($1, $2, $3, $4, $5, 'synthetic.docx', 'finalized',
+       'internal_ai_minimisation', '[]'::jsonb, '{}'::jsonb, $6, $7::jsonb,
+       'model+supplement', $8, now(), now())`,
+    [
+      runId,
+      seed.orgId,
+      seed.matterId,
+      seed.documentId,
+      seed.versionId,
+      outputId,
+      JSON.stringify({
+        outputMimeType: 'text/plain',
+        outputFilename: 'synthetic-redacted.txt',
+        outputSha256: copySha256,
+      }),
+      seed.ownerId,
+    ],
+  )
+  return { ...seed, runId, outputId, outputKey }
+}
+
 function saveApp(storage: unknown, user: AuthzVariables['user']) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
   routes.use('*', async (c, next) => {
@@ -179,6 +226,30 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
       expect(documents.rows).toHaveLength(2)
     } finally {
       await cleanupRun(seed)
+    }
+  })
+
+  it('refuses a run that belongs to a document instead of forking it', async () => {
+    const seed = await seedMatter(pool, 'edit')
+    const linked = await seedLinkedRun(seed)
+    const storage = storageFor(seed)
+    storage.binary.set(linked.outputKey, copyBytes)
+    try {
+      const response = await saveApp(storage, ownerUser(seed)).request(
+        `/api/redaction-runs/${linked.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+
+      expect(response.status).toBe(422)
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          code: 'redaction_return_unavailable',
+          message:
+            'This run belongs to a document. Return its copy to that document instead.',
+        },
+      })
+    } finally {
+      await cleanupRun(linked)
     }
   })
 

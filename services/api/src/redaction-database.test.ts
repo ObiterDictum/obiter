@@ -10,6 +10,7 @@ import {
   restoreRedactionRunWithAudit,
   selectMutationRun,
   softDeleteRedactionRun,
+  withDecisionNames,
   type RedactionRunRow,
 } from './redaction-database'
 import {
@@ -94,6 +95,27 @@ describe('mapRedactionRun', () => {
       // @ts-expect-error Intentionally exercise a query row missing lineage.
       mapRedactionRun(row),
     ).toThrow('Stored redaction replacement lineage was not selected.')
+  })
+})
+
+describe('withDecisionNames', () => {
+  it('joins the reviewer name for display without replacing the stored id', async () => {
+    const queryable = {
+      query: async () => ({ rows: [{ id: 'usr_1', name: 'A. Morgan' }] }),
+    } as unknown as Pool
+
+    const named = await withDecisionNames(queryable, 'org_1', {
+      span_1: {
+        decision: 'accept',
+        decidedBy: 'usr_1',
+        decidedAt: '2026-02-01T10:00:00.000Z',
+      },
+    })
+
+    expect(named.span_1).toMatchObject({
+      decidedBy: 'usr_1',
+      decidedByName: 'A. Morgan',
+    })
   })
 })
 

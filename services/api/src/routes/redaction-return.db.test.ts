@@ -171,7 +171,7 @@ async function cleanupRun(seed: ReturnSeed) {
 }
 
 describe('POST /api/redaction-runs/:runId/return-to-document', () => {
-  it('commits the finalized output as a linked immutable version', async () => {
+  it('commits the finalized output as a linked immutable version with no paragraph lineage', async () => {
     const seed = await seedFinalizedRun('edit')
     try {
       const storage = storageFor(seed)
@@ -203,6 +203,11 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
         }),
       )
       expect(written?.equals(outputBytes)).toBe(true)
+      const lineage = await pool.query<{ lineage: unknown }>(
+        `select lineage from document_versions where id = $1`,
+        [body.versionId],
+      )
+      expect(lineage.rows[0]?.lineage).toBeNull()
 
       const audit = await pool.query<{
         action: string
