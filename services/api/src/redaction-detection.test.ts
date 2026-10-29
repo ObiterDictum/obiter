@@ -138,6 +138,18 @@ describe('redaction detection', () => {
     )
   })
 
+  it('records the reconciliation and court-context components in the detector version', async () => {
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async () => [],
+      log: () => undefined,
+    })
+
+    const result = await detect('Synthetic text')
+
+    expect(result.detectorVersion).toContain(';reconcile@1;court-context@1;')
+  })
+
   it('degrades to heuristic spans when the model fails to load', async () => {
     const detect = createRedactionDetector({
       loadClassifier: async () => {

@@ -109,7 +109,7 @@ describe('migration runner', () => {
     }
   })
 
-  it('refuses a migration that carries its own transaction control', async () => {
+  it('refuses transaction control in any pending file before applying any', async () => {
     const dir = fixtureDir({
       '0001_ok.sql': 'select 1',
       '0002_wrapped.sql': 'begin;\nselect 2;\ncommit;\n',

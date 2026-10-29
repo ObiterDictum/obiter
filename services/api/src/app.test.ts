@@ -124,6 +124,69 @@ describe('createApiApp', () => {
     })
   })
 
+  it('keeps health available with a null database name when the URL is malformed', async () => {
+    const response = await createApiApp(
+      { ...testEnv, nodeEnv: 'development', databaseUrl: 'invalid' },
+      createPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    ).request('/api/health')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      status: 'ok',
+      provenance: { databaseName: null },
+    })
+  })
+
+  it('keeps health available when git metadata is absent', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'obiter-health-'))
+    const previousDirectory = process.cwd()
+    try {
+      process.chdir(directory)
+      const response = await createApiApp(
+        { ...testEnv, nodeEnv: 'development' },
+        createPool(async () => ({ rows: [] })),
+        { auth: authWithRole('member') },
+      ).request('/api/health')
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ status: 'ok' })
+    } finally {
+      process.chdir(previousDirectory)
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('reports a missing session organisation as an integrity error', async () => {
+    const response = await createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    ).request('/api/me')
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'organisation_not_found' },
+    })
+  })
+
+  it('rejects a profile update when the session user no longer exists', async () => {
+    const response = await createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    ).request('/api/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Test User' }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
+  })
+
   it('reports the serving adapter when the entry point declares one', async () => {
     const auth = {
       api: {

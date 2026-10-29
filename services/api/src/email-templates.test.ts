@@ -52,6 +52,19 @@ describe('email templates', () => {
     expect(email.html).toContain('&lt;script&gt;')
   })
 
+  it('keeps every template self-contained without remote assets or scripts', () => {
+    for (const email of [
+      magicLinkEmail(URL),
+      verificationEmail(URL),
+      resetPasswordEmail(URL),
+      organisationInviteEmail(URL, 'North Chambers'),
+    ]) {
+      expect(email.html).not.toMatch(/<(?:link|script|img)\b/iu)
+      expect(email.html).not.toMatch(/@import|url\(/iu)
+      expect(email.text).toContain(URL)
+    }
+  })
+
   it('keeps all subjects and copy free of emoji and exclamation marks', () => {
     for (const email of [
       magicLinkEmail(URL),

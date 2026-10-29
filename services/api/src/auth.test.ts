@@ -67,6 +67,31 @@ describe('userAdditionalFields — sign-up stash seam (config regression)', () =
 })
 
 describe('sendMagicLink', () => {
+  it('logs only numeric provider status codes', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      for (const statusCode of [429, 'secret']) {
+        resendSendMock.mockResolvedValueOnce({
+          data: null,
+          error: { message: 'delivery failed', statusCode },
+        })
+        await expect(
+          sendMagicLink(
+            { ...baseEnv, resendApiKey: 're_test_key' },
+            'user@example.test',
+            'https://app.example.test/verify?token=abc',
+          ),
+        ).rejects.toThrow('delivery failed')
+      }
+      expect(consoleError.mock.calls[0]?.[1]).toMatchObject({ statusCode: 429 })
+      expect(consoleError.mock.calls[1]?.[1]).toMatchObject({
+        statusCode: undefined,
+      })
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('logs the magic-link URL to the console and never calls Resend when no API key is configured', async () => {
     const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
 

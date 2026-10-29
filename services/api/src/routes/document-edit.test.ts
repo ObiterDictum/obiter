@@ -337,6 +337,49 @@ describe('POST /api/documents/:id/edit', () => {
     expect(storage.writes).toEqual([])
   })
 
+  it('tracks an edit that omits the toggle by the base version setting', async () => {
+    const database = new EditDatabase()
+    const { app } = routeApp(database)
+    const flip = await app.request('/api/documents/doc_1/edit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        baseVersionId: 'ver_1',
+        operations: [],
+        trackChanges: true,
+      }),
+    })
+    const flipped = (await flip.json()) as { versionId: string }
+
+    const response = await app.request(
+      '/api/documents/doc_1/edit',
+      editRequest(flipped.versionId, 'Tracked synthetic text'),
+    )
+
+    expect(response.status).toBe(201)
+    expect(database.audits.at(-1)?.metadata).toMatchObject({
+      trackRevisions: true,
+      trackRevisionsChanged: false,
+    })
+  })
+
+  it('leaves run addresses out of a tracked version lineage', async () => {
+    const database = new EditDatabase()
+    const { app } = routeApp(database)
+
+    const response = await app.request(
+      '/api/documents/doc_1/edit',
+      editRequest('ver_1', 'Tracked synthetic text', true),
+    )
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      lineage: { paragraphs: { runs: unknown[] }[] }
+    }
+    expect(body.lineage.paragraphs.length).toBeGreaterThan(0)
+    expect(body.lineage.paragraphs.flatMap(({ runs }) => runs)).toEqual([])
+  })
+
   it('rechecks document existence under the transaction lock', async () => {
     const database = new EditDatabase({ transactionDocumentMissing: true })
     const { app, storage } = routeApp(database)

@@ -16,7 +16,7 @@ const held: AuthorityRow[] = [
 
 describe('case law resolution', () => {
   it.each(['[2066]  uksc   1', '[2066] UKSC 1', '[2066]\tUKSC\t1'])(
-    'resolves the harmless variants of %j',
+    'resolves neutral citation variant %j as case law',
     async (rawText) => {
       expect(await resolveOne(rawText, { authorities: held })).toMatchObject({
         kind: 'case_law',

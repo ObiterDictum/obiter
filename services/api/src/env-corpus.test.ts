@@ -155,6 +155,22 @@ const refusedTestCorpusUrls: Array<[string, string]> = [
 ]
 
 describe.each(corpusKeys)('test-mode identity for %s', (key) => {
+  it('ignores connection parameters and fragments when comparing database targets', () => {
+    expect(
+      readCorpus(
+        key,
+        'postgres://obiter@localhost/obiter_test?sslmode=require#fragment',
+        true,
+      ),
+    ).toBeDefined()
+  })
+
+  it('does not resolve loopback host aliases when comparing database targets', () => {
+    expect(() =>
+      readCorpus(key, 'postgres://obiter@127.0.0.1:5432/obiter_test', true),
+    ).toThrow(`${key} must match TEST_DATABASE_URL.`)
+  })
+
   it.each(acceptedTestCorpusUrls)('accepts %s', (_label, url) => {
     readCorpus(key, url, true)
 

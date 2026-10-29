@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from '../test-database.test-support'
+import { createDocument } from '../document-database'
 import {
   app,
   auditCount,
@@ -152,6 +153,63 @@ for (const spec of specs) {
     }, 30_000)
   })
 }
+
+it('denies document creation when a queued share revocation commits first', async () => {
+  const seed = await seedMatter(pool, 'edit')
+  const writer = transactionObserveGate(pool, isMatterLockStatement)
+  const { revoker, request } = await openRevocation(seed, 'revoke')
+  const writing = createDocument(writer.pool, {
+    organisationId: seed.orgId,
+    matterId: seed.matterId,
+    userId: seed.editorId,
+    filename: 'synthetic.txt',
+    fileType: 'text/plain',
+    sizeBytes: 1,
+    contentSha256: 'a'.repeat(64),
+  })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const entered = await Promise.race([
+      writer.entered.then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 5000)
+      }),
+    ])
+    expect(entered).toBe(true)
+    expect(
+      await waitForLockWait(pool, requirePid(writer.backendPid, 'writer')),
+    ).toContain(requirePid(revoker.backendPid, 'revoker'))
+    revoker.open()
+    expect((await request).status).toBe(200)
+    expect(await writing).toBeNull()
+    expect((await state(pool, seed)).versions).toBe(1)
+  } finally {
+    if (timer) clearTimeout(timer)
+    revoker.open()
+    await Promise.allSettled([request, writing])
+    await cleanupMatter(pool, seed)
+  }
+}, 30_000)
+
+it('creates uploaded versions without edit lineage', async () => {
+  const seed = await seedMatter(pool, 'edit')
+  try {
+    const created = await createDocument(pool, {
+      organisationId: seed.orgId,
+      matterId: seed.matterId,
+      userId: seed.ownerId,
+      filename: 'synthetic.txt',
+      fileType: 'text/plain',
+      sizeBytes: 1,
+      contentSha256: 'a'.repeat(64),
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.version.lineage).toBeNull()
+  } finally {
+    await cleanupMatter(pool, seed)
+  }
+})
 
 afterAll(async () => {
   await pool.end()

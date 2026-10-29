@@ -41,6 +41,10 @@ describe('safeDownloadFilename', () => {
     )
   })
 
+  it('removes trailing dots and spaces to keep names stable across filesystems', () => {
+    expect(safeDownloadFilename('report...   ')).toBe('report')
+  })
+
   it('appends a required extension exactly once', () => {
     expect(safeDownloadFilename('report', { extension: '.docx' })).toBe(
       'report.docx',

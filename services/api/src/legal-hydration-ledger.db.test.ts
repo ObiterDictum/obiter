@@ -213,6 +213,45 @@ describe('shared Postgres hydration admission ledger', () => {
     }
   })
 
+  it('logs no subject or key when admission fails', async () => {
+    const broken = new Pool({
+      connectionString: 'postgres://obiter:obiter@127.0.0.1:1/obiter_test',
+      connectionTimeoutMillis: 250,
+    })
+    const logged: unknown[][] = []
+    const original = console.error
+    console.error = (...args: unknown[]) => {
+      logged.push(args)
+    }
+    try {
+      const unreachable = ledger(broken)
+      expect(
+        (await unreachable.admit('usr_secret_subject', 'secret_key', true))
+          .status,
+      ).toBe('unavailable')
+    } finally {
+      console.error = original
+      await broken.end()
+    }
+
+    expect(JSON.stringify(logged)).not.toContain('usr_secret_subject')
+    expect(JSON.stringify(logged)).not.toContain('secret_key')
+  })
+
+  it('does not fail when releasing a lease on an unreachable database', async () => {
+    const broken = new Pool({
+      connectionString: 'postgres://obiter:obiter@127.0.0.1:1/obiter_test',
+      connectionTimeoutMillis: 250,
+    })
+    try {
+      await expect(
+        ledger(broken).complete('00000000-0000-0000-0000-000000000000'),
+      ).resolves.toBeUndefined()
+    } finally {
+      await broken.end()
+    }
+  })
+
   it('does not invoke an operation when admission is unavailable', async () => {
     const broken = new Pool({
       connectionString: 'postgres://obiter:obiter@127.0.0.1:1/obiter_test',

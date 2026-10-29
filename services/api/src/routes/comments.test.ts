@@ -877,6 +877,28 @@ describe('document comment routes', () => {
     expect(database.comments.size).toBe(1)
   })
 
+  it('replays the same comment intent after the anchor version changes', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    database.seedComment({
+      anchorVersionId: 'ver_old',
+      authorId: 'usr_actor',
+      clientKey: 'submit-old-version',
+      body: 'Same intent',
+      paragraphId: 'para-1',
+      startOffset: 0,
+      endOffset: 1,
+    })
+
+    const response = await createComment(routeApp(database).app, {
+      body: 'Same intent',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      clientKey: 'submit-old-version',
+    })
+
+    expect(response.status).toBe(200)
+    expect(database.comments.size).toBe(1)
+  })
+
   it('does not replay a comment client key whose stored row is another organisation', async () => {
     const database = new TestDatabase({ access: 'edit' })
     database.seedComment({
@@ -1005,6 +1027,32 @@ describe('document comment routes', () => {
     expect(stored?.importedParentFingerprint).toBe(
       importedCommentFingerprint(importedHead),
     )
+  })
+
+  it('rejects reply key replay when the imported head identity changes', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const head: DocumentImportedComment = {
+      id: 'ooxml-3',
+      ooxmlId: 3,
+      author: 'Alice Example',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      body: 'Original head',
+      bodyTruncated: false,
+      paraId: 'A1B2C3D4',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 4 },
+      resolved: false,
+      parentId: null,
+    }
+    const storage = new MemoryStorage(cachedCommentModelJsonWith([head]))
+    const app = routeApp(database, undefined, storage).app
+    const body = { body: 'Reply', clientKey: 'reply-identity' }
+
+    expect((await replyToComment(app, head.id, body)).status).toBe(201)
+    storage.text.set(
+      modelObjectKey,
+      cachedCommentModelJsonWith([{ ...head, body: 'Different head' }]),
+    )
+    expect((await replyToComment(app, head.id, body)).status).toBe(409)
   })
 
   it('orphans replies whose imported head no longer matches, fingerprinted or not', async () => {

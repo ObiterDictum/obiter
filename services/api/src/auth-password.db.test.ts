@@ -124,6 +124,31 @@ describe('password change end to end (Postgres + better-auth)', () => {
     })
   }
 
+  it('revokes existing sessions when a password reset succeeds', async () => {
+    const user = await createVerifiedUser()
+    const sessionToken = await signIn(user.email, user.password)
+    expect(await sessionFor(sessionToken)).not.toBeNull()
+
+    const consoleInfo = vi.spyOn(console, 'info')
+    consoleInfo.mockClear()
+    await auth.api.requestPasswordReset({ body: { email: user.email } })
+    const logged: unknown = consoleInfo.mock.calls.find(
+      ([label]) =>
+        typeof label === 'string' && label.includes('Reset-password'),
+    )?.[1]
+    if (!logged || typeof logged !== 'object' || !('url' in logged)) {
+      throw new Error('Reset link was not delivered')
+    }
+    if (typeof logged.url !== 'string') throw new Error('Invalid reset link')
+    const token = new URL(logged.url).searchParams.get('token')
+    if (!token) throw new Error('Reset link has no token')
+    await auth.api.resetPassword({
+      body: { token, newPassword: 'replacement-password-value' },
+    })
+
+    expect(Boolean(await sessionFor(sessionToken))).toBe(false)
+  })
+
   it('applies the change, revokes the other sessions, and audits exactly once', async () => {
     const user = await createVerifiedUser()
     const currentToken = await signIn(user.email, user.password)
