@@ -182,7 +182,7 @@ export function FinalizedOutput({
           blob,
           format === 'json-shareable'
             ? 'redaction-audit.json'
-            : scheduleFilename(run.sourceFilename, `.${format}`),
+            : scheduleFilename(`.${format}`),
         ),
     })
   const exportFailed = outputQuery.error ?? (isFile ? fileQuery.error : null)
@@ -439,7 +439,7 @@ export function FinalizedOutput({
               <div className="flex flex-col gap-3">
                 <Detail
                   label="File"
-                  value={scheduleFilename(run.sourceFilename, '.pdf')}
+                  value={scheduleFilename('.pdf')}
                 />
                 <Detail
                   label="Decisions"
