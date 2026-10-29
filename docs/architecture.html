@@ -2735,7 +2735,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>37 migrations, 0001 to 0038, 0008 withdrawn</dd>
+                <dd>38 migrations, 0001 to 0039, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3467,7 +3467,11 @@
                   <td class="id">legal-search/</td>
                   <td>
                     Public judgment, stored or hydrated. No session required.
-                    Must not expose matter or client data.
+                    Must not expose matter or client data. Serves
+                    <code>judges</code> (names) and <code>summary</code> (the
+                    court's published press summary, quoted) from the stored
+                    row; an empty list and a null summary are the honest "the
+                    source publishes none", never a placeholder.
                   </td>
                 </tr>
                 <tr>
@@ -4599,8 +4603,16 @@
                     Stored judgments, summary and document JSON, provider
                     metadata. The generated tsvector from 0003/0004 was dropped
                     in 0019 when Meilisearch became the sole query engine.
+                    Judges and the court's published summary (0039) are read
+                    only from Find Case Law's structured metadata — the
+                    LegalDocML <code>&lt;judge&gt;</code> elements and the
+                    separate press-summary document that names the judgment in
+                    <code>&lt;uk:summaryOf&gt;</code> — with the field and
+                    source recorded per value. <code>metadata_fetched_at</code>
+                    is the resumable backfill queue: NULL means not yet read,
+                    and a fetched row with neither field is stamped too.
                   </td>
-                  <td class="id">0003, 0004, 0019</td>
+                  <td class="id">0003, 0004, 0019, 0039</td>
                 </tr>
                 <tr>
                   <td class="id">

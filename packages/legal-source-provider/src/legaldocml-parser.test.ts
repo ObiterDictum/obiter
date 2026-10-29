@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  extractLegalDocMlJudges,
   extractLegalDocMlMetadata,
+  extractLegalDocMlPressSummary,
   parseLegalDocMlParagraphs,
 } from './legaldocml-parser'
 
@@ -283,5 +285,98 @@ describe('extractLegalDocMlMetadata', () => {
       dateDecided: null,
       neutralCitation: null,
     })
+  })
+})
+
+/**
+ * Trimmed from [2026] UKSC 31's own data.xml. The `<judge>` elements and the
+ * `TLCPerson` entries carry the published bench; the cover prose around them
+ * is the part the licence does not let us read.
+ */
+const enrichedHeader = `
+      <references source="#tna">
+        <TLCPerson eId="judge-lord-reed-president" href="/judge-lord-reed-president" showAs="Lord Reed, President"/>
+        <TLCPerson eId="judge-lord-briggs" href="/judge-lord-briggs" showAs="Lord Briggs"/>
+      </references>
+      <p class="JudgmentJudges"><span>before</span><br/><br/><judge refersTo="#judge-lord-reed-president">Lord Reed, President</judge><br/><judge refersTo="#judge-lord-briggs">Lord Briggs</judge><br/><judge refersTo="#judge-lord-stephens">Lord Stephens</judge><br/><judge refersTo="#judge-lady-rose">Lady Rose</judge><br/><judge refersTo="#judge-lord-snowden">Lord Snowden</judge></p>`
+
+describe('extractLegalDocMlJudges', () => {
+  it('reads the bench from the header judge elements', () => {
+    expect(
+      extractLegalDocMlJudges(
+        judgment(paragraph('para_1', '1.', 'Text.'), enrichedHeader),
+      ),
+    ).toEqual([
+      'Lord Reed, President',
+      'Lord Briggs',
+      'Lord Stephens',
+      'Lady Rose',
+      'Lord Snowden',
+    ])
+  })
+
+  // The licence boundary: [2026] EWHC 2282 (Admin) names its judge only in
+  // cover prose ("HUGO KEITH KC, SITTING AS A DEPUTY HIGH COURT JUDGE") with
+  // no marked-up element. Reading that paragraph would be text extraction.
+  it('yields nothing when the bench is only cover prose', () => {
+    const proseHeader = `
+      <p style="text-align:center"><span style="font-weight:bold">Before</span>:</p>
+      <p class="CoverMain" style="text-align:center">HUGO KEITH KC, SITTING AS A DEPUTY HIGH COURT JUDGE</p>`
+
+    expect(
+      extractLegalDocMlJudges(
+        judgment(paragraph('para_1', '1.', 'Text.'), proseHeader),
+      ),
+    ).toEqual([])
+  })
+
+  it('returns an empty list rather than throwing on unusable input', () => {
+    expect(extractLegalDocMlJudges('<html><body>hi</body></html>')).toEqual([])
+  })
+})
+
+describe('extractLegalDocMlPressSummary', () => {
+  // Trimmed from the published press summary of [2026] UKSC 31.
+  const pressSummary = `<?xml version="1.0" encoding="UTF-8"?>
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:uk="https://caselaw.nationalarchives.gov.uk/akn">
+  <doc name="pressSummary">
+    <meta>
+      <proprietary source="#tna">
+        <uk:summaryOf>https://caselaw.nationalarchives.gov.uk/id/uksc/2026/31</uk:summaryOf>
+      </proprietary>
+    </meta>
+    <mainBody>
+      <level>
+        <content>
+          <p class="Heading5"><span>Background to the Appeal</span></p>
+        </content>
+      </level>
+      <level>
+        <content>
+          <p><span>This appeal concerns the operation of the regime in the Commonhold and Leasehold Reform Act 2002 (the &#8220;</span><span style="font-weight:bold">CLRA</span><span>&#8221;).</span></p>
+        </content>
+      </level>
+    </mainBody>
+  </doc>
+</akomaNtoso>`
+
+  it('reads the published paragraphs and the judgment it summarises', () => {
+    const summary = extractLegalDocMlPressSummary(pressSummary)
+
+    expect(summary?.summaryOf).toBe(
+      'https://caselaw.nationalarchives.gov.uk/id/uksc/2026/31',
+    )
+    expect(summary?.paragraphs).toEqual([
+      'Background to the Appeal',
+      'This appeal concerns the operation of the regime in the Commonhold and Leasehold Reform Act 2002 (the “CLRA”).',
+    ])
+  })
+
+  it('returns null for a document with no main body', () => {
+    expect(
+      extractLegalDocMlPressSummary(
+        '<akomaNtoso><judgment><header/></judgment></akomaNtoso>',
+      ),
+    ).toBeNull()
   })
 })

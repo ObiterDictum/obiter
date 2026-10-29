@@ -73,6 +73,7 @@ export type {
   MojRateLimiter,
   ProviderDocumentResult,
   ProviderDocumentSource,
+  ProviderFetch,
   ProviderSkipReason,
   ProviderSourceMetadata,
 } from './moj-provider'
@@ -92,4 +93,15 @@ export {
   legalDocMlParser,
   parseLegalDocMlParagraphs,
   extractLegalDocMlMetadata,
+  extractLegalDocMlJudges,
+  extractLegalDocMlPressSummary,
 } from './legaldocml-parser'
+export type { LegalDocMlPressSummary } from './legaldocml-parser'
+
+export type {
+  PublishedCaseLawMetadata,
+  PublishedMetadataFailure,
+  PublishedMetadataResult,
+  PublishedMetadataSourceRecord,
+} from './published-metadata'
+export { fetchPublishedCaseLawMetadata } from './published-metadata'
