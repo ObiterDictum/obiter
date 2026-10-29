@@ -41,9 +41,7 @@ async function requireCheckoutArtifact() {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
-  } catch {
-    // git unavailable or not a checkout: provenance cannot be compared.
-  }
+  } catch {}
   if (!head)
     throw new Error(
       `cannot resolve the checkout commit to compare ${dist}'s provenance (${marker.commit}) against`,

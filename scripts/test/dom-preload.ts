@@ -9,7 +9,6 @@ if (
     !testFile.endsWith('.test.tsx') &&
     !testFile.endsWith('.test.mjs'))
 ) {
-  // Not a test file (should not happen under `bun test`); nothing to install.
 } else {
   let source = ''
   try {

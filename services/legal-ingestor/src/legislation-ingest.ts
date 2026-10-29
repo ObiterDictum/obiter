@@ -219,9 +219,7 @@ async function writeLegislationDocument(
   } catch (error) {
     try {
       await client.query('ROLLBACK')
-    } catch {
-      // Rollback failure must not mask the original write error.
-    }
+    } catch {}
     throw error
   } finally {
     client.release()

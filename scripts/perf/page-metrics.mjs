@@ -32,9 +32,7 @@ export const COLLECT_INIT_SCRIPT = () => {
       const last = entries[entries.length - 1]
       if (last) window.__perf.lcp = last.startTime
     }).observe({ type: 'largest-contentful-paint', buffered: true })
-  } catch {
-    // A browser without a given observer type still yields the rest.
-  }
+  } catch {}
 }
 
 export async function milestones(page, selector) {

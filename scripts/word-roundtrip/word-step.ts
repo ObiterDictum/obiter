@@ -54,9 +54,7 @@ export function detectWord(): WordProbe {
       try {
         const found = execFileSync('where', [command], { encoding: 'utf8' })
         if (found.trim()) return { status: 'word-detected', path: found.trim() }
-      } catch {
-        /* not on PATH */
-      }
+      } catch {}
     }
   } else if (process.platform === 'darwin') {
     try {
@@ -66,9 +64,7 @@ export function detectWord(): WordProbe {
         { encoding: 'utf8' },
       )
       if (found.trim()) return { status: 'word-detected', path: found.trim() }
-    } catch {
-      /* no Word */
-    }
+    } catch {}
   }
   for (const command of ['libreoffice', 'soffice']) {
     try {
@@ -77,9 +73,7 @@ export function detectWord(): WordProbe {
         status: 'not-checked',
         reason: `Only ${command} was found; LibreOffice is not Microsoft Word and does not satisfy the gate.`,
       }
-    } catch {
-      /* continue */
-    }
+    } catch {}
   }
   return {
     status: 'not-checked',

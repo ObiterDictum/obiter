@@ -68,10 +68,7 @@ async function main() {
   try {
     try {
       createQuerier({ databaseUrl: target.url }).exec('select 1')
-    } catch {
-      // The listener closes before the handshake completes. The connection is
-      // the evidence; the failure is expected.
-    }
+    } catch {}
     results.push([
       'psql',
       await waitFor(() => intended.connections.length > 0, {
