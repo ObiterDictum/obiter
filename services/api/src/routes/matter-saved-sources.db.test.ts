@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { AuthzUser, AuthzVariables } from '../authz'
 import { createTestPool } from '../test-database.test-support'
 import { createMatterSavedSourcesRoutes } from './matter-saved-sources'
+import { waitForLockWait } from './matter-lock-race.test-support'
 
 /**
  * Saved sources belong to one matter in one organisation. These cases drive
@@ -227,6 +228,63 @@ describe('matter saved sources', () => {
       const remaining = (await afterRemoval.json()) as { savedSources: [] }
       expect(remaining.savedSources).toHaveLength(0)
     } finally {
+      await cleanup(seed)
+    }
+  })
+
+  it('refuses a save queued behind a share revocation', async () => {
+    const seed = await seedMatter()
+    const writerPool = createTestPool()
+    const blocker = await pool.connect()
+    let pending: Promise<Response> | undefined
+    try {
+      await pool.query(
+        "update matter_shares set access_level = 'edit' where matter_id = $1",
+        [seed.matterId],
+      )
+      const asEditor = app(writerPool, {
+        id: seed.viewerId,
+        organisationId: seed.orgId,
+        role: 'member',
+      })
+      const path = `/api/matters/${seed.matterId}/saved-sources`
+      const request = {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(sourceBody),
+      }
+      expect((await asEditor.request(path, request)).status).toBe(201)
+      await pool.query(
+        'delete from matter_saved_sources where matter_id = $1',
+        [seed.matterId],
+      )
+      const backend = await writerPool.query<{ pid: number }>(
+        'select pg_backend_pid() as pid',
+      )
+      const pid = backend.rows[0]?.pid
+      if (!pid) throw new Error('Writer backend missing')
+      await blocker.query('begin')
+      await blocker.query('select id from matters where id = $1 for update', [
+        seed.matterId,
+      ])
+      pending = asEditor.request(path, request)
+      await waitForLockWait(pool, pid)
+      await blocker.query(
+        'delete from matter_shares where matter_id = $1 and grantee_user_id = $2',
+        [seed.matterId, seed.viewerId],
+      )
+      await blocker.query('commit')
+      expect((await pending).status).toBe(404)
+      const saved = await pool.query(
+        'select id from matter_saved_sources where matter_id = $1',
+        [seed.matterId],
+      )
+      expect(saved.rows).toHaveLength(0)
+    } finally {
+      await blocker.query('rollback')
+      blocker.release()
+      await pending
+      await writerPool.end()
       await cleanup(seed)
     }
   })

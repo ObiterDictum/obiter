@@ -133,7 +133,7 @@ describe('buildHardRedactionPdf', () => {
     expect(Buffer.from(result.bytes).subarray(0, 5).toString('latin1')).toBe(
       '%PDF-',
     )
-    expect(result.filename).toBe('source-redacted.pdf')
+    expect(result.filename).toBe('document-redacted.pdf')
   })
 
   it('burns the docx before rendering and rasterizes the renderer PDF', async () => {
@@ -180,7 +180,7 @@ describe('buildHardRedactionPdf', () => {
       (await zip.file('word/document.xml')?.async('string')) ?? ''
     expect(documentXml).toContain('[REDACTED]')
     expect(documentXml).not.toContain('Alice')
-    expect(result.filename).toBe('letter-redacted.pdf')
+    expect(result.filename).toBe('document-redacted.pdf')
   })
 
   it('refuses a docx source when no renderer is configured', async () => {
@@ -331,6 +331,6 @@ describe('buildHardRedactionPdf', () => {
       renderer: null,
       tokenMap: {},
     })
-    expect(result.filename).toBe('brief-redacted.pdf')
+    expect(result.filename).toBe('document-redacted.pdf')
   })
 })

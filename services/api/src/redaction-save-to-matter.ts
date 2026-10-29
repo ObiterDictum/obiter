@@ -46,11 +46,7 @@ function outputFileType(run: RedactionRunRecord) {
 }
 
 function outputFilename(run: RedactionRunRecord) {
-  const recorded = run.summary.outputFilename
-  if (recorded) return recorded
-  const stem = run.sourceFilename.replace(/\.[^.]+$/u, '') || run.sourceFilename
-  const mimeType = run.summary.outputMimeType ?? 'text/plain'
-  return `${stem}-redacted.${mimeType === PDF_MIME ? 'pdf' : mimeType === DOCX_MIME ? 'docx' : 'txt'}`
+  return `document-redacted.${outputFileType(run)}`
 }
 
 /**
@@ -61,7 +57,7 @@ function outputFilename(run: RedactionRunRecord) {
  * at all. The bytes are the stored finalized output, re-hashed and compared with
  * the SHA-256 recorded at finalisation, so what lands in the matter is the file
  * the reviewer actually approved. Creating the document goes through the same
- * `createDocument` + extraction + audit path as an upload, and the matter is
+ * `createDocumentInTransaction` + extraction + audit path, and the matter is
  * access-checked for edit: the run's own access does not grant write access to
  * a matter it was never filed in.
  */
@@ -140,7 +136,8 @@ export async function saveRedactionOutputToMatter(
               document.matter_id
        from document_versions version
        join matter_documents document on document.id = version.matter_document_id
-       where version.id = $1 and version.organisation_id = $2`,
+       where version.id = $1 and version.organisation_id = $2
+         and document.deleted_at is null`,
         [current.returnedDocumentVersionId, current.organisationId],
       )
       const row = existing.rows[0]

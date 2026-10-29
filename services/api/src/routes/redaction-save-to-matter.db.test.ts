@@ -142,12 +142,14 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
       const version = await pool.query<{
         document_status: string
         text_object_key: string | null
+        filename: string
       }>(
-        `select document_status, text_object_key from document_versions
+        `select document_status, text_object_key, filename from document_versions
          where id = $1`,
         [body.versionId],
       )
       expect(version.rows[0]?.document_status).toBe('ready')
+      expect(version.rows[0]?.filename).toBe('document-redacted.txt')
       expect(storage.text.get(version.rows[0]!.text_object_key!)).toContain(
         'Synthetic redacted witness statement',
       )
@@ -245,6 +247,7 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
     try {
       const storage = storageFor(seed)
       storage.binary.set(seed.outputKey, copyBytes)
+      const originalKeys = [...storage.binary.keys()].sort()
       const writeText = storage.writeText.bind(storage)
       storage.writeText = async () => {
         throw new Error('storage unavailable')
@@ -259,6 +262,10 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         [seed.matterId],
       )
       expect(afterFailure.rows).toHaveLength(1)
+      expect([...storage.binary.keys()].sort()).toEqual(originalKeys)
+      expect(
+        [...storage.text.keys()].some((key) => key.endsWith('/text')),
+      ).toBe(false)
       storage.writeText = writeText
       const retried = await saveApp(storage, ownerUser(seed)).request(
         `/api/redaction-runs/${seed.runId}/save-to-matter`,

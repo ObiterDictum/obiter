@@ -1122,6 +1122,10 @@ export async function createDocument(
     await client.query('begin')
 
     const created = await createDocumentInTransaction(client, input)
+    if (!created) {
+      await client.query('rollback')
+      return null
+    }
     await client.query('commit')
     return created
   } catch (error) {

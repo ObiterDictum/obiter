@@ -1,9 +1,15 @@
+import JSZip from 'jszip'
 import { describe, expect, it } from 'bun:test'
 import {
   AUDIT_REPORT_VERSION,
   buildAuditReport,
 } from './redaction-audit-report'
-import { scheduleLines } from './redaction-schedule-export'
+import {
+  scheduleLines,
+  renderSchedulePdf,
+  renderScheduleDocx,
+  scheduleExportFilename,
+} from './redaction-schedule-export'
 import type { RedactionRunRecord } from './redaction-database'
 
 const run: RedactionRunRecord = {
@@ -106,4 +112,18 @@ it('counts an override_keep as visible in the schedule totals', () => {
   expect(scheduleLines(report)).toContain(
     'Decisions: 0 removed, 1 kept visible',
   )
+})
+
+it('omits the confidential source filename from schedules and exports Unicode-named sources', async () => {
+  const sourceFilename = 'Synthetic Łucja.docx'
+  const report = buildAuditReport({ ...run, sourceFilename }, [])
+  expect(scheduleLines(report).join('\n')).not.toContain(sourceFilename)
+  expect(scheduleExportFilename('.pdf')).toBe('redaction-schedule.pdf')
+  expect(scheduleExportFilename('.docx')).toBe('redaction-schedule.docx')
+  const pdf = await renderSchedulePdf(report)
+  expect(Buffer.from(pdf).subarray(0, 5).toString()).toBe('%PDF-')
+  const docx = await JSZip.loadAsync(await renderScheduleDocx(report))
+  const story = await docx.file('word/document.xml')?.async('string')
+  expect(story).toBeDefined()
+  expect(story).not.toContain(sourceFilename)
 })

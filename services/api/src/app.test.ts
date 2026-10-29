@@ -2165,7 +2165,7 @@ describe('createApiApp redaction review reads', () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
       mimeType: 'text/plain',
-      filename: 'source-redacted.txt',
+      filename: 'document-redacted.txt',
       text: 'Stored redaction text.',
       outputId: 'out_1',
       sha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
@@ -2174,7 +2174,7 @@ describe('createApiApp redaction review reads', () => {
     expect(readText).toHaveBeenCalledWith('org/org_1/outputs/out_1')
   })
 
-  it('returns redacted PDF metadata and binary download bytes', async () => {
+  it('keeps source names out of PDF metadata and downloads, including legacy output names', async () => {
     const pdfBytes = Buffer.from('%PDF-1.4 redacted')
     const readBinary = vi.fn(async () => pdfBytes)
     const run = finalizedRunRow({
@@ -2221,7 +2221,7 @@ describe('createApiApp redaction review reads', () => {
     expect(meta.status).toBe(200)
     await expect(meta.json()).resolves.toEqual({
       mimeType: 'application/pdf',
-      filename: 'brief-redacted.pdf',
+      filename: 'document-redacted.pdf',
       text: null,
       outputId: 'out_1',
       sha256: null,
@@ -2232,7 +2232,7 @@ describe('createApiApp redaction review reads', () => {
     expect(file.status).toBe(200)
     expect(file.headers.get('content-type')).toBe('application/pdf')
     expect(file.headers.get('content-disposition')).toContain(
-      'brief-redacted.pdf',
+      'document-redacted.pdf',
     )
     expect(file.headers.get('x-content-type-options')).toBe('nosniff')
     expect(Buffer.from(await file.arrayBuffer())).toEqual(pdfBytes)
@@ -2284,7 +2284,7 @@ describe('createApiApp redaction review reads', () => {
     const file = await app.request('/api/redaction-runs/red_1/output/file')
     expect(file.status).toBe(200)
     expect(file.headers.get('content-disposition')).toBe(
-      'attachment; filename="passwd-redacted.pdf"',
+      'attachment; filename="document-redacted.pdf"',
     )
     expect(file.headers.get('content-disposition')).not.toContain('/')
   })
@@ -3078,7 +3078,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(output.status).toBe(200)
     expect(await output.json()).toMatchObject({
       mimeType: 'application/pdf',
-      filename: 'letter-footnotes-numbering-redacted.pdf',
+      filename: 'document-redacted.pdf',
       text: null,
       securePdf: true,
     })

@@ -44,7 +44,6 @@ export function scheduleLines(report: AuditReport): string[] {
     'Obiter redaction schedule',
     '',
     `Run: ${report.redactionRunId}`,
-    `Source: ${report.originalDocument.filename}`,
     `Generated: ${when(report.generatedAt)}`,
     `Detection mode: ${report.detectionMode}`,
     `Policy: ${report.policyMode}`,
@@ -120,11 +119,6 @@ export async function renderScheduleDocx(report: AuditReport) {
   return createSyntheticDocx(scheduleLines(report))
 }
 
-/** `witness-statement-shah.docx` → `witness-statement-shah-schedule.pdf`. */
-export function scheduleExportFilename(
-  sourceFilename: string,
-  extension: '.pdf' | '.docx',
-) {
-  const stem = sourceFilename.replace(/\.[^.]+$/u, '') || sourceFilename
-  return `${stem}-schedule${extension}`
+export function scheduleExportFilename(extension: '.pdf' | '.docx') {
+  return `redaction-schedule${extension}`
 }

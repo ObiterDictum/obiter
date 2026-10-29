@@ -114,6 +114,7 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
     const client = await pool.connect()
+    let committed = false
     try {
       await client.query('begin')
       if (
@@ -162,10 +163,11 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
         requestId: c.get('requestId'),
       })
       await client.query('commit')
+      committed = true
       return c.json({ savedSource }, 201)
     } finally {
       try {
-        await client.query('rollback')
+        if (!committed) await client.query('rollback')
       } finally {
         client.release()
       }
@@ -188,6 +190,7 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
         return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
       }
       const client = await pool.connect()
+      let committed = false
       try {
         await client.query('begin')
         if (
@@ -229,10 +232,11 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
           requestId: c.get('requestId'),
         })
         await client.query('commit')
+        committed = true
         return c.json({ removed: true, savedSourceId: result.rows[0].id })
       } finally {
         try {
-          await client.query('rollback')
+          if (!committed) await client.query('rollback')
         } finally {
           client.release()
         }
