@@ -228,7 +228,7 @@ describe('resolveLegislationActPage', () => {
   })
 
   it('withholds the whole page while legacy rows are unclassified', async () => {
-    const legacy = actPool(actDocument, [], /* classified */ false)
+    const legacy = actPool(actDocument, [], false)
     const result = await resolveLegislationActPage(legacy, 'ukpga/2010/15')
     expect(result.status).toBe('unavailable')
     expect(legacy.query).toHaveBeenCalled()

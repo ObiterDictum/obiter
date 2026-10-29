@@ -236,9 +236,7 @@ function resolveRelative(fromFile: string, specifier: string): string | null {
   for (const candidate of candidates) {
     try {
       if (statSync(candidate).isFile()) return candidate
-    } catch {
-      // Not a file: try the next candidate.
-    }
+    } catch {}
   }
   return null
 }
