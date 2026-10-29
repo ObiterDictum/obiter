@@ -2,13 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
 import { ToastProvider, Toaster } from '@obiter/ui'
-import { useRef, useState, type ReactNode } from 'react'
-import { AgentPanel } from './agent-panel'
+import { Suspense, lazy, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
 import { Sidebar } from './sidebar'
 import { TopBar } from './top-bar'
+
+// The Agent is an on-demand surface with no shared state, so its panel — and
+// the docked-panel placement machinery it drags in — stays out of the entry
+// graph the shell pays for on every page.
+const AgentPanel = lazy(() =>
+  import('./agent-panel').then((module) => ({ default: module.AgentPanel })),
+)
 
 /**
  * App frame. Gates the shell on a real better-auth session: unauthenticated
@@ -89,7 +95,11 @@ function AuthenticatedFrame({
           {children}
         </main>
       </div>
-      {agentOpen ? <AgentPanel onClose={closeAgent} /> : null}
+      {agentOpen ? (
+        <Suspense fallback={null}>
+          <AgentPanel onClose={closeAgent} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }
