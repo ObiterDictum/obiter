@@ -5,6 +5,7 @@ import { blockedSummary, refusedSummary } from './document-save-messages'
 import type { DocumentSave } from './use-document-save'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
+import { UnsavedNavigationGuard } from './unsaved-navigation-guard'
 
 /**
  * Everything the workspace must disclose about work that is not on the server:
@@ -24,6 +25,12 @@ export function DocumentSaveBanners({
   const plural = save.blocked.length === 1 ? 'change' : 'changes'
   return (
     <div className="flex flex-col gap-2 px-3 pb-2">
+      <UnsavedNavigationGuard
+        atRisk={
+          save.persistence === 'unavailable' &&
+          save.saveState.status !== 'saved'
+        }
+      />
       {drafts.restored && save.dirty ? (
         <Banner
           tone="info"
