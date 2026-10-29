@@ -67,7 +67,6 @@ describe('OOXML section and break edits', () => {
 
   it('releases a single margin attribute with a null field', async () => {
     const document = await parseDocx(await createSyntheticDocx(['Hello']))
-    // The reading-side default carries no pgMar; a later null must not create one.
     applyDocumentEdits(document, [
       { type: 'set_section_properties', margins: { top: 720, left: null } },
     ])
@@ -89,7 +88,6 @@ describe('OOXML section and break edits', () => {
     const xml = await zipText(output, 'word/document.xml')
     expect(xml).toContain('<w:headerReference w:type="default" r:id="rId5"/>')
     expect(xml).toContain('<w:footerReference w:type="default" r:id="rId6"/>')
-    // The earlier paragraph-level section is untouched.
     expect(xml).toContain(
       '<w:sectPr><w:headerReference w:type="default" r:id="rId3"/>',
     )
@@ -252,8 +250,6 @@ describe('OOXML section and break edits', () => {
   })
 
   it('validates the break offset against the appended effective text', async () => {
-    // The ordinary flow: type to lengthen the run, caret at the end, insert a
-    // break. The plan pass cannot bound this against the pre-batch text.
     const document = await parseDocx(await createSyntheticDocx(['Hello']))
     const paragraph = mainParagraphs(document)[0]
     const run = paragraph?.runs[0]
@@ -330,9 +326,6 @@ describe('OOXML section and break edits', () => {
     const paragraph = mainParagraphs(document)[0]
     const run = paragraph?.runs[0]
     if (!paragraph || !run) throw new Error('Synthetic run is missing.')
-    // Highlight applied before the break is the order collectFormatOperations
-    // produces; materialising the run must fold the run-property write, not
-    // overlap it.
     applyDocumentEdits(document, [
       { type: 'replace_run_text', runId: run.id, text: 'Hello brave world' },
       { type: 'set_run_emphasis', runId: run.id, highlight: 'yellow' },
@@ -361,10 +354,6 @@ describe('OOXML section and break edits', () => {
     const paragraph = mainParagraphs(document)[0]
     const run = paragraph?.runs[0]
     if (!paragraph || !run) throw new Error('Synthetic run is missing.')
-    // A collapsed-caret toggle is run-keyed and writes no text, so only the
-    // run-keyed overlay key can tell the break path to materialise. Otherwise
-    // the reopened tail run comes from the parse-time `runProperties` snapshot
-    // and saves unstyled while the paint claims the whole run is bold.
     applyDocumentEdits(document, [
       { type: 'set_run_emphasis', runId: run.id, bold: true },
       {
@@ -451,7 +440,6 @@ describe('OOXML section and break edits', () => {
       '<w:sectPrChange w:id="1"><w:sectPr><w:pgSz w:w="9000" w:h="9000"/><w:pgMar w:top="100"/></w:sectPr></w:sectPrChange>' +
       '</w:sectPr>'
     const next = patchSectionPropertiesXml(sect, { margins: { top: 720 } })
-    // The live section is patchable and the history copy is preserved verbatim.
     expect(next).toContain('<w:pgMar w:top="720"/>')
     expect(next).toContain(
       '<w:sectPrChange w:id="1"><w:sectPr><w:pgSz w:w="9000" w:h="9000"/><w:pgMar w:top="100"/></w:sectPr></w:sectPrChange>',
@@ -484,8 +472,6 @@ describe('OOXML section and break edits', () => {
     const paragraph = paragraphWires(document)[0]
     const runs = paragraph?.runs ?? []
     if (!paragraph || !runs[1]) throw new Error('Fixture is missing.')
-    // Rewriting the second run's text means the break materialises it, so the
-    // paragraph-level offset must be converted to a run-local one.
     applyDocumentEdits(document, [
       { type: 'replace_run_text', runId: runs[1].id, text: 'worldly' },
       {
@@ -513,8 +499,6 @@ describe('OOXML section and break edits', () => {
     const paragraph = paragraphWires(document)[0]
     const runs = paragraph?.runs ?? []
     if (!paragraph || !runs[0] || !runs[1]) throw new Error('Fixture missing.')
-    // Both runs are rewritten, so each break takes the materialise path; the
-    // offsets 3 and 9 are inside the first and second run respectively.
     applyDocumentEdits(document, [
       { type: 'replace_run_text', runId: runs[0].id, text: 'Hello ' },
       { type: 'replace_run_text', runId: runs[1].id, text: 'worldly' },
@@ -569,9 +553,6 @@ describe('OOXML section and break edits', () => {
     applyDocumentEdits(document, [
       { type: 'insert_section_break', paragraphId: paragraph.id },
     ])
-    // A save canonicalises identity after the edit; the identity must fold into
-    // the expansion instead of writing a second replacement over the same
-    // range, which would fail to serialise.
     canonicaliseParagraphIdentities(document)
     const xml = await documentXml(document)
     expect(xml).toContain(
@@ -609,7 +590,6 @@ async function zipText(input: Uint8Array, partName: string) {
   return part.async('string')
 }
 
-/** Parses a body with `w14` declared, so a `w14:paraId` fixture is valid. */
 async function loadDeclaring(paragraphXml: string) {
   const base = await buildOoxmlFixture('full-fidelity-with-w14-ids')
   const zip = await JSZip.loadAsync(base)

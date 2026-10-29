@@ -101,8 +101,6 @@ function parseParts(
     const part = sourceParts.get(partName)
     if (!part || part.kind !== 'xml') continue
     const source = decodePart(part)
-    // Hyperlink `r:id`s resolve on the part that owns the story, so the map
-    // is scoped to its own relationships and to no other kind.
     const hyperlinkTargets = new Map(
       relationships
         .filter(
@@ -134,8 +132,6 @@ function parseParts(
 
   const changeNodes = [...trackedChanges.values()]
   matchMovePairs(changeNodes)
-  // Pairing has run, so this is where the engine's static decidability lands
-  // on the wire for every surface that lists the changes.
   markUndecidableChanges(changeNodes)
 
   const styles = parseOptionalTypedPart(
@@ -200,9 +196,6 @@ function matchMovePairs(changes: TrackedChangeNode[]) {
     const to = members.filter(({ wire }) => wire.elementName === 'moveTo')
     const fromNode = from[0]
     const toNode = to[0]
-    // A container-named group is a real move with at least one member on
-    // each side. The shared-w:id fallback is tolerated legacy markup, so it
-    // keeps the strict one-from-one-to rule.
     const paired = key.startsWith('name:')
       ? from.length > 0 && to.length > 0
       : members.length === 2 && from.length === 1 && to.length === 1

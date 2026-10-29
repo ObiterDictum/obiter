@@ -1,10 +1,3 @@
-/**
- * Run and paragraph formatting attributes — the element → attribute →
- * value bound table slice covering borders, shading, justification,
- * tabs, spacing, indentation, font declarations and run effects. Layout
- * and settings slices live in their sibling modules; the assembled
- * `WML_FORMAT_ATTRIBUTE_BOUNDS` re-exports all three.
- */
 import type { ShareSafeValueBound } from './share-safe-value-bounds'
 import {
   WML_CHARSET,
@@ -49,8 +42,6 @@ import { FLAG_BOUND } from './share-safe-value-bounds'
 
 const ONOFF = FLAG_BOUND
 
-// `w:` and `w:type` belong only where a border element doubles as a
-// cell-margin carrier — the six `w:tblCellMar` slots.
 const MARGIN_BORDER_ELEMENTS = new Set([
   'top',
   'left',
@@ -87,9 +78,6 @@ const WML_FORMAT_TEXT_ATTRIBUTE_BOUNDS: ReadonlyArray<
     (element): readonly [string, ReadonlyMap<string, ShareSafeValueBound>] => [
       element,
       new Map([
-        // `w:start`/`w:end` double as numbering bound attributes in
-        // other contexts; as border values they take the border enum,
-        // and `w:ind`/`w:lvl` numeric uses land through the union.
         [
           'val',
           element === 'start' || element === 'end'
@@ -263,14 +251,6 @@ const WML_FORMAT_TEXT_ATTRIBUTE_BOUNDS: ReadonlyArray<
   ],
 ]
 
-/**
- * The formatting attribute surface, mapped element → attribute → value
- * bound: layout, borders, shading, spacing, font and frame attributes the
- * copy may carry, each pinned to the enumeration or lexical shape its
- * simple type declares. An attribute a table does not list is not
- * formatting a reader needs; a declared attribute whose value falls
- * outside its bound is a payload, not a format choice.
- */
 export const WML_FORMAT_ATTRIBUTE_BOUNDS: ReadonlyArray<
   readonly [string, ReadonlyMap<string, ShareSafeValueBound>]
 > = [

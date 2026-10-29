@@ -41,10 +41,6 @@ export function relationshipsPartName(sourcePartName: string) {
   return `${directory}_rels/${sourcePartName.slice(slash + 1)}.rels`
 }
 
-/**
- * The relationship-id allocator used elsewhere in the codebase: `rId` + a
- * 1-based counter colliding only against the source part's own set.
- */
 function nextRelationshipId(document: OoxmlDocument, sourcePartName: string) {
   const used = new Set(
     document.model.relationships
@@ -56,11 +52,6 @@ function nextRelationshipId(document: OoxmlDocument, sourcePartName: string) {
   return `rId${candidate}`
 }
 
-/**
- * Appends a Relationship element to the source part's `.rels` part — creating
- * the part when absent — registers the wire relationship, and marks the part
- * dirty for serialisation.
- */
 export function appendRelationship(
   document: OoxmlDocument,
   sourcePartName: string,
@@ -105,14 +96,6 @@ export function appendRelationship(
   return wire
 }
 
-/**
- * Ensures the inserted media part resolves to `contentType`. A missing
- * extension gets a `<Default>`; an existing Default that maps the extension
- * to a different type must be preserved for the parts that rely on it, so
- * this part takes a `<Override>` instead. Declarations are read from the
- * part as it would serialise — pending same-batch inserts included — so the
- * effective type, not just the presence of any declaration, decides.
- */
 export function ensureMediaContentType(
   document: OoxmlDocument,
   partName: string,
@@ -128,8 +111,6 @@ export function ensureMediaContentType(
   }
   const override = effective.overrides.get(partName)
   if (override === contentType) return
-  // A second Override for one part name is invalid OOXML — a conflicting one
-  // cannot be papered over.
   if (override !== undefined) throw new OoxmlError('invalid-document-edit')
   const declared = effective.defaults.get(extension.toLowerCase())
   if (declared === contentType) return
@@ -156,14 +137,6 @@ export function ensureMediaContentType(
   editable.dirty = true
 }
 
-/**
- * Adds an image binary part under `word/media`, enforcing the loader's
- * package limits so an edit cannot create a package the reader itself would
- * refuse. `reservedPartNames` lists every other part the same insertion will
- * create (a relationships part, for example), so the entry count guards the
- * finished package; dirty parts are weighed at their serialised size because
- * the original payload ignores pending growth.
- */
 export function addMediaPart(
   document: OoxmlDocument,
   contentType: string,
@@ -207,14 +180,6 @@ export function addMediaPart(
   return partName
 }
 
-/**
- * Registers a new story part an edit creates — the `word/footnotes.xml` a
- * first footnote needs — under the same package bounds `addMediaPart`
- * enforces, with `reservedPartNames` covering the relationships part the
- * caller will create alongside it so the entry count guards the finished
- * package. The part is born dirty and serialises from its overlay, where
- * the caller's entry appends land.
- */
 export function addXmlStoryPart(
   document: OoxmlDocument,
   partName: string,
@@ -249,7 +214,6 @@ export function addXmlStoryPart(
   return part
 }
 
-/** The byte signature each supported raster type must actually carry. */
 const IMAGE_SIGNATURES = {
   'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
   'image/jpeg': [0xff, 0xd8, 0xff],
@@ -257,11 +221,6 @@ const IMAGE_SIGNATURES = {
   'image/bmp': [0x42, 0x4d],
 } satisfies Record<DocumentEditImageContentType, readonly number[]>
 
-/**
- * The declared content type is a client claim; the bytes are the truth. A
- * mismatch would write a part whose payload disagrees with its declared type,
- * so the signature is verified before the part exists.
- */
 function matchesImageSignature(
   contentType: DocumentEditImageContentType,
   bytes: Uint8Array,
@@ -270,7 +229,6 @@ function matchesImageSignature(
   return signature.every((value, index) => bytes[index] === value)
 }
 
-/** The size a part contributes to the serialised package. */
 function serialisedPartLength(part: SourcePart) {
   if (!part.dirty) return part.originalPayload.byteLength
   if (part.kind !== 'xml' || !part.overlay) {
@@ -283,16 +241,6 @@ function serialisedPartLength(part: SourcePart) {
   }
 }
 
-/**
- * Inserts an element inside a root element, expanding a self-closing root,
- * and returns the child XML as emitted. The content-types and relationships
- * parts are always single-rooted.
- *
- * One replacement owns the root's expansion: the first child rewrites the
- * whole self-closing element and later children append inside that same
- * replacement — a second whole-root replacement would overlap the first and
- * fail serialisation.
- */
 function insertRootChild(
   overlay: XmlOverlay,
   rootName: string,
@@ -315,12 +263,6 @@ function insertRootChild(
   return childXml
 }
 
-/**
- * Appends already-formed child XML under a named root — `w:footnote` entries
- * carry children, so they cannot go through `insertRootChild`'s
- * attribute-only emission. The self-closing expansion composes the same way:
- * one replacement owns the root and later children append inside it.
- */
 export function insertRootChildXml(
   overlay: XmlOverlay,
   rootName: string,
@@ -370,14 +312,6 @@ function appendToRootElement(
   })
 }
 
-/**
- * Emits the child in the root's resolved namespace. A prefixed root passes
- * its prefix down (`pkg:Relationships` gets `pkg:Relationship` children); an
- * unprefixed root relies on its default namespace, and a root bound to no
- * namespace needs the child to declare the part's namespace explicitly — an
- * unprefixed child there would resolve to no namespace and be dropped on
- * reload.
- */
 function qualifiedChildXml(
   root: XmlElement,
   childName: string,
@@ -400,23 +334,10 @@ export type CounterSource = {
 const drawingCounters = new WeakMap<object, number>()
 const paraIdCounters = new WeakMap<object, number>()
 
-/** A `wp:docPr`/`pic:cNvPr` id unique within the part, pending splices included. */
 export function nextDrawingId(source: CounterSource) {
   return nextCounterId(drawingCounters, source, (id) => `\\bid="${id}"`)
 }
 
-/**
- * `w14:paraId` values for paragraphs a table insert creates: an `E6`-prefixed
- * hex suffix checked against the source and pending splices, so repeated
- * inserts in one batch never reuse an id.
- *
- * Source ids are collected namespace-resolved: the attribute is matched by
- * the w14 namespace URI, not its spelling, so `alias:paraId`, single quotes
- * and whitespace around `=` cannot slip a collision past the allocator.
- * Pending splice values are fragments whose namespace bindings may live
- * outside them, so every prefixed spelling is scanned — over-matching only
- * costs an id; under-matching allocates a duplicate.
- */
 export function nextSyntheticParaId(source: CounterSource) {
   const used = new Set(sourceParaIds(source))
   for (const pending of source.replacements.values()) {
@@ -438,7 +359,6 @@ const PARA_ID_VALUE = /^[0-9A-Fa-f]{8}$/u
 
 const paraIdsInSource = new WeakMap<CounterSource, ReadonlySet<string>>()
 
-/** The paraId values the part source already uses, keyed by namespace URI. */
 function sourceParaIds(source: CounterSource) {
   const cached = paraIdsInSource.get(source)
   if (cached) return cached

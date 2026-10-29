@@ -11,11 +11,6 @@ import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
 export type ParagraphNumbering = {
   numId: string | null
   ilvl?: number
-  /**
-   * Restart the list at this number. The untracked writer points the paragraph
-   * at a numbering instance carrying the override; the tracked writer folds the
-   * same resolved instance into its `w:pPrChange`.
-   */
   startOverride?: number | null
 }
 
@@ -42,13 +37,6 @@ export function setParagraphNumbering(
   part.dirty = true
 }
 
-/**
- * Resolves the numbering instance a `w:numPr` should reference. When no start
- * override is asked for, the requested `numId` is written unchanged. When one
- * is, the paragraph must point at an instance whose `w:lvlOverride` carries the
- * override, so a matching existing instance is reused or a new `w:num` is
- * created in `word/numbering.xml` and registered on the model.
- */
 export function resolveParagraphNumbering(
   document: OoxmlDocument,
   numbering: ParagraphNumbering,
@@ -93,12 +81,6 @@ function numPrInstruction(numbering: ParagraphNumbering) {
   return `<w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="${escapeXmlAttribute(numbering.numId ?? '')}"/></w:numPr>`
 }
 
-/**
- * Appends a `w:num` that references the same abstract numbering as `source`
- * with a `w:lvlOverride`/`w:startOverride` for one level. It is registered on
- * the model so a later operation in the same batch can de-duplicate against it
- * and so validation sees it.
- */
 function createNumberingOverride(
   document: OoxmlDocument,
   source: OoxmlDocument['model']['numbering'][number],
@@ -147,20 +129,6 @@ function createNumberingOverride(
   return numberingId
 }
 
-/**
- * The `w:num` a restart points at. It carries the new `w:lvlOverride` for the
- * restarted level plus a verbatim copy of the source instance's other
- * overrides, so the emitted XML and the model entry the caller registers
- * describe the same levels. Omitting them would make the model claim
- * formatting the saved part does not carry.
- *
- * The target override's children are `w:startOverride` then `w:lvl`, the order
- * CT_NumLvl requires. A source that redefined the target level with a nested
- * `w:lvl` keeps that level — dropping it would silently change the list's
- * formatting and desync the model entry, which records the source level — but
- * its own `w:start` is rewritten to the restart value so a consumer that reads
- * only the nested level still restarts. The two elements cannot then disagree.
- */
 export function buildOverrideFragment(
   sourceFragment: string,
   prefix: string,
@@ -196,19 +164,12 @@ export function buildOverrideFragment(
   )
 }
 
-/** One `w:lvlOverride`, matched as a self-closing tag or a paired element. */
 type LevelOverride = {
   ilvl: number
   body: string
   xml: string
 }
 
-/**
- * Every `w:lvlOverride` in a `w:num`. The self-closing alternative comes first
- * so a `<w:lvlOverride w:ilvl="0"/>` never swallows the body of a later paired
- * override, which a single open/body/close pattern does because it reads the
- * slash as part of the open tag.
- */
 function levelOverrides(fragment: string) {
   const result: LevelOverride[] = []
   for (const match of fragment.matchAll(
@@ -224,15 +185,6 @@ function levelOverrides(fragment: string) {
   return result
 }
 
-/**
- * The target override's nested `w:lvl` with its own `w:start` set to the
- * restart value. The level is kept so the restart does not change formatting;
- * rewriting the start keeps it from contradicting the sibling `w:startOverride`.
- * A level is expanded from its self-closing form so a schema-valid
- * `<w:lvl .../>` keeps its redefinition instead of vanishing from the saved
- * part; the existing `w:start` rewrite also accepts a paired element so it
- * never leaves a dangling close tag.
- */
 function restartedLevelXml(overrideXml: string, prefix: string, start: number) {
   const match = overrideXml.match(
     /<(\w+:)?lvl\b([^>]*?)\/>|<(\w+:)?lvl\b([^>]*?)>([\s\S]*?)<\/(?:\w+:)?lvl>/u,
@@ -258,12 +210,6 @@ function restartedLevelXml(overrideXml: string, prefix: string, start: number) {
   return `<${lvl}${attributes}>${children}</${lvl}>`
 }
 
-/**
- * Insert a new `w:num` before a trailing `w:numIdMacAtCleanup`. `CT_Numbering`
- * orders `num` elements before that element, so appending at the closing tag
- * would be schema-invalid when the part carries one; without it the insertion
- * point is the closing tag.
- */
 function insertionBeforeCleanup(
   source: string,
   closeAt: number,
@@ -283,7 +229,6 @@ function qualify(prefix: string, name: string) {
   return prefix ? `${prefix}:${name}` : name
 }
 
-/** The color of a clean override: one level override that changes only start. */
 export function hasPureStartOverride(
   fragment: string,
   ilvl: number,
@@ -293,8 +238,6 @@ export function hasPureStartOverride(
   if (overrides.length !== 1) return false
   const override = overrides[0]
   if (!override || override.ilvl !== ilvl) return false
-  // A nested `w:lvl` overrides the level's formatting, not just its start, so
-  // it is not a pure restart instance and must not be reused.
   if (/<(?:\w+:)?lvl\b/u.test(override.body)) return false
   return new RegExp(
     `<(?:\\w+:)?startOverride\\b[^>]*\\bval\\s*=\\s*["']${String(start)}["']`,
@@ -302,12 +245,6 @@ export function hasPureStartOverride(
   ).test(override.body)
 }
 
-/**
- * The `w:startOverride` an instance declares for one level, read from its raw
- * `w:num`. The instance-level `startOverride` the parser exposes is its first
- * descendant override at any level, so it cannot answer this per-level read.
- * A self-closing `w:lvlOverride` carries no override and is not read.
- */
 export function levelStartOverride(
   fragment: string,
   ilvl: number,

@@ -24,19 +24,11 @@ function modelParagraphs(model: DocumentModelWire) {
 
 const THREE = `\n<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>\n<w:p><w:r><w:t>Beta</w:t></w:r></w:p>\n<w:p><w:r><w:t>Gamma</w:t></w:r></w:p>\n`
 
-/**
- * Resolves a lineage run address against the actually reparsed model: the
- * paragraph id must exist and the run index must be in range. This proves the
- * lineage refers to the serialized result, not the mutate-in-memory model.
- */
 function resolveRun(
   model: DocumentModelWire,
   paragraphId: string,
   runIndex: number,
 ) {
-  // The lineage names paragraphs in every editable story — a canonicalised
-  // header or footer paragraph is a legitimate `toParagraphId` — so
-  // resolution searches all of them, not just the body.
   const paragraph = model.stories
     .flatMap((story) => story.paragraphs)
     .find((item) => item.id === paragraphId)
@@ -164,10 +156,6 @@ describe('version lineage resolves against the reparsed DOCX', () => {
       versionId: 'ver_2',
     })
     const entry = lineage.paragraphs[0]
-    // The replacement text is what the split cut, so the head and the tail
-    // name their own slices of it — a coarse whole-run origin on every part
-    // would let a reversal write the pre-save text to the head while the
-    // tail kept its saved text, persisting the duplication.
     const slices = (entry?.runs ?? []).map((run) =>
       run.segments.map((segment) => [
         segment.fromRunId,

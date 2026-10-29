@@ -28,17 +28,7 @@ export type TrackedChangeNode = {
   innerFragment: string
   previousPropertiesFragment?: string
   validMoveCounterpart: boolean
-  /**
-   * The identity every member of one tracked move shares. Word groups a move
-   * by the `w:name` on its `w:moveFromRangeStart`/`w:moveToRangeStart`
-   * containers — one move can hold several wrappers and several ranges — so a
-   * `name:` key carries the story part to keep same-named parts' moves
-   * distinct. Wrappers outside any container pair by a shared `w:id` as
-   * tolerated legacy markup (`id:` key). Internal — the wire only carries the
-   * resolved `pairId`.
-   */
   moveGroup?: string
-  /** Marker element ranges for every range container in the move's group. */
   moveMarkers?: XmlElementRange[]
   deletedTextElements: { range: XmlElementRange; qualifiedName: string }[]
   paragraphMarkRange?: XmlElementRange
@@ -76,8 +66,6 @@ export type TextRunAnchor = {
   runRange: XmlElementRange
   textRanges: TextRange[]
   textElements: XmlElementRange[]
-  // Ranges of the run's own text-wrapping w:br elements, in source order. They
-  // are text (a newline the parser counts), so a text replacement consumes them.
   textBreaks: XmlElementRange[]
   runProperties: string[]
   runPropertiesRange?: XmlElementRange

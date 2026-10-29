@@ -25,9 +25,6 @@ export function setRunStyle(
   styleId: string | null,
 ) {
   const part = requireEditablePart(document, anchor.partName)
-  // A run-style write inside a run already reopened by a page-break splice
-  // would style only the first sibling and leave the saved tail on its
-  // parse-time properties. Fail closed with a typed edit error.
   if (hasPendingBreakSplice(part.overlay, anchor.runRange)) {
     throw new OoxmlError('invalid-document-edit')
   }

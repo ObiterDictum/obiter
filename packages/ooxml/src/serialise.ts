@@ -30,10 +30,6 @@ export async function serialiseDocx(document: OoxmlDocument) {
   } catch {
     throw new OoxmlError('serialisation-failed')
   }
-  // A published version must be a package the reader accepts: an insertion
-  // can add parts (a media part, a relationships part) and grow dirty XML
-  // beyond what the original payload sizes accounted for, so the loader's
-  // limits are enforced against the completed archive before it is returned.
   assertOoxmlPackageCentralDirectory(bytes)
   return bytes
 }

@@ -15,24 +15,11 @@ import { planShareSafeCopy } from './share-safe-inventory'
 import { refuseShareSafe } from './share-safe-refusal'
 import { decodeXmlReferences } from './xml-lexemes'
 
-/**
- * Parts that may never ride in the emitted package — comment surfaces,
- * people records, thumbnails, signatures, customXml payloads, glossary
- * documents, printer settings and the effects-only style sheet.
- */
 const FORBIDDEN_PART =
   /(^|\/)(comments|commentsExtended|commentsIds|commentsExtensible|commentsAuthors|people)[^/]*\.xml$|\/(glossary|customXml|stylesWithEffects)\/|\/printerSettings\.|\/_xmlsignatures?\/|^docProps\/thumbnail\.|_xmlsignatures\//iu
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
-/**
- * The verification half of the policy: re-parse the finished archive and
- * prove the package the recipient opens satisfies the same inventory the
- * copy was built from. The plan the output replays to must be completely
- * clean — nothing left to drop, detach, remove or rewrite — and every
- * emitted part's bytes are re-walked lexeme by lexeme for the constructs
- * canonical emission promised would be absent.
- */
 export async function verifyShareSafePackage(bytes: Uint8Array) {
   let reparsed: OoxmlDocument
   try {
@@ -50,8 +37,6 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
     )
   }
 
-  // The same inventory classifies the output: it must be completely clean —
-  // nothing left to drop, detach or rewrite.
   const plan = planShareSafeCopy(reparsed)
   for (const [name, disposition] of plan.dispositions) {
     if (disposition.kind === 'drop') {
@@ -87,7 +72,6 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
     }
   }
 
-  // Binary parts re-inspect: the payload must strip to itself.
   const binaryTails = new Map<string, string>()
   for (const relationship of reparsed.model.relationships) {
     const tail = relationship.type.slice(relationship.type.lastIndexOf('/') + 1)
@@ -131,8 +115,6 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
     anchorTargets.push(...result.anchorTargets)
     fieldReferences.push(...result.fieldReferences)
   }
-  // A `w:anchor` pointing at a bookmark that did not ship is a dead
-  // pointer; a name the byte check did not generate was never rewritten.
   for (const anchor of anchorTargets) {
     if (!bookmarkNames.has(anchor)) {
       refuseShareSafe(
@@ -141,8 +123,6 @@ export async function verifyShareSafePackage(bytes: Uint8Array) {
       )
     }
   }
-  // A reference-field operand must name a shipped bookmark — a dangling
-  // operand is an unrewritten input name leaking out.
   for (const reference of fieldReferences) {
     if (!bookmarkNames.has(reference)) {
       refuseShareSafe(
@@ -178,11 +158,6 @@ function verifyRelationshipsExternal(document: OoxmlDocument) {
   }
 }
 
-/**
- * Core and extended properties must arrive empty at the reader: the
- * transform emits a canonical bare root, so a surviving depth-1 child is
- * residue in either part.
- */
 function verifyCoreProperties(document: OoxmlDocument) {
   const byTail = (tail: string) =>
     document.model.relationships.filter(
@@ -206,11 +181,6 @@ function verifyCoreProperties(document: OoxmlDocument) {
   }
 }
 
-/**
- * Every property in the shipped part is a canonical product marking —
- * a known name carrying a value of its declared type: `documentKind`
- * names a kind this build knows, and a flag spells `true` or `false`.
- */
 function verifyCustomProperties(document: OoxmlDocument) {
   const relationship = document.model.relationships.find(
     (candidate) =>

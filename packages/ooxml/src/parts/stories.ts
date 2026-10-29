@@ -87,8 +87,6 @@ export function parseStory(
   }
 
   const moveRanges = resolveMoveRanges(partName, elements)
-  // The lookup answers a question per change, so it is built once for the part
-  // rather than re-scanned inside every change.
   const trackedLookup = trackedChangeLookup(elements, paragraphAnchors)
   const trackedChanges = elements
     .filter(isTrackedChange)
@@ -126,19 +124,6 @@ export function parseStory(
   }
 }
 
-/**
- * The part's stored fields lowered onto the wire. Pairing and shape facts
- * are only computable here, while element parentage and sibling order
- * still exist: `headId`/`tailId`/`boundaryIds`/`paragraphIds` name the
- * wire ids of the paragraphs the span covers, `instruction` carries the
- * decoded field text for classification, and `rangeReplaceable` proves the
- * shape an in-place refresh rewrites. A field whose carriers the model
- * cannot all name — a marker inside tracked markup the wire drops, or one
- * floating outside every `w:p` — records `boundariesAnchored: false`; a
- * field whose very head is unmodelled cannot name an anchor at all, so its
- * modelled carriers land in `unanchoredFieldParagraphIds` and any deletion
- * touching them is refused outright.
- */
 function storyFields(
   source: string,
   elements: XmlElement[],
@@ -155,8 +140,6 @@ function storyFields(
   const fields: DocumentFieldWire[] = []
   const unanchored = new Set<string>()
   const spans = fieldSpans(elements, source)
-  // Nested decides `rangeReplaceable` per field, so it is worked out for all of
-  // them once rather than re-asked of every field against every other field.
   const nestedSpans = nestedFieldSpans(spans)
   for (const span of spans) {
     const boundaryIds = span.boundaryParagraphs.flatMap((element) => {

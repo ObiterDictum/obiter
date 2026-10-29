@@ -42,11 +42,6 @@ export function applyTrackedChangeDecisions(
   if (wouldRemoveLastParagraph(document, action, removals, pending)) {
     throw new OoxmlError('last-paragraph-required')
   }
-  // A decision that drops stored content — accepting a deletion, rejecting
-  // an insertion, removing a shell — takes every `fldChar` inside it with
-  // it. When that leaves a stored field with some boundary markers gone
-  // and some surviving, Word can never pair the remainder, so the whole
-  // decision is refused rather than write an unbalanced field.
   const removalsByPart = new Map<string, { start: number; end: number }[]>()
   const addRemoval = (
     partName: string,
@@ -75,12 +70,8 @@ export function applyTrackedChangeDecisions(
       throw invalidDecision()
     }
   }
-  // Fold the absorbed siblings only once the decision is accepted: a refused
-  // decision must leave the parsed document untouched.
   commitParagraphMarkSiblings(document, absorbed)
 
-  // Remove the shells first: each covers a whole paragraph, and any change
-  // inside it is dropped from `pending`, so the two overlays never overlap.
   for (const removal of removals) {
     const part = requireEditablePart(document, removal.partName)
     setOverlayReplacement(
@@ -112,10 +103,6 @@ export function applyTrackedChangeDecisions(
     part.dirty = true
   }
 
-  // A decided move's range markers go too: the containers exist only to group
-  // the halves, and orphaned moveFrom/moveToRange markup is residue no
-  // consumer should reopen. A marker already covered by a decision or
-  // removal range is left to that replacement.
   const cleared = new Set<string>()
   for (const target of uniqueChanges([...requested, ...absorbed])) {
     if (!target.moveMarkers?.length) continue
@@ -154,16 +141,6 @@ export function applyTrackedChangeDecisions(
   return uniqueChanges([...requested, ...absorbed]).map(({ wire }) => wire.id)
 }
 
-/**
- * The static reason this engine can never decide a listed change, or
- * undefined when it can. A move needs a fully paired group; a property
- * change needs the previous-properties fragment a rejection restores. The
- * parse writes the reason onto the wire so review surfaces can mark a
- * listed-but-undecidable change honestly; the engine still enforces the same
- * rules here, so the flag only ever narrows what a client may offer — it
- * never authorises a decision. Relational refusals (overlapping decision
- * ranges, a stale base, the last-paragraph guard) stay per-request.
- */
 export function undecidableReason(
   change: TrackedChangeNode,
 ): NonNullable<DocumentChangeWire['undecidable']> | undefined {
@@ -181,7 +158,6 @@ export function undecidableReason(
   return undefined
 }
 
-/** Writes `undecidable` onto every listed change the engine cannot decide. */
 export function markUndecidableChanges(changes: readonly TrackedChangeNode[]) {
   for (const change of changes) {
     const reason = undecidableReason(change)
@@ -204,8 +180,6 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
     if (!target) throw invalidDecision()
     targets.set(target.wire.id, target)
     if (target.wire.kind === 'move') {
-      // A move is a named group — several wrappers across several ranges —
-      // so deciding any member decides the whole group.
       if (undecidableReason(target)) throw invalidDecision()
       for (const member of document.trackedChanges.values()) {
         if (member.moveGroup !== target.moveGroup) continue
@@ -217,13 +191,6 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
   return [...targets.values()]
 }
 
-/**
- * Resolves the empty shells a rejection removes. A removal is only valid when
- * it is one requested `w:ins` target's own paragraph: the paragraph parses
- * with no visible run (its content is entirely tracked-insert), and every
- * requested target inside it is that insertion. That refuses a decision that
- * would delete a paragraph carrying any untracked content.
- */
 function resolveRemovalParagraphs(
   document: OoxmlDocument,
   requested: readonly TrackedChangeNode[],
@@ -245,8 +212,6 @@ function resolveRemovalParagraphs(
   for (const paragraphId of removeParagraphIds) {
     const anchor = anchorFor(document, paragraphId)
     if (!anchor) throw invalidDecision()
-    // A shell whose visible content is entirely tracked-insert parses to no
-    // runs. Anything else would mean deleting untracked content.
     if (anchor.runs.length > 0) throw invalidDecision()
     const inside = requested.filter(
       (target) =>
@@ -258,9 +223,6 @@ function resolveRemovalParagraphs(
     if (!inside.every((target) => target.wire.kind === 'insert')) {
       throw invalidDecision()
     }
-    // The removal deletes the whole paragraph, so a tracked change inside it
-    // that this decision does not name would be destroyed undecided. Refuse
-    // rather than let a caller erase pending markup by naming the shell.
     const insideIds = new Set(inside.map((target) => target.wire.id))
     for (const change of document.trackedChanges.values()) {
       if (
@@ -286,15 +248,6 @@ function anchorFor(document: OoxmlDocument, paragraphId: string) {
   return document.paragraphAnchors.get(paragraphId)
 }
 
-/**
- * Whether this decision would leave the main body with no paragraph. A tracked
- * deletion keeps the paragraph mark as deleted markup, but accepting that mark
- * (or rejecting the last tracked-insert shell) removes the whole `w:p`, so the
- * persisted body must keep at least one paragraph. The count adds paragraphs
- * the parser excludes because their mark is already deleted, so a reject that
- * restores one is not mistaken for a removal. This is the same typed refusal
- * the edit guard uses, not a second paragraph-count rule.
- */
 function wouldRemoveLastParagraph(
   document: OoxmlDocument,
   action: DocumentTrackedChangeDecisionRequest['action'],
@@ -308,9 +261,6 @@ function wouldRemoveLastParagraph(
   const mainParagraphIds = new Set(
     mainStory.paragraphs.map((paragraph) => paragraph.id),
   )
-  // Every main-part mark-deletion change names the whole `w:p` its mark sits
-  // in, including paragraphs the parser excludes from the wire model. They are
-  // body paragraphs, so they count.
   const markRanges: Array<{ start: number; end: number }> = []
   let bodyCount = mainStory.paragraphs.length
   for (const change of document.trackedChanges.values()) {
@@ -319,10 +269,6 @@ function wouldRemoveLastParagraph(
     markRanges.push(change.paragraphMarkRange)
     bodyCount += 1
   }
-  // A decision removes whole `w:p` subtrees, so count every main paragraph or
-  // mark whose range is contained in a removed range. That catches hosted
-  // paragraphs and nested mark-deleted paragraphs inside the removed one, which
-  // an id-membership count would miss.
   const removedRanges: Array<{ start: number; end: number }> = removals.map(
     (removal) => ({ start: removal.start, end: removal.end }),
   )
@@ -383,12 +329,6 @@ function validateTargets(
   }
 }
 
-/**
- * Whether the decision drops the target's stored content rather than
- * keeping or restoring it: accepting a deletion or a move's `from` half,
- * or rejecting an insertion or a move's `to` half. Unwrapping keeps the
- * markers — only these paths erase source bytes.
- */
 function decisionRemovesContent(
   target: TrackedChangeNode,
   action: DocumentTrackedChangeDecisionRequest['action'],
@@ -446,12 +386,6 @@ function restoreDeletedText(target: TrackedChangeNode) {
   return restored
 }
 
-/**
- * The changes a paragraph-mark deletion absorbs: changes whose range sits inside
- * the deleted mark's paragraph. Pure: it only collects them, so a decision the
- * guard later refuses leaves the parsed document unchanged. The caller folds
- * them with `commitParagraphMarkSiblings` after the decision is accepted.
- */
 function collectParagraphMarkSiblings(
   document: OoxmlDocument,
   accepted: readonly TrackedChangeNode[],

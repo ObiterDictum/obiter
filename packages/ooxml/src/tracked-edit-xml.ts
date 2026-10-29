@@ -17,20 +17,6 @@ import {
   textBreakReplacements,
 } from './text-run-edit'
 
-/**
- * XML fragments for tracked-change markers. The tracked-change writer in
- * tracked-edits.ts decides where a `w:ins`/`w:del`/`rPrChange`/`pPrChange`
- * wrapper goes; this module builds the fragment it splices in and the
- * insert-versus-delete pair every text replacement needs. Every function here
- * is pure: it takes source XML and anchors, and returns XML.
- */
-
-/**
- * The run's replacement XML under tracking. The old text is renamed to
- * delText by the caller; this only builds the inserted side, and consumes the
- * run's own text-wrapping breaks so the replacement text is the single source
- * of the run's `w:br` elements.
- */
 export function replaceRunText(
   source: string,
   anchor: TextRunAnchor,
@@ -108,10 +94,6 @@ export function wordPrefix(
 }
 
 function insertedRunFragment(value: string, prefix: string) {
-  // The tracked-text replacement's property host is the inserted run when one
-  // exists; a granular pure deletion emits only `w:del`, so the host falls
-  // back to the deleted run — the property change belongs to the run the text
-  // came from, and dropping it would lose a same-batch style or emphasis edit.
   let start = value.indexOf(`<${prefix}:ins`)
   if (start === -1) start = value.indexOf(`<${prefix}:del`)
   if (start === -1) return undefined
@@ -176,18 +158,6 @@ export function extractInsertedRunRpr(
   return match?.[0] ?? `<${prefix}:${propertiesName}/>`
 }
 
-/**
- * Distributes a patched properties fragment over every piece of a pending
- * tracked text replacement that survives an accept: each shared run takes
- * the new properties with its own change marker, while the inserted run
- * takes the properties without one — a marker nested inside `w:ins` is not
- * a listed change and could never be decided. A `w:del` piece keeps the
- * properties the struck text was recorded with; when no piece survives — a
- * deletion-only replacement — the deleted run takes the patched properties
- * so a reject restores the state the user last saw. Returns undefined when
- * the value is not the writer's flat sequence of `w:r`, `w:del` and `w:ins`
- * pieces, leaving the caller to its fallback.
- */
 export function foldRprIntoTrackedText(
   value: string,
   prefix: string,
@@ -216,10 +186,6 @@ export function foldRprIntoTrackedText(
   const patchRunXml = (runXml: string, marker: boolean) => {
     const current =
       runXml.match(propertiesPattern)?.[0] ?? `<${prefix}:${propertiesName}/>`
-    // A run already carrying a marker keeps it — its `previous` still names
-    // the pre-batch properties — and merges the new patch beside it. A piece
-    // nested inside `w:ins` or `w:del` takes the patch alone: a marker there
-    // is not a listed change and its id could never be decided.
     const next = current.includes(`<${prefix}:${propertiesName}Change`)
       ? mergeTrackedProperties(current, prefix, propertiesName, patch)
       : marker
@@ -320,9 +286,6 @@ export function patchStyleChild(
       instruction,
     )
   }
-  // CT_RPr/CT_PPr require rStyle/pStyle to be the first child, so a missing
-  // style element lands right after the open tag, before existing children
-  // and before any emphasis already merged into the same replacement.
   const openingEnd = fragment.indexOf('>') + 1
   return `${fragment.slice(0, openingEnd)}${instruction}${fragment.slice(openingEnd)}`
 }

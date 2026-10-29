@@ -1,11 +1,5 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
-/**
- * The footprint of what changed between the base and current versions of a
- * merge candidate, and which client operations those changes conflict with.
- * Kept apart from `collaboration-merge.ts`, which is at its source ceiling
- * carrying the alignment machinery.
- */
 export type ChangedFootprints = {
   paragraphStyles: ReadonlySet<string>
   paragraphOpaque: ReadonlySet<string>
@@ -28,15 +22,9 @@ export function operationConflicts(
     return !changes.paragraphIds.has(operation.paragraphId)
   }
   if (operation.type === 'insert_table') {
-    // The table is spliced directly after its anchor, so it needs the anchor
-    // to survive into the current version — the same footprint an inserted
-    // paragraph requires. The anchor's own content is untouched.
     return !changes.paragraphIds.has(operation.paragraphId)
   }
   if (operation.type === 'insert_image') {
-    // The offset addresses this paragraph's text, so a text edit to the same
-    // paragraph in the current version moves the picture; refuse rather than
-    // place it at a stale offset, as for a break.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphOpaque.has(operation.paragraphId) ||
@@ -47,9 +35,6 @@ export function operationConflicts(
     operation.type === 'set_hyperlink' ||
     operation.type === 'mark_defined_term'
   ) {
-    // A range mark addresses this paragraph's text, so a text edit to the
-    // same paragraph in the current version moves the covered range; refuse
-    // rather than wrap the wrong runs.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphOpaque.has(operation.paragraphId) ||
@@ -57,8 +42,6 @@ export function operationConflicts(
     )
   }
   if (operation.type === 'insert_cross_reference') {
-    // The offset addresses this paragraph's text, and the target must survive
-    // to carry the bookmark — both footprints apply.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       !changes.paragraphIds.has(operation.targetParagraphId) ||
@@ -91,9 +74,6 @@ export function operationConflicts(
     operation.type === 'insert_page_number' ||
     operation.type === 'insert_footnote'
   ) {
-    // The offset addresses this paragraph's text, so a text edit to the same
-    // paragraph in the current version moves the splice; refuse rather than
-    // place it at a stale offset.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphOpaque.has(operation.paragraphId) ||
@@ -101,14 +81,6 @@ export function operationConflicts(
     )
   }
   if (operation.type === 'insert_table_of_contents') {
-    // The offset footprint is shared with the other splices, but the entries
-    // also bookmark every heading paragraph — a deleted or rewritten heading
-    // anywhere in the document changes what the field captures. The
-    // footprint cannot say which changed ids are headings, so any paragraph
-    // change conflicts rather than capture a stale entry list.
-    // `paragraphIds` is the presence set: every aligned paragraph, changed
-    // or not. It answers only whether the anchor survived; the change sets
-    // are `paragraphStyles`, `paragraphOpaque` and `paragraphRunChanges`.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphStyles.size > 0 ||
@@ -117,10 +89,6 @@ export function operationConflicts(
     )
   }
   if (operation.type === 'insert_table_of_authorities') {
-    // The same document-wide footprint as the contents table, one step
-    // deeper: the field also marks every citation occurrence and bookmarks
-    // every citing paragraph, so any paragraph change anywhere — not just a
-    // heading's — can move a mark offset or empty an entry.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphStyles.size > 0 ||
@@ -129,9 +97,6 @@ export function operationConflicts(
     )
   }
   if (operation.type === 'update_table_of_authorities') {
-    // A refresh reads the same document-wide citation set and rewrites the
-    // field's covered paragraphs: any paragraph change can move a mark
-    // offset, empty an entry, or touch the range the update replaces.
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
       changes.paragraphStyles.size > 0 ||
@@ -145,8 +110,6 @@ export function operationConflicts(
       changes.paragraphOpaque.has(operation.paragraphId)
     )
   }
-  // A section-properties edit is document-wide and carries no paragraph or run
-  // address, so it has no footprint to conflict with in E5.
   if (operation.type === 'set_section_properties') return false
   if (operation.type === 'set_run_emphasis') {
     if (operation.runId !== undefined) {

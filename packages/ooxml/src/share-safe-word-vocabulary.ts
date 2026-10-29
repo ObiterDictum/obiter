@@ -1,21 +1,4 @@
-/**
- * The bounded WordprocessingML vocabulary the share-safe copy may emit.
- * A `w:` element absent from this list refuses the export rather than
- * shipping unclassified markup; a `w:` attribute absent from the attribute
- * list is stripped as metadata rather than trusted. Names in the removal
- * and refusal sets never appear here — they resolve before the allow-list
- * runs, so the same name in a non-removal context still refuses.
- */
-
-/**
- * WordprocessingML elements a kept part may carry: visible content,
- * formatting, structure, numbering, styles, fonts, settings, fields and
- * form machinery. Revision, opaque-payload, external-pointer and
- * hiding-mark names are excluded — the policy refuses them by class before
- * this list is consulted.
- */
 export const WML_ELEMENTS = new Set([
-  // package roots and story containers
   'document',
   'body',
   'hdr',
@@ -31,7 +14,6 @@ export const WML_ELEMENTS = new Set([
   'settings',
   'webSettings',
   'sectPr',
-  // paragraphs and paragraph properties
   'p',
   'pPr',
   'pStyle',
@@ -78,7 +60,6 @@ export const WML_ELEMENTS = new Set([
   'bar',
   'insideH',
   'insideV',
-  // runs and run properties
   'r',
   'rPr',
   'rStyle',
@@ -118,7 +99,6 @@ export const WML_ELEMENTS = new Set([
   'vanish',
   'webHidden',
   'specVanish',
-  // run content
   't',
   'br',
   'cr',
@@ -156,12 +136,10 @@ export const WML_ELEMENTS = new Set([
   'rt',
   'rubyBase',
   'txbxContent',
-  // links, anchors and proofing
   'hyperlink',
   'bookmarkStart',
   'bookmarkEnd',
   'proofErr',
-  // tables
   'tbl',
   'tblPr',
   'tblPrEx',
@@ -203,7 +181,6 @@ export const WML_ELEMENTS = new Set([
   'hideMark',
   'headers',
   'tblStylePr',
-  // section content
   'headerReference',
   'footerReference',
   'footnotePr',
@@ -222,7 +199,6 @@ export const WML_ELEMENTS = new Set([
   'rtlGutter',
   'docGrid',
   'printerSettings',
-  // numbering
   'abstractNum',
   'abstractNumId',
   'num',
@@ -244,7 +220,6 @@ export const WML_ELEMENTS = new Set([
   'numPicBullet',
   'start',
   'end',
-  // styles
   'docDefaults',
   'rPrDefault',
   'pPrDefault',
@@ -264,7 +239,6 @@ export const WML_ELEMENTS = new Set([
   'personalReply',
   'latentStyles',
   'lsdException',
-  // content controls
   'sdt',
   'sdtPr',
   'sdtContent',
@@ -288,7 +262,6 @@ export const WML_ELEMENTS = new Set([
   'picture',
   'repeatingSection',
   'repeatingSectionItem',
-  // form fields
   'ffData',
   'helpText',
   'statusText',
@@ -306,7 +279,6 @@ export const WML_ELEMENTS = new Set([
   'calcOnExit',
   'entryMacro',
   'exitMacro',
-  // fonts and web settings
   'panose1',
   'charset',
   'family',
@@ -322,7 +294,6 @@ export const WML_ELEMENTS = new Set([
   'pixelsPerInch',
   'divs',
   'div',
-  // settings
   'zoom',
   'proofState',
   'defaultTabStop',
@@ -431,12 +402,6 @@ export const WML_ELEMENTS = new Set([
   'openMode',
 ])
 
-/**
- * `w:` elements that are pure metadata or label carriers — removed whole
- * wherever they appear: `w:alias` and `w:tblCaption`/`w:tblDescription`
- * carry display text a reader never needs, `w:aliases` and `w:rsid` are
- * style provenance.
- */
 export const SHARE_SAFE_CARRIER_ELEMENTS = new Set([
   'alias',
   'tblCaption',
@@ -445,17 +410,14 @@ export const SHARE_SAFE_CARRIER_ELEMENTS = new Set([
   'rsid',
 ])
 
-/** Revision-adjacent marker elements — inert residue, removed whole. */
 export const SHARE_SAFE_MARKER_ELEMENTS = new Set([
   'displacedByIns',
   'displacedByDel',
   'displacedByCustomXml',
 ])
 
-/** The only namespace URI a `w:compatSetting` may name. */
 export const COMPAT_SETTING_URI = 'http://schemas.microsoft.com/office/word'
 
-/** `w:compatSetting` names Word writes; anything else is dropped. */
 export const COMPAT_SETTING_NAMES = new Set([
   'compatibilityMode',
   'overrideTableStyleFontSizeAndJustification',

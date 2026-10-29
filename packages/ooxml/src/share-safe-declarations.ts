@@ -19,39 +19,14 @@ import {
 import type { SourcePart } from './model'
 import { refuseShareSafe } from './share-safe-refusal'
 
-/**
- * The package-declaration halves of the content analysis: `.rels` parts and
- * `[Content_Types].xml` carry no story content, only declarations, so their
- * checks are shaped around what the plan keeps and drops rather than the
- * element vocabulary. Both refuse a malformed declaration and remove only
- * the entries whose targets no longer ship.
- */
-
-/** `xsd:ID` — an NCName: letter or underscore, then name characters. */
 const RELATIONSHIP_ID = /^[A-Za-z_][\w.-]{0,127}$/u
-/** `xsd:anyURI` for a declaration slot — bounded, no whitespace. */
 const RELATIONSHIP_URI = /^\S{1,2048}$/u
-/** `ST_Extension` reduced to the extension alphabet Office writes. */
 const CONTENT_TYPE_EXTENSION = /^[A-Za-z0-9]{1,32}$/u
-/** `ST_ContentType` — a `token/token` media type with optional params. */
 const CONTENT_TYPE_MEDIA =
   /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,127}(?:\s*;\s*[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}="[^"]{0,255}")*$/u
-/** `xsd:anyURI` part names — `/`-rooted, bounded segments. */
 const CONTENT_TYPE_PART_NAME = /^\/[^\s/]{1,256}(?:\/[^\s/]{1,256}){0,31}$/u
-/** `ST_TargetMode` — the two spellings the enumeration declares. */
 const RELATIONSHIP_TARGET_MODES = new Set(['Internal', 'External'])
 
-/**
- * No declaration element carries text: `Relationships`, `Relationship`,
- * `Types`, `Default` and `Override` are all empty-content or element-only
- * shapes. Whitespace between declarations is fine; anything else is a
- * payload riding a channel with no legal text.
- */
-/**
- * One text gap inside a declaration element: canonical emission already
- * drops comments and processing instructions, so only the residue after
- * those lexical spans matters — it must be whitespace.
- */
 function assertWhitespaceOnly(fragment: string, partName: string) {
   const residue = fragment
     .replace(/<!--[\s\S]*?-->/gu, '')
@@ -71,9 +46,6 @@ function assertWhitespaceDeclarationText(
 ) {
   const source = part.overlay?.source
   if (source === undefined) return
-  // The children index is built once: filtering the whole element list per
-  // element is quadratic, and a declaration-heavy part is exactly the shape
-  // an attacker would send to burn CPU.
   const children = childrenByParent(elements)
   for (const element of elements) {
     if (
@@ -91,12 +63,6 @@ function assertWhitespaceDeclarationText(
     assertWhitespaceOnly(source.slice(cursor, element.endTagStart), part.name)
   }
 }
-/**
- * `.rels` parts: declarations the plan strips go, declarations whose
- * target no longer ships go, and every survivor is checked against the
- * package — no external pointer, no dangling target, no undeclarable
- * declaration.
- */
 export function analyseRelationshipsPart(
   part: SourcePart,
   elements: readonly XmlElement[],
@@ -115,14 +81,10 @@ export function analyseRelationshipsPart(
     )
   }
   const kept = keptPartNames(plan)
-  // Two declarations spelling one `Id` make `r:id` resolution ambiguous —
-  // a reader could follow either. Refuse rather than pick.
   const seenIds = new Set<string>()
   assertWhitespaceDeclarationText(part, elements, PACKAGE_REL_NAMESPACE)
   for (const element of elements) {
     if (element.namespaceUri !== PACKAGE_REL_NAMESPACE) continue
-    // Shape is `Relationships` at the root, `Relationship` directly
-    // beneath it — a nested declaration is a document no writer makes.
     if (
       (element.localName === 'Relationships' && element.depth !== 0) ||
       (element.localName === 'Relationship' && element.depth !== 1)
@@ -167,8 +129,6 @@ export function analyseRelationshipsPart(
       continue
     }
     if (targetMode !== undefined) {
-      // `TargetMode` is a two-spelling enumeration — anything else,
-      // including a differently-cased `external`, is malformed input.
       if (!RELATIONSHIP_TARGET_MODES.has(targetMode)) {
         refuseShareSafe(
           'malformed-package',
@@ -196,8 +156,6 @@ export function analyseRelationshipsPart(
       resolved = undefined
     }
     if (resolved !== undefined) {
-      // A relationship targeting a declaration part — another `.rels` or
-      // the content-types stream — is a shape OPC gives no meaning to.
       if (resolved.endsWith('.rels') || resolved === CONTENT_TYPES_PART) {
         refuseShareSafe(
           'malformed-package',
@@ -216,10 +174,6 @@ export function analyseRelationshipsPart(
       )
     }
 
-    // Canonical emission: a surviving declaration ships a generated
-    // `rId<n>` in document order, the target spelled relative to the
-    // canonical owner name, and no `TargetMode` — internal targets are the
-    // only kind that survive, so the attribute carries nothing.
     const emittedIds =
       plan.relationshipIds.get(part.name) ?? new Map<string, string>()
     plan.relationshipIds.set(part.name, emittedIds)
@@ -272,11 +226,6 @@ function keptPartNames(plan: ShareSafePlan) {
   return kept
 }
 
-/**
- * `[Content_Types].xml`: overrides naming parts that no longer ship are
- * removed, `Default` declarations whose extension no kept part uses go
- * with them, and duplicate or malformed declarations refuse.
- */
 export function analyseContentTypesPart(
   part: SourcePart,
   elements: readonly XmlElement[],
@@ -289,13 +238,8 @@ export function analyseContentTypesPart(
     const dot = name.lastIndexOf('.')
     if (dot !== -1) usedExtensions.add(name.slice(dot + 1).toLowerCase())
   }
-  // Extensions and part names already declared, mapped to the type they
-  // declared. A repeat carrying the same type is redundant and drops;
-  // a repeat carrying a different type is ambiguous and refuses.
   const seenDefaults = new Map<string, string>()
   const seenOverrides = new Map<string, string>()
-  // The declarations that survive — a kept part must end up covered by
-  // one of them, not by an entry the plan already dropped.
   const shippedDefaults = new Set<string>()
   const shippedOverrides = new Set<string>()
   assertWhitespaceDeclarationText(part, elements, CONTENT_TYPES_NAMESPACE)
@@ -386,10 +330,6 @@ export function analyseContentTypesPart(
       shippedOverrides.add(target)
     }
   }
-  // Every kept part must end up typed: an `Override` naming it, or a
-  // `Default` covering its extension. A part without coverage is a
-  // package a recipient cannot consistently decode — refuse. The
-  // content-types part itself is covered by the container contract.
   for (const name of kept) {
     if (name === CONTENT_TYPES_PART) continue
     const dot = name.lastIndexOf('.')

@@ -109,10 +109,6 @@ describe('set_run_emphasis paragraph range', () => {
     const run = paragraph?.runs[0]
     if (!paragraph || !run) throw new Error('Fixture run is missing.')
 
-    // There is no tracked rPrChange writer for a range split. Applying it
-    // untracked would discard the requested tracking, and skipping it would
-    // report a saved formatting change that was never written. The batch is
-    // refused so the client holds and surfaces the slot while the rest saves.
     expect(() =>
       applyDocumentEdits(
         document,
@@ -163,9 +159,6 @@ describe('a cross-paragraph join persists its tail formatting', () => {
     const base = paragraph.runs.map((run) => run.text).join('').length
     const originalText = paragraph.runs.map((run) => run.text).join('')
     const appended = 'avo'
-    // The shape a join emits: the tail text is folded onto the head
-    // paragraph's last run, then its formatting is restated as a range
-    // emphasis over the appended slice (server-side, after the text edit).
     applyDocumentEdits(document, [
       {
         type: 'replace_run_text',
@@ -186,8 +179,6 @@ describe('a cross-paragraph join persists its tail formatting', () => {
     expect(reparsed?.runs.map((run) => run.text).join('')).toBe(
       `${originalText}${appended}`,
     )
-    // The appended characters are italic in the saved document, not just in
-    // the editor's paint.
     const italicText = (reparsed?.runs ?? [])
       .filter((run) => runItalic(run))
       .map((run) => run.text)

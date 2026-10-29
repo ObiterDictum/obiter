@@ -1,6 +1,5 @@
 import { escapeXmlAttribute } from './parts/overlay'
 
-/** Direct page-margin overrides in twips; `null` releases an attribute. */
 export type SectionMarginPatch = {
   top?: number | null
   right?: number | null
@@ -11,22 +10,12 @@ export type SectionMarginPatch = {
   gutter?: number | null
 }
 
-/**
- * A narrow section-properties patch over the body-level `w:sectPr`.
- *
- * - `margins: null` removes `w:pgMar`; a field `null` removes just that attribute.
- * - `pageSize: null` removes `w:pgSz`; `orientation: null` removes `w:orient`.
- * - `orientation` alone swaps the current `w:w`/`w:h` to match. An explicit
- *   `pageSize` is authoritative and is not swapped, so `w:orient` is derived
- *   from the resulting dimensions when only a size is given.
- */
 export type SectionPropertiesPatch = {
   margins?: SectionMarginPatch | null
   orientation?: 'portrait' | 'landscape' | null
   pageSize?: { width: number; height: number } | null
 }
 
-/** Word's A4 page size in twips, matching the reading side's default. */
 export const A4_PAGE_TWIPS = { width: 11_906, height: 16_838 }
 
 const MARGIN_ATTRIBUTES = [
@@ -39,9 +28,6 @@ const MARGIN_ATTRIBUTES = [
   'gutter',
 ] as const
 
-// CT_SectPr (ECMA-376) child order for the two properties E5 writes. A missing
-// child must land after the last present predecessor, not immediately after the
-// open tag, or the section is schema-invalid.
 const SECTION_CHILD_PREDECESSORS = new Map<string, readonly string[]>([
   [
     'pgSz',
@@ -75,13 +61,6 @@ export function patchSectionPropertiesXml(
   return history ? insertSectionHistory(next, history) : next
 }
 
-/**
- * Splits a `w:sectPr` at its `w:sectPrChange` history record. `active` is the
- * live section element (with a closing tag); `history` is the change element
- * and the original closing tag. Every child lookup must operate on `active`
- * only: the recorded `<w:sectPr>` inside the change is a copy, and matching it
- * would patch stale geometry while leaving the live section untouched.
- */
 export function splitSectionHistory(fragment: string) {
   const changeStart = fragment.search(/<w:sectPrChange\b/u)
   if (changeStart === -1) return { active: fragment, history: '' }
@@ -101,17 +80,7 @@ function insertSectionHistory(fragment: string, history: string) {
     : `${fragment}${history}`
 }
 
-/**
- * The live `w:sectPr` element in a preserved fragment, with any
- * `w:sectPrChange` history record cut away. The reader must not match the copy
- * inside the change: it holds pre-change geometry and would report a section
- * that the document no longer has.
- */
 export function activeSectionXml(fragment: string): string {
-  // A paragraph's tracked history (`w:pPrChange`) can carry the section it had
-  // before the change. The reader must see only the live properties, so cut
-  // that history before locating the live `w:sectPr`, or the recorded copy
-  // reports a phantom section.
   const change = fragment.search(/<w:pPrChange\b/u)
   const live = change === -1 ? fragment : fragment.slice(0, change)
   const { active } = splitSectionHistory(live)

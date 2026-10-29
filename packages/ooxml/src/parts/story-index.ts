@@ -3,16 +3,6 @@ import { isTrackedChange } from './tracked-change-nodes'
 
 const NO_ELEMENTS: readonly XmlElement[] = []
 
-/**
- * One pass over a part's element list, indexing what the story walk asks for
- * over and over: children, the nearest enclosing `w:r`/`w:p`, and the tracked
- * change and `mc:Fallback` facts. Without it every paragraph and every run
- * scans the whole list, so a part costs runs × elements — 2,000 field-bearing
- * paragraphs took ~30 s before this. Elements are in document order, so a
- * parent is always seen before its children: ancestor facts are computed
- * forward and subtree facts backward, with no recursion (a part may nest
- * 20,000 deep).
- */
 export class PartIndex {
   private readonly children: Map<XmlElement, XmlElement[]>
   private readonly byRun = new Map<XmlElement, XmlElement[]>()
@@ -81,12 +71,10 @@ export class PartIndex {
     return this.children.get(element) ?? NO_ELEMENTS
   }
 
-  /** Elements whose nearest enclosing `w:r` is `run`, in document order. */
   descendantsOfRun(run: XmlElement) {
     return this.byRun.get(run) ?? NO_ELEMENTS
   }
 
-  /** Elements whose nearest enclosing `w:p` is `paragraph`. */
   descendantsOfParagraph(paragraph: XmlElement) {
     return this.byParagraph.get(paragraph) ?? NO_ELEMENTS
   }
@@ -99,12 +87,10 @@ export class PartIndex {
     return this.insideFallback.has(element)
   }
 
-  /** The element itself or a descendant is a tracked change. */
   containsTrackedChange(element: XmlElement) {
     return this.trackedSubtree.has(element)
   }
 
-  /** A `w:del` on the paragraph's own mark, which deletes the paragraph. */
   hasDeletedParagraphMark(paragraph: XmlElement) {
     const properties = this.childrenOf(paragraph).find((element) =>
       isWord(element, 'pPr'),

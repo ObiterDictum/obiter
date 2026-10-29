@@ -14,12 +14,6 @@ import {
   WP,
 } from './share-safe-probe-kit'
 
-/**
- * A minimal drawing carrier — `pic:pic` inside `wp:inline` — the bounded
- * embedded attribute vocabulary resolves inside it. The pipeline checks
- * names and values, not schema parenting, so the fragments only need to
- * place the attribute under test on a kept element.
- */
 const DRAW = (inner: string) =>
   `<w:p><w:r><w:drawing><wp:inline xmlns:wp="${WP}"><a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC}"><pic:pic xmlns:pic="${PIC}">${inner}</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
 

@@ -21,8 +21,6 @@ import { setOverlayReplacement, parseXmlElements } from './parts/overlay'
 import { appendPropertyChange } from './tracked-edit-xml'
 import { replaceTextRunAtAnchor, wordRunInnerTextXml } from './text-run-edit'
 
-// Shared run-splitting primitives. model-run-emphasis composes them for range
-// formatting; this module composes them for redaction text replacement.
 export function runPieceXml(
   source: string,
   run: ParagraphAnchor['runs'][number],
@@ -100,15 +98,6 @@ export function applyEmphasisXml(xml: string, emphasis: RunEmphasis) {
   })
 }
 
-/**
- * The tracked form of `applyEmphasisXml` for a run piece a range split
- * produced: the patched properties carry a `w:rPrChange` marker holding the
- * piece's previous properties element, so accepting keeps the new formatting
- * and rejecting restores exactly what the range replaced. A piece with no
- * `w:rPr` records an empty previous element — the decision parser requires a
- * properties fragment to restore, and an empty one means "no direct
- * formatting".
- */
 export function applyTrackedEmphasisXml(
   xml: string,
   emphasis: RunEmphasis,
@@ -151,26 +140,9 @@ export type RunTextReplacement = {
   from: number
   to: number
   text: string
-  /**
-   * Run properties applied to the replacement run only. The covered source
-   * text is gone before this is written, so a black highlight/colour here
-   * styles the harmless marker, never the original content.
-   */
   emphasis?: RunEmphasis
 }
 
-/**
- * Replace text ranges inside one paragraph, splitting runs at range
- * boundaries exactly like applyRunEmphasisRange (same locateOffset /
- * runPieceXml / openAt / closeAt machinery, same whole-run fast path via
- * replaceTextRunAtAnchor). Covered pieces keep the run's rPr so styles
- * survive. Covered non-text payloads are removed; layout controls may stay.
- *
- * One pass per paragraph: every original run is split at most once and new
- * ids come from a local allocator seeded with the live model, so the
- * duplicate ids E41 reports for repeated splits of the same run cannot
- * occur here regardless of that defect's status.
- */
 export function applyRunTextReplacementRange(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -180,8 +152,6 @@ export function applyRunTextReplacementRange(
   const part = requireEditablePart(document, paragraph.partName)
   const source = part.overlay.source
   const text = paragraph.runs.map((run) => run.wire.text).join('')
-  // Mirror the text-output overlap rule (redaction-policy outputSpans):
-  // ordered by start, a range starting inside the previous one is dropped.
   const spans: RunTextReplacement[] = []
   for (const replacement of [...replacements].sort(
     (left, right) => left.from - right.from || right.to - left.to,
@@ -241,8 +211,6 @@ export function applyRunTextReplacementRange(
       }))
     if (hits.length === 1) {
       const hit = hits[0]!
-      // A styled replacement cannot use the whole-run fast path: it keeps the
-      // run's existing rPr, so the emphasis would be lost.
       if (
         hit.localFrom === 0 &&
         hit.localTo === run.wire.text.length &&
@@ -322,8 +290,6 @@ function splitReplacedRun(
     start: range.start - run.runRange.start,
     end: range.end - run.runRange.start,
   }))
-  // Redaction removes non-text payloads inside the covered range too.
-  // Only layout controls may survive in a replacement piece.
   const controls = elements.filter(
     (element) =>
       element.depth === 1 &&
@@ -366,8 +332,6 @@ function splitReplacedRun(
     const leading = kept.filter((control) => control.end <= textStart)
     const trailing = kept.slice(leading.length)
     const lines = normaliseEditText(hit.text).split('\n')
-    // The parser's retained tokens for what this piece writes: controls
-    // before the replacement text, then the rest after its last line.
     const tokensOf = (items: typeof kept, offset: number, textIndex: number) =>
       elements
         .filter(
@@ -414,8 +378,6 @@ function splitReplacedRun(
   const wires = parts.map((part, index) => ({
     id: index === 0 ? run.wire.id : nextId(),
     ...(run.wire.styleId ? { styleId: run.wire.styleId } : {}),
-    // A text edit leaves the run inside any stored hyperlink, so every
-    // piece the split produces keeps the target.
     ...(run.wire.hyperlinkTarget
       ? { hyperlinkTarget: run.wire.hyperlinkTarget }
       : {}),
@@ -434,8 +396,6 @@ function splitReplacedRun(
     xml: parts.map((part) => part.xml).join(''),
     wires,
     // SAFETY: `wires` is built one per `parts` entry, and `ordered` is the
-    // sorted split bounds with one more entry than `parts`, so `index` and
-    // `index + 1` are in range for every part.
     originParts: parts.map((part, index) => ({
       run: wires[index] as DocumentTextRunWire,
       from: ordered[index] as number,
@@ -444,9 +404,6 @@ function splitReplacedRun(
   }
 }
 
-// A materialised run is a bare <w:r>; its namespace prefixes are declared on
-// the part root, so wrap it in a synthetic root carrying the part's
-// declarations and shift the parsed ranges back into run coordinates.
 export function parseWrappedRun(partSource: string, runXml: string) {
   const declarationEnd = partSource.startsWith('<?xml')
     ? partSource.indexOf('?>') + 2

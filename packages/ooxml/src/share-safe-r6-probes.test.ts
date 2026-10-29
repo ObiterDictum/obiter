@@ -14,13 +14,6 @@ import {
   WP,
 } from './share-safe-probe-kit'
 
-/**
- * R6: attribute *values*, not just names and scopes. Every declared slot
- * resolves through a shared bound — an enumeration or grammar a value
- * must satisfy — and a declared slot holding an out-of-bound value
- * refuses the copy rather than stripping or preserving it. The byte
- * mirror re-derives each verdict from the emitted source.
- */
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 const A14 = 'http://schemas.microsoft.com/office/drawing/2010/main'
 const CP =

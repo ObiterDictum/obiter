@@ -42,15 +42,6 @@ export function reconcileDocumentEdits(
 
 type MainStory = OoxmlDocument['model']['stories'][number]
 
-/**
- * The base-to-current correspondence of a reconciled merge: which current
- * paragraph continues each base paragraph, and which current run continues
- * each base run. Paragraphs are matched by persisted `w14:paraId` (or the
- * verified positional alignment for a legacy base); runs by their index in a
- * matched paragraph, which the merge's own conflict check requires to be
- * skeleton-stable. This is the base side of the merge lineage, never a
- * positional guess at reversal targets.
- */
 export type MergeAlignment = {
   baseToCurrentParagraph: Map<string, string>
   baseToCurrentRun: Map<string, string>
@@ -101,14 +92,6 @@ export function alignMergeDocuments(
   return alignment
 }
 
-/**
- * Rewrites a client's operations from its base addresses to the current
- * version's addresses. A reconciled merge applies the batch to the newer
- * current document, where a collaborator's insert or edit has reallocated
- * positional run ids; applying the base ids directly would write an unrelated
- * run. An address the alignment does not name is refused rather than left to
- * collide with whatever current id happens to share it.
- */
 export function remapMergeOperations(
   operations: readonly DocumentEditOperation[],
   alignment: MergeAlignment,
@@ -205,9 +188,6 @@ function indexAligned(base: MainStory, current: MainStory) {
 function sameSkeleton(base: MainStory, current: MainStory) {
   if (base.partName !== current.partName) return false
   if (indexAligned(base, current)) return true
-  // Sequential model ids shift after a round-tripped insert. Only w14
-  // paraId/textId stay stable, so extras are allowed when every identified
-  // base paragraph still exists in order.
   let currentIndex = 0
   for (const paragraph of base.paragraphs) {
     if (!paragraph.sourceParaId) continue
@@ -224,13 +204,6 @@ function sameSkeleton(base: MainStory, current: MainStory) {
   return true
 }
 
-/**
- * Positional alignment for a base that predates persisted paragraph ids.
- * Reconciliation is a conflict check, not identity translation: when the base
- * carries no `w14:paraId`, the only link to a canonicalised current version is
- * the verified run skeleton at the same index. History translation never uses
- * this; it consumes the authoritative lineage.
- */
 function positionallyAligned(base: MainStory, current: MainStory) {
   return (
     base.paragraphs.length === current.paragraphs.length &&

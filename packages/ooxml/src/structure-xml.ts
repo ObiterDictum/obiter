@@ -26,56 +26,20 @@ const DRAWING_NAMESPACES =
   'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
   'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
 
-/**
- * The structural-insertion markup builders. The save writer and the client's
- * pending fold both call these, so a pending table or picture serialises the
- * same fragment it will carry once stored — pending paint reads the writer's
- * own output through the same model shape a reparse produces.
- */
-
-/**
- * The neighbourhood a table insert is decided against, expressed so both the
- * writer (parsed XML siblings) and the fold (wire paragraphs) can compute it
- * from their own representation.
- */
 export type TablePlacementContext = {
-  /**
-   * Earlier inserts in this batch parked a tail behind the anchor — a prior
-   * table's last cell or an inserted paragraph — that the new table chains
-   * after to keep operation order.
-   */
   hasPendingTail: boolean
-  /** A block follows the anchor's pending region in the body. */
   hasFollowingBlock: boolean
-  /**
-   * The following block is a table: two adjacent `w:tbl` elements merge in
-   * Word, so the boundary needs a paragraph between them.
-   */
   followingIsTable: boolean
-  /** The following block is the body `w:sectPr` — a body cannot end on a table. */
   followingIsSectionProperties: boolean
-  /** Tables this anchor already produced in the batch. */
   occurrence: number
 }
 
-/** The placement decisions for one table insert. */
 export type TablePlacement = {
-  /** Splice after the parked tail rather than the anchor paragraph. */
   chainAfterPendingTail: boolean
-  /** Emit the separator paragraph keeping two same-anchor tables distinct. */
   needsSeparatorParagraph: boolean
-  /**
-   * Emit the trailing paragraph OOXML requires after a body-final table or
-   * before an adjacent one.
-   */
   needsTrailingParagraph: boolean
 }
 
-/**
- * The placement rules for a body-level table insert — the single source both
- * the save writer and the pending fold apply, so a painted draft cannot
- * drift from what save/reload produces.
- */
 export function decideTablePlacement(
   context: TablePlacementContext,
 ): TablePlacement {
@@ -89,14 +53,6 @@ export function decideTablePlacement(
   }
 }
 
-/**
- * An empty paragraph carrying a `w14:paraId`. It is a table cell's mandatory
- * last child, the separator Word writes between adjacent tables, and the
- * trailing paragraph OOXML requires after a body-final table. The `w14`
- * namespace is declared inline only where the fragment's own root cannot
- * inherit it: cell paragraphs sit inside a `w:tbl` that declares it, while a
- * separator or trailing paragraph is a body-level sibling and must carry it.
- */
 export function buildTableParagraphXml(
   paraId: string,
   declareNamespace: boolean,
@@ -106,17 +62,6 @@ export function buildTableParagraphXml(
     : `<w:p w14:paraId="${paraId}"/>`
 }
 
-/**
- * A bordered, full-width table: `w:tbl` carrying `w:tblPr`/`w:tblGrid`, each
- * `w:tr` holding `columns` `w:tc` cells that each end in an empty paragraph —
- * the OOXML rule that a cell's last child is its `w:p`. `cellParaIds` supplies
- * one `w14:paraId` per cell, row-major, so `paragraphIdsInCell` binds each
- * cell paragraph to a distinct wire.
- *
- * Merged cells and nested tables are deliberately not offered by E6's insert:
- * the writer emits a plain grid rather than a `gridSpan`/`vMerge`/`w:tbl` it
- * cannot address afterwards.
- */
 export function buildTableXml(
   rows: number,
   columns: number,
@@ -143,13 +88,6 @@ export function buildTableXml(
   )
 }
 
-/**
- * An inline picture: `w:drawing`/`wp:inline`/`a:blip` with the image part
- * addressed by `relId` — the same shape the reader resolves
- * (`imagePartNameForDrawing`) and paints (`PageDrawing`). The extent is the
- * requested pixel size in EMU at 96 dpi, which is how `drawingBoxSize` reads
- * it back.
- */
 export function buildInlineDrawingXml({
   widthPx,
   heightPx,
@@ -186,11 +124,6 @@ export function buildInlineDrawingXml({
 const FOOTNOTE_REFERENCE_STYLE = 'FootnoteReference'
 const FOOTNOTE_TEXT_STYLE = 'FootnoteText'
 
-/**
- * The body-side `w:footnoteReference` run: the style Word gives the mark and
- * the note's allocated `w:id`. It carries no `w:t`, so it is zero-width in
- * the paragraph's effective text — the same fragment a reparse reads back.
- */
 export function buildFootnoteReferenceRunXml(footnoteId: number) {
   return (
     `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr>` +
@@ -198,12 +131,6 @@ export function buildFootnoteReferenceRunXml(footnoteId: number) {
   )
 }
 
-/**
- * The entry-side `w:footnote` for a one-paragraph note: the `w:footnoteRef`
- * mark run ahead of the note's own text run. `paraId` is emitted when the
- * caller already allocated it — a created paragraph needs its persisted
- * identity in the same write, not a later pass.
- */
 export function buildFootnoteXml(
   footnoteId: number,
   text: string,
@@ -219,11 +146,6 @@ export function buildFootnoteXml(
   )
 }
 
-/**
- * The root of a created `word/footnotes.xml`: both namespaces the part's
- * content needs, no entries. The separator (-1) and continuation separator
- * (0) entries are appended through the same path real notes use.
- */
 export function buildFootnotesRootXml() {
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
@@ -232,11 +154,6 @@ export function buildFootnotesRootXml() {
   )
 }
 
-/**
- * The separator entries a footnotes part requires: `w:id="-1"` and `w:id="0"`
- * are reserved, which is why real notes allocate from 1. Each holds one
- * paragraph — `paraId` is that paragraph's persisted identity.
- */
 export function buildFootnoteSeparatorXml(
   footnoteId: number,
   kind: 'separator' | 'continuationSeparator',

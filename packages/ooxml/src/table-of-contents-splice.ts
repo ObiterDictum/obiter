@@ -23,21 +23,12 @@ import {
 import { W14_NAMESPACE } from './structure-xml'
 import { TOC_FIELD_END_RUN } from './table-of-contents-xml'
 
-/**
- * The pPr the tail paragraph carries: the anchor's properties as they will
- * serialise — pending same-batch property writes folded in — since a
- * paragraph split keeps its formatting on both halves. A pending write that
- * overlaps the pPr range's boundary cannot be expressed, so the insertion
- * refuses rather than copy stale properties.
- */
 export function effectivePropertiesXml(
   overlay: XmlOverlay,
   paragraph: ParagraphAnchor,
 ) {
   const range = paragraph.paragraphPropertiesRange
   if (!range) {
-    // A pending `:pPr` insert writes the whole new element at the start tag;
-    // it is the paragraph's effective properties either way.
     const pending = overlay.replacements.get(`${paragraph.wire.id}:pPr`)
     if (pending && /^<w:pPr\b/u.test(pending.value)) return pending.value
     return ''
@@ -71,13 +62,6 @@ export function isBlankParagraph(paragraph: ParagraphAnchor) {
   )
 }
 
-/**
- * A blank paragraph has no run to split: the whole `w:p` element is replaced
- * with the closed head, the entries and the closed tail — the `:pPr`-keyed
- * merge this path uses, so a property write or an earlier zero-width field
- * splice into the same empty paragraph keeps composing in the same key
- * instead of racing this splice.
- */
 export function spliceIntoBlankParagraph(
   overlay: XmlOverlay,
   paragraph: ParagraphAnchor,
@@ -91,9 +75,6 @@ export function spliceIntoBlankParagraph(
   const tailXml = (pPr: string) =>
     `<w:p xmlns:w14="${W14_NAMESPACE}" w14:paraId="${tailParaId}">${pPr}${TOC_FIELD_END_RUN}</w:p>`
   if (existing && /^<w:p\b/u.test(existing.value)) {
-    // The pending value is already a complete paragraph element (an earlier
-    // field or property splice); the head it describes stays whole and the
-    // entries follow it.
     const pPr =
       /<w:pPr\b[\s\S]*?<\/w:pPr>/u.exec(existing.value)?.[0] ?? pPrCopy
     setOverlayReplacement(overlay, key, {
@@ -120,13 +101,6 @@ export function spliceIntoBlankParagraph(
   })
 }
 
-/**
- * The splice value at a located point: close whatever run/text the point
- * split, close the head paragraph, emit the entries, and open the tail —
- * carrying the copied pPr and the field `end` — before reopening the run
- * the tail text continues in. A point with no run to split inserts between
- * siblings instead.
- */
 export function tocSpliceReplacement(
   source: string,
   point: InsertionPoint,
@@ -173,15 +147,6 @@ export function tocSpliceReplacement(
   }
 }
 
-/**
- * The wire counterpart of the source splice: the anchor's run list is split
- * at `offset`, the head runs stay on the anchor wire and the tail's — behind
- * the field `end` run — move to a new wire after the inserted wires. The tail
- * keeps the paragraph's pPr fragment; other preserved children stay on the
- * head, which is where they serialise. `insertedWires` is the field's
- * result paragraphs — entries for a table of contents, heading plus
- * entries for a table of authorities.
- */
 export function spliceParagraphWires(
   document: OoxmlDocument,
   story: DocumentStoryWire,
@@ -272,8 +237,6 @@ export function spliceParagraphWires(
         lineage.operationIndex,
       )
     }
-    // The tail derives from the anchor rather than existing before — a
-    // paragraph split — so its origin names the anchor, not null.
     lineage.recorder.touched.add(tailWire)
     lineage.recorder.paragraphOrigin.set(tailWire, {
       fromParagraphId: wire.id,

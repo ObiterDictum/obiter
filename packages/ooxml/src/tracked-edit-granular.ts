@@ -4,14 +4,6 @@ import { wordRunInnerTextXml } from './text-run-edit'
 import { decodeXmlReferences } from './xml-lexemes'
 import { rawOffsetAtDecodedBoundary } from './text-offsets'
 
-/**
- * The granular tracked text replacement. The tracked-change writer in
- * tracked-edits.ts decides between this shape and the whole-run form; this
- * module only measures the changed middle and proves whether the run can be
- * split at it. Every function here is pure: it takes source XML and anchors,
- * and returns XML.
- */
-
 export type GranularRunEdit =
   | {
       kind: 'pieces'
@@ -23,20 +15,6 @@ export type GranularRunEdit =
   | { kind: 'noop' }
   | { kind: 'fallback' }
 
-/**
- * The granular form of a tracked text replacement. The run splits at the
- * changed middle: an untouched run for the shared head, a `w:del` run holding
- * only the removed characters, a `w:ins` run holding only the inserted ones
- * and an untouched run for the shared tail — the shape Word itself writes,
- * and the shape legal review expects.
- *
- * Only a run whose content is safely splittable qualifies: an optional
- * `w:rPr` plus plain `w:t` children and no text-wrapping breaks. A run
- * carrying tabs, breaks, field characters, instructions, note or comment
- * references, drawings, bookmark or comment range markers, or any other
- * child falls back to the whole-run form — fail closed, because those
- * children carry identity or structure a blind split would duplicate.
- */
 export function granularRunEdit(
   source: string,
   anchor: TextRunAnchor,
@@ -80,8 +58,6 @@ export function granularRunEdit(
         )
       cursor += length
     }
-    // Keep source lexemes, including CR references, even inside a deletion:
-    // rejecting the revision must restore the exact original characters.
     const space = /^\s|\s$/u.test(decodeXmlReferences(raw))
       ? ' xml:space="preserve"'
       : ''
@@ -99,7 +75,6 @@ export function granularRunEdit(
   return pieces
 }
 
-/** Map a comparison offset back across CRLF pairs in the source text. */
 function sourceBoundary(source: string, offset: number) {
   let raw = 0
   for (let normalised = 0; normalised < offset; normalised += 1) {

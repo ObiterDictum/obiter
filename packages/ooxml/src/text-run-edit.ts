@@ -7,9 +7,6 @@ import {
 } from './parts/overlay'
 import { hasPendingBreakSplice } from './run-break-splices'
 
-// P10: extracting replaceTextRunText changed overlay keys to the run-scoped
-// `:text:` namespace, added xml:space for whitespace-bounded replacements, and
-// changed an unavailable target from model-node-not-found to model-node-not-editable.
 export function replaceTextRunAtAnchor(
   document: OoxmlDocument,
   anchor: TextRunAnchor,
@@ -18,11 +15,6 @@ export function replaceTextRunAtAnchor(
   const part = document.sourceParts.get(anchor.partName)
   const overlay = part?.overlay
   if (!part || !overlay || anchor.textRanges.length === 0) return false
-  // A text replacement rewrites the run's text elements, so it cannot compose
-  // with a page-break splice that already reopens the run inside them: the
-  // replacement range strictly contains the splice point and the overlay
-  // serialiser rejects the overlap. Fail closed with a typed edit error so the
-  // batch is a holdable 400 rather than a 500 at serialisation.
   if (hasPendingBreakSplice(overlay, anchor.runRange)) {
     throw new OoxmlError('invalid-document-edit')
   }
@@ -39,8 +31,6 @@ export function replaceTextRunAtAnchor(
       ...range,
       value: index === 0 ? escapeXmlText(text) : '',
     }))
-  // Positional keys keep a later replacement of the same run overwriting the
-  // earlier ranges instead of leaving a stale one behind.
   const overlayReplacements = [
     ...replacements,
     ...textBreakReplacements(anchor, 0),
@@ -72,12 +62,6 @@ export function replaceTextRunAtAnchor(
   return true
 }
 
-/**
- * The run's own text-wrapping breaks are text the replacement supersedes: the
- * new text re-emits its own w:br elements, so leaving the old ones behind both
- * duplicates breaks and desynchronises wire.text from the saved XML. Breaks of
- * any other type are structure and stay where they are.
- */
 export function textBreakReplacements(
   anchor: TextRunAnchor,
   origin: number,

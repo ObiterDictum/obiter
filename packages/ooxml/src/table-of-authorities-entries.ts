@@ -1,52 +1,25 @@
 import { neutralCitationPatternSource } from '@obiter/contracts'
 import type { DocumentParagraphWire } from '@obiter/contracts'
 
-/**
- * One citation occurrence in a body paragraph: the citing paragraph and the
- * effective-text offset just past the citation — where the hidden `TA` mark
- * is spliced.
- */
 export type AuthorityOccurrence = {
   paragraphId: string
   end: number
   citation: string
 }
 
-/**
- * One `TOA` entry: a distinct citation and the paragraphs that cite it, in
- * document order — each gets a `_ToA` bookmark the entry's `PAGEREF` fields
- * resolve. Entries are sorted by citation text, matching the order a
- * regenerated table lists them.
- */
 export type TableOfAuthoritiesEntry = {
   citation: string
   paragraphIds: string[]
 }
 
-/**
- * What a `TOA` field captures: every citing occurrence for the mark pass,
- * and the distinct-citation entries the generated paragraphs list.
- */
 export type TableOfAuthorities = {
   occurrences: AuthorityOccurrence[]
   entries: TableOfAuthoritiesEntry[]
 }
 
-// The shared grammar `@obiter/contracts` owns, so the marks the writer
-// splices name the same citations Verify resolves and the authorities list
-// extracts. Compiled once at module load, not inside the scan loop.
 const NEUTRAL_CITATION = new RegExp(neutralCitationPatternSource, 'g')
-// Generated field-result paragraphs hold captured text, not authored text:
-// a citation inside a table-of-authorities entry or a table-of-contents
-// entry is a copy the field wrote, and marking it would put a `TA` mark
-// inside the result a regenerated field replaces.
 const GENERATED_RESULT_STYLE = /^(TOAHeading|TableofAuthorities|TOC\d+)$/u
 
-/**
- * Whether a paragraph style names a generated field's result — the same
- * test the collector applies, exported so the ribbon's availability reads
- * the same exclusions the writer's mark pass does.
- */
 export function isGeneratedFieldResultStyle(
   styleId: string | undefined,
 ): boolean {
@@ -56,15 +29,6 @@ export function isGeneratedFieldResultStyle(
 const wireText = (paragraph: DocumentParagraphWire) =>
   paragraph.runs.map((run) => run.text).join('')
 
-/**
- * The citations a `TOA` field captures over `paragraphs`, in paragraph
- * order: every neutral-citation occurrence, and the distinct-citation entry
- * list grouping them. `textOf` supplies the text a caller reads — stored
- * wire text for the writer, effective text for the pending fold — so the
- * marks land at the offsets the splice receives and the entries name the
- * words the user sees. Paragraphs styled as a generated field's result are
- * skipped: their citation text is captured output, not a citing instance.
- */
 export function tableOfAuthoritiesCitations(
   paragraphs: readonly DocumentParagraphWire[],
   textOf: (paragraph: DocumentParagraphWire) => string = wireText,
