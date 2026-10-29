@@ -50,15 +50,8 @@ import {
 export const DEFAULT_PORT = 3000
 export const DEFAULT_HOST = '0.0.0.0'
 
-/**
- * Parse PORT into a usable integer. Accepts only decimal integer strings;
- * anything else (NaN, hex, scientific notation, out of range, non-integer,
- * empty string) falls back to DEFAULT_PORT. Returns the fallback for anything
- * that would otherwise produce a surprising or broken listen().
- */
 export function parsePort(raw, fallback = DEFAULT_PORT) {
   if (raw === undefined || raw === null || raw === '') return fallback
-  // Reject anything that isn't a plain decimal integer (no 0x, no 1e3).
   if (!/^[0-9]+$/.test(String(raw))) return fallback
   const parsed = Number(raw)
   if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535)
@@ -66,20 +59,12 @@ export function parsePort(raw, fallback = DEFAULT_PORT) {
   return parsed
 }
 
-/**
- * Resolve the absolute URL for an incoming request. Prefers a configured
- * trusted origin (OBITER_WEB_ORIGIN) over the forgeable Host header.
- * Returns a URL with the request path + search preserved.
- */
 export function resolveBaseUrl(webOrigin, hostHeader) {
   if (webOrigin) {
     try {
-      // Validate it parses as an origin; drop any path component.
       const parsed = new URL(webOrigin)
       return `${parsed.protocol}//${parsed.host}`
-    } catch {
-      // Fall through to Host header if the configured origin is malformed.
-    }
+    } catch {}
   }
   return hostHeader ? `http://${hostHeader}` : `http://${DEFAULT_HOST}`
 }
@@ -100,9 +85,6 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 }
 
-// Gzip is cached per process, keyed by path plus the file's size and mtime so
-// a changed file can never serve stale compressed bytes. The map is a bounded
-// LRU: the least recently used entry is evicted rather than clearing wholesale.
 const gzipCache = new Map()
 const GZIP_CACHE_LIMIT = 128
 
@@ -121,22 +103,6 @@ function gzipAsset(key, body) {
   return compressed
 }
 
-/**
- * Apply a Web Response's headers onto a Node ServerResponse, then write the
- * status line. Set-Cookie is handled specially: a Response may carry multiple
- * Set-Cookie headers (better-auth emits several), which must NOT be collapsed
- * into a single value. undici's getSetCookie() returns them as an array.
- *
- * `extraHeaders` are applied after the upstream headers, but two of them are
- * merged rather than replaced: `vary` is unioned, and `cache-control` keeps the
- * more restrictive value so a handler's `private`/`no-store` cannot be weakened
- * by this host (or vice versa). `content-encoding` is never applied over one the
- * handler already set, so a pre-encoded body is never gzipped twice.
- *
- * `dropContentLength` is for the SSR path, where the body is streamed (and may
- * be compressed) so Node owns framing. Static assets pass their own known
- * length.
- */
 export function applyResponseHeaders(
   res,
   webRes,
@@ -155,8 +121,6 @@ export function applyResponseHeaders(
     res.setHeader('set-cookie', cookies)
   }
 
-  // Set every other header individually (preserving multiples where Node
-  // supports them). Skip content-length when the stream owns framing.
   webRes.headers.forEach((value, key) => {
     const lower = key.toLowerCase()
     if (lower === 'set-cookie') return
@@ -188,16 +152,6 @@ export function applyResponseHeaders(
   return res
 }
 
-/**
- * Stream a Web Response body into a Node ServerResponse using Node core
- * stream primitives. Readable.fromWeb bridges the Web ReadableStream to a Node
- * stream; pipeline wires up error propagation, backpressure (slow clients no
- * longer balloon memory), and clean teardown on client disconnect.
- *
- * Resolves on a clean end; rejects on a stream/socket error (caller logs and
- * destroys the response). Node suppresses the body itself for HEAD requests,
- * leaving the headers (including Content-Length) intact.
- */
 export function streamResponse(res, webRes, { compress = false } = {}) {
   if (!webRes.body) {
     res.end()
@@ -210,13 +164,6 @@ export function streamResponse(res, webRes, { compress = false } = {}) {
   return pipeline(nodeStream, res, { end: true })
 }
 
-/**
- * Build the production request handler. Static-asset reads come from a
- * pluggable `clientDir` so tests can inject fixtures without touching disk.
- * `immutableAssets` is the set of filenames the build recorded as content
- * hashed; only those may be cached immutably. `buildProvenance` is served at
- * GET /.well-known/obiter-build when provided.
- */
 export function createRequestHandler(
   handle,
   { clientDir, webOrigin, immutableAssets, buildProvenance } = {},
@@ -259,7 +206,6 @@ export function createRequestHandler(
         return
       }
 
-      // Serve client static assets directly; anything else is SSR.
       if (url.pathname.startsWith('/assets/') && clientDir) {
         const staticRes = await serveStatic(
           url.pathname,
@@ -280,13 +226,9 @@ export function createRequestHandler(
       const isHtml = (webRes.headers.get('content-type') ?? '').includes(
         'text/html',
       )
-      // A body the handler already encoded is passed through untouched. When
-      // identity is refused and gzip is not, the only acceptable coding is
-      // gzip even for a non-HTML response.
       const alreadyEncoded = webRes.headers.has('content-encoding')
       const compress =
         accepted.gzip && !alreadyEncoded && (isHtml || !accepted.identity)
-      // SSR output is per-session; never let a shared cache keep it.
       applyResponseHeaders(
         res,
         webRes,
@@ -318,7 +260,6 @@ function nodeRequestHeaders(req) {
 }
 
 async function serveStatic(pathname, clientDir, accepted, immutableAssets) {
-  // Guard against path traversal.
   if (pathname.includes('..') || pathname.includes('\0')) return null
   const filePath = join(clientDir, pathname)
   let info
@@ -356,21 +297,11 @@ async function serveStatic(pathname, clientDir, accepted, immutableAssets) {
   })
 }
 
-/**
- * Default server bootstrap. Imports the built SSR handler, verifies the artifact
- * against its build provenance, wires the request handler, and listens on
- * HOST:PORT.
- */
 export async function start() {
   const __dirname = dirname(fileURLToPath(import.meta.url))
   const serverModulePath = join(__dirname, 'dist', 'server', 'server.js')
   const distDir = join(__dirname, 'dist')
 
-  // The marker describes what was built. A missing marker is warned about (an
-  // ad-hoc build without the supported command); a marker whose digest does not
-  // match the client bytes on disk is refused, because serving it would present
-  // files as an artifact they are not. The digest covers dist/client/assets
-  // only; the emitted server bundle is not digested (known limitation).
   let marker = null
   try {
     marker = await verifyArtifactIntegrity(distDir)
@@ -381,7 +312,6 @@ export async function start() {
     )
   }
 
-  // Dynamic import needs a file:// URL on Windows; bare absolute paths fail.
   const handlerModule = await import(pathToFileURL(serverModulePath).href)
   const handle = handlerModule.default?.fetch ?? handlerModule.fetch
   if (typeof handle !== 'function') {
@@ -426,8 +356,6 @@ async function hasMarker(distDir) {
   }
 }
 
-// Run only when invoked directly (`node serve.mjs`), not when imported by tests.
-// pathToFileURL normalizes the cross-platform comparison (Windows paths vs file:// URLs).
 import { pathToFileURL as _pathToFileURL } from 'node:url'
 const invokedScript = process.argv[1]
 const isMain =

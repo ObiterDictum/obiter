@@ -1,13 +1,3 @@
-/*
- * Focused unit tests for the production SSR host helpers (serve.mjs).
- *
- * Uses Node's built-in test runner (node:test) — no new dependency. Covers the
- * pure helpers that carry the correctness load: PORT parsing (B4), Set-Cookie
- * array handling (B6), trusted-origin URL resolution (W1), Accept-Encoding
- * negotiation (RFC 9110 §12.5.3), header ownership, and per-file gzip caching.
- * The streaming path itself delegates to Node core and is exercised here through
- * a real HTTP server over a fixture client directory.
- */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
@@ -41,11 +31,15 @@ test('parsePort', async (t) => {
     assert.equal(parsePort('65535'), 65535)
   })
 
-  await t.test('falls back to default for non-integer input (B4)', () => {
-    assert.equal(parsePort('abc'), DEFAULT_PORT)
-    assert.equal(parsePort('80.5'), DEFAULT_PORT)
-    assert.equal(parsePort('1e3'), DEFAULT_PORT)
-  })
+  await t.test(
+    'falls back to the default for anything that is not a plain decimal integer',
+    () => {
+      assert.equal(parsePort('abc'), DEFAULT_PORT)
+      assert.equal(parsePort('80.5'), DEFAULT_PORT)
+      assert.equal(parsePort('1e3'), DEFAULT_PORT)
+      assert.equal(parsePort('0x10'), DEFAULT_PORT)
+    },
+  )
 
   await t.test('falls back to default for out-of-range ports (B4)', () => {
     assert.equal(parsePort('0'), DEFAULT_PORT)
@@ -112,8 +106,6 @@ test('applyResponseHeaders — Set-Cookie handling (B6)', async (t) => {
 
   await t.test('preserves multiple Set-Cookie headers as an array', () => {
     const res = makeRes()
-    // Real fetch responses carry multiple Set-Cookie values as separate header
-    // entries; Headers.append (not an object literal) reproduces that shape.
     const headers = new Headers()
     headers.append('set-cookie', 'session=abc; Path=/')
     headers.append('set-cookie', 'csrf=xyz; Path=/')
@@ -206,6 +198,7 @@ test('createRequestHandler over a real server', async (t) => {
     'export const x = 1\n',
   )
   await writeFile(join(dir, 'assets', 'unhashed.js'), 'export const y = 2\n')
+  await writeFile(join(dir, 'assets', 'logo-12345678.png'), 'not-a-real-png')
   const ssrHtml = '<!doctype html><html><body>hi</body></html>'
   let ssrBody = ssrHtml
   let ssrHeaders = { 'content-type': 'text/html; charset=utf-8' }
@@ -252,6 +245,26 @@ test('createRequestHandler over a real server', async (t) => {
       assert.equal(res.headers.get('content-encoding'), null)
       assert.equal(await res.text(), 'export const x = 1\n')
     })
+
+    await t.test(
+      'a client refusing identity gets gzip even for a non-compressible asset',
+      async () => {
+        const res = await fetch(`${origin}/assets/logo-12345678.png`, {
+          headers: { 'accept-encoding': 'gzip, identity;q=0' },
+        })
+        assert.equal(res.headers.get('content-encoding'), 'gzip')
+        assert.equal(await res.text(), 'not-a-real-png')
+      },
+    )
+
+    await t.test(
+      'the build marker path falls through to SSR when none is configured',
+      async () => {
+        const res = await fetch(`${origin}/.well-known/obiter-build`)
+        assert.equal(res.status, 200)
+        assert.match(res.headers.get('content-type') ?? '', /text\/html/)
+      },
+    )
 
     await t.test('identity;q=0 with gzip refused gets 406', async () => {
       const res = await fetch(`${origin}/sign-in`, {
@@ -337,5 +350,27 @@ test('createRequestHandler over a real server', async (t) => {
   } finally {
     await new Promise((resolve) => server.close(resolve))
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('serves the build marker only when the handler is given one', async () => {
+  const handler = createRequestHandler(
+    () =>
+      new Response('<!doctype html>', {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      }),
+    { buildProvenance: { commit: 'abc1234' } },
+  )
+  const server = createServer(handler)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const origin = `http://127.0.0.1:${server.address().port}`
+
+  try {
+    const res = await fetch(`${origin}/.well-known/obiter-build`)
+    assert.equal(res.status, 200)
+    assert.deepEqual(await res.json(), { commit: 'abc1234' })
+    assert.equal(res.headers.get('cache-control'), 'private, no-store')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
   }
 })

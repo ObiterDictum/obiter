@@ -1,10 +1,7 @@
-/*
- * Unit tests for the HTTP response policy: Accept-Encoding negotiation and
- * cache/header merging. Uses Node's built-in test runner (node:test).
- */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  COMPRESSIBLE_EXTENSIONS,
   IMMUTABLE_CACHE_CONTROL,
   REVALIDATE_CACHE_CONTROL,
   acceptsGzip,
@@ -109,11 +106,18 @@ test('acceptsGzip / negotiateEncoding — RFC 9110 Accept-Encoding', async (t) =
     assert.equal(acceptsGzip('gzip;q='), false)
     assert.equal(acceptsGzip('gzip;q=2'), false)
     assert.equal(acceptsGzip('gzip;q=1.0001'), false)
-    // A malformed gzip parameter does not make identity unacceptable.
     assert.deepEqual(negotiateEncoding('gzip;q=abc'), {
       gzip: false,
       identity: true,
     })
+  })
+
+  await t.test('a repeated coding keeps its first quality value', () => {
+    assert.deepEqual(negotiateEncoding('gzip;q=0, gzip;q=1'), {
+      gzip: false,
+      identity: true,
+    })
+    assert.equal(acceptsGzip('gzip;q=1, gzip;q=0'), true)
   })
 
   await t.test('an unlisted coding is unacceptable without a wildcard', () => {
@@ -122,6 +126,12 @@ test('acceptsGzip / negotiateEncoding — RFC 9110 Accept-Encoding', async (t) =
       identity: true,
     })
   })
+})
+
+test('compressible extensions exclude fonts and images', () => {
+  assert.ok(COMPRESSIBLE_EXTENSIONS.has('.css'))
+  assert.ok(!COMPRESSIBLE_EXTENSIONS.has('.woff2'))
+  assert.ok(!COMPRESSIBLE_EXTENSIONS.has('.png'))
 })
 
 test('cache and header helpers', async (t) => {

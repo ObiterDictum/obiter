@@ -1,45 +1,15 @@
-/*
- * Local `.env` resolution and parsing, shared by every Node process in the
- * monorepo.
- *
- * This existed as three copies: the API loader, the legal-ingestor loader and
- * the assignment scan in Vite's config. Fixing one left the others running the
- * old rule, and P1.30 is the second time a lane inherited another worktree's
- * `.env`. One implementation imported by both services is the only shape that
- * cannot drift.
- *
- * It is a `.mjs` rather than TypeScript because Vite's config, the Playwright
- * config and the api/ingestor loaders all consume it: a plain JavaScript module
- * is loadable by Node without a transform, so every caller resolves the same
- * file instead of a copy of the rules. `index.ts` re-exports what is here.
- */
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { parseEnv } from 'node:util'
 import { collectEnvKeys, duplicateEnvKeyMessage } from './env-keys.mjs'
 
-// The workspace root is where bun.lock lives. It is the boundary the
-// .env search must not cross: one worktree's .env must never be resolved from
-// another's, which a fixed-depth walk cannot prevent.
 const WORKSPACE_ROOT_MARKER = 'bun.lock'
 
-// Backstop for the case where no marker is ever found: a built image, a copied
-// dist, a cwd under no workspace. Without it the walk would reach `/`, which is
-// wider than the five-level walk it replaced and would let an unrelated
-// ancestor .env satisfy required production keys. Outside a workspace the
-// search must stay at least as narrow as the cap it replaces.
 const MAX_LOCAL_ENV_WALK_DEPTH = 5
 
 let localEnvLoaded = false
 let localEnvFile = null
 
-/**
- * Resolve the worktree's `.env` by walking up from `startDirectory` and
- * stopping at the workspace root. A directory carrying bun.lock is
- * checked for a `.env` and then ends the search, so a lane worktree whose own
- * `.env` is missing resolves to nothing rather than silently inheriting the
- * checkout above it and connecting to another lane's database.
- */
 export function resolveLocalEnvFile(startDirectory) {
   let directory = startDirectory
 
@@ -57,21 +27,6 @@ export function resolveLocalEnvFile(startDirectory) {
   return null
 }
 
-/**
- * Parse a `.env` file into entries, refusing a key assigned more than once.
- *
- * Values come from node:util.parseEnv, the same parser Vite 8's loadEnv uses,
- * so the API and the web server cannot disagree on quoting, escapes or inline
- * comments. parseEnv collapses a repeated key last-wins, so the duplicate rule
- * is a separate scan over `collectEnvKeys`: a repeated key is a mistake, not a
- * precedence choice, and refusing it keeps a lane from running two values for
- * one key.
- *
- * Cross-file duplicates are not detected. The API reads only `.env`, while
- * loadEnv also layers `.env.local` and `.env.<mode>.local`, so a key present in
- * both files still diverges between the two halves. That is known and
- * deliberately out of scope here.
- */
 export function parseLocalEnvFile(envPath) {
   const source = readFileSync(envPath, 'utf8')
   const seen = new Set()
@@ -89,13 +44,6 @@ export function parseLocalEnvFile(envPath) {
   return new Map(entries)
 }
 
-/**
- * Load the worktree's `.env` into process.env without overriding values the
- * process already has, and return the path read (null when none was). The path
- * is reported by /api/health provenance so a lane can prove its configuration
- * file as well as its checkout. Skipped under test runners so a suite never
- * reads a developer's .env; the result is memoized for the process lifetime.
- */
 export function loadLocalEnvFile(startDirectory = process.cwd()) {
   if (
     localEnvLoaded ||
