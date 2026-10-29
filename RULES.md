@@ -27,9 +27,9 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 - No speculative abstractions: no interface with one implementation, no factory for one product, no config for a value that never changes. No scaffolding "for later" — later can scaffold for itself.
 - Reuse before you write: check for an existing helper, util, or pattern a few files over before creating a new one. Then prefer stdlib and platform features, then existing dependencies — never a new dependency for what a few lines can do.
 - Fewest files possible, shortest working diff. Deletion over addition, boring over clever.
-- Fewest lines that stay readable: no verbose ceremony, no wrapper around a wrapper, no comment restating the line below it. Brevity never beats clarity — if shorter is harder to trace, keep the longer version.
+- Fewest lines that stay readable: no verbose ceremony, no wrapper around a wrapper, no comments. Brevity never beats clarity — if shorter is harder to trace, keep the longer version.
 - Authentication must always use a real server-side session and `GET /api/me`. No development auto-login, synthetic sessions, default credentials, or client-side auth bypasses. Fixtures must not provide runtime auth context; test fixtures may remain clearly isolated.
-- Comments explain why, not what: intent, constraints, or non-obvious reasoning — especially legal or safety rationale. Never restate the code, never narrate the obvious, never leave a comment that would survive the code being deleted.
+- No comments in code. The only exceptions: a URL to an upstream issue, RFC or spec that explains a workaround; licence headers; a legal or regulatory constraint prefixed `Legal:`; the `SAFETY:` justifications oxlint requires; tool directives. A rule worth explaining is a test whose name states it (see TESTING.md). `bun scripts/lint/check-comments.mjs` enforces this.
 
 ## Architecture
 
