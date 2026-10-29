@@ -11,6 +11,7 @@ import type {
   DocumentStoryWire,
 } from '@obiter/contracts'
 import { compareDocumentModels } from './document-compare'
+import { alignParagraphs } from './document-compare-align'
 import { wordDiff } from './document-compare-word-diff'
 
 function paragraph(
@@ -504,6 +505,27 @@ describe('compareDocumentModels', () => {
     expect(entries.filter((entry) => entry.type === 'modified')).toHaveLength(0)
     expect(entries.filter((entry) => entry.type === 'removed')).toHaveLength(65)
     expect(entries.filter((entry) => entry.type === 'added')).toHaveLength(65)
+  })
+
+  it('breaks equal similarity scores by base order and then target order', () => {
+    const base = [
+      paragraph('p1', 'one two three alpha'),
+      paragraph('p2', 'one two three beta'),
+    ]
+    const target = [
+      paragraph('q1', 'one two three gamma'),
+      paragraph('q2', 'one two three delta'),
+    ]
+
+    expect(
+      alignParagraphs(base, target).map(({ base: before, target: after }) => [
+        before?.id,
+        after?.id,
+      ]),
+    ).toEqual([
+      ['p1', 'q1'],
+      ['p2', 'q2'],
+    ])
   })
 
   it('reports story structure and package area changes', () => {
