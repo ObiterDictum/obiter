@@ -128,6 +128,20 @@ describe('layoutFromLaidChars', () => {
     ).toBe(true)
   })
 
+  it('does not merge glyphs across a baseline shift', () => {
+    const left = lineChars('Alice', 40)
+    const right = lineChars('Smith', 40 + 5 * 7, 104)
+    const chars = [...left, ...right]
+
+    const layout = layoutFromLaidChars(chars, [{ width: 400, height: 200 }])
+
+    expect(
+      layout.segments.every(
+        (segment) => segment.end <= left.length || segment.start >= left.length,
+      ),
+    ).toBe(true)
+  })
+
   it('keeps cover geometry exact across adjacent items with unequal advances', () => {
     const prefix = 'Mr. '
     const name = 'Wilhelmina'

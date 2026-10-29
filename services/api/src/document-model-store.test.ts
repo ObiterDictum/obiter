@@ -113,6 +113,16 @@ describe('getDocumentModel through the worker pool', () => {
     expect(storage.textWrites).toHaveLength(1)
   }, 20_000)
 
+  it('reports the curated store error when the worker cannot parse the source', async () => {
+    const storage = new MemoryStorage({
+      binary: [[sourceObjectKey, new TextEncoder().encode('not a docx')]],
+    })
+
+    await expect(getDocumentModel(storage, source)).rejects.toBeInstanceOf(
+      DocumentModelStoreError,
+    )
+  }, 20_000)
+
   it('reports the curated store error once the pool has shut down', async () => {
     await closeDocumentModelWorkers()
 

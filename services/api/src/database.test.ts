@@ -397,6 +397,48 @@ describe('matter workspace database operations', () => {
     ).toBe(false)
   })
 
+  it('soft-deletes a document and audits the document and each cascaded run', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'commit' || text === 'rollback')
+        return { rows: [] }
+      if (text.startsWith('select matter_id from matter_documents'))
+        return { rows: [{ matter_id: 'mtr_1' }] }
+      if (text.startsWith('select id from matters'))
+        return { rows: [{ id: 'mtr_1', deleted_at: null }] }
+      if (text.includes('select matter.id from matters')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.includes('from users')) return { rows: [{ id: 'usr_1' }] }
+      if (text.startsWith('select id from matter_documents'))
+        return { rows: [{ id: 'doc_1' }] }
+      if (text.startsWith('update matter_documents'))
+        return {
+          rows: [documentRow({ deleted_at: '2026-02-01T00:00:00.000Z' })],
+        }
+      if (text.startsWith('update redaction_runs'))
+        return { rows: [{ id: 'red_1' }] }
+      if (text.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    const result = await softDeleteDocumentWithCascade(pool, {
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      id: 'doc_1',
+      requestId: 'req_1',
+    })
+
+    expect(result).toMatchObject({
+      document: { id: 'doc_1', deletedAt: '2026-02-01T00:00:00.000Z' },
+      runs: [{ id: 'red_1' }],
+    })
+    const auditActions = calls
+      .filter(([sql]) => sql.includes('insert into audit_logs'))
+      .map(([, params]) => (params as unknown[])[4])
+    expect(auditActions).toEqual(['document.delete', 'redaction_run.delete'])
+  })
+
   it('returns null without auditing when the matter is already deleted', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
@@ -588,7 +630,7 @@ describe('matter workspace database operations', () => {
     expect(lock?.[0]).toMatch(/deleted_at::text/)
   })
 
-  it('restores a document and only runs with the same deletion timestamp', async () => {
+  it('restores a document only after the matter lock and only runs deleted with it', async () => {
     const deletedAt = '2026-02-01 00:00:00.123456+00'
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
