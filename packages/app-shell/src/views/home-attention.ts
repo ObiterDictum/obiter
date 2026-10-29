@@ -7,6 +7,7 @@ import {
   redactionRunNeedsDecision,
   undecidedSpanCount,
 } from '../redaction-runs'
+import { latestRunsPerDocument, openWorkForRun } from '../open-work'
 
 /**
  * Anything on Home that is waiting for a person, assembled from the endpoints
@@ -81,7 +82,9 @@ export function buildAttentionItems(
   sources: AttentionSources,
 ): AttentionItem[] {
   return [
-    ...sources.verificationRuns.flatMap((run) =>
+    // One document's newest run stands for that document: a re-run answers the
+    // same question, so counting both would count the same work twice.
+    ...latestRunsPerDocument(sources.verificationRuns).flatMap((run) =>
       verificationAttentionItem(run, sources),
     ),
     ...sources.redactionRuns.flatMap((run) =>
@@ -114,7 +117,7 @@ function verificationAttentionItem(
       // count here; the Verify page still reports the two states apart.
       const reviewRequiredCount =
         run.summary.reviewRequiredCount + run.summary.notCheckedCount
-      if (flaggedCount === 0 && reviewRequiredCount === 0) return []
+      if (openWorkForRun(run) === 0) return []
       return [
         {
           ...base,
@@ -198,7 +201,13 @@ function waitTime(iso: string) {
 }
 
 export interface AttentionSummary {
+  /** Rows on the queue: a document with work, or a redaction run. */
+  queue: number
+  /** Open findings plus undecided redaction runs: the number every surface
+   * shows, so the sidebar, the Home header and a matter agree. */
   total: number
+  verify: number
+  redact: number
   flagged: number
   redactDecisions: number
   reviews: number
@@ -207,7 +216,10 @@ export interface AttentionSummary {
 
 export function summariseAttention(items: AttentionItem[]): AttentionSummary {
   const summary: AttentionSummary = {
-    total: items.length,
+    queue: items.length,
+    total: 0,
+    verify: 0,
+    redact: 0,
     flagged: 0,
     redactDecisions: 0,
     reviews: 0,
@@ -217,17 +229,22 @@ export function summariseAttention(items: AttentionItem[]): AttentionSummary {
     const kind = item.kind
     switch (kind) {
       case 'verify_flagged':
-        summary.flagged += 1
-        break
       case 'verify_review':
-        summary.reviews += 1
+        summary.flagged += item.flaggedCount
+        summary.reviews += item.reviewRequiredCount
+        summary.verify += item.flaggedCount + item.reviewRequiredCount
+        break
+      case 'verify_failed':
+        summary.failed += 1
+        summary.verify += 1
         break
       case 'redact_decision':
         summary.redactDecisions += 1
+        summary.redact += 1
         break
-      case 'verify_failed':
       case 'redact_failed':
         summary.failed += 1
+        summary.redact += 1
         break
       default: {
         const unhandled: never = kind
@@ -235,5 +252,6 @@ export function summariseAttention(items: AttentionItem[]): AttentionSummary {
       }
     }
   }
+  summary.total = summary.verify + summary.redact
   return summary
 }

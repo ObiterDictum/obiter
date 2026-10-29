@@ -239,7 +239,7 @@ function HomeDashboard({ me }: { me: MeResponse }) {
         <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
           <AttentionSection
             items={ranked.slice(0, ATTENTION_LIMIT)}
-            total={ranked.length}
+            total={summary.queue}
             loading={attentionLoading}
             error={attentionError}
           />
