@@ -180,6 +180,9 @@ async function selectFirst(page: Page, text: string, units: number) {
  */
 async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
   const boxes = panel(page).getByRole('checkbox')
+  // The list arrives with the tracked-changes query; selecting before the
+  // first row paints would build a "0 changes" decision.
+  await expect(boxes.first()).toBeVisible({ timeout: 15_000 })
   const count = await boxes.count()
   const label = `${String(count)} ${count === 1 ? 'change' : 'changes'}`
   for (let index = 0; index < count; index += 1) await boxes.nth(index).check()
