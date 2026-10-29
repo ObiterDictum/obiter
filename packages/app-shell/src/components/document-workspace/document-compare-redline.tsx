@@ -18,6 +18,7 @@ import {
   CompareDifferencesPanel,
   comparisonSegments,
 } from './document-compare-differences'
+import { TRACKED_DELETE_MARK } from './tracked-marks'
 import { DocumentDesk, DocumentPage } from './document-page'
 import { QueryError } from './workspace-chrome'
 
@@ -327,7 +328,7 @@ export function DocumentComparisonView({
         <div className="flex w-full min-w-0 flex-col items-center gap-6">
           <DocumentPage zoom={90}>
             <div className="flex flex-col gap-2 p-14" data-compare-redline>
-              <p className="mb-2 text-caption text-muted">
+              <p className="mb-2 text-caption text-paper-muted">
                 Changes from version {data.base.versionNumber} to version{' '}
                 {data.target.versionNumber}
                 {data.identical ? ' · identical' : null}
@@ -390,7 +391,8 @@ function ComparisonBlockView({
       <p
         id={id}
         className={cn(
-          'rounded-sm bg-danger-surface px-1 text-body break-words whitespace-pre-wrap text-danger line-through',
+          'rounded-sm bg-danger-surface px-1 text-body break-words whitespace-pre-wrap',
+          TRACKED_DELETE_MARK,
           activeClasses,
         )}
       >
@@ -403,7 +405,7 @@ function ComparisonBlockView({
     <p
       id={id}
       className={cn(
-        'rounded-sm px-1 text-body break-words whitespace-pre-wrap text-ink',
+        'rounded-sm px-1 text-body break-words whitespace-pre-wrap text-paper-ink',
         block.entryIndex === undefined ? undefined : 'bg-warning-soft',
         activeClasses,
       )}
@@ -412,7 +414,7 @@ function ComparisonBlockView({
         ? text === ''
           ? '\u00a0'
           : text
-        : comparisonSegments(block.segments)}
+        : comparisonSegments(block.segments, 'paper')}
     </p>
   )
 }

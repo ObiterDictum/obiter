@@ -6,6 +6,7 @@ import {
   type DocumentComparisonSegment,
   type DocumentCompareResponse,
 } from '@obiter/contracts'
+import { TRACKED_DELETE_MARK, TRACKED_INSERT_MARK } from './tracked-marks'
 
 /**
  * The difference list beside the redline: one row per difference in document
@@ -74,20 +75,24 @@ export function CompareDifferencesPanel({
 /**
  * The segments of a wording change, marked in place: what is gone struck
  * through, what replaced it underlined, so a reader sees the sentence as it
- * now reads and the words it lost in the same line.
+ * now reads and the words it lost in the same line. The paper is a fixed white
+ * sheet and the panel is themed chrome, so each surface paints its own marks.
  */
 export function comparisonSegments(
   segments: readonly DocumentComparisonSegment[],
+  surface: 'paper' | 'panel',
 ): ReactNode {
+  const removed = surface === 'paper' ? TRACKED_DELETE_MARK : 'text-danger'
+  const added = surface === 'paper' ? TRACKED_INSERT_MARK : 'text-success'
   return segments.map((segment, index) =>
     segment.kind === 'same' ? (
       segment.text
     ) : segment.kind === 'removed' ? (
-      <del key={index} className="text-danger line-through">
+      <del key={index} className={cn(removed, 'line-through')}>
         {segment.text}
       </del>
     ) : (
-      <ins key={index} className="text-success underline">
+      <ins key={index} className={cn(added, 'underline')}>
         {segment.text}
       </ins>
     ),
@@ -113,7 +118,8 @@ export function entryLabel(entry: DocumentComparisonEntry) {
 
 function entryPreview(entry: DocumentComparisonEntry): ReactNode {
   if (entry.type === 'story' || entry.type === 'package') return ''
-  if (entry.type === 'modified') return comparisonSegments(entry.segments)
+  if (entry.type === 'modified')
+    return comparisonSegments(entry.segments, 'panel')
   return entry.text
 }
 
