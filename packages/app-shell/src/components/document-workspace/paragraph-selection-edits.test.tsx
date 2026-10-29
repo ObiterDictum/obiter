@@ -6,12 +6,15 @@ import {
   insertParagraphRuns,
   type DocumentEditOperation,
 } from '@obiter/contracts'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
   rerenderWorkspace,
+  command,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,
@@ -54,7 +57,7 @@ function saveOperations(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 function save() {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
 }
 
 describe('editing across a cross-paragraph selection', () => {
@@ -224,7 +227,7 @@ describe('formatting a cross-paragraph selection', () => {
   it('queues one emphasis range per selected paragraph', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     save()
     expect(saveOperations(editAsync)).toEqual([
       {
@@ -248,7 +251,7 @@ describe('formatting a cross-paragraph selection', () => {
     const { editAsync } = mount()
     clickParagraph('p1')
     placeCaret(2)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     save()
     expect(saveOperations(editAsync)).toEqual([
       { type: 'set_run_emphasis', runId: 'p1-r', bold: true },
@@ -260,11 +263,11 @@ describe('formatting a cross-paragraph selection', () => {
     // refuses them: the save carries every selected paragraph's range.
     const { editAsync } = mount()
     selectAcrossBoundary()
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
-    fireEvent.click(screen.getByRole('tab', { name: 'Home' }))
+    openRibbonTab('Review')
+    setTrackChanges(true)
+    openRibbonTab('Home')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     save()
     const call = editAsync.mock.calls[0]?.[0] as
       { trackChanges?: boolean } | undefined
@@ -298,9 +301,9 @@ describe('formatting a cross-paragraph selection', () => {
     ]
     const { editAsync } = mount(model)
     selectAcrossBoundary()
-    fireEvent.change(screen.getByLabelText('Paragraph style'), {
-      target: { value: 'Quote' },
-    })
+    // The paragraph style picker is a Base UI Select; its choices are also
+    // Format menu rows, which is the path a keyboard user takes to them.
+    fireEvent.click(command('Quote'))
     save()
     const operations = saveOperations(editAsync)
     expect(operations).toEqual(

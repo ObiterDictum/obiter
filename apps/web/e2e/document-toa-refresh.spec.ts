@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import { openMenu, runMenuCommand } from './editor-chrome'
 
 /*
  * E11 browser journey for the table of authorities refresh: the References
@@ -57,14 +58,17 @@ async function createAccount(request: APIRequestContext) {
 }
 
 const toaButton = (page: Page) =>
-  page.getByRole('button', { name: /Table of authorities/ })
+  page.getByRole('menuitem', { name: 'Table of authorities', exact: true })
 const updateButton = (page: Page) =>
-  page.getByRole('button', { name: /Update table/ })
+  page.getByRole('menuitem', {
+    name: 'Update table of authorities',
+    exact: true,
+  })
 const toaHeading = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: 'Table of Cases' })
 
 async function openReferences(page: Page) {
-  await page.getByRole('tab', { name: 'References' }).click()
+  await openMenu(page, 'Insert')
 }
 
 type EditBody = { operations?: Array<Record<string, unknown>> }
@@ -114,6 +118,7 @@ test('table of authorities paints, saves, updates and exports', async ({
   // and the entry the stored citation produces.
   const anchorParagraph = page.locator('[data-paragraph-id]').nth(1)
   await anchorParagraph.click()
+  await openReferences(page)
   await expect(toaButton(page)).toBeEnabled()
   await toaButton(page).click()
   await expect(toaHeading(page)).toHaveCount(1)
@@ -137,29 +142,33 @@ test('table of authorities paints, saves, updates and exports', async ({
     timeout: 30_000,
   })
   await expect(toaHeading(page)).toHaveCount(1)
-  await openReferences(page)
   await focusParagraph(page, 'Table of Cases')
+  await openReferences(page)
   await expect(updateButton(page)).toBeEnabled()
 
   // The field's boundary paragraphs cannot be deleted piecemeal: the
   // heading holds the `begin`, so Delete paragraph refuses with the shared
   // field reason rather than leaving `fldChar` runs Word cannot pair.
   await focusParagraph(page, 'Table of Cases')
-  await page.getByRole('tab', { name: 'Home' }).click()
-  const deleteParagraph = page.getByRole('button', {
+  await openMenu(page, 'Edit')
+  const deleteParagraph = page.getByRole('menuitem', {
     name: 'Delete paragraph',
+    exact: true,
   })
   await expect(deleteParagraph).toBeDisabled()
   await shot(page, '03-field-boundary-refused')
 
   // A new citation in an ordinary paragraph, then the refresh: the painted
   // model lists both authorities before the save lands.
-  await openReferences(page)
   await focusParagraph(page, 'IN THE HIGH COURT OF JUSTICE')
-  await page.getByRole('button', { name: 'Insert authority' }).click()
+  await openReferences(page)
+  await page
+    .getByRole('menuitem', { name: 'Insert authority', exact: true })
+    .click()
   await page.getByRole('textbox', { name: 'Citation' }).fill(ADDED_CITATION)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
   await focusParagraph(page, 'Table of Cases')
+  await openReferences(page)
   await updateButton(page).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: ADDED_CITATION }).first(),
@@ -191,8 +200,7 @@ test('table of authorities paints, saves, updates and exports', async ({
   // mark per citing paragraph — the refresh did not accrete marks — and
   // both entries in the generated result.
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('tab', { name: 'Review' }).click()
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
   const exportPath = await download.path()
   const documentXml = zipPart(exportPath, 'word/document.xml')

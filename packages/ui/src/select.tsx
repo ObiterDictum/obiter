@@ -20,6 +20,8 @@ export interface SelectProps {
   invalid?: boolean
   name?: string
   disabled?: boolean
+  /** `compact` is the toolbar measure: one short row beside icon buttons. */
+  size?: 'default' | 'compact'
   className?: string
 }
 
@@ -42,11 +44,13 @@ export function Select({
   invalid,
   name,
   disabled,
+  size = 'default',
   className,
 }: SelectProps) {
   const labelId = useId()
+  const compact = size === 'compact'
   return (
-    <div className={cn('flex flex-col gap-2', className)}>
+    <div className={cn('flex flex-col gap-2', compact && 'gap-0', className)}>
       {label ? (
         <span id={labelId} className="text-meta text-ink">
           {label}
@@ -65,11 +69,20 @@ export function Select({
           aria-label={label ? undefined : (ariaLabel ?? placeholder)}
           aria-invalid={invalid || undefined}
           className={cn(
-            'inline-flex h-control w-full items-center justify-between gap-2 rounded-md border bg-raised px-3 text-meta text-ink',
-            'transition-[border-color,box-shadow] duration-150',
+            compact
+              ? 'inline-flex h-7 items-center justify-between gap-1 rounded-sm px-1.5 text-caption text-muted pointer-coarse:h-11'
+              : 'inline-flex h-control w-full items-center justify-between gap-2 rounded-md border bg-raised px-3 text-meta text-ink',
+            compact
+              ? 'bg-fill hover:bg-fill-hover data-[popup-open]:bg-fill-hover'
+              : 'transition-[border-color,box-shadow] duration-150',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-            'disabled:cursor-not-allowed disabled:opacity-45 data-[popup-open]:border-brand',
-            invalid ? 'border-danger' : 'border-line hover:border-line-strong',
+            'disabled:cursor-not-allowed disabled:opacity-45',
+            compact ? undefined : 'data-[popup-open]:border-brand',
+            compact
+              ? undefined
+              : invalid
+                ? 'border-danger'
+                : 'border-line hover:border-line-strong',
           )}
         >
           <BaseSelect.Value>
@@ -82,7 +95,11 @@ export function Select({
             }
           </BaseSelect.Value>
           <BaseSelect.Icon className="text-muted">
-            <CaretDown size={16} weight="regular" aria-hidden="true" />
+            <CaretDown
+              size={compact ? 12 : 16}
+              weight="regular"
+              aria-hidden="true"
+            />
           </BaseSelect.Icon>
         </BaseSelect.Trigger>
         <BaseSelect.Portal>

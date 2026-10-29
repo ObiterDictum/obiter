@@ -184,7 +184,7 @@ export function DocumentVerifyChip({
 }
 
 /**
- * The header's Run control. It starts the same run the panel's control does,
+ * The header's Check citations control. It starts the same run the panel's control does,
  * through the same availability gate, and opens the panel so the run's
  * progress, failure or result is never hidden behind a closed panel.
  */
@@ -199,14 +199,14 @@ export function VerifyRunButton({ onOpen }: { onOpen: () => void }) {
       size="sm"
       disabled={!verification.startAvailability.available && !running}
       loading={running}
-      aria-label="Run"
+      aria-label="Check citations"
       onClick={() => {
         onOpen()
         verification.startRun()
       }}
       iconStart={<ArrowClockwise size={14} aria-hidden />}
     >
-      <span className="max-compact:sr-only">Run</span>
+      <span className="max-compact:sr-only">Check citations</span>
     </Button>
   )
 }

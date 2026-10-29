@@ -10,6 +10,14 @@ import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import {
+  closeMenu,
+  menuItem,
+  openMenu,
+  runMenuCommand,
+  setTrackChanges,
+  trackChangesSwitch,
+} from './editor-chrome'
 import { verifyEmailInDb } from './support'
 
 /*
@@ -172,6 +180,9 @@ async function selectFirst(page: Page, text: string, units: number) {
  */
 async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
   const boxes = panel(page).getByRole('checkbox')
+  // The list arrives with the tracked-changes query; selecting before the
+  // first row paints would build a "0 changes" decision.
+  await expect(boxes.first()).toBeVisible({ timeout: 15_000 })
   const count = await boxes.count()
   const label = `${String(count)} ${count === 1 ? 'change' : 'changes'}`
   for (let index = 0; index < count; index += 1) await boxes.nth(index).check()
@@ -186,25 +197,23 @@ async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
 }
 
 async function openChangesPanel(page: Page) {
-  // The ribbon mounts its tabs once the document model arrives, so a click
-  // that lands during that transition can revert to Home. Retry the whole
-  // selection instead of assuming the first click stuck.
+  // The Review menu's Changes row is the chrome's own control, with its count
+  // when it has one; the panel's filter segment is called "Changes 5" without
+  // parentheses, and clicking that would filter the list the test counts. The
+  // chrome mounts once the document model arrives, so retry the open.
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByRole('tab', { name: 'Review' }).click()
-    // The ribbon's own control, named with its count. The panel's filter
-    // segment is also called "Changes N", and clicking that would filter the
-    // list the test is about to count.
-    // The ribbon's own control, with its count when it has one. The panel's
-    // filter segment is called "Changes 5" without parentheses, and clicking
-    // that would filter the list the test is about to count.
-    const button = page
-      .getByRole('button', { name: /^Changes( \(\d+\))?$/u })
-      .last()
-    const clicked = await button
+    const opened = await openMenu(page, 'Review')
+      .then(() => true)
+      .catch(() => false)
+    if (!opened) continue
+    const row = page.getByRole('menuitemcheckbox', { name: /^Changes/u })
+    const clicked = await row
       .click({ timeout: 5_000 })
       .then(() => true)
       .catch(() => false)
     if (!clicked) continue
+    // The row keeps the menu open (it is a toggle); close it before counting.
+    await closeMenu(page).catch(() => undefined)
     const shown = await expect(panel(page))
       .toBeVisible({ timeout: 5_000 })
       .then(() => true)
@@ -214,19 +223,13 @@ async function openChangesPanel(page: Page) {
   throw new Error('could not open the Changes panel')
 }
 
-async function reviewToggle(page: Page, name: string) {
-  // Same ribbon remount race as openChangesPanel: a Review click that lands
-  // before the document model arrives reverts to Home, so retry it.
-  const toggle = page.getByRole('button', { name }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByRole('tab', { name: 'Review' }).click()
-    const shown = await expect(toggle)
-      .toBeVisible({ timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (shown) return toggle
-  }
-  throw new Error(`could not find the ${name} toggle on the Review tab`)
+async function reviewToggle(page: Page, on: boolean) {
+  // Same mount race as openChangesPanel: the header switch appears with the
+  // document model, so retry until it reports the expected state.
+  const toggle = trackChangesSwitch(page)
+  await expect(toggle).toBeVisible({ timeout: 15_000 })
+  await setTrackChanges(page, on)
+  return toggle
 }
 
 function zipPart(docxPath: string, partName: string) {
@@ -260,7 +263,8 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   // rows: ins, del, the move (one row for both halves) and the two property
   // markers.
   const list = panel(page).getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(5, { timeout: 15_000 })
+  // Five tracked changes plus the fixture's one imported comment thread.
+  await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
   await expect(list).toContainText('Alice Example')
   await expect(list).toContainText('Jane Example')
   await expect(list).toContainText('Insertion')
@@ -268,20 +272,30 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await expect(list).toContainText('Move')
   await expect(list).toContainText('Formatting')
   // The counts name what is there, and the move is counted once.
-  await expect(panel(page)).toContainText('4 changes · 1 comment · 1 move')
+  await expect(panel(page)).toContainText('4 changes · 1 move · 1 comment')
 
-  // No change is active yet; the ribbon's single Accept/Reject publish why.
+  // No change is active yet; the Review menu's single Accept/Reject publish
+  // their reason as a description, never as part of the command's name.
+  await openMenu(page, 'Review')
+  const acceptChange = menuItem(page, 'Accept change')
+  await expect(acceptChange).toBeDisabled()
+  await expect(acceptChange).toHaveAttribute('aria-describedby', /.+/)
   await expect(
-    page.getByRole('button', {
-      name: 'Accept change: Go to a change first — use Previous, Next or the Changes list.',
-    }),
-  ).toBeDisabled()
+    page
+      .getByText(
+        'Go to a change first — use Previous, Next or the Changes list.',
+      )
+      .first(),
+  ).toBeVisible()
+  await closeMenu(page)
 
   // Panel navigation marks the active row and reveals it in the document.
+  // Rows are in document order and the comment thread is row 1, so the first
+  // change row is row 2.
   await list.getByRole('button', { name: 'Show this change' }).first().click()
-  await expect(panel(page)).toContainText('1 of 5')
+  await expect(panel(page)).toContainText('2 of 6')
   await panel(page).getByRole('button', { name: 'Next' }).click()
-  await expect(panel(page)).toContainText('2 of 5')
+  await expect(panel(page)).toContainText('3 of 6')
   await expect(list.locator('li[aria-current="true"]')).toHaveCount(1)
 
   // Rejecting the active change from the ribbon writes one immutable
@@ -292,16 +306,15 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
         incoming.url(),
       ) && incoming.request().method() === 'POST',
   )
-  await page
-    .getByRole('button', { name: 'Reject change', exact: true })
-    .first()
-    .click()
+  await runMenuCommand(page, 'Review', 'Reject change')
   const rejected = await rejectResponse
   expect(rejected.status(), await rejected.text()).toBe(201)
-  await expect(list.getByRole('listitem')).toHaveCount(4, { timeout: 15_000 })
-  // The rejected row left, and the review slot it held now names the change
-  // after it — the second row of the four that remain.
-  await expect(panel(page)).toContainText('2 of 4')
+  // Four remaining changes plus the fixture's comment thread.
+  await expect(list.getByRole('listitem')).toHaveCount(5, { timeout: 15_000 })
+  // The rejected row left; the review slot now names the next decidable
+  // change, which is the third row of the five that remain (a comment thread
+  // is row one).
+  await expect(panel(page)).toContainText('3 of 5')
 
   // Selecting every remaining row and accepting it lands them in one atomic
   // version; the bar named exactly how many changes that would be.
@@ -314,14 +327,14 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await decideSelection(page, 'Accept')
   const accepted = await acceptAllResponse
   expect(accepted.status(), await accepted.text()).toBe(201)
-  await expect(
-    page.getByRole('heading', { name: 'No tracked changes' }),
-  ).toBeVisible({ timeout: 15_000 })
+  // Every tracked change is decided; the document's comment thread remains,
+  // so the panel reports no changes rather than an empty list.
+  await expect(panel(page)).toContainText('0 changes', { timeout: 15_000 })
 
   // The export resolves every marker: no tracked element survives, the
   // accepted insertion stayed, and the rejected deletion kept its text.
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
   const documentXml = zipPart(await download.path(), 'word/document.xml')
   expect(documentXml).not.toContain('<w:ins')
@@ -332,15 +345,17 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   expect(documentXml).toContain('Inserted')
   expect(documentXml).toContain('Deleted')
 
-  // A fresh context reads the decided state back: the panel stays empty.
+  // A fresh context reads the decided state back: no tracked change remains.
+  // The imported comment thread is still a row, so the panel reports zero
+  // changes rather than pretending the document has nothing to read.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter)
     await openChangesPanel(reloaded)
-    await expect(
-      reloaded.getByRole('heading', { name: 'No tracked changes' }),
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(panel(reloaded)).toContainText('0 changes', {
+      timeout: 15_000,
+    })
   } finally {
     await fresh.close()
   }
@@ -382,23 +397,32 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   // stranded move, which renders marked and disabled while the row still
   // navigates to it.
   const list = panel(page).getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
+  // Six changes plus the fixture's one imported comment thread.
+  await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
   const undecidableRow = list.locator('li', { hasText: 'Stranded move' })
   await expect(undecidableRow).toContainText('This move cannot be decided here')
+  // A move that cannot be paired offers no decision at all: one row that says
+  // who, what moved and why, rather than two dead buttons.
+  await expect(undecidableRow.getByRole('button')).toHaveCount(1)
   await expect(
-    undecidableRow.getByRole('button', { name: 'Accept' }),
-  ).toBeDisabled()
-  await expect(
-    undecidableRow.getByRole('button', { name: 'Reject' }),
-  ).toBeDisabled()
+    undecidableRow.getByRole('button', { name: 'Show this change' }),
+  ).toBeVisible()
+  await expect(undecidableRow.getByText("Move · can't be paired")).toBeVisible()
   await undecidableRow.getByRole('button', { name: 'Show this change' }).click()
-  // The undecidable move is pinned at the top of the list, so it is row 1.
-  await expect(panel(page)).toContainText('1 of 6')
+  // Rows are in document order, so the stranded move is last: seven rows
+  // including the fixture's comment thread.
+  await expect(panel(page)).toContainText('7 of 7')
+  await openMenu(page, 'Review')
+  const acceptChange = menuItem(page, 'Accept change')
+  await expect(acceptChange).toBeDisabled()
   await expect(
-    page.getByRole('button', {
-      name: 'Accept change: This move cannot be decided here; it stays listed and unchanged in the document.',
-    }),
-  ).toBeDisabled()
+    page
+      .getByText(
+        'This move cannot be decided here; it stays listed and unchanged in the document.',
+      )
+      .first(),
+  ).toBeVisible()
+  await closeMenu(page)
 
   // The undecidable row offers no checkbox, so a selection can only ever name
   // supported changes; the request carries their ids with the move's pair.
@@ -419,7 +443,8 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   expect(payload.changeIds).not.toContain(undecidableId)
 
   // The undecidable change is the only one left — still listed, still marked.
-  await expect(list.getByRole('listitem')).toHaveCount(1, { timeout: 15_000 })
+  // The stranded move and the fixture's comment thread are what remain.
+  await expect(list.getByRole('listitem')).toHaveCount(2, { timeout: 15_000 })
   await expect(list.locator('li', { hasText: 'Stranded move' })).toContainText(
     'This move cannot be decided here',
   )
@@ -427,7 +452,7 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   // The export keeps its markup untouched: nothing decided it silently, and
   // the supported changes resolved around it.
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const xml = zipPart(await (await downloadPromise).path(), 'word/document.xml')
   expect(xml).toContain('w:name="orphanMove"')
   expect(xml).toContain('<w:moveFrom ')
@@ -442,7 +467,8 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
     await openFixtureDocument(reloaded, email, password, matter, MIXED_PATH)
     await openChangesPanel(reloaded)
     const reloadedList = panel(reloaded).getByRole('list')
-    await expect(reloadedList.getByRole('listitem')).toHaveCount(1, {
+    // The undecidable move and the fixture's comment thread remain.
+    await expect(reloadedList.getByRole('listitem')).toHaveCount(2, {
       timeout: 15_000,
     })
     await expect(reloadedList).toContainText('Stranded move')
@@ -461,22 +487,14 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   const matter = `E9 tracking ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // Wait for the model-backed ribbon before turning tracking on.
+  // Wait for the model-backed chrome before turning tracking on.
   await openChangesPanel(page)
-  const tracking = page.getByRole('button', { name: /Track changes/u }).first()
-  await expect(tracking).toBeVisible({ timeout: 15_000 })
-  if ((await tracking.getAttribute('aria-pressed')) !== 'true') {
-    await tracking.click()
-  }
-  await expect(
-    page.getByRole('button', { name: 'Track changes on' }),
-  ).toBeVisible()
+  await setTrackChanges(page, true)
 
   // Bold only the first five code units of an untouched single-run
   // paragraph; the run must split so the rest keeps its properties.
   await selectFirst(page, PLAIN, SELECTED.length)
-  await page.getByRole('tab', { name: 'Home' }).click()
-  await page.getByRole('button', { name: 'Bold' }).click()
+  await page.getByRole('button', { name: 'Bold', exact: true }).click()
 
   const saveResponse = page.waitForResponse(
     (incoming) =>
@@ -491,7 +509,8 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   // author alongside the imported revisions.
   await openChangesPanel(page)
   const list = panel(page).getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
+  // Six changes plus the fixture's one imported comment thread.
+  await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
   const recorded = list.locator('li', { hasText: USER_NAME }).first()
   await expect(recorded).toBeVisible()
   await expect(recorded).toContainText('Formatting')
@@ -499,7 +518,7 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   // The export carries a real w:rPrChange whose covered run is split off,
   // leaving the untouched tail intact in its own run.
   const pendingDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const pendingXml = zipPart(
     await (await pendingDownload).path(),
     'word/document.xml',
@@ -520,12 +539,12 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   await decideSelection(page, 'Reject')
   const decided = await decisionResponse
   expect(decided.status(), await decided.text()).toBe(201)
-  await expect(
-    page.getByRole('heading', { name: 'No tracked changes' }),
-  ).toBeVisible({ timeout: 15_000 })
+  // Every tracked change is decided; the document's comment thread remains,
+  // so the panel reports no changes rather than an empty list.
+  await expect(panel(page)).toContainText('0 changes', { timeout: 15_000 })
 
   const decidedDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const decidedXml = zipPart(
     await (await decidedDownload).path(),
     'word/document.xml',
@@ -551,7 +570,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
 
   // The fixture's settings.xml carries w:trackRevisions, so the Review toggle
   // must open ON without a click — the persisted state, not a default.
-  await reviewToggle(page, 'Track changes on')
+  await reviewToggle(page, true)
 
   // Substitute the quantity inside the first paragraph's single run.
   await focusParagraph(page, PLAIN)
@@ -577,7 +596,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   expect(saved.status(), await saved.text()).toBe(201)
 
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const docxPath = await (await downloadPromise).path()
   const documentXml = zipPart(docxPath, 'word/document.xml')
   const settingsXml = zipPart(docxPath, 'word/settings.xml')
@@ -592,14 +611,12 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter)
-    const tracking = await reviewToggle(reloaded, 'Track changes on')
+    const tracking = await reviewToggle(reloaded, true)
 
     // Flip the toggle off and save: a lone flip is a settings-only write —
     // the request carries an empty operation list and the pending value.
     await tracking.click()
-    await expect(
-      reloaded.getByRole('button', { name: 'Track changes off' }).first(),
-    ).toBeVisible()
+    await expect(trackChangesSwitch(reloaded)).not.toBeChecked()
     const settingsSave = reloaded.waitForResponse(
       (incoming) =>
         /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
@@ -631,7 +648,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const rereadPage = await reread.newPage()
   try {
     await openFixtureDocument(rereadPage, email, password, matter)
-    await reviewToggle(rereadPage, 'Track changes off')
+    await reviewToggle(rereadPage, false)
   } finally {
     await reread.close()
   }
@@ -659,9 +676,7 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
     INLINE_PATH,
   )
   await openChangesPanel(page)
-  const tracking = page.getByRole('button', { name: /Track changes/u }).first()
-  if ((await tracking.getAttribute('aria-pressed')) !== 'true')
-    await tracking.click()
+  await setTrackChanges(page, true)
   await selectFirst(page, PLAIN, PLAIN.length)
   await page.keyboard.insertText('Alice Example revised summary')
   const saving = page.waitForResponse(
@@ -694,10 +709,7 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   await expect(selectedRow).toContainText('revised')
   // Append at the unchanged editable paragraph end. Tracking is an independent
   // session toggle; explicitly switch it off for this ordinary follow-up edit.
-  await page.getByRole('tab', { name: 'Review' }).click()
-  const toggle = page.getByRole('button', { name: /Track changes/u }).first()
-  if ((await toggle.getAttribute('aria-pressed')) === 'true')
-    await toggle.click()
+  await setTrackChanges(page, false)
   await target.click()
   await editor(page).press('Control+End')
   await editor(page).pressSequentially(' tail')
@@ -739,9 +751,7 @@ test('native clicks place the caret inside an unsaved tracked insertion', async 
     `E9 pending caret ${Date.now()}`,
   )
   await openChangesPanel(page)
-  await expect(
-    page.getByRole('button', { name: 'Track changes on' }),
-  ).toBeVisible()
+  await expect(trackChangesSwitch(page)).toBeChecked()
   await selectFirst(page, PLAIN, SELECTED.length)
   await page.keyboard.type('45,000')
   await page.keyboard.press('Escape')

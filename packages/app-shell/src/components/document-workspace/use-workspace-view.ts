@@ -20,8 +20,38 @@ export type WorkspaceView = 'print' | 'web'
  * browser spell-checking. All are per-document UI choices — they reset on
  * remount like the panel opens and are never persisted into a draft.
  */
-export function useWorkspaceView() {
+/**
+ * The scale the paper is painted at. 100% means "as wide as the canvas beside
+ * any docked panel", so opening a panel reflows the page instead of hiding its
+ * right edge; a reader who zooms in past 100 widens the paper and the desk
+ * scrolls, which is the deliberate exception.
+ */
+export function pageZoomFor(
+  zoom: number,
+  columnWidth: number | null,
+  pageWidth: number,
+) {
+  if (pageWidth <= 0) return zoom
+  const available = (columnWidth ?? pageWidth + 16) - 16
+  const fit = Math.min(100, Math.floor((available / pageWidth) * 100))
+  return Math.max(50, Math.round((zoom * fit) / 100))
+}
+
+export function useWorkspaceView(modelLoaded = true) {
   const [view, setView] = useState<WorkspaceView>('print')
+  const [compareOpen, setCompareOpen] = useState(false)
+  // The key handler cannot reach the chrome's own surfaces, so a request is a
+  // counter: a repeat press still opens the surface it names.
+  const [requests, setRequests] = useState({
+    find: 0,
+    palette: 0,
+    formatting: 0,
+  })
+  const request = (surface: keyof typeof requests) =>
+    setRequests((current) => ({
+      ...current,
+      [surface]: current[surface] + 1,
+    }))
   const [rulerOn, setRulerOn] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [spelling, setSpelling] = useState(false)
@@ -29,7 +59,8 @@ export function useWorkspaceView() {
   // that column so the page engine lays out at a real width rather than a
   // guessed one.
   const columnRef = useRef<HTMLDivElement>(null)
-  const columnWidth = useElementWidth(columnRef)
+  // The column mounts with the model, so the observer starts once it exists.
+  const columnWidth = useElementWidth(columnRef, modelLoaded)
   const webWidthPx = Math.max(320, (columnWidth ?? 720) - 16)
   const flow = useMemo<DocumentLayoutFlow | undefined>(
     () => (view === 'web' ? { kind: 'web', widthPx: webWidthPx } : undefined),
@@ -85,6 +116,11 @@ export function useWorkspaceView() {
   return {
     view,
     setView,
+    columnWidth,
+    compareOpen,
+    setCompareOpen,
+    requests,
+    request,
     forPrint,
     rulerOn,
     toggleRuler: () => setRulerOn((value) => !value),

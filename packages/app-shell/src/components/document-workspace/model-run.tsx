@@ -3,6 +3,7 @@ import type {
   InlineProjection,
 } from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
+import { TRACKED_DELETE_MARK, TRACKED_INSERT_MARK } from './tracked-marks'
 import { useMemo, type ReactNode } from 'react'
 import type {
   DocumentChangeWire,
@@ -297,10 +298,8 @@ function ModelRun({
     <span
       className={cn(
         'relative',
-        kinds.has('insert') &&
-          'underline decoration-[#3d7a52] underline-offset-4',
-        kinds.has('delete') &&
-          'text-[#9a4f3c] line-through decoration-[#9a4f3c]',
+        kinds.has('insert') && TRACKED_INSERT_MARK,
+        kinds.has('delete') && TRACKED_DELETE_MARK,
         kinds.has('move') && 'underline decoration-dotted decoration-[#4a6f8a]',
         kinds.has('property') &&
           'underline decoration-dotted decoration-[#8a6a2a]',

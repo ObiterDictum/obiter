@@ -3,6 +3,13 @@ import { saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  closeMenu,
+  menuItem,
+  openFormatting,
+  openMenu,
+  runMenuCommand,
+} from './editor-chrome'
 
 /*
  * E11 browser journey: the References ribbon's legal-document controls must
@@ -40,8 +47,16 @@ const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true })
-const referencesTab = (page: Page) =>
-  page.getByRole('tab', { name: 'References' })
+/** A command in the Insert menu, which stays open only for its toggles. */
+async function insertCommand(page: Page, name: string) {
+  await openMenu(page, 'Insert')
+  await menuItem(page, name).click()
+}
+/** A command in the Review menu, where the Checks rows live. */
+async function reviewCommand(page: Page, name: string) {
+  await openMenu(page, 'Review')
+  await menuItem(page, name).click()
+}
 const markedText = (page: Page) => page.locator('[data-defined-term]')
 const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
 const authoritiesPanel = (page: Page) =>
@@ -50,7 +65,7 @@ const checksPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Legal checks' })
 
 async function openReferences(page: Page) {
-  await referencesTab(page).click()
+  await openMenu(page, 'Insert')
 }
 
 async function focusHeading(page: Page) {
@@ -100,19 +115,19 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
 
   // The defined-term mark needs a selection; without one the control carries
   // its honest reason and stays disabled rather than faking a no-op success.
-  const markButton = page.getByRole('button', { name: /Mark defined term/ })
-  await expect(markButton).toBeDisabled()
+  await expect(menuItem(page, 'Mark defined term')).toBeDisabled()
 
   // The house style is chosen before the insertion so the journey proves the
   // choice shapes what is written, not that a label moved.
-  await page.getByLabel('Citation style').selectOption('house')
+  await menuItem(page, 'Citation style: House style').click()
+  await closeMenu(page)
 
   // Insert authority: a caret in a paragraph takes the citation. Free text
   // is refused with an accessible error and reaches neither the document
   // nor the draft state.
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
-  await page.getByRole('button', { name: 'Insert authority' }).click()
+  await insertCommand(page, 'Insert authority')
   const citationField = page.getByRole('textbox', { name: 'Citation' })
   await citationField.fill('the first defendant')
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
@@ -129,37 +144,41 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   for (let index = 0; index < 6; index += 1) {
     await page.keyboard.press('Shift+ArrowRight')
   }
-  await expect(markButton).toBeEnabled()
-  await markButton.click()
+  await openReferences(page)
+  await expect(menuItem(page, 'Mark defined term')).toBeEnabled()
+  await menuItem(page, 'Mark defined term').click()
   await expect(markedText(page)).toContainText('IN THE')
   await shot(page, '03-pending-mark')
 
   // The checks panel reads the pending mark now: the term list shows the
   // covered words as a defined term.
-  await page.getByRole('button', { name: 'Check defined terms' }).click()
+  await reviewCommand(page, 'Check defined terms')
   await expect(checksPanel(page)).toBeVisible()
   await expect(checksPanel(page)).toContainText('in the')
   await shot(page, '04-terms-check')
 
   // The same panel's cross-reference section answers honestly when the
   // document holds no stored fields.
-  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await reviewCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText('reference')
 
   // The list of authorities groups the inserted citation. Verify citations
   // shares the canonical availability, so with pending edits it is disabled
   // with the honest reason rather than starting a run over stale content.
-  await page.getByRole('button', { name: 'List of authorities' }).click()
+  await reviewCommand(page, 'List of authorities')
   await expect(authoritiesPanel(page)).toContainText(CITATION)
-  const verifyButton = page.getByRole('button', { name: /Verify citations/ })
+  await openMenu(page, 'Review')
+  const verifyButton = menuItem(page, 'Verify citations')
   await expect(verifyButton).toBeDisabled()
   await shot(page, '05-verify-dirty')
 
+  await closeMenu(page)
   await saveAndWait(page)
   await shot(page, '06-saved')
 
   // Saved, the entry reveals the document-level Verify control: the dock's
   // own button takes focus rather than a second run-starter appearing.
+  await openMenu(page, 'Review')
   await expect(verifyButton).toBeEnabled()
   await verifyButton.click()
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
@@ -181,8 +200,11 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
     timeout: 30_000,
   })
   await openReferences(page)
-  await expect(page.getByLabel('Citation style')).toHaveValue('house')
-  await page.getByRole('button', { name: 'Check defined terms' }).click()
+  await expect(menuItem(page, 'Citation style: House style')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  await reviewCommand(page, 'Check defined terms')
   await expect(checksPanel(page)).toContainText('in the', {
     timeout: 30_000,
   })
@@ -198,8 +220,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
       CITATION,
       { timeout: 30_000 },
     )
-    await openReferences(reloaded)
-    await reloaded.getByRole('button', { name: 'Check defined terms' }).click()
+    await reviewCommand(reloaded, 'Check defined terms')
     await expect(checksPanel(reloaded)).toContainText('in the')
     await shot(reloaded, '09-stored-checks')
   } finally {
@@ -222,13 +243,13 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
   // and neither leaves a pending draft behind — Save stays disabled.
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
-  await page.getByRole('button', { name: 'Insert authority' }).click()
+  await insertCommand(page, 'Insert authority')
   await page.getByRole('textbox', { name: 'Citation' }).fill(CITATION)
   await page.getByRole('button', { name: 'Cancel', exact: true }).last().click()
   await expect(caretParagraph).not.toContainText(CITATION)
   await expect(save(page)).toBeDisabled()
 
-  await page.getByRole('button', { name: 'Insert cross-reference' }).click()
+  await insertCommand(page, 'Cross-reference')
   await page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
     .first()
@@ -240,7 +261,7 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
 
   // The same chooser, used for real, paints the pending field marker and
   // writes a REF field whose stored result is the heading's text.
-  await page.getByRole('button', { name: 'Insert cross-reference' }).click()
+  await insertCommand(page, 'Cross-reference')
   await page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
     .first()
@@ -255,7 +276,7 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
     timeout: 30_000,
   })
   await openReferences(page)
-  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await reviewCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText('1 reference field checked')
   await expect(checksPanel(page)).toContainText('No cross-reference findings')
   await shot(page, '11-stored-reference-clean')
@@ -273,7 +294,7 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
     timeout: 30_000,
   })
   await openReferences(page)
-  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await reviewCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText('differs from the target')
   await shot(page, '12-stored-reference-stale')
 
@@ -283,15 +304,15 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
     .locator('[data-paragraph-id]', { hasText: 'Amended heading text' })
     .first()
     .click()
-  await page.getByRole('tab', { name: 'Home' }).click()
-  await page.getByRole('button', { name: 'Delete paragraph' }).click()
+  await openFormatting(page)
+  await runMenuCommand(page, 'Edit', 'Delete paragraph')
   await saveAndWait(page)
   await page.reload({ waitUntil: 'networkidle' })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
   await openReferences(page)
-  await page.getByRole('button', { name: 'Check cross-references' }).click()
+  await reviewCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText(
     'not a bookmark in this document',
   )

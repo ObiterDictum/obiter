@@ -3,6 +3,12 @@ import { focusParagraph, saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fixturePath } from './support'
+import {
+  choose,
+  openFormatting,
+  selectedValue,
+  setTrackChanges,
+} from './editor-chrome'
 
 /*
  * E2 browser journey: Font family, Font size, Font colour and Clear formatting
@@ -30,10 +36,9 @@ function shot(page: Page, name: string) {
 }
 
 /** The Font family / size / colour selects, exact at rest. */
-const fontFamily = (page: Page) => page.getByLabel('Font', { exact: true })
-const fontSize = (page: Page) => page.getByLabel('Font size', { exact: true })
-const fontColour = (page: Page) =>
-  page.getByLabel('Font colour', { exact: true })
+const fontFamily = (page: Page) => selectedValue(page, 'Font')
+const fontSize = (page: Page) => selectedValue(page, 'Font size')
+const fontColour = (page: Page) => selectedValue(page, 'Font colour')
 
 /** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, text: string, units: number) {
@@ -63,9 +68,7 @@ async function paintedStyle(page: Page, text: string) {
 }
 
 async function enableTracking(page: Page) {
-  await page.getByRole('tab', { name: 'Review' }).click()
-  await page.getByRole('button', { name: 'Track changes off' }).click()
-  await page.getByRole('tab', { name: 'Home' }).click()
+  await setTrackChanges(page, true)
 }
 
 type EditBody = {
@@ -98,15 +101,15 @@ test('font family, size and colour paint, save, and reload from a fresh context'
 
   await selectFirst(page, HEADING, SELECTED.length)
 
-  await fontFamily(page).selectOption('Georgia')
-  await fontSize(page).selectOption({ label: '12' })
-  await fontColour(page).selectOption('FF0000')
+  await choose(page, 'Font', 'Georgia')
+  await choose(page, 'Font size', '12')
+  await choose(page, 'Font colour', 'Red')
 
   // The chosen options and the painted run agree; 12pt is 24 half-points,
   // which the paint renders at 16px.
-  await expect(fontFamily(page)).toHaveValue('Georgia')
-  await expect(fontSize(page)).toHaveValue('24')
-  await expect(fontColour(page)).toHaveValue('FF0000')
+  await expect(fontFamily(page)).toHaveText('Georgia')
+  await expect(fontSize(page)).toHaveText('12')
+  await expect(fontColour(page)).toHaveText('Red')
   const style = await paintedStyle(page, SELECTED)
   expect(style?.fontFamily).toContain('Georgia')
   expect(style?.fontSize).toBe('16px')
@@ -133,9 +136,10 @@ test('font family, size and colour paint, save, and reload from a fresh context'
   try {
     await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await selectFirst(reloaded, HEADING, SELECTED.length)
-    await expect(fontFamily(reloaded)).toHaveValue('Georgia')
-    await expect(fontSize(reloaded)).toHaveValue('24')
-    await expect(fontColour(reloaded)).toHaveValue('FF0000')
+    await openFormatting(reloaded)
+    await expect(fontFamily(reloaded)).toHaveText('Georgia')
+    await expect(fontSize(reloaded)).toHaveText('12')
+    await expect(fontColour(reloaded)).toHaveText('Red')
     const reloadedStyle = await paintedStyle(reloaded, SELECTED)
     expect(reloadedStyle?.fontFamily).toContain('Georgia')
     expect(reloadedStyle?.fontSize).toBe('16px')
@@ -163,9 +167,9 @@ test('clear formatting removes direct character formatting and saves nulls', asy
   })
 
   await selectFirst(page, HEADING, SELECTED.length)
-  await fontFamily(page).selectOption('Georgia')
-  await fontSize(page).selectOption({ label: '12' })
-  await fontColour(page).selectOption('FF0000')
+  await choose(page, 'Font', 'Georgia')
+  await choose(page, 'Font size', '12')
+  await choose(page, 'Font colour', 'Red')
   await page.getByRole('button', { name: 'Bold' }).click()
   await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
     'aria-pressed',
@@ -177,9 +181,9 @@ test('clear formatting removes direct character formatting and saves nulls', asy
 
   // Every direct property is released, so the select values fall back and the
   // bold control reads unpressed even if a style still paints bold.
-  await expect(fontFamily(page)).toHaveValue('')
-  await expect(fontSize(page)).toHaveValue('')
-  await expect(fontColour(page)).toHaveValue('')
+  await expect(fontFamily(page)).toHaveText('Default font')
+  await expect(fontSize(page)).toHaveText('Default')
+  await expect(fontColour(page)).toHaveText('Automatic')
   await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
     'aria-pressed',
     'false',
@@ -231,6 +235,7 @@ test('queues font formatting and clear formatting on a tracked partial selection
   // A tracked range split is recorded as a w:rPrChange, so the font controls
   // and Clear formatting stay available and queue a draft instead of
   // refusing.
+  await openFormatting(page)
   await expect(fontFamily(page)).toBeEnabled()
   await expect(fontSize(page)).toBeEnabled()
   await expect(fontColour(page)).toBeEnabled()
@@ -238,10 +243,10 @@ test('queues font formatting and clear formatting on a tracked partial selection
     page.getByRole('button', { name: 'Clear formatting', exact: true }),
   ).toBeEnabled()
 
-  await fontFamily(page).selectOption('Georgia')
-  await fontSize(page).selectOption({ label: '12' })
-  await expect(fontFamily(page)).toHaveValue('Georgia')
-  await expect(fontSize(page)).toHaveValue('24')
+  await choose(page, 'Font', 'Georgia')
+  await choose(page, 'Font size', '12')
+  await expect(fontFamily(page)).toHaveText('Georgia')
+  await expect(fontSize(page)).toHaveText('12')
   const trackedStyle = await paintedStyle(page, SELECTED)
   expect(trackedStyle?.fontFamily).toContain('Georgia')
   expect(trackedStyle?.fontSize).toBe('16px')

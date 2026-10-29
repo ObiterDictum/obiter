@@ -1,12 +1,11 @@
 import { ArrowRight } from '@phosphor-icons/react'
-import { Badge, Button, DockedPanel } from '@obiter/ui'
+import { Badge, Button, DockedPanel, type PanelPopout } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import type {
   DocumentVersionRecord,
   MatterDocumentRecord,
 } from '../../documents'
 import { formatBytes, formatDateTime } from '../../format'
-import { DocumentVersionCompare } from './version-compare'
 
 /** The product's name for a stored file type, not the raw MIME. */
 function fileTypeLabel(fileType: string) {
@@ -31,6 +30,7 @@ function fileTypeLabel(fileType: string) {
 export function DocumentInfoPanel({
   open,
   onClose,
+  popout,
   document,
   matterLink,
   versions,
@@ -38,6 +38,7 @@ export function DocumentInfoPanel({
 }: {
   open: boolean
   onClose: () => void
+  popout?: PanelPopout
   document: MatterDocumentRecord
   /** The matter's name and reference, as a node: only the route has them. */
   matterLink?: ReactNode
@@ -53,6 +54,7 @@ export function DocumentInfoPanel({
     <DockedPanel
       title="Document information"
       onClose={onClose}
+      popout={popout}
       footer={
         <p className="text-caption text-subtle">
           A version is a locked copy. Editing always creates a new version, so a
@@ -143,10 +145,6 @@ export function DocumentInfoPanel({
               </li>
             ))}
           </ul>
-          <DocumentVersionCompare
-            documentId={document.id}
-            versions={versions}
-          />
         </section>
       </div>
     </DockedPanel>

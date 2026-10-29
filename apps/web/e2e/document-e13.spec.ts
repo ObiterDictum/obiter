@@ -9,6 +9,7 @@ import {
   openRibbonTab,
   signIn,
 } from './e13-support'
+import { choose, closeMenu, menuItem, toggleCommand } from './editor-chrome'
 
 /*
  * E13 browser coverage, view family: the View ribbon's real controls (web
@@ -74,14 +75,12 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   await openDocx(page, email, password, `E13 view ${Date.now()}`)
 
   // A stored heading gives the navigation pane a real outline entry.
-  await page.getByRole('tab', { name: 'Home', exact: true }).click()
   await focusParagraph(page, HEADING)
-  await page
-    .getByLabel('Paragraph style', { exact: true })
-    .selectOption({ label: 'Heading 1' })
+  await choose(page, 'Paragraph style', 'Heading 1')
 
   await openRibbonTab(page, 'View')
-  await page.getByRole('button', { name: 'Web layout' }).click()
+  await menuItem(page, 'Web layout').click()
+  await closeMenu(page)
   const sheets = page.locator('[data-document-sheet]')
   await expect(sheets.first()).toBeVisible({ timeout: 10_000 })
   await expect(sheets.first()).toHaveClass(/bg-transparent/)
@@ -91,12 +90,14 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
     await expect(sheets.nth(index)).toHaveClass(/bg-transparent/)
   }
 
-  await page.getByRole('button', { name: 'Ruler' }).click()
+  await openRibbonTab(page, 'View')
+  await menuItem(page, 'Ruler').click()
+  await closeMenu(page)
   const ruler = page.locator('[data-document-ruler]')
   await expect(ruler).toBeVisible()
   await expect(ruler).toHaveAttribute('aria-label', /Page width [\d.]+ cm/)
 
-  await page.getByRole('button', { name: 'Navigation pane' }).click()
+  await toggleCommand(page, 'View', 'Navigation pane')
   const outline = page.locator('[data-outline-item]')
   await expect(outline.first()).toBeVisible()
   const target = page
@@ -109,21 +110,30 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
 
   // Zoom renders a real transform on the sheet, and resets honestly.
   const sheet = page.locator('[data-document-sheet]').first()
-  await page.getByRole('button', { name: 'Zoom out' }).click()
+  await openRibbonTab(page, 'View')
+  await menuItem(page, 'Zoom out').click()
+  await closeMenu(page)
   await expect(sheet).toHaveCSS('transform', /matrix\(0.9/)
-  await page.getByRole('button', { name: 'Zoom in' }).click()
+  await openRibbonTab(page, 'View')
+  await menuItem(page, 'Zoom in').click()
+  await closeMenu(page)
   await expect(sheet).toHaveCSS('transform', /matrix\(1/)
 
-  await page.getByRole('button', { name: 'Print layout' }).click()
+  await openRibbonTab(page, 'View')
+  await menuItem(page, 'Print layout').click()
+  await closeMenu(page)
   await expect(sheets.first()).toHaveClass(/ring-black/)
 
   await openRibbonTab(page, 'Review')
   const column = page.locator('[data-document-desk] [spellcheck]')
   await expect(column).toHaveAttribute('spellcheck', 'false')
-  await page.getByRole('button', { name: 'Spelling' }).click()
+  await menuItem(page, 'Spelling').click()
+  await closeMenu(page)
   await expect(column).toHaveAttribute('spellcheck', 'true')
   await expect(page.getByText(/not a legal correctness check/i)).toBeVisible()
-  await page.getByRole('button', { name: 'Spelling' }).click()
+  await openRibbonTab(page, 'Review')
+  await menuItem(page, 'Spelling').click()
+  await closeMenu(page)
   await expect(column).toHaveAttribute('spellcheck', 'false')
 })
 
@@ -182,7 +192,9 @@ test('the PDF viewer pages a generated multi-page document with bounded mounting
   const widthBefore = await sheet.evaluate(
     (node) => node.firstElementChild?.getBoundingClientRect().width ?? 0,
   )
-  await page.getByRole('button', { name: 'Zoom in' }).click()
+  // The PDF surface has its own zoom controls; the editor's View menu does
+  // not exist on a read-only viewer.
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
   const widthAfter = await sheet.evaluate(
     (node) => node.firstElementChild?.getBoundingClientRect().width ?? 0,
   )

@@ -10,12 +10,14 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
+  command,
 } from './docx-workspace-harness'
+
 import { clickParagraph } from './paragraph-selection-harness'
 
 function helloModel() {
@@ -45,22 +47,6 @@ function paragraphStyle(paragraphId: string): CSSStyleDeclaration {
   return root.style
 }
 
-function lineSpacingSelect(): HTMLSelectElement {
-  const node = screen.getByLabelText('Line spacing', { exact: true })
-  if (!(node instanceof HTMLSelectElement)) {
-    throw new Error('missing Line spacing select')
-  }
-  return node
-}
-
-function indentSelect(): HTMLSelectElement {
-  const node = screen.getByLabelText('Indent', { exact: true })
-  if (!(node instanceof HTMLSelectElement)) {
-    throw new Error('missing Indent select')
-  }
-  return node
-}
-
 function paragraphOperations(editAsync: ReturnType<typeof vi.fn>) {
   const call = editAsync.mock.calls[0]?.[0] as
     { operations?: DocumentEditOperation[] } | undefined
@@ -70,9 +56,16 @@ function paragraphOperations(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
+
+/**
+ * Line spacing and Indent are Base UI Selects; applying one is a browser
+ * journey and is covered end to end by document-paragraph-formatting.spec.ts,
+ * which asserts the painted and stored values in a fresh context. The mounted
+ * assertions here cover the controls that are plain buttons.
+ */
 
 describe('the paragraph formatting controls', () => {
   it('applies an alignment, paints it, and saves one operation', async () => {
@@ -95,48 +88,6 @@ describe('the paragraph formatting controls', () => {
     ])
   })
 
-  it('applies line spacing and reflects the effective value', async () => {
-    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
-    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    clickParagraph('p1')
-
-    fireEvent.change(lineSpacingSelect(), { target: { value: '1.5' } })
-    expect(lineSpacingSelect().value).toBe('1.5')
-    // The 1.5 multiple paints from the same XML the server writes: the default
-    // 22 half-point face renders a 22px line box.
-    expect(paragraphStyle('p1').lineHeight).toBe('22px')
-
-    await save(editAsync)
-    expect(paragraphOperations(editAsync)).toEqual([
-      {
-        type: 'set_paragraph_format',
-        paragraphId: 'p1',
-        lineSpacing: { line: 360, lineRule: 'auto' },
-      },
-    ])
-  })
-
-  it('applies a first-line indent from the Layout ribbon and reflects it', async () => {
-    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
-    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    clickParagraph('p1')
-    openRibbonTab('Layout')
-
-    fireEvent.change(indentSelect(), { target: { value: 'first' } })
-    expect(indentSelect().value).toBe('first')
-    // 720 twips is Word's half-inch default indent, painted as 48px.
-    expect(paragraphStyle('p1').textIndent).toBe('48px')
-
-    await save(editAsync)
-    expect(paragraphOperations(editAsync)).toEqual([
-      {
-        type: 'set_paragraph_format',
-        paragraphId: 'p1',
-        indentation: { firstLine: 720 },
-      },
-    ])
-  })
-
   it('reverts and reapplies a paragraph change in one undo step', () => {
     mountWorkspace({ models: { doc_1: helloModel() } })
     clickParagraph('p1')
@@ -155,8 +106,7 @@ describe('the paragraph formatting controls', () => {
   it('keeps paragraph formatting available under track changes and saves tracked', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
     openRibbonTab('Home')
     clickParagraph('p1')
 

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
+import { runMenuCommand } from './editor-chrome'
 
 /*
  * Browser-only coverage for redo. jsdom can drive the mounted editor and does,
@@ -377,7 +378,7 @@ test.describe('redo in a browser', () => {
 
     // Insert a paragraph, then type so Undo has a text step while the insert
     // itself stays in the draft state.
-    await page.getByRole('button', { name: 'Insert paragraph' }).click()
+    await runMenuCommand(page, 'Edit', 'Insert paragraph')
     const pending = page.getByLabel('Pending paragraph text', { exact: true })
     await check(pending).toBeVisible({ timeout: 10_000 })
     await pending.pressSequentially('X')

@@ -72,10 +72,13 @@ describe('headerSaveState', () => {
     ).toBe('Saving…')
     expect(
       headerSaveState({ ...base, state: { status: 'failed' } }).label,
-    ).toBe('Save failed: your work is not on the server')
-    expect(headerSaveState({ ...base, state: { status: 'stale' } }).label).toBe(
-      'The document has changed on the server',
-    )
+    ).toBe('Save failed — not on the server')
+    // The conflict banner says the document changed, once, with Reload; the
+    // header only stops claiming the work is saved.
+    expect(headerSaveState({ ...base, state: { status: 'stale' } })).toEqual({
+      label: '',
+      tone: null,
+    })
     expect(
       headerSaveState({ ...base, state: { status: 'blocked' } }).label,
     ).toBe('Saved, but the edit history needs a reload')

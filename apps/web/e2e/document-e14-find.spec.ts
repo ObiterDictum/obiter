@@ -8,10 +8,11 @@ import {
   focusParagraph,
   openDocx,
   openMatterDocument,
-  openRibbonTab,
+  openFind,
   saveAndWait,
   signIn,
 } from './e13-support'
+import { runMenuCommand } from './editor-chrome'
 
 /*
  * E14 browser coverage: the complete find/replace journey on a DOCX —
@@ -147,7 +148,7 @@ test('DOCX find navigates, replaces across a paragraph break, saves and reloads'
 }) => {
   const { email, password } = await createAccount(request)
   await openDocx(page, email, password, `E14 find ${Date.now()}`)
-  await openRibbonTab(page, 'Review')
+  await openFind(page)
 
   const findField = page.getByLabel('Find in document')
   const status = page.getByRole('status').filter({ hasText: /found|\// })
@@ -210,7 +211,6 @@ test('DOCX find navigates, replaces across a paragraph break, saves and reloads'
   ).toHaveCount(1)
 
   // Undo is one logical step for the replace: the batch rewinds together.
-  await openRibbonTab(page, 'Home')
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'Beta paragraph' }),
@@ -239,7 +239,6 @@ test('DOCX find navigates, replaces across a paragraph break, saves and reloads'
   ).toHaveCount(0)
 
   // Ctrl/Cmd+F routes to the find field from the document surface.
-  await openRibbonTab(page, 'Review')
   await focusParagraph(page, 'Beta clause')
   await page.keyboard.press('Control+f')
   await expect(page.getByLabel('Find in document')).toBeFocused()
@@ -356,7 +355,7 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await openRibbonTab(page, 'Review')
+  await openFind(page)
 
   const findField = page.getByLabel('Find in document')
   const status = page.getByRole('status').filter({ hasText: /found|\// })
@@ -422,7 +421,6 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
   ).toHaveCount(1)
-  await openRibbonTab(page, 'Home')
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'also marker' }),
@@ -434,7 +432,7 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
   ).toHaveCount(1)
-  await openRibbonTab(page, 'Review')
+  await openFind(page)
 
   // The folded Greek hit rewrites at its real range and persists through
   // the save pipeline.
@@ -461,10 +459,9 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
   // The exported DOCX is re-parsed from its own downloaded bytes: the
   // replacements are in it, and the field machinery the refusal protected
   // is untouched.
-  await openRibbonTab(page, 'Review')
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export', exact: true }).click(),
+    runMenuCommand(page, 'File', 'Export'),
   ])
   const exportPath = test.info().outputPath('e14-export.docx')
   await download.saveAs(exportPath)
