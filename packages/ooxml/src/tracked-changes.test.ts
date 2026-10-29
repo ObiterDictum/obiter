@@ -967,3 +967,23 @@ async function zipText(bytes: Uint8Array, partName: string) {
   if (!entry) throw new Error('Fixture part is missing.')
   return entry.async('string')
 }
+
+describe('field balance across a decision', () => {
+  it('refuses a decision that would leave only some of a stored field boundary', async () => {
+    const document = await parseDocx(
+      await replaceDocumentXml(
+        '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:fldChar w:fldCharType="begin"/></w:r></w:ins><w:r><w:instrText xml:space="preserve"> TOA \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p></w:body></w:document>',
+      ),
+    )
+    const insertion = document.model.changes.find(
+      ({ elementName }) => elementName === 'ins',
+    )
+    if (!insertion) throw new Error('Tracked insertion is missing.')
+
+    expect(() =>
+      applyTrackedChangeDecisions(document, [insertion.id], 'reject'),
+    ).toThrowError(
+      expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
+    )
+  })
+})
