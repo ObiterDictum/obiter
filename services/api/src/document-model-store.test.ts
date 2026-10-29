@@ -115,7 +115,7 @@ describe('getDocumentModel through the worker pool', () => {
 
   it('reports the curated store error when the worker cannot parse the source', async () => {
     const storage = new MemoryStorage({
-      binary: [[sourceObjectKey, new TextEncoder().encode('not a docx')]],
+      binary: [[sourceObjectKey, Buffer.from('not a docx')]],
     })
 
     await expect(getDocumentModel(storage, source)).rejects.toBeInstanceOf(

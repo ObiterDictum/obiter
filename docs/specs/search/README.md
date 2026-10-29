@@ -23,6 +23,17 @@ The next work is:
 - add debounced auto-search, keyboard navigation, idle state, and filter removal
 - remove stale Search/Atlas compatibility scaffolding after tests pass
 
+## Legislation Index Rebuild
+
+`services/api/src/rebuild-legislation-index.ts` rebuilds the `legislation_provisions` index from Postgres, which is the system of record, through a staging index that is swapped in atomically. The rebuild is repeatable and idempotent.
+
+- Only provision rows are indexed. Part, Chapter, Schedule and crossheading rows are headings with no searchable body.
+- Provisions flagged `has_unapplied_effects` are indexed with the flag. The serving layer withholds their text and needs the flag to do so without a live call; excluding them would make amended provisions unfindable instead of honestly labelled.
+- Engine ids use the hyphenated path form because engine ids reject slashes; the full path stays queryable in `provisionRef`.
+- Timestamps are normalised to ISO strings at write, because `pg` returns `timestamptz` as a `Date`.
+
+The script has no exported unit and needs a live Postgres and Meilisearch, so these rules are recorded here rather than proved by a test.
+
 ## Documents
 
 - [Experience And Refactor](experience-and-refactor.md)

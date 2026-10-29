@@ -4,6 +4,7 @@ import { createDocument, updateDocumentExtraction } from './document-database'
 import {
   createOrganisationForUser,
   ensureOrganisationForUser,
+  renameOrganisation,
 } from './organisation-database'
 import {
   restoreDocumentWithAudit,
@@ -982,6 +983,61 @@ describe('createOrganisationForUser', () => {
           s.includes('"pendingOrganisationName" = null'),
       ),
     ).toBe(true)
+  })
+})
+
+describe('renameOrganisation', () => {
+  it('returns null without an audit when the organisation does not exist', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'rollback') return { rows: [] }
+      if (text.startsWith('select id, name, plan from organisations')) {
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      renameOrganisation(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        name: 'Harrington Vale',
+        requestId: 'req_1',
+      }),
+    ).resolves.toBeNull()
+
+    expect(calls.some(([sql]) => sql.includes('insert into audit_logs'))).toBe(
+      false,
+    )
+  })
+
+  it('commits a rename that repeats the stored name without an audit', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'commit') return { rows: [] }
+      if (text.startsWith('select id, name, plan from organisations')) {
+        return {
+          rows: [{ id: 'org_1', name: 'Harrington Vale', plan: 'team' }],
+        }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      renameOrganisation(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        name: 'Harrington Vale',
+        requestId: 'req_1',
+      }),
+    ).resolves.toEqual({
+      organisation: { id: 'org_1', name: 'Harrington Vale', plan: 'team' },
+      renamed: false,
+    })
+
+    expect(calls.some(([sql]) => sql.includes('insert into audit_logs'))).toBe(
+      false,
+    )
   })
 })
 

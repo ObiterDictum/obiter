@@ -8,6 +8,14 @@ import {
   LegalSourceHydrationGate,
 } from './legal-search-hydration-budget'
 
+describe('hydration keys', () => {
+  it('shares one key for queries that differ only in spacing and case', () => {
+    expect(canonicalHydrationQueryKey({ query: '  Potanina   v  UKSC ' })).toBe(
+      canonicalHydrationQueryKey({ query: 'potanina v uksc' }),
+    )
+  })
+})
+
 describe('LegalSearchHydrationBudget', () => {
   it('deduplicates in-flight misses by canonical query key', () => {
     const budget = new LegalSearchHydrationBudget({
