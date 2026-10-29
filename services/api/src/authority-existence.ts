@@ -83,10 +83,13 @@ async function readStore<T>(read: () => Promise<T>): Promise<T> {
 }
 
 function storeUnavailable(error: StoreReadError): AuthorityExistenceOutcome {
-  const message = error.cause instanceof Error ? error.cause.message : null
+  const code =
+    error.cause instanceof Error && 'code' in error.cause
+      ? String(error.cause.code)
+      : null
   console.warn('Authority existence store read failed', {
     category: error.category,
-    message,
+    code,
   })
   return { outcome: 'unavailable', reason: error.category }
 }
