@@ -17,7 +17,6 @@
     "@obiter/legal-schema": "workspace:*",
     "@obiter/legal-source-provider": "workspace:*",
     "@obiter/search-client": "workspace:*",
-    "meilisearch": "^0.51.0",
     "pg": "^8.20.0"
   },
   "devDependencies": {
