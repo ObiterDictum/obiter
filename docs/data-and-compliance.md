@@ -49,6 +49,26 @@ That means the immediate operating rule is:
 - avoid bulk enrichment or NLP over the full corpus until that licence is granted
 - use the machine-readable document URI as the stable internal identifier where appropriate
 
+### Judges and summaries until the licence is granted
+
+The judgment page shows the bench and the court's summary, and both are read only
+from fields Find Case Law publishes as structured metadata:
+
+- `judges` comes from the `<judge>` elements The National Archives marks up in
+  the LegalDocML `<header>`. A judgment whose cover page names the bench only in
+  prose has no such element, so its row keeps nothing and the page shows no
+  coram line.
+- `summary` is the court's own press summary, published as a separate LegalDocML
+  document whose `<uk:summaryOf>` names the judgment it belongs to. It is
+  quoted whole, never generated, and only stored when that back-reference
+  matches.
+
+Nothing in that path runs a regex, model or heuristic over judgment paragraphs or
+the cover-page prose. Every stored value records the field it came from and its
+source (`fcl_metadata` today, `extracted` for a licensed extractor later), so a
+future licensed pass can fill the same columns with different provenance and the
+two are distinguishable in the data.
+
 ## Legislation Handling
 
 Legislation needs a different ingestion and modeling approach from case law. Atlas should track:

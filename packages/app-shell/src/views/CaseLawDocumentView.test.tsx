@@ -3,7 +3,13 @@ import { Suspense, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { ToastProvider } from '@obiter/ui'
 
 // The view renders <Link to="/search"> and reads useNavigate-free; mock the
@@ -184,6 +190,54 @@ describe('CaseLawDocumentView', () => {
     // them from the title.
     expect(screen.queryByText('Judges')).toBeNull()
     expect(screen.queryByText('Panel')).toBeNull()
+  })
+
+  it('shows the published bench and the court summary, labelled with its source', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          ...DOCUMENT_PAYLOAD,
+          judges: ['Lord Reed, President', 'Lord Briggs', 'Lady Rose'],
+          summary: {
+            kind: 'press_summary',
+            paragraphs: [
+              'This appeal concerns the right to manage.',
+              'The respondent disputed the appellant’s entitlement.',
+            ],
+            sourceUrl:
+              'https://caselaw.nationalarchives.gov.uk/uksc/2024/3/press-summary',
+          },
+        }),
+      ),
+    )
+    renderView()
+
+    await screen.findByRole('document')
+    expect(
+      screen.getByText('Coram: Lord Reed, President · Lord Briggs · Lady Rose'),
+    ).toBeTruthy()
+    // Labelled with what was published and by whom, so it is not read as an
+    // Obiter headnote.
+    expect(screen.getByText(/Press summary, UK Supreme Court/)).toBeTruthy()
+    expect(
+      screen.getByText('This appeal concerns the right to manage.'),
+    ).toBeTruthy()
+    const summaryCard = screen.getByRole('region', { name: 'Summary' })
+    expect(
+      within(summaryCard)
+        .getByRole('link', { name: 'Open original' })
+        .getAttribute('href'),
+    ).toBe('https://caselaw.nationalarchives.gov.uk/uksc/2024/3/press-summary')
+  })
+
+  it('shows no bench and no summary when the source publishes neither', async () => {
+    mockFetch()
+    renderView()
+
+    await screen.findByRole('document')
+    expect(screen.queryByText(/Coram:/)).toBeNull()
+    expect(screen.queryByText(/Press summary/)).toBeNull()
   })
 
   it('shows the recorded retrieval date when the source carries one', async () => {
