@@ -179,7 +179,7 @@ describe('contextual verification evidence', () => {
       }),
     )
     const panel = await screen.findByRole('dialog')
-    expect(panel.textContent).toContain('stored version ver_1')
+    expect(panel.textContent).toContain('Checked the stored version.')
     expect(panel.textContent).toContain(
       'Unsaved edits are not part of the stored version',
     )
@@ -226,7 +226,7 @@ describe('contextual verification evidence', () => {
     mount([finding()])
     const dock = await screen.findByRole('region', { name: 'Verification' })
     expect(dock.textContent).toContain('A newer version is stored')
-    expect(dock.textContent).toContain('stored version ver_1')
+    expect(dock.textContent).toContain('Checked the stored version.')
   })
 
   it('moves focus to the run status when a run starts', async () => {
@@ -244,7 +244,8 @@ describe('contextual verification evidence', () => {
     expect(dock.textContent).toContain(
       '1 flagged · 1 needs review · 1 matches the checked source',
     )
-    expect(dock.textContent).toContain('ver_1')
+    expect(dock.textContent).toContain('Checked the stored version.')
+    expect(dock.textContent).not.toContain('ver_1')
     fireEvent.click(screen.getByRole('button', { name: 'Go to finding' }))
     expect(await screen.findByRole('dialog')).toBeTruthy()
   })

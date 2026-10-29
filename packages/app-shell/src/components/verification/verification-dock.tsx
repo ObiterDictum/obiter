@@ -132,13 +132,10 @@ export function VerificationDock({
           verification.checkedVersionNumber,
           verification.currentVersionNumber,
         )
-      : verificationStoredVersionNote(
-          verification.checkedVersionId ?? 'unknown',
-          {
-            unsaved: verification.dirty,
-            stale: verification.stale,
-          },
-        )
+      : verificationStoredVersionNote(verification.checkedVersionNumber, {
+          unsaved: verification.dirty,
+          stale: verification.stale,
+        })
     : null
   const statusMessage = !run
     ? 'Verification has not been started for this stored version.'

@@ -127,6 +127,7 @@ function finding(
       end: 4,
     },
     authorityLabel: `Authority ${index}`,
+    authorityName: null,
     dismissal: null,
     evidence: [],
     ...overrides,

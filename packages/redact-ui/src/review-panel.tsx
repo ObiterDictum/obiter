@@ -205,12 +205,7 @@ export function ReviewPanel({
                     </span>
                     {record ? (
                       <span className="text-caption text-ink">
-                        {decisionRecord(
-                          record.decision,
-                          record.decidedBy,
-                          record.decidedAt,
-                          currentUserId,
-                        )}
+                        {decisionRecord(record, currentUserId)}
                       </span>
                     ) : null}
                   </button>
