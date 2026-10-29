@@ -240,16 +240,17 @@ export function workspaceKeyDown(
 
 /**
  * Whether an Escape keypress should close the open docked panel. It must not
- * steal the key from a dialog (which has its own dismissal), from the document
- * text (where Escape clears the caret), or from a field outside the panel
- * (where it is the platform's own cancel). Inside the panel it always closes.
+ * steal the key from a dialog or menu (which has its own dismissal), from the
+ * document text (where Escape clears the caret), or from a field outside the
+ * panel (where it is the platform's own cancel). Inside the panel it always
+ * closes.
  */
 export function closesPanelOnEscape(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return true
   if (target.closest('[data-docked-panel]')) return true
   if (
     target.closest(
-      '[role="dialog"], [data-paragraph-id], input, textarea, select, [contenteditable="true"]',
+      '[role="dialog"], [role="menu"], [role="listbox"], [data-paragraph-id], input, textarea, select, [contenteditable="true"]',
     )
   ) {
     return false
