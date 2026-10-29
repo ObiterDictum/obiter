@@ -267,7 +267,7 @@ describe('matter saved sources', () => {
       await blocker.query('select id from matters where id = $1 for update', [
         seed.matterId,
       ])
-      pending = asEditor.request(path, request)
+      pending = Promise.resolve(asEditor.request(path, request))
       await waitForLockWait(pool, pid)
       await blocker.query(
         'delete from matter_shares where matter_id = $1 and grantee_user_id = $2',
