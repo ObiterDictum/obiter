@@ -130,7 +130,10 @@ it.each(['download', 'return', 'save', 'hard', 'hard-refusal'] as const)(
         }),
       )
       if (path === 'hard-refusal') {
-        expect(finalized.status).toBe(502)
+        expect(finalized.status).toBe(409)
+        expect(await finalized.json()).toMatchObject({
+          error: { code: 'extraction_coverage_incomplete' },
+        })
         expect(renderInput).toBeUndefined()
         const result = await pool.query<{
           output_id: string | null
