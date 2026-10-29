@@ -109,7 +109,7 @@ export function sameParagraphFormat(
   )
 }
 
-export function sameLineSpacing(
+function sameLineSpacing(
   a: ParagraphFormatDraft['lineSpacing'],
   b: ParagraphFormatDraft['lineSpacing'],
 ): boolean {
@@ -118,7 +118,7 @@ export function sameLineSpacing(
   return a.line === b.line && a.lineRule === b.lineRule
 }
 
-export function sameIndentation(
+function sameIndentation(
   a: ParagraphFormatDraft['indentation'],
   b: ParagraphFormatDraft['indentation'],
 ): boolean {
@@ -189,7 +189,7 @@ export function preEmphasisForRange(
   return null
 }
 
-export function emphasisOf(fragments: readonly string[]): PendingEmphasis {
+function emphasisOf(fragments: readonly string[]): PendingEmphasis {
   const properties = runPropertiesFromFragments(fragments)
   return {
     bold: properties.bold,

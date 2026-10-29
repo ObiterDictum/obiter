@@ -3,15 +3,12 @@ import {
   paragraphDeletionRefusal,
   removeInsert,
   type LocalInsert,
-  type ParagraphDeletionOutcome,
   type ParagraphDeletionRefusal,
 } from './document-edits'
 import { storyFlowOrder } from './document-story-flow'
 
-export type { ParagraphDeletionOutcome }
-
 /** The draft fields a deletion can change. */
-export type ParagraphDeletionState = {
+type ParagraphDeletionState = {
   inserts: LocalInsert[]
   deletedParagraphIds: string[]
 }

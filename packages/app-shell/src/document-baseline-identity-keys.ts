@@ -173,7 +173,7 @@ export function savedIdentities(baseline: SaveBaseline): SavedIdentities {
   return lineageIdentities(baseline.lineage, baseline.toModel, baseline)
 }
 
-export function emptyIdentities(): SavedIdentities {
+function emptyIdentities(): SavedIdentities {
   return {
     inserted: new Map(),
     insertedRuns: new Map(),

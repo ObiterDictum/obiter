@@ -20,7 +20,6 @@ export type {
   DraftSlot,
   DraftState,
   StructureKind,
-  TrackedRejection,
 } from './document-draft-state'
 
 export type SavePlan = {
@@ -92,8 +91,4 @@ export {
   removeDraftSlots,
   slotLabel,
   splitDraftSlots,
-} from './document-save-slots'
-export type {
-  SplitDraftSlotsResult,
-  SplitKeysResult,
 } from './document-save-slots'

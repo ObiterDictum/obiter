@@ -7,7 +7,7 @@ import {
 import type { ExtraRuns } from '../../document-word-edits'
 import { editableRangeText } from './inline-change-review'
 
-export function caretFromPoint(
+function caretFromPoint(
   clientX: number,
   clientY: number,
 ): { node: Node; offset: number } | undefined {

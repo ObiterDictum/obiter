@@ -36,7 +36,7 @@ export function pendingImageTarget(draft: {
   return pendingImagePartName(draft).slice('word/'.length)
 }
 
-export function decodeImageBytes(dataBase64: string) {
+function decodeImageBytes(dataBase64: string) {
   const binary = atob(dataBase64)
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {

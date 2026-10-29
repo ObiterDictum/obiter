@@ -14,7 +14,7 @@ import { mutationError } from './workspace-chrome'
  * for the metadata-stripped variant — the server refuses with a reason rather
  * than emit a file it cannot prove clean.
  */
-export async function exportDocumentAsDocx(
+async function exportDocumentAsDocx(
   documentId: string,
   filename: string,
   options?: { shareSafe?: boolean },

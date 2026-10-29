@@ -104,7 +104,7 @@ export function splitDraftSlots(
   }
 }
 
-export interface SplitKeysResult<T> {
+interface SplitKeysResult<T> {
   kept: Record<string, T>
   taken: Record<string, T>
 }

@@ -5,7 +5,7 @@ import {
 } from './document-page-media'
 import { emuToPx, xmlDigitAttr, xmlStartTag } from './document-page-units'
 
-export type DrawingPart = {
+type DrawingPart = {
   kind: 'rect' | 'picture'
   leftPx: number
   topPx: number
