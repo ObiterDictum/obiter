@@ -42,6 +42,21 @@ annotations, forms, attachments or source strings, page and size limits) before 
 stored, and the run is only marked `finalized` after persistence. A failure leaves
 the run unfinalized, keeps no output and reports `redaction_secure_pdf_failed`.
 
+## On-device detection engine
+
+`@obiter/rampart-inference` keeps the heuristic layer free of the model: the
+transformers.js pipeline is imported on first use inside `loadNerClassifier`, so
+importing the package and running `detectHeuristics` never loads the runtime.
+
+`detectNer` sizes windows by the classifier's own tokenizer, never by a character
+count, and always makes forward progress. Input that fits one window, or any
+classifier with no tokenizer, takes a single-window path whose result is identical
+to scanning the text directly; the path exists only to avoid window planning.
+
+Span repair is bounded: it stops after 32 convergence iterations so rows full of
+same-label fragments cannot loop between rescue and bridging. Healthy text converges
+in a handful.
+
 ## Finalise gate (approved divergence)
 
 Redact PRD 2 allowed finalising with unreviewed spans after a warning. The review

@@ -1,15 +1,3 @@
-/*
- * Regression tests for the journey's API-origin and database isolation.
- *
- * The reviewed head (`540d654`) let `journey.spec.ts` fall back to the shared
- * dev API on `127.0.0.1:8787` when `OBITER_API_ORIGIN` was unset: sign-up then
- * created the synthetic user in the shared `obiter` database while the psql
- * verification updated the task database, sign-in failed, and shared data was
- * written to. The source assertions below fail against that head; the
- * resolver assertions below prove the shared endpoint can no longer be reached
- * by the journey in any configuration, so a run that cannot name an isolated
- * stack aborts before an account exists.
- */
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -27,7 +15,6 @@ after(async () => {
   )
 })
 
-/** A worktree-shaped directory with no `.env`, so only processEnv configures. */
 async function bareWorktree() {
   const root = await mkdtemp(join(tmpdir(), 'obiter-journey-'))
   tempDirs.push(root)
@@ -47,15 +34,12 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
     new URL('e2e/journey.spec.ts', import.meta.url),
     'utf8',
   )
-  // The DB-touching helper was extracted here; the guard must cover both the
-  // call site and the helper boundary, not a token that moved files.
   const support = await readFile(
     new URL('e2e/support.ts', import.meta.url),
     'utf8',
   )
 
   // The reviewed head carried `?? 'http://127.0.0.1:8787'` on line 6; this
-  // fails there and keeps it from coming back in any form.
   assert.ok(
     !spec.includes('8787'),
     'journey.spec.ts must not name the shared dev API port',
@@ -69,8 +53,6 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
     'journey.spec.ts must resolve its targets through journey-target',
   )
 
-  // The guard runs at module load — before the test registers and before any
-  // request — so a refused configuration cannot create an account first.
   const guardAt = spec.indexOf('resolveJourneyTargets()')
   assert.ok(guardAt !== -1)
   assert.ok(
@@ -82,8 +64,6 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
     'the guard must resolve before any request is made',
   )
 
-  // Call site: resolution precedes the database verification, and that call
-  // receives the database name the guard resolved (which throws on `obiter`).
   const verifyAt = spec.search(/verifyEmailInDb\(\s*databaseName\b/)
   assert.ok(
     verifyAt !== -1,
@@ -94,10 +74,6 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
     'the guard must resolve before the database verification call',
   )
 
-  // Helper boundary: the extracted helper must require an explicit database
-  // name, pass exactly that name to psql, and resolve nothing itself, so there
-  // is no shared-database fallback and no ambient origin to reach. Strip
-  // comments first so the assertion measures code, not explanatory prose.
   const supportCode = support.replace(/\/\/[^\n]*/g, '')
   assert.ok(
     /function verifyEmailInDb\(\s*databaseName: string,/.test(supportCode),
@@ -123,8 +99,6 @@ test('the journey spec cannot name or reach the shared 8787 endpoint', async () 
 test('refuses the shared API the resolver would otherwise default to', async () => {
   const startDirectory = await bareWorktree()
 
-  // Nothing selects a port anywhere: this is the exact reviewed-head
-  // configuration, and it must throw instead of signing up on 8787.
   assert.throws(
     () =>
       resolveJourneyTargets({
@@ -141,7 +115,7 @@ test('refuses an explicitly shared origin even on lane ports', async () => {
   for (const origin of [
     'http://127.0.0.1:8787',
     'http://localhost:8787/',
-    'http://127.0.0.1:3000', // the shared web server proxies /api to the shared API
+    'http://127.0.0.1:3000',
   ]) {
     assert.throws(
       () =>
@@ -164,8 +138,6 @@ test('refuses shared server ports behind an otherwise clean origin', async () =>
         startDirectory,
         processEnv: {
           ...LANE_ENV,
-          // A clean origin with a shared PORT still means the API server would
-          // be started on obiter-live's port.
           OBITER_API_ORIGIN: 'http://127.0.0.1:8789',
           PORT: '8787',
         },
@@ -283,8 +255,6 @@ test('requires the verification database to be explicitly selected', async () =>
 test('accepts the explicitly selected, isolated lane configuration', async () => {
   const startDirectory = await bareWorktree()
 
-  // Origin derived from the lane PORT, database name derived from the URL the
-  // API server is started with: one API, one database, no fallbacks.
   assert.deepEqual(
     resolveJourneyTargets({ startDirectory, processEnv: LANE_ENV }),
     {
@@ -294,7 +264,6 @@ test('accepts the explicitly selected, isolated lane configuration', async () =>
     },
   )
 
-  // The same, selected through a worktree .env instead of the environment.
   const root = await mkdtemp(join(tmpdir(), 'obiter-journey-env-'))
   tempDirs.push(root)
   await writeFile(join(root, 'bun.lock'), '// bun lockfile v1\n')

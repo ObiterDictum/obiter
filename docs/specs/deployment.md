@@ -91,6 +91,10 @@ Artifacts shipped:
   - `HOST` — bind address (default 0.0.0.0).
   - `OBITER_WEB_ORIGIN` — trusted public origin used to build the request URL. **Set this in Dokploy** (to the site origin). When set it takes precedence over the forgeable client `Host` header, which matters if the container is reachable without Traefik. With same-domain routing this is just the site origin.
   - `BETTER_AUTH_URL` — consumed by the auth client (same-domain ⇒ site origin).
+  - `OBITER_BUILD_PROVENANCE` — set to `1` to expose the build marker at `GET /.well-known/obiter-build`; unset (the production default) that path falls through to SSR.
+
+  The gzip cache is keyed by path plus file size and mtime and bounded to 128 entries, so a changed file never serves stale compressed bytes. Importing `serve.mjs` never starts a server; only running it directly does, using a `pathToFileURL` comparison that is also correct on Windows.
+
 - `apps/web/serve.test.mjs` — focused unit tests (Node's built-in `node:test` runner, no new dependency) for the pure helpers: `parsePort` (range/format), `resolveBaseUrl` (trusted-origin vs Host), and `applyResponseHeaders` (multiple Set-Cookie preservation, status line).
 - `apps/web/package.json` gains a `start` script (`bun serve.mjs`) so the serve path is reproducible outside Docker too.
 - **ONNX Runtime — CPU-only installs** — there is no repo-root `.npmrc`.

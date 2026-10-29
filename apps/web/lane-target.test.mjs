@@ -25,10 +25,6 @@ after(async () => {
   )
 })
 
-/**
- * A worktree-shaped directory: a bun.lock marker (which bounds the
- * .env walk) and optionally the lane .env the setup script writes.
- */
 async function laneWorktree(env) {
   const root = await mkdtemp(join(tmpdir(), 'obiter-lane-'))
   tempDirs.push(root)
@@ -41,9 +37,6 @@ const LANE_ENV = 'OBITER_WEB_PORT=3004\nPORT=8791\n'
 const SHA = 'a'.repeat(40)
 
 test('defaults to the checkout that holds this suite', () => {
-  // The default root is the worktree root, not apps/: resolving it one level
-  // short makes every provenance check compare against the wrong directory.
-  // Nothing here depends on a developer's .env, which CI does not have.
   assert.ok(existsSync(join(WORKTREE_ROOT, 'bun.lock')))
   assert.ok(existsSync(join(WORKTREE_ROOT, 'apps', 'web', 'lane-target.mjs')))
 
@@ -116,7 +109,6 @@ test('refuses the shared ports when an existing server may be reused', async () 
     () => assertLaneTargets(targets, { reuseExistingServer: true }),
     /shared dev ports/,
   )
-  // CI starts its own servers, so the defaults are that runner's own ports.
   assert.doesNotThrow(() =>
     assertLaneTargets(targets, { reuseExistingServer: false }),
   )
@@ -131,7 +123,6 @@ test('a lane-configured run passes the reuse guard', async () => {
   )
 })
 
-/** A fake fetch standing in for the lane's web and API servers. */
 function fakeServers({ root, webRoot = root, apiRoot = root, envFile }) {
   return async (url) => {
     if (url.endsWith('/api/health')) {
