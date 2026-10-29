@@ -955,5 +955,3 @@ const DOCUMENT_KINDS = [
   { value: 'skeleton', label: 'Skeleton argument' },
   { value: 'order', label: 'Order' },
 ] as const
-
-
