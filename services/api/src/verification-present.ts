@@ -66,7 +66,7 @@ function count(value: string | number | null) {
   return Number(value ?? 0)
 }
 
-export function runSummary(row: VerificationRunRow): VerificationRunSummary {
+function runSummary(row: VerificationRunRow): VerificationRunSummary {
   return {
     findingCount: count(row.finding_count),
     flaggedCount: count(row.flagged_count),

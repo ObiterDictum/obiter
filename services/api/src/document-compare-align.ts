@@ -277,7 +277,7 @@ function longestIncreasingPairs(candidates: Array<[number, number]>) {
   return anchors.reverse()
 }
 
-export function paragraphText(paragraph: DocumentParagraphWire) {
+function paragraphText(paragraph: DocumentParagraphWire) {
   return paragraph.runs.map((run) => run.text).join('')
 }
 

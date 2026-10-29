@@ -22,16 +22,16 @@ import { readBoundedResponseText } from '../bounded-upstream-body'
  */
 
 /** Fresh results are reused for ten minutes: about six refreshes an hour. */
-export const CHANGELOG_FRESH_TTL_MS = 10 * 60_000
+const CHANGELOG_FRESH_TTL_MS = 10 * 60_000
 
 /** A failed refresh is not retried for two minutes: at most 30 an hour. */
-export const CHANGELOG_FAILURE_COOLDOWN_MS = 2 * 60_000
+const CHANGELOG_FAILURE_COOLDOWN_MS = 2 * 60_000
 
 /** Successfully fetched data is served for at most a day after a failure. */
-export const CHANGELOG_STALE_MAX_MS = 24 * 60 * 60_000
+const CHANGELOG_STALE_MAX_MS = 24 * 60 * 60_000
 
 /** Each upstream request is aborted after five seconds. */
-export const CHANGELOG_UPSTREAM_TIMEOUT_MS = 5_000
+const CHANGELOG_UPSTREAM_TIMEOUT_MS = 5_000
 
 /**
  * Hard per-process ceiling on upstream HTTP requests inside any rolling hour.
@@ -40,27 +40,27 @@ export const CHANGELOG_UPSTREAM_TIMEOUT_MS = 5_000
  * spent per request, not per refresh, so successes, failures, the commits
  * fallback and throttled refreshes all draw on it.
  */
-export const CHANGELOG_REQUEST_BUDGET = 30
-export const CHANGELOG_REQUEST_WINDOW_MS = 60 * 60_000
+const CHANGELOG_REQUEST_BUDGET = 30
+const CHANGELOG_REQUEST_WINDOW_MS = 60 * 60_000
 
 /**
  * A throttled refresh waits at least a minute, GitHub's secondary-rate-limit
  * guidance. A valid provider delay can extend that; it can never shorten it.
  */
-export const CHANGELOG_THROTTLE_MIN_COOLDOWN_MS = 60_000
+const CHANGELOG_THROTTLE_MIN_COOLDOWN_MS = 60_000
 
 /**
  * A provider delay beyond a day is treated as extreme and capped, so a
  * malformed or hostile header cannot park refreshes indefinitely. An hour is
  * far below this and is honoured as sent.
  */
-export const CHANGELOG_COOLDOWN_MAX_MS = 24 * 60 * 60_000
+const CHANGELOG_COOLDOWN_MAX_MS = 24 * 60 * 60_000
 
 /** A single upstream body is rejected, unparsed, once it passes this size. */
-export const CHANGELOG_MAX_BODY_BYTES = 64 * 1024
+const CHANGELOG_MAX_BODY_BYTES = 64 * 1024
 
 /** GitHub's own per_page cap; a larger array is treated as malformed. */
-export const CHANGELOG_MAX_ENTRIES = 5
+const CHANGELOG_MAX_ENTRIES = 5
 
 const RELEASES_URL =
   'https://api.github.com/repos/ObiterDictum/obiter/releases?per_page=5'

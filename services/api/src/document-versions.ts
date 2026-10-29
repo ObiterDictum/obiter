@@ -29,8 +29,6 @@ import {
 } from './document-version-commit'
 import type { StorageService } from './storage'
 
-export { DocumentEditStoreError } from './document-version-commit'
-
 type VersionMutationInput = {
   organisationId: string
   matterId: string
@@ -96,7 +94,7 @@ export class DocumentEditInvalidError extends Error {
   }
 }
 
-export class DocumentTrackedChangeReadError extends Error {
+class DocumentTrackedChangeReadError extends Error {
   constructor() {
     super('The tracked changes could not be read.')
     this.name = new.target.name

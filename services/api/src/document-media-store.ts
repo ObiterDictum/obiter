@@ -12,7 +12,7 @@ type ImagePart = { bytes: Uint8Array; contentType: string }
 type ImagePartMap = ReadonlyMap<string, ImagePart>
 
 /** Immutable versions retained per API process. */
-export const DOCUMENT_IMAGE_PART_CACHE_LIMIT = 16
+const DOCUMENT_IMAGE_PART_CACHE_LIMIT = 16
 
 /**
  * Retained image bytes per API process, independent of the entry cap. An
@@ -24,7 +24,7 @@ export const DOCUMENT_IMAGE_PART_CACHE_LIMIT = 16
  * This bounds bytes the cache retains. A load in progress, the package being
  * unzipped, and the per-request response copy are outside it.
  */
-export const DOCUMENT_IMAGE_PART_CACHE_MAX_BYTES = 64 * 1024 * 1024
+const DOCUMENT_IMAGE_PART_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 export type DocumentImagePartCache = {
   get(key: string): Promise<ImagePartMap> | undefined

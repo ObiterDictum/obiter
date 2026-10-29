@@ -115,7 +115,7 @@ export function readDocxNoteBodies(
  * context ("Footnote reference N") next to its w:footnoteReference in the
  * main text, so reviewers can find the reference point.
  */
-export function formatDocxNoteBody(note: DocxNoteBody): string {
+function formatDocxNoteBody(note: DocxNoteBody): string {
   const label = note.kind === 'footnote' ? 'Footnote' : 'Endnote'
   return `[${label} ${note.id}] ${note.text}`
 }

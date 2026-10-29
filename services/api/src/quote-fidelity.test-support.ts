@@ -14,12 +14,12 @@ import type { QuoteCheckResult, QuoteFidelityRequest } from './quote-fidelity'
  * cannot drift from each other unnoticed.
  */
 
-export const subject: VerificationSubject = {
+const subject: VerificationSubject = {
   documentId: 'd-4',
   versionId: 'v-1',
 }
 
-export function quote(rawText: string): CitationInput {
+function quote(rawText: string): CitationInput {
   return {
     rawText,
     location: { paragraphId: 'p-1', start: 0, end: rawText.length },
@@ -81,7 +81,7 @@ export function judgmentCitation(sourceId: string): NormalizedCitation {
   return { kind: 'case_law', neutralCitation: '[2066] UKSC 1', sourceId }
 }
 
-export interface ParagraphFixture {
+interface ParagraphFixture {
   paragraphNumber: number
   text: string
 }
@@ -95,7 +95,7 @@ export interface AuthorityFixture {
   paragraphs?: ParagraphFixture[]
 }
 
-export interface ProvisionFixture {
+interface ProvisionFixture {
   labelPath: string
   text: string
   hasUnappliedEffects?: boolean
@@ -118,7 +118,7 @@ export interface ActFixture {
   }
 }
 
-export function authoritySummary(id: string) {
+function authoritySummary(id: string) {
   return {
     id,
     title: `Stored ${id}`,
@@ -131,7 +131,7 @@ export function authoritySummary(id: string) {
   }
 }
 
-export function actRow(act: ActFixture) {
+function actRow(act: ActFixture) {
   return {
     identity: act.identity,
     actType: 'ukpga',

@@ -54,7 +54,7 @@ type PresenceBucket = {
   participants: Map<string, PresenceEntry>
 }
 
-export class DocumentPresenceReadError extends Error {
+class DocumentPresenceReadError extends Error {
   constructor() {
     super('The document cursor could not be validated.')
     this.name = new.target.name

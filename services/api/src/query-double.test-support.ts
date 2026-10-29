@@ -1,6 +1,6 @@
 import type { Pool, QueryResult, QueryResultRow } from 'pg'
 
-export type QueryCall = { text: string; values: unknown[] | undefined }
+type QueryCall = { text: string; values: unknown[] | undefined }
 
 type QueryResponder = (
   text: string,

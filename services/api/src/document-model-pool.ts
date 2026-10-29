@@ -11,7 +11,7 @@ import type { DocumentModelWire } from '@obiter/contracts'
  * and an editor model fetch proceed together without letting a burst of
  * uploads or verifications grow the process's worker footprint.
  */
-export const documentModelWorkerConcurrency = 2
+const documentModelWorkerConcurrency = 2
 
 /**
  * How long a dispatched task may take to answer. A worker that never
@@ -41,7 +41,7 @@ export const documentModelWorkerConcurrency = 2
  * it and fail with the curated store error, which is not a reason to let
  * callers park forever.
  */
-export const documentModelTaskTimeoutMs = 600_000
+const documentModelTaskTimeoutMs = 600_000
 
 /**
  * How many callers may park waiting for a free worker. Waiters hold their
@@ -52,7 +52,7 @@ export const documentModelTaskTimeoutMs = 600_000
  * `documentModelWorkerMaxWaiting` payloads whatever the server's request
  * concurrency turns out to be.
  */
-export const documentModelWorkerMaxWaiting = 16
+const documentModelWorkerMaxWaiting = 16
 
 /**
  * The one task the worker executes. `parse` validates an already-stored

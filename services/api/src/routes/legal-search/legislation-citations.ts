@@ -32,19 +32,13 @@ import {
   type LegislationActRef,
 } from './legislation-titles'
 
-export {
-  createActDirectory,
-  looseActTitleKey,
-  normalizeActTitle,
-  stripLeadingTitleConnectors,
-} from './legislation-titles'
+export { createActDirectory } from './legislation-titles'
 export type {
   ActDirectory,
   LegislationActDirectoryEntry,
-  LegislationActRef,
 } from './legislation-titles'
 
-export interface LegislationProvisionRef extends LegislationActRef {
+interface LegislationProvisionRef extends LegislationActRef {
   labelPath: string
   label: string
   /** Full provision identity, e.g. ukpga/2010/15/section/40. */

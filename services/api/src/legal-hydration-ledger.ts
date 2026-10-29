@@ -4,22 +4,6 @@ import type {
   LegalHydrationLedger,
 } from './legal-search-hydration-budget'
 
-/**
- * How long an admission transaction waits for the single admission advisory
- * lock before failing closed. Normal admissions hold the lock for single-digit
- * milliseconds, so this is generous headroom; beyond it the holder is treated
- * as wedged and admission returns `unavailable` rather than hanging every
- * replica on one lock.
- */
-export const DEFAULT_HYDRATION_ADMISSION_LOCK_TIMEOUT_MS = 2_000
-
-/**
- * How long any one admission statement may run. It must not be shorter than the
- * lock bound, so a blocked lock is reported as a lock timeout; it caps the
- * sweep and count statements if the database is slow to execute them.
- */
-export const DEFAULT_HYDRATION_ADMISSION_STATEMENT_TIMEOUT_MS = 5_000
-
 export interface PostgresLegalHydrationLedgerConfig {
   /**
    * Unexpired in-flight leases allowed across every replica. This bounds the

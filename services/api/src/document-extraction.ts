@@ -15,10 +15,7 @@ import {
 } from './docx-extraction'
 import { extractPdfContent } from './pdf-extraction'
 
-export type {
-  DocumentTextLayout,
-  ExtractedDocumentContent,
-} from './document-layout'
+export type { ExtractedDocumentContent } from './document-layout'
 export {
   DocumentExtractionError,
   IMAGE_ONLY_DOCX_MESSAGE,
@@ -30,9 +27,7 @@ export type { DocumentExtractionDependencies } from './docx-extraction'
 export {
   decodeXmlText,
   extractWordXmlText,
-  formatDocxNoteBody,
   readDocxNoteBodies,
-  type DocxNoteBody,
 } from './docx-extraction'
 export { prepareLaidChars } from './pdf-extraction'
 

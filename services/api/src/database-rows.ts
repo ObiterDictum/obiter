@@ -61,15 +61,15 @@ export type MatterDocumentRow = {
   deleted_by: string | null
 }
 
-export function timestamp(value: Date | string) {
+function timestamp(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
 }
 
-export function nullableTimestamp(value: Date | string | null) {
+function nullableTimestamp(value: Date | string | null) {
   return value === null ? null : timestamp(value)
 }
 
-export function stringArray(value: unknown): string[] {
+function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
     : []

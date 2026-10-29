@@ -4,31 +4,6 @@ import type {
   MojRequestCharge,
 } from '@obiter/legal-source-provider'
 
-/**
- * How long a charge transaction waits for the single budget advisory lock
- * before failing closed. Normal charges hold the lock for single-digit
- * milliseconds, so this is generous headroom; beyond it the holder is treated
- * as wedged and the charge returns `unavailable` rather than stalling every
- * replica on one lock.
- */
-export const DEFAULT_MOJ_REQUEST_LOCK_TIMEOUT_MS = 2_000
-
-/**
- * How long any one statement in a charge transaction may run. It must not be
- * shorter than the lock bound, so a blocked lock is reported as a lock
- * timeout; it caps the sweep and count statements if the database is slow.
- */
-export const DEFAULT_MOJ_REQUEST_STATEMENT_TIMEOUT_MS = 5_000
-
-/**
- * How long a charge waits to acquire a pooled connection before failing
- * closed. `lock_timeout` and `statement_timeout` only bound statements once a
- * connection exists; `pg` waits forever for a free client from an exhausted
- * pool, so without this bound a saturated pool would stall a charge rather
- * than fail closed.
- */
-export const DEFAULT_MOJ_REQUEST_CONNECT_TIMEOUT_MS = 5_000
-
 export interface PostgresMojRequestBudgetConfig {
   /** Upstream HTTP attempts allowed across every replica in the window. */
   limit: number

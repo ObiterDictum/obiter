@@ -22,7 +22,7 @@ type AccessLevel = 'view' | 'edit'
  * so a ten-minute lease comfortably exceeds any live request and only a dead
  * executor's claim can expire. It is renewed at explicit boundaries, never by
  * an interval, so a hung process cannot hold the lease open forever. */
-export const verificationRunLeaseSeconds = 600
+const verificationRunLeaseSeconds = 600
 
 const runColumns = `
   run.id, run.organisation_id, run.matter_id, run.document_id,
@@ -156,7 +156,7 @@ export async function listVerificationRuns(
   }
 }
 
-export type StoredFindingDismissal = {
+type StoredFindingDismissal = {
   reason: string | null
   dismissedBy: string
   dismissedAt: string

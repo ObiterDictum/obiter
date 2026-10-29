@@ -157,13 +157,6 @@ export async function createOrganisationForUser(
 }
 
 /**
- * Default tenant name when an org-less user first hits Matters or Redact.
- * Canonical value lives in @obiter/contracts so the client can recognise a
- * still-default workspace; re-exported here for existing import sites.
- */
-export { PERSONAL_WORKSPACE_NAME }
-
-/**
  * Ensures the user has an organisation for tenant-scoped product data.
  * Creates the tenant with the stashed sign-up name when present, else a
  * personal workspace; otherwise returns the existing organisation. Used by

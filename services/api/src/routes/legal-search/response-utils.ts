@@ -26,7 +26,7 @@ import {
 
 export type LegalFetchRetrievalPath =
   'stored_exact_lookup' | 'stored_index' | 'live_provider'
-export type LegalFetchResultGroupKey = 'judgments' | 'legislation'
+type LegalFetchResultGroupKey = 'judgments' | 'legislation'
 export type LegalFetchOutcome =
   | 'results'
   | 'no_match'

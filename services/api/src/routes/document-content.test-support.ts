@@ -10,7 +10,7 @@ import {
   textObjectKey,
 } from './document-route.test-support'
 
-export { expectDocument404, sourceObjectKey, textObjectKey }
+export { expectDocument404 }
 
 export const docxBytes = Buffer.from('PK\x03\x04fake-docx-bytes')
 export const pdfBytes = Buffer.from('%PDF-1.4 fake-pdf-bytes')

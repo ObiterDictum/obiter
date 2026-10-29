@@ -48,7 +48,7 @@ import {
  * candidate, not a batch failure. */
 export const maxQuoteLength = 4000
 export const maxSourceFragments = 10_000
-export const maxSourceCharacters = 4_000_000
+const maxSourceCharacters = 4_000_000
 
 /** The bounded number of candidates one call accepts. Each candidate still
  * costs a bounded scan of its source, so the batch bound is what keeps one
@@ -76,7 +76,7 @@ export class QuoteBatchTooLargeError extends Error {
 /** Why one candidate produced no finding. Every reason describes that candidate
  * alone: none of them is a batch failure, and none of them is a comparison
  * result, so a rejected candidate can never be read as a pass or a mismatch. */
-export type QuoteCheckRejectionReason =
+type QuoteCheckRejectionReason =
   | 'quote_blank'
   | 'quote_too_large'
   | 'quote_span_mismatch'
@@ -91,7 +91,7 @@ export type QuoteCheckResult =
 /** A request that V1's finding model cannot carry: a blank quotation, or a
  * quotation that is not the draft slice its location names. Raised only by the
  * single-request entry point, where there is no sibling to preserve. */
-export class QuoteRequestInvalidError extends Error {
+class QuoteRequestInvalidError extends Error {
   readonly reason: Extract<
     QuoteCheckRejectionReason,
     'quote_blank' | 'quote_span_mismatch'

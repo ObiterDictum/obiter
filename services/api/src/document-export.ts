@@ -40,7 +40,7 @@ type ExportVersion = Pick<
   | 'filename'
 >
 
-export class DocumentExportError extends DocumentDerivedStoreError {
+class DocumentExportError extends DocumentDerivedStoreError {
   constructor() {
     super('The document could not be exported.')
   }

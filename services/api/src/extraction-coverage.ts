@@ -52,7 +52,7 @@ import {
 
 // Parts with fewer non-whitespace chars than this are ignored so empty
 // footnote separators and trivial fragments do not block clean documents.
-export const UNEXAMINED_PART_MIN_CHARS = 20
+const UNEXAMINED_PART_MIN_CHARS = 20
 
 // PDF fusion signals: zero-gap fused runs (adjacent Tj, no spaces) keep every
 // char, so char-ratio shows ~zero loss — the signal is run shape, not char
@@ -90,13 +90,13 @@ export const UNEXAMINED_PART_MIN_CHARS = 20
 // over-spaced text (handled nowhere). Scanned PDFs are handled separately
 // via MINIMUM_PDF_CHARS_PER_PAGE. Thresholds validated against clean
 // fixtures in extraction-coverage.test.ts; recalibrate on real fused runs.
-export const FUSED_TOKEN_MIN_LENGTH = 30
-export const FUSED_TOKEN_CHAR_SHARE = 0.05
-export const FUSED_TOKEN_ABSOLUTE_LENGTH = 100
-export const FUSED_LETTER_RUN_MIN_LENGTH = 16
-export const FUSED_LETTER_RUN_SHARE = 0.1
+const FUSED_TOKEN_MIN_LENGTH = 30
+const FUSED_TOKEN_CHAR_SHARE = 0.05
+const FUSED_TOKEN_ABSOLUTE_LENGTH = 100
+const FUSED_LETTER_RUN_MIN_LENGTH = 16
+const FUSED_LETTER_RUN_SHARE = 0.1
 // Share is meaningless below a sentence or two: one word owns the ratio.
-export const FUSED_LETTER_RUN_MIN_TOTAL_LETTERS = 50
+const FUSED_LETTER_RUN_MIN_TOTAL_LETTERS = 50
 
 function nonWhitespaceChars(value: string) {
   return [...value].filter((ch) => !/\s/u.test(ch)).length

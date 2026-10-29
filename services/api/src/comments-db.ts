@@ -212,9 +212,9 @@ export function mapReply(row: ReplyRow): DocumentCommentReplyRecord {
   }
 }
 
-export function timestamp(value: Date | string): string
-export function timestamp(value: Date | string | null): string | null
-export function timestamp(value: Date | string | null) {
+function timestamp(value: Date | string): string
+function timestamp(value: Date | string | null): string | null
+function timestamp(value: Date | string | null) {
   return value instanceof Date ? value.toISOString() : value
 }
 
