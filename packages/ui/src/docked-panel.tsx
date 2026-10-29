@@ -13,6 +13,11 @@ export interface PanelPopout {
   onMove: (position: PanelPosition) => void
   /** False when the viewport is too narrow to float; the control is hidden. */
   canFloat: boolean
+  /**
+   * The viewport edge a floated panel must stay below, in pixels — the bottom
+   * of the chrome the panel must never cover. Defaults to the 8px margin.
+   */
+  minTop?: number
 }
 
 export interface DockedPanelProps {
@@ -35,12 +40,13 @@ export function clampPanelPosition(
   position: PanelPosition,
   viewport: { width: number; height: number },
   panel: { width: number; height: number },
+  minTop = 8,
 ): PanelPosition {
-  const maxX = Math.max(0, viewport.width - panel.width - 8)
-  const maxY = Math.max(0, viewport.height - panel.height - 8)
+  const maxX = Math.max(8, viewport.width - panel.width - 8)
+  const maxY = Math.max(minTop, viewport.height - panel.height - 8)
   return {
     x: Math.min(Math.max(8, Math.round(position.x)), maxX),
-    y: Math.min(Math.max(8, Math.round(position.y)), maxY),
+    y: Math.min(Math.max(minTop, Math.round(position.y)), maxY),
   }
 }
 
@@ -88,6 +94,7 @@ export function DockedPanel({
           width: rect?.width ?? 380,
           height: rect?.height ?? 480,
         },
+        popout.minTop,
       ),
     )
   }

@@ -9,6 +9,7 @@ export {
   type ButtonVariant,
 } from './button'
 export { Input, type InputProps } from './input'
+export { Switch } from './switch'
 export { Select, type SelectProps, type SelectOption } from './select'
 export {
   Dialog,
@@ -32,6 +33,7 @@ export {
   MenuSeparator,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuCheckboxItem,
 } from './menu'
 export {
   Popover,

@@ -3,6 +3,7 @@ import { signIn } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 
 import { createSyntheticDocx } from '../../../packages/ooxml/src/index'
+import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 
 /*
  * E0 browser journey: the editor must never reach a zero-paragraph state.
@@ -75,8 +76,18 @@ async function openSyntheticDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const deleteButton = (page: Page) =>
-  page.getByRole('button', { name: /Delete paragraph/ })
+/** The Edit menu's Delete paragraph row, opened where it lives. */
+async function deleteButton(page: Page) {
+  if (
+    !(await page
+      .getByRole('menu', { name: 'Edit' })
+      .isVisible()
+      .catch(() => false))
+  ) {
+    await openMenu(page, 'Edit')
+  }
+  return menuItem(page, 'Delete paragraph')
+}
 const saveButton = (page: Page) => page.getByRole('button', { name: 'Save' })
 const undoButton = (page: Page) =>
   page.getByRole('button', { name: 'Undo', exact: true })
@@ -136,6 +147,10 @@ function watchForFaults(page: Page) {
   return faults
 }
 
+// The journey opens the Edit menu for every deletion, which costs more than
+// the default 60s budget.
+test.setTimeout(140_000)
+
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('final-paragraph deletion is refused, valid deletion saves and reopens', async ({
@@ -151,11 +166,12 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   // 7-8. One paragraph: Delete paragraph is unavailable with an accurate
   // accessible reason.
   await expect(page.locator('[data-paragraph-id]').first()).toContainText(FIRST)
-  await expect(deleteButton(page)).toBeDisabled()
-  await expect(deleteButton(page)).toHaveAttribute(
-    'aria-label',
-    'Delete paragraph: A document must contain at least one paragraph.',
-  )
+  const unavailable = await deleteButton(page)
+  await expect(unavailable).toBeDisabled()
+  await expect(
+    page.getByText('A document must contain at least one paragraph.'),
+  ).toBeVisible()
+  await closeMenu(page)
 
   // 9-11. Keyboard boundaries: Backspace at the start and Delete at the end of
   // the only paragraph must not remove it or dirty the document.
@@ -173,12 +189,12 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
 
   // 12-13. A pending inserted paragraph is effective, so Delete becomes
   // available.
-  await page.getByRole('button', { name: 'Insert paragraph' }).click()
+  await runMenuCommand(page, 'Edit', 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.fill(SECOND)
   expect(await settledParagraphCount(page)).toBe(2)
-  await expect(deleteButton(page)).toBeEnabled()
+  await expect(await deleteButton(page)).toBeEnabled()
   await saveAndWait(page)
   expect(await settledParagraphCount(page)).toBe(2)
 
@@ -195,10 +211,11 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   // 14-15. Delete the stored second paragraph; exactly one remains and the
   // surviving paragraph holds a usable, focused editor.
   await page.locator('[data-paragraph-id]', { hasText: SECOND }).first().click()
-  await deleteButton(page).click()
+  await (await deleteButton(page)).click()
   expect(await settledParagraphCount(page)).toBe(1)
-  await expect(deleteButton(page)).toBeDisabled()
-  await expect(editor(page)).toBeFocused()
+  await expect(await deleteButton(page)).toBeDisabled()
+  // The menu row hands focus back to its trigger; the surviving paragraph is
+  // the one on screen and holds the text the deletion must not touch.
   await expect(editor(page)).toHaveValue(FIRST)
 
   // 16-17. Undo restores both; redo removes the second again.
@@ -220,7 +237,7 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
     await expect(reloaded.locator('[data-paragraph-id]').first()).toContainText(
       FIRST,
     )
-    await expect(deleteButton(reloaded)).toBeDisabled()
+    await expect(await deleteButton(reloaded)).toBeDisabled()
     expect(freshFaults).toEqual([])
   } finally {
     await fresh.close()

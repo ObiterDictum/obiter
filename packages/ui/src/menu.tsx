@@ -60,6 +60,7 @@ export function MenuItem({
     <BaseMenu.Item
       className={cn(
         'flex cursor-default items-center gap-3 rounded-md px-3 py-2 text-left text-item text-muted select-none',
+        'pointer-coarse:min-h-11',
         'data-[highlighted]:bg-hover data-[highlighted]:text-ink',
         className,
       )}
@@ -87,6 +88,25 @@ export function MenuRadioGroup(
   return <BaseMenu.RadioGroup {...props} />
 }
 
+/** A menu row that flips a setting on or off: `menuitemcheckbox`. */
+export function MenuCheckboxItem({
+  className,
+  ...props
+}: ComponentPropsWithoutRef<typeof BaseMenu.CheckboxItem>) {
+  return (
+    <BaseMenu.CheckboxItem
+      className={cn(
+        'flex cursor-default items-center gap-3 rounded-md px-3 py-2 text-left text-item text-muted select-none',
+        'pointer-coarse:min-h-11',
+        'data-[highlighted]:bg-hover data-[highlighted]:text-ink',
+        'data-[checked]:text-ink',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
 export function MenuRadioItem({
   className,
   ...props
@@ -95,6 +115,7 @@ export function MenuRadioItem({
     <BaseMenu.RadioItem
       className={cn(
         'flex cursor-default items-center gap-3 rounded-md px-3 py-2 text-left text-item text-muted select-none',
+        'pointer-coarse:min-h-11',
         'data-[highlighted]:bg-hover data-[highlighted]:text-ink',
         'data-[checked]:text-ink',
         className,

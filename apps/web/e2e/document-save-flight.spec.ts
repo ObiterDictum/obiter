@@ -9,6 +9,13 @@ import {
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import {
+  closeMenu,
+  menuItem,
+  openMenu,
+  openRibbonTab,
+  runMenuCommand,
+} from './editor-chrome'
 
 /*
  * Save-flight regression journey: a keystroke typed while a save is landing
@@ -124,7 +131,7 @@ async function caretAtEnd(page: Page, text: string) {
 }
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'References') {
-  await page.getByRole('tab', { name, exact: true }).first().click()
+  await openRibbonTab(page, name)
 }
 
 /**
@@ -472,18 +479,22 @@ test('typing through the save flight beside a stored table of contents and page 
 
   // Two headings for real entries and a page break so the body repaginates:
   // the structural save reshapes every paragraph id this flight crosses.
-  await openRibbon(page, 'Home')
-  await focusParagraph(page, HEADING)
-  await page.getByRole('button', { name: 'Heading 1' }).click()
-  await focusParagraph(page, 'Beta paragraph')
-  await page.getByRole('button', { name: 'Heading 1' }).click()
+  for (const text of [HEADING, 'Beta paragraph']) {
+    await focusParagraph(page, text)
+    await openMenu(page, 'Format')
+    await menuItem(page, 'Heading 1').click()
+    await closeMenu(page)
+  }
   await focusParagraph(page, BODY)
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Page break' }).click()
+  await runMenuCommand(page, 'Insert', 'Page break')
 
   await focusParagraph(page, 'Alpha item')
   await openRibbon(page, 'References')
-  await page.getByRole('button', { name: /Table of contents/ }).click()
+  await openRibbon(page, 'Insert')
+  await page
+    .getByRole('menuitem', { name: 'Table of contents', exact: true })
+    .click()
   await expect(headingParagraphs(page)).toHaveCount(2)
   await saveAndWait(page)
 

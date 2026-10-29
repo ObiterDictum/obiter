@@ -75,12 +75,14 @@ describe('the Styles gallery and list restart controls', () => {
     })
     clickParagraph('p1')
 
-    // The picker is a Base UI Select now; its disabled state and the reason
-    // are on the combobox trigger, which a name query still reaches.
-    const select = screen.getByRole('combobox', {
-      name: 'Paragraph style: This document has no paragraph styles.',
-    })
+    // The picker is a Base UI Select now; its disabled state is on the
+    // combobox trigger and the reason is its surrounding title, so the
+    // control keeps one name whatever state it is in.
+    const select = screen.getByRole('combobox', { name: 'Paragraph style' })
     expect(select).toHaveProperty('disabled', true)
+    expect(select.closest('[title]')?.getAttribute('title')).toBe(
+      'This document has no paragraph styles.',
+    )
     // The old fallback advertised Normal/Heading 1/Quote as pending UI.
     expect(screen.queryByRole('button', { name: /Heading 1/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Quote/ })).toBeNull()
@@ -93,12 +95,10 @@ describe('the Styles gallery and list restart controls', () => {
 
     const quote = command('Quote')
     fireEvent.click(quote)
-    expect(quote.getAttribute('aria-pressed')).toBe('true')
-    expect(
-      screen
-        .getByRole('button', { name: 'Heading 1' })
-        .getAttribute('aria-pressed'),
-    ).toBe('false')
+    // A style is a radio choice in the Format menu: the current style is
+    // checked, and the others in its group are not.
+    expect(quote.getAttribute('aria-checked')).toBe('true')
+    expect(command('Heading 1').getAttribute('aria-checked')).toBe('false')
 
     await save(editAsync)
     expect(operations(editAsync)).toContainEqual({

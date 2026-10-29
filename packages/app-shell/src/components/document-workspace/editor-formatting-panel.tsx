@@ -141,7 +141,22 @@ export function EditorFormattingPanel({
   const emphasis = format?.emphasisUnavailable
   const layoutDisabled = !format || Boolean(format.layoutUnavailable)
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover
+      open={open}
+      onOpenChange={(next, details) => {
+        // A value control inside the panel opens its own portaled listbox, so
+        // the press that picks an option is reported as an outside press. It
+        // is inside this surface in every way that matters: closing here would
+        // dismiss the panel at the moment the choice lands.
+        if (
+          !next &&
+          (details.reason === 'outside-press' || details.reason === 'focus-out')
+        ) {
+          return
+        }
+        onOpenChange(next)
+      }}
+    >
       <PopoverPortal>
         <PopoverPositioner anchor={anchor} side="bottom" align="end">
           <PopoverPopup

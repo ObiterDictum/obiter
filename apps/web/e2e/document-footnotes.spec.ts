@@ -6,6 +6,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openRibbonTab } from './editor-chrome'
+import { runMenuCommand } from './editor-chrome'
 
 /*
  * E7b browser journey: the Insert ribbon's Footnote control must survive the
@@ -84,12 +86,11 @@ async function openFixtureDocument(
   const documentRow = main.getByText(fixtureName).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
 
-  // The standalone workspace lives under the documents route; the rail's
-  // "In this matter" link is the only element that navigates there.
-  await page
-    .getByRole('complementary')
-    .getByRole('link', { name: fixtureName })
-    .click()
+  // The standalone workspace lives under the documents route; the document
+  // row itself is the link that opens it. The row's name is ambiguous with
+  // the rail's own copy, so the first link wins as it does for the shared
+  // journey helper.
+  await page.getByRole('link', { name: fixtureName }).first().click()
   await expect(page).toHaveURL(/\/documents\//, { timeout: 20_000 })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
@@ -98,9 +99,6 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-
-const ribbon = (page: Page, name: 'Home' | 'Insert' | 'Review') =>
-  page.getByRole('tab', { name, exact: true }).first()
 
 /** The painted body paragraph the caret anchors in. */
 const bodyParagraph = (page: Page) =>
@@ -111,7 +109,7 @@ const noteParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: MARKER }).first()
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
-  await ribbon(page, name).click()
+  await openRibbonTab(page, name)
 }
 
 /**
@@ -161,12 +159,17 @@ test('a footnote typed into its opened story survives save, reload and export', 
   // Insert ribbon → Footnote folds the note in and opens its story: the
   // editable paragraph is the pending note body, empty but for the mark.
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Footnote', exact: true }).click()
+  await page
+    .getByRole('menuitemcheckbox', { name: 'Footnote', exact: true })
+    .click()
   await expect(
-    page.getByRole('button', { name: 'Close footnotes' }),
+    page.getByRole('menuitemcheckbox', { name: 'Close footnotes' }),
   ).toBeVisible()
-  await expect(editor(page)).toBeFocused()
+  // A menu row returns focus to its trigger when the menu closes; the note
+  // body is opened and empty, and clicking it lands the caret there.
+  await expect(editor(page)).toBeVisible()
   await expect(editor(page)).toHaveValue('')
+  await editor(page).click()
   await shot(page, '01-note-story-open')
 
   await page.keyboard.type(MARKER)
@@ -184,7 +187,8 @@ test('a footnote typed into its opened story survives save, reload and export', 
   // The reconciled boundary leaves saving live: close the notes story, edit
   // the body and save again — the unreconciled defect refused this second
   // save behind the reload banner.
-  await page.getByRole('button', { name: 'Close footnotes' }).click()
+  await openRibbon(page, 'Insert')
+  await page.getByRole('menuitemcheckbox', { name: 'Close footnotes' }).click()
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await bodyParagraph(page).click()
     const focused = await expect(editor(page))
@@ -213,13 +217,17 @@ test('a footnote typed into its opened story survives save, reload and export', 
     await expect(noteParagraph(reloaded)).toBeVisible({ timeout: 30_000 })
     await openRibbon(reloaded, 'Insert')
     await noteParagraph(reloaded).click()
+    await openRibbon(reloaded, 'Insert')
     await expect(
-      reloaded.getByRole('button', { name: 'Close footnotes' }),
+      reloaded.getByRole('menuitemcheckbox', { name: 'Close footnotes' }),
     ).toBeVisible()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
     // Closing the story restores normal body editing.
-    await reloaded.getByRole('button', { name: 'Close footnotes' }).click()
+    await openRibbon(reloaded, 'Insert')
+    await reloaded
+      .getByRole('menuitemcheckbox', { name: 'Close footnotes' })
+      .click()
     await bodyParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(BODY_TEXT))
     await shot(reloaded, '04-reloaded-note-editable')
@@ -230,7 +238,7 @@ test('a footnote typed into its opened story survives save, reload and export', 
   // The exported DOCX carries both the reference and the note entry.
   await openRibbon(page, 'Review')
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
   expect(download.suggestedFilename()).toMatch(/\.docx$/)
   const exportDir = mkdtempSync(path.join(tmpdir(), 'e7b-export-'))

@@ -80,13 +80,15 @@ export function ReviewDecisionBar({
       {location ? (
         <p className="truncate text-caption text-subtle">{location}</p>
       ) : null}
+      {/* The barrier reason belongs on the disabled controls, not in a
+          second paragraph: the banner above the document already says what
+          happened and offers Reload. */}
       <p className="text-caption break-words whitespace-pre-wrap text-muted">
-        {reason ??
-          (lead?.text
-            ? labelledBreaks(lead.text)
-            : lead
-              ? 'Formatting change'
-              : 'Choose a change in the list, or use Next.')}
+        {lead?.text
+          ? labelledBreaks(lead.text)
+          : lead
+            ? 'Formatting change'
+            : 'Choose a change in the list, or use Next.'}
       </p>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
@@ -119,6 +121,7 @@ export function ReviewDecisionBar({
               variant="secondary"
               size="sm"
               disabled={disabled}
+              title={reason ?? undefined}
               onClick={onReject}
               iconStart={<X size={12} aria-hidden />}
             >
@@ -131,6 +134,7 @@ export function ReviewDecisionBar({
               variant="primary"
               size="sm"
               disabled={disabled}
+              title={reason ?? undefined}
               onClick={onAccept}
               iconStart={<Check size={12} aria-hidden />}
             >

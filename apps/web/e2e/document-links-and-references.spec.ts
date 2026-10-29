@@ -3,6 +3,7 @@ import { createAccount, openFixtureDocument } from './document-journey'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openRibbonTab } from './editor-chrome'
 
 /*
  * E6b browser journey: the Insert ribbon's Link and Cross-reference controls
@@ -37,14 +38,12 @@ const editor = (page: Page) =>
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
 const undo = (page: Page) =>
   page.getByRole('button', { name: 'Undo', exact: true })
-const tabs = (page: Page) =>
-  page.getByRole('tab', { name: /Home|Insert|Layout/ })
 const linkedText = (page: Page) =>
   page.locator(`[data-link-target="${LINK_TARGET}"]`)
 const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Layout') {
-  await tabs(page).filter({ hasText: name }).first().click()
+  await openRibbonTab(page, name)
 }
 
 async function focusHeading(page: Page) {
@@ -106,7 +105,7 @@ test('hyperlink and cross-reference paint, save and reload', async ({
     await page.keyboard.press('Shift+ArrowRight')
   }
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Link' }).click()
+  await page.getByRole('menuitem', { name: 'Link', exact: true }).click()
   await page.getByLabel('Address').fill(LINK_TARGET)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
   await expect(linkedText(page)).toBeVisible()
@@ -119,7 +118,10 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await page.keyboard.press('Escape')
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
-  await page.getByRole('button', { name: 'Cross-reference' }).click()
+  await openRibbon(page, 'Insert')
+  await page
+    .getByRole('menuitem', { name: 'Cross-reference', exact: true })
+    .click()
   const target = page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
     .first()

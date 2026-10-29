@@ -3,6 +3,8 @@ import { focusParagraph, saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openRibbonTab } from './editor-chrome'
+import { closeMenu, openMenu } from './editor-chrome'
 
 /*
  * E7c browser journey: the References ribbon's Table of contents control
@@ -32,12 +34,12 @@ function shot(page: Page, name: string) {
 }
 
 const tocButton = (page: Page) =>
-  page.getByRole('button', { name: /Table of contents/ })
+  page.getByRole('menuitem', { name: 'Table of contents', exact: true })
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
 
 async function openRibbon(page: Page, name: 'Home' | 'References') {
-  await page.getByRole('tab', { name, exact: true }).first().click()
+  await openRibbonTab(page, name)
 }
 
 type EditBody = { operations?: Array<Record<string, unknown>> }
@@ -71,20 +73,24 @@ test('table of contents refuses without headings, then paints, saves and reloads
   // is the honest one.
   await focusParagraph(page, 'Alpha item')
   await openRibbon(page, 'References')
-  const refused = page.getByRole('button', {
-    name: 'Table of contents: The document has no headings a table of contents can list.',
-  })
+  const refused = tocButton(page)
   await expect(refused).toBeDisabled()
+  await expect(
+    page.getByText(
+      'The document has no headings a table of contents can list.',
+    ),
+  ).toBeVisible()
   await shot(page, '01-no-headings-refusal')
 
   // Style a paragraph as Heading 1 through the gallery. The style has no
   // explicit outline level — the built-in styleId fallback is what admits
   // it to the field's `\o "1-3"` range.
-  await openRibbon(page, 'Home')
   await focusParagraph(page, HEADING)
-  const headingStyle = page.getByRole('button', { name: 'Heading 1' })
+  await openMenu(page, 'Format')
+  const headingStyle = page.getByRole('menuitemradio', { name: 'Heading 1' })
   await headingStyle.click()
-  await expect(headingStyle).toHaveAttribute('aria-pressed', 'true')
+  await expect(headingStyle).toHaveAttribute('aria-checked', 'true')
+  await closeMenu(page)
 
   // The caret in an ordinary paragraph takes the pending field: one folded
   // entry paragraph per heading, its `PAGEREF` resolving through the

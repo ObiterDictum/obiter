@@ -31,7 +31,7 @@ import {
 import { ApiError } from '../../api'
 import { emptyDraftState } from '../../document-save-plan'
 import { writeDocumentDraft } from '../../document-draft-store'
-import { openRibbonTab } from './editor-test-commands'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   rerenderWorkspace,
@@ -252,7 +252,7 @@ async function clickDecisionSave(
 
 function enableTracking() {
   openRibbonTab('Review')
-  fireEvent.click(command('Track changes off'))
+  setTrackChanges(true)
   openRibbonTab('Home')
 }
 
@@ -1341,7 +1341,7 @@ describe('saving a footnote', () => {
 })
 
 describe('saving an inserted structure', () => {
-  it.skip('reconciles a body save that inserts a picture so a second save runs', async () => {
+  it('reconciles a body save that inserts a picture so a second save runs', async () => {
     const restorePicker = stubImagePicker()
     try {
       const document = await server(['Page body'])
@@ -1426,7 +1426,7 @@ describe('undo across a saved mid-run structure', () => {
   // text across both continuing runs: writing it only to the head leaves the
   // tail's saved text beside the restored text, and the next save persists
   // the duplication.
-  it.skip('reverses a run edit split by a saved picture without duplicating text', async () => {
+  it('reverses a run edit split by a saved picture without duplicating text', async () => {
     const restorePicker = stubImagePicker()
     try {
       const document = await server(['Hello world'])

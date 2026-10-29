@@ -2,7 +2,7 @@ import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
-import { openRibbonTab } from './editor-test-commands'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -382,7 +382,7 @@ describe('DocxWorkspace document derivations', () => {
       },
     })
     openRibbonTab('Review')
-    fireEvent.click(command('Track changes off'))
+    setTrackChanges(true)
     selectBodyParagraph()
     const field = screen.getByLabelText('Paragraph text')
     reset()

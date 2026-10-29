@@ -1,4 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react'
+import type { ByRoleMatcher } from '@testing-library/react'
 
 /**
  * Command lookup for tests: a control by name, opening the chrome surface
@@ -83,8 +84,24 @@ const COMMAND_HOME = {
  * a control by selecting a tab now reveals it by opening its menu or the
  * formatting panel — the same user action either way.
  */
+/**
+ * The roles a command can appear under: the toolbar and panel controls are
+ * buttons, and a menu row is the menu role Base UI gives it. A command is one
+ * control wherever it is offered, so a lookup by name does not care which.
+ */
+const COMMAND_ROLES = [
+  'button',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+] as const satisfies readonly ByRoleMatcher[]
+
+function queryCommands(name: string | RegExp) {
+  return COMMAND_ROLES.flatMap((role) => screen.queryAllByRole(role, { name }))
+}
+
 export function command(name: string | RegExp): HTMLElement {
-  const matches = screen.queryAllByRole('button', { name })
+  const matches = queryCommands(name)
   const visible = matches.find((element) => !element.closest('[hidden]'))
   if (visible) return visible
   const matched =
@@ -121,16 +138,14 @@ export function command(name: string | RegExp): HTMLElement {
       'View',
     ]) {
       open(surface)
-      if (
-        screen
-          .queryAllByRole('button', { name })
-          .some((element) => !element.closest('[hidden]'))
-      ) {
+      if (queryCommands(name).some((element) => !element.closest('[hidden]'))) {
         break
       }
     }
   }
-  return screen.getByRole('button', { name })
+  const found = queryCommands(name)
+  if (!found[0]) throw new Error(`no command ${String(name)}`)
+  return found[0]
 }
 
 /**
@@ -138,9 +153,9 @@ export function command(name: string | RegExp): HTMLElement {
  * is not already on screen. Used where the label carries a state reason.
  */
 export function commandPrefix(prefix: string): HTMLElement {
-  const visible = screen
-    .queryAllByRole('button')
-    .find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
+  const visible = COMMAND_ROLES.flatMap((role) =>
+    screen.queryAllByRole(role),
+  ).find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
   if (visible) return visible
   const home = Object.keys(COMMAND_HOME).find((key) => key.startsWith(prefix))
   if (home) {
@@ -159,16 +174,16 @@ export function commandPrefix(prefix: string): HTMLElement {
   }
   // SAFETY: `home` is one of the literal COMMAND_HOME values, each of which
   // names a rendered menu trigger.
-  const found = screen
-    .queryAllByRole('button')
-    .find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
+  const found = COMMAND_ROLES.flatMap((role) =>
+    screen.queryAllByRole(role),
+  ).find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
   if (!found) throw new Error(`no ${prefix}`)
   return found
 }
 
 /** `command`, or null when the control is not offered in this state. */
 export function commandOrNull(name: string | RegExp): HTMLElement | null {
-  const matches = screen.queryAllByRole('button', { name })
+  const matches = queryCommands(name)
   const visible = matches.find((element) => !element.closest('[hidden]'))
   if (visible) return visible
   try {
@@ -208,4 +223,46 @@ export function openRibbonTab(name: keyof typeof MENU_OF_TAB) {
   fireEvent.click(
     screen.getByRole('button', { name: new RegExp(`^${MENU_OF_TAB[name]}$`) }),
   )
+}
+
+/** The description a control publishes: why it is disabled, or its hint. */
+export function commandReason(element: HTMLElement) {
+  return (element.getAttribute('aria-describedby') ?? '')
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ')
+}
+
+/** Whether a command's control refuses activation, whatever role it has. */
+export function commandDisabled(element: HTMLElement) {
+  return (
+    element.hasAttribute('disabled') ||
+    element.getAttribute('aria-disabled') === 'true'
+  )
+}
+
+/**
+ * The one tracking control: the header switch. Its name is constant, so the
+ * state is the switch's own checked state rather than part of the name.
+ */
+export function trackChangesSwitch() {
+  return screen.getByRole('switch', { name: 'Track changes' })
+}
+
+/** Turn tracking on or off, whatever state it is in. */
+export function setTrackChanges(on: boolean) {
+  const toggle = trackChangesSwitch()
+  if ((toggle.getAttribute('aria-checked') === 'true') !== on) {
+    fireEvent.click(toggle)
+  }
+}
+
+/** A command row in an open menu, whatever role the menu gives it. */
+export function menuItem(name: string | RegExp) {
+  const match = queryCommands(name).find(
+    (element) => element.getAttribute('role')?.startsWith('menuitem') === true,
+  )
+  if (!match) throw new Error(`no menu row ${String(name)}`)
+  return match
 }

@@ -2,7 +2,11 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import { openRibbonTab } from './editor-chrome'
 import { verifyEmailInDb } from './support'
+
+/** The chrome's command surfaces, re-exported for the specs that used tabs. */
+export { openRibbonTab }
 
 /*
  * The helpers every E13 spec family shares: a synthetic account through the
@@ -137,26 +141,15 @@ export async function saveAndWait(page: Page) {
 }
 
 /**
- * The ribbon's tabs are gone. Home and Layout choices now live in the
- * formatting panel, and the rest are rows in the menu bar, so opening a tab
- * means opening the surface that holds its commands.
+ * Find moved into its own bar; Ctrl+F reveals it the way the product does.
+ * The chord is handled by the workspace, so the caret has to be in the
+ * document for it to arrive — the same thing a reader does before searching.
  */
-export async function openRibbonTab(page: Page, name: string) {
-  if (name === 'Home' || name === 'Layout') {
-    await page.getByRole('button', { name: 'Font, paragraph and page' }).click()
-    return
-  }
-  const menu =
-    name === 'References' ? 'Insert' : name === 'Insert' ? 'Insert' : name
-  const trigger = page.getByRole('button', { name: menu, exact: true }).first()
-  if ((await trigger.getAttribute('aria-expanded')) === 'true') return
-  await trigger.click()
-}
-
-/** Find moved into its own bar; Ctrl+F reveals it the way the product does. */
 export async function openFind(page: Page) {
   const field = page.getByLabel('Find in document')
   if (await field.isVisible().catch(() => false)) return field
+  const paragraph = page.locator('[data-paragraph-id]').first()
+  if ((await paragraph.count()) > 0) await paragraph.click()
   await page.keyboard.press('Control+f')
   await expect(field).toBeVisible()
   return field

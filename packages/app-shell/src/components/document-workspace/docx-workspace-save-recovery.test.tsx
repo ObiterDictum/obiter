@@ -259,7 +259,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: /Insert table/ }))
+    fireEvent.click(command('Insert table'))
     fireEvent.click(command('Insert'))
     openReviewTab()
     fireEvent.click(command('Save'))

@@ -3,7 +3,14 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import { ApiError } from '../../api'
-import { openRibbonTab } from './editor-test-commands'
+import {
+  commandDisabled,
+  commandReason,
+  menuItem,
+  openRibbonTab,
+  setTrackChanges,
+  trackChangesSwitch,
+} from './editor-test-commands'
 import {
   downloadBlob,
   fetchDocumentExport,
@@ -82,21 +89,23 @@ describe('DocxWorkspace chrome', () => {
     expect(command('Bullets')).toHaveProperty('disabled', true)
     expect(command('Multilevel numbering')).toHaveProperty('disabled', true)
     openRibbonTab('Insert')
-    // Table and picture are real controls; with no caret paragraph they
-    // report an honest reason instead of a placeholder label.
-    expect(
-      screen.getByRole('button', {
-        name: 'Insert table: Place the cursor in a paragraph to insert',
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: 'Picture: Place the cursor in a paragraph to insert',
-      }),
-    ).toHaveProperty('disabled', true)
-    openRibbonTab('Layout')
-    // The E12 classification controls are live: they commit immutable marking
-    // versions against the saved document.
+    // Table and picture are real controls; with no caret paragraph they are
+    // unavailable and say why as a description, not as part of their name.
+    for (const name of ['Insert table', 'Picture']) {
+      // `Insert table` is a menu row; Picture is too, but this assertion is
+      // about the reason the command carries while no caret sits in a
+      // paragraph.
+      const row = menuItem(name)
+      expect(commandDisabled(row)).toBe(true)
+      expect(commandReason(row)).toBe(
+        'Place the cursor in a paragraph to insert',
+      )
+    }
+    // The formatting panel is still open — its own controls toggled it, and a
+    // menu interaction does not dismiss it — so the E12 classification
+    // controls are asserted where they live.
+    // They are live: they commit immutable marking versions against the saved
+    // document.
     expect(
       screen.getByRole('combobox', { name: 'Document type' }),
     ).toHaveProperty('disabled', false)
@@ -126,7 +135,7 @@ describe('DocxWorkspace chrome', () => {
     field.setSelectionRange(1, 4)
     fireEvent.select(field)
     openRibbonTab('Review')
-    fireEvent.click(command('Track changes off'))
+    setTrackChanges(true)
     openRibbonTab('Home')
     const bold = command('Bold')
     expect(bold).toHaveProperty('disabled', false)
@@ -559,9 +568,8 @@ describe('DocxWorkspace markings', () => {
     // The document type is a radio list in the Format menu: the stored kind is
     // offered as itself, and picking another one commits the markings.
     fireEvent.click(screen.getByRole('button', { name: /^Format$/ }))
-    expect(
-      screen.getByRole('button', { name: 'externally-authored-kind' }),
-    ).toBeTruthy()
+    // A stored kind this build does not list is still offered as itself.
+    expect(menuItem('externally-authored-kind')).toBeTruthy()
     fireEvent.click(command('Letter before action'))
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
@@ -585,17 +593,18 @@ describe('DocxWorkspace markings', () => {
     openRibbonTab('Layout')
 
     for (const name of ['Draft', 'Privileged', 'Without prejudice']) {
-      const control = screen.getByRole('button', {
-        name: `${name}: Save or discard unsaved edits before marking.`,
-      })
+      const control = command(name)
       expect(control).toHaveProperty('disabled', true)
       expect(control.getAttribute('aria-pressed')).toBe('false')
+      expect(control.getAttribute('title')).toBe(
+        'Save or discard unsaved edits before marking.',
+      )
     }
-    expect(
-      screen.getByRole('combobox', {
-        name: 'Document type: Save or discard unsaved edits before marking.',
-      }),
-    ).toHaveProperty('disabled', true)
+    const kind = screen.getByRole('combobox', { name: 'Document type' })
+    expect(kind).toHaveProperty('disabled', true)
+    expect(kind.closest('[title]')?.getAttribute('title')).toBe(
+      'Save or discard unsaved edits before marking.',
+    )
   })
 
   it('treats a stale-base 409 like a save conflict: the reload banner appears', async () => {
@@ -627,9 +636,8 @@ describe('DocxWorkspace track changes toggle', () => {
         },
       },
     })
-    openRibbonTab('Review')
-    const toggle = command('Track changes on')
-    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    const toggle = trackChangesSwitch()
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
   })
 
   it('saves a lone toggle flip as a settings-only version', async () => {
@@ -639,8 +647,7 @@ describe('DocxWorkspace track changes toggle', () => {
       versionNumber: 2,
     }))
     mountWorkspace({ editAsync })
-    openRibbonTab('Review')
-    fireEvent.click(command('Track changes off'))
+    setTrackChanges(true)
 
     // A flip with no edits is still unsaved state, and Save persists it.
     await waitFor(() =>
@@ -663,15 +670,17 @@ describe('DocxWorkspace track changes toggle', () => {
       trackRevisions: true,
     }
     const view = mountWorkspace({ models: { doc_1: tracked } })
-    openRibbonTab('Review')
-    fireEvent.click(command('Track changes on'))
-    await waitFor(() => expect(commandOrNull('Track changes off')).toBeTruthy())
+    setTrackChanges(false)
+    await waitFor(() =>
+      expect(trackChangesSwitch().getAttribute('aria-checked')).toBe('false'),
+    )
 
     // Unsaved work survives a remount through the draft store — a pending
-    // flip is unsaved work, so the reopened toggle is still off.
+    // flip is unsaved work, so the reopened switch is still off.
     view.unmount()
     mountWorkspace({ models: { doc_1: tracked } })
-    openRibbonTab('Review')
-    await waitFor(() => expect(commandOrNull('Track changes off')).toBeTruthy())
+    await waitFor(() =>
+      expect(trackChangesSwitch().getAttribute('aria-checked')).toBe('false'),
+    )
   })
 })

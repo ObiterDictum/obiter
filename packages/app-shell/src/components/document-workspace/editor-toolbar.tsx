@@ -165,12 +165,6 @@ export function EditorToolbar({
         pressed={props.commentsOpen}
         onClick={props.onToggleComments}
       />
-      <EditorTextButton
-        label={props.trackChanges ? 'Track changes on' : 'Track changes off'}
-        pressed={props.trackChanges}
-        disabled={!props.canEdit}
-        onClick={props.onToggleTrackChanges}
-      />
       <div className="ms-auto flex shrink-0 items-center gap-1">
         <EditorIconButton
           label="Font, paragraph and page"

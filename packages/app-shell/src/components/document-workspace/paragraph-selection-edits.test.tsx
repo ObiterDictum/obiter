@@ -6,7 +6,7 @@ import {
   insertParagraphRuns,
   type DocumentEditOperation,
 } from '@obiter/contracts'
-import { openRibbonTab } from './editor-test-commands'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -264,7 +264,7 @@ describe('formatting a cross-paragraph selection', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
     openRibbonTab('Review')
-    fireEvent.click(command('Track changes off'))
+    setTrackChanges(true)
     openRibbonTab('Home')
 
     fireEvent.click(command('Bold'))

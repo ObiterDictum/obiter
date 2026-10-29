@@ -60,17 +60,12 @@ function save(editAsync: ReturnType<typeof vi.fn>) {
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
-/* The value selects in this file are Base UI Selects; jsdom cannot open their
- * popups, so the cases that drove them end-to-end are skipped here and covered
- * by the document e2e specs (font formatting, page layout, paragraph formatting). */
-/** The expanded test bodies below are skipped; this keeps their types real. */
-function lineSpacingSelect(): HTMLElement {
-  return screen.getByRole('combobox', { name: 'Line spacing' })
-}
-
-function indentSelect(): HTMLElement {
-  return screen.getByRole('combobox', { name: 'Indent' })
-}
+/**
+ * Line spacing and Indent are Base UI Selects; applying one is a browser
+ * journey and is covered end to end by document-paragraph-formatting.spec.ts,
+ * which asserts the painted and stored values in a fresh context. The mounted
+ * assertions here cover the controls that are plain buttons.
+ */
 
 describe('the paragraph formatting controls', () => {
   it('applies an alignment, paints it, and saves one operation', async () => {
@@ -93,46 +88,6 @@ describe('the paragraph formatting controls', () => {
     ])
   })
 
-  it.skip('applies line spacing and reflects the effective value', async () => {
-    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
-    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    clickParagraph('p1')
-
-    expect(lineSpacingSelect().textContent).toBe('1.5')
-    // The 1.5 multiple paints from the same XML the server writes: the default
-    // 22 half-point face renders a 22px line box.
-    expect(paragraphStyle('p1').lineHeight).toBe('22px')
-
-    await save(editAsync)
-    expect(paragraphOperations(editAsync)).toEqual([
-      {
-        type: 'set_paragraph_format',
-        paragraphId: 'p1',
-        lineSpacing: { line: 360, lineRule: 'auto' },
-      },
-    ])
-  })
-
-  it.skip('applies a first-line indent from the Layout ribbon and reflects it', async () => {
-    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
-    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    clickParagraph('p1')
-    openRibbonTab('Layout')
-
-    expect(indentSelect().textContent).toBe('first')
-    // 720 twips is Word's half-inch default indent, painted as 48px.
-    expect(paragraphStyle('p1').textIndent).toBe('48px')
-
-    await save(editAsync)
-    expect(paragraphOperations(editAsync)).toEqual([
-      {
-        type: 'set_paragraph_format',
-        paragraphId: 'p1',
-        indentation: { firstLine: 720 },
-      },
-    ])
-  })
-
   it('reverts and reapplies a paragraph change in one undo step', () => {
     mountWorkspace({ models: { doc_1: helloModel() } })
     clickParagraph('p1')
@@ -151,8 +106,7 @@ describe('the paragraph formatting controls', () => {
   it('keeps paragraph formatting available under track changes and saves tracked', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    openRibbonTab('Review')
-    fireEvent.click(command('Track changes off'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
     openRibbonTab('Home')
     clickParagraph('p1')
 
