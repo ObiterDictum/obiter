@@ -54,7 +54,11 @@ describe('fetchPublishedCaseLawMetadata', () => {
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
     expect(result.metadata.judges).toEqual([
-      { name: 'Lord Briggs', source: 'fcl_metadata', field: 'legaldocml:judge' },
+      {
+        name: 'Lord Briggs',
+        source: 'fcl_metadata',
+        field: 'legaldocml:judge',
+      },
       { name: 'Lady Rose', source: 'fcl_metadata', field: 'legaldocml:judge' },
     ])
     expect(result.metadata.summary?.paragraphs).toEqual([
@@ -66,7 +70,7 @@ describe('fetchPublishedCaseLawMetadata', () => {
     expect(calls).toHaveLength(3)
   })
 
-  it("refuses a press summary whose own summaryOf names another judgment", async () => {
+  it('refuses a press summary whose own summaryOf names another judgment', async () => {
     const { fetchImpl } = provider({
       '/uksc/2026/31/data.xml': judgmentXml,
       '/uksc/2026/31': judgmentPage,

@@ -43,10 +43,7 @@ function fakePool(pendingRows: Array<Record<string, unknown>>) {
   return { pool, queries }
 }
 
-function deps(
-  pool: Db,
-  routes: Record<string, string>,
-): MetadataBackfillDeps {
+function deps(pool: Db, routes: Record<string, string>): MetadataBackfillDeps {
   return createMetadataBackfillDeps(
     pool,
     { mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk' },
@@ -88,7 +85,11 @@ describe('backfillPublishedMetadata', () => {
     )
     expect(update?.params[0]).toBe('uksc-2026-31')
     expect(JSON.parse(String(update?.params[1]))).toEqual([
-      { name: 'Lord Briggs', source: 'fcl_metadata', field: 'legaldocml:judge' },
+      {
+        name: 'Lord Briggs',
+        source: 'fcl_metadata',
+        field: 'legaldocml:judge',
+      },
     ])
     expect(JSON.parse(String(update?.params[2])).paragraphs).toEqual([
       'This appeal concerns the right to manage.',
@@ -110,7 +111,9 @@ describe('backfillPublishedMetadata', () => {
     })
 
     expect(
-      queries.some((query) => query.text.includes('update legal_source_documents')),
+      queries.some((query) =>
+        query.text.includes('update legal_source_documents'),
+      ),
     ).toBe(false)
     // Still pending, so a later run retries it rather than recording "none".
     expect(report).toMatchObject({ fetched: 0, remaining: 1 })
@@ -141,7 +144,9 @@ describe('backfillPublishedMetadata', () => {
   })
 
   it('records a judgment that publishes neither field as read, not pending', async () => {
-    const { pool, queries } = fakePool([{ ...row, xml_uri: null, court: 'ewca-civ' }])
+    const { pool, queries } = fakePool([
+      { ...row, xml_uri: null, court: 'ewca-civ' },
+    ])
     const report = await backfillPublishedMetadata(deps(pool, {}), {
       limit: 10,
     })

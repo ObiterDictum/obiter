@@ -150,7 +150,7 @@ async function fetchPressSummary(
 /** The judgment page's own link to its press summary, if it publishes one. */
 function readPressSummaryHref(html: string): string | null {
   for (const match of html.matchAll(/href="([^"]+)"/gi)) {
-    if (/\/press-summary$/.test(match[1])) return match[1]
+    if (match[1].endsWith('/press-summary')) return match[1]
   }
   return null
 }

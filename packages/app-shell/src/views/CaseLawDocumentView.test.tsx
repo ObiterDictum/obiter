@@ -228,9 +228,7 @@ describe('CaseLawDocumentView', () => {
       within(summaryCard)
         .getByRole('link', { name: 'Open original' })
         .getAttribute('href'),
-    ).toBe(
-      'https://caselaw.nationalarchives.gov.uk/uksc/2024/3/press-summary',
-    )
+    ).toBe('https://caselaw.nationalarchives.gov.uk/uksc/2024/3/press-summary')
   })
 
   it('shows no bench and no summary when the source publishes neither', async () => {

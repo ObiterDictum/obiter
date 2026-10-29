@@ -1923,7 +1923,10 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('serves an empty bench and no summary when the row carries neither', async () => {
-    searchClientMock.getDocument.mockResolvedValueOnce({ ...hit, paragraphs: [] })
+    searchClientMock.getDocument.mockResolvedValueOnce({
+      ...hit,
+      paragraphs: [],
+    })
     const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/documents/uksc-2024-3')

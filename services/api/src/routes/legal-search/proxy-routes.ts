@@ -561,10 +561,7 @@ export function createLegalSearchProxyRoutes(
     // Both read from published metadata only (see 0039). An empty list and a
     // null summary are the honest "the source publishes none", so the page
     // renders nothing rather than a placeholder.
-    const published: {
-      judges: string[]
-      summary: CaseLawSummaryResponse | null
-    } = {
+    const published = {
       judges: storedSourceRecord?.judges?.map((judge) => judge.name) ?? [],
       summary: storedSourceRecord?.publishedSummary
         ? {
@@ -573,6 +570,9 @@ export function createLegalSearchProxyRoutes(
             sourceUrl: storedSourceRecord.publishedSummary.sourceUrl,
           }
         : null,
+    } satisfies {
+      judges: string[]
+      summary: CaseLawSummaryResponse | null
     }
 
     if (document) {
