@@ -149,7 +149,7 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         [body.versionId],
       )
       expect(version.rows[0]?.document_status).toBe('ready')
-      expect(version.rows[0]?.filename).toBe('document-redacted.txt')
+      expect(version.rows[0]?.filename).toBe('pasted-extract-redacted.txt')
       expect(storage.text.get(version.rows[0]!.text_object_key!)).toContain(
         'Synthetic redacted witness statement',
       )

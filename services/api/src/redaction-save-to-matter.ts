@@ -45,8 +45,15 @@ function outputFileType(run: RedactionRunRecord) {
   return 'txt'
 }
 
+/**
+ * Inside the matter the copy keeps its source's name: the matter is the firm's
+ * own access-controlled space, and a dozen copies all called
+ * "document-redacted" could not be told apart. Only downloads, which leave the
+ * firm, drop the source name.
+ */
 function outputFilename(run: RedactionRunRecord) {
-  return `document-redacted.${outputFileType(run)}`
+  const stem = run.sourceFilename.replace(/\.[^.]+$/u, '') || 'document'
+  return `${stem}-redacted.${outputFileType(run)}`
 }
 
 /**
