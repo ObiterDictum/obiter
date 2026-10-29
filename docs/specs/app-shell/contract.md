@@ -192,6 +192,8 @@ These rules were in code comments until the no-comments rule (29 Oct 2026). A un
 - Restoring the last draft unmounts the save banner, so focus moves back to the document rather than being stranded on a removed node (`save-banners.tsx`).
 - Focus returns to the caret's field at the only point a save can begin (`use-document-save.ts`).
 - Save containment probes the most recent slots first (`use-document-save.ts`).
+- While a save is still landing at the version boundary, Save stays visibly active rather than reading as inert (`use-document-save.ts`).
+- The track-changes toggle is sent only while a flip is pending, so a stale tab cannot revert a collaborator's setting (`use-document-save.ts`).
 - Find caches the folded text and its maps per text and fold flag, maps hits to spans in one forward walk, and searches only the story open for editing (`document-find.ts`).
 - Local paint descriptors for pending redlines never enter model storage or review decisions (`document-pending-redlines.ts`).
 - A range edit whose head is revision-only has no run to join into and is refused before paint shows it (`document-range-edits.ts`).
