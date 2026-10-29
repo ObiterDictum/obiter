@@ -1,9 +1,3 @@
-/*
- * Tests for the build marker written into dist/ and verified at serve time and
- * by the measurement harness. These cover the failures the marker exists to
- * refuse: a missing marker, a dist modified after the build, a stale commit, a
- * dirty build presented as clean, and a development React artifact.
- */
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -34,7 +28,6 @@ after(async () => {
   )
 })
 
-/** A minimal built dist: two content-hashed client assets. */
 async function fixtureDist() {
   const dir = await mkdtemp(join(tmpdir(), 'obiter-provenance-'))
   tempDirs.push(dir)
@@ -98,6 +91,28 @@ test('a dist modified after the build is refused', async () => {
   await writeFile(
     join(dir, 'client', 'assets', 'index-abcdefgh.js'),
     'tampered\n',
+  )
+  await assert.rejects(
+    () => verifyArtifactIntegrity(dir),
+    /modified after build/,
+  )
+})
+
+test('a swapped font or PDF worker is refused', async () => {
+  const dir = await fixtureDist()
+  await writeFile(
+    join(dir, 'client', 'assets', 'font-abcdefgh.woff2'),
+    'font-bytes',
+  )
+  await writeFile(
+    join(dir, 'client', 'assets', 'pdf-ijklmnop.js'),
+    'worker-bytes',
+  )
+  identity()
+  await writeBuildProvenance(dir, { repoRoot: dir })
+  await writeFile(
+    join(dir, 'client', 'assets', 'font-abcdefgh.woff2'),
+    'swapped',
   )
   await assert.rejects(
     () => verifyArtifactIntegrity(dir),
@@ -184,7 +199,6 @@ test('the Dockerfile passes both provenance args into the web build', async () =
   )
   assert.match(dockerfile, /ARG OBITER_BUILD_COMMIT/)
   assert.match(dockerfile, /ARG OBITER_BUILD_DIRTY/)
-  // Join line continuations so the whole RUN is one logical line.
   const buildLine = dockerfile
     .replace(/\\\n\s*/g, ' ')
     .split('\n')

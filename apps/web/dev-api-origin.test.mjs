@@ -5,13 +5,6 @@ import {
   resolveDevApiOrigin,
 } from './dev-api-origin.mjs'
 
-/*
- * These pin the contract that made SSR and the proxy disagree: the origin comes
- * from the process environment first and the worktree `.env` second, a lane
- * `.env` is honoured without exporting anything, and an unconfigured lane is
- * refused rather than pointed at the shared dev API.
- */
-
 const SHARED_WEB_PORT = 3000
 const SHARED_API_ORIGIN = 'http://localhost:8787'
 
@@ -98,6 +91,18 @@ test('a blank origin falls through to PORT rather than to the shared API', () =>
   assert.equal(origin, 'http://localhost:8789')
 })
 
+test('ignores BETTER_AUTH_URL so it cannot choose a dev backend', () => {
+  assert.throws(
+    () =>
+      resolveDevApiOrigin({
+        processEnv: { BETTER_AUTH_URL: 'http://localhost:8788' },
+        fileEnv: {},
+        webPort: 3002,
+      }),
+    /must not fall back to the shared dev API/,
+  )
+})
+
 test('refuses an invalid configured origin', () => {
   for (const value of ['not-a-url', 'ftp://localhost:8789', 'localhost:8789']) {
     assert.throws(
@@ -171,8 +176,6 @@ test('refusal leaves no proxy target or SSR define wired', () => {
     () => applyDevServerApiOrigin(config, { processEnv: {}, fileEnv: {} }),
     /must not fall back to the shared dev API/,
   )
-  // The shared target must not be installed before the refusal; a failed
-  // resolution must not leave a proxy or define pointing at 8787.
   assert.equal(config.server.proxy['/api'], undefined)
   assert.equal(config.environments.ssr.define, undefined)
 })
@@ -187,9 +190,6 @@ test('re-resolves on a config restart without writing the process environment', 
   })
   assert.equal(first.server.proxy['/api'].target, 'http://localhost:9891')
 
-  // Vite re-evaluates the config on restart. A value the resolver wrote into
-  // process.env would shadow the edited .env and pin the first origin; the
-  // resolver must not write one.
   const second = {
     server: { port: 3002, proxy: {} },
     environments: { ssr: {} },

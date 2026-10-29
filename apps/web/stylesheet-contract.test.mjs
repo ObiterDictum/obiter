@@ -1,23 +1,3 @@
-/*
- * Regression for the production web image's stylesheet 404: SSR pages named a
- * styles-*.css that dist/client neither contained nor served.
- *
- * The defect only appears where nothing ignores the build output. The Docker
- * context ships no .gitignore and no .git, so Tailwind's automatic source
- * detection rescanned the dist/ that the client build pass had just written
- * when the SSR pass compiled its own copy of the stylesheet. The two passes
- * hashed differently, the SSR manifest carried the second hash, and only the
- * first file was ever emitted.
- *
- * This test therefore builds the real artifact in a mirrored tree with no
- * .gitignore and no .git (the image build's condition), serves it with the
- * production host (serve.mjs under bun), and asserts from live SSR responses
- * that every stylesheet the principal routes name exists under dist/client and
- * serves HTTP 200 with a text/css body. When the two passes disagree the
- * request 404s here exactly as it did in the image. It also pins the cache
- * policy (SSR stays private/no-store, hashed stylesheets stay immutable) and
- * path safety (traversal never serves files from disk) on the same server.
- */
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
@@ -38,14 +18,8 @@ import { IMMUTABLE_CACHE_CONTROL } from './http-policy.mjs'
 
 const repoRoot = join(import.meta.dirname, '..', '..')
 
-/** Routes the production host must answer with a styled page. */
 const ROUTES = ['/', '/sign-in', '/search', '/settings']
 
-/**
- * Never mirrored into the sandbox: build output and caches (the image context
- * excludes the same), VCS metadata, and environment files (the image ships
- * none; a lane .env must not configure a test build either).
- */
 const SKIP = new Set([
   '.git',
   '.tanstack',
@@ -58,11 +32,6 @@ const SKIP = new Set([
 ])
 const skipEntry = (name) => SKIP.has(name) || name.startsWith('.env')
 
-/**
- * Copy src into dest preserving symlinks verbatim. node:fs.cp is not usable
- * here: it rewrites a relative symlink into an absolute one pointing back at
- * the source tree, which would silently resolve packages outside the sandbox.
- */
 async function mirror(src, dest) {
   await mkdir(dest, { recursive: true })
   for (const entry of await readdir(src, { withFileTypes: true })) {
@@ -75,11 +44,6 @@ async function mirror(src, dest) {
   }
 }
 
-/**
- * Root files only: workspaces are resolved from package.json, and the tree
- * deliberately omits .gitignore and .env files, which the image context never
- * ships.
- */
 const ROOT_FILES = [
   'package.json',
   'bun.lock',
@@ -121,7 +85,6 @@ function run(cmd, args, { cwd, env, timeoutMs }) {
   })
 }
 
-/** Production build environment: no NODE_ENV (the config refuses a dev build). */
 function buildEnv() {
   const env = { ...process.env, CI: '1' }
   delete env.NODE_ENV
@@ -136,9 +99,7 @@ function buildEnv() {
         encoding: 'utf8',
       }).length > 0
     env.OBITER_BUILD_DIRTY = dirty ? '1' : '0'
-  } catch {
-    // No git in the environment: the marker records null, as an ad-hoc build does.
-  }
+  } catch {}
   return env
 }
 
@@ -163,7 +124,6 @@ async function freePort() {
   })
 }
 
-/** Raw request so the client cannot normalise dot segments before the wire. */
 function rawRequest(port, path) {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1')
@@ -190,7 +150,7 @@ function rawRequest(port, path) {
 }
 
 let sandbox
-let server // child process running the production host
+let server
 let port
 
 after(async () => {
@@ -208,16 +168,12 @@ after(async () => {
 })
 
 test(
-  'builds the real web artifact without .gitignore or .git (the image build condition)',
+  'builds the real web artifact without .gitignore, .git or NODE_ENV (the image build condition)',
   { timeout: 300_000 },
   async () => {
     sandbox = await mkdtemp(join(tmpdir(), 'obiter-stylesheet-'))
     await mirror(join(repoRoot, 'packages'), join(sandbox, 'packages'))
     await mirror(join(repoRoot, 'apps', 'web'), join(sandbox, 'apps', 'web'))
-    // Root node_modules as links: bun's isolated layout stores everything
-    // behind relative symlinks, so the copy stays inside the sandbox except
-    // the package store, which is shared deliberately (dependencies are not
-    // under test and re-installing would take minutes).
     await mirror(join(repoRoot, 'node_modules'), join(sandbox, 'node_modules'))
     await symlink(
       join(repoRoot, 'node_modules', '.bun'),
@@ -265,9 +221,7 @@ test(
       try {
         const probe = await fetch(`${origin}/sign-in`)
         if (probe.status > 0) break
-      } catch {
-        // Not listening yet.
-      }
+      } catch {}
       if (Date.now() > deadline)
         assert.fail(`serve.mjs never became ready:\n${serverLog}`)
       await new Promise((done) => setTimeout(done, 250))
@@ -300,7 +254,6 @@ test(
         href.startsWith('/assets/') && href.endsWith('.css'),
         `unexpected stylesheet URL shape: ${href}`,
       )
-      // Ownership: the named file must be emitted into the served client tree.
       const emitted = await stat(join(clientDir, href))
       assert.ok(emitted.isFile(), `${href} must exist in dist/client`)
 

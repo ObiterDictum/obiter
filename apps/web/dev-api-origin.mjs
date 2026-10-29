@@ -54,18 +54,6 @@ export function resolveDevApiOrigin({ processEnv, fileEnv, webPort }) {
   )
 }
 
-/**
- * Wire the resolved origin into a resolved Vite config: the `/api` proxy target
- * and the SSR-only `process.env.OBITER_API_ORIGIN` define. Both come from one
- * `resolveDevApiOrigin` call, so the browser and the in-process SSR handler can
- * never be pointed at different backends.
- *
- * The port is `config.server.port`, which is the effective port only after
- * Vite's `configResolved` hook has run and CLI options such as `--port` have
- * been merged. The proxy object is mutated in place because Vite copies
- * `server.proxy` into `preview.proxy` before `configResolved`; replacing it
- * would leave `vite preview` without a proxy.
- */
 export function applyDevServerApiOrigin(config, { processEnv, fileEnv }) {
   const apiOrigin = resolveDevApiOrigin({
     processEnv,
@@ -96,13 +84,11 @@ function parseOrigin(raw, key) {
     )
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    // `url.origin` drops any userinfo, so a credentialed mistake is not echoed.
     throw new Error(`${key} must be an http(s) origin; got "${url.origin}".`)
   }
   return url.origin
 }
 
-/** Mask `user:password@` userinfo before a value is put into an error message. */
 function redactCredentials(value) {
   return String(value).replace(/\/\/[^/@\s]*@/, '//<redacted>@')
 }

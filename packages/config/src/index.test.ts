@@ -13,7 +13,6 @@ describe('resolveLocalEnvFile', () => {
     return directory
   }
 
-  // A worktree root, marked the way the real repository marks one.
   async function tempWorktree(base = tmpdir()) {
     const root = await tempDir('obiter-worktree-', base)
     await writeFile(join(root, 'bun.lock'), '// bun lockfile v1\n')
@@ -39,8 +38,6 @@ describe('resolveLocalEnvFile', () => {
   })
 
   it('does not cross the worktree boundary into a parent checkout .env', async () => {
-    // The shape of ~/Source/Obiter: a checkout with a .env and a lane worktree
-    // nested inside it whose own .env is missing.
     const parent = await tempDir('obiter-parent-')
     await writeFile(join(parent, '.env'), 'DATABASE_URL=postgres://shared\n')
 
@@ -57,9 +54,6 @@ describe('resolveLocalEnvFile', () => {
   })
 
   it('stops at the depth cap when no workspace marker exists', async () => {
-    // Six levels below the .env, with no marker anywhere: the walk must not
-    // reach the file. Before the marker bound this path walked to /, so a
-    // bundled or copied deployment could pick up an unrelated ancestor .env.
     const root = await tempDir('obiter-unbounded-')
     const envPath = join(root, '.env')
     await writeFile(envPath, 'DATABASE_URL=postgres://foreign\n')
@@ -127,8 +121,6 @@ describe('parseLocalEnvFile', () => {
   })
 
   it('reads a quoted multiline value without treating KEY= inside it as an assignment', async () => {
-    // A PEM private key is the real case: the body contains lines that look
-    // like assignments, and the value may legitimately be multiline.
     const envPath = await writeEnv(
       'PRIVATE_KEY="-----BEGIN\nKEY=inner\n-----END"\nPORT=8791\n',
     )

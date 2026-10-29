@@ -1,34 +1,8 @@
-// A path reference is the only way to load an ambient declaration beside the
-// importing file without publishing a types package.
 // oxlint-disable-next-line typescript/triple-slash-reference
 /// <reference path="./jsdom.d.ts" />
 import { expect } from 'bun:test'
 import { JSDOM } from 'jsdom'
 
-/**
- * jsdom for DOM test files.
- *
- * Installed by scripts/test/dom-preload.ts before the test module's own
- * imports, when the file imports this package as its DOM marker. The preload
- * is the point that matters: bun evaluates bare specifiers before relative
- * ones and React/Testing Library cache `canUseDOM` and `document.body` at
- * their own module evaluation, so a per-file setup module can run too late.
- * The import in the test file is idempotent with that preload; it exists so a
- * file declares that it needs the DOM.
- *
- * The globals installed here are jsdom's, including `Event`/`EventTarget`,
- * which differ from the Node globals of the same name — a Node `Event`
- * dispatched at a jsdom target is rejected as "not of type 'Event'". Node's
- * runtime essentials (timers, fetch, crypto, MessageChannel) are kept: jsdom
- * either lacks them or its versions are not what code under test uses.
- *
- * `@testing-library/dom` is deliberately not imported here. Its `screen`
- * binds against `document.body` at its own module evaluation, and the preload
- * guarantees this install finishes before the test module's imports run, so
- * the first evaluation any Testing Library package makes already sees the
- * live document. Pre-importing it here only moved that cost into setup for
- * files that import it anyway, and paid it for files that never do.
- */
 const runtimeGlobals = new Set([
   'console',
   'process',
@@ -47,8 +21,6 @@ const runtimeGlobals = new Set([
   'WebSocket',
   'crypto',
   'performance',
-  // React's scheduler posts through a MessageChannel; jsdom's does not drive
-  // it the same way, so the host implementation stays.
   'MessageChannel',
   'MessagePort',
   'AbortController',
@@ -74,12 +46,7 @@ async function install(): Promise<void> {
     pretendToBeVisual: true,
   })
   const window = dom.window
-  // jsdom implements no layout, so it has no matchMedia at all. The shell reads
-  // media queries for its compact rail; a stub that reports "no match" keeps
-  // those components renderable, and a test that needs a matching query
-  // overrides it on the window it owns.
   if (typeof window.matchMedia !== 'function') {
-    // jsdom has no layout engine, so the stub reports no match and never fires.
     window.matchMedia = (query: string) => ({
       matches: false,
       media: query,
@@ -110,9 +77,7 @@ async function install(): Promise<void> {
         configurable: true,
         writable: true,
       })
-    } catch {
-      // A non-configurable host global; the host value stays.
-    }
+    } catch {}
   }
 
   for (const [key, value] of Object.entries({
@@ -131,9 +96,7 @@ async function install(): Promise<void> {
         configurable: true,
         writable: true,
       })
-    } catch {
-      // Already defined by the runtime with a compatible value.
-    }
+    } catch {}
   }
 
   hostGlobals[installFlag] = true
@@ -141,11 +104,6 @@ async function install(): Promise<void> {
 
 await install()
 
-/**
- * A short description of a value for a failure message, bounded so formatting
- * stays cheap. jsdom nodes never reach the impl graph; other values are
- * inspected shallowly, since only `null` was expected anyway.
- */
 function describeValue(value: unknown): string {
   if (typeof Node !== 'undefined' && value instanceof Node) {
     if (
@@ -169,16 +127,6 @@ function describeValue(value: unknown): string {
   }
 }
 
-/**
- * `toBeNull` with bun's exact pass rule (`received === null`) and a bounded
- * failure message. The built-in formats the received value eagerly, and for a
- * jsdom node that walk follows `[Symbol(impl)]` into `_globalObject`, the whole
- * Window: roughly 200ms for a detached element and seconds once the app is
- * mounted. Every `waitFor` poll that fails before the condition holds pays it,
- * so one negative-DOM wait could hold the file for seconds with no test
- * sleeping anywhere. The summary keeps the element identifiable: tag, id,
- * role, text, without traversing the graph.
- */
 expect.extend({
   toBeNull(received: unknown) {
     const pass = received === null
