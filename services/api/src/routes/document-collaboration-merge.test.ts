@@ -169,7 +169,7 @@ describe('collaboration merges', () => {
     expect(database.audits).toHaveLength(4)
   })
 
-  it('merges disjoint stale edits into the next version while retaining both changes', async () => {
+  it('merges disjoint stale edits with both changes and base-relative lineage', async () => {
     const database = new EditDatabase()
     const route = collaborationApp(database)
     const first = await route.app.request(
