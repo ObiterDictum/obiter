@@ -87,6 +87,7 @@ export function isWord(element: XmlElement, localName: string) {
 // (bears a newline) only when its type is textWrapping or absent. Every other
 // type is structure: it consumes no text offset and must survive a text edit.
 export function isTextWrappingBreak(element: XmlElement) {
+  if (isWord(element, 'cr')) return true
   if (!isWord(element, 'br')) return false
   const type = attributeValue(element, WORD_NAMESPACE, 'type')
   return type === undefined || type === 'textWrapping'
