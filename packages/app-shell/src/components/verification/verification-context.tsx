@@ -42,7 +42,7 @@ export type RenderedFindings = {
  * re-deriving the dock's gate, so an enabled ribbon control always has a real
  * dock control to reveal and focus.
  */
-export type StartAvailability =
+type StartAvailability =
   { available: true } | { available: false; reason: string }
 
 /** The document-level Verify strip. `revealStart` falls back to it if the

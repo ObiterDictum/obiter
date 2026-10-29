@@ -65,15 +65,6 @@ export function runEmphasisClass(run: DocumentTextRunWire): string | undefined {
   return classes.length > 0 ? classes.join(' ') : undefined
 }
 
-export function runColor(run: DocumentTextRunWire): string | undefined {
-  const value = run.preservedXmlFragments
-    .join('')
-    .match(/<w:color\b[^>]*w:val="([^"]+)"/i)?.[1]
-  if (!value || value.toLowerCase() === 'auto') return undefined
-  if (!/^[0-9A-Fa-f]{6}$/.test(value)) return undefined
-  return `#${value}`
-}
-
 export function readableRunColor(
   color: string | undefined,
   background?: string,

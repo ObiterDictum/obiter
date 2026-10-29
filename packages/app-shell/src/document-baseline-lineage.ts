@@ -20,16 +20,12 @@ import {
   pendingUnresolvedRunId,
 } from './document-baseline-identity-keys'
 
-export function hasAuthoritativeLineage(baseline: SaveBaseline): boolean {
-  return baseline.lineage !== undefined && baseline.versionId !== undefined
-}
-
 /**
  * The base runs a covered reversal has to be able to address. A missing
  * address is what makes a translation unsafe: the result model run ids are
  * positional, so falling back to the base id can name unrelated content.
  */
-export function coveredRunIds(
+function coveredRunIds(
   slot: DraftSlot,
   baseline: Pick<SaveBaseline, 'sent' | 'fromModel'>,
 ): string[] {
@@ -333,7 +329,7 @@ export function lineageIdentities(
   }
 }
 
-export function nearestSurvivingPreceding(
+function nearestSurvivingPreceding(
   order: readonly string[],
   surviving: ReadonlySet<string>,
   paragraphId: string,
@@ -347,7 +343,7 @@ export function nearestSurvivingPreceding(
   return null
 }
 
-export function nearestSurvivingFollowing(
+function nearestSurvivingFollowing(
   order: readonly string[],
   surviving: ReadonlySet<string>,
   paragraphId: string,

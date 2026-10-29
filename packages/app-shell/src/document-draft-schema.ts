@@ -12,7 +12,7 @@ import { DOCUMENT_DRAFT_SCHEMA_VERSION } from './document-draft-identity'
  * so the storage lifecycle module stays under the source ceiling while the
  * contract for a persisted draft reads in one place.
  */
-export const localInsertSchema = z
+const localInsertSchema = z
   .object({
     clientId: z.string().min(1),
     afterParagraphId: z.string().min(1),
@@ -29,7 +29,7 @@ const trackedRejectionSchema = z
     removeParagraphIds: z.array(z.string().min(1)).min(1).optional(),
   })
   .strict()
-export const draftStateSchema = z
+const draftStateSchema = z
   .object({
     drafts: z.record(z.string(), z.string()),
     inserts: z.array(localInsertSchema),

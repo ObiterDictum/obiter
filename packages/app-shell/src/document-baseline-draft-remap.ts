@@ -191,8 +191,3 @@ export function hasUnresolvedBaselineIdentities(state: DraftState): boolean {
     )
   )
 }
-
-/** Whether a boundary still holds an identity the saved model has not named. */
-export function hasPendingIdentities(baseline: SaveBaseline) {
-  return baseline.toModel === undefined
-}

@@ -227,17 +227,6 @@ export function paragraphHasUnmodelled(
   )
 }
 
-export function storyHasUnmodelled(story: DocumentStoryWire): boolean {
-  return (
-    story.preservedXmlFragments.length > 0 ||
-    story.paragraphs.some(paragraphHasUnmodelled)
-  )
-}
-
-export function runDraftKey(run: DocumentTextRunWire): string {
-  return run.id
-}
-
 export function cursorForSelection(
   model: DocumentModelWire,
   paragraphId: string,
