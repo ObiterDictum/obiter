@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { ArrowsLeftRight, X } from '@phosphor-icons/react'
-import { Button, DockedPanel, Select, cn } from '@obiter/ui'
-import {
-  DOCUMENT_COMPARISON_ENTRY_MAX_COUNT,
-  type DocumentComparisonEntry,
-  type DocumentCompareResponse,
-  type DocumentModelWire,
-  type DocumentParagraphWire,
+import { Button, Select, cn } from '@obiter/ui'
+import type {
+  DocumentComparisonSegment,
+  DocumentCompareResponse,
+  DocumentModelWire,
+  DocumentParagraphWire,
 } from '@obiter/contracts'
 import { paragraphPlainText } from '../../document-model-text'
 import {
@@ -15,6 +14,10 @@ import {
 } from '../../document-workspace-api'
 import { formatDate } from '../../format'
 import type { DocumentVersionRecord } from '../../documents'
+import {
+  CompareDifferencesPanel,
+  comparisonSegments,
+} from './document-compare-differences'
 import { DocumentDesk, DocumentPage } from './document-page'
 import { QueryError } from './workspace-chrome'
 
@@ -213,11 +216,15 @@ function CompareBody({
   )
 }
 
-/** One row of the redline: body text, a removal in place, or a part marker. */
+/** One row of the redline: body text with its changes marked, or a removal in place. */
 type ComparisonBlock =
-  | { kind: 'paragraph'; paragraph: DocumentParagraphWire; entryIndex?: number }
+  | {
+      kind: 'paragraph'
+      paragraph: DocumentParagraphWire
+      entryIndex?: number
+      segments?: readonly DocumentComparisonSegment[]
+    }
   | { kind: 'removed'; text: string; entryIndex: number }
-  | { kind: 'marker'; label: string; entryIndex: number }
 
 /**
  * The target document in reading order with each difference marked, and every
@@ -225,7 +232,7 @@ type ComparisonBlock =
  * removal is anchored before the next base paragraph the target still holds,
  * so a deleted clause reads between the clauses that stayed around it instead
  * of vanishing into a list. Changes outside paragraph text (styles, numbering,
- * tracked-change records) are markers at the end; they name themselves.
+ * tracked-change records) are named by the difference list, not the paper.
  */
 export function comparisonBlocks(
   data: DocumentCompareResponse,
@@ -270,17 +277,6 @@ export function comparisonBlocks(
     list.push(block)
     removalsByAnchor.set(anchor.id, list)
   })
-  const markers = data.entries.flatMap((entry, index) =>
-    entry.type === 'story' || entry.type === 'package'
-      ? [
-          {
-            kind: 'marker' as const,
-            label: entryLabel(entry),
-            entryIndex: index,
-          },
-        ]
-      : [],
-  )
   const blocks: ComparisonBlock[] = []
   for (const story of target.stories) {
     for (const paragraph of story.paragraphs) {
@@ -289,10 +285,17 @@ export function comparisonBlocks(
         kind: 'paragraph',
         paragraph,
         entryIndex: entryByParagraph.get(paragraph.id),
+        segments: segmentsFor(data, entryByParagraph.get(paragraph.id)),
       })
     }
   }
-  return [...blocks, ...trailing, ...markers]
+  return [...blocks, ...trailing]
+}
+
+/** The word-level change marks a modified paragraph carries, when it has them. */
+function segmentsFor(data: DocumentCompareResponse, index: number | undefined) {
+  const entry = index === undefined ? undefined : data.entries[index]
+  return entry?.type === 'modified' ? entry.segments : undefined
 }
 
 /** The redline over the paper, with the difference list beside it. */
@@ -346,49 +349,12 @@ export function DocumentComparisonView({
           </DocumentPage>
         </div>
       </DocumentDesk>
-      <DockedPanel title="Differences" onClose={onClose}>
-        <div className="flex flex-col gap-3">
-          <p className="text-caption text-muted">
-            {data.entries.length === 0
-              ? 'No differences.'
-              : `${String(data.entries.length)} difference${data.entries.length === 1 ? '' : 's'}, in document order.`}
-          </p>
-          <ul className="flex flex-col">
-            {data.entries.map((entry, index) => (
-              <li key={index} className="border-t border-line first:border-t-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto w-full justify-start py-2 text-left whitespace-normal"
-                  aria-label={`Show difference ${String(index + 1)}: ${entryLabel(entry)}`}
-                  aria-current={index === active ? 'true' : undefined}
-                  onClick={() => jumpTo(index)}
-                >
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-caption text-subtle">
-                      {entryLabel(entry)}
-                    </span>
-                    <span className="text-body break-words whitespace-normal text-ink">
-                      {entryPreview(entry)}
-                    </span>
-                  </span>
-                </Button>
-              </li>
-            ))}
-          </ul>
-          {data.entriesTruncated ? (
-            <p className="text-caption text-muted" role="status">
-              Only the first {DOCUMENT_COMPARISON_ENTRY_MAX_COUNT} differences
-              are shown.
-            </p>
-          ) : null}
-          {data.notes.map((note, index) => (
-            <p key={index} className="text-caption text-muted">
-              {note}
-            </p>
-          ))}
-        </div>
-      </DockedPanel>
+      <CompareDifferencesPanel
+        data={data}
+        active={active}
+        onJump={jumpTo}
+        onClose={onClose}
+      />
     </div>
   )
 }
@@ -419,19 +385,6 @@ function ComparisonBlockView({
   const activeClasses = isActive
     ? 'outline-2 outline-offset-2 outline-ring'
     : ''
-  if (block.kind === 'marker') {
-    return (
-      <p
-        id={id}
-        className={cn(
-          'rounded-sm bg-warning-soft px-1 text-caption text-ink',
-          activeClasses,
-        )}
-      >
-        {block.label}
-      </p>
-    )
-  }
   if (block.kind === 'removed') {
     return (
       <p
@@ -455,49 +408,11 @@ function ComparisonBlockView({
         activeClasses,
       )}
     >
-      {text === '' ? '\u00a0' : text}
+      {block.segments === undefined
+        ? text === ''
+          ? '\u00a0'
+          : text
+        : comparisonSegments(block.segments)}
     </p>
   )
-}
-
-export function entryLabel(entry: DocumentComparisonEntry) {
-  switch (entry.type) {
-    case 'added':
-      return 'Paragraph added'
-    case 'removed':
-      return 'Paragraph removed'
-    case 'modified':
-      return 'Wording changed'
-    case 'formatted':
-      return 'Formatting changed'
-    case 'story':
-      return 'Structure changed'
-    case 'package':
-      return packageAreaLabel(entry.area)
-  }
-}
-
-function entryPreview(entry: DocumentComparisonEntry) {
-  if (entry.type === 'story' || entry.type === 'package') return ''
-  if (entry.type === 'modified') {
-    return entry.segments.map((segment) => segment.text).join('')
-  }
-  return entry.text
-}
-
-function packageAreaLabel(area: string) {
-  switch (area) {
-    case 'styles':
-      return 'Styles changed'
-    case 'numbering':
-      return 'List numbering changed'
-    case 'relationships':
-      return 'Document links changed'
-    case 'comments':
-      return 'Comment records changed'
-    case 'revisions':
-      return 'Tracked-change records changed'
-    default:
-      return 'Document package changed'
-  }
 }
