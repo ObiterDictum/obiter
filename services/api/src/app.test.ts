@@ -138,6 +138,19 @@ describe('createApiApp', () => {
     })
   })
 
+  it('reports a missing session organisation as an integrity error', async () => {
+    const response = await createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    ).request('/api/me')
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'organisation_not_found' },
+    })
+  })
+
   it('reports the serving adapter when the entry point declares one', async () => {
     const auth = {
       api: {
