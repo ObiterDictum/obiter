@@ -437,10 +437,7 @@ export function FinalizedOutput({
             </div>
             <dl className="grid gap-x-8 gap-y-3 md:grid-cols-2">
               <div className="flex flex-col gap-3">
-                <Detail
-                  label="File"
-                  value={scheduleFilename('.pdf')}
-                />
+                <Detail label="File" value={scheduleFilename('.pdf')} />
                 <Detail
                   label="Decisions"
                   value={`${run.summary.reviewedCount} recorded`}
