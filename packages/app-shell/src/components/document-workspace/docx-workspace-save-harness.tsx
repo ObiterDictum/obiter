@@ -197,7 +197,7 @@ function idleMutation(overrides: Record<string, unknown> = {}) {
   }
 }
 
-export type SaveWorkspaceOptions = {
+type SaveWorkspaceOptions = {
   editAsync?: ReturnType<typeof vi.fn>
   mergeAsync?: ReturnType<typeof vi.fn>
   versionId?: string

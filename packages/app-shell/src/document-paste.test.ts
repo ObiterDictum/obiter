@@ -6,14 +6,7 @@ import type {
 import { flowParagraphIds } from './document-edits'
 import { applyPasteText, splitPasteLines } from './document-paste'
 import { blockText, emptyEditorState } from './document-word-edits'
-
-function paragraph(id: string, text: string): DocumentParagraphWire {
-  return {
-    id,
-    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
-    preservedXmlFragments: [],
-  }
-}
+import { textParagraph as paragraph } from './document-wire-test-support'
 
 function model(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   return {

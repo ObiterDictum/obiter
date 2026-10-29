@@ -14,41 +14,13 @@ import {
   translateSnapshot,
   type SaveBaseline,
 } from './document-history-baseline'
+import { wireModel as model } from './document-wire-test-support'
 
 function paragraph(id: string, pPr: string): DocumentParagraphWire {
   return {
     id,
     runs: [{ id: `${id}-r`, text: 'text', preservedXmlFragments: [] }],
     preservedXmlFragments: [pPr],
-  }
-}
-
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
   }
 }
 

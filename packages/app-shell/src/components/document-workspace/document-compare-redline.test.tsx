@@ -3,13 +3,13 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'bun:test'
 import type {
   DocumentCompareResponse,
-  DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import {
   DocumentComparisonView,
   comparisonPageLayout,
 } from './document-compare-redline'
+import { wireModel as model } from '../../document-wire-test-support'
 
 afterEach(cleanup)
 
@@ -23,35 +23,6 @@ function paragraph(id: string, text: string): DocumentParagraphWire {
     id,
     runs: [{ id: `${id}-r1`, text, preservedXmlFragments: [] }],
     preservedXmlFragments: [],
-  }
-}
-
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
   }
 }
 

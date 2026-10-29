@@ -34,6 +34,7 @@ import {
   wordEditJoinRefusal,
   type EditorState,
 } from './document-word-edits'
+import { bodyStory } from './document-wire-test-support'
 
 const footnoteDraft = (
   id: string,
@@ -81,17 +82,6 @@ function model(stories: DocumentStoryWire[]): DocumentModelWire {
       privileged: false,
       withoutPrejudice: false,
     },
-  }
-}
-
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
-  return {
-    partName: 'word/document.xml',
-    kind: 'document',
-    paragraphs,
-    preservedXmlFragments: [],
-    fields: [],
-    unanchoredFieldParagraphIds: [],
   }
 }
 

@@ -7,6 +7,11 @@ import {
   paragraphTabStops,
 } from './document-page-margin'
 import type { DocumentModelWire, DocumentStoryWire } from '@obiter/contracts'
+import {
+  bodyStory,
+  textParagraph,
+  wireModel,
+} from './document-wire-test-support'
 
 const logo =
   '<w:drawing><wp:inline><wp:extent cx="1714500" cy="457200"/><a:blip r:embed="rId1"/></wp:inline></w:drawing>'
@@ -268,33 +273,25 @@ describe('footerLetterhead', () => {
 })
 
 describe('marginBandHeights', () => {
-  it('uses the footer letterhead height when it is present', () => {
-    const shape =
-      '<w:drawing><wp:extent cx="7560310" cy="1371600"/><a:solidFill><a:srgbClr val="3A3A3A"/></a:solidFill></w:drawing>'
-    const model: DocumentModelWire = {
-      version: 1,
-      stories: [
+  function bandModel(
+    kind: 'header' | 'footer',
+    drawing: string,
+    bodyXml: string[] = [],
+  ): DocumentModelWire {
+    return wireModel(
+      [textParagraph('p1', 'Hello')],
+      [
         {
-          partName: 'word/document.xml',
-          kind: 'document',
-          paragraphs: [
-            {
-              id: 'p1',
-              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
+          ...bodyStory([textParagraph('p1', 'Hello')]),
+          preservedXmlFragments: bodyXml,
         },
         {
-          partName: 'word/footer1.xml',
-          kind: 'footer',
+          partName: kind === 'header' ? 'word/header1.xml' : 'word/footer1.xml',
+          kind,
           paragraphs: [
             {
-              id: 'f1',
-              runs: [{ id: 's1', text: '', preservedXmlFragments: [shape] }],
+              id: `${kind}1`,
+              runs: [{ id: 's1', text: '', preservedXmlFragments: [drawing] }],
               preservedXmlFragments: [],
             },
           ],
@@ -303,178 +300,35 @@ describe('marginBandHeights', () => {
           unanchoredFieldParagraphIds: [],
         },
       ],
-      styles: [],
-      numbering: [],
-      relationships: [],
-      preservedXmlFragments: [],
-      changes: [],
-      comments: [],
-      trackRevisions: false,
-      markings: {
-        documentKind: null,
-        draft: false,
-        privileged: false,
-        withoutPrejudice: false,
-      },
-    }
+    )
+  }
+  it('uses the footer letterhead height when it is present', () => {
+    const shape =
+      '<w:drawing><wp:extent cx="7560310" cy="1371600"/><a:solidFill><a:srgbClr val="3A3A3A"/></a:solidFill></w:drawing>'
+    const model = bandModel('footer', shape)
     expect(marginBandHeights(model).footerPx).toBeGreaterThanOrEqual(72)
   })
 
   it('counts a grouped header drawing without the Word header distance', () => {
     const group =
       '<w:drawing><wpg:wgp><a:xfrm><a:off x="0" y="0"/><a:ext cx="9129802" cy="1314450"/></a:xfrm><wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="276045"/><a:ext cx="1238250" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><wps:wsp><wps:spPr><a:xfrm><a:off x="3062377" y="276045"/><a:ext cx="6067425" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><pic:pic><a:blip r:embed="rId1"/><a:xfrm><a:off x="1371600" y="0"/><a:ext cx="1454785" cy="1314450"/></a:xfrm></pic:pic></wpg:wgp></w:drawing>'
-    const model: DocumentModelWire = {
-      version: 1,
-      stories: [
-        {
-          partName: 'word/document.xml',
-          kind: 'document',
-          paragraphs: [
-            {
-              id: 'p1',
-              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
-        },
-        {
-          partName: 'word/header1.xml',
-          kind: 'header',
-          paragraphs: [
-            {
-              id: 'h1',
-              runs: [{ id: 'r1', text: '', preservedXmlFragments: [group] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
-        },
-      ],
-      styles: [],
-      numbering: [],
-      relationships: [],
-      preservedXmlFragments: [],
-      changes: [],
-      comments: [],
-      trackRevisions: false,
-      markings: {
-        documentKind: null,
-        draft: false,
-        privileged: false,
-        withoutPrejudice: false,
-      },
-    }
+    const model = bandModel('header', group)
     expect(marginBandHeights(model).headerPx).toBe(186)
   })
 
   it('counts a negative header anchor from the page edge', () => {
     const group =
       '<w:drawing><wp:anchor><wp:positionV relativeFrom="page"><wp:posOffset>-280035</wp:posOffset></wp:positionV></wp:anchor><wpg:wgp><a:xfrm><a:off x="0" y="0"/><a:ext cx="9129802" cy="1314450"/></a:xfrm><wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="276045"/><a:ext cx="1238250" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><wps:wsp><wps:spPr><a:xfrm><a:off x="3062377" y="276045"/><a:ext cx="6067425" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><pic:pic><a:blip r:embed="rId1"/><a:xfrm><a:off x="1371600" y="0"/><a:ext cx="1454785" cy="1314450"/></a:xfrm></pic:pic></wpg:wgp></w:drawing>'
-    const model: DocumentModelWire = {
-      version: 1,
-      stories: [
-        {
-          partName: 'word/document.xml',
-          kind: 'document',
-          paragraphs: [
-            {
-              id: 'p1',
-              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
-        },
-        {
-          partName: 'word/header1.xml',
-          kind: 'header',
-          paragraphs: [
-            {
-              id: 'h1',
-              runs: [{ id: 'r1', text: '', preservedXmlFragments: [group] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
-        },
-      ],
-      styles: [],
-      numbering: [],
-      relationships: [],
-      preservedXmlFragments: [],
-      changes: [],
-      comments: [],
-      trackRevisions: false,
-      markings: {
-        documentKind: null,
-        draft: false,
-        privileged: false,
-        withoutPrejudice: false,
-      },
-    }
+    const model = bandModel('header', group)
     expect(marginBandHeights(model).headerPx).toBe(109)
   })
 
   it('includes the Word header distance for a paragraph-relative letterhead', () => {
     const group =
       '<w:drawing><wp:anchor><wp:positionV relativeFrom="paragraph"><wp:posOffset>-280035</wp:posOffset></wp:positionV></wp:anchor><wpg:wgp><a:xfrm><a:off x="0" y="0"/><a:ext cx="9129802" cy="1314450"/></a:xfrm><wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="276045"/><a:ext cx="1238250" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><wps:wsp><wps:spPr><a:xfrm><a:off x="3062377" y="276045"/><a:ext cx="6067425" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><pic:pic><a:blip r:embed="rId1"/><a:xfrm><a:off x="1371600" y="0"/><a:ext cx="1454785" cy="1314450"/></a:xfrm></pic:pic></wpg:wgp></w:drawing>'
-    const model: DocumentModelWire = {
-      version: 1,
-      stories: [
-        {
-          partName: 'word/document.xml',
-          kind: 'document',
-          paragraphs: [
-            {
-              id: 'p1',
-              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [
-            '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>',
-          ],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
-        },
-        {
-          partName: 'word/header1.xml',
-          kind: 'header',
-          paragraphs: [
-            {
-              id: 'h1',
-              runs: [{ id: 'r1', text: '', preservedXmlFragments: [group] }],
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-          fields: [],
-          unanchoredFieldParagraphIds: [],
-        },
-      ],
-      styles: [],
-      numbering: [],
-      relationships: [],
-      preservedXmlFragments: [],
-      changes: [],
-      comments: [],
-      trackRevisions: false,
-      markings: {
-        documentKind: null,
-        draft: false,
-        privileged: false,
-        withoutPrejudice: false,
-      },
-    }
+    const model = bandModel('header', group, [
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>',
+    ])
     expect(marginBandHeights(model).headerPx).toBe(156)
   })
 })

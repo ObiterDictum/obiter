@@ -1,9 +1,6 @@
 import '@obiter/test-dom'
 import { describe, expect, it } from 'bun:test'
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
-} from '@obiter/contracts'
+import type { DocumentParagraphWire } from '@obiter/contracts'
 
 import { MapStorage, scope } from './document-draft-store-test-support'
 import { emptyFormatDrafts } from './document-format-types'
@@ -28,6 +25,7 @@ import {
   type DraftState,
   type DraftSlot,
 } from './document-save-plan'
+import { wireModel as model } from './document-wire-test-support'
 
 function paragraph(id: string, text = 'text'): DocumentParagraphWire {
   return {
@@ -51,35 +49,6 @@ function linkedParagraph(): DocumentParagraphWire {
       { id: 'p1-c', text: ' today', preservedXmlFragments: [] },
     ],
     preservedXmlFragments: [],
-  }
-}
-
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
   }
 }
 

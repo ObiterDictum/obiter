@@ -14,6 +14,7 @@ import { emptyDraftState, planDocumentSave } from '../../document-save-plan'
 import type { StructuralDraft } from '../../document-structural-drafts'
 import type { BreakDraft } from '../../document-draft-state'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
+import { wireModel as model } from '../../document-wire-test-support'
 
 function paragraph(
   id: string,
@@ -25,35 +26,6 @@ function paragraph(
     ...(styleId ? { styleId } : {}),
     runs: text ? [{ id: `${id}-r`, text, preservedXmlFragments: [] }] : [],
     preservedXmlFragments: [],
-  }
-}
-
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
   }
 }
 
