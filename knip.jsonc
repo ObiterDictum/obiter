@@ -1,0 +1,39 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  // `where` and `mdfind` are the OS lookups scripts/word-roundtrip/word-step.ts
+  // uses to find a Word install; they are not npm binaries.
+  "ignoreBinaries": ["where", "mdfind"],
+  // Tailwind is consumed from CSS (`@import 'tailwindcss'` through
+  // packages/ui/tailwind.css), which knip cannot follow from the manifest.
+  "ignoreDependencies": ["tailwindcss"],
+  "workspaces": {
+    ".": {
+      // Operational entry points run by hand or by a documented command, not
+      // imported by product code. Keep them; deleting them would remove the
+      // only way to run the job.
+      "entry": [
+        "scripts/api-runtime/database-target-proof.mjs",
+        "scripts/eval-redact.ts",
+        "scripts/generate-pdf-fixtures.mjs",
+        "scripts/perf/editor-interaction.mjs",
+        "scripts/perf/editor-interaction-probes.mjs",
+        "scripts/word-roundtrip/run.ts",
+        "tools/oxlint/anti-slop/effect/index.ts",
+      ],
+    },
+    "apps/web": {
+      // Declarations for lane-target.mjs, which stays .mjs so Node can load it
+      // from playwright.config.ts. TypeScript uses this file; knip cannot.
+      "entry": ["lane-target.d.mts"],
+    },
+    "packages/search-client": {
+      "entry": ["src/benchmark/run.ts"],
+    },
+    "services/api": {
+      "entry": [
+        "src/rebuild-legislation-index.ts",
+        "src/rebuild-search-index.ts",
+      ],
+    },
+  },
+}
