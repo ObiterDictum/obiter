@@ -63,6 +63,14 @@ Rules:
 - desktop magic-link completion must land back in the embedded desktop auth flow
 - failed or expired links must show a clear recoverable state
 
+## Password Reset
+
+Better Auth issues single-use password-reset tokens with its default one-hour
+expiry. A reset request does not reveal whether the email address exists. The
+email links directly to the web reset screen at the configured web origin; the
+token is validated when the new password is submitted. An invalid or expired
+token must leave the user able to request another link.
+
 ## Protected Routes
 
 Protected route loading must verify:
