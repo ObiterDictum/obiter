@@ -48,8 +48,8 @@ type DocumentWorkspaceProps = {
  * documentId remounts it on a switch, so no unsaved draft, pending insert,
  * selection or caret from document A can render, mutate, save or hold focus in
  * document B. Same-document rerenders keep their key and state. A switch is
- * prompt-free and unsaved drafts are persisted per tab (E45), so returning to A
- * restores A's unsaved work instead of destroying it.
+ * prompt-free when unsaved drafts can be persisted per tab (E45), so returning
+ * to A restores A's work. Failed draft storage requires confirmation to leave.
  */
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   const kind = workspaceKind(props.version?.fileType)
