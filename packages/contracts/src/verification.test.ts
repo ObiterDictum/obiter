@@ -134,6 +134,7 @@ describe('verification contracts', () => {
       dismissal: {
         reason: 'The paragraph quotes the judgment directly.',
         dismissedBy: 'usr_1',
+        dismissedByName: 'Priya Shah',
         dismissedAt: '2026-10-26T14:52:00.000Z',
       },
       reviewReason: 'citation_unresolved',

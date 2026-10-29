@@ -385,6 +385,7 @@ describe('HomeRouteView — greeting and actions', () => {
         verificationRun({ id: 'verify_1' }),
         verificationRun({
           id: 'verify_2',
+          documentId: 'doc_2',
           status: 'failed',
           completedAt: '2026-10-26T14:27:00.000Z',
         }),
@@ -395,7 +396,8 @@ describe('HomeRouteView — greeting and actions', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          '3 items need your attention: 1 legal-accuracy risk, 1 redaction decision and 1 failed run.',
+          // Findings, not runs: this run left one flagged finding and two citations to review.
+          '5 items need your attention: 1 legal-accuracy risk, 1 redaction decision, 2 citations to review and 1 failed run.',
         ),
       ).toBeTruthy()
     })

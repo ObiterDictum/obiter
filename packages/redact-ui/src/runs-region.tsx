@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import { apiFetch, useDocument } from '@obiter/app-shell'
 import { Button, Card, EmptyState, Skeleton, StatusDot } from '@obiter/ui'
 import type { RedactionRun } from './types'
+import { detectionFailureMessage } from './detection-failure'
 import { useCreateDocumentRedactionRun } from './hooks'
 import { formatDate } from './span-copy'
 
@@ -144,9 +145,8 @@ export function RedactionRunsRegion({
                     Started {formatDate(run.createdAt)}
                   </p>
                   {run.status === 'failed' ? (
-                    <p className="mt-1 text-caption text-danger" role="alert">
-                      {run.summary.failureReason ??
-                        'The detector stopped before it finished, so this run found nothing.'}
+                    <p className="mt-1 text-caption text-danger">
+                      {detectionFailureMessage(run)}
                     </p>
                   ) : null}
                 </div>

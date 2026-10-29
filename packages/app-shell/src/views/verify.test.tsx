@@ -180,6 +180,7 @@ const needsReview = finding({
 let runs: VerificationRun[]
 let findings: VerificationFindingView[]
 let dismissals: string[]
+let reopenals: string[]
 let dismissFails = false
 
 function fulfil(body: unknown, status = 200) {
@@ -195,6 +196,7 @@ beforeEach(() => {
   runs = [run()]
   findings = [flagged, needsReview, finding()]
   dismissals = []
+  reopenals = []
   dismissFails = false
   mocks.useCurrentUser.mockReturnValue({
     data: {
@@ -253,11 +255,19 @@ beforeEach(() => {
           )
         }
         const findingId = decodeURIComponent(dismiss[2]!)
+        if (init?.method === 'DELETE') {
+          reopenals.push(findingId)
+          findings = findings.map((item) =>
+            item.id === findingId ? { ...item, dismissal: null } : item,
+          )
+          return new Response(null, { status: 204 })
+        }
         const body = jsonBody(init) as { reason?: string }
         dismissals.push(findingId)
         const dismissal = {
           reason: body.reason ?? null,
           dismissedBy: 'usr_1',
+          dismissedByName: 'Priya Shah',
           dismissedAt: at,
         }
         findings = findings.map((item) =>
@@ -359,18 +369,30 @@ describe('VerifyRouteView', () => {
     ).toBeTruthy()
   })
 
-  it('claims a citation match only for a check that ran, and states each uncertainty', async () => {
+  it('folds the matches behind one line, and states each limit once', async () => {
     await renderVerify()
+    // A run's matches are the bulk of a healthy check and the least urgent to
+    // read, so they arrive as one line the reader can open.
+    await screen.findByText('advice-note-northgate.docx')
+    const show = await screen.findByRole('button', {
+      name: /matches? the checked source/,
+    })
+    expect(screen.queryByText('Citation matches checked source')).toBeNull()
+    expect(show.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(show)
+    expect(show.getAttribute('aria-expanded')).toBe('true')
     expect(
       await screen.findByText('Citation matches checked source'),
     ).toBeTruthy()
     expect(screen.getAllByText('Flagged').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Needs review').length).toBeGreaterThan(0)
+    // The check's own sentence is the only statement of the limit on the card.
     expect(
-      screen.getByText(
-        /The citation did not match a stored source\. It may be wrong/,
-      ),
-    ).toBeTruthy()
+      screen.getAllByText('The quotation could not be attributed.').length,
+    ).toBeGreaterThan(0)
+    expect(
+      screen.queryByText(/The citation did not match a stored source\. It may/),
+    ).toBeNull()
   })
 
   it('links the stored source page and its pinpoint', async () => {
@@ -422,6 +444,38 @@ describe('VerifyRouteView', () => {
     ).toBeTruthy()
     // The check's own outcome is unchanged: it is still a flagged finding.
     expect(screen.getAllByText('Flagged').length).toBeGreaterThan(0)
+  })
+
+  it('renders a dismissed finding as settled and reopens it on request', async () => {
+    findings = [
+      {
+        ...flagged,
+        dismissal: {
+          reason: 'The paragraph quotes the judgment directly.',
+          dismissedBy: 'usr_2',
+          dismissedByName: 'Priya Shah',
+          dismissedAt: '2026-10-26T09:02:00.000Z',
+        },
+      },
+      finding(),
+    ]
+    await renderVerify()
+    // Settled, not alarming: the state word is the decision, not the outcome.
+    expect(await screen.findByText('Dismissed')).toBeTruthy()
+    // The tab still counts the run's outcomes; the card no longer states one.
+    expect(screen.queryByText('Flagged', { selector: 'span' })).toBeNull()
+    expect(screen.getByText(/Dismissed by Priya Shah ·/)).toBeTruthy()
+    expect(
+      screen.getByText('The paragraph quotes the judgment directly.'),
+    ).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen finding' }))
+    await waitFor(() => expect(reopenals).toEqual(['vf_flagged']))
+    // Back in the queue: the finding shows its own state again.
+    await waitFor(() => expect(screen.queryByText('Dismissed')).toBeNull())
+    expect(
+      screen.getAllByText('Flagged', { selector: 'span' }).length,
+    ).toBeGreaterThan(0)
   })
 
   it('says a dismissal was not saved and keeps the finding open when it fails', async () => {

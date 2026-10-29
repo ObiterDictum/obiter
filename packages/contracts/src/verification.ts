@@ -126,6 +126,10 @@ export const verificationFindingDismissalSchema = z
   .object({
     reason: z.string().min(1).nullable(),
     dismissedBy: z.string().min(1),
+    /** The dismissing person's member name, for everyone in the matter. Null
+     * when the account is no longer an organisation member; the UI then names
+     * nobody rather than showing an internal id. */
+    dismissedByName: z.string().min(1).nullable(),
     dismissedAt: z.string().datetime({ offset: true }),
   })
   .strict()

@@ -10,6 +10,7 @@ import { documentWidths, mockSession, workspaceNav } from './shell-harness'
  */
 
 const RUN_ID = 'vrun_6f2ffddc-4c20-4df5-b981-44ea5e1bd4dc'
+const VERSION_ID = 'ver_9a6135fb-0000-4000-8000-000000000003'
 const DOC_ID = 'doc_9a6135fb-0000-4000-8000-000000000001'
 const MATTER_ID = 'mtr_7c1b0000-0000-4000-8000-000000000002'
 
@@ -23,7 +24,7 @@ async function mockVerifyData(page: Page) {
             organisationId: 'org_shell_test',
             matterId: MATTER_ID,
             documentId: DOC_ID,
-            documentVersionId: 'ver_9a6135fb-0000-4000-8000-000000000003',
+            documentVersionId: VERSION_ID,
             status: 'completed',
             failureCode: null,
             createdBy: 'usr_shell_test',
@@ -31,13 +32,82 @@ async function mockVerifyData(page: Page) {
             startedAt: '2026-09-14T09:00:01.000Z',
             completedAt: '2026-09-14T09:00:02.000Z',
             summary: {
-              findingCount: 2,
+              findingCount: 3,
               flaggedCount: 0,
               reviewRequiredCount: 2,
+              notCheckedCount: 0,
+              dismissedCount: 0,
             },
-            documentCurrentVersionId:
-              'ver_9a6135fb-0000-4000-8000-000000000003',
+            documentCurrentVersionId: VERSION_ID,
             stale: false,
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  )
+  // The findings endpoint shares the `/api/verification-runs` prefix, so it is
+  // mocked in its own shape: a run, a page of findings and the next cursor.
+  // Answering it with the run list is how this spec used to crash the view.
+  await page.route(`**/api/verification-runs/${RUN_ID}/findings**`, (route) =>
+    route.fulfill({
+      json: {
+        run: {
+          id: RUN_ID,
+          organisationId: 'org_shell_test',
+          matterId: MATTER_ID,
+          documentId: DOC_ID,
+          documentVersionId: VERSION_ID,
+          status: 'completed',
+          failureCode: null,
+          createdBy: 'usr_shell_test',
+          createdAt: '2026-09-14T09:00:00.000Z',
+          startedAt: '2026-09-14T09:00:01.000Z',
+          completedAt: '2026-09-14T09:00:02.000Z',
+          summary: {
+            findingCount: 3,
+            flaggedCount: 0,
+            reviewRequiredCount: 2,
+            notCheckedCount: 0,
+            dismissedCount: 0,
+          },
+          documentCurrentVersionId: VERSION_ID,
+          stale: false,
+        },
+        findings: [
+          {
+            id: 'vf:review-1',
+            type: 'citation_resolution',
+            state: 'review_required',
+            dismissal: null,
+            reviewReason: 'citation_unresolved',
+            severity: 'medium',
+            confidence: 'low',
+            requiresReview: true,
+            explanation:
+              'No stored source in Obiter matches this citation, so there is nothing to check it against.',
+            excerpt: '[2099] UKSC 9',
+            location: { paragraphId: 'para-000002', start: 0, end: 13 },
+            authorityLabel: 'Unmatched citation',
+            authorityName: null,
+            evidence: [],
+          },
+          {
+            id: 'vf:match-1',
+            type: 'quote_fidelity',
+            state: 'clear',
+            dismissal: null,
+            reviewReason: null,
+            severity: null,
+            confidence: 'high',
+            requiresReview: false,
+            explanation:
+              'The quotation appears in the stored public source as quoted.',
+            excerpt: 'the court must consider',
+            location: { paragraphId: 'para-000001', start: 0, end: 22 },
+            authorityLabel: '[2017] UKSC 24',
+            authorityName: 'Wood v Capita Insurance Services Ltd',
+            evidence: [],
           },
         ],
         nextCursor: null,
@@ -58,9 +128,20 @@ async function mockVerifyData(page: Page) {
           updatedAt: '2026-09-01T09:00:00.000Z',
           deletedAt: null,
           deletedBy: null,
-          currentVersion: { filename: 'Potanina-skeleton-argument.docx' },
+          currentVersion: {
+            id: VERSION_ID,
+            filename: 'Potanina-skeleton-argument.docx',
+            documentStatus: 'ready',
+          },
         },
-        versions: [],
+        versions: [
+          {
+            id: VERSION_ID,
+            versionNumber: 3,
+            filename: 'Potanina-skeleton-argument.docx',
+            documentStatus: 'ready',
+          },
+        ],
       },
     }),
   )
@@ -125,16 +206,32 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
       .getByText(/Potanina v Potanin/)
       .first(),
   ).toBeVisible()
-  await expect(
-    page.locator('main').getByText('Review required (2)'),
-  ).toBeVisible()
+  await expect(page.locator('main').getByText(/2 need review/)).toBeVisible()
   await expect(page.getByText(RUN_ID)).toBeHidden()
   await expect(
     page.locator('main').getByRole('link', { name: 'Open document' }),
   ).toBeVisible()
 
-  // The stored version stays visible beside the friendly identity.
-  await expect(page.locator('main').getByText(/ver_9a6135fb/)).toBeVisible()
+  // The checked version is named by its number, as everywhere else in the
+  // product; the internal version id is never shown.
+  await expect(
+    page
+      .locator('main')
+      .getByText(/version 3/)
+      .first(),
+  ).toBeVisible()
+  await expect(page.locator('main').getByText(VERSION_ID)).toBeHidden()
+
+  // Matches are folded behind one line that opens in place.
+  const matches = page.locator('main').getByRole('button', {
+    name: /matches? the checked source/,
+  })
+  await expect(matches).toHaveAttribute('aria-expanded', 'false')
+  await matches.click()
+  await expect(matches).toHaveAttribute('aria-expanded', 'true')
+  await expect(
+    page.locator('main').getByText('Quotation matches checked source'),
+  ).toBeVisible()
 })
 
 test('both search fields show a keyboard focus ring', async ({ page }) => {

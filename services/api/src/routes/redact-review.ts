@@ -9,6 +9,7 @@ import {
   applyPseudonymised,
   applyRedacted,
   createTokenMap,
+  mixedTextGroups,
   RedactionSpanIntegrityError,
   type OutputDowngradeReason,
 } from '@obiter/redaction-policy'
@@ -29,6 +30,7 @@ import type { RedactionRenderer } from '../redaction-renderer'
 import { sha256 } from '../redaction-secure-pdf'
 import {
   finalizeRedactionRun,
+  withDecisionNames,
   getRedactionOutputKey,
   getRedactionRun,
   getRunLayoutObjectKey,
@@ -217,6 +219,22 @@ export function createRedactReviewRoutes(
   storage: StorageService,
   renderer: RedactionRenderer | null = null,
 ) {
+  /**
+   * A run read for a reviewer names the person behind each decision. The read is
+   * scoped to the run's organisation, so a name only ever reaches a colleague in
+   * that organisation — never across tenants, and never an email address.
+   */
+  async function namedReviewers(pool: Pool, run: RedactionRunRecord) {
+    return {
+      ...run,
+      decisions: await withDecisionNames(
+        pool,
+        run.organisationId,
+        run.decisions,
+      ),
+    }
+  }
+
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs/:runId', async (c) => {
@@ -230,7 +248,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    return c.json({ run: publicRun(run) })
+    return c.json({ run: publicRun(await namedReviewers(pool, run)) })
   })
 
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
@@ -356,6 +374,7 @@ export function createRedactReviewRoutes(
         spanId: c.req.param('spanId'),
         decision: decision.data,
         userId: user.id,
+        applyToSameText: body?.applyToSameText === true,
       })
       if (result.kind === 'not_found')
         return errorResponse(
@@ -400,12 +419,15 @@ export function createRedactReviewRoutes(
         action: 'redaction.span_decision',
         metadata: {
           spanId: result.span.id,
+          spanIds: result.spanIds,
           decision: decision.data,
           category: result.span.category,
         },
         requestId: c.get('requestId'),
       })
-      return c.json({ run: publicRun(result.run) })
+      return c.json({
+        run: publicRun(await namedReviewers(pool, result.run)),
+      })
     },
   )
 
@@ -470,6 +492,20 @@ export function createRedactReviewRoutes(
         'validation_failed',
         'Acknowledge that the detection mode was not recorded before finalising.',
         400,
+      )
+    // Refuse before any output write: identical text decided both ways leaves
+    // one occurrence of the same words in the copy that leaves the firm. The
+    // client lists the groups; the server refuses regardless of what the UI
+    // claims, because a missing check here is a disclosure, not a missed style.
+    const mixedGroups = mixedTextGroups(run.spans, run.decisions)
+    if (mixedGroups.length > 0)
+      return errorResponse(
+        c,
+        'mixed_text_decisions',
+        mixedGroups.length === 1
+          ? 'One piece of repeated text has different decisions: it is redacted in one place and kept visible in another. Decide every occurrence the same way before finalising.'
+          : `${String(mixedGroups.length)} pieces of repeated text have different decisions: each is redacted in one place and kept visible in another. Decide every occurrence the same way before finalising.`,
+        409,
       )
     const textObjectKey = await getRunTextObjectKey(pool, run, user)
     if (!textObjectKey)
