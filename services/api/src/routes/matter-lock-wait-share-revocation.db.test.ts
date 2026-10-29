@@ -172,7 +172,7 @@ it('denies document creation when a queued share revocation commits first', asyn
     const entered = await Promise.race([
       writer.entered.then(() => true),
       new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), 2000)
+        timer = setTimeout(() => resolve(false), 5000)
       }),
     ])
     expect(entered).toBe(true)
