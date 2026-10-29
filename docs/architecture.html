@@ -3035,7 +3035,8 @@
                   <td>
                     Sources kept with a matter, listed under view access and
                     filed under edit access (<code>matter.source_save</code>,
-                    audited). Idempotent on
+                    audited in the same transaction under the matter edit lock).
+                    Idempotent on
                     <code>(matter, kind, source)</code>.
                   </td>
                 </tr>
@@ -3621,8 +3622,11 @@
                     Files a finalized standalone run's copy as version 1 of a
                     new document in a chosen matter (edit-gated on that matter,
                     audited as <code>redaction.saved_to_matter</code> plus the
-                    document upload events). A document-linked run is refused
-                    here and returns through <code>return-to-document</code>.
+                    document upload events in one transaction, with the matter
+                    and run locked). Concurrent saves resolve to one version;
+                    retries re-check destination edit access. A document-linked
+                    run is refused here and returns through
+                    <code>return-to-document</code>.
                   </td>
                 </tr>
                 <tr>
@@ -3635,9 +3639,10 @@
                   <td class="id">redact-lifecycle.ts</td>
                   <td>
                     Audit report as JSON and the redaction schedule as PDF or
-                    DOCX (<code>format=pdf|docx</code>); the schedule lists
-                    decisions, never the removed words. Deleted runs are
-                    available by known id to owner/admin only
+                    DOCX (<code>format=pdf|docx</code>); disclosure downloads
+                    use generic filenames, and the schedule omits the source
+                    filename and lists decisions, never the removed words.
+                    Deleted runs are available by known id to owner/admin only
                   </td>
                 </tr>
                 <tr>
