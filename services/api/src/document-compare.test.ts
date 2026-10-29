@@ -522,6 +522,17 @@ describe('compareDocumentModels', () => {
     expect(kinds.sort()).toEqual(['package', 'story'])
   })
 
+  it('does not report a package change when styles are reordered', () => {
+    const styles = [
+      { styleId: 'First', sourceFragment: '<w:style first/>' },
+      { styleId: 'Second', sourceFragment: '<w:style second/>' },
+    ]
+    const base = model([], { styles })
+    const target = model([], { styles: [...styles].reverse() })
+
+    expect(compareDocumentModels(base, target).entries).toEqual([])
+  })
+
   it('reports a one-sided story part its paragraphs cannot', () => {
     const body = [paragraph('p1', 'Body.', { sourceParaId: 'a' })]
     const header = story([], {
