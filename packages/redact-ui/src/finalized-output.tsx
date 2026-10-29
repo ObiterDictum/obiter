@@ -175,10 +175,15 @@ export function FinalizedOutput({
   // A run with no document of its own has no version to return to, so the copy
   // is filed by creating a document in the matter the reviewer picks.
   const standalone = run.matterId === null && run.documentId === null
-  const exportSchedule = (format: 'pdf' | 'docx') =>
+  const exportSchedule = (format: 'pdf' | 'docx' | 'json-shareable') =>
     schedule.mutate(format, {
       onSuccess: (blob) =>
-        downloadBlob(blob, scheduleFilename(run.sourceFilename, `.${format}`)),
+        downloadBlob(
+          blob,
+          format === 'json-shareable'
+            ? 'redaction-audit.json'
+            : scheduleFilename(`.${format}`),
+        ),
     })
   const exportFailed = outputQuery.error ?? (isFile ? fileQuery.error : null)
 
@@ -432,10 +437,7 @@ export function FinalizedOutput({
             </div>
             <dl className="grid gap-x-8 gap-y-3 md:grid-cols-2">
               <div className="flex flex-col gap-3">
-                <Detail
-                  label="File"
-                  value={scheduleFilename(run.sourceFilename, '.pdf')}
-                />
+                <Detail label="File" value={scheduleFilename('.pdf')} />
                 <Detail
                   label="Decisions"
                   value={`${run.summary.reviewedCount} recorded`}
@@ -471,10 +473,26 @@ export function FinalizedOutput({
               >
                 Export Word
               </Button>
+              <Button
+                variant="secondary"
+                loading={
+                  schedule.isPending && schedule.variables === 'json-shareable'
+                }
+                disabled={schedule.isPending}
+                onClick={() => exportSchedule('json-shareable')}
+                iconStart={<DownloadSimple size={16} aria-hidden="true" />}
+              >
+                Export shareable JSON
+              </Button>
               <span className="text-caption text-subtle">
                 Generated from the audit record.
               </span>
             </div>
+            <p className="text-caption text-subtle">
+              The shareable JSON holds the counts, categories, decisions,
+              reviewers and the output’s SHA-256 — never the words removed or
+              the source filename — so it can be given to the other side.
+            </p>
             {schedule.error ? (
               <p className="text-meta text-danger" role="alert">
                 The schedule was not exported. {schedule.error.message}

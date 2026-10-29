@@ -6,6 +6,7 @@ import type {
   MatterDocumentRecord,
 } from '../../documents'
 import { formatBytes, formatDateTime } from '../../format'
+import { RedactedMark } from '../../redacted-mark'
 
 /** The product's name for a stored file type, not the raw MIME. */
 function fileTypeLabel(fileType: string) {
@@ -107,7 +108,7 @@ export function DocumentInfoPanel({
                   v{version.versionNumber}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="flex items-baseline gap-2">
+                  <span className="flex flex-wrap items-baseline gap-2">
                     <span className="truncate text-item text-ink">
                       Version {String(version.versionNumber)}
                     </span>
@@ -118,6 +119,10 @@ export function DocumentInfoPanel({
                           ? 'Original upload'
                           : null}
                     </span>
+                    <RedactedMark
+                      redaction={version.redaction}
+                      producedAt={version.createdAt}
+                    />
                   </span>
                   <span className="truncate text-caption text-subtle">
                     {formatDateTime(version.createdAt)} ·{' '}

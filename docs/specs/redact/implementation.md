@@ -68,6 +68,17 @@ but never reproduces the removed words: the file is meant to be emailed and
 printed. Disclosure copies use generic filenames; schedules identify the run
 without reproducing the confidential source filename.
 
+## Shareable audit export
+
+`format=json-shareable` serves the same audit as `obiter.redaction-audit-shareable/v1`,
+for handing to the other side. It carries the counts by category and decision,
+each decision's category, reviewer, time and page, the reviewer and time of
+finalisation, the audit log's actions and actors, and the output's SHA-256. It
+carries no span text, no source text and no original filename — the restricted
+JSON keeps those for the run's access-controlled record. Pages come from the
+same stored layout the review screen reads; a source with no stored layout
+leaves the page absent rather than guessing.
+
 ## Filing a standalone copy
 
 A run that began from pasted text or a loose upload has no document to return
@@ -75,7 +86,23 @@ to. `POST /api/redaction-runs/:runId/save-to-matter` files its finalised copy as
 version 1 of a new document in a chosen matter: edit access on that matter is
 checked, the stored bytes are re-hashed against the SHA-256 recorded at
 finalisation, extraction runs, and the file, version and run are audited.
+The copy may be filed into any matter the user can edit. There is no
+"redaction matter" and no matter type of its own; a matter does not become
+special because a redacted copy was filed in it.
 The destination matter and run are locked before filing. The document, version,
 run link and audit events commit together; failed writes roll back and remove
 staged objects. Concurrent requests resolve to the same saved version, and retries
 re-check edit access to the destination matter.
+
+## Provenance mark
+
+A version Redact produced — through Save to matter or Return to document — is
+marked wherever it appears: a "Redacted" badge with the line "Produced by Redact
+on 29 Oct 2026 by A. Morgan", linking to the run for a reader who may open it.
+Text and an icon, never colour alone. The mark appears in the matter's documents
+table, the document's version list and version viewer, the editor header (Word,
+PDF and text), Home's recent documents, and the matter list's document preview.
+It is derived from data the run already records: `returned_document_version_id`
+links the run to the version it created, and the run's finalise audit row names
+the reviewer. No column was added. A reader who may see the filed copy but not
+the standalone run behind it still sees the mark, without the link.
