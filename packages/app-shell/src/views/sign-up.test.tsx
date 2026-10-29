@@ -22,9 +22,6 @@ const searchState = vi.hoisted(() => ({
   token: 'invite-token' as string | undefined,
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const authModuleKeys = Object.fromEntries(
   Object.keys(await import('../auth')).map((key) => [key, undefined]),
 )
@@ -47,9 +44,6 @@ mock.module('../auth', () =>
   ),
 )
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const organisationMembershipModuleKeys = Object.fromEntries(
   Object.keys(await import('../organisation-membership')).map((key) => [
     key,
@@ -65,9 +59,6 @@ mock.module('../organisation-membership', () =>
   ),
 )
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -107,9 +98,6 @@ mock.module('@tanstack/react-router', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { SignUpRouteView } = await import('./sign-up')
 
 function fillForm(options: { organisationName?: string } = {}) {
@@ -122,7 +110,6 @@ function fillForm(options: { organisationName?: string } = {}) {
   fireEvent.change(document.querySelector('input[type="password"]')!, {
     target: { value: 'SuperSecret123!' },
   })
-  // The organisation field only renders without an invite token.
   const orgInput = screen.queryByRole('textbox', {
     name: 'Organisation name',
   })
@@ -239,8 +226,6 @@ describe('SignUpRouteView', () => {
 
   it('requires an organisation name when signing up without a token', async () => {
     searchState.token = undefined
-    // No signUp stub: the submit returns before reaching sign-up, and a
-    // queued once-value here would leak into the next test's queue.
 
     render(<SignUpRouteView />)
     expect(
@@ -266,7 +251,6 @@ describe('SignUpRouteView', () => {
     fillForm({ organisationName: '  Acme Law  ' })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
-    // Sent trimmed: the API validation trims again, so both agree.
     await waitFor(() => {
       expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
         name: 'Ada',

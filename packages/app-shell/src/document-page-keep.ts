@@ -79,7 +79,6 @@ export function widowMaxY(
   widthPx: number,
   orphanCheck: boolean,
   fontFamily?: string,
-  /** Line 1's first-line offset, applied only when the slice starts at it. */
   textIndentPx = 0,
 ): number {
   if (!widowControl) return pageMaxY
@@ -128,8 +127,6 @@ export function paragraphMetrics(
     fontSize,
     Math.max(1, columnWidthPx - indent),
     face.run.fontFamily,
-    // The metrics stand in for the paint's own row count, so they have to
-    // narrow line 1 exactly as the paint does.
     firstLineIndentPx(face, Boolean(list)),
   )
   return {

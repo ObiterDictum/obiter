@@ -7,12 +7,6 @@ export interface SegmentedOption<Value extends string> {
   icon?: ReactNode
 }
 
-/**
- * A segmented control for choosing one of a few mutually exclusive settings:
- * the sign-in method and the theme. Plain pressed buttons inside a labelled
- * group, because both are filters on a form rather than tabbed panels — there
- * is no panel to point `aria-controls` at.
- */
 export function SegmentedControl<Value extends string>({
   label,
   value,
@@ -46,9 +40,6 @@ export function SegmentedControl<Value extends string>({
             className={cn(
               'inline-flex h-7 items-center justify-center gap-1 rounded-sm px-2 text-caption whitespace-nowrap',
               'transition-[color,background-color,box-shadow] duration-150',
-              // Same raised, outlined selection as TabsTrigger: in dark the
-              // raised surface is darker than the fill, so the outline carries
-              // the state.
               active
                 ? 'bg-raised font-medium text-ink shadow-sm ring-1 ring-brand/40'
                 : 'text-subtle hover:text-ink',

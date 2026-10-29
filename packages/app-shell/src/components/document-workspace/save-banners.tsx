@@ -7,12 +7,6 @@ import type { WorkspaceDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
 import { UnsavedNavigationGuard } from './unsaved-navigation-guard'
 
-/**
- * Everything the workspace must disclose about work that is not on the server:
- * a restored draft, a draft from another version, a change that cannot be
- * addressed, a change the server rejected, or a failed request. Each carries
- * the action that recovers from it, and none of them deletes content silently.
- */
 export function DocumentSaveBanners({
   save,
   drafts,
@@ -51,9 +45,6 @@ export function DocumentSaveBanners({
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    // Restoring the last recoverable draft unmounts this
-                    // banner, so a keyboard activation would strand focus on
-                    // document.body the same way a save flight does.
                     refocusCaretBeforeFlight()
                     drafts.restoreRecoverable(item.draftId)
                   }}

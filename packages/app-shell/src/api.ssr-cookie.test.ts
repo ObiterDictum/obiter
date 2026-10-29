@@ -29,9 +29,7 @@ describe('apiFetch SSR cookie forwarding', () => {
   })
 
   it('forwards Cookie header during SSR when request has cookie', async () => {
-    // Simulate SSR: window is undefined
     vi.stubGlobal('window', undefined as unknown as Window & typeof globalThis)
-    // Also ensure globalThis.window is undefined for typeof check
     // @ts-ignore — delete to make typeof window === "undefined"
     if (typeof globalThis.window !== 'undefined') {
       // @ts-ignore
@@ -101,7 +99,6 @@ describe('apiFetch SSR cookie forwarding', () => {
   })
 
   it('does not forward cookie on client even if getter is set', async () => {
-    // window is defined (jsdom) — client, no stub
     const req = new Request('http://localhost:3000/', {
       headers: { cookie: 'better-auth.session_token=should-not-forward' },
     })

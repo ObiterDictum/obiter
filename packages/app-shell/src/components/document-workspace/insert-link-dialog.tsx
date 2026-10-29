@@ -12,11 +12,6 @@ import {
 } from '@obiter/ui'
 import type { StructuralInsertOutcome } from '../../document-structure-toolbar'
 
-/**
- * The address a pending hyperlink carries. The draft — and so the save —
- * rejects anything but an http, https or mailto URL, so a refused outcome is
- * shown in place rather than closing the dialog on a typo.
- */
 export function InsertLinkDialog({
   open,
   onOpenChange,

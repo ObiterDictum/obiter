@@ -12,8 +12,6 @@ import {
 
 describe('DocxWorkspace vertical caret delivery', () => {
   const marker = 'ZXQMARK'
-  // Each paragraph stays on one wrapped line at the default A4 width, so a
-  // visual column is the caret offset and the assertions read directly.
   const staleModel = multiParagraphModel([
     paragraph('p1', 'A'.repeat(40)),
     paragraph('p2', `BBBBB${marker}${'C'.repeat(40)}`),
@@ -30,10 +28,7 @@ describe('DocxWorkspace vertical caret delivery', () => {
 
   it('does not deliver a stale column past a pending insert into a later selection', () => {
     mountWorkspace({ models: { doc_1: staleModel } })
-    // p1 holds the caret at column 40.
     fireEvent.click(screen.getByText('A'.repeat(40)))
-    // A pending insert sits between p1 and p2; the vertical move crosses into
-    // a destination that never mounts a ParagraphEditor.
     fireEvent.click(command('Insert paragraph'))
     fireEvent.click(screen.getByText('A'.repeat(40)))
     const editor = field()
@@ -42,7 +37,6 @@ describe('DocxWorkspace vertical caret delivery', () => {
     fireEvent.keyDown(editor, { key: 'ArrowDown' })
     expect(screen.getByLabelText('Pending paragraph text')).toBeTruthy()
 
-    // Find -> Next places the caret at offset 5 of p2.
     openRibbonTab('Review')
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: marker },
@@ -51,8 +45,6 @@ describe('DocxWorkspace vertical caret delivery', () => {
     const found = field()
     expect(found.selectionStart).toBe(5)
 
-    // The next vertical move must use the freshly selected column (5), not the
-    // column retained before the pending insert.
     fireEvent.keyDown(found, { key: 'ArrowDown' })
     expect(field().value).toBe('D'.repeat(40))
     expect(field().selectionStart).toBe(5)
@@ -81,9 +73,6 @@ describe('DocxWorkspace vertical caret delivery', () => {
 
     rerenderWorkspace(view, 'doc_2')
 
-    // docB's p2 is short, so the restored caret clamps to 10. The first move
-    // in the new document must derive its column from that caret, not the 40
-    // retained from docA.
     const switched = field()
     expect(switched.value).toBe('Y'.repeat(10))
     switched.focus()

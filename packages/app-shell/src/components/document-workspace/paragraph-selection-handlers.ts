@@ -3,11 +3,6 @@ import type { useWorkspaceCaret } from './use-workspace-caret'
 
 type Caret = ReturnType<typeof useWorkspaceCaret>
 
-/**
- * The selection handlers a paragraph editor needs, mapped from the caret hook
- * that owns the selection. Kept out of the workspace component so the deeper
- * selection semantics live beside the hook that implements them.
- */
 export function paragraphSelectionHandlers(
   caret: Pick<
     Caret,

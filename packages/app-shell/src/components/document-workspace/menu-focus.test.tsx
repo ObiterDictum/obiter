@@ -9,14 +9,6 @@ import {
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
-/*
- * A command run from the menu bar hands the caret back to the document. The
- * menu restores focus to its own trigger, so the workspace re-focuses the
- * caret's field once the menu has finished closing — otherwise the next typed
- * character goes nowhere, which is what the old ribbon's mousedown guard
- * prevented.
- */
-
 function activeField() {
   const active = document.activeElement
   return (

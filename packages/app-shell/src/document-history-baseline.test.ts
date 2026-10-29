@@ -59,8 +59,6 @@ const fromModel = model([
   { id: 'p2', run: 'r2', text: 'tail' },
 ])
 
-// What the server returns after saving: re-parsed identities, and the inserted
-// paragraph named p3.
 const savedModel = model([
   { id: 'p1', run: 'r1', text: 'Hello' },
   { id: 'p3', run: 'r3', text: 'Second' },
@@ -76,7 +74,6 @@ function baseline(overrides: Partial<SaveBaseline>): SaveBaseline {
   }
 }
 
-// Authoritative lineage for saving an insert of 'Second' after p1.
 const insertLineage: DocumentVersionLineage = {
   version: 1,
   baseVersionId: 'ver_1',
@@ -118,7 +115,6 @@ const insertLineage: DocumentVersionLineage = {
   ],
 }
 
-// Authoritative lineage for saving a deletion of the first paragraph.
 const firstDeleteLineage: DocumentVersionLineage = {
   version: 1,
   baseVersionId: 'ver_1',
@@ -154,7 +150,6 @@ const firstDeleteResult = model([
   { id: 'para-w14-00000003', run: 'text-000003', text: 'Gamma' },
 ])
 
-// Authoritative lineage for saving a deletion of p2.
 const deleteLineage: DocumentVersionLineage = {
   version: 1,
   baseVersionId: 'ver_1',
@@ -221,17 +216,10 @@ describe('translateSnapshot', () => {
         { id: 'p2', run: 'r2', text: 'tail' },
       ]),
     })
-    // The snapshot described 'Hello'; against the saved model that is now an
-    // override, so undo reverses the saved edit instead of doing nothing.
     expect(translated?.drafts).toEqual({ r1: 'Hello' })
   })
 
   it('distributes a pre-save run text across every result run continuing it', () => {
-    // A mid-run structure splice split r1 into head + insert + tail while the
-    // same save covered its text edit. The reversal must write each
-    // continuing run's own slice: writing the whole pre-save text to the head
-    // alone leaves the tail's saved text beside it, and the next save
-    // persists the duplication.
     const splitResult = model([{ id: 'p1', run: 'head', text: 'Hello' }])
     splitResult.stories[0]?.paragraphs[0]?.runs.push(
       { id: 'inserted', text: '', preservedXmlFragments: [] },
@@ -336,8 +324,6 @@ describe('translateSnapshot', () => {
       },
       versionId: 'ver_2',
     })
-    // The saved rPr was copied to both halves of the split run, so the
-    // inverse is restated on each — or the tail keeps the saved styling.
     expect(translated?.format.emphasis.map((item) => item.runId)).toEqual([
       'head',
       'tail',
@@ -414,8 +400,6 @@ describe('translateSnapshot', () => {
       },
       boundary,
     )
-    // The paragraph id is authoritative from the lineage; only the result run
-    // id waits for the reloaded model, so it is held as a pending identity.
     const heldRun = Object.keys(translated?.drafts ?? {})[0] ?? ''
     expect(isPendingBaselineId(heldRun)).toBe(true)
 
@@ -547,10 +531,6 @@ describe('translateSnapshot', () => {
       ...emptyDraftState(),
       breaks: [{ id: 'b1', paragraphId: 'p1', offset: 0, kind: 'page' }],
     }
-    // The snapshot holds the break as pending work, but the save stored it,
-    // so the snapshot already describes the saved document: the covered slot
-    // drops and unrelated work in the same snapshot survives. Blocking here
-    // wedged the workspace — every later edit painted but could never save.
     const held = translateSnapshot(
       { ...sent, drafts: { r1: 'Typed' } },
       { covered: [breakSlot], sent, fromModel },
@@ -558,8 +538,6 @@ describe('translateSnapshot', () => {
     expect(held).not.toBeNull()
     expect(held?.breaks).toEqual([])
     expect(held?.drafts.r1).toBe('Typed')
-    // A snapshot that predates the break drops the covered slot and does not
-    // block: it already describes the document without the break.
     const pre = translateSnapshot(emptyDraftState(), {
       covered: [breakSlot],
       sent,
@@ -570,10 +548,6 @@ describe('translateSnapshot', () => {
   })
 
   it('translates a snapshot holding a pending break and structure together', () => {
-    // The E7c defect shape: the break and the field were both pending in one
-    // save, and the snapshot taken between them held both. A page break and a
-    // section break share the 'break' slot kind, so one covered break of each
-    // kind pins the neighbour combinations too.
     const covered: DraftSlot[] = [
       { kind: 'break', key: 'break:b1', id: 'b1', breakKind: 'page' },
       { kind: 'break', key: 'break:b2', id: 'b2', breakKind: 'section' },
@@ -613,12 +587,6 @@ describe('translateSnapshot', () => {
   })
 })
 
-/**
- * The authoritative lineage is the identity source. These cases are the
- * reviewer's wrong-target reproduction in miniature: a mid-document insert
- * whose result positions shift cannot be resolved by an id set-difference, but
- * the server names the stored paragraph directly.
- */
 describe('lineage-driven identity', () => {
   const baseModel = model([
     { id: 'para-000001', run: 'text-000001', text: 'Alpha' },
@@ -703,8 +671,6 @@ describe('lineage-driven identity', () => {
       lineage,
       versionId: 'ver_2',
     })
-    // The snapshot predates the insert, so its reversal deletes exactly the
-    // stored paragraph. Gamma (para-000003) must not be touched.
     expect(translated?.deletedParagraphIds).toEqual(['para-w14-00000002'])
     expect(translated?.deletedParagraphIds).not.toContain('para-w14-00000004')
   })
@@ -878,8 +844,6 @@ describe('lineage-driven identity', () => {
       },
       versionId: 'ver_2',
     })
-    // The reversal must carry the whole pre-save character state, or the saved
-    // font properties survive the undo.
     expect(translated?.format.emphasis).toEqual([
       {
         runId: 'text-w14-00000001',
@@ -958,7 +922,6 @@ describe('lineage-driven identity', () => {
       acceptedOperations: [0],
       paragraphs: [],
     }
-    // The boundary is refused before any translation happens.
     expect(
       lineageCoversCoveredSlots(noRunAddresses, {
         covered: [runTextSlot('text-000001')],
@@ -966,8 +929,6 @@ describe('lineage-driven identity', () => {
         fromModel: baseModel,
       }),
     ).toBe(false)
-    // Defence in depth: even a direct translation must not produce a draft
-    // keyed by the source run id, which post-reload names unrelated content.
     const translated = translateSnapshot(emptyDraftState(), {
       covered: [runTextSlot('text-000001')],
       sent,
@@ -982,8 +943,6 @@ describe('lineage-driven identity', () => {
   })
 
   it('surfaces an uncovered base run the lineage does not name', () => {
-    // A run the batch did not cover still names a base identity. If the
-    // lineage omits its result address, keeping the base id would retarget it.
     const state: DraftState = {
       ...emptyDraftState(),
       drafts: { 'text-000002': 'typed late' },
@@ -1017,7 +976,6 @@ describe('lineage-driven identity', () => {
       toModel: resultModel,
     })
     expect(result.unresolved).toBe(true)
-    // The base key is left explicit as unsaved work, never silently sent.
     expect(Object.keys(result.state.drafts)).toContain('text-000002')
   })
 
@@ -1026,8 +984,6 @@ describe('lineage-driven identity', () => {
       ...emptyDraftState(),
       drafts: { 'text-000001': 'Hello world' },
     }
-    // A tracked version omits every run address, so a covered run-keyed
-    // reversal cannot be translated and the boundary is refused, not guessed.
     const uncovered: DocumentVersionLineage = {
       version: 1,
       baseVersionId: 'ver_1',
@@ -1048,7 +1004,6 @@ describe('lineage-driven identity', () => {
         fromModel: baseModel,
       }),
     ).toBe(false)
-    // The lineage that maps the run is accepted.
     expect(
       lineageCoversCoveredSlots(lineage, {
         covered: [runTextSlot('text-000001')],
@@ -1086,8 +1041,6 @@ describe('lineage-driven identity', () => {
       lineage: trackedInsertLineage,
       versionId: 'ver_2',
     }
-    // The covered insertion parses to no run, but its reversal is named, so
-    // the boundary is accepted rather than blocked.
     expect(lineageCoversCoveredSlots(trackedInsertLineage, boundary)).toBe(true)
     const translated = translateSnapshot(emptyDraftState(), boundary)
     expect(translated?.deletedParagraphIds).toEqual([])
@@ -1138,12 +1091,8 @@ describe('lineage-driven identity', () => {
       versionId: 'ver_2',
       toModel: resultModel,
     }
-    // The covered run has no result address but a named rejection, so the
-    // boundary is accepted rather than refused.
     expect(lineageCoversCoveredSlots(trackedLineage, boundary)).toBe(true)
     const translated = translateSnapshot(snapshot, boundary)
-    // No run id is invented for content the model does not have; the reversal
-    // is the persisted change group.
     expect(translated?.drafts['text-000001']).toBeUndefined()
     expect(translated?.trackedRejections).toEqual([
       { key: 'reject:0,1', ooxmlIds: ['0', '1'] },
@@ -1154,9 +1103,6 @@ describe('lineage-driven identity', () => {
   })
 
   it('merges reversals two operations record against one run', () => {
-    // A text edit and a property change on the same run each record a
-    // reversal keyed by it; undoing the batch means rejecting every id, not
-    // only the later op's.
     const mergedLineage: DocumentVersionLineage = {
       version: 1,
       baseVersionId: 'ver_1',

@@ -34,13 +34,6 @@ import { useVerificationWorkspace } from '../verification/verification-context'
 type DocumentExportHandlers = ReturnType<typeof documentExportHandlers>
 type WorkspacePanels = ReturnType<typeof useWorkspacePanels>
 
-/**
- * The DOCX workspace's chrome: the menu bar, the compact toolbar and the save
- * and recovery banners beneath them, plus the surfaces a menu row opens — the
- * formatting panel, find, the command palette and the insert dialogs. The desk
- * layout (pages, ruler, navigation pane, side panels) stays in
- * `docx-workspace.tsx`.
- */
 export function DocxWorkspaceChrome({
   props,
   save,
@@ -62,11 +55,9 @@ export function DocxWorkspaceChrome({
   transientNotice: string | null
   selectionNotice: string
   onReload: () => void
-  /** Surface requests from the key handler, counted so a repeat still opens. */
   requests: { find: number; palette: number; formatting: number }
   selectionActive: boolean
   onCommentSelection: () => void
-  /** The citation a source page left for this document, and its two answers. */
   citation: ReturnType<typeof usePendingCitation>
   citationCanInsert: boolean
 }) {
@@ -80,16 +71,10 @@ export function DocxWorkspaceChrome({
   const [linkOpen, setLinkOpen] = useState(false)
   const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
   const [authorityOpen, setAuthorityOpen] = useState(false)
-  // The formatting panel has no close control of its own: the control that
-  // opens it closes it, and Escape closes it from inside. Toggling here keeps
-  // one button one name, so a reader can open and dismiss it from the toolbar
-  // or the Format menu without hunting for an X.
   const openFormatting = (anchor: HTMLElement | null) => {
     setFormattingAnchor(anchor)
     setFormattingOpen((open) => !open)
   }
-  // A command from the key handler or the palette has no toolbar button to
-  // anchor to; the panel then opens under the toolbar's own control.
   useLayoutEffect(() => {
     if (requests.formatting === 0) return
     setFormattingAnchor(
@@ -103,14 +88,10 @@ export function DocxWorkspaceChrome({
   useLayoutEffect(() => {
     if (requests.palette > 0) setPaletteOpen(true)
   }, [requests.palette])
-  // The find field is not mounted until the bar is, so focus follows the open.
   useLayoutEffect(() => {
     if (findOpen) document.getElementById('document-find')?.focus()
   }, [findOpen])
 
-  // The Review menu's Verify row reads the same availability the header's
-  // Check citations control does, so the menu never offers a run the document
-  // cannot start (unsaved edits, a loading status, a not-ready version).
   const verification = useVerificationWorkspace()
   const verify = verification
     ? {
@@ -132,8 +113,6 @@ export function DocxWorkspaceChrome({
     openAuthority: () => setAuthorityOpen(true),
     closeStory: props.structure.onCloseStory,
   }
-  // The Review menu's Verify row reveals the dock's own Run control with
-  // focus, rather than starting a second run from the chrome.
   const menued: EditorChromeProps = {
     ...props,
     verify,
@@ -197,8 +176,7 @@ export function DocxWorkspaceChrome({
         onComment={onCommentSelection}
         onCite={actions.openAuthority}
       />
-      {/* The picture picker is a hidden input the Insert ▸ Picture command
-          clicks: it must stay mounted wherever the chrome is. */}
+
       {props.structure.picturePicker}
       <InsertTableDialog
         open={tableOpen}
@@ -239,19 +217,8 @@ export function DocxWorkspaceChrome({
   )
 }
 
-/**
- * The toolbar's props beyond the save fields the chrome derives. The Insert
- * group's structural fields arrive by intersection because `useInsertRibbon`
- * builds them in the toolbar's own shape.
- */
 export type DocxChromeProps = EditorChromeProps
 
-/**
- * Build the chrome's props from the workspace's own state. The workspace keeps
- * the machines (save, drafts, review, panels) and this file keeps the mapping
- * from those machines to the chrome's props, so `docx-workspace.tsx` stays
- * inside its source ceiling.
- */
 export function docxWorkspaceChrome({
   save,
   drafts,

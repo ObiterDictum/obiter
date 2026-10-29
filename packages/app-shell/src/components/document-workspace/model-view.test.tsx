@@ -117,8 +117,6 @@ const narrowTableModel: DocumentModelWire = {
   ],
 }
 
-/** The five runs `insertPageNumber` stores: the result run holds no text —
- * the instruction resolves at paint time. */
 function storedPageFieldRuns(prefix: string) {
   return [
     {

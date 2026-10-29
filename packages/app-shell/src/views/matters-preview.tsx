@@ -8,11 +8,6 @@ import type { MatterRow } from './matters-rows'
 import { MatterTile } from './matters-table'
 import { MatterUploadButton } from './matter-upload'
 
-/**
- * The selected matter, read without leaving the list: what it is, and what is in
- * it. What is waiting in it is the table's own Open work column, so the preview
- * never repeats the queue a second time.
- */
 export function MatterPreview({
   row,
   documents,
@@ -64,8 +59,6 @@ export function MatterPreview({
           files.map((document) => {
             const version = document.currentVersion
             return (
-              // The mark links to the run, so it sits beside the row's link
-              // rather than inside it.
               <div
                 key={document.id}
                 className="flex min-w-0 items-center gap-3 py-2"

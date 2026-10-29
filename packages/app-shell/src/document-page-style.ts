@@ -41,7 +41,6 @@ export type ParagraphFace = {
   indentLeftPx?: number
   indentRightPx?: number
   indentFirstPx?: number
-  /** A hanging indent: the first line hangs left of the body indent. */
   indentHangingPx?: number
   keepNext?: boolean
   keepLines?: boolean
@@ -61,8 +60,6 @@ const THEME_FONT: ThemeFont = {
   majorascii: 'Cambria',
 }
 
-// Word's closed highlight palette, so a DOCX authored in Word paints the same
-// colour here. The editor's own Highlight control only ever writes `yellow`.
 const HIGHLIGHT_COLOUR: ThemeFont = {
   yellow: '#FFFF00',
   green: '#00FF00',
@@ -142,13 +139,6 @@ export function paragraphLineHeightPx(face: ParagraphFace): number {
   return Number.isFinite(ratio) ? size * ratio : size * 1.15
 }
 
-/**
- * Line 1's offset from the body edge, in CSS `text-indent` terms: a positive
- * `w:firstLine` holds line 1 back from the body edge by that much, a `w:hanging`
- * starts it that far left of it, and neither leaves line 1 on the body edge. The
- * paint applies this as `text-indent` and the wrap takes it off line 1's width,
- * so both have to read the same number or they disagree about where line 1 ends.
- */
 export function paragraphTextIndentPx(face: ParagraphFace): number {
   if (face.indentFirstPx) return face.indentFirstPx
   if (face.indentHangingPx) return -face.indentHangingPx
@@ -196,11 +186,6 @@ export function runCss(face: RunFace): CSSProperties {
   })
 }
 
-/**
- * Underline and strikethrough are independent decorations. An explicit `false`
- * on either clears that line (overriding an inherited style) without dropping
- * the other, which a single boolean could not express.
- */
 function runTextDecoration(face: RunFace): CSSProperties['textDecoration'] {
   const lines: string[] = []
   if (face.underline === true) lines.push('underline')
@@ -230,10 +215,6 @@ function styleChain(
 }
 
 function faceFromXml(xml: string): ParagraphFace {
-  // Tracked history lives in nested `w:rPrChange`/`w:pPrChange` elements —
-  // including the previous paragraph mark's `w:rPr` inside `w:pPrChange` — so
-  // drop it before reading or a foreign change paints a value the current
-  // paragraph no longer carries.
   const current = withoutTrackedParagraphProperties(xml)
   const pPrBlock = current.match(/<w:pPr\b[\s\S]*?<\/w:pPr>/i)?.[0] ?? ''
   const rest = current.replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/i, '')
@@ -300,15 +281,11 @@ function mergeParagraph(...faces: ParagraphFace[]): ParagraphFace {
   return faces.reduce<ParagraphFace>(
     (current, next) => ({
       align: next.align ?? current.align,
-      // `??`, not `||`: a direct 0 spacing overrides a style's value.
       marginTopPx: next.marginTopPx ?? current.marginTopPx,
       marginBottomPx: next.marginBottomPx ?? current.marginBottomPx,
       lineHeight: next.lineHeight ?? current.lineHeight,
       indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
       indentRightPx: next.indentRightPx ?? current.indentRightPx,
-      // First-line and hanging are mutually exclusive in OOXML: a face naming
-      // either overrides both, or a direct `w:firstLine` would leave an
-      // inherited `w:hanging` behind it (`indentKind` reads hanging first).
       indentFirstPx:
         next.indentFirstPx ??
         (next.indentHangingPx === undefined
@@ -349,12 +326,6 @@ function lineHeight(
   return String(line / 240)
 }
 
-/**
- * Absent stays absent: `mergeParagraph` falls back to the style chain on
- * `undefined` but not on `0`, so mapping an absent attribute to 0 would let a
- * paragraph's silence override its style. `w:firstLine="0"` — Word's spelling
- * of "no indent" — is a real 0 and does override.
- */
 function twipPx(value: number | undefined): number | undefined {
   return value === undefined ? undefined : twipToPx(value)
 }

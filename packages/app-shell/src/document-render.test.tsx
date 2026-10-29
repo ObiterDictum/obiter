@@ -25,8 +25,6 @@ async function blackBarModel() {
       emphasis: { highlight: 'black', colour: '000000' },
     },
   ])
-  // The edit lives in the document overlay until it is serialised, so re-read
-  // the bytes exactly as a renderer caller would.
   return (await parseDocx(await serialiseDocx(parsed))).model
 }
 

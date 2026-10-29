@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * E1: the Clipboard ribbon controls, the Ctrl/Cmd+B/I/U layer, and a
- * multi-paragraph paste. The pure splitter and the undo-grouping rule have
- * their own unit suites; this file drives them through the mounted workspace so
- * the availability rules, the accessible names and the single history step are
- * exercised the way a user meets them.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -88,8 +81,6 @@ describe('the clipboard ribbon controls', () => {
   it('enables Copy and Cut only with a document selection and Paste always', () => {
     mountWorkspace({ models: { doc_1: model() } })
 
-    // The clipboard commands are Edit menu rows: unavailable rows carry
-    // `aria-disabled` and name their reason beside the row.
     expect(commandDisabled(control('Copy'))).toBe(true)
     expect(commandDisabled(control('Cut'))).toBe(true)
     expect(commandDisabled(control('Paste'))).toBe(false)
@@ -112,7 +103,6 @@ describe('the clipboard ribbon controls', () => {
 
     fireEvent.click(control('Copy'))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('el'))
-    // Copying must not touch the document.
     expect(bodyField().value).toBe('Hello')
   })
 
@@ -142,7 +132,6 @@ describe('the clipboard ribbon controls', () => {
     await waitFor(() =>
       expect(selectionStatus()).toMatch(/clipboard could not be written/i),
     )
-    // A failed cut must not delete text the clipboard never held.
     expect(bodyField().value).toBe('Hello')
   })
 
@@ -154,10 +143,8 @@ describe('the clipboard ribbon controls', () => {
 
     fireEvent.click(control('Paste'))
     await waitFor(() => expect(renderedParagraphIds()).toHaveLength(3))
-    // The caret lands in the pasted second paragraph, which is a pending insert.
     expect(pendingField().value).toBe('B')
 
-    // One paste is one history entry, however many paragraphs it created.
     fireEvent.click(control('Undo'))
     expect(renderedParagraphIds()).toHaveLength(2)
     expect(screen.queryByLabelText('Pending paragraph text')).toBeNull()
@@ -185,12 +172,9 @@ describe('the clipboard ribbon controls', () => {
       clipboardData: { getData: () => 'A\nB' },
     })
 
-    // The insert splits into two pending paragraphs, not one with a hard break.
     await waitFor(() => expect(renderedParagraphIds()).toHaveLength(4))
     expect(pendingFields().map((field) => field.value)).toEqual(['A', 'B'])
 
-    // One paste is one history step: a single undo restores the pre-paste
-    // insert rather than leaving the two the paste created.
     fireEvent.click(control('Undo'))
     expect(renderedParagraphIds()).toHaveLength(3)
     expect(screen.getAllByLabelText('Pending paragraph text')).toHaveLength(1)
@@ -203,10 +187,6 @@ describe('the clipboard ribbon controls', () => {
     fireEvent.click(control('Insert paragraph'))
     fireEvent.change(pendingField(), { target: { value: 'ab' } })
 
-    // Select in the body paragraph so its format range is live, then click into
-    // the insert: that click must reseat the range on the insert's own caret,
-    // not leave the body paragraph's range as a phantom the ribbon paste
-    // replaces. The insert must keep both characters.
     clickParagraph('p1')
     nativeSelect(1, 4)
     fireEvent.click(pendingField())
@@ -220,13 +200,10 @@ describe('the clipboard ribbon controls', () => {
     mountWorkspace({ models: { doc_1: model() } })
     clickParagraph('p2')
     nativeSelect(1, 3)
-    // Escape collapses the selection, then a second Escape leaves the paragraph.
     fireEvent.keyDown(bodyField(), { key: 'Escape' })
     fireEvent.keyDown(bodyField(), { key: 'Escape' })
 
     fireEvent.click(control('Paste'))
-    // Escape cleared the selected paragraph; the ribbon falls back to the first
-    // paragraph and must not reuse the blurred paragraph's caret offset.
     await waitFor(() => expect(bodyField().value).toBe('ZHello'))
   })
 
@@ -234,16 +211,12 @@ describe('the clipboard ribbon controls', () => {
     mountWorkspace({ models: { doc_1: model() } })
     clickParagraph('p1')
     fireEvent.click(control('Insert paragraph'))
-    // Select in the body paragraph again, so the insert is rendered but not the
-    // selected paragraph: a drop on it must target the insert, not the range.
     clickParagraph('p1')
     nativeSelect(1, 4)
 
     fireEvent.drop(pendingField(), { dataTransfer: { getData: () => 'Z' } })
 
     await waitFor(() => expect(pendingField().value).toBe('Z'))
-    // The body paragraph's text is untouched: the drop did not replace its
-    // live selection with the payload.
     expect(
       document.querySelector('[data-paragraph-id="p1"]')?.textContent ?? '',
     ).toContain('Hello')
@@ -256,8 +229,6 @@ describe('the clipboard ribbon controls', () => {
     const before = renderedParagraphIds().length
 
     fireEvent.click(control('Paste'))
-    // A split there would render siblings as body text while the save writes
-    // them inside the cell, so it is refused with the structure reason.
     await waitFor(() =>
       expect(selectionStatus()).toMatch(/cannot cross a table/),
     )
@@ -334,8 +305,6 @@ describe('the character-formatting keyboard layer', () => {
     fireEvent.keyDown(bodyField(), { key: 'b', ctrlKey: true })
     expect(pressed('Bold')).toBe('false')
 
-    // The find box is a foreign field inside the workspace shell: its own
-    // Ctrl+B must not reach the document control.
     openRibbonTab('Review')
     const find = screen.getByLabelText('Find in document')
     fireEvent.keyDown(find, { key: 'b', ctrlKey: true })

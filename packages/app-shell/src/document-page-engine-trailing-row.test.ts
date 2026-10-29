@@ -89,8 +89,6 @@ describe('layoutDocument trailing-row pagination', () => {
           block.wrapWidthPx ?? 1,
         ).map((line) => ({ from: from + line.from, to: from + line.to }))
       })
-    // `String.split` is the browser row list for a textarea: one row per
-    // segment plus the empty row a trailing break opens.
     expect(drawn.length).toBe(text.split('\n').length)
     const covered = Array.from({ length: text.length }, () => 0)
     for (const row of drawn) {
@@ -107,8 +105,6 @@ describe('layoutDocument trailing-row pagination', () => {
     const linePx = paragraphLineHeightPx(
       paragraphFace(breakParagraph('p1', 0), []),
     )
-    // A page ten and a half default lines tall: ten body rows fit after the
-    // trailing empty row, an eleventh does not.
     const pageTwips = Math.round(1440 + 15 * 10.5 * linePx)
     const sectPr = `<w:sectPr><w:pgSz w:w="11906" w:h="${pageTwips}"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>`
     const model = modelOf(
@@ -123,9 +119,6 @@ describe('layoutDocument trailing-row pagination', () => {
         (block) => block.type === 'paragraph' && block.paragraph.id === 'tail',
       ),
     )
-    // Nine breaks and the empty row the last one opens fill ten lines, leaving
-    // half a line: the tail paragraph cannot share it. A model without the
-    // trailing row thinks a line and a half remain and keeps the tail here.
     expect(pageOfTail).toBe(1)
   })
 })

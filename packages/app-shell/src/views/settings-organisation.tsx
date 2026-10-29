@@ -18,13 +18,6 @@ import {
 import { OrganisationPeople } from './settings-members'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
-/**
- * Organisation settings: the tenant name, who may change it, and the members
- * and invites the product already supports. Rename stays owner-only, which is
- * the policy the API enforces (requireOwnerRole plus an ownership check against
- * the caller's own organisation), so an admin or member is shown the same facts
- * without an edit control that could only fail.
- */
 export function OrganisationSection({
   me,
   active,
@@ -102,9 +95,6 @@ function OrganisationNameForm({
 }) {
   const renameOrganisation = useRenameOrganisation()
   const inputRef = useRef<HTMLInputElement>(null)
-  // Same policy as the account name: see `useCanonicalNameField`. The identity
-  // is the organisation id, so a different organisation never inherits this
-  // form's draft or baseline.
   const field = useCanonicalNameField({
     identity: organisation.id,
     canonical: organisation.name,
@@ -179,9 +169,6 @@ function CreateOrganisationForm() {
     setSubmitting(true)
     try {
       await createOrganisation.mutateAsync({ name: trimmed })
-      // The created organisation is merged into the cached /api/me, so this
-      // section re-renders with the real organisation rather than navigating
-      // the user away from the page they are working in.
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'conflict_detected') {
         setError('You already have an organisation. Refreshing…')

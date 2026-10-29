@@ -20,35 +20,17 @@ import {
 } from '@tanstack/react-router'
 import type { MeResponse } from '@obiter/contracts'
 
-/**
- * The name-form state policy, driven through the real TanStack Query hooks and
- * a mocked `apiFetch`, so a resolved save and a refetched canonical value meet
- * the mounted form exactly as they do in the product.
- *
- * The contract under test: a save never discards newer typing, the saved
- * baseline always tracks the authoritative value, and Reset returns to the
- * latest stored value rather than the value from the first mount.
- */
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('../api')) }
 mock.module('../api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
 mock.module('../auth', () => ({
   ...authModule,
   useAuth: () => ({ changePassword: vi.fn() }),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const organisationMembershipModuleKeys = Object.fromEntries(
   Object.keys(await import('../organisation-membership')).map((key) => [
     key,
@@ -77,9 +59,6 @@ mock.module('../organisation-membership', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { SettingsRouteView } = await import('./settings')
 
 const ME: MeResponse = {

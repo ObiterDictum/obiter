@@ -37,10 +37,6 @@ function mount(model = threeParagraphs()) {
   return { view, editAsync }
 }
 
-/**
- * Selects from p1 offset 2 to p2 offset 2: a native in-paragraph selection
- * extended one step across the boundary and two model-owned steps inside it.
- */
 function selectAcrossBoundary() {
   clickParagraph('p1')
   nativeSelect(2, 5)
@@ -89,7 +85,6 @@ describe('editing across a cross-paragraph selection', () => {
     selectAcrossBoundary()
     fireEvent.keyDown(bodyField(), { key: 'X' })
     save()
-    // p1 keeps its head, the selection is replaced by X, and p2's tail joins.
     expect(saveOperations(editAsync)).toEqual([
       { type: 'replace_run_text', runId: 'p1-r', text: 'AlXavo' },
       { type: 'delete_paragraph', paragraphId: 'p2' },
@@ -99,11 +94,8 @@ describe('editing across a cross-paragraph selection', () => {
   it('edits from the collapsed caret after a modified arrow', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
-    // Ctrl+Arrow moves natively; the model collapses first so the two agree.
     fireEvent.keyDown(bodyField(), { key: 'ArrowRight', ctrlKey: true })
     expect(selectionStatus()).toBe('')
-    // The ordered end of the range is p2 offset 2, so typing must extend p2
-    // rather than replace the range that was selected a moment ago.
     fireEvent.change(bodyField(), { target: { value: 'BraXvo' } })
     save()
     expect(saveOperations(editAsync)).toEqual([
@@ -114,9 +106,6 @@ describe('editing across a cross-paragraph selection', () => {
   it('applies a non-keydown change as a replacement of the range', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
-    // A change that reaches the field without a key event (an IME commit, a
-    // drop, a paste path the key handler missed) is the inserted text that
-    // replaces the whole range, not an edit of one paragraph of it.
     fireEvent.change(bodyField(), { target: { value: 'X' } })
     save()
     expect(saveOperations(editAsync)).toEqual([
@@ -129,8 +118,6 @@ describe('editing across a cross-paragraph selection', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
     fireEvent.change(bodyField(), { target: { value: '' } })
-    // A pure deletion through the value cannot be expressed as a replacement,
-    // so it is refused with a spoken reason rather than silently discarded.
     expect(selectionStatus()).toMatch(/cannot replace a document selection/)
     save()
     expect(editAsync).not.toHaveBeenCalled()
@@ -207,15 +194,11 @@ describe('editing across a cross-paragraph selection', () => {
     save()
     await vi.waitFor(() => expect(editAsync).toHaveBeenCalled())
 
-    // The saved version comes back with the range applied.
     models.doc_1 = multiParagraphModel([
       paragraph('p1', 'Alavo'),
       paragraph('p3', 'Charlie'),
     ])
     rerenderWorkspace(view, 'doc_1')
-    // The reloaded paragraph is painted twice — the overlay span and the
-    // textarea both carry the text (jsdom exposes a textarea's value as its
-    // text content), so getByText is ambiguous by construction here.
     expect(screen.getAllByText('Alavo').length).toBeGreaterThan(0)
     expect(screen.queryByText('Bravo')).toBeNull()
     expect(selectionStatus()).toBe('')
@@ -259,8 +242,6 @@ describe('formatting a cross-paragraph selection', () => {
   })
 
   it('queues one range per selected paragraph under track changes', () => {
-    // Mid-run ranges are recorded as w:rPrChange, so tracking no longer
-    // refuses them: the save carries every selected paragraph's range.
     const { editAsync } = mount()
     selectAcrossBoundary()
     openRibbonTab('Review')
@@ -301,8 +282,6 @@ describe('formatting a cross-paragraph selection', () => {
     ]
     const { editAsync } = mount(model)
     selectAcrossBoundary()
-    // The paragraph style picker is a Base UI Select; its choices are also
-    // Format menu rows, which is the path a keyboard user takes to them.
     fireEvent.click(command('Quote'))
     save()
     const operations = saveOperations(editAsync)
@@ -346,8 +325,6 @@ describe('a formatted tail keeps its formatting through the join', () => {
     fireEvent.keyDown(bodyField(), { key: 'Backspace' })
     save()
     const operations = saveOperations(editAsync)
-    // The italic tail run and the bold tail run are restated over their slices
-    // of the merged paragraph, so the save keeps what the editor painted.
     expect(operations).toContainEqual(
       expect.objectContaining({
         type: 'set_run_emphasis',
@@ -388,8 +365,6 @@ describe('a formatted tail keeps its formatting through the join', () => {
     const { editAsync } = mount(model)
     selectAcrossBoundary()
     fireEvent.keyDown(bodyField(), { key: 'Backspace' })
-    // The join cannot carry the tail's character style, so nothing changes and
-    // the reason is announced.
     expect(selectionStatus()).toMatch(/cannot save/)
     save()
     expect(editAsync).not.toHaveBeenCalled()
@@ -464,8 +439,6 @@ describe('cut ordering and non-keydown input', () => {
     placeCaret(5)
     fireEvent.drop(bodyField(), { dataTransfer: { getData: () => 'A\nB' } })
     save()
-    // A drop carries the same payload as a paste, so its newline becomes a
-    // paragraph break rather than a hard break inside p1.
     const operations = saveOperations(editAsync)
     expect(operations[0]).toEqual({
       type: 'replace_run_text',
@@ -488,10 +461,7 @@ describe('cut ordering and non-keydown input', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
     const field = bodyField()
-    // Synthetic composition events, not a real OS IME pass: the commit is the
-    // value the field holds when composition ends.
     fireEvent.compositionStart(field)
-    // A change during the composition is not the commit and is not applied.
     fireEvent.change(field, { target: { value: 'Z' } })
     field.value = 'X'
     fireEvent.compositionEnd(field)
@@ -504,15 +474,11 @@ describe('cut ordering and non-keydown input', () => {
 })
 
 describe('pasting over a document selection', () => {
-  // An empty clipboard and an image-only or format-only copy arrive as the
-  // same absent text/plain payload, and the editor collapses both to ''
-  // before its length check, so one input models both refusals.
   it('refuses an empty or text-less clipboard instead of deleting the selection', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
     fireEvent.paste(bodyField(), { clipboardData: { getData: () => '' } })
     expect(selectionStatus()).toMatch(/cannot replace a document selection/)
-    // The range is still live, painted, and untouched.
     expect(selectedText('p1')).toBe('pha')
     expect(selectedText('p2')).toBe('Br')
     save()
@@ -535,8 +501,6 @@ describe('pasting over a document selection', () => {
     selectAcrossBoundary()
     fireEvent.paste(bodyField(), { clipboardData: { getData: () => '\n' } })
     save()
-    // A newline is a paragraph break, not a hard break inside the joined
-    // paragraph: the head keeps its text and the tail moves to a new paragraph.
     const operations = saveOperations(editAsync)
     expect(operations[0]).toEqual({
       type: 'replace_run_text',
@@ -577,8 +541,6 @@ describe('pasting over a document selection', () => {
     selectAcrossBoundary()
     const field = bodyField()
     fireEvent.paste(field, { clipboardData: { getData: () => 'zed' } })
-    // The paste path preventDefaults, so a browser that still dispatches the
-    // input event must not insert the same text a second time.
     fireEvent.change(field, { target: { value: 'Alzedavo' } })
     save()
     expect(saveOperations(editAsync)).toEqual([
@@ -593,7 +555,6 @@ describe('an unsaved inserted paragraph blocks a selection', () => {
     mount()
     clickParagraph('p1')
     placeCaret(5)
-    // Enter after p1 creates the pending paragraph and moves the caret into it.
     fireEvent.keyDown(bodyField(), { key: 'Enter' })
     clickParagraph('p1')
     placeCaret(5)

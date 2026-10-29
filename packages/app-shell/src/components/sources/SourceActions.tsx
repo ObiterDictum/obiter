@@ -16,11 +16,6 @@ import { useMattersList } from '../../matters'
 import { requestCitation } from '../../pending-citation'
 import { savedSourcesKeys } from '../../saved-sources'
 
-/**
- * The one source a page is showing, in the shape a matter files. `sourceId` is
- * the corpus identity, so a saved entry always reads the same stored source
- * the page does.
- */
 export interface SaveableSource {
   kind: 'judgment' | 'legislation'
   sourceId: string
@@ -29,12 +24,6 @@ export interface SaveableSource {
   sourceUrl: string | null
 }
 
-/**
- * The citation as it is written: the authority's own name with its citation —
- * "Wood v Capita Insurance Services Ltd [2017] UKSC 24", "Equality Act 2010,
- * s. 13(3)". One formatter for "Copy citation" and "Cite in document", so the
- * copied text and the inserted text can never drift apart.
- */
 export function sourceCitation(source: SaveableSource) {
   if (!source.citation) return source.title
   return source.kind === 'legislation'
@@ -42,12 +31,6 @@ export function sourceCitation(source: SaveableSource) {
     : `${source.title} ${source.citation}`
 }
 
-/**
- * Why a document cannot take the citation, or null when it can. The editor
- * only writes Word documents, and only for a person who may edit the matter;
- * both answers come from the API beside the document, so the menu never offers
- * an insertion the document would refuse.
- */
 export function citationTargetRefusal(target: CitationTarget): string | null {
   if (!target.canEdit) return 'You have view-only access to this matter'
   const kind = workspaceKind(target.fileType)
@@ -57,21 +40,6 @@ export function citationTargetRefusal(target: CitationTarget): string | null {
   return 'This document cannot be edited'
 }
 
-/**
- * Keep a source with a matter, and take its citation away.
- *
- * The home page promises a matter keeps the sources you find, so this is the
- * action that makes that true: the source is filed against one matter the
- * reader can edit, under the API's own matter access check. The matter is
- * chosen from a menu rather than a dialog — the choice is one of a short list
- * the reader already knows, and picking one is the whole interaction.
- *
- * "Cite in document" carries the citation to a document the reader has opened.
- * The citation is inserted in the editor, at the caret, never here: this page
- * cannot know where the sentence goes, and a citation dropped at an arbitrary
- * position is worse than one not inserted. Choosing a document only opens it
- * with the citation pending, and the editor asks where it goes.
- */
 export function SourceActions({ source }: { source: SaveableSource }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -127,9 +95,6 @@ export function SourceActions({ source }: { source: SaveableSource }) {
   }
 
   function citeIn(target: CitationTarget) {
-    // The citation is left for that one document, then the document opens.
-    // Nothing is inserted here: the editor owns the caret and asks where the
-    // citation goes.
     requestCitation(target.documentId, citation)
     navigate({
       to: '/matters/$matterId/documents/$documentId',

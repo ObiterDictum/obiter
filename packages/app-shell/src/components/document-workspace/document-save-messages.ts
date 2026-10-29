@@ -6,7 +6,6 @@ import {
 } from '../../document-save-plan'
 import type { BaselineBlockReason } from './use-save-baseline'
 
-/** One sentence naming why a committed save's history cannot be reconciled. */
 export function blockedHistoryMessage(reason: BaselineBlockReason | null) {
   switch (reason) {
     case 'newer-version':
@@ -25,11 +24,6 @@ export function messageFor(error: unknown) {
   return 'Your changes have not been saved. The request failed before the server committed anything.'
 }
 
-/**
- * One sentence naming what the server refused. The slot stays pending in the
- * drafts, so the next save retries it; the only way it disappears is the
- * discard affordance next to this message.
- */
 export function refusedSummary(refused: readonly DraftSlot[]) {
   if (refused.length === 0) return null
   if (refused.length === 1) {
@@ -39,13 +33,10 @@ export function refusedSummary(refused: readonly DraftSlot[]) {
   return `${String(refused.length)} changes were rejected by the server; they stay in your drafts and the next save will try them again.`
 }
 
-/** One sentence naming what could not be sent and what to do about it. */
 export function blockedSummary(blocked: readonly BlockedDraft[]) {
   if (blocked.length === 0) return null
   const [only] = blocked
   if (blocked.length === 1 && only) {
-    // The partition's reason is specific (a missing run, a revision-only
-    // paragraph); a generic mismatch would misstate what to do.
     return `${capitalise(only.label)} could not be sent. ${only.reason} Discard it to keep saving.`
   }
   return `${String(blocked.length)} changes could not be sent because they no longer match the document. Discard them to keep saving.`

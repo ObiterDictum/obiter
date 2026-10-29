@@ -28,9 +28,6 @@ const mocks = vi.hoisted(() => ({
   useRecentlyOpenedDocument: vi.fn(),
 }))
 
-// Each module is snapshotted before mock.module registers: a factory that
-// awaited its own specifier re-entered the in-flight mock and deadlocked under
-// bun's module registry.
 const mattersModule = { ...(await import('./matters')) }
 mock.module('./matters', () => ({
   ...mattersModule,
@@ -396,7 +393,6 @@ describe('HomeRouteView — greeting and actions', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          // Findings, not runs: this run left one flagged finding and two citations to review.
           '5 items need your attention: 1 legal-accuracy risk, 1 redaction decision, 2 citations to review and 1 failed run.',
         ),
       ).toBeTruthy()
@@ -425,7 +421,6 @@ describe('HomeRouteView — needs your attention', () => {
     expect(
       screen.getByText('Awaiting a decision · 3 detected spans'),
     ).toBeTruthy()
-    // The filename appears once, on the meta line; the state once, as the title.
     expect(screen.getAllByText(/advice-note\.docx/)).toHaveLength(1)
     expect(screen.queryByText('Flagged')).toBeNull()
     expect(screen.queryByText('In review')).toBeNull()
@@ -501,7 +496,6 @@ describe('HomeRouteView — rail', () => {
     })
     expect(screen.getByText('advice-note.docx')).toBeTruthy()
     expect(screen.getByText('1 document · REF-mtr_0')).toBeTruthy()
-    // One initials helper for matters, the same label the sidebar shows.
     expect(screen.getByText('REF')).toBeTruthy()
     expect(
       screen.getByRole('link', { name: /All 1/ }).getAttribute('href'),

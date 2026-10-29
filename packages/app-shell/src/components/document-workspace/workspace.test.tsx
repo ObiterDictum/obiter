@@ -15,15 +15,9 @@ const workspaceApi = vi.hoisted(() => ({
   useDocumentText: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentWorkspaceApiModule = {
   ...(await import('../../document-workspace-api')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentWorkspaceApiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-workspace-api')).map((key) => [
     key,
@@ -40,9 +34,6 @@ mock.module('../../document-workspace-api', () =>
   ),
 )
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const docxWorkspaceModuleKeys = Object.fromEntries(
   Object.keys(await import('./docx-workspace')).map((key) => [key, undefined]),
 )
@@ -55,8 +46,6 @@ mock.module('./docx-workspace', () =>
   ),
 )
 
-// The workspace carries the document-level Verify control, so it reads server
-// state through TanStack Query.
 const verification = vi.hoisted(() => ({
   useDocument: vi.fn(),
   useDocumentVerificationRuns: vi.fn(),
@@ -64,13 +53,7 @@ const verification = vi.hoisted(() => ({
   useVerificationFindings: vi.fn(),
   latestVerificationRun: vi.fn(),
 }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('../../documents')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../documents')).map((key) => [key, undefined]),
 )
@@ -83,13 +66,7 @@ mock.module('../../documents', () =>
     })(),
   ),
 )
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const verificationRunsModule = { ...(await import('../../verification-runs')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const verificationRunsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../verification-runs')).map((key) => [
     key,
@@ -112,9 +89,6 @@ mock.module('../../verification-runs', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { DocumentWorkspace } = await import('./workspace')
 
 function wrapper({ children }: PropsWithChildren) {
@@ -129,7 +103,6 @@ function wrapper({ children }: PropsWithChildren) {
   )
 }
 
-/** Render the workspace inside the query provider its verification dock needs. */
 function renderWorkspace(element: React.ReactElement) {
   return render(element, { wrapper })
 }
@@ -259,21 +232,16 @@ describe('DocumentWorkspace', () => {
     )
     const field = screen.getByLabelText('Find in document')
 
-    // A control disabled under the pointer — 'Next page' on the last page —
-    // drops focus to the body, outside the shell's key routing. The chord
-    // still reaches the workspace find: claimed once, focused once.
     expect(fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true })).toBe(
       false,
     )
     expect(document.activeElement).toBe(field)
 
-    // Focus owned outside the workspace keeps the platform's own find.
     field.blur()
     const outside = document.body.appendChild(document.createElement('button'))
     expect(fireEvent.keyDown(outside, { key: 'f', ctrlKey: true })).toBe(true)
     expect(document.activeElement).not.toBe(field)
 
-    // The route leaves with the surface: unmounted, the chord is unclaimed.
     unmount()
     expect(fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true })).toBe(
       true,

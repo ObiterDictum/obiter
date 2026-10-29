@@ -6,9 +6,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { ToastProvider } from '@obiter/ui'
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -40,9 +37,6 @@ mock.module('@tanstack/react-router', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { LegislationActView, legislationActQueryOptions } =
   await import('./LegislationActView')
 
@@ -174,8 +168,6 @@ function renderView(identity: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
-  // The page's source actions confirm with a toast, so the provider the frame
-  // mounts is here too.
   return render(
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
@@ -209,19 +201,12 @@ describe('LegislationActView', () => {
     await waitFor(() => {
       expect(screen.getByText('Equality Act 2010')).toBeTruthy()
     })
-    // Chapter appears as the eyebrow and in the definition list.
     expect(screen.getAllByText('2010 c. 15')).toHaveLength(2)
-    // Accurate against the payload: 2 of 6 content rows withheld. The
-    // Part and Schedule headings are never counted.
     expect(screen.getByText('2 of 6 provisions are not shown')).toBeTruthy()
-    // Heading rows render for containers, with their heading text.
     expect(screen.getByText('Part 2')).toBeTruthy()
     expect(screen.getByText('Equality: key concepts')).toBeTruthy()
     expect(screen.getByText('Schedule 2')).toBeTruthy()
     expect(screen.getByText('Equality of terms')).toBeTruthy()
-    // Document order preserved inside Part 2: s. 10 after s. 9, inserted
-    // s. 13A kept between ss. 13 and 14 rather than sorted. Headings are
-    // divs, so the leaf order comes from the provision-status links.
     const labels = screen
       .getAllByRole('link')
       .filter((link) => link.getAttribute('data-legislation-status'))
@@ -234,11 +219,9 @@ describe('LegislationActView', () => {
       's. 14',
       'Sch. 2 para. 4',
     ])
-    // The schedule paragraph is a leaf link nested under the schedule.
     expect(
       screen.getByText('Sch. 2 para. 4').closest('a')?.getAttribute('href'),
     ).toBe('/ln/ukpga/2010/15/schedule/2/paragraph/4')
-    // Withheld entry stays listed and links to its provision page.
     const withheldLink = screen.getByText('s. 14').closest('a')
     expect(withheldLink?.getAttribute('href')).toBe(
       '/ln/ukpga/2010/15/section/14',

@@ -147,8 +147,6 @@ export type DrawingBoxSize = {
 }
 
 export function drawingBoxSize(xml: string): DrawingBoxSize {
-  // One linear tag match, then attribute reads over that tag: an alternation
-  // with `[^>]*` gaps backtracks polynomially on repeated `cx="0"` attributes.
   const extent = xml.match(/<(?:wp:extent|a:ext)\b[^>]*>/i)?.[0]
   const cx = xmlDigitAttr(extent, 'cx')
   const cy = xmlDigitAttr(extent, 'cy')
@@ -228,10 +226,6 @@ export function runDisplayText(
 ): string {
   const xml = run.preservedXmlFragments.join('')
   if (/<w:instrText\b/i.test(xml)) {
-    // `\bPAGE\b` cannot match inside `PAGEREF`, so the checks can share the
-    // instruction test: a `PAGE` field resolves to the page it paints on, a
-    // `PAGEREF` to the page its bookmark's paragraph lays out on. An
-    // unresolvable name paints nothing, matching the empty stored result.
     if (/\bPAGE\b/i.test(xml)) return String(pageNumber)
     const reference = /\bPAGEREF\s+(\S+)\s/i.exec(xml)?.[1]
     if (reference !== undefined) {
@@ -240,8 +234,6 @@ export function runDisplayText(
     }
   }
   if (run.text) return run.text
-  // A tab run is element-only: body paint has no column machinery, so it
-  // shows as the character a plain-text export would carry.
   if (/<w:tab\b/i.test(xml)) return '\t'
   return ''
 }

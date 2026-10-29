@@ -1,12 +1,6 @@
 import { initialsOf } from '../../format'
 import { PAPER_REVIEWER_MARKS } from './tracked-marks'
 
-/**
- * Who made a tracked change, as something a reader can see: a stable hue from
- * a six-colour palette and the author's initials. Colour alone is not the
- * signal — the initials are printed beside it — but the hue lets a reader
- * follow one reviewer through a long document at a glance.
- */
 const CLASSES = [
   {
     text: 'text-reviewer-1',
@@ -40,18 +34,14 @@ const CLASSES = [
   },
 ] as const
 
-/** The class names carry the hue; they must stay literal for Tailwind. */
 export type ReviewerStyle = {
   text: string
   surface: string
-  /** The same hue, held dark enough for the fixed white sheet in both themes. */
   paperText: string
   initials: string
-  /** Index 1-6, for a `data-reviewer` attribute in tests and styling. */
   slot: number
 }
 
-/** FNV-1a over the author name: stable across sessions and documents. */
 function hash(value: string) {
   let result = 2166136261
   for (let index = 0; index < value.length; index += 1) {

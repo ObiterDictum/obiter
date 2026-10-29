@@ -1,10 +1,5 @@
 import { fireEvent, screen } from '@testing-library/react'
 
-/**
- * Test seams for the document selection suites. Clicking into a paragraph is
- * how the product focuses one; jsdom has no hit testing, so the point lookup
- * the click path uses is stubbed the same way the caret suites stub it.
- */
 export function clickParagraph(paragraphId: string, offset = 0) {
   const root = document.querySelector(`[data-paragraph-id="${paragraphId}"]`)
   if (!(root instanceof HTMLElement)) {
@@ -37,7 +32,6 @@ function firstText(root: HTMLElement): Text {
   return node
 }
 
-/** The rendered visual rows of a paragraph, in the projection the caret uses. */
 export function renderedLines(paragraphId: string): Array<{
   from: number
   to: number
@@ -58,18 +52,12 @@ export function bodyField(): HTMLTextAreaElement {
   return node
 }
 
-/** Puts the caret at a model offset without a click, the way a test needs it. */
 export function placeCaret(offset: number) {
   const field = bodyField()
   field.setSelectionRange(offset, offset)
   return field
 }
 
-/**
- * Selects a range inside the focused paragraph the way a mouse drag would.
- * React only synthesises onSelect from its own dependency events, so the
- * mouseup a drag ends with is part of the simulation.
- */
 export function nativeSelect(from: number, to: number) {
   const field = bodyField()
   field.focus()
@@ -79,11 +67,6 @@ export function nativeSelect(from: number, to: number) {
   return field
 }
 
-/**
- * The text painted as selected in one paragraph. A paragraph split across page
- * blocks is rendered more than once, so every block's marks are joined in
- * document order.
- */
 export function selectedText(paragraphId: string): string {
   return [...document.querySelectorAll(`[data-paragraph-id="${paragraphId}"]`)]
     .flatMap((root) => [...root.querySelectorAll('[data-selected-text]')])

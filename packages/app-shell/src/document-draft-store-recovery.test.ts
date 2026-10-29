@@ -14,9 +14,6 @@ import {
   stateWithText,
 } from './document-draft-store-test-support'
 
-// The suite title matches document-draft-store.test.ts: these cases were split
-// out of the same `document draft persistence` suite so the file stays under
-// the 500-line ceiling without renaming any collected test.
 describe('document draft persistence', () => {
   it('discovers a draft after the tab that wrote it has gone', () => {
     const storage = new MapStorage()

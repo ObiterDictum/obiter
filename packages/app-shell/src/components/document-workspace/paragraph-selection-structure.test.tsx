@@ -15,14 +15,6 @@ import {
   selectionStatus,
 } from './paragraph-selection-harness'
 
-/*
- * A table sits between the body paragraphs the selection model covers. The
- * cells are part of the story's paragraph list but not of its body flow, so
- * the selection has to stop at them: no cell may be painted as covered, no
- * range may bridge the table, and Ctrl+A must refuse rather than select a body
- * range that silently skips the cells.
- */
-
 function mount(model = tabledBodyModel()) {
   const editAsync = vi.fn()
   mountWorkspace({ models: { doc_1: model }, editAsync })
@@ -56,7 +48,6 @@ describe('extending a selection towards a table', () => {
     expect(notPrevented).toBe(false)
     expect(selectionStatus()).toMatch(/cannot cross a table/)
     expect(selectedMarkCount()).toBe(0)
-    // The caret stayed on the body paragraph it started from.
     expect(bodyField().value).toBe('Alpha')
   })
 
@@ -75,8 +66,6 @@ describe('extending a selection towards a table', () => {
     mount()
     clickParagraph('p1')
     placeCaret(2)
-    // A native in-paragraph selection is mirrored, then the crossing is
-    // refused, so the body range the user already had is not thrown away.
     const field = bodyField()
     field.focus()
     field.setSelectionRange(2, 5)
@@ -110,7 +99,6 @@ describe('plain arrow navigation at a table', () => {
     clickParagraph('p1')
     placeCaret(5)
     fireEvent.keyDown(bodyField(), { key: 'ArrowRight' })
-    // The flow the caret may walk is the body text, so the arrow stops.
     expect(bodyField().value).toBe('Alpha')
   })
 
@@ -124,13 +112,6 @@ describe('plain arrow navigation at a table', () => {
   })
 })
 
-/*
- * A single caret reaches the same join primitive a range edit uses. Delete at
- * the end of the body paragraph before a table and Backspace at the start of
- * the body paragraph after it must refuse the join with the structural reason:
- * no cell text crosses the table, no cell paragraph is deleted, and the draft
- * is untouched.
- */
 describe('a single caret at a table boundary', () => {
   function save() {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -144,7 +125,6 @@ describe('a single caret at a table boundary', () => {
     expect(notPrevented).toBe(false)
     expect(selectionStatus()).toMatch(/cannot cross a table/)
     expect(bodyField().value).toBe('Alpha')
-    // Nothing entered the draft, so Save has nothing to send.
     expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty(
       'disabled',
       true,

@@ -9,10 +9,6 @@ import type {
 } from '@obiter/contracts'
 import { apiFetch } from './api'
 
-/**
- * Matter access grants, from the API that already owns them. Only the matter's
- * owner may read or change shares, so callers offer the dialog only to them.
- */
 const matterSharesKeys = {
   forMatter: (matterId: string) => ['matter-shares', matterId] as const,
 }
@@ -54,11 +50,6 @@ export function useGrantMatterShare(matterId: string) {
   })
 }
 
-/**
- * Change one grant's access in place. The list is invalidated rather than
- * patched, because the row shows the level the API stored, not the level the
- * dialog hoped for.
- */
 export function useUpdateMatterShare(matterId: string) {
   const queryClient = useQueryClient()
   return useMutation({

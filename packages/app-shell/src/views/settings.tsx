@@ -17,16 +17,6 @@ const SECTIONS = [
 
 type SettingsSection = (typeof SECTIONS)[number]['id']
 
-/**
- * Settings: the account, the password, the organisation and this device's
- * preferences. Every section is mounted for the life of the route and hidden
- * rather than unmounted when it is not the active one, so a half-typed change
- * is not discarded by moving between sections. Sections that own a query pass
- * their active state down and only fetch once opened.
- *
- * The section nav is a column beside the body, and a row above it at 1024 and
- * under where a column would leave the members tables too narrow.
- */
 export function SettingsRouteView() {
   const { data: me } = useCurrentUser()
   const [section, setSection] = useState<SettingsSection>('account')

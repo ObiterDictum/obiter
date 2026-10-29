@@ -14,11 +14,6 @@ import {
 import { useState, type FormEvent } from 'react'
 import { useCreateMatter, type CreateMatterInput } from '../matters'
 
-/**
- * The one create-matter form, opened from the matters list and from the
- * dashboard's primary action. Nothing is created until the API accepts it, and
- * the returned matter is shown by the matters query the dialog invalidates.
- */
 export function CreateMatterDialog({
   trigger = 'Create matter',
   variant = 'primary',

@@ -12,8 +12,6 @@ function paragraph(id: string, text: string) {
   }
 }
 
-/** A body paragraph whose tail run carries a stored `w:footnoteReference`
- * — the wire the parser emits for the mark. */
 const body = {
   partName: 'word/document.xml',
   kind: 'document' as const,
@@ -77,8 +75,6 @@ const model: DocumentModelWire = {
   },
 }
 
-/** The laid-out blocks the page renders: the body paragraph, then the note
- * bodies the paginator appends at the foot of the page. */
 const blocks = [
   { type: 'paragraph' as const, paragraph: body.paragraphs[0]! },
   { type: 'paragraph' as const, paragraph: footnotes.paragraphs[1]! },
@@ -135,7 +131,6 @@ describe('a painted footnote body', () => {
       />,
     )
     expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
-    // The body takes no caret while the notes story is open.
     expect(
       screen
         .getByText('Body text')

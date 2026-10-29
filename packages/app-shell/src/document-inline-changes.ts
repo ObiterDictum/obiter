@@ -25,15 +25,9 @@ export type InlineSpan = {
   hyperlinkTarget?: string
 }
 
-/**
- * Tracked page and column breaks paint as labelled marks rather than line
- * breaks. Each is one code unit, like the control character it replaces, so
- * the textarea, the paint and wrap measurement agree on every offset.
- */
 export const markBreaks = (text: string) =>
   text.replace(/[\f\v]/gu, (mark) => (mark === '\f' ? '\u21df' : '\u21e5'))
 
-/** Paint runs stay out of drafts; only pending insertion characters are editable. */
 function projectInlineChanges(
   paragraph: DocumentParagraphWire,
   changes: readonly DocumentChangeWire[],
@@ -216,8 +210,6 @@ function projectInlineChanges(
     return at - removed
   }
   const toDisplay = (at: number, side?: 'before' | 'after') => {
-    // replaceRunRange writes into the first run ending at the offset. Match
-    // that affinity so typing at an opaque gap paints where the caret sits.
     if (side === undefined) {
       const pendingEdge = spans
         .filter((span) => span.pending && !span.editable && span.offset === at)
@@ -289,8 +281,6 @@ export function inlineChanges(
   return projection
 }
 
-/** The editing textarea hides the paint, so it names who revised the
- * paragraph; Escape leaves the textarea for the revisions themselves. */
 export function inlineDescription({ spans }: InlineProjection) {
   const authors = new Set(
     spans
@@ -356,8 +346,6 @@ export function inlineLinkOverlay(
   }
 }
 
-/** Pending range formatting splits a run into display pieces whose ids extend
- * the stored run id, and a pending mark must still find its source run. */
 function paintedFrom(runId: string, sourceRunId: string) {
   return runId === sourceRunId || runId.startsWith(`${sourceRunId}:`)
 }

@@ -408,8 +408,6 @@ describe('paragraphFace indentation and spacing merge', () => {
     )
 
   it("takes the paragraph style's indent when the paragraph names none", () => {
-    // The reason #306 exists: a paragraph with no direct `w:ind` used to
-    // contribute a 0 that overrode its style, so the indent never painted.
     const face = styled(
       '<w:style w:styleId="Body"><w:pPr><w:ind w:left="480" w:firstLine="240"/></w:pPr></w:style>',
       '<w:pPr/>',
@@ -428,9 +426,6 @@ describe('paragraphFace indentation and spacing merge', () => {
   })
 
   it('overrides first-line and hanging as a pair', () => {
-    // They are mutually exclusive in OOXML, so a direct `w:firstLine` must not
-    // leave the style's `w:hanging` behind it: `indentKind` reads hanging
-    // first and would report the wrong control value.
     const face = styled(
       '<w:style w:styleId="Body"><w:pPr><w:ind w:hanging="240"/></w:pPr></w:style>',
       '<w:pPr><w:ind w:firstLine="480"/></w:pPr>',
@@ -465,9 +460,7 @@ describe('paragraphFace indentation and spacing merge', () => {
       '<w:style w:styleId="Body"><w:pPr><w:spacing w:before="240" w:after="240"/></w:pPr></w:style>',
       '<w:pPr><w:spacing w:before="0"/></w:pPr>',
     )
-    // `||` used to keep the style's value, so a direct zero could not...
     expect(face.marginTopPx).toBe(0)
-    // ...while the untouched side still comes from the style.
     expect(face.marginBottomPx).toBe(16)
   })
 })

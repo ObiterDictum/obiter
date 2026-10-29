@@ -20,6 +20,7 @@ import {
   structuralEditOperations,
   type StructuralDraft,
 } from './document-structural-drafts'
+import { bodyStory } from './document-wire-test-support'
 
 const tocDraft = (
   id: string,
@@ -65,17 +66,6 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   }
 }
 
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
-  return {
-    partName: 'word/document.xml',
-    kind: 'document',
-    paragraphs,
-    preservedXmlFragments: [],
-    fields: [],
-    unanchoredFieldParagraphIds: [],
-  }
-}
-
 function story(document: DocumentModelWire) {
   return document.stories[0]
 }
@@ -101,8 +91,6 @@ describe('table-of-contents drafts', () => {
 
 describe('withStructuralDrafts table of contents', () => {
   it('splits the anchor inside a run and splices entry and tail wires', () => {
-    // The offset lands strictly inside the anchor's one run — the position
-    // where a paragraph split has to reparent run text, not only runs.
     const base = model([
       paragraph('h1', 'Overview', 'Heading1'),
       paragraph('p2', 'AlphaBeta'),
@@ -117,9 +105,6 @@ describe('withStructuralDrafts table of contents', () => {
       'Beta',
     ])
 
-    // The head keeps the anchor's id and runs; the tail is a new wire whose
-    // first run carries the field's `end` marker — all zero-width in the
-    // editable stream.
     const head = paragraphs[1]
     const entry = paragraphs[2]
     const tail = paragraphs[3]
@@ -130,8 +115,6 @@ describe('withStructuralDrafts table of contents', () => {
     ])
     expect(tail?.runs[1]?.text).toBe('Beta')
 
-    // The field lives in the first entry wire: begin, the `\o "1-3"`
-    // instruction and a `PAGEREF` to the heading's `_Toc` bookmark.
     const xml = fragments(folded).join('')
     expect(xml).toContain(' TOC \\o "1-3" \\u ')
     expect(entry?.styleId).toBe('TOC1')
@@ -159,8 +142,6 @@ describe('withStructuralDrafts table of contents', () => {
       tocDraft('s2', 'p2', 5),
     ])
     const paragraphs = story(folded)?.paragraphs ?? []
-    // Head, first field's entry + parked tail (end marker only), second
-    // field's entry, then the real tail carrying both ends and the text.
     expect(paragraphs.map((item) => paragraphPlainText(item))).toEqual([
       'Overview',
       'Alpha',
@@ -188,9 +169,6 @@ describe('withStructuralDrafts table of contents', () => {
   })
 
   it('lists only headings that survive the batch', () => {
-    // A heading marked for deletion stays on the painted story, but the
-    // writer skips it when it captures entries — so the pending field must
-    // skip it too, or the paint promises an entry the save omits.
     const base = model([
       paragraph('h1', 'Doomed', 'Heading1'),
       paragraph('h2', 'Surviving', 'Heading1'),
@@ -210,7 +188,6 @@ describe('withStructuralDrafts table of contents', () => {
       'Surviving',
       'Anchor',
     ])
-    // No `_Toc` fragment lands on the paragraph the save removes.
     expect(
       paragraphs[0]?.preservedXmlFragments.some((fragment) =>
         fragment.includes('_Toc'),
@@ -240,7 +217,6 @@ describe('withStructuralDrafts table of contents', () => {
         ),
       ),
     ).toBe(true)
-    // The stored pair is reused, not duplicated.
     expect(
       story(folded)?.paragraphs[0]?.preservedXmlFragments.filter((fragment) =>
         fragment.includes('_Toc'),
@@ -289,11 +265,6 @@ describe('table of contents save partitioning', () => {
   })
 
   it('holds a field whose only heading the batch replaces', () => {
-    // A runless heading carrying typed text saves as an insert plus a
-    // delete: its id lands in the writer's `deletedIds` without ever
-    // appearing in `deletedParagraphIds`. The partition must read the same
-    // effective set — sending the field means the writer captures zero
-    // entries and refuses the whole batch on every retry.
     const base = model([paragraph('h1', '', 'Heading1'), paragraph('p2', 'x')])
     const plan = planDocumentSave(base, {
       ...emptyDraftState(),
@@ -302,7 +273,6 @@ describe('table of contents save partitioning', () => {
       },
       structures: [tocDraft('s1', 'p2', 0)],
     })
-    // The replacement still saves; the doomed field is the only slot held.
     expect(plan.operations).toEqual([
       {
         type: 'insert_paragraph_after',
@@ -317,10 +287,6 @@ describe('table of contents save partitioning', () => {
   })
 
   it('lists only the heading that survives a replaced paragraph', () => {
-    // The same implicit delete as above, but a second heading survives: the
-    // field is sent, and the pending fold must capture the survivor alone —
-    // the same set the writer's `deletedIds` exclusion produces — so the
-    // paint never lists a heading the save removes.
     const base = model([
       paragraph('h1', '', 'Heading1'),
       paragraph('h2', 'Surviving', 'Heading1'),
@@ -361,10 +327,6 @@ describe('table of contents save partitioning', () => {
   })
 
   it('counts a heading the same batch is still creating', () => {
-    // The heading style is a pending format draft, not a stored style: the
-    // writer applies `set_paragraph_style` before the field captures its
-    // entries, so the partition must read heading-ness off the same batch
-    // rather than the stored wires alone.
     const plan = planDocumentSave(
       model([paragraph('h1', 'Overview'), paragraph('p2', 'x')]),
       {
@@ -393,9 +355,6 @@ describe('table of contents save partitioning', () => {
   })
 
   it('blocks a reloaded field for every reason the ribbon refuses', () => {
-    // A draft persisted before the document changed must not be sent to a
-    // writer that will throw — blocking the structure while an unrelated
-    // run draft still goes out is the whole point of the partition.
     const cellStory = bodyStory([
       paragraph('h1', 'Overview', 'Heading1'),
       paragraph('para-w14-CELLP1', 'Cell'),
@@ -551,10 +510,6 @@ describe('table of contents ribbon availability', () => {
   })
 
   it('does not count a heading only a pending insert adds', () => {
-    // The painted model carries the inserted paragraph with its Heading1
-    // style, but no stored paragraph can hold its `PAGEREF` bookmark — the
-    // writer skips it, so the count skips it too and a document whose
-    // headings are all pending still refuses.
     const stored = model([paragraph('p1')])
     const painted = model([
       paragraph('p1'),
@@ -566,9 +521,6 @@ describe('table of contents ribbon availability', () => {
   })
 
   it('does not count a heading marked for deletion', () => {
-    // The painted story still holds the doomed paragraph, but the
-    // partition's heading set excludes it — the ribbon must refuse the
-    // same field the save would block.
     const base = model([paragraph('h1', 'Doomed', 'Heading1'), paragraph('p1')])
     expect(
       toolbar({
@@ -647,7 +599,6 @@ describe('PAGEREF paint', () => {
     ).toBe('4')
     expect(runDisplayText(fieldRun(' PAGEREF _Toc9 '), 1, new Map())).toBe('')
     expect(runDisplayText(fieldRun(' PAGEREF _Toc9 '), 1)).toBe('')
-    // `PAGE` still resolves to the painting page, not the map.
     expect(runDisplayText(fieldRun(' PAGE '), 3, new Map([['_Toc2', 4]]))).toBe(
       '3',
     )
@@ -679,7 +630,6 @@ describe('PAGEREF paint', () => {
     ])
     expect(pages.length).toBeGreaterThanOrEqual(2)
     expect(pageReferenceMap(base, pages).get('_Toc1')).toBe(2)
-    // A bookmarked paragraph still on the first page reports it.
     heading.preservedXmlFragments.length = 0
     const first = paragraph('p0', 'Top')
     first.preservedXmlFragments.push(
@@ -691,10 +641,6 @@ describe('PAGEREF paint', () => {
   })
 
   it('keeps the first page when a paragraph spans a break', () => {
-    // A heading long enough to straddle a page break lays out as two
-    // fragments, one per page. Its bookmark opens the paragraph, so
-    // `PAGEREF` must name the page the paragraph starts on — not the page
-    // its continuation block lands on.
     const heading = paragraph('h1', 'A heading that runs over', 'Heading1')
     heading.preservedXmlFragments.push(
       '<w:bookmarkStart w:id="3" w:name="_Toc3"/>',

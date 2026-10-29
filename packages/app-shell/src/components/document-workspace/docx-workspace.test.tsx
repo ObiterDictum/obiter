@@ -23,11 +23,6 @@ import {
   commandOrNull,
 } from './docx-workspace-harness'
 
-/** The authoritative lineage a text-only save returns: no structural slots. */
-/**
- * A text-only save of `r1` in `p1`: the run keeps its result address, which
- * the workspace resolves the reversal through.
- */
 function textEditLineage(baseVersionId: string, versionId: string) {
   return {
     version: 1 as const,
@@ -41,8 +36,6 @@ function textEditLineage(baseVersionId: string, versionId: string) {
         runs: [
           {
             runIndex: 0,
-            // The two mounted fixtures address the same single run under
-            // different ids (`r1` and `p1-r`).
             segments: [
               { fromRunId: 'r1', fromOffset: 0, toOffset: 0 },
               { fromRunId: 'p1-r', fromOffset: 0, toOffset: 0 },
@@ -58,8 +51,6 @@ describe('DocxWorkspace chrome', () => {
   it('keeps the chrome outside the scrolling document desk', () => {
     mountWorkspace({})
     const desk = document.querySelector('[data-document-desk]')
-    // The ribbon is gone: no tab strip, and none of the chrome is inside the
-    // desk's scroll box, so scrolling the paper never scrolls the commands.
     expect(desk?.querySelector('[role="tab"]')).toBeNull()
     expect(document.querySelector('[role="tab"]')).toBeNull()
     const menu = screen.getByRole('navigation', { name: 'Document menu' })
@@ -71,8 +62,6 @@ describe('DocxWorkspace chrome', () => {
 
   it('wires the font commands and keeps the rest unavailable', () => {
     mountWorkspace({})
-    // The font values live in the formatting panel; opening it is the same
-    // click the toolbar's own control makes.
     fireEvent.click(
       screen.getByRole('button', { name: 'Font, paragraph and page' }),
     )
@@ -89,23 +78,13 @@ describe('DocxWorkspace chrome', () => {
     expect(command('Bullets')).toHaveProperty('disabled', true)
     expect(command('Multilevel numbering')).toHaveProperty('disabled', true)
     openRibbonTab('Insert')
-    // Table and picture are real controls; with no caret paragraph they are
-    // unavailable and say why as a description, not as part of their name.
     for (const name of ['Insert table', 'Picture']) {
-      // `Insert table` is a menu row; Picture is too, but this assertion is
-      // about the reason the command carries while no caret sits in a
-      // paragraph.
       const row = menuItem(name)
       expect(commandDisabled(row)).toBe(true)
       expect(commandReason(row)).toBe(
         'Place the cursor in a paragraph to insert',
       )
     }
-    // The formatting panel is still open — its own controls toggled it, and a
-    // menu interaction does not dismiss it — so the E12 classification
-    // controls are asserted where they live.
-    // They are live: they commit immutable marking versions against the saved
-    // document.
     expect(
       screen.getByRole('combobox', { name: 'Document type' }),
     ).toHaveProperty('disabled', false)
@@ -116,11 +95,7 @@ describe('DocxWorkspace chrome', () => {
     expect(command('Insert authority')).toHaveProperty('disabled', false)
     expect(screen.queryByRole('combobox', { name: /Harvard/i })).toBeNull()
     openRibbonTab('Review')
-    // The document-level Redact action is real; the ribbon entry reveals it
-    // rather than claiming the capability does not exist.
     expect(command('Redact this document')).toHaveProperty('disabled', false)
-    // Share-safe export is a live route: refusal comes from the server, not a
-    // placeholder control.
     expect(command('Share-safe export')).toHaveProperty('disabled', false)
   })
 
@@ -139,7 +114,6 @@ describe('DocxWorkspace chrome', () => {
     openRibbonTab('Home')
     const bold = command('Bold')
     expect(bold).toHaveProperty('disabled', false)
-    // The tracked range formats as a pending draft, not a refused control.
     fireEvent.click(bold)
     expect(command('Save')).toHaveProperty('disabled', false)
   })
@@ -197,9 +171,6 @@ describe('DocxWorkspace chrome', () => {
     openRibbonTab('References')
     fireEvent.click(command('List of authorities'))
     fireEvent.click(command('[2024] UKSC 3'))
-    // The hit names a body paragraph: selecting it leaves margin editing the
-    // way a body click does, and the caret lands where the format controls
-    // can actually reach it.
     expect(within(band).queryByLabelText('Paragraph text')).toBeNull()
     expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
       'value',
@@ -225,7 +196,6 @@ describe('DocxWorkspace export', () => {
       })
     })
     expect(downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
-    // The only live region left is the find count; no export error announced.
     expect(
       screen
         .queryAllByRole('status')
@@ -450,8 +420,6 @@ describe('DocxWorkspace find and undo', () => {
     expect(undo).toHaveProperty('disabled', false)
     fireEvent.click(undo)
 
-    // The removed insert is gone, so selection must fall back to the
-    // paragraph it was split from instead of pointing at nothing.
     expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
       'value',
       'Hello',
@@ -481,8 +449,6 @@ describe('DocxWorkspace find and undo', () => {
     expect(undo).toHaveProperty('disabled', false)
     fireEvent.click(undo)
 
-    // The insert survived the undo (only its text was rewound), so the
-    // caret must stay inside it instead of jumping to the anchor paragraph.
     expect(screen.getByLabelText('Pending paragraph text')).toHaveProperty(
       'value',
       before,
@@ -526,8 +492,6 @@ describe('DocxWorkspace markings', () => {
     fireEvent.click(command('Draft'))
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
-    // No flip is pending, so the request leaves the stored setting alone
-    // rather than echoing the value this mount loaded with.
     expect(markingsAsync.mock.calls[0]?.[0]).toEqual({
       baseVersionId: 'ver_1',
       markings: {
@@ -537,7 +501,6 @@ describe('DocxWorkspace markings', () => {
         withoutPrejudice: false,
       },
     })
-    // The reloaded model (ver_2) carries the marking; the control reflects it.
     await waitFor(() =>
       expect(
         screen
@@ -556,7 +519,6 @@ describe('DocxWorkspace markings', () => {
           ...multiParagraphModel([paragraph('p1', 'Hello')]),
           trackRevisions: false,
           markings: {
-            // A kind this build does not list is still offered and kept.
             documentKind: 'externally-authored-kind',
             draft: false,
             privileged: true,
@@ -565,10 +527,7 @@ describe('DocxWorkspace markings', () => {
         },
       },
     })
-    // The document type is a radio list in the Format menu: the stored kind is
-    // offered as itself, and picking another one commits the markings.
     fireEvent.click(screen.getByRole('button', { name: /^Format$/ }))
-    // A stored kind this build does not list is still offered as itself.
     expect(menuItem('externally-authored-kind')).toBeTruthy()
     fireEvent.click(command('Letter before action'))
 
@@ -649,7 +608,6 @@ describe('DocxWorkspace track changes toggle', () => {
     mountWorkspace({ editAsync })
     setTrackChanges(true)
 
-    // A flip with no edits is still unsaved state, and Save persists it.
     await waitFor(() =>
       expect(
         document
@@ -675,8 +633,6 @@ describe('DocxWorkspace track changes toggle', () => {
       expect(trackChangesSwitch().getAttribute('aria-checked')).toBe('false'),
     )
 
-    // Unsaved work survives a remount through the draft store — a pending
-    // flip is unsaved work, so the reopened switch is still off.
     view.unmount()
     mountWorkspace({ models: { doc_1: tracked } })
     await waitFor(() =>

@@ -19,25 +19,6 @@ import { documentStory } from './document-model-text'
 const FOOTNOTE_ID =
   /<w:footnote\b[^>]*\bw:id="(-?\d+)"|<w:footnoteReference\b[^>]*\bw:id="(-?\d+)"/gu
 
-/**
- * Folds each pending footnote draft into the painted model:
- *
- * - The reference: a zero-length run carrying the `w:footnoteReference`
- *   fragment, spliced into the body paragraph's runs at the caret offset —
- *   the same wire a reparse yields, so `runNoteRefs` paints the mark through
- *   the stored-reference path and the editable text gains no character.
- * - The entry: a `w:footnote` fragment plus one paragraph wire, appended to
- *   the footnotes story — created when the package carries none, with the
- *   separator entries the writer emits. The note paragraph folds with the
- *   draft-derived id `footnoteNoteParagraphId`, so the text the user types
- *   into it lands in `extraRuns` under a key that never names a stored
- *   paragraph.
- *
- * The fragments come from the same `structure-xml` builders the writer
- * calls, so the pending entry paints exactly the markup the save writes; the
- * note's pending `w:id` counts above every stored id and stays stable for
- * the session.
- */
 export function foldFootnoteDrafts(
   model: DocumentModelWire,
   footnotes: readonly (StructuralDraft & { kind: 'footnote' })[],
@@ -95,13 +76,6 @@ export function foldFootnoteDrafts(
   return { ...model, stories }
 }
 
-/**
- * The footnotes story with the pending entries appended — created, with the
- * separator entries the writer emits, when the model has none. Each pending
- * note paragraph is the entry's only `w:p`, matching the writer's
- * one-paragraph entry: the mark run is folded in, the note's own text is
- * not — it lives in `extraRuns` under the note paragraph id.
- */
 function foldedNoteStory(
   story: DocumentStoryWire | undefined,
   spliced: readonly {
@@ -149,11 +123,6 @@ function foldedNoteStory(
   return { ...base, paragraphs, preservedXmlFragments: fragments }
 }
 
-/**
- * The painted note paragraph: the `FootnoteReference` mark run and nothing
- * else — the note's text is typed into `extraRuns`, whose runs append after
- * the mark run exactly as a reloaded paragraph's text run follows it.
- */
 function noteParagraphWire(
   draft: StructuralDraft & { kind: 'footnote' },
   paraId: string,
@@ -177,13 +146,6 @@ function noteParagraphWire(
   }
 }
 
-/**
- * One above the highest `w:id` any stored entry or body reference names —
- * the writer's allocation rule applied to the painted model so a pending
- * mark never reuses an id and never collides with a second pending note.
- * The footnotes story alone is not enough: a stored `w:footnoteReference`
- * can outlive its entry.
- */
 function nextPendingFootnoteId(
   model: DocumentModelWire,
   story: DocumentStoryWire | undefined,
@@ -208,18 +170,6 @@ function nextPendingFootnoteId(
   return next
 }
 
-/**
- * Splices a zero-length run into the paragraph wire at the effective-text
- * offset, splitting the run that contains it — the wire counterpart of the
- * writer's `spliceInlineXml` + `spliceRunWires`, used by both the image and
- * the footnote-reference folds.
- *
- * The offset addresses effective text (typed drafts included), exactly as
- * the writer's whole-run replacement composes the markup into the pending
- * text. A run the draft state replaces wholesale splits the same way, but
- * neither half can keep the run's id: the drafts map would repaint the full
- * replacement text on whichever half kept it.
- */
 export function spliceRunAtOffset(
   paragraph: DocumentParagraphWire,
   offset: number,

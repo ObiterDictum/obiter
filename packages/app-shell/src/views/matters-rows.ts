@@ -3,38 +3,19 @@ import type { MatterRecord } from '../matters'
 import type { AttentionItem } from './home-attention'
 import { summariseAttention } from './home-attention'
 
-/**
- * The matters list's rows, derived once and kept free of React so the table, the
- * preview and the tests read the same facts. Everything here comes from reads
- * the shell already makes: the matters list, each matter's documents, and the
- * same attention items Home ranks.
- */
-
 export interface MatterOpenWork {
-  /**
-   * Unresolved findings, not queue rows: one Verify run can carry several, and
-   * the sidebar counts them the same way. A queue row is one decision.
-   */
   flaggedFindings: number
   reviewFindings: number
   redactionDecisions: number
   failed: number
-  /** Rows this matter contributes to Home's queue. */
   total: number
 }
 
-/** One count of what is waiting in a matter, in the list's own words. */
 export interface OpenWorkPart {
   label: string
   tone: 'danger' | 'warning' | 'info'
 }
 
-/**
- * Open work as the counts a row shows. Verify's two kinds are separate on
- * purpose: "1 flagged" is a proved mismatch and "2 need review" is a citation
- * nobody has decided, and a matter that folds them into one number loses the
- * difference every other surface keeps.
- */
 export function openWorkParts(openWork: MatterOpenWork): OpenWorkPart[] {
   const parts: OpenWorkPart[] = []
   if (openWork.flaggedFindings > 0) {
@@ -62,22 +43,11 @@ export function openWorkParts(openWork: MatterOpenWork): OpenWorkPart[] {
 
 export interface MatterRow {
   matter: MatterRecord
-  /**
-   * The newest matter change or document version. A matter's own `updatedAt`
-   * does not move when someone uploads or edits a document in it.
-   */
   lastActivity: string
-  /** Null while that matter's documents are unread. */
   documentCount: number | null
-  /** Null until the runs behind the attention items have loaded. */
   openWork: MatterOpenWork | null
 }
 
-/**
- * Group the queue's items by matter, so "open work" means exactly what Home and
- * the sidebar mean by it: a Verify finding nobody resolved, a redaction run with
- * an undecided span, or a run that failed.
- */
 export function openWorkByMatter(
   items: AttentionItem[],
 ): Map<string, MatterOpenWork> {
@@ -118,7 +88,6 @@ const NO_OPEN_WORK: MatterOpenWork = {
   total: 0,
 }
 
-/** A matter's open work, or none when it has no queued item. */
 export function openWorkFor(
   byMatter: Map<string, MatterOpenWork>,
   matterId: string,
@@ -128,9 +97,7 @@ export function openWorkFor(
 
 export function buildMatterRows(input: {
   matters: MatterRecord[]
-  /** matterId → that matter's documents, absent until they are read. */
   documentsByMatter: Map<string, MatterDocumentRecord[] | undefined>
-  /** Null while the runs behind the queue are still loading. */
   openWork: Map<string, MatterOpenWork> | null
 }): MatterRow[] {
   return input.matters
@@ -149,7 +116,6 @@ export function buildMatterRows(input: {
     .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity))
 }
 
-/** A matter with no readable documents falls back to its own last change. */
 export function lastActivityOf(
   matter: MatterRecord,
   documents: MatterDocumentRecord[] | undefined,
@@ -164,11 +130,8 @@ export function lastActivityOf(
 }
 
 export interface MatterFilter {
-  /** Matches the matter name, reference, jurisdiction or legal domain. */
   search: string
-  /** A legal domain exactly as the API returns it, or null for every matter. */
   domain: string | null
-  /** Only matters with open work. */
   needsAttention: boolean
 }
 
@@ -196,7 +159,6 @@ export function filterMatterRows(
   })
 }
 
-/** The filter chips: the domains the loaded matters actually use. */
 export function legalDomainOptions(matters: MatterRecord[]): string[] {
   const domains = new Set<string>()
   for (const matter of matters) {

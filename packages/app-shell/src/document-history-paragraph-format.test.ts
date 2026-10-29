@@ -14,49 +14,13 @@ import {
   translateSnapshot,
   type SaveBaseline,
 } from './document-history-baseline'
-
-/*
- * E3 paragraph-format reversal. `translateSnapshot` re-expresses a snapshot a
- * save covered against the saved baseline, so undo restores the pre-save
- * paragraph layout rather than doing nothing. The reversal must be a complete
- * snapshot: the writer merges `w:ind`, so an omitted attribute lets a value the
- * save added survive its own undo.
- */
+import { wireModel as model } from './document-wire-test-support'
 
 function paragraph(id: string, pPr: string): DocumentParagraphWire {
   return {
     id,
     runs: [{ id: `${id}-r`, text: 'text', preservedXmlFragments: [] }],
     preservedXmlFragments: [pPr],
-  }
-}
-
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
   }
 }
 
@@ -81,7 +45,6 @@ function formatState(
   }
 }
 
-/** The paragraph XML a reversal draft would paint onto the saved paragraph. */
 function paintedParagraph(
   saved: DocumentModelWire,
   paragraphId: string,
@@ -111,8 +74,6 @@ describe('paragraph-format reversal', () => {
 
     const translated = translateSnapshot(emptyDraftState(), baseline)
     const inverse = translated?.format.paragraphFormats.p1
-    // Every attribute is named, including the ones the paragraph did not carry,
-    // so the merge cannot keep the `firstLine` the save wrote.
     expect(inverse).toEqual({
       indentation: { left: 720, right: null, firstLine: null, hanging: null },
     })
@@ -153,10 +114,6 @@ describe('paragraph-format reversal', () => {
   })
 
   it('drops the reversal when the result paragraph is absent from the saved model', () => {
-    // The same batch deleted this paragraph, so the saved model has no result
-    // paragraph to hold a reversal. Mirroring the paragraph-style branch, the
-    // covered slot just drops rather than leaving a draft the next save can
-    // never send and so blocks permanently.
     const translated = translateSnapshot(emptyDraftState(), {
       covered: [pformatSlot('p1')],
       sent: formatState('p1', { alignment: 'center' }),
@@ -167,9 +124,6 @@ describe('paragraph-format reversal', () => {
   })
 
   it('keeps a pending alignment the snapshot held instead of releasing it', () => {
-    // Align centre, then type a character. The snapshot recorded for the
-    // keystroke still holds the pending alignment and the save stores it, so
-    // undoing the save must not release the saved centring.
     const fromModel = model([paragraph('p1', '<w:pPr/>')])
     const savedModel = model([
       paragraph('p1', '<w:pPr><w:jc w:val="center"/></w:pPr>'),
@@ -182,10 +136,7 @@ describe('paragraph-format reversal', () => {
         fromModel,
       } satisfies SaveBaseline,
     )
-    // The snapshot already describes what the save stored, so the reversal is
-    // dropped rather than releasing the alignment to null.
     expect(translated?.format.paragraphFormats.p1).toBeUndefined()
-    // The painted paragraph keeps its saved centring.
     const xml =
       formattedModel(
         savedModel,
@@ -195,9 +146,6 @@ describe('paragraph-format reversal', () => {
   })
 
   it('restores the pending alignment over the stored one', () => {
-    // The snapshot predates a later change the save stored. Its pending centre
-    // is the pre-save answer to restore, not the stored paragraph's absent
-    // alignment (which would release to null) nor the save's right.
     const translated = translateSnapshot(
       formatState('p1', { alignment: 'center' }),
       {

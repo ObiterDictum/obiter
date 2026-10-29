@@ -2,20 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { apiUrl } from './api-url'
 
-/*
- * SSR API-origin precedence.
- *
- * The web dev server publishes its resolved origin as
- * `process.env.OBITER_API_ORIGIN` to the SSR transform (apps/web/vite.config.ts
- * -> apps/web/dev-api-origin.mjs), so in dev SSR that key wins the `??` chain.
- * `BETTER_AUTH_URL` stays the production session callback origin and the SSR
- * fallback; it is deliberately not a second way to choose a dev backend.
- *
- * This file does not import `@obiter/test-dom`, but Bun still exposes a global
- * `window`, so each case removes it to reach the server branch of `apiUrl()`.
- * If the precedence is reversed, the first case fails with the lane origin
- * replaced by the web origin.
- */
 const KEYS = ['OBITER_API_ORIGIN', 'BETTER_AUTH_URL'] as const
 const original = Object.fromEntries(
   KEYS.map((key) => [key, process.env[key]]),
@@ -24,7 +10,6 @@ const original = Object.fromEntries(
 function withoutWindow() {
   vi.stubGlobal('window', undefined as unknown as Window & typeof globalThis)
   if (typeof globalThis.window !== 'undefined') {
-    // delete to make `typeof window === "undefined"`.
     delete (globalThis as { window?: unknown }).window
   }
 }

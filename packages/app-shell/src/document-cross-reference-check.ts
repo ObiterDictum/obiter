@@ -9,24 +9,8 @@ import type { LegalCheckFinding } from './document-legal-checks'
 import { effectiveParagraph, paragraphPlainText } from './document-model-text'
 import type { StructuralDraft } from './document-structural-drafts'
 
-/**
- * The stored cross-reference check: reads the bookmark and field markup the
- * wire keeps as preserved fragments, pairs each `REF`/`NOTEREF`/`PAGEREF`
- * instruction — complex or `w:fldSimple` — with the bookmark it names, and
- * reports what cannot hold: a missing or about-to-be-deleted target, an
- * unpaired bookmark half, a `REF` result text that no longer appears under
- * its target.
- *
- * Scope is deliberately narrow, and every limitation stays visible as a
- * `review` finding rather than a silent pass: a field instruction that does
- * not parse, a field whose begin and end sit in different paragraphs, or a
- * bookmark with no partner all report as unchecked rather than sound.
- */
-
 export type CrossReferenceCheck = {
-  /** Stored `REF`/`NOTEREF`/`PAGEREF` fields read and checked. */
   fields: number
-  /** Pending cross-reference drafts the save will write. */
   pending: number
   findings: LegalCheckFinding[]
 }
@@ -37,28 +21,14 @@ const BOOKMARK_ID = /\bw:id="(\d+)"/u
 const BOOKMARK_NAME = /\bw:name="([^"]*)"/u
 const FIELD_CHAR = /<w:fldChar\b[^>]*\bw:fldCharType="(begin|separate|end)"/u
 const INSTRUCTION = /<w:instrText\b[^>]*>([\s\S]*?)<\/w:instrText>/gu
-/**
- * A `w:fldSimple` element: the instruction lives on `w:instr`, the stored
- * result in its inner `w:t` runs. Both self-closing and run-carrying forms
- * match; a malformed element is simply not a field the check can read.
- */
 const SIMPLE_FIELD =
   /<w:fldSimple\b[^>]*\bw:instr="([^"]*)"[^>]*?(?:\/>|>([\s\S]*?)<\/w:fldSimple>)/gu
 const SIMPLE_FIELD_TEXT = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/gu
-/**
- * Anchored at the instruction's start so an outer `IF`, `TOC` or `TA`
- * field — which may hold a nested `REF` — never resolves to the inner
- * field's target. `\b` keeps `REF` from matching inside `PAGEREF`, and a
- * quoted target keeps its spaces. `REFERENCE_KEYWORD` alone distinguishes
- * "not a reference field" from "a reference whose target is unreadable".
- */
 const REFERENCE = /^\s*(PAGEREF|NOTEREF|REF)\s+("[^"]*"|[^\s\\]+)/iu
 const REFERENCE_KEYWORD = /^\s*(PAGEREF|NOTEREF|REF)\b/iu
 
 type BookmarkIndex = {
-  /** Defined bookmark name → the paragraph holding its start marker. */
   names: Map<string, string>
-  /** `w:id`s that opened a bookmark without a matching end, or vice versa. */
   unpaired: Array<{ paragraphId: string; id: string }>
 }
 
@@ -97,27 +67,13 @@ function collectBookmarks(model: DocumentModelWire): BookmarkIndex {
   return { names, unpaired }
 }
 
-/**
- * A stored field found by walking the runs in order — a complex
- * `w:fldChar` field or a `w:fldSimple`. `instruction` is every `instrText`
- * run concatenated before `separate`; `result` is the run text after it —
- * for a nested field, the text its source bytes genuinely carry inside the
- * outer field's result region.
- */
 type StoredField = {
   paragraphId: string
   instruction: string
   result: string
-  /** The field never closed in this paragraph — a cross-paragraph field or a malformed one. */
   open: boolean
 }
 
-/**
- * The reference an instruction names, or null for a non-reference field.
- * A `REF`-family keyword with no readable target still counts as a
- * reference field — an unreadable one, reported as review rather than
- * silently dropped from the field count.
- */
 function referenceInstruction(
   instruction: string,
 ): { kind: 'REF' | 'PAGEREF' | 'NOTEREF'; target: string | undefined } | null {
@@ -142,10 +98,6 @@ function collectFields(
   const fields: StoredField[] = []
   for (const paragraph of story.paragraphs) {
     if (gone.has(paragraph.id)) continue
-    // Simple fields carry their instruction on the element itself — they
-    // are preserved as paragraph-level fragments, so a document whose only
-    // references are `w:fldSimple` still counts them rather than reading
-    // as clean.
     for (const fragment of paragraph.preservedXmlFragments) {
       for (const match of fragment.matchAll(SIMPLE_FIELD)) {
         const instruction = decodeXmlReferences(match[1] ?? '')
@@ -161,11 +113,6 @@ function collectFields(
         })
       }
     }
-    // Complex fields stack: a `REF` nested inside an `IF` or a `PAGEREF`
-    // inside a `TOC` result is its own field, closed by its own `end`, not
-    // swallowed by the outer field's span. Text after `separate`
-    // accumulates into every field it encloses — the nested field's
-    // rendered output is genuinely part of the outer result.
     const open: Array<{
       instruction: string
       result: string
@@ -292,13 +239,6 @@ export function checkCrossReferences(
         })
         continue
       }
-      // Only a `REF` field stores bookmark-scoped text, and only that text
-      // can be compared: a `PAGEREF` result is a page number and a
-      // `NOTEREF` a note mark, so comparing either against the target
-      // paragraph's text would invent a staleness that is not there. A
-      // `REF` result is a slice of the bookmark's content, so it must still
-      // appear within the target's current text — containment, not
-      // equality, because the bookmark need not cover the whole paragraph.
       if (reference.kind !== 'REF' || field.result === '') continue
       const current = effectiveText(targetParagraphId)
       if (current !== undefined && !current.includes(field.result)) {

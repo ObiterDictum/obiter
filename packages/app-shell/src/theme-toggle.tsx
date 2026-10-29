@@ -1,11 +1,6 @@
 import { Moon, Sun } from '@phosphor-icons/react'
 import { setAppTheme, useAppTheme } from './use-app-theme'
 
-/**
- * The theme toggle, shared by the top bar and the auth gate. One press flips
- * the theme being rendered and stores it as an explicit choice, which is how a
- * user leaves "match system".
- */
 export function ThemeToggle() {
   const theme = useAppTheme()
   const next = theme === 'light' ? 'dark' : 'light'

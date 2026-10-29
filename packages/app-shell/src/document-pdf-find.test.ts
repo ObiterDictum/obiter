@@ -42,7 +42,6 @@ const view = (
 
 describe('pdfFindHits', () => {
   it('maps a hit inside one segment to a slice of that segment', () => {
-    // 'alpha beta': 'beta' sits at 6..10, inside segment 0 covering 0..11.
     const hits = pdfFindHits(view('alpha beta', [segment(0, 11, 0)]), 'beta', {
       matchCase: false,
       wholeWord: false,
@@ -58,8 +57,6 @@ describe('pdfFindHits', () => {
   })
 
   it('slices a hit that spans a segment and a page boundary', () => {
-    // 'wrap across' split across two pages: segment 0 'wrap ' (0..5, page 0),
-    // segment 1 'across' (5..11, page 1). 'p a' covers 3..6 of the text.
     const hits = pdfFindHits(
       view('wrap across', [segment(0, 5, 0), segment(5, 11, 1)]),
       'p a',
@@ -111,15 +108,10 @@ describe('pdfFindHits', () => {
       matchCase: false,
       wholeWord: false,
     })
-    // The text still matches — the extractor's layout may not cover it. The
-    // hit is honest: found, navigable, with nothing to paint.
     expect(hits).toEqual([{ start: 7, end: 10, pageIndex: 0, slices: [] }])
   })
 
   it('navigates an unsegmented mid-document hit to the nearest covered page', () => {
-    // 'gap' sits between the segment on page 0 and the segment on page 2 —
-    // nothing covers it, but landing on page 1 would be a lie about where
-    // the text came from; the first segment after it is the honest page.
     const hits = pdfFindHits(
       view('aaa gap zzz', [segment(0, 4, 0), segment(8, 11, 2)]),
       'gap',
@@ -164,10 +156,6 @@ describe('pdfSliceBounds', () => {
   })
 
   it('keeps bounds proportional even when advances exist, matching the span', () => {
-    // The viewer mounts each segment's text as one span at the segment box,
-    // so a highlight tracks the same proportional interpolation the text
-    // itself is placed with — per-character advances would sit the slice
-    // where the text is not.
     const bounds = pdfSliceBounds(
       { width: 100, start: 0, end: 4 },
       { start: 1, end: 3 },

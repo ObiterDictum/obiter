@@ -4,11 +4,6 @@ import { usePresenceUpdate } from '../../document-workspace-api'
 
 const HEARTBEAT_MS = 8_000
 
-/**
- * Heartbeat presence to the shared registry. Timer sync, not data fetching.
- * `clientId` is a per-tab nonce: two tabs of one account are distinct
- * participants, and a tab closing removes only its own heartbeat row.
- */
 export function useDocumentPresenceHeartbeat(
   documentId: string,
   cursor: DocumentCursor | null,

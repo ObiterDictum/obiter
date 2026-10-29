@@ -20,11 +20,6 @@ import {
   pendingUnresolvedRunId,
 } from './document-baseline-identity-keys'
 
-/**
- * The base runs a covered reversal has to be able to address. A missing
- * address is what makes a translation unsafe: the result model run ids are
- * positional, so falling back to the base id can name unrelated content.
- */
 function coveredRunIds(
   slot: DraftSlot,
   baseline: Pick<SaveBaseline, 'sent' | 'fromModel'>,
@@ -50,13 +45,6 @@ function coveredRunIds(
   }
 }
 
-/**
- * Whether the lineage names every covered slot the translation needs. A
- * response that omits one is incomplete, so the caller must not translate it:
- * a positional fallback would retarget the reversal at unrelated content. A
- * tracked version carries no run addresses at all (the reparsed run list
- * differs), so any run-keyed covered slot is refused and surfaced as blocked.
- */
 export function lineageCoversCoveredSlots(
   lineage: DocumentVersionLineage,
   baseline: Pick<SaveBaseline, 'covered' | 'sent' | 'fromModel'>,
@@ -71,9 +59,6 @@ export function lineageCoversCoveredSlots(
       }
     }
   }
-  // A tracked operation has no result run address; its reversal is the
-  // rejection group the lineage carries. A run on a paragraph the same batch
-  // inserted is covered by that insert's deletion, so it needs no address.
   const reversedRuns = new Set(
     (lineage.reversals ?? []).flatMap((reversal) =>
       reversal.fromRunId ? [reversal.fromRunId] : [],
@@ -91,15 +76,9 @@ export function lineageCoversCoveredSlots(
         (paragraph) => paragraph.insertedByIntent === slot.clientId,
       )
       if (!entry) return false
-      // A tracked insertion carries its own reversal: rejecting the `w:ins`
-      // ids and removing the shell paragraph in one decision. Its result
-      // paragraph has no run address, but that does not make it uncoverable.
       if (entry.trackedInsertChangeIds?.length && entry.toParagraphId) {
         continue
       }
-      // An untracked insertion's result paragraph must carry a run; a tracked
-      // insertion with no reversal recorded is a boundary that cannot be
-      // reconciled, and is surfaced rather than guessed.
       if (entry.runs.length === 0) return false
       continue
     }
@@ -120,8 +99,6 @@ export function lineageCoversCoveredSlots(
       slot.kind === 'paragraph-format'
     ) {
       if (reversedParagraphs.has(slot.paragraphId)) continue
-      // A style on a paragraph the same batch inserted is addressed by the
-      // insert's intent id; every other paragraph must be in the map.
       if (paragraphIds.has(slot.paragraphId)) continue
       if (
         lineage.paragraphs.some(
@@ -162,13 +139,6 @@ export function lineageCoversCoveredSlots(
   return true
 }
 
-/**
- * Reads identity from the server's authoritative lineage. A base run may map
- * to several result runs (a split) or a result run may compose several base
- * runs (a merge); the lineage's own segments name every continuing result
- * run with the slice of the base run's text it carries, and a paragraph maps
- * directly.
- */
 export function lineageIdentities(
   lineage: DocumentVersionLineage,
   toModel: DocumentModelWire | undefined,
@@ -190,9 +160,6 @@ export function lineageIdentities(
       ? storyParagraph(toModel, entry.toParagraphId)
       : undefined
     for (const run of entry.runs) {
-      // One continuing run may owe several segments to the same base run (a
-      // move or re-join); its slice of the base run's saved text is the span
-      // they cover together.
       const spans = new Map<string, { from: number; to: number }>()
       for (const segment of run.segments) {
         if (segment.fromRunId === null) continue
@@ -222,9 +189,6 @@ export function lineageIdentities(
     }
   }
 
-  // Insertions are correlated by the opaque intent id the client sent, never
-  // by matching the insert lists. An inserted paragraph without one (an
-  // empty-paragraph fill) has no client insert slot to name.
   for (const entry of lineage.paragraphs) {
     if (entry.fromParagraphId !== null) continue
     const intentId = entry.insertedByIntent
@@ -242,8 +206,6 @@ export function lineageIdentities(
   )
   for (const slot of baseline.covered) {
     if (slot.kind !== 'delete') continue
-    // The restoration anchor is found inside the deleted paragraph's own
-    // story: a header paragraph restores against its header siblings.
     const fromOrder = storyFlowParagraphIds(
       editableStoryOf(baseline.fromModel, slot.paragraphId),
       [],
@@ -259,9 +221,6 @@ export function lineageIdentities(
       restoredAnchors.set(slot.paragraphId, paragraphIds.get(anchor) ?? anchor)
       continue
     }
-    // A deletion that removed the first paragraph has no preceding anchor; it
-    // re-inserts before the first survivor instead, so the reversal is never
-    // silently dropped.
     const next = nearestSurvivingFollowing(
       fromOrder,
       surviving,
@@ -278,10 +237,6 @@ export function lineageIdentities(
   const runReversals = new Map<string, string[]>()
   const paragraphReversals = new Map<string, string[]>()
   for (const reversal of lineage.reversals ?? []) {
-    // Two operations in one batch can name the same node — a text edit and a
-    // property change on one run both record a reversal keyed by it — so ids
-    // merge into the node's group rather than the later op overwriting the
-    // earlier and leaving ids the undo group can never reject.
     if (reversal.fromRunId) {
       runReversals.set(reversal.fromRunId, [
         ...(runReversals.get(reversal.fromRunId) ?? []),
@@ -295,9 +250,6 @@ export function lineageIdentities(
     }
   }
 
-  // A tracked paragraph insertion carries its own reversal: rejecting the
-  // `w:ins` ids empties the paragraph, and removing the shell named by the
-  // result paragraph id completes the undo in the same decision.
   const insertReversals = new Map<
     string,
     { ooxmlIds: string[]; removeParagraphId: string }
@@ -370,17 +322,6 @@ export function runText(model: DocumentModelWire, runId: string) {
   return undefined
 }
 
-/**
- * Re-expresses a pre-save run text across every result run that continues the
- * base run: a mid-run splice left the head of the text in the first result
- * run and the tail in the last, so each takes the slice at its own recorded
- * range — writing the whole text to the first alone would leave the tail's
- * saved text beside the restored head, and the next save persists that
- * duplication. The first also takes anything before its range and the last
- * anything after it, so no character the snapshot held is dropped. A run the
- * lineage does not continue keeps the whole text at a pending identity that
- * stays unresolved — and blocks — if no result run can be named for it.
- */
 export function reversalRunTexts(
   identities: SavedIdentities,
   baseRunId: string,

@@ -6,12 +6,6 @@ import {
 } from '../../document-ruler'
 import type { ParagraphFace } from '../../document-page-style'
 
-/**
- * The horizontal ruler: the sheet's real measure — margins, centimetre ticks
- * and the caret paragraph's indent markers — scaled with the desk's zoom.
- * It presents measurements only; it is not an interactive control, so it is
- * exposed as one labelled image rather than focusable chrome.
- */
 export function DocumentRuler({
   geometry,
   face,
@@ -69,7 +63,6 @@ export function DocumentRuler({
   )
 }
 
-/** One indent marker — a filled triangle pointing at its measure. */
 function RulerMarker({
   kind,
   positionPx,

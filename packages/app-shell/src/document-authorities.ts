@@ -21,9 +21,6 @@ export type AuthorityHit = {
   citation: string
 }
 
-// Built from the shared grammar in `@obiter/contracts` so extraction and
-// Verify's citation resolution cannot disagree about what a neutral citation
-// is. Compiled once at module load, not inside the scan loop.
 const NEUTRAL_CITATION = new RegExp(neutralCitationPatternSource, 'g')
 
 export function extractAuthorities(
@@ -61,14 +58,6 @@ export function extractAuthorities(
   return hits
 }
 
-/**
- * What an Insert-authority input names, against the same grammars Verify
- * resolves citations with: a supported neutral citation, a citation for a
- * court Verify does not resolve, or a canonical `/ln/` legislation path
- * (the only legislation form the resolver accepts). Everything else —
- * free text, malformed brackets, prose — is `invalid` and must not reach
- * the document as a citation.
- */
 export type AuthorityInputKind =
   'neutral' | 'unsupported_court' | 'legislation' | 'invalid'
 

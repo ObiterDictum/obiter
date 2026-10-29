@@ -1,10 +1,4 @@
 import '@obiter/test-dom'
-// Pagination truthfulness through the real infinite query. The provider's
-// findings hook is NOT mocked here: `apiFetch` is the external-network
-// boundary, and the run's second findings page is only reachable if the
-// provider really walks the cursor. A preassembled findings array could not
-// expose the defect this file pins (totals, coverage and navigation bounded by
-// the loaded page).
 import { createElement, type PropsWithChildren } from 'react'
 import {
   cleanup,
@@ -23,13 +17,7 @@ import type {
 } from '@obiter/contracts'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('../../api')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const apiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../api')).map((key) => [key, undefined]),
 )
@@ -44,13 +32,7 @@ mock.module('../../api', () =>
 )
 
 const documentHook = vi.hoisted(() => ({ useDocument: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentsModule = { ...(await import('../../documents')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentsModuleKeys = Object.fromEntries(
   Object.keys(await import('../../documents')).map((key) => [key, undefined]),
 )
@@ -65,15 +47,9 @@ mock.module('../../documents', () =>
 )
 
 const modelHook = vi.hoisted(() => ({ useDocumentModel: vi.fn() }))
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentWorkspaceApiModule = {
   ...(await import('../../document-workspace-api')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentWorkspaceApiModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-workspace-api')).map((key) => [
     key,
@@ -90,9 +66,6 @@ mock.module('../../document-workspace-api', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { VerificationWorkspaceProvider } =
   await import('../verification/verification-context')
 const { VerificationDock } = await import('../verification/verification-dock')
@@ -220,7 +193,6 @@ function mount() {
 describe('contextual verification pagination', () => {
   it('walks the findings cursor so coverage and totals are the whole run', async () => {
     mount()
-    // The second page is only fetched through the real infinite-query cursor.
     await waitFor(() => {
       expect(
         api.apiFetch.mock.calls.some(([url]) =>
@@ -229,7 +201,6 @@ describe('contextual verification pagination', () => {
       ).toBe(true)
     })
     const dock = await screen.findByRole('region', { name: 'Verification' })
-    // Counts come from the run summary over every finding, not page one.
     await waitFor(() => {
       expect(dock.textContent).toContain('2 flagged')
     })
@@ -245,7 +216,6 @@ describe('contextual verification pagination', () => {
     await waitFor(() => expect(allFindings.disabled).toBe(false))
     fireEvent.click(allFindings)
     const index = await screen.findByRole('dialog')
-    // The row for a second-page finding is present and activatable.
     await waitFor(() => {
       expect(index.textContent).toContain('Page two explanation')
     })
@@ -257,7 +227,6 @@ describe('contextual verification pagination', () => {
     )
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('Page two authority')
-    // "51 of 55": the position uses the server total, not the loaded subset.
     expect(panel.textContent).toContain('51 of 55')
   })
 })

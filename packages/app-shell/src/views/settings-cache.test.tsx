@@ -20,32 +20,17 @@ import {
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from '../api'
 
-/**
- * Drives the real TanStack Query hooks against a mocked `apiFetch`, so the
- * account form is exercised with the mutation that refreshes `GET /api/me`
- * rather than a stub of that mutation. The `settings-*.test.tsx` suites mock the
- * hooks to cover the UI states; this file proves the cache contract.
- */
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('../api')) }
 mock.module('../api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
 mock.module('../auth', () => ({
   ...authModule,
   useAuth: () => ({ changePassword: vi.fn() }),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const organisationMembershipModuleKeys = Object.fromEntries(
   Object.keys(await import('../organisation-membership')).map((key) => [
     key,
@@ -74,9 +59,6 @@ mock.module('../organisation-membership', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { SettingsRouteView } = await import('./settings')
 
 const ME: MeResponse = {
@@ -158,8 +140,6 @@ describe('SettingsRouteView — account save refreshes GET /api/me', () => {
       })
     })
 
-    // The mutation refreshes the shared /api/me cache rather than leaving a
-    // locally patched value behind.
     await waitFor(() => {
       expect(
         queryClient.getQueryData<MeResponse>(['current-user'])?.user.name,

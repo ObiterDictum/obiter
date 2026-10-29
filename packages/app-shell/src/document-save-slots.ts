@@ -1,7 +1,6 @@
 import type { DraftSlot, DraftState } from './document-save-plan'
 import { hasSectionDraft } from './document-section-format'
 
-/** Removes the named slots from a draft state, leaving everything else. */
 export function removeDraftSlots(
   state: DraftState,
   slots: readonly DraftSlot[],
@@ -14,11 +13,6 @@ export type SplitDraftSlotsResult = {
   removed: DraftState
 }
 
-/**
- * Splits the named slots out of a draft state. The removed fragment is what a
- * held change is: work the server would not accept, kept aside so it is neither
- * resent nor lost.
- */
 export function splitDraftSlots(
   state: DraftState,
   slots: readonly DraftSlot[],
@@ -142,11 +136,6 @@ export function hasDraftState(state: DraftState) {
   )
 }
 
-/**
- * The covered slots whose value is unchanged since the request was planned.
- * A slot edited while the request was in flight was not in it, so clearing that
- * slot would drop text the server never received.
- */
 export function clearableSlots(
   covered: readonly DraftSlot[],
   sent: DraftState,
@@ -157,7 +146,6 @@ export function clearableSlots(
   )
 }
 
-/** A stable string for the draft content one slot holds. */
 function slotFingerprint(state: DraftState, slot: DraftSlot): string {
   switch (slot.kind) {
     case 'run-text':
@@ -199,7 +187,6 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
   }
 }
 
-/** A short noun phrase naming what a slot holds, for user-facing disclosure. */
 export function slotLabel(slot: DraftSlot): string {
   switch (slot.kind) {
     case 'run-text':

@@ -42,22 +42,16 @@ export function PendingInsert({
 }) {
   const field = useRef<HTMLTextAreaElement>(null)
   const programmaticFocus = useRef(false)
-  // A pending insert cannot continue a vertical-column run, so every way of
-  // entering or editing it ends the run rather than holding a stale column.
   const clearColumn = () => clearVerticalColumn(verticalCaret)
   const text = insertPlainText(insert)
   const restore =
     restoreCaret?.paragraphId === insert.clientId
       ? restoreCaret.offset
       : undefined
-  // Keep the caret after Enter (DOM selection).
   useEffect(() => {
     if (!selected) return
     const node = field.current
     if (!node) return
-    // Focus from this effect is not a user selection: the insert is already the
-    // selected paragraph. Marking it keeps `onFocus` from re-selecting, so a
-    // late effect can never seat the caret back on an insert an undo removed.
     programmaticFocus.current = true
     node.focus({ preventScroll: true })
     programmaticFocus.current = false
@@ -206,9 +200,7 @@ export function PendingInsert({
           minHeight: '1.15em',
         }}
       />
-      {/* Print never reaches a form control reliably, so the inserted text is
-          also painted as static content. Hidden on screen, where the textarea
-          above is the editable surface. */}
+
       <div
         data-pending-insert-print
         aria-hidden="true"

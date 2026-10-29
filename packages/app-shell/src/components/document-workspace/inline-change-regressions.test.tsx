@@ -392,8 +392,6 @@ it('refuses local edits and joins whose save would erase tracked subtrees, not j
   expect(paragraphJoinRefusal(model, emptyEditorState(), paragraph.id)).toBe(
     'tracked-change',
   )
-  // A plain tail folds into a revised head's last run, ahead of its trailing
-  // revision: the canvas and the saved bytes agree, so the join stays allowed.
   const trailing = { ...deletion, inlinePosition: { beforeRunId: null } }
   const into = await modelOf(
     [paragraph, { ...previous, id: 'next' }],
@@ -422,7 +420,6 @@ it('refuses local edits and joins whose save would erase tracked subtrees, not j
     runId: 'b',
     text: ' unitsFirst',
   })
-  // A revision-only head has no run to fold the tail into.
   const bare = await modelOf(
     [
       { ...paragraph, runs: [] },

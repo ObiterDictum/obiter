@@ -12,7 +12,6 @@ describe('citation style preference', () => {
     const storage = new MapStorage()
     writeCitationStyle(storage, 'doc_1', 'house')
     expect(readCitationStyle(storage, 'doc_1')).toBe('house')
-    // Another document on the same store keeps its own default.
     expect(readCitationStyle(storage, 'doc_2')).toBe('oscola')
   })
 

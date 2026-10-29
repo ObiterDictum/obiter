@@ -20,8 +20,6 @@ function subscribeOffline(callback: () => void) {
   }
 }
 
-/** Reachability is browser state, so it is read from the platform rather than
- * stored: an effect that polls or mirrors it would only lag the truth. */
 export function useOffline(): boolean {
   return useSyncExternalStore(
     subscribeOffline,
@@ -30,11 +28,6 @@ export function useOffline(): boolean {
   )
 }
 
-/**
- * What the shell can say when it cannot reach the server. It promises only what
- * is true today: reading already-loaded pages, and nothing about saving, which
- * needs the connection.
- */
 export function ShellOfflineBanner() {
   const offline = useOffline()
   if (!offline) return null
@@ -57,7 +50,6 @@ export function ShellOfflineBanner() {
   )
 }
 
-/** The frame's own loading state: the session check that gates the chrome. */
 export function ShellBootLoading() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-canvas">
@@ -84,11 +76,6 @@ const NOT_FOUND_CODES = new Set([
 
 export type ShellFailure = 'error' | 'not-found' | 'forbidden'
 
-/**
- * A failed route or render, classified by what the user can do about it. A
- * permission refusal and a missing record are not errors to retry, and saying
- * "something went wrong" for either teaches people to distrust the message.
- */
 export function classifyShellFailure(error: unknown): ShellFailure {
   if (!(error instanceof ApiError)) return 'error'
   if (error.code === 'forbidden' || error.code === 'no_organisation')
@@ -193,11 +180,6 @@ export function ShellPermissionDenied() {
   )
 }
 
-/**
- * The router's error surface: an unhandled failure in a loader or a render.
- * `reset` re-runs the route, which is the only retry the shell can offer — a
- * bare reload would discard in-progress editor state that is still intact.
- */
 export function ShellError({
   error,
   reset,

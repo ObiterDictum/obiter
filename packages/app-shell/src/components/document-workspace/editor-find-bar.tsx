@@ -3,11 +3,6 @@ import { Button } from '@obiter/ui'
 import { EditorIconButton, EditorTextButton } from './editor-controls'
 import type { DocumentFindToolbar } from './ribbon-types'
 
-/**
- * The find and replace bar. It opens as a row under the toolbar rather than
- * living inside a menu: a field in a menu loses the keystrokes the menu's own
- * typeahead expects, and the document behind it stays the thing being read.
- */
 export function EditorFindBar({
   find,
   onClose,

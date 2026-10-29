@@ -8,11 +8,6 @@ import { draftStorage } from './document-draft-storage'
 
 type DraftWriterStorage = NonNullable<ReturnType<typeof draftStorage>>
 
-/**
- * Holds this tab's writer claim open while it owns a draft: touching it on an
- * interval and releasing it on page hide. A stale claim is how another tab may
- * take the draft over, so the release must always run.
- */
 export function useDraftWriterClaim({
   storage,
   documentId,

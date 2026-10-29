@@ -8,12 +8,6 @@ import {
 } from '@obiter/contracts'
 import { TRACKED_DELETE_MARK, TRACKED_INSERT_MARK } from './tracked-marks'
 
-/**
- * The difference list beside the redline: one row per difference in document
- * order, naming where it is and showing what it says. A row is a column of two
- * blocks rather than a control with a fixed height, so a long paragraph wraps
- * inside its own row instead of overflowing onto the next one.
- */
 export function CompareDifferencesPanel({
   data,
   active,
@@ -72,12 +66,6 @@ export function CompareDifferencesPanel({
   )
 }
 
-/**
- * The segments of a wording change, marked in place: what is gone struck
- * through, what replaced it underlined, so a reader sees the sentence as it
- * now reads and the words it lost in the same line. The paper is a fixed white
- * sheet and the panel is themed chrome, so each surface paints its own marks.
- */
 export function comparisonSegments(
   segments: readonly DocumentComparisonSegment[],
   surface: 'paper' | 'panel',

@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * E5 page and section layout: the Layout ribbon's Margins, Orientation and
- * Page size controls, and the Insert ribbon's Page break and Section break
- * controls, must apply to the body section, save one operation each, and move
- * in one history step. The effective readers and the save-plan slots live in
- * document-section-edits.test.ts; this is the mounted-control surface.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -41,13 +34,6 @@ function save(editAsync: ReturnType<typeof vi.fn>) {
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
-/**
- * The value selects are Base UI Selects. Applying a preset through one is a
- * browser journey (opening a portaled listbox, picking a row) and is covered
- * end to end by document-page-layout.spec.ts, which asserts the stored page
- * setup after a reload. What jsdom can prove without the popup is the state a
- * reader sees when the control cannot run at all.
- */
 function select(name: string): HTMLElement {
   return screen.getByRole('combobox', { name })
 }
@@ -75,8 +61,6 @@ describe('the page setup controls', () => {
     mountWorkspace({ models: { doc_1: helloModel() } })
     fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
     openRibbonTab('Layout')
-    // A tracked page-setup change cannot be represented, so the controls say
-    // so by being unavailable rather than by applying something silently.
     for (const name of ['Margins', 'Page size']) {
       expect((select(name) as HTMLButtonElement).disabled).toBe(true)
     }
@@ -105,8 +89,6 @@ describe('the break controls', () => {
   it('inserts a page break at the offset of a mouse-placed caret', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    // Focus the paragraph, then click inside its field so the caret sits at a
-    // non-zero offset. A mouse click must carry that offset, not reset to 0.
     clickParagraph('p1')
     const field = bodyField()
     field.setSelectionRange(3, 3)

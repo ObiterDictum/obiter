@@ -13,14 +13,6 @@ import {
 import { classifyAuthorityInput } from '../../document-authorities'
 import type { CitationStyle } from '../../document-preferences'
 
-/**
- * Inserts an authority citation at the caret. The input is validated against
- * the same grammars Verify resolves, so an authority that cannot be resolved
- * is refused up front rather than written and silently uncheckable. An
- * unsupported court is inserted anyway with a warning: the citation is real
- * text the author may want, and Verify reports it for review rather than
- * calling it invalid.
- */
 export function InsertAuthorityDialog({
   open,
   onOpenChange,

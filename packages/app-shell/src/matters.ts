@@ -8,13 +8,6 @@ import { queryOptions } from '@tanstack/react-query'
 import { apiFetch } from './api'
 import { documentsKeys } from './documents'
 
-/**
- * Real matter + document domain types, mirroring the wire shapes returned by
- * `services/api` (org-scoped, audited matters/documents endpoints). These live
- * in the shell rather than `@obiter/contracts` because the matters/documents
- * APIs do not yet have shared request/response schemas there.
- */
-
 export type MatterStatus = 'active' | 'archived' | 'deleted'
 
 export interface MatterRecord {
@@ -51,11 +44,6 @@ export interface CreateMatterInput {
   clientReference?: string
 }
 
-/**
- * A matter's tile label: the client reference's letters, else the name's
- * initials. One helper for every surface that shows a matter, so the sidebar
- * and the dashboard never disagree about what a matter is called in miniature.
- */
 export function matterInitials(
   matter: Pick<MatterRecord, 'name' | 'clientReference'>,
 ): string {
@@ -69,7 +57,6 @@ export function matterInitials(
     .join('')
 }
 
-/** Query key factory — the single source of truth for matters cache keys. */
 export const mattersKeys = {
   all: ['matters'] as const,
   lists: () => [...mattersKeys.all, 'list'] as const,
@@ -99,12 +86,6 @@ export function matterQueryOptions(matterId: string) {
   })
 }
 
-/**
- * Create a matter and refresh the list. Per TanStack Query conventions, the
- * list query is invalidated on success (the new row appears on next read
- * without a manual reload) and the new matter is optimistically inserted into
- * the list cache.
- */
 export function useCreateMatter(): UseMutationResult<
   MatterRecord,
   Error,
@@ -127,7 +108,6 @@ export function useCreateMatter(): UseMutationResult<
   })
 }
 
-/** Matters list via TanStack Query. */
 export function useMattersList(options?: { enabled?: boolean }) {
   return useQuery({
     ...mattersListQueryOptions(),
@@ -135,7 +115,6 @@ export function useMattersList(options?: { enabled?: boolean }) {
   })
 }
 
-/** Single matter via TanStack Query. */
 export function useMatter(matterId: string, options?: { enabled?: boolean }) {
   return useQuery({
     ...matterQueryOptions(matterId),
@@ -143,11 +122,6 @@ export function useMatter(matterId: string, options?: { enabled?: boolean }) {
   })
 }
 
-/**
- * Soft-delete a matter and its documents/runs (owner/admin only). On success
- * the detail is removed from cache and the list invalidated so the matter
- * disappears on next read.
- */
 export function useDeleteMatter() {
   const queryClient = useQueryClient()
   return useMutation({

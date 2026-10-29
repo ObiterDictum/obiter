@@ -20,14 +20,6 @@ const FIELD_END_FRAGMENT = '<w:fldChar w:fldCharType="end"/>'
 
 type TocDraft = StructuralDraft & { kind: 'table-of-contents' }
 
-/**
- * The pending-fold state for `TOC` drafts: the `_Toc` bookmark name and
- * `w:id` allocators, seeded from the names and ids the painted model
- * already holds. A heading that already carries a `_Toc` fragment — stored
- * or folded by an earlier draft — reuses its name, matching the writer's
- * `ensureParagraphBookmark` reuse, so the names the pending `PAGEREF`s
- * resolve are the same ones the save allocates.
- */
 export function createTableOfContentsFold(
   model: DocumentModelWire,
   drafts: Record<string, string>,
@@ -58,12 +50,6 @@ export function createTableOfContentsFold(
     }
   }
 
-  /**
-   * One heading wire's bookmark name: an existing `_Toc` name on the wire
-   * when it has one, otherwise a freshly allocated pair — returned as
-   * fragments for the caller to attach, since folded wires are replaced
-   * rather than mutated.
-   */
   const bookmarkFor = (paragraph: DocumentParagraphWire) => {
     const own = [
       ...paragraph.preservedXmlFragments,
@@ -86,11 +72,6 @@ export function createTableOfContentsFold(
     }
   }
 
-  /**
-   * The entries the fold captures — the same heading rule the writer's
-   * `tableOfContentsEntries` applies, over the painted paragraphs so an
-   * earlier pending fold's head paragraph reports its post-split text.
-   */
   const entries = (paragraphs: readonly DocumentParagraphWire[]) =>
     tableOfContentsEntriesFor(
       paragraphs,
@@ -100,17 +81,6 @@ export function createTableOfContentsFold(
       bookmarkFor,
     )
 
-  /**
-   * Splices one pending `TOC` into `paragraphs` — the wire counterpart of
-   * the writer's `</w:p>`-level splice. The anchor's runs split at the
-   * effective-text offset: head runs stay on the anchor wire, the tail
-   * moves behind the field `end` run into a new wire after the entry
-   * wires. A second draft on the same anchor migrates the previous tail's
-   * text runs into the newest tail — the shape the serialised output
-   * produces, where the last `</w:p>`-opening tail carries all the text.
-   * `tails` is the map the table fold parks trailing wires in, so a table
-   * anchored here still chains after the field.
-   */
   return function fold(
     paragraphs: DocumentParagraphWire[],
     draft: TocDraft,
@@ -171,9 +141,6 @@ export function createTableOfContentsFold(
       paragraphs.splice(index + 1, 0, ...entryWires, tailWire)
     }
     tails.set(anchor.id, tailWire)
-    // Pending bookmark fragments attach after the split so a heading that
-    // was the anchor lands them on the head wire — the same wire the
-    // writer's `bookmarkStart` serialises into.
     for (const entry of captured) {
       if (!entry.fragments) continue
       const at = paragraphs.findIndex(
@@ -195,13 +162,6 @@ export function createTableOfContentsFold(
 
 type PendingTocEntry = TocEntry & { fragments?: string[] }
 
-/**
- * Heading paragraphs at outline levels 1-3 in painted order — the painted
- * twin of the writer's `tableOfContentsEntries`, reading effective text so
- * a typed heading edit already in the draft shows in the entry it will
- * capture. A paragraph marked for deletion stays painted but is skipped,
- * matching the heading set the writer's `deletedIds` exclusion captures.
- */
 function tableOfContentsEntriesFor(
   paragraphs: readonly DocumentParagraphWire[],
   styles: readonly DocumentStyleWire[],
@@ -229,13 +189,6 @@ function tableOfContentsEntriesFor(
   return entries
 }
 
-/**
- * Splits `runs` at the effective-text `offset` — the wire twin of the
- * writer's run reparenting. Zero-length runs stay with the head; a run
- * the draft state replaces loses its id on both halves so the draft does
- * not repaint over a split, the rule `spliceRunAtOffset` uses. Exported
- * for the authorities fold, whose anchor splits the same way.
- */
 export function splitRunsAtOffset(
   runs: readonly DocumentTextRunWire[],
   offset: number,

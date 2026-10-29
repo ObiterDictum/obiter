@@ -17,6 +17,7 @@ import {
   type StructuralDraft,
 } from './document-structural-drafts'
 import type { TableOfAuthoritiesFacts } from './document-legal-toolbar'
+import { bodyStory } from './document-wire-test-support'
 
 const toaDraft = (
   id: string,
@@ -62,17 +63,6 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   }
 }
 
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
-  return {
-    partName: 'word/document.xml',
-    kind: 'document',
-    paragraphs,
-    preservedXmlFragments: [],
-    fields: [],
-    unanchoredFieldParagraphIds: [],
-  }
-}
-
 function story(document: DocumentModelWire) {
   return document.stories[0]
 }
@@ -84,7 +74,6 @@ function fragments(document: DocumentModelWire) {
   ])
 }
 
-/** The facts the derivations memo reports for a one-citation document. */
 function facts(
   citingWires: DocumentParagraphWire[],
   occurrences: { paragraphId: string; end: number; citation: string }[],
@@ -135,9 +124,6 @@ describe('withStructuralDrafts table of authorities', () => {
       'Beta',
     ])
 
-    // The citing wire carries the hidden `TA` mark — three zero-width runs
-    // after the citation — and the `_ToA` bookmark the entry's PAGEREF
-    // resolves, both the fragments the writer stamps.
     const citing = paragraphs[0]
     expect(
       citing?.runs.some((run) =>
@@ -184,8 +170,6 @@ describe('withStructuralDrafts table of authorities', () => {
     ])
     const folded = withStructuralDrafts(base, [toaDraft('s1', 'p2', 0)])
     const citing = story(folded)?.paragraphs[0]
-    // The citation ends at offset 16: head run keeps the cited text, the
-    // three hidden mark runs follow, then the rest of the sentence.
     expect(citing?.runs.map((run) => run.text)).toEqual([
       'In [2020] UKSC 1',
       '',
@@ -210,8 +194,6 @@ describe('withStructuralDrafts table of authorities', () => {
       '[2019] EWCA Civ 12',
       '[2020] UKSC 1, ',
     ])
-    // Both citing paragraphs carry a bookmark; the shared citation's entry
-    // references each.
     expect(
       paragraphs.filter((item) =>
         item.preservedXmlFragments.some((fragment) =>
@@ -296,7 +278,6 @@ describe('withStructuralDrafts table of authorities', () => {
     expect(entries.map((item) => paragraphPlainText(item))).toEqual([
       '[2019] UKSC 3',
     ])
-    // The captured paragraph is never marked or bookmarked.
     expect(fragments(folded).some((f) => f.includes(' TA \\l "[2020]'))).toBe(
       false,
     )
@@ -377,7 +358,6 @@ describe('table of authorities save partitioning', () => {
   })
 
   it('blocks a reloaded field for every reason the ribbon refuses', () => {
-    // No citation: the writer would refuse an empty field.
     const barePlan = planDocumentSave(
       model([paragraph('p1'), paragraph('p2', 'x')]),
       { ...emptyDraftState(), structures: [toaDraft('s1', 'p2', 0)] },
@@ -388,7 +368,6 @@ describe('table of authorities save partitioning', () => {
     expect(barePlan.blocked[0]?.reason).toContain('no citations')
     expect(barePlan.operations).toEqual([])
 
-    // A citing paragraph carrying tracked changes cannot hold the mark.
     const trackedModel = model([
       paragraph('c1', 'Cited [2020] UKSC 1.'),
       paragraph('p2', 'x'),
@@ -416,9 +395,6 @@ describe('table of authorities save partitioning', () => {
   })
 
   it('blocks a field whose mark lands inside a pending link', () => {
-    // The link draft covers the run the citation sits in: the `TA` mark's
-    // zero-width splice lands strictly inside it — the same refusal the
-    // writer's `w:hyperlink` element check would answer at save.
     const plan = planDocumentSave(
       model([
         paragraph('c1', 'Cited [2020] UKSC 1 fully.'),
@@ -445,7 +421,6 @@ describe('table of authorities save partitioning', () => {
         item.slot.structureKind === 'table-of-authorities',
     )
     expect(toaBlock?.reason).toContain('hyperlink')
-    // The link itself is unrelated and still goes out.
     expect(
       plan.blocked.filter(
         (item) =>

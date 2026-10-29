@@ -25,11 +25,8 @@ import { nextActionableIndex } from './verification-mapping'
 import { VerificationFindingsIndex } from './verification-findings-index'
 import { VerifyDismissDialog } from './verify-dismiss-dialog'
 
-/** The docked panel's state in the same words the header chip uses. */
 function dockState(verification: VerificationWorkspaceValue) {
   const { run } = verification
-  // Starting a run is visible before the run row comes back: the request is
-  // the only thing that exists until the server answers.
   if (verification.startPending) {
     return { label: 'Checking…', tone: 'info' as const }
   }
@@ -44,8 +41,6 @@ function dockState(verification: VerificationWorkspaceValue) {
   if (verification.stale) {
     return { label: 'Check out of date', tone: 'warning' as const }
   }
-  // A finished run whose every finding is unchecked established nothing. It is
-  // not a clean result and must not be worded as one.
   if (counts.total > 0 && counts.notChecked === counts.total) {
     return { label: 'Nothing checked', tone: 'warning' as const }
   }
@@ -58,19 +53,11 @@ function dockState(verification: VerificationWorkspaceValue) {
   return { label: 'Checked', tone }
 }
 
-/**
- * The document's Verify panel. It states what was checked and against which
- * version, what is still a person's decision, and the one action that follows —
- * then lists the run's findings in the same words the Verify page uses. The
- * engine, the run and the findings are untouched: this is the presentation
- * boundary over the same API.
- */
 export function VerificationDock({
   panel = false,
   currentUserId,
 }: {
   panel?: boolean
-  /** The signed-in user, so a dismissal can say "you" truthfully. */
   currentUserId?: string
 }) {
   const verification = useVerificationWorkspace()
@@ -108,8 +95,6 @@ export function VerificationDock({
   }
 
   const { run, findings } = verification
-  // The counts come from the run summary the server computed over every
-  // finding, so a page that failed to load cannot make the run look smaller.
   const counts = run
     ? verificationSummaryCounts(run.summary)
     : verificationFindingCounts(findings)
@@ -124,8 +109,6 @@ export function VerificationDock({
     state.label === 'Checked' && verification.checkedVersionNumber
       ? `Checked · version ${String(verification.checkedVersionNumber)}`
       : state.label
-  // Name the version by number when the document is loaded, and fall back to
-  // the stored version id otherwise: an unnamed check is not an honest one.
   const versionNote = run
     ? verification.checkedVersionNumber !== undefined &&
       verification.currentVersionNumber !== undefined
@@ -352,8 +335,6 @@ export function VerificationDock({
         </Button>
       </div>
 
-      {/* Rendered only while open: the index reads the signed-in user, and a
-          closed dialog must not add a query to the workspace. */}
       {verification.indexOpen ? (
         <VerificationFindingsIndex
           open

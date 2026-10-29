@@ -9,9 +9,6 @@ import { collectEditOperations } from './document-edits'
 import { documentStory } from './document-model-text'
 import { emptyFormatDrafts } from './document-format-edits'
 
-// E44 app-shell leg: typing a word and formatting it before the first save
-// must produce one request whose replacement text and range emphasis share the
-// drafted paragraph coordinate space.
 describe('draft-to-request construction for typing plus formatting', () => {
   it('emits the replacement then the emphasis in draft coordinates', async () => {
     const { paragraph, run } = await seedParagraph('Hello')

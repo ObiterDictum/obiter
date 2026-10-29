@@ -1,18 +1,6 @@
-/*
- * Legislation page data: the response shapes and the queries that fetch them.
- *
- * These live apart from their views for the same reason the case-law query
- * does: the top bar's breadcrumb names the source, so it needs the query
- * without dragging a page's components into the entry chunk.
- */
 import { queryOptions } from '@tanstack/react-query'
 import { apiUrl } from '../lib/api-url'
 
-/**
- * One addressable level beneath the provision being read: a subsection, a
- * sub-paragraph, or a further level. `text` is that level's own words, and is
- * absent when the level's wording is withheld.
- */
 export interface LegislationProvisionSubsection {
   label: string
   labelPath: string
@@ -29,7 +17,6 @@ interface LegislationProvisionDocument {
   year: number
   provisionLabel: string
   labelPath: string
-  /** The provision's own published heading, where the source carries one. */
   heading?: string
   extent: string
   legislationStatus: 'current' | 'amended_not_held'
@@ -86,10 +73,7 @@ export interface LegislationActContentsNode {
   extent: string
   withheld: boolean
   kind: LegislationActContentsKind
-  /** Heading text for container rows; never set for provision rows. */
   text?: string
-  /** A provision's own published heading, so a section reads
-   * "s. 13 Direct discrimination" rather than a bare number. */
   heading?: string
   children: LegislationActContentsNode[]
 }
@@ -103,12 +87,8 @@ interface LegislationActDocument {
   extent: string
   officialUrl: string
   sourceUrl: string
-  /** When this corpus read the Act's data.xml; absent when not recorded. */
   acquiredAt?: string
   canonicalUrl: string
-  /** Content rows only: sections plus schedule paragraphs. Containers
-   * (Part, Chapter, Schedule, crossheading) are headings, never withheld,
-   * and excluded from both counts. */
   totalCount: number
   withheldCount: number
   contents: LegislationActContentsNode[]
@@ -125,8 +105,6 @@ export function legislationActQueryOptions(identity: string) {
     retry: 1,
     refetchOnMount: 'always',
     queryFn: async () => {
-      // Encode per segment so identity slashes stay as separators while
-      // unsafe characters inside a segment cannot break the request path.
       const encodedIdentity = identity
         .split('/')
         .map((segment) => encodeURIComponent(segment))

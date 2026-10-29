@@ -22,11 +22,6 @@ import { breadcrumbTrail, matterIdFromPath } from './navigation'
 import { useSourceTitle } from './source-title'
 import { ThemeToggle } from './theme-toggle'
 
-/**
- * The top bar: where you are, app-wide search, the theme choice and the account.
- * It shares the content column with every page, so the breadcrumb starts on the
- * same x as the page title.
- */
 export function TopBar({ platform }: { platform: AppPlatform }) {
   const { data: me } = useQuery(currentUserQueryOptions())
   const pathname = useRouterState({
@@ -61,8 +56,6 @@ export function TopBar({ platform }: { platform: AppPlatform }) {
             <Fragment key={`${crumb.label}-${index}`}>
               {index > 0 ? <CrumbSeparator /> : null}
               {crumb.to ? (
-                // A module crumb is short and stays whole; the page crumb
-                // takes the truncation, so "Search" never reads "Sea…".
                 <Link
                   to={crumb.to}
                   className="max-w-[18rem] shrink-0 truncate text-subtle hover:text-ink"
@@ -96,7 +89,6 @@ function CrumbSeparator() {
   )
 }
 
-/** "Owner · Harrington Vale LLP", or whichever half is known. */
 function accountContext(me: MeResponse) {
   const role = me.user.role
     ? me.user.role.charAt(0).toUpperCase() + me.user.role.slice(1)
@@ -104,12 +96,6 @@ function accountContext(me: MeResponse) {
   return [role, me.organisation?.name].filter(Boolean).join(' · ')
 }
 
-/**
- * The account menu. Base UI Menu supplies the roles and the keyboard contract
- * the shell e2e spec asserts (Enter/Space/ArrowDown open into the list, arrows
- * and Home/End move, Escape closes and returns focus to the avatar, Tab or an
- * outside click closes); the trigger and popup carry only the visual layer.
- */
 function AccountMenu({
   platform,
   me,
@@ -136,8 +122,6 @@ function AccountMenu({
         {initialsOf(me.user.name)}
       </MenuTrigger>
       <MenuContent aria-label="Account">
-        {/* Whose account this is, not an action: presentation keeps the menu
-            list a list of menuitems for screen readers. */}
         <div role="presentation" className="px-3 py-2">
           <p className="truncate text-item text-ink">{me.user.name}</p>
           <p className="break-all text-caption text-subtle">{me.user.email}</p>

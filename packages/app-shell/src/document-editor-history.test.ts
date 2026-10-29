@@ -15,9 +15,6 @@ const typing = (inserted: string): HistoryEdit => ({
   inserted,
 })
 
-/** Runs a history step inside `act` and hands back what it restored. A closure
- * assignment is not tracked by control flow, so the value rides on an object
- * with its union type written down. */
 function restoredBy(step: () => DraftState | null): DraftState | null {
   const captured: { value: DraftState | null } = { value: null }
   act(() => {
@@ -33,7 +30,6 @@ describe('useWorkspaceDraftHistory undo grouping', () => {
     act(() => result.current.record(state('1'), typing('b')))
     act(() => result.current.record(state('2'), typing('c')))
 
-    // One entry, recorded before the whole run: undo returns the pre-run state.
     const restored = restoredBy(() => result.current.stepBack(state('3')))
     expect(restored?.drafts.run).toBe('0')
     expect(result.current.canUndo).toBe(false)
@@ -45,7 +41,6 @@ describe('useWorkspaceDraftHistory undo grouping', () => {
     act(() => result.current.record(state('0'), typing('a')))
     act(() => result.current.record(state('1'), { kind: 'structural' }))
 
-    // The structural edit's own pre-state is on top, not the run's first.
     const restored = restoredBy(() => result.current.stepBack(state('2')))
     expect(restored?.drafts.run).toBe('1')
   })

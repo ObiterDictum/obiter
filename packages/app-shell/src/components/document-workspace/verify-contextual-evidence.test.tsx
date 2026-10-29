@@ -1,7 +1,4 @@
 import '@obiter/test-dom'
-// Which findings are drawn in the document, where they are drawn, and what
-// happens when one is activated. Mapping and placement are the subject here;
-// navigation, keyboard and version truthfulness live in the sibling suite.
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { finding, mount, quoteFinding } from './verify-contextual-harness'
@@ -17,7 +14,6 @@ describe('contextual verification evidence', () => {
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('[2012] UKSC 7')
     expect(panel.textContent).toContain('Citation matches checked source')
-    // The version is named by number when it is known, never by its id.
     expect(panel.textContent).toContain('Checked the stored version.')
   })
 
@@ -44,8 +40,6 @@ describe('contextual verification evidence', () => {
     const panel = await screen.findByRole('dialog')
     expect(panel.closest('[data-document-desk]')).toBeNull()
     expect(desk?.children.length).toBe(flowBefore)
-    // The marker layer is out of flow, so it cannot add a line, a margin or a
-    // scroll height to the page it decorates.
     const layer = document.querySelector('[data-verification-layer]')
     expect(layer?.className).toContain('absolute')
   })
@@ -81,8 +75,6 @@ describe('contextual verification evidence', () => {
     expect(markers).toHaveLength(1)
     expect(markers[0]!.getAttribute('aria-label')).toContain('Flagged')
     expect(markers[0]!.getAttribute('aria-label')).toContain('2 findings here')
-    // The marker must open the most serious member it advertises, not whichever
-    // member the API happened to list first.
     fireEvent.click(markers[0]!)
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('Flagged')
@@ -93,8 +85,6 @@ describe('contextual verification evidence', () => {
   it('names the run once, as the Verify page does, then its time', async () => {
     mount([finding()])
     const region = await screen.findByRole('region', { name: 'Verification' })
-    // The dock states the state ("Checked") and then when it ran; a second verb
-    // for the same event ("Completed …") says it twice.
     expect(region.textContent).toContain('Checked')
     expect(region.textContent).toMatch(/14 Sep\w* 2026, 00:00/u)
     expect(region.textContent).not.toContain('Completed')

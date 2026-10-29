@@ -6,15 +6,12 @@ import type {
 import { documentStory, paragraphPlainText } from '../../document-model-text'
 import { itemLead, reviewItems, type ReviewItem } from './review-items'
 
-/** One row of the merged review list: a tracked change, a move, or a thread. */
 export type ReviewRow =
   | {
       kind: 'change'
       id: string
       item: ReviewItem
-      /** Where it is: "Clause 4.2", or the paragraph's first words. */
       location: string
-      /** One line of the paragraph around the change. */
       context: string
       order: number
     }
@@ -32,12 +29,6 @@ export type ReviewFilter = 'all' | 'change' | 'comment' | 'move'
 
 const WORDS = 6
 
-/**
- * The review list, in document order: changes and moves with the comment
- * threads interleaved, so a reader works through the document once rather
- * than cross-referencing two panels. A row with no locatable paragraph sorts
- * last rather than being dropped.
- */
 export function reviewRows({
   model,
   changes,
@@ -108,7 +99,6 @@ export function reviewRows({
   return rows.sort((left, right) => left.order - right.order)
 }
 
-/** Whether a row survives the filter tabs. */
 export function rowMatchesFilter(row: ReviewRow, filter: ReviewFilter) {
   if (filter === 'all') return true
   if (filter === 'comment') return row.kind === 'comment'
@@ -118,11 +108,6 @@ export function rowMatchesFilter(row: ReviewRow, filter: ReviewFilter) {
     : row.item.kind === 'change'
 }
 
-/**
- * Where a change sits: the nearest numbered clause above it, else the
- * paragraph's own opening words. Never a guess at a clause number the
- * document does not print.
- */
 function paragraphLocation(
   paragraphs: ReadonlyArray<{
     id: string
@@ -153,7 +138,6 @@ function paragraphText(paragraph: { runs?: ReadonlyArray<{ text: string }> }) {
   return (paragraph.runs ?? []).map((run) => run.text).join('')
 }
 
-/** A clause number at the start of a paragraph: "4", "4.2", "12.3.1". */
 function leadingNumber(text: string) {
   const match = /^\s*((?:\d+\.)*\d+)\.?(?:\s|$)/u.exec(text)
   return match?.[1]
@@ -167,7 +151,6 @@ function firstWords(text: string, count: number) {
   return words.slice(0, count).join(' ')
 }
 
-/** The paragraph's own words around the change, on one line. */
 function surroundingText(
   text: string,
   needle: string | undefined,
@@ -187,7 +170,6 @@ function clip(text: string, length: number) {
   return text.length > length ? `${text.slice(0, length)}…` : text
 }
 
-/** The changed text itself, bounded: a card shows the change, not a page. */
 export function changedWords(text: string, limit = 60) {
   const trimmed = text.trim()
   return trimmed.length > limit ? `${trimmed.slice(0, limit)}…` : trimmed

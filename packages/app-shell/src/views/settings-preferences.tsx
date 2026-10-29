@@ -17,11 +17,6 @@ const THEME_OPTIONS = [
   { value: 'system' as const, label: 'Match system' },
 ]
 
-/**
- * This device's appearance. The theme is a stored preference (local storage,
- * beside the top bar's toggle), not account state, so "Match system" follows
- * the computer the user is sitting at.
- */
 export function PreferencesSection({ active }: { active: boolean }) {
   const choice = useThemeChoice()
 

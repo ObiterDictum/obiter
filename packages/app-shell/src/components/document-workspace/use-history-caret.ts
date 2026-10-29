@@ -2,12 +2,6 @@ import type { DocumentModelWire } from '@obiter/contracts'
 import { historyCaretPlacement } from '../../document-history-caret'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 
-/**
- * Runs one history step and keeps the caret on a paragraph the restored
- * state still renders. The placement itself is pure (`historyCaretPlacement`
- * carries the story-aware order); this hook only applies it and clears the
- * document selection the step invalidated.
- */
 export function useHistoryCaret({
   model,
   drafts,

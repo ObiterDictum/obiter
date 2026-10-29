@@ -1,9 +1,6 @@
 import '@obiter/test-dom'
 import { describe, expect, it } from 'bun:test'
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
-} from '@obiter/contracts'
+import type { DocumentParagraphWire } from '@obiter/contracts'
 
 import { MapStorage, scope } from './document-draft-store-test-support'
 import { emptyFormatDrafts } from './document-format-types'
@@ -28,6 +25,7 @@ import {
   type DraftState,
   type DraftSlot,
 } from './document-save-plan'
+import { wireModel as model } from './document-wire-test-support'
 
 function paragraph(id: string, text = 'text'): DocumentParagraphWire {
   return {
@@ -37,7 +35,6 @@ function paragraph(id: string, text = 'text'): DocumentParagraphWire {
   }
 }
 
-/** 'See <the report> today' with the stored link covering the middle run. */
 function linkedParagraph(): DocumentParagraphWire {
   return {
     id: 'p1',
@@ -52,35 +49,6 @@ function linkedParagraph(): DocumentParagraphWire {
       { id: 'p1-c', text: ' today', preservedXmlFragments: [] },
     ],
     preservedXmlFragments: [],
-  }
-}
-
-function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs,
-        preservedXmlFragments: [],
-        fields: [],
-        unanchoredFieldParagraphIds: [],
-      },
-    ],
-    styles: [],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-    comments: [],
-    trackRevisions: false,
-    markings: {
-      documentKind: null,
-      draft: false,
-      privileged: false,
-      withoutPrejudice: false,
-    },
   }
 }
 
@@ -180,8 +148,6 @@ describe('link and cross-reference drafts', () => {
       structures: [crossReferenceDraft('s1', 'p1', 'p2')],
       deletedParagraphIds: ['p2'],
     })
-    // The deletion itself still saves; only the reference pointing at the
-    // deleted paragraph is held back.
     expect(deleted.operations.map((operation) => operation.type)).toEqual([
       'delete_paragraph',
     ])
@@ -191,11 +157,6 @@ describe('link and cross-reference drafts', () => {
   })
 
   it('blocks a cross-reference whose target the batch replaces', () => {
-    // A runless paragraph carrying typed text is deleted by the insert plus
-    // delete the batch emits — the writer's `deletedIds` holds it even
-    // though no draft marks it. A reference pointing there would bookmark a
-    // paragraph the batch removes, so it is held back exactly like a
-    // reference to an explicitly deleted one.
     const base = model([
       paragraph('p1', 'text'),
       { id: 'p2', runs: [], preservedXmlFragments: [] },
@@ -207,7 +168,6 @@ describe('link and cross-reference drafts', () => {
       },
       structures: [crossReferenceDraft('s1', 'p1', 'p2')],
     })
-    // The replacement still saves; only the reference is held back.
     expect(plan.operations).toEqual([
       { type: 'insert_paragraph_after', paragraphId: 'p2', text: 'Typed' },
       { type: 'delete_paragraph', paragraphId: 'p2' },
@@ -223,7 +183,7 @@ describe('link and cross-reference drafts', () => {
       paragraph('p1', 'See the cited sections'),
       paragraph('p2', 'Target'),
     ])
-    const link = linkDraft('s1', 'p1') // covers [1,4) of the single run
+    const link = linkDraft('s1', 'p1')
     const cases: Array<{ name: string; structures: StructuralDraft[] }> = [
       {
         name: 'a second link in the same run',
@@ -272,13 +232,11 @@ describe('link and cross-reference drafts', () => {
         name,
       ).toEqual([expect.objectContaining({ kind: 'structure', id: 's2' })])
       expect(plan.blocked[0]?.reason, name).toBeTruthy()
-      // The surviving draft still saves.
       expect(plan.operations).toHaveLength(1)
     }
   })
 
   it('keeps composable same-paragraph structural drafts addressable', () => {
-    // Two runs: 'See ' (0-4) and 'sections' (4-12).
     const base = model([
       {
         id: 'p1',
@@ -354,8 +312,6 @@ describe('link and cross-reference drafts', () => {
   })
 
   it('blocks a splice drafted inside a stored hyperlink', () => {
-    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): the stored link
-    // covers the middle run, so 8 nests inside it and 2 lands before it.
     const base = model([linkedParagraph(), paragraph('p2', 'Target')])
     const nested = planDocumentSave(base, {
       ...emptyDraftState(),
@@ -378,10 +334,6 @@ describe('link and cross-reference drafts', () => {
   })
 
   it("blocks the stored link's leading boundary but not its trailing one", () => {
-    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): a splice at 4 opens
-    // the linked run's text, so it lands inside the w:hyperlink element and
-    // the writer refuses; the client rule must match. At 14 the point lands
-    // at the next unlinked run's start and composes.
     const base = model([linkedParagraph(), paragraph('p2', 'Target')])
     const leading = planDocumentSave(base, {
       ...emptyDraftState(),
@@ -427,8 +379,6 @@ describe('link and cross-reference drafts', () => {
       structures: [
         linkDraft('s1', 'p1'),
         crossReferenceDraft('s2', 'p1', 'p2'),
-        // A malformed slot: the scheme bound was not enforced when this
-        // payload was written. It must not take siblings or text down.
         linkDraft('s3', 'p1', 'javascript:alert(1)'),
       ],
     }
@@ -594,8 +544,6 @@ describe('documentStructureToolbar links', () => {
     expect(
       toolbar({ trackChanges: true }).api.crossReferenceUnavailable,
     ).toBeTruthy()
-    // A selection gives the insertion no caret, even though a link could
-    // still cover the same range.
     const { api } = toolbar()
     expect(api.crossReferenceUnavailable).toContain('Collapse the selection')
     expect(api.insertCrossReference('p2').inserted).toBe(false)
@@ -634,8 +582,6 @@ describe('documentStructureToolbar links', () => {
   })
 
   it('refuses a second structural draft the writers cannot compose', () => {
-    // The held link covers p1's whole single run, so a caret inside it is
-    // unavailable to a picture or a cross-reference.
     const { api, structures } = toolbar({
       structures: [linkDraft('s1', 'p1')],
       offset: 3,

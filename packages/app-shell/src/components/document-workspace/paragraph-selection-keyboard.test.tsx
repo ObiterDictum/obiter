@@ -18,15 +18,6 @@ import {
   selectionStatus,
 } from './paragraph-selection-harness'
 
-/*
- * jsdom performs no textarea selection movement of its own, so an arrow that
- * the textarea keeps natively (one that stays inside the paragraph) cannot be
- * driven here. Every test below therefore places the caret at the boundary the
- * native step would have reached, which is exactly the state the editor reads,
- * and `placeCaret` stands in for that native move. The browser journey in the
- * PR covers the native movement itself.
- */
-
 const defaultModel = () =>
   multiParagraphModel([
     paragraph('p1', 'Alpha'),
@@ -68,7 +59,6 @@ describe('extending a selection across a paragraph boundary', () => {
     placeCaret(5)
     const { notPrevented } = shiftKey('ArrowRight')
     expect(notPrevented).toBe(false)
-    // The focus moved to the next paragraph while the anchor stayed behind.
     expect(bodyField().value).toBe('Bravo')
     expect(bodyField().selectionEnd).toBe(0)
     expect(selectionStatus()).toMatch(/2 paragraphs selected/)
@@ -87,14 +77,10 @@ describe('extending a selection across a paragraph boundary', () => {
   it('paints the selected text in every paragraph it covers', () => {
     mount()
     clickParagraph('p1')
-    // A native selection inside p1, then a crossing extension: the anchor is
-    // p1 offset 3 and the focus moves out of the paragraph.
     nativeSelect(3, 5)
     shiftKey('ArrowRight')
     expect(selectedText('p1')).toBe('ha')
     expect(selectionStatus()).toMatch(/2 paragraphs selected/)
-    // Every later step is model-owned, so the focus walks to the end of the
-    // next paragraph and then crosses into the one after it.
     for (let step = 0; step < 5; step += 1) shiftKey('ArrowRight')
     expect(selectedText('p2')).toBe('Bravo')
     expect(selectedText('p3')).toBe('')
@@ -107,19 +93,15 @@ describe('extending a selection across a paragraph boundary', () => {
     mount()
     clickParagraph('p3')
     placeCaret(0)
-    // One step crosses into the end of Bravo, then every later step is owned
-    // by the model, so the whole run can be driven here.
     shiftKey('ArrowLeft')
     expect(bodyField().value).toBe('Bravo')
     for (let step = 0; step < 6; step += 1) shiftKey('ArrowLeft')
     expect(bodyField().value).toBe('Alpha')
     expect(selectionStatus()).toMatch(/3 paragraphs selected/)
     expect(selectedText('p2')).toBe('Bravo')
-    // The anchor never moved: p3 is entered only as far as its own start.
     expect(selectedText('p3')).toBe('')
 
     for (let step = 0; step < 5; step += 1) shiftKey('ArrowLeft')
-    // Reading order is unchanged, so p1 is selected from its start to its end.
     expect(bodyField().value).toBe('Alpha')
     expect(selectedText('p1')).toBe('Alpha')
     expect(selectionStatus()).toMatch(/3 paragraphs selected/)
@@ -133,15 +115,12 @@ describe('extending a selection across a paragraph boundary', () => {
     shiftKey('ArrowRight')
     expect(selectionStatus()).toMatch(/2 paragraphs selected/)
 
-    // Contracting steps the focus back one position at a time, shrinking the
-    // range rather than crossing the anchor.
     shiftKey('ArrowLeft')
     expect(bodyField().value).toBe('Alpha')
     expect(selectedText('p1')).toBe('ha')
     shiftKey('ArrowLeft')
     expect(selectedText('p1')).toBe('h')
     shiftKey('ArrowLeft')
-    // The anchor itself is where contraction stops.
     expect(selectionStatus()).toBe('')
     expect(selectedMarkCount()).toBe(0)
     expect(bodyField().selectionStart).toBe(3)
@@ -175,12 +154,8 @@ describe('extending a selection across a paragraph boundary', () => {
     )
     clickParagraph('p1')
     nativeSelect(3, 6)
-    // The newline at offset 3 belongs to the row it terminates, so only the
-    // second row's characters are painted.
     expect(selectedText('p1')).toBe('tw')
     expect(selectionStatus()).toBe('1 paragraph selected.')
-    // The model holds the focus at the offset after the break, so the next
-    // step reaches the end of the text and the one after crosses.
     shiftKey('ArrowRight')
     shiftKey('ArrowRight')
     expect(bodyField().value).toBe('next')
@@ -207,7 +182,6 @@ describe('selections and the sticky visual column', () => {
     placeCaret(last.from + column)
     shiftKey('ArrowDown')
     expect(bodyField().value).toBe('short')
-    // A short destination clamps the caret but never the retained column.
     expect(bodyField().selectionEnd).toBe('short'.length)
     shiftKey('ArrowDown')
     expect(bodyField().value).toBe(long)
@@ -220,8 +194,6 @@ describe('selections and the sticky visual column', () => {
     const rows = renderedLines('p1')
     const second = rows[1]
     if (!second) throw new Error('expected wrapped rows')
-    // A wrapped line is extended natively inside the paragraph; the model is
-    // told through the textarea's own selection event.
     nativeSelect(second.from - 1, second.from + 2)
     expect(selectedText('p1')).toBe(
       long.slice(second.from - 1, second.from + 2),
@@ -238,7 +210,6 @@ describe('collapsing a document selection', () => {
     clickParagraph('p1')
     placeCaret(5)
     shiftKey('ArrowRight')
-    // Further extensions are model-owned, so the focus lands mid-paragraph.
     for (let step = 0; step < 4; step += 1) shiftKey('ArrowRight')
     expect(selectionStatus()).toMatch(/2 paragraphs selected/)
     const { notPrevented } = plainKey('Escape')
@@ -271,7 +242,6 @@ describe('collapsing a document selection', () => {
 
     plainKey('ArrowRight')
     expect(selectionStatus()).toBe('')
-    // The ordered end of the selection is the focus at p2 offset 0.
     expect(bodyField().value).toBe('Bravo')
     expect(bodyField().selectionStart).toBe(0)
 
@@ -280,7 +250,6 @@ describe('collapsing a document selection', () => {
     shiftKey('ArrowRight')
     plainKey('ArrowLeft')
     expect(selectionStatus()).toBe('')
-    // The ordered start is the anchor at p1 offset 5.
     expect(bodyField().value).toBe('Alpha')
     expect(bodyField().selectionStart).toBe(5)
   })
@@ -294,8 +263,6 @@ describe('collapsing a document selection', () => {
     expect(selectionStatus()).toBe('')
     expect(bodyField().value).toBe('Alpha')
     expect(bodyField().selectionStart).toBe(5)
-    // A plain arrow at the paragraph edge still crosses, the way E33 moves a
-    // collapsed caret.
     plainKey('ArrowRight')
     expect(bodyField().value).toBe('Bravo')
     expect(bodyField().selectionStart).toBe(0)
@@ -338,8 +305,6 @@ describe('select all and platform modifiers', () => {
       placeCaret(5)
       shiftKey('ArrowRight')
       expect(selectionStatus()).toMatch(/2 paragraphs selected/)
-      // The first modified arrow collapses the model selection so the native
-      // move and the model agree; the shortcut is native after that.
       const { notPrevented } = shiftKey('ArrowRight', options)
       expect(notPrevented).toBe(false)
       expect(selectionStatus()).toBe('')
@@ -393,9 +358,6 @@ describe('select all and platform modifiers', () => {
 })
 
 describe('a collapsed selection hands the caret back to native movement', () => {
-  // A selection shrunk back onto its anchor must be treated as gone: the caret
-  // the user then puts somewhere with a native move is the anchor the next
-  // extension uses, not the anchor of the ghost selection.
   const short = () =>
     multiParagraphModel([paragraph('p1', 'ha'), paragraph('p2', 'Bravo')])
 
@@ -412,14 +374,10 @@ describe('a collapsed selection hands the caret back to native movement', () => 
   it('anchors a later extension at the real caret, not the stale anchor', () => {
     mount(short())
     collapseAtStart()
-    // Native movement inside the paragraph; no select event reaches the model.
     placeCaret(2)
     shiftKey('ArrowRight')
-    // The anchor is the caret at the paragraph end, so nothing of p1 is
-    // covered. Reusing the collapsed anchor would paint 'ha'.
     expect(selectedText('p1')).toBe('')
     expect(selectionStatus()).toMatch(/2 paragraphs selected/)
-    // Backspace then joins the two paragraphs, keeping 'ha'.
     fireEvent.keyDown(bodyField(), { key: 'Backspace' })
     expect(bodyField().value).toBe('haBravo')
   })
@@ -429,8 +387,6 @@ describe('a collapsed selection hands the caret back to native movement', () => 
       multiParagraphModel([paragraph('p1', 'hands'), paragraph('p2', 'Bravo')]),
     )
     collapseAtStart()
-    // A mouse drag made after the collapse must be mirrored again, not blocked
-    // by the collapsed selection object the model still held.
     nativeSelect(1, 3)
     expect(selectionStatus()).toMatch(/1 paragraph selected/)
     expect(selectedText('p1')).toBe('an')
@@ -444,15 +400,11 @@ describe('a collapsed selection hands the caret back to native movement', () => 
     nativeSelect(2, 5)
     shiftKey('ArrowRight')
     expect(selectedText('p1')).toBe('nds')
-    // Reverse the extension back through the anchor, one position at a time.
     shiftKey('ArrowLeft')
     shiftKey('ArrowLeft')
     shiftKey('ArrowLeft')
     shiftKey('ArrowLeft')
     expect(selectionStatus()).toBe('')
-    // A native move then puts the caret at the paragraph end, and the next
-    // crossing must anchor there, not at the collapsed anchor 2 (which would
-    // paint 'nds').
     placeCaret(5)
     shiftKey('ArrowRight')
     expect(selectedText('p1')).toBe('')
@@ -467,12 +419,9 @@ describe('Escape leaves the paragraph', () => {
     placeCaret(5)
     shiftKey('ArrowRight')
     expect(selectionStatus()).toMatch(/2 paragraphs selected/)
-    // First Escape collapses rather than leaving the selection and the caret
-    // disagreeing.
     plainKey('Escape')
     expect(selectionStatus()).toBe('')
     expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
-    // Second Escape leaves the paragraph.
     plainKey('Escape')
     expect(screen.queryByLabelText('Paragraph text')).toBeNull()
   })
@@ -484,7 +433,6 @@ describe('Escape leaves the paragraph', () => {
     fireEvent.change(bodyField(), { target: { value: 'Alpha!' } })
     plainKey('Escape')
     expect(screen.queryByLabelText('Paragraph text')).toBeNull()
-    // Re-entering the paragraph shows the edit; nothing unsaved was discarded.
     clickParagraph('p1')
     expect(bodyField().value).toBe('Alpha!')
   })
@@ -496,13 +444,9 @@ describe('selection navigation mutates nothing', () => {
     clickParagraph('p1')
     placeCaret(5)
     shiftKey('ArrowRight')
-    // Contracting back onto the anchor collapses the selection rather than
-    // keeping a live range, and the plain arrow then moves the caret natively.
     shiftKey('ArrowLeft')
     plainKey('ArrowRight')
     expect(editAsync).not.toHaveBeenCalled()
-    // The plain arrow crossed into the next paragraph, so the caret moved but
-    // the document did not change.
     expect(selectionStatus()).toBe('')
     expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
       'value',
@@ -515,7 +459,6 @@ describe('selection navigation mutates nothing', () => {
     clickParagraph('p1')
     placeCaret(3)
     plainKey('Escape')
-    // Focus left the paragraph; no editor owns the caret any more.
     expect(screen.queryByLabelText('Paragraph text')).toBeNull()
   })
 })
