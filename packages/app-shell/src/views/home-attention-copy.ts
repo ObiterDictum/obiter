@@ -1,5 +1,8 @@
 import type { VerificationFindingView } from '@obiter/contracts'
-import { verificationFailureLabel } from '../verification-copy'
+import {
+  verificationAuthority,
+  verificationFailureLabel,
+} from '../verification-copy'
 import { formatDateTime } from '../format'
 import type { AttentionItem, AttentionSummary } from './home-attention'
 
@@ -20,7 +23,9 @@ export function attentionSummaryText(summary: AttentionSummary): string {
     parts.push(count(summary.redactDecisions, 'redaction decision'))
   }
   if (summary.reviews > 0) {
-    parts.push(count(summary.reviews, 'citation to review'))
+    parts.push(
+      count(summary.reviews, 'citation to review', 'citations to review'),
+    )
   }
   if (summary.failed > 0) parts.push(count(summary.failed, 'failed run'))
   const noun = summary.total === 1 ? 'item' : 'items'
@@ -28,8 +33,8 @@ export function attentionSummaryText(summary: AttentionSummary): string {
   return `${summary.total} ${noun} ${verb} your attention: ${list(parts)}.`
 }
 
-function count(value: number, singular: string) {
-  return `${value} ${value === 1 ? singular : `${singular}s`}`
+function count(value: number, singular: string, plural = `${singular}s`) {
+  return `${value} ${value === 1 ? singular : plural}`
 }
 
 function list(parts: string[]) {
@@ -127,7 +132,7 @@ export function attentionExplanation(
       const remaining = item.flaggedCount + item.reviewRequiredCount
       if (finding) {
         const rest = remaining > 1 ? ` ${remaining - 1} more in this run.` : ''
-        return `${finding.authorityLabel}: ${finding.explanation}${rest}`
+        return `${verificationAuthority(finding)}: ${finding.explanation}${rest}`
       }
       const parts: string[] = []
       if (item.flaggedCount > 0) parts.push(`${item.flaggedCount} flagged`)

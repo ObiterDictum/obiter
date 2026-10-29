@@ -266,6 +266,7 @@ export function finding(
     excerpt: '[2012] UKSC 7',
     location: location('p1', CITATION_PARAGRAPH, '[2012] UKSC 7'),
     authorityLabel: '[2012] UKSC 7',
+    authorityName: null,
     dismissal: null,
     evidence: [
       {
@@ -294,6 +295,7 @@ export function quoteFinding(): VerificationFindingView {
       'the court must give the claimant a fair opportunity',
     ),
     authorityLabel: '[2012] UKSC 40',
+    authorityName: null,
     dismissal: null,
     evidence: [],
   })
@@ -310,6 +312,7 @@ export function unmappableFinding(): VerificationFindingView {
     excerpt: '[2099] EWHC 999 (Ch)',
     location: location('p-gone', CITATION_PARAGRAPH, '[2012] UKSC 7'),
     authorityLabel: 'Unresolved citation',
+    authorityName: null,
     dismissal: null,
     evidence: [],
   })
@@ -329,6 +332,7 @@ export function hardBreakFinding(): VerificationFindingView {
     excerpt: HARD_BREAK_TEXT,
     location: location('p3', HARD_BREAK_TEXT, HARD_BREAK_TEXT),
     authorityLabel: '[2012] UKSC 41',
+    authorityName: null,
     dismissal: null,
     evidence: [],
   })
