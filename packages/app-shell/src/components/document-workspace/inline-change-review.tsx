@@ -95,7 +95,9 @@ export function InlineChange({
   const content = children ?? labelledBreaks(text)
   // Each reviewer keeps one hue wherever their revisions paint, and the strike
   // or underline still says which kind of revision it is, so the distinction
-  // never rests on colour alone.
+  // never rests on colour alone. On the fixed white sheet the hue is the paper
+  // form of the palette: the dark theme lightens the panel's token until it is
+  // unreadable against paper.
   const reviewer = reviewerStyle(author)
 
   return (
@@ -142,7 +144,7 @@ export function InlineChange({
         event.stopPropagation()
         review?.selectChange(change.id)
       }}
-      className={`${pending ? (editable ? 'pointer-events-auto' : 'pointer-events-none') : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-ring ${reviewer.text} ${active ? 'bg-warning-soft' : ''}`}
+      className={`${pending ? (editable ? 'pointer-events-auto' : 'pointer-events-none') : 'pointer-events-auto cursor-pointer'} relative z-10 rounded-[1px] focus-visible:outline-2 focus-visible:outline-ring ${reviewer.paperText} ${active ? 'bg-warning-soft' : ''}`}
       style={{
         textDecoration: deleted ? 'line-through' : 'underline',
       }}

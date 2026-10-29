@@ -244,28 +244,42 @@ export function verificationCountsLabel(counts: VerificationFindingCounts) {
 }
 
 /**
- * The time label for a run, paired with the timestamp it actually describes.
- * `completed_at` is written for both a completed and a failed run (the moment
- * the terminal transition was recorded), so it describes a failure truthfully
- * rather than showing when the run was requested. A live run has no completion
- * time: it is placed by when it started, or when it was created if no executor
- * has picked it up.
+ * The moment a run's label describes. `completed_at` is written for both a
+ * completed and a failed run (the moment the terminal transition was
+ * recorded), so it describes a failure truthfully rather than showing when the
+ * run was requested. A live run has no completion time: it is placed by when it
+ * started, or when it was created if no executor has picked it up.
  */
-export function verificationRunTime(run: VerificationRun) {
+export function verificationRunTimestamp(run: VerificationRun) {
   switch (run.status) {
     case 'completed':
-      return run.completedAt
-        ? `Completed ${formatRunTime(run.completedAt)}`
-        : `Created ${formatRunTime(run.createdAt)}`
     case 'failed':
-      return run.completedAt
-        ? `Stopped ${formatRunTime(run.completedAt)}`
-        : `Created ${formatRunTime(run.createdAt)}`
+      return run.completedAt ?? run.createdAt
     case 'running':
     case 'queued':
-      return run.startedAt
-        ? `Started ${formatRunTime(run.startedAt)}`
-        : `Created ${formatRunTime(run.createdAt)}`
+      return run.startedAt ?? run.createdAt
+    default: {
+      const unhandled: never = run.status
+      return unhandled
+    }
+  }
+}
+
+/**
+ * The time label for a run, with the verb its state earned. A surface that
+ * already names the state beside it uses `verificationRunTimestamp` instead:
+ * "Checked · version 2 … Completed 29 Oct" says the same event twice.
+ */
+export function verificationRunTime(run: VerificationRun) {
+  const time = formatRunTime(verificationRunTimestamp(run))
+  switch (run.status) {
+    case 'completed':
+      return run.completedAt ? `Completed ${time}` : `Created ${time}`
+    case 'failed':
+      return run.completedAt ? `Stopped ${time}` : `Created ${time}`
+    case 'running':
+    case 'queued':
+      return run.startedAt ? `Started ${time}` : `Created ${time}`
     default: {
       const unhandled: never = run.status
       return unhandled

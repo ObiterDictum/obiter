@@ -8,6 +8,7 @@ import type {
   UserRole,
 } from '@obiter/contracts'
 import {
+  citationTargetsResponseSchema,
   documentOpenResponseSchema,
   recentlyOpenedDocumentResponseSchema,
 } from '@obiter/contracts'
@@ -29,6 +30,7 @@ import {
 } from '../document-extraction'
 import {
   getRecentlyOpenedDocument,
+  listCitationTargets,
   recordDocumentOpen,
 } from '../document-opens'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
@@ -366,6 +368,16 @@ export function createDocumentsRoutes(
     if (user instanceof Response) return user
     const document = await getRecentlyOpenedDocument(pool, user)
     return c.json(recentlyOpenedDocumentResponseSchema.parse({ document }))
+  })
+
+  // The list behind "Cite in document": the documents this person opened, so
+  // the citation is typed into one they are already working in. Registered
+  // before `:id` for the same reason as the single read.
+  routes.get('/api/documents/citation-targets', async (c) => {
+    const user = await ensureOrgUser(c, pool)
+    if (user instanceof Response) return user
+    const documents = await listCitationTargets(pool, user)
+    return c.json(citationTargetsResponseSchema.parse({ documents }))
   })
 
   routes.post('/api/documents/:id/opened', async (c) => {

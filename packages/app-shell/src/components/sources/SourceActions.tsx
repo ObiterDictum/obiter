@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Button,
   Menu,
@@ -7,9 +8,12 @@ import {
   MenuTrigger,
   useToast,
 } from '@obiter/ui'
-import type { SavedMatterSource } from '@obiter/contracts'
+import type { CitationTarget, SavedMatterSource } from '@obiter/contracts'
 import { apiFetch } from '../../api'
+import { useCitationTargets } from '../../documents'
+import { workspaceKind } from '../../document-kind'
 import { useMattersList } from '../../matters'
+import { requestCitation } from '../../pending-citation'
 import { savedSourcesKeys } from '../../saved-sources'
 
 /**
@@ -26,6 +30,34 @@ export interface SaveableSource {
 }
 
 /**
+ * The citation as it is written: the authority's own name with its citation —
+ * "Wood v Capita Insurance Services Ltd [2017] UKSC 24", "Equality Act 2010,
+ * s. 13(3)". One formatter for "Copy citation" and "Cite in document", so the
+ * copied text and the inserted text can never drift apart.
+ */
+export function sourceCitation(source: SaveableSource) {
+  if (!source.citation) return source.title
+  return source.kind === 'legislation'
+    ? `${source.title}, ${source.citation}`
+    : `${source.title} ${source.citation}`
+}
+
+/**
+ * Why a document cannot take the citation, or null when it can. The editor
+ * only writes Word documents, and only for a person who may edit the matter;
+ * both answers come from the API beside the document, so the menu never offers
+ * an insertion the document would refuse.
+ */
+export function citationTargetRefusal(target: CitationTarget): string | null {
+  if (!target.canEdit) return 'You have view-only access to this matter'
+  const kind = workspaceKind(target.fileType)
+  if (kind === 'docx') return null
+  if (kind === 'pdf') return 'PDF documents open read-only'
+  if (kind === 'txt') return 'Text documents open read-only'
+  return 'This document cannot be edited'
+}
+
+/**
  * Keep a source with a matter, and take its citation away.
  *
  * The home page promises a matter keeps the sources you find, so this is the
@@ -34,15 +66,19 @@ export interface SaveableSource {
  * chosen from a menu rather than a dialog — the choice is one of a short list
  * the reader already knows, and picking one is the whole interaction.
  *
- * "Copy citation" stands in for a document citation action because there is no
- * editor entry point a source page can drive: the editor owns insertion, and
- * its only route in is editing the open document.
+ * "Cite in document" carries the citation to a document the reader has opened.
+ * The citation is inserted in the editor, at the caret, never here: this page
+ * cannot know where the sentence goes, and a citation dropped at an arbitrary
+ * position is worse than one not inserted. Choosing a document only opens it
+ * with the citation pending, and the editor asks where it goes.
  */
 export function SourceActions({ source }: { source: SaveableSource }) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const matters = useMattersList()
-  const citation = source.citation ?? source.title
+  const targets = useCitationTargets()
+  const citation = sourceCitation(source)
 
   async function save(matterId: string, matterName: string) {
     try {
@@ -90,7 +126,19 @@ export function SourceActions({ source }: { source: SaveableSource }) {
     }
   }
 
+  function citeIn(target: CitationTarget) {
+    // The citation is left for that one document, then the document opens.
+    // Nothing is inserted here: the editor owns the caret and asks where the
+    // citation goes.
+    requestCitation(target.documentId, citation)
+    navigate({
+      to: '/matters/$matterId/documents/$documentId',
+      params: { matterId: target.matterId, documentId: target.documentId },
+    })
+  }
+
   const mattersReady = matters.data !== undefined && matters.data.length > 0
+  const targetRows = targets.data ?? []
 
   return (
     <>
@@ -125,6 +173,44 @@ export function SourceActions({ source }: { source: SaveableSource }) {
                   ? 'Loading matters…'
                   : 'No matters yet — create one first'}
             </MenuItem>
+          )}
+        </MenuContent>
+      </Menu>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button variant="secondary" size="md" loading={targets.isPending}>
+              Cite in document
+            </Button>
+          }
+        />
+        <MenuContent aria-label="Cite in document">
+          {targets.isError ? (
+            <MenuItem disabled>Your documents could not be loaded</MenuItem>
+          ) : targets.isPending ? (
+            <MenuItem disabled>Loading documents…</MenuItem>
+          ) : targetRows.length === 0 ? (
+            <MenuItem disabled>
+              No documents opened yet — open a Word document first
+            </MenuItem>
+          ) : (
+            targetRows.map((target) => {
+              const refusal = citationTargetRefusal(target)
+              return (
+                <MenuItem
+                  key={target.documentId}
+                  disabled={refusal !== null}
+                  onClick={() => citeIn(target)}
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{target.filename}</span>
+                    <span className="truncate text-caption text-subtle">
+                      {refusal ?? target.matterName}
+                    </span>
+                  </span>
+                </MenuItem>
+              )
+            })
           )}
         </MenuContent>
       </Menu>
