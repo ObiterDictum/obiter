@@ -99,7 +99,7 @@ export function comparisonSegments(
   )
 }
 
-export function entryLabel(entry: DocumentComparisonEntry) {
+function entryLabel(entry: DocumentComparisonEntry) {
   switch (entry.type) {
     case 'added':
       return 'Paragraph added'
