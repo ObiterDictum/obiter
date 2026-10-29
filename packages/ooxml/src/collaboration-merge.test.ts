@@ -599,7 +599,7 @@ describe('bounded collaboration reconciliation', () => {
     expect(address?.run.runIndex).toBeGreaterThanOrEqual(0)
   })
 
-  it('rewrites base addresses to current before applying a merge batch', async () => {
+  it('rewrites legacy paragraph addresses to canonical current ids before applying a merge batch', async () => {
     const seededBytes = await createSyntheticDocx(['Alpha', 'Beta'])
     const base = await parseDocx(seededBytes)
     const currentDoc = await parseDocx(seededBytes)
