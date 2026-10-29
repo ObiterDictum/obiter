@@ -303,22 +303,28 @@ function segmentsFor(data: DocumentCompareResponse, index: number | undefined) {
 
 /** The redline's own reading size, before the desk has to shrink it. */
 const COMPARE_PAGE_ZOOM = 90
+/** Below this the redline is too small to read, so the sheet narrows instead. */
+const COMPARE_MIN_ZOOM = 80
 /** The desk's own gutter (`px-8`) on both sides of the paper. */
 const COMPARE_DESK_GUTTER = 64
 
 /**
- * The zoom the redline's paper takes in the desk the Differences panel leaves
- * it. Beside a docked panel on a 1024px window the desk is ~390px, where the
- * paper at its reading size runs under the panel and is clipped; shrinking it
- * keeps the whole sheet visible, and the reader can pop the panel out to read
- * at full size. A desk too narrow to measure keeps the reading size.
+ * The size of the redline's sheet in the desk the Differences panel leaves it.
+ * Beside a docked panel on a 1024px window the desk is ~390px: shrinking a
+ * whole A4 sheet into that makes the text unreadable, so the sheet keeps a
+ * readable zoom and narrows instead, and the redline reflows to it. The
+ * redline is a reading view of the change, not the printed page.
  */
-export function comparisonPageZoom(deskWidth: number | null) {
-  if (deskWidth === null) return COMPARE_PAGE_ZOOM
-  const fit = Math.floor(
-    ((deskWidth - COMPARE_DESK_GUTTER) / A4_WIDTH_PX) * 100,
-  )
-  return Math.max(40, Math.min(COMPARE_PAGE_ZOOM, fit))
+export function comparisonPageLayout(deskWidth: number | null) {
+  const room = deskWidth === null ? null : deskWidth - COMPARE_DESK_GUTTER
+  if (room === null || room >= (A4_WIDTH_PX * COMPARE_PAGE_ZOOM) / 100)
+    return { zoom: COMPARE_PAGE_ZOOM, width: A4_WIDTH_PX }
+  const fit = Math.floor((room / A4_WIDTH_PX) * 100)
+  if (fit >= COMPARE_MIN_ZOOM) return { zoom: fit, width: A4_WIDTH_PX }
+  return {
+    zoom: COMPARE_MIN_ZOOM,
+    width: Math.floor((room * 100) / COMPARE_MIN_ZOOM),
+  }
 }
 
 /** The redline over the paper, with the difference list beside it. */
@@ -339,7 +345,7 @@ export function DocumentComparisonView({
 }) {
   const blocks = comparisonBlocks(data, base, target)
   const deskRef = useRef<HTMLDivElement>(null)
-  const zoom = comparisonPageZoom(useElementWidth(deskRef))
+  const page = comparisonPageLayout(useElementWidth(deskRef))
   const jumpTo = (index: number) => {
     onActive(index)
     document
@@ -350,7 +356,7 @@ export function DocumentComparisonView({
     <div className="flex min-h-0 flex-1 flex-col items-stretch overflow-hidden lg:flex-row">
       <DocumentDesk deskRef={deskRef}>
         <div className="flex w-full min-w-0 flex-col items-center gap-6">
-          <DocumentPage zoom={zoom}>
+          <DocumentPage zoom={page.zoom} width={page.width}>
             <div className="flex flex-col gap-2 p-14" data-compare-redline>
               <p className="mb-2 text-caption text-paper-muted">
                 Changes from version {data.base.versionNumber} to version{' '}
