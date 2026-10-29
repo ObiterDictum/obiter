@@ -129,5 +129,3 @@ export const WML_REFERENCE_ATTRIBUTE_BOUNDS: ReadonlyArray<
   ['hpsRaise', new Map([['val', WML_INT]])],
   ['hpsBaseText', new Map([['val', WML_INT]])],
 ]
-
-export default WML_REFERENCE_ATTRIBUTE_BOUNDS

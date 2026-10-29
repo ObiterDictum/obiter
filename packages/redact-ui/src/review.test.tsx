@@ -452,6 +452,43 @@ describe('redaction review', () => {
     ).toHaveProperty('disabled', true)
   })
 
+  it('allows DOCX finalisation with a deliberately kept duplicate', () => {
+    const repeated = [
+      { ...spans[0]!, start: 0, end: 4 },
+      { ...spans[0]!, id: 'span_3', start: 21, end: 25 },
+    ]
+    renderRun({
+      sourceFilename: 'statement.docx',
+      spans: repeated,
+      decisions: {
+        span_1: {
+          decision: 'accept',
+          decidedBy: 'usr_me',
+          decidedAt: '2026-10-26T14:42:00.000Z',
+        },
+        span_3: {
+          decision: 'reject',
+          decidedBy: 'usr_me',
+          decidedAt: '2026-10-26T14:43:00.000Z',
+        },
+      },
+      summary: {
+        ...decidedRun.summary,
+        totalSpans: 2,
+        reviewedCount: 2,
+        unreviewedCount: 0,
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Finalise' }))
+    expect(
+      screen.queryByText(/One piece of text has different decisions/u),
+    ).toBeNull()
+    fireEvent.click(screen.getByLabelText(/I have reviewed every page/u))
+    expect(
+      screen.getByRole('button', { name: /Finalise redacted PDF/u }),
+    ).toHaveProperty('disabled', false)
+  })
+
   it('requires both the detection acknowledgement and the page review to finalise', () => {
     const mutate = vi.fn()
     hooks.useFinalizeRun.mockReturnValue({ mutate, isPending: false })

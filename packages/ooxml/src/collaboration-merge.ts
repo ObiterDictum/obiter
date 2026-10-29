@@ -1,6 +1,7 @@
 import type { DocumentEditOperation } from '@obiter/contracts'
 
 import { operationConflicts, type ChangedFootprints } from './merge-conflicts'
+import { sameStrings } from './equivalence'
 import {
   OoxmlError,
   type OoxmlDocument,
@@ -417,11 +418,4 @@ function sourceForRange(
 function emptyProperties(fragment: string) {
   const match = fragment.match(/^<([^\s/>]+)>\s*<\/\1>$/u)
   return match !== null || /^<[^\s/>]+\s*\/>$/u.test(fragment)
-}
-
-function sameStrings(left: readonly string[], right: readonly string[]) {
-  return (
-    left.length === right.length &&
-    left.every((value, index) => value === right[index])
-  )
 }

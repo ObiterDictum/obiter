@@ -22,9 +22,9 @@ export type ToaEntry = TableOfAuthoritiesEntry & { bookmarks: string[] }
  * `\h` hyperlinks each entry to its authority, `\c "1"` collects category 1
  * — cases — the only category the citation grammar produces.
  */
-export const TOA_INSTRUCTION = ' TOA \\h \\c "1" '
+const TOA_INSTRUCTION = ' TOA \\h \\c "1" '
 /** The heading the generated field's first result paragraph carries. */
-export const TOA_HEADING = 'Table of Cases'
+const TOA_HEADING = 'Table of Cases'
 const HIDDEN_RUN_PROPERTIES = '<w:rPr><w:vanish/></w:rPr>'
 const FIELD_BEGIN_FRAGMENT = '<w:fldChar w:fldCharType="begin"/>'
 const FIELD_END_FRAGMENT = '<w:fldChar w:fldCharType="end"/>'

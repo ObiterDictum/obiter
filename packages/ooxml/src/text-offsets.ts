@@ -16,13 +16,13 @@ import { decodeXmlReferences } from './xml-lexemes'
  * keeps one traversal owner so no caller can disagree about a break or an
  * entity boundary.
  */
-export type RunSplitPoint = {
+type RunSplitPoint = {
   kind: 'run'
   run: TextRunAnchor
   textElement?: XmlElementRange
   position: 'content' | 'before-element' | 'after-element'
 }
-export type EmptyParagraphSplitPoint = {
+type EmptyParagraphSplitPoint = {
   kind: 'empty-paragraph'
   paragraph: XmlElementRange
 }

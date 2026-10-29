@@ -1,7 +1,7 @@
 import type { DocumentRangeRefusal } from '../../document-range-edits'
 
 /** The message shown when an unsaved inserted paragraph blocks a selection. */
-export const INSERT_BLOCKS_SELECTION =
+const INSERT_BLOCKS_SELECTION =
   'Selection cannot cross an unsaved inserted paragraph. Save or discard it first.'
 
 /**
@@ -9,7 +9,7 @@ export const INSERT_BLOCKS_SELECTION =
  * selection model only covers paragraphs the flow renders as ordinary body
  * text, so a table is a barrier rather than silently bridged content.
  */
-export const STRUCTURE_BLOCKS_SELECTION =
+const STRUCTURE_BLOCKS_SELECTION =
   'Selection cannot cross a table or text box. Select the body text on either side instead.'
 
 /**
@@ -17,7 +17,7 @@ export const STRUCTURE_BLOCKS_SELECTION =
  * save cannot restate. Refusing before the draft changes keeps what the editor
  * paints and what the saved document holds the same.
  */
-export const JOIN_FORMATTING_BLOCKS_EDIT =
+const JOIN_FORMATTING_BLOCKS_EDIT =
   'This edit would drop formatting the document cannot save. Change the text on each side instead.'
 
 /** The message shown when a join or range edit would remove a paragraph that
@@ -28,33 +28,33 @@ export const TRACKED_CHANGE_BLOCKS_JOIN =
 
 /** The message shown when input that must replace a document selection cannot
  * be expressed as such, instead of the input silently disappearing. */
-export const INPUT_BLOCKS_EDIT =
+const INPUT_BLOCKS_EDIT =
   'That input cannot replace a document selection. Edit the text on each side instead.'
 
 /** The message shown when a find hit cannot be replaced because its range
  * crosses a boundary replace cannot cover — a table, a text box, or the
  * markers of a stored field. The match itself stays findable: the refusal is
  * about rewriting, not about the text not being there. */
-export const FIND_REPLACE_BLOCKS_STRUCTURE =
+const FIND_REPLACE_BLOCKS_STRUCTURE =
   'That match cannot be replaced because it crosses a table, a text box, or a stored field boundary.'
 
 /** The message shown when a find replace resolves to nothing: the hits the
  * control read were re-derived from the live state first, so an empty
  * outcome means the match it named is already gone. */
-export const FIND_REPLACE_EMPTY = 'That match is no longer in the document.'
+const FIND_REPLACE_EMPTY = 'That match is no longer in the document.'
 
 /** The message shown when a cut could not write the clipboard, so the text was
  * left in the document rather than deleted for a copy that never happened. */
-export const CLIPBOARD_BLOCKS_CUT =
+const CLIPBOARD_BLOCKS_CUT =
   'The clipboard could not be written, so the text was not deleted.'
 
 /** The message shown when a copy was refused by the clipboard, so the user
  * knows nothing reached the clipboard rather than assuming it did. */
-export const CLIPBOARD_BLOCKS_COPY =
+const CLIPBOARD_BLOCKS_COPY =
   'The clipboard could not be written, so nothing was copied.'
 
 /** The message shown when the clipboard could not be read for a paste. */
-export const CLIPBOARD_BLOCKS_PASTE = 'The clipboard could not be read.'
+const CLIPBOARD_BLOCKS_PASTE = 'The clipboard could not be read.'
 
 /** Why the last selection action was refused. The message is derived from the
  * kind, so a refusal cannot outlive the condition that produced it. */

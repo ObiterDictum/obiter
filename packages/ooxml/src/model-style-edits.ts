@@ -128,11 +128,7 @@ function setStyleInstruction(
   })
 }
 
-export function patchStyleValue(
-  fragment: string,
-  prefix: string,
-  styleId: string,
-) {
+function patchStyleValue(fragment: string, prefix: string, styleId: string) {
   const escaped = escapeXmlAttribute(styleId)
   const value = /(\s+(?:[^\s:>]+:)?val\s*=\s*)(["'])([^"']*)\2/u
   if (value.test(fragment)) return fragment.replace(value, `$1$2${escaped}$2`)

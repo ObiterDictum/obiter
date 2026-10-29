@@ -48,13 +48,6 @@ export async function openFormatting(page: Page) {
   await expect(panel).toBeVisible()
 }
 
-export async function closeFormatting(page: Page) {
-  await page.keyboard.press('Escape')
-  await expect(
-    page.getByRole('dialog', { name: 'Font, paragraph and page' }),
-  ).toBeHidden()
-}
-
 /**
  * Open the surface that holds a former tab's commands: Home and Layout values
  * are in the formatting panel, everything else is a menu.
@@ -131,12 +124,4 @@ export async function setTrackChanges(page: Page, on: boolean) {
   const toggle = trackChangesSwitch(page)
   if ((await toggle.isChecked()) !== on) await toggle.click()
   await expect(toggle).toBeChecked({ checked: on })
-}
-
-/** The command palette, reached the way the product offers it. */
-export async function openPalette(page: Page) {
-  await page.keyboard.press('Control+k')
-  await expect(
-    page.getByRole('dialog', { name: 'Editor commands' }),
-  ).toBeVisible()
 }

@@ -243,5 +243,3 @@ export const WML_FORMAT_LAYOUT_ATTRIBUTE_BOUNDS: ReadonlyArray<
   ['tmpl', new Map([['val', WML_HEX8]])],
   ['numberingId', new Map([['val', WML_INT]])],
 ]
-
-export default WML_FORMAT_LAYOUT_ATTRIBUTE_BOUNDS

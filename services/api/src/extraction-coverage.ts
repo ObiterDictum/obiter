@@ -1,4 +1,6 @@
-import { loadOoxmlZipEntries } from '@obiter/ooxml'
+import { mapDocxText } from './redaction-docx-map'
+import { prepareDocxForBurn } from './redaction-docx-xml'
+import { loadOoxmlZipEntries, type OoxmlPackageLimits } from '@obiter/ooxml'
 import {
   decodeXmlText,
   extractWordXmlText,
@@ -377,14 +379,39 @@ export function countBodyTextboxChars(documentXml: string) {
 export async function findUncoveredDocxRegions(
   sourceBytes: Buffer,
   extractedText = '',
+  limits?: OoxmlPackageLimits,
 ): Promise<string[]> {
   let entries: Map<string, Uint8Array>
   try {
-    entries = await loadOoxmlZipEntries(sourceBytes)
+    entries = await loadOoxmlZipEntries(sourceBytes, limits)
   } catch {
     // Unreadable here means extraction already failed upstream; nothing to add.
     return []
   }
+  const regions = docxRegions(entries, extractedText, false)
+  if (regions.length === 0) return regions
+  // Only text produced by Redact's own walker covers notes, revisions,
+  // comments and textboxes; legacy Mammoth text keeps the stricter checks.
+  let walkerCoordinates = false
+  try {
+    walkerCoordinates =
+      mapDocxText(
+        await loadOoxmlZipEntries(
+          await prepareDocxForBurn(sourceBytes, limits),
+          limits,
+        ),
+      ).text === extractedText.trim()
+  } catch {
+    // Not walker coordinates; the burn refuses these runs on its own.
+  }
+  return walkerCoordinates ? docxRegions(entries, extractedText, true) : regions
+}
+
+function docxRegions(
+  entries: Map<string, Uint8Array>,
+  extractedText: string,
+  mappedCoverage: boolean,
+): string[] {
   const regions: string[] = []
   const pushChars = (name: string, chars: number) => {
     if (chars >= UNEXAMINED_PART_MIN_CHARS)
@@ -408,20 +435,20 @@ export async function findUncoveredDocxRegions(
     extractedText,
     'footnote',
   )
-  if (uncoveredFootnoteChars >= UNEXAMINED_PART_MIN_CHARS)
+  if (!mappedCoverage && uncoveredFootnoteChars >= UNEXAMINED_PART_MIN_CHARS)
     regions.push(regionLabel('footnotes', uncoveredFootnoteChars))
   const uncoveredEndnoteChars = uncoveredNoteChars(
     entries,
     extractedText,
     'endnote',
   )
-  if (uncoveredEndnoteChars >= UNEXAMINED_PART_MIN_CHARS)
+  if (!mappedCoverage && uncoveredEndnoteChars >= UNEXAMINED_PART_MIN_CHARS)
     regions.push(regionLabel('endnotes', uncoveredEndnoteChars))
 
   // Headers/footers: covered when the supplemental pass carried them into
   // the extracted text, which also catches parts nothing references.
   for (const [name, xml] of storyXml) {
-    if (!/^word\/(header|footer)/i.test(name)) continue
+    if (mappedCoverage || !/^word\/(header|footer)/i.test(name)) continue
     pushChars(name, unexaminedChars(extractWordXmlText(xml), extractedText))
   }
 
@@ -431,7 +458,7 @@ export async function findUncoveredDocxRegions(
     let chars = 0
     for (const block of trackedRevisionBlocks(xml))
       chars += unexaminedChars(block, extractedText)
-    if (chars > 0)
+    if (chars > 0 && !mappedCoverage)
       regions.push(`tracked changes in ${name} (${chars} chars not examined)`)
   }
 
@@ -444,13 +471,15 @@ export async function findUncoveredDocxRegions(
         ? 'comment authors'
         : null
     if (!label) continue
-    pushChars(label, nonWhitespaceChars(wordPartText(entries, name)))
+    if (!mappedCoverage || label !== 'comments')
+      pushChars(label, nonWhitespaceChars(wordPartText(entries, name)))
   }
 
   const documentXml = storyXml.get('word/document.xml')
   if (documentXml) {
     // Body VML textboxes are dropped by mammoth; drawing textboxes the same.
-    pushChars('textboxes', countBodyTextboxChars(documentXml))
+    if (!mappedCoverage)
+      pushChars('textboxes', countBodyTextboxChars(documentXml))
     pushChars(
       'drawing textboxes',
       unexaminedChars(bodyDrawingText(documentXml), extractedText),
@@ -649,9 +678,14 @@ export async function findUncoveredRegions(input: {
   mimeType: string | null
   sourceBytes: Buffer | null
   extractedText: string
+  ooxmlLimits?: OoxmlPackageLimits
 }): Promise<string[]> {
   const kind = classifySource(input.filename, input.mimeType)
   if (kind === 'pdf') return findUncoveredPdfRegions(input.extractedText)
   if (kind !== 'docx' || !input.sourceBytes) return []
-  return findUncoveredDocxRegions(input.sourceBytes, input.extractedText)
+  return findUncoveredDocxRegions(
+    input.sourceBytes,
+    input.extractedText,
+    input.ooxmlLimits,
+  )
 }

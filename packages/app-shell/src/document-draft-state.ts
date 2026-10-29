@@ -42,7 +42,7 @@ export type DraftState = {
 }
 
 /** One history step's tracked changes, rejected together. */
-export type TrackedRejection = {
+type TrackedRejection = {
   /** Stable key for clearing/looking up this group. */
   key: string
   /** Persisted OOXML change ids (`w:id`) to reject as a unit. */

@@ -30,8 +30,8 @@ export type Mark = {
   drifted: boolean
 }
 
-export const BOOKMARK_START = /<w:bookmarkStart\b[^>]*>/g
-export const BOOKMARK_END = /<w:bookmarkEnd\b[^>]*>/g
+const BOOKMARK_START = /<w:bookmarkStart\b[^>]*>/g
+const BOOKMARK_END = /<w:bookmarkEnd\b[^>]*>/g
 const BOOKMARK_ID = /\bw:id="(\d+)"/u
 const BOOKMARK_NAME = /\bw:name="([^"]*)"/u
 const WORD = /[\p{L}\p{N}]+/gu
