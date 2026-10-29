@@ -541,6 +541,26 @@ describe('compareDocumentModels', () => {
     ).toBe('q2')
   })
 
+  it('does not anchor a paragraph ID repeated in one version', () => {
+    const base = [
+      paragraph('p1', 'First text', { sourceParaId: 'duplicate' }),
+      paragraph('p2', 'Second text', { sourceParaId: 'duplicate' }),
+    ]
+    const target = [
+      paragraph('q1', 'First text', { sourceParaId: 'duplicate' }),
+    ]
+
+    expect(
+      alignParagraphs(base, target).map(({ base: before, target: after }) => [
+        before?.id,
+        after?.id,
+      ]),
+    ).toEqual([
+      ['p1', 'q1'],
+      ['p2', undefined],
+    ])
+  })
+
   it('reports story structure and package area changes', () => {
     const base = model([paragraph('p1', 'Text.', { sourceParaId: 'aa01' })], {
       styles: [{ styleId: 'Normal', sourceFragment: '<w:style a/>' }],
