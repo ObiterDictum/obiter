@@ -26,6 +26,7 @@ import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
 import { WorkspaceBanners } from './workspace-banners'
 import { WorkspaceRibbon } from './workspace-chrome'
+import { useVerificationWorkspace } from '../verification/verification-context'
 
 type DocumentExportHandlers = ReturnType<typeof documentExportHandlers>
 type WorkspacePanels = ReturnType<typeof useWorkspacePanels>
@@ -70,9 +71,13 @@ export function DocxWorkspaceChrome({
   const [tableOpen, setTableOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [crossReferenceOpen, setCrossReferenceOpen] = useState(false)
+  // The formatting panel has no close control of its own: the control that
+  // opens it closes it, and Escape closes it from inside. Toggling here keeps
+  // one button one name, so a reader can open and dismiss it from the toolbar
+  // or the Format menu without hunting for an X.
   const openFormatting = (anchor: HTMLElement | null) => {
     setFormattingAnchor(anchor)
-    setFormattingOpen(true)
+    setFormattingOpen((open) => !open)
   }
   // A command from the key handler or the palette has no toolbar button to
   // anchor to; the panel then opens under the toolbar's own control.
@@ -94,6 +99,20 @@ export function DocxWorkspaceChrome({
     if (findOpen) document.getElementById('document-find')?.focus()
   }, [findOpen])
 
+  // The Review menu's Verify row reads the same availability the header's
+  // Check citations control does, so the menu never offers a run the document
+  // cannot start (unsaved edits, a loading status, a not-ready version).
+  const verification = useVerificationWorkspace()
+  const verify = verification
+    ? {
+        available: verification.startAvailability.available,
+        reason:
+          'reason' in verification.startAvailability
+            ? verification.startAvailability.reason
+            : '',
+        pending: verification.startPending,
+      }
+    : props.verify
   const actions = {
     openFormatting: () => openFormatting(formattingAnchor),
     openFind: () => setFindOpen(true),
@@ -103,7 +122,19 @@ export function DocxWorkspaceChrome({
     openCrossReference: () => setCrossReferenceOpen(true),
     closeStory: props.structure.onCloseStory,
   }
-  const menus = editorMenus(props, actions)
+  // The Review menu's Verify row reveals the dock's own Run control with
+  // focus, rather than starting a second run from the chrome.
+  const menued: EditorChromeProps = {
+    ...props,
+    verify,
+    onOpenVerify: verification
+      ? () => {
+          props.onOpenVerify?.()
+          verification.revealStart()
+        }
+      : props.onOpenVerify,
+  }
+  const menus = editorMenus(menued, actions)
   return (
     <WorkspaceRibbon>
       <div className="flex items-stretch border-b border-line px-3">
@@ -148,6 +179,9 @@ export function DocxWorkspaceChrome({
         onComment={onCommentSelection}
         onCite={props.onInsertAuthority}
       />
+      {/* The picture picker is a hidden input the Insert ▸ Picture command
+          clicks: it must stay mounted wherever the chrome is. */}
+      {props.structure.picturePicker}
       <InsertTableDialog
         open={tableOpen}
         onOpenChange={setTableOpen}

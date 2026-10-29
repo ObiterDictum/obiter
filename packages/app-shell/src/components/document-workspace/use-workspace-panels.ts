@@ -47,10 +47,22 @@ function writePlacements(placements: Placements) {
   }
 }
 
-/** A floated panel opens under the header, clear of the paper's right edge. */
+/**
+ * The bottom of the chrome a floated panel must not cover: the toolbar row is
+ * the last of it, so a panel opens on the paper below it rather than over the
+ * document header's own controls.
+ */
+function chromeBottom() {
+  if (typeof document === 'undefined') return 8
+  const toolbar = document.querySelector('[data-editor-toolbar]')
+  const bottom = toolbar?.getBoundingClientRect().bottom
+  return bottom === undefined ? 8 : Math.round(bottom) + 8
+}
+
+/** A floated panel opens under the chrome, clear of the paper's right edge. */
 function defaultPosition(): PanelPosition {
   if (typeof window === 'undefined') return { x: 0, y: 0 }
-  return { x: Math.max(8, window.innerWidth - 404), y: 96 }
+  return { x: Math.max(8, window.innerWidth - 404), y: chromeBottom() }
 }
 
 /**
@@ -132,11 +144,15 @@ export function useWorkspacePanels() {
   /** The pop-out state of one panel, in the shared primitive's shape. */
   function popout(panel: WorkspacePanel): PanelPopout {
     const placement = placements[panel]
+    const minTop = chromeBottom()
     const position = placement ?? { ...defaultPosition(), floating: false }
     return {
       mode: wide && placement?.floating ? 'floating' : 'docked',
-      position: { x: position.x, y: position.y },
+      // A position stored before the chrome was measured could still sit over
+      // the header, so the floor is applied on every read, not only on a move.
+      position: { x: position.x, y: Math.max(position.y, minTop) },
       canFloat: wide,
+      minTop,
       onToggle: () =>
         update(panel, (current) => ({
           ...defaultPosition(),

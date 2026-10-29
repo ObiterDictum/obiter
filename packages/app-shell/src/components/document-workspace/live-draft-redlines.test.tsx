@@ -3,7 +3,7 @@ import '@obiter/test-dom'
 import { expect, it } from 'bun:test'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { vi } from '../../../../../scripts/test/vitest-compat'
-import { openRibbonTab } from './editor-test-commands'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -22,7 +22,7 @@ it('paints unsaved tracked replacements while keeping inserted text editable and
     editAsync,
   })
   openRibbonTab('Review')
-  fireEvent.click(command('Track changes off'))
+  setTrackChanges(true)
   clickParagraph('p1')
   const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
   fireEvent.change(field, { target: { value: 'Order 45,000 units' } })
@@ -65,7 +65,7 @@ it('shows an empty inserted paragraph mark without adding editable characters', 
     models: { doc_1: multiParagraphModel([paragraph('p1', 'Anchor')]) },
   })
   openRibbonTab('Review')
-  fireEvent.click(command('Track changes off'))
+  setTrackChanges(true)
   clickParagraph('p1')
   const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
   field.setSelectionRange(field.value.length, field.value.length)

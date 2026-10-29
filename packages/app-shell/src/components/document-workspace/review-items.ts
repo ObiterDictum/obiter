@@ -112,6 +112,18 @@ export function itemChangeIds(item: ReviewItem) {
 }
 
 /**
+ * A move whose halves the parser never paired — one half on its own, or two
+ * halves that carry the same text instead of a mutual `pairId`. No decision
+ * can run on it, so the row states that rather than offering Accept/Reject.
+ */
+export function itemUnpairable(item: ReviewItem) {
+  return (
+    item.kind === 'move' &&
+    item.members.every((member) => member.pairId === undefined)
+  )
+}
+
+/**
  * Whether the engine can decide this row at all. A move whose halves the
  * parser never paired is decided as a pair or not at all, so merging the two
  * display rows must not make one decidable.
@@ -183,12 +195,7 @@ export function reviewCountsLabel(counts: ReviewCounts, comments: number) {
 export function itemKindLabel(item: ReviewItem) {
   if (item.kind === 'move') {
     const { lead } = item
-    if (
-      item.members.length > 1 &&
-      item.members.every((member) => member.pairId === undefined)
-    ) {
-      return 'Move · cannot be paired'
-    }
+    if (itemUnpairable(item)) return "Move · can't be paired"
     if (item.members.length > 1) return 'Move'
     return lead.kind === 'move' && lead.direction === 'from'
       ? 'Move · moved from'

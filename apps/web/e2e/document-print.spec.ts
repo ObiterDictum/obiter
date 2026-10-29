@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 import { mockSession } from './shell-harness'
+import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 
 /**
  * Headless proof that Print uses the document state on screen.
@@ -254,7 +255,7 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
 
   // A deleted paragraph: select paragraph 2 and delete it from the ribbon.
   await page.getByText('Paragraph 2 of the print fixture.').first().click()
-  await page.getByRole('button', { name: 'Delete paragraph' }).click()
+  await runMenuCommand(page, 'Edit', 'Delete paragraph')
   await expect(desk).not.toContainText('Paragraph 2 of the print fixture.')
 
   // The page rule is the document's own page box, not an assumed A4.
@@ -266,12 +267,13 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
 
   // A review panel is private workspace chrome: open one before printing so
   // the run proves panels inside the desk do not reach the printer.
-  await page.getByRole('tab', { name: 'Review' }).click()
   await page.getByRole('button', { name: 'Comments', exact: true }).click()
 
   // Print media: chrome is out, the painted document (drafts included) stays.
   await page.emulateMedia({ media: 'print' })
-  await expect(page.getByRole('tab', { name: 'Review' })).toBeHidden()
+  await expect(
+    page.getByRole('toolbar', { name: 'Document toolbar' }),
+  ).toBeHidden()
   await expect(page.getByRole('button', { name: 'Save' })).toBeHidden()
   await expect(page.locator('[data-print-hide]')).toBeHidden()
   await expect(desk).toContainText('Edited paragraph one')
@@ -313,16 +315,9 @@ test('printing from the web layout paginates onto the stored paper size', async 
   // The continuous web layout is one unbounded sheet; Chromium's printToPDF
   // dispatches beforeprint, which must repaginate the painted DOM onto paper
   // sheets before the snapshot is taken.
-  const viewTab = page.getByRole('tab', { name: 'View', exact: true }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await viewTab.click()
-    const selected = await expect(viewTab)
-      .toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (selected) break
-  }
-  await page.getByRole('button', { name: 'Web layout' }).click()
+  await openMenu(page, 'View')
+  await menuItem(page, 'Web layout').click()
+  await closeMenu(page)
   await expect(page.locator('[data-document-sheet]')).toHaveCount(1)
   expect(
     await page
@@ -367,8 +362,7 @@ test('the Print control reports an absent print capability', async ({
     })
   })
   await openWorkspace(page)
-  await page.getByRole('tab', { name: 'Review' }).click()
-  await page.getByRole('button', { name: 'Print', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Print')
   await expect(
     page.getByText('Printing is not available in this environment.'),
   ).toBeVisible()

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Check, ChatText, X } from '@phosphor-icons/react'
 import {
-  Badge,
   Button,
   DockedPanel,
   EmptyState,
@@ -23,6 +22,7 @@ import {
   itemDecidable,
   itemKindLabel,
   itemLead,
+  itemUnpairable,
   reviewCounts,
   type ReviewItem,
 } from './review-items'
@@ -104,7 +104,6 @@ export function DocumentReviewPanel({
       ? `More than ${String(TRACKED_DECISION_MAX_IDS)} changes must be decided in smaller groups.`
       : null)
   const decideBlocked = review.pending || Boolean(review.unavailable)
-  const barrierNoteId = 'changes-review-unavailable'
   const bulkActive = selectedItems.length > 0
 
   function toggle(row: ReviewRow) {
@@ -276,6 +275,10 @@ export function DocumentReviewPanel({
                 )
               }
               const undecidable = !itemDecidable(row.item)
+              // A move no decision can run on is one row that says who, what
+              // moved and why it cannot be decided here — not a move row with
+              // a second "moved from" line and a pair of dead buttons.
+              const unpairable = itemUnpairable(row.item)
               const leadChange = itemLead(row.item)
               const reason = undecidable
                 ? (review.undecidableReason(leadChange) ??
@@ -283,10 +286,8 @@ export function DocumentReviewPanel({
                     ? "This move's two halves could not be paired here, so it cannot be decided. It stays listed and unchanged in the document."
                     : 'This change cannot be decided here; it stays listed and unchanged in the document.'))
                 : undefined
-              const describedBy =
-                [reason ? noteId : null, decideBlocked ? barrierNoteId : null]
-                  .filter((id): id is string => id !== null)
-                  .join(' ') || undefined
+              const barrierReason =
+                (decideBlocked ? review.unavailable : null) ?? undefined
               const lead = itemLead(row.item)
               const style = reviewerStyle(lead.author)
               return (
@@ -339,10 +340,12 @@ export function DocumentReviewPanel({
                         </span>
                       </span>
                       <span className="text-caption text-subtle">
-                        {row.location} · {itemKindLabel(row.item)}
+                        {unpairable
+                          ? itemKindLabel(row.item)
+                          : `${row.location} · ${itemKindLabel(row.item)}`}
                       </span>
                       <ChangeText item={row.item} />
-                      {row.context ? (
+                      {row.context && !unpairable ? (
                         <span className="truncate text-caption text-muted">
                           {row.context}
                         </span>
@@ -357,28 +360,30 @@ export function DocumentReviewPanel({
                         {reason}
                       </p>
                     ) : null}
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={decideBlocked || Boolean(reason)}
-                        aria-describedby={describedBy}
-                        onClick={() => review.decideChange('reject', lead)}
-                        iconStart={<X size={12} aria-hidden />}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={decideBlocked || Boolean(reason)}
-                        aria-describedby={describedBy}
-                        onClick={() => review.decideChange('accept', lead)}
-                        iconStart={<Check size={12} aria-hidden />}
-                      >
-                        Accept
-                      </Button>
-                    </div>
+                    {unpairable ? null : (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={decideBlocked || Boolean(reason)}
+                          title={reason ?? barrierReason}
+                          onClick={() => review.decideChange('reject', lead)}
+                          iconStart={<X size={12} aria-hidden />}
+                        >
+                          Reject
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={decideBlocked || Boolean(reason)}
+                          title={reason ?? barrierReason}
+                          onClick={() => review.decideChange('accept', lead)}
+                          iconStart={<Check size={12} aria-hidden />}
+                        >
+                          Accept
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </li>
               )
@@ -478,9 +483,6 @@ function ChangeText({ item }: { item: ReviewItem }) {
         deleted ? 'line-through' : 'underline',
       )}
     >
-      {item.kind === 'move' && item.members.length < 2 ? (
-        <Badge tone="warning">Move · cannot be paired</Badge>
-      ) : null}{' '}
       {labelledBreaks(changedWords(lead.text))}
     </span>
   )

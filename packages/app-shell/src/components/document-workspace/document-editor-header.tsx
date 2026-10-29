@@ -1,7 +1,7 @@
 import {
   Button,
   StatusDot,
-  cn,
+  Switch,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -177,45 +177,16 @@ function DocumentEditorHeader({
           </Tooltip>
         ) : null}
         {trackChanges === undefined || !onToggleTrackChanges ? null : (
-          // The switch, not a toggle button: the visible pill carries the
-          // state and the control is a real checkbox with switch semantics,
-          // so assistive technology reads on/off rather than a pressed button.
-          <label
-            className={cn(
-              'inline-flex cursor-pointer items-center gap-2 rounded-pill px-2 py-1 text-caption select-none',
-              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
-              'pointer-coarse:min-h-11',
-              trackChanges
-                ? 'bg-brand-soft text-ink'
-                : 'text-muted hover:bg-hover hover:text-ink',
-            )}
+          // One tracking control, in the header: a real switch with the
+          // visible pill and wording inside it, so assistive technology reads
+          // on/off rather than a pressed button and the toolbar keeps no copy.
+          <Switch
+            label="Track changes"
+            checked={trackChanges}
+            onCheckedChange={onToggleTrackChanges}
           >
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="Track changes"
-              checked={trackChanges}
-              onChange={onToggleTrackChanges}
-              className="peer sr-only"
-            />
-            <span
-              aria-hidden
-              className={cn(
-                'relative h-4 w-7 shrink-0 rounded-pill transition-colors duration-150',
-                trackChanges ? 'bg-brand' : 'bg-line-strong',
-              )}
-            >
-              <span
-                className={cn(
-                  'absolute top-0.5 size-3 rounded-pill bg-surface-raised transition-[left] duration-150',
-                  trackChanges ? 'left-3.5' : 'left-0.5',
-                )}
-              />
-            </span>
-            <span>
-              {trackChanges ? 'Track changes on' : 'Track changes off'}
-            </span>
-          </label>
+            {trackChanges ? 'Track changes on' : 'Track changes off'}
+          </Switch>
         )}
         {verify}
         {saveButton}

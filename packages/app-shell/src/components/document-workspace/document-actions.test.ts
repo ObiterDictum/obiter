@@ -12,10 +12,13 @@ afterEach(() => {
 })
 
 describe('revealDocumentRedactionRuns', () => {
-  it('moves focus to the document-level redaction region', () => {
+  it('moves focus to the document-level redaction region on the next frame', async () => {
     document.body.innerHTML = `<section id="${documentRedactionRunsId}" tabindex="-1"><button>Redact this document</button></section>`
     const region = document.getElementById(documentRedactionRunsId)
     revealDocumentRedactionRuns()
+    // A menu row's own focus restoration runs first; the reveal is deferred
+    // so it wins the next frame.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
     expect(document.activeElement).toBe(region)
   })
 

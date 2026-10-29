@@ -3,7 +3,11 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentChangeWire, DocumentComment } from '@obiter/contracts'
-import { openRibbonTab } from './editor-test-commands'
+import {
+  commandDisabled,
+  menuItem,
+  openRibbonTab,
+} from './editor-test-commands'
 import {
   mountWorkspace,
   selectBodyParagraph,
@@ -92,7 +96,10 @@ const moveNote =
 
 function openReviewPanel() {
   openRibbonTab('Review')
-  fireEvent.click(screen.getByRole('button', { name: /^Changes/ }))
+  // The Changes row is a toggle in the Review menu: it keeps the menu open,
+  // so the menu is dismissed before the list is read.
+  fireEvent.click(menuItem(/^Changes/))
+  fireEvent.keyDown(document, { key: 'Escape' })
   return screen.getByRole('complementary', { name: 'Changes and comments' })
 }
 
@@ -129,7 +136,7 @@ describe('review panel', () => {
       'Select the deletion by Review Author',
     ])
     const moveRow = row(panel, 'stranded move')
-    expect(moveRow.textContent).toContain('Move · moved from')
+    expect(moveRow.textContent).toContain("Move · can't be paired")
     expect(within(moveRow).queryByRole('checkbox')).toBeNull()
   })
 
@@ -282,16 +289,21 @@ describe('review panel', () => {
       within(row(panel, 'added words')).getByRole('button', { name: 'Accept' }),
     )
 
+    // The sentence belongs to the banner above the document, once; the
+    // panel's disabled controls carry the short why as their tooltip rather
+    // than repeating the paragraph in the bar.
     await waitFor(() =>
-      expect(panel.textContent).toContain('Reload before deciding changes.'),
+      expect(
+        within(row(panel, 'added words'))
+          .getByRole('button', { name: 'Accept' })
+          .getAttribute('title'),
+      ).toBe('Reload before deciding changes.'),
     )
-    // The reload route stays the banner's, and the panel's rows are disabled
-    // rather than offering a decision against a base the server has moved.
     expect(command('Reload')).toBeTruthy()
     for (const accept of within(panel).getAllByRole('button', {
       name: 'Accept',
     })) {
-      expect(accept).toHaveProperty('disabled', true)
+      expect(commandDisabled(accept)).toBe(true)
     }
   })
 
@@ -307,16 +319,19 @@ describe('review panel', () => {
     const accept = within(row(panel, 'added words')).getByRole('button', {
       name: 'Accept',
     })
-    // The row names the barrier through its own note, and the decision bar
-    // states it in words once the reader reaches the row.
-    const describedBy = accept.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
+    // The row's control carries the short why as its tooltip; the decision bar
+    // does the same for its own Accept/Reject once the row is current, so the
+    // barrier is never a paragraph repeated in two places.
+    expect(accept.getAttribute('title')).toBe(reason)
     fireEvent.click(
       within(row(panel, 'added words')).getByRole('button', {
         name: 'Show this change',
       }),
     )
-    expect(within(panel).getByText(reason)).toBeTruthy()
+    const barButtons = within(panel).getAllByRole('button', {
+      name: 'Accept',
+    })
+    expect(barButtons.at(-1)?.getAttribute('title')).toBe(reason)
   })
 
   it('follows the row under review with the decision bar and its own navigation', () => {

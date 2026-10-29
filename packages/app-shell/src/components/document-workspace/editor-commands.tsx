@@ -31,6 +31,8 @@ export type EditorCommand = {
   soon?: boolean | string
   /** A state the user flips repeatedly keeps the menu open. */
   stayOpen?: boolean
+  /** The command opens a surface that takes focus of its own (dialog, panel). */
+  opensSurface?: boolean
   run?: () => void
 }
 
@@ -122,7 +124,7 @@ export function editorMenus(
     { value: 'oscola', label: 'OSCOLA' },
     { value: 'house', label: 'House style' },
   ]
-  return [
+  const menus: EditorMenu[] = [
     {
       id: 'file',
       label: 'File',
@@ -172,6 +174,7 @@ export function editorMenus(
             {
               id: 'compare',
               label: 'Compare versions',
+              opensSurface: true,
               disabled: props.onOpenCompare === undefined,
               disabledReason: 'Two stored versions are needed to compare.',
               run: props.onOpenCompare,
@@ -270,12 +273,14 @@ export function editorMenus(
               shortcut: 'Ctrl F',
               hint: find ? undefined : EDITING_HINT,
               disabled: !find,
+              opensSurface: true,
               run: actions.openFind,
             },
             {
               id: 'commands',
               label: 'All commands',
               shortcut: 'Ctrl K',
+              opensSurface: true,
               run: actions.openPalette,
             },
           ],
@@ -313,6 +318,7 @@ export function editorMenus(
             {
               id: 'table',
               label: 'Insert table',
+              opensSurface: true,
               disabled: !structure || Boolean(structure.tableUnavailable),
               disabledReason: structure?.tableUnavailable,
               run: actions.openTable,
@@ -333,6 +339,7 @@ export function editorMenus(
             {
               id: 'link',
               label: 'Link',
+              opensSurface: true,
               disabled: !structure || Boolean(structure.linkUnavailable),
               disabledReason: structure?.linkUnavailable,
               run: actions.openLink,
@@ -340,6 +347,7 @@ export function editorMenus(
             {
               id: 'cross-reference',
               label: 'Cross-reference',
+              opensSurface: true,
               disabled:
                 !structure || Boolean(structure.crossReferenceUnavailable),
               disabledReason: structure?.crossReferenceUnavailable,
@@ -423,6 +431,7 @@ export function editorMenus(
             {
               id: 'insert-authority',
               stayOpen: true,
+              opensSurface: true,
               label: 'Insert authority',
               run: props.onInsertAuthority,
             },
@@ -476,6 +485,7 @@ export function editorMenus(
             {
               id: 'formatting-panel',
               label: 'Font, paragraph and page settings',
+              opensSurface: true,
               disabled: !editing,
               disabledReason: EDITING_HINT,
               run: actions.openFormatting,
@@ -717,6 +727,7 @@ export function editorMenus(
             {
               id: 'verify',
               label: 'Verify citations',
+              opensSurface: true,
               disabled: props.verify
                 ? props.verify.pending || !props.verify.available
                 : undefined,
@@ -837,6 +848,7 @@ export function editorMenus(
       ],
     },
   ]
+  return menus
 }
 
 /** The command list a palette searches: every command, in menu order. */

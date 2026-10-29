@@ -14,16 +14,17 @@ import {
   multiParagraphModel,
   paragraph,
   command,
-  commandOrNull,
 } from './docx-workspace-harness'
+import { commandDisabled, commandReason } from './editor-test-commands'
 import { bodyField, clickParagraph } from './paragraph-selection-harness'
 
-function deleteButton(): HTMLButtonElement {
-  const button = commandOrNull(/^Delete paragraph/)
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error('Delete paragraph control is missing.')
-  }
-  return button
+/**
+ * The Edit menu's Delete paragraph row. Base UI marks a menu item unavailable
+ * with `aria-disabled`, and carries the reason as a description beside the
+ * row rather than in its name.
+ */
+function deleteButton() {
+  return command('Delete paragraph')
 }
 
 const saveButton = () => command('Save')
@@ -57,10 +58,8 @@ describe('last-paragraph deletion safety', () => {
     mountWorkspace({})
 
     const button = deleteButton()
-    expect(button.disabled).toBe(true)
-    expect(button.getAttribute('aria-label')).toBe(
-      `Delete paragraph: ${LAST_PARAGRAPH_MESSAGE}`,
-    )
+    expect(commandDisabled(button)).toBe(true)
+    expect(commandReason(button)).toBe(LAST_PARAGRAPH_MESSAGE)
     // The refused control cannot make the document dirty, so Save stays off.
     expect(saveButton()).toHaveProperty('disabled', true)
   })
@@ -80,26 +79,26 @@ describe('last-paragraph deletion safety', () => {
   it('enables Delete paragraph after inserting a paragraph and disables it again on deletion', () => {
     mountWorkspace({})
     clickParagraph('p1')
-    expect(deleteButton().disabled).toBe(true)
+    expect(commandDisabled(deleteButton())).toBe(true)
 
     // A pending inserted paragraph is an effective paragraph, so the guard
     // lifts as soon as the second paragraph exists.
     fireEvent.click(command('Insert paragraph'))
     expect(renderedParagraphCount()).toBe(2)
-    expect(deleteButton().disabled).toBe(false)
+    expect(commandDisabled(deleteButton())).toBe(false)
 
     // Deleting the pending insert is safe and returns the document to one
     // effective paragraph, so the control disables again.
     fireEvent.click(deleteButton())
     expect(renderedParagraphCount()).toBe(1)
-    expect(deleteButton().disabled).toBe(true)
+    expect(commandDisabled(deleteButton())).toBe(true)
     expect(saveButton()).toHaveProperty('disabled', true)
   })
 
   it('deletes one of two paragraphs, marks the document dirty, and restores it on undo', () => {
     mountWorkspace({ models: { doc_1: twoParagraphs() } })
     clickParagraph('p2')
-    expect(deleteButton().disabled).toBe(false)
+    expect(commandDisabled(deleteButton())).toBe(false)
 
     fireEvent.click(deleteButton())
 
@@ -109,12 +108,12 @@ describe('last-paragraph deletion safety', () => {
     expect(selectedParagraphId()).toBe('p1')
     expect(bodyField().value).toBe('Hello')
     expect(document.activeElement).toBe(bodyField())
-    expect(deleteButton().disabled).toBe(true)
+    expect(commandDisabled(deleteButton())).toBe(true)
     expect(saveButton()).toHaveProperty('disabled', false)
 
     fireEvent.click(command('Undo'))
     expect(renderedParagraphCount()).toBe(2)
-    expect(deleteButton().disabled).toBe(false)
+    expect(commandDisabled(deleteButton())).toBe(false)
   })
 
   it('keeps the second deletion refused after a valid first deletion', () => {
@@ -123,10 +122,8 @@ describe('last-paragraph deletion safety', () => {
     fireEvent.click(deleteButton())
 
     // Only p1 is left, and the control is unavailable for it.
-    expect(deleteButton().disabled).toBe(true)
-    expect(deleteButton().getAttribute('aria-label')).toBe(
-      `Delete paragraph: ${LAST_PARAGRAPH_MESSAGE}`,
-    )
+    expect(commandDisabled(deleteButton())).toBe(true)
+    expect(commandReason(deleteButton())).toBe(LAST_PARAGRAPH_MESSAGE)
     expect(renderedParagraphCount()).toBe(1)
   })
 })

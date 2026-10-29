@@ -6,13 +6,17 @@ import {
   TRACKED_DECISION_MAX_IDS,
   type DocumentChangeWire,
 } from '@obiter/contracts'
-import { openRibbonTab } from './editor-test-commands'
+import {
+  command,
+  commandDisabled,
+  commandReason,
+  openRibbonTab,
+} from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
   selectBodyParagraph,
-  command,
 } from './docx-workspace-harness'
 
 import { editorMenus } from './editor-commands'
@@ -193,7 +197,7 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(command('Track changes off'))
+    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
     fireEvent.click(command('Accept all changes'))
 
     // A pending flip is unsaved state the decision commits with the version,
@@ -219,15 +223,13 @@ describe('DocxWorkspace change review', () => {
     openRibbonTab('Review')
 
     const reason = 'Save or discard unsaved edits before deciding changes.'
-    expect(
-      screen.getByRole('button', { name: `Accept all changes: ${reason}` }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', { name: `Accept change: ${reason}` }),
-    ).toHaveProperty('disabled', true)
-    fireEvent.click(
-      screen.getByRole('button', { name: `Accept change: ${reason}` }),
-    )
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(reason)
+    const accept = command('Accept change')
+    expect(commandDisabled(accept)).toBe(true)
+    expect(commandReason(accept)).toBe(reason)
+    fireEvent.click(accept)
     expect(decide).not.toHaveBeenCalled()
   })
 
@@ -242,20 +244,20 @@ describe('DocxWorkspace change review', () => {
     openRibbonTab('Review')
 
     const reason = 'Save or discard unsaved edits before deciding changes.'
-    expect(
-      screen.getByRole('button', { name: `Accept all changes: ${reason}` }),
-    ).toHaveProperty('disabled', true)
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(reason)
   })
 
   it('names the cap when the supported set alone exceeds it', () => {
     mountWorkspace({ changes: overCap })
     openRibbonTab('Review')
 
-    expect(
-      screen.getByRole('button', {
-        name: `Accept all changes: More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`,
-      }),
-    ).toHaveProperty('disabled', true)
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(
+      `More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`,
+    )
   })
 
   it('names the absent review surface instead of a boundary reason', () => {
@@ -457,31 +459,21 @@ describe('DocxWorkspace change review', () => {
 
     const reason =
       'None of the listed changes can be decided here; they stay listed and unchanged in the document.'
-    expect(
-      screen.getByRole('button', {
-        name: `Accept all supported changes: ${reason}`,
-      }),
-    ).toHaveProperty('disabled', true)
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `Accept all supported changes: ${reason}`,
-      }),
-    )
+    const acceptAll = command('Accept all supported changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(reason)
+    fireEvent.click(acceptAll)
     expect(decide).not.toHaveBeenCalled()
   })
 
   it('reports an empty review honestly', () => {
     mountWorkspace({})
     openRibbonTab('Review')
-    expect(
-      screen.getByRole('button', {
-        name: 'Accept change: There are no tracked changes.',
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: 'Accept all changes: There are no tracked changes.',
-      }),
-    ).toHaveProperty('disabled', true)
+    const accept = command('Accept change')
+    expect(commandDisabled(accept)).toBe(true)
+    expect(commandReason(accept)).toBe('There are no tracked changes.')
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe('There are no tracked changes.')
   })
 })

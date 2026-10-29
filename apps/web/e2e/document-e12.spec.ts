@@ -1,4 +1,12 @@
 import { signIn } from './e13-support'
+import {
+  choose,
+  menuItem,
+  openMenu,
+  openRibbonTab,
+  runMenuCommand,
+  selectedValue,
+} from './editor-chrome'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
@@ -164,22 +172,19 @@ type MarkingsBody = {
 }
 
 /**
- * Opens a ribbon tab and proves it selected before the caller touches the
- * panel's controls: a click that lands while the workspace re-renders its
- * toolbar (post-load, post-reload) can hit a detached trigger and silently
- * lose the activation.
+ * Opens the surface that holds a former tab's commands and proves it is up
+ * before the caller touches its controls: a click that lands while the
+ * workspace re-renders its chrome (post-load, post-reload) can hit a detached
+ * trigger and silently lose the activation.
  */
-async function openRibbonTab(page: Page, name: 'Layout' | 'Review') {
-  const tab = page.getByRole('tab', { name, exact: true }).first()
+async function openTab(page: Page, name: 'Layout' | 'Review') {
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await tab.click()
-    const selected = await expect(tab)
-      .toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
+    const opened = await openRibbonTab(page, name)
       .then(() => true)
       .catch(() => false)
-    if (selected) return
+    if (opened) return
   }
-  await expect(tab).toHaveAttribute('aria-selected', 'true')
+  await openRibbonTab(page, name)
 }
 
 test.use({ viewport: { width: 1440, height: 900 } })
@@ -202,7 +207,7 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
     }
   })
 
-  const kind = page.getByLabel('Document type')
+  const kind = selectedValue(page, 'Document type')
   const draft = page.getByRole('button', { name: 'Draft', exact: true })
   const privileged = page.getByRole('button', {
     name: 'Privileged',
@@ -212,13 +217,13 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
     name: 'Without prejudice',
     exact: true,
   })
-  await openRibbonTab(page, 'Layout')
+  await openTab(page, 'Layout')
   await expect(kind).toBeVisible()
 
   // Each change is its own immutable commit; the control must carry the
   // committed state back rather than a local paint.
-  await kind.selectOption('particulars')
-  await expect(kind).toHaveValue('particulars')
+  await choose(page, 'Document type', 'Particulars of claim')
+  await expect(kind).toHaveText('Particulars of claim')
   await expect(kind).toBeEnabled()
   await draft.click()
   await expect(draft).toHaveAttribute('aria-pressed', 'true')
@@ -239,21 +244,17 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   // Stored, not painted: a reload reads the same markings back out of the
   // committed DOCX's custom properties.
   await page.reload({ waitUntil: 'networkidle' })
-  await openRibbonTab(page, 'Layout')
-  await expect(kind).toHaveValue('particulars', { timeout: 30_000 })
+  await openTab(page, 'Layout')
+  await expect(kind).toHaveText('Particulars of claim', { timeout: 30_000 })
   await expect(draft).toHaveAttribute('aria-pressed', 'true')
   await expect(privileged).toHaveAttribute('aria-pressed', 'true')
   await expect(withoutPrejudice).toHaveAttribute('aria-pressed', 'false')
 
   // The standard export keeps the package's properties — the markings and
   // the foreign dms property alike — and names the file as uploaded.
-  await openRibbonTab(page, 'Review')
-  await expect(
-    page.getByRole('button', { name: 'Export', exact: true }),
-  ).toBeVisible()
   const [standardDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export', exact: true }).click(),
+    runMenuCommand(page, 'File', 'Export'),
   ])
   expect(standardDownload.suggestedFilename()).toBe(UNICODE_NAME)
   const standardPath = test.info().outputPath('export.docx')
@@ -274,7 +275,7 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   // survive, and everything the policy strips is verifiably gone.
   const [shareDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Share-safe export' }).click(),
+    runMenuCommand(page, 'File', 'Share-safe export'),
   ])
   const shareName = shareDownload.suggestedFilename()
   expect(shareName).toBe(UNICODE_NAME.replace('.docx', '-share-safe.docx'))
@@ -306,10 +307,9 @@ test('a document redaction run returns its finalized copy as a new version', asy
     buffer: readFileSync(fixturePath()),
   })
 
-  // The ribbon entry reveals the document-level control rather than starting
-  // a shadow run; the region's own button creates it.
-  await openRibbonTab(page, 'Review')
-  await page.getByLabel('Redact this document').click()
+  // The File menu's entry reveals the document-level control rather than
+  // starting a shadow run; the region's own button creates it.
+  await runMenuCommand(page, 'File', 'Redact this document')
   const region = page.getByRole('region', { name: 'Redaction runs' })
   await expect(region).toBeFocused()
   await region.getByRole('button', { name: 'Redact this document' }).click()
@@ -375,7 +375,8 @@ test('a document redaction run returns its finalized copy as a new version', asy
   // version list and the run no longer offers a second return.
   await page.getByRole('button', { name: 'Open document' }).click()
   await expect(page).toHaveURL(/\/documents\/doc_/, { timeout: 20_000 })
-  await page.getByRole('button', { name: 'Document information' }).click()
+  await openMenu(page, 'File')
+  await menuItem(page, 'Document information').click()
   const versionsPanel = page.getByRole('complementary', {
     name: 'Document information',
   })

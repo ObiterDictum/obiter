@@ -5,6 +5,8 @@ import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openRibbonTab } from './editor-chrome'
+import { runMenuCommand } from './editor-chrome'
 
 /*
  * E7a browser journey: the Insert ribbon's Header, Footer and Page number
@@ -83,12 +85,11 @@ async function openFixtureDocument(
   const documentRow = main.getByText(fixtureName).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
 
-  // The standalone workspace lives under the documents route; the rail's
-  // "In this matter" link is the only element that navigates there.
-  await page
-    .getByRole('complementary')
-    .getByRole('link', { name: fixtureName })
-    .click()
+  // The standalone workspace lives under the documents route; the document
+  // row itself is the link that opens it. The row's name is ambiguous with
+  // the rail's own copy, so the first link wins as it does for the shared
+  // journey helper.
+  await page.getByRole('link', { name: fixtureName }).first().click()
   await expect(page).toHaveURL(/\/documents\//, { timeout: 20_000 })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
@@ -97,9 +98,6 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-
-const ribbon = (page: Page, name: 'Home' | 'Insert' | 'Review') =>
-  page.getByRole('tab', { name, exact: true }).first()
 
 /** The painted margin band — read-only, plain text until editing opens. */
 const paintedHeader = (page: Page) => page.getByText(HEADER_TEXT).first()
@@ -113,7 +111,7 @@ const bodyParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: BODY_TEXT }).first()
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
-  await ribbon(page, name).click()
+  await openRibbonTab(page, name)
 }
 
 /**
@@ -151,8 +149,12 @@ test('header text and page number survive save, reload and export', async ({
 
   // Insert ribbon → Header opens the final section's header story.
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Header', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Close header' })).toBeVisible()
+  await page
+    .getByRole('menuitemcheckbox', { name: 'Header', exact: true })
+    .click()
+  await expect(
+    page.getByRole('menuitemcheckbox', { name: 'Close header' }),
+  ).toBeVisible()
 
   // Clicking the band paragraph focuses the shared paragraph editor.
   await headerParagraph(page).click()
@@ -168,7 +170,8 @@ test('header text and page number survive save, reload and export', async ({
 
   // Page number inserts a PAGE field at the header caret — the editable
   // text stream keeps exactly the typed text (the field is zero-width).
-  await page.getByRole('button', { name: 'Page number' }).click()
+  await openRibbon(page, 'Insert')
+  await page.getByRole('menuitem', { name: 'Page number', exact: true }).click()
   await expect(editor(page)).toHaveValue(new RegExp(`${MARKER}$`))
   await shot(page, '03-page-number-inserted')
 
@@ -190,12 +193,17 @@ test('header text and page number survive save, reload and export', async ({
       timeout: 30_000,
     })
     await openRibbon(reloaded, 'Insert')
-    await reloaded.getByRole('button', { name: 'Header', exact: true }).click()
+    await reloaded
+      .getByRole('menuitemcheckbox', { name: 'Header', exact: true })
+      .click()
     await headerParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
     // Closing the story restores normal body editing.
-    await reloaded.getByRole('button', { name: 'Close header' }).click()
+    await openRibbon(reloaded, 'Insert')
+    await reloaded
+      .getByRole('menuitemcheckbox', { name: 'Close header' })
+      .click()
     await bodyParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(BODY_TEXT))
     await shot(reloaded, '05-reloaded-body-editable')
@@ -207,7 +215,7 @@ test('header text and page number survive save, reload and export', async ({
   // field instruction in word/header1.xml.
   await openRibbon(page, 'Review')
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
   expect(download.suggestedFilename()).toMatch(/\.docx$/)
   const savedPath = path.join(os.tmpdir(), `e7a-export-${Date.now()}.docx`)

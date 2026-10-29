@@ -7,6 +7,7 @@ import {
 } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { fixturePath, verifyEmailInDb } from './support'
+import { openMenu } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
@@ -83,20 +84,22 @@ test('the ribbon entries reveal the one real document action', async ({
 }) => {
   await seedDocument(page, request)
 
-  // References ▸ Verify citations is live and moves focus to the dock control.
-  await page.getByRole('tab', { name: 'References' }).click()
-  const verifyCitations = page.getByRole('button', {
+  // Review ▸ Verify citations is live and moves focus to the dock control.
+  await openMenu(page, 'Review')
+  const verifyCitations = page.getByRole('menuitem', {
     name: 'Verify citations',
+    exact: true,
   })
   await expect(verifyCitations).toBeEnabled({ timeout: 15_000 })
   await verifyCitations.click()
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
 
-  // Review ▸ Redact this document reveals the real document-level action.
-  await page.getByRole('tab', { name: 'Review' }).click()
-  const ribbonRedact = page
-    .locator('[role="toolbar"]')
-    .getByRole('button', { name: 'Redact this document' })
+  // File ▸ Redact this document reveals the real document-level action.
+  await openMenu(page, 'File')
+  const ribbonRedact = page.getByRole('menuitem', {
+    name: 'Redact this document',
+    exact: true,
+  })
   await expect(ribbonRedact).toBeEnabled()
   await ribbonRedact.click()
   await expect(page.locator('#document-redaction-runs')).toBeFocused()
@@ -187,9 +190,11 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 }) => {
   await seedDocument(page, request)
 
-  // Start verification from the header's Run control, which opens the Verify
-  // panel so the run's progress and findings are visible.
-  await page.getByRole('button', { name: 'Run', exact: true }).click()
+  // Start verification from the header's Check citations control, which opens
+  // the Verify panel so the run's progress and findings are visible.
+  await page
+    .getByRole('button', { name: 'Check citations', exact: true })
+    .click()
   await expect(page.getByText('2 need review').first()).toBeVisible({
     timeout: 30_000,
   })

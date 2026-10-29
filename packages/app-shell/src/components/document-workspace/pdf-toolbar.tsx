@@ -1,5 +1,5 @@
 import { DownloadSimple, FileArrowDown } from '@phosphor-icons/react'
-import { EditorIconButton } from './editor-controls'
+import { EditorIconButton, EditorTextButton } from './editor-controls'
 import type { DocumentFindToolbar } from './ribbon-types'
 
 /**
@@ -56,6 +56,32 @@ export function PdfWorkspaceToolbar({
         <span role="status" className="min-w-12 text-caption text-muted">
           {find.matchLabel}
         </span>
+      ) : null}
+      {/* The hits are useless without a way to reach them: the PDF surface
+          carries the same Next/Previous controls as the editor's find bar. */}
+      {find ? (
+        <>
+          <EditorIconButton
+            label="Previous match"
+            onClick={find.onPrevious}
+            icon={<span aria-hidden>↑</span>}
+          />
+          <EditorIconButton
+            label="Next match"
+            onClick={find.onNext}
+            icon={<span aria-hidden>↓</span>}
+          />
+          <EditorTextButton
+            label="Match case"
+            pressed={find.options.matchCase}
+            onClick={() => find.onToggleOption('matchCase')}
+          />
+          <EditorTextButton
+            label="Whole word"
+            pressed={find.options.wholeWord}
+            onClick={() => find.onToggleOption('wholeWord')}
+          />
+        </>
       ) : null}
       <span className="mx-1 h-5 w-px bg-line" aria-hidden />
       <EditorIconButton

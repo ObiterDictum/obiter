@@ -1,3 +1,5 @@
+import { initialsOf } from '../../format'
+
 /**
  * Who made a tracked change, as something a reader can see: a stable hue from
  * a six-colour palette and the author's initials. Colour alone is not the
@@ -33,13 +35,8 @@ function hash(value: string) {
 }
 
 export function reviewerInitials(author: string | undefined) {
-  const words = (author ?? '')
-    .trim()
-    .split(/\s+/u)
-    .filter((word) => word.length > 0)
-  if (words.length === 0) return '?'
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase()
-  return `${words[0]![0] ?? ''}${words[words.length - 1]![0] ?? ''}`.toUpperCase()
+  const trimmed = (author ?? '').trim()
+  return trimmed === '' ? '?' : initialsOf(trimmed)
 }
 
 export function reviewerStyle(author: string | undefined): ReviewerStyle {
