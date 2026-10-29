@@ -1,17 +1,21 @@
-import { documentTextLayoutSchema } from '@obiter/contracts'
+import {
+  documentTextLayoutSchema,
+  type DocumentTextLayout,
+} from '@obiter/contracts'
 import type { Pool } from 'pg'
 import type { buildAuditReport } from './redaction-audit-report'
 import {
   getRunLayoutObjectKey,
   type RedactionRunRecord,
 } from './redaction-database'
-import { reviewerNames } from './reviewer-names'
 import type { StorageService } from './storage'
 import type { AuthenticatedOrgUser } from './authz'
 
 type AuditReport = ReturnType<typeof buildAuditReport>
 
 export const SHAREABLE_AUDIT_VERSION = 'obiter.redaction-audit-shareable/v1'
+
+export type ShareableAuditReport = ReturnType<typeof buildShareableAuditReport>
 
 /**
  * The audit as a file that can be handed to the other side. It carries what the
@@ -28,7 +32,8 @@ export function buildShareableAuditReport(
 ) {
   const decisions = report.spanDecisions
   const kept = decisions.filter(
-    (entry) => entry.decision === 'reject' || entry.decision === 'override_keep',
+    (entry) =>
+      entry.decision === 'reject' || entry.decision === 'override_keep',
   ).length
   return {
     reportVersion: SHAREABLE_AUDIT_VERSION,
@@ -74,31 +79,24 @@ export function buildShareableAuditReport(
   }
 }
 
+/** The shareable audit as the bytes the download serves. */
+export function shareableAuditBytes(report: ShareableAuditReport) {
+  return new TextEncoder().encode(`${JSON.stringify(report, null, 2)}\n`)
+}
+
 /**
  * The page each span sits on, from the layout the review screen reads. A source
  * without a stored layout (or one this API cannot parse) leaves every page
  * absent rather than guessing: a wrong page number in an audit file is worse
  * than none.
  */
-async function pagesBySpan(
-  pool: Pool,
-  storage: StorageService,
-  run: RedactionRunRecord,
-  user: AuthenticatedOrgUser,
+export function spanPages(
+  layout: DocumentTextLayout,
+  spans: RedactionRunRecord['spans'],
 ) {
   const pages = new Map<string, number>()
-  const layoutObjectKey = await getRunLayoutObjectKey(pool, run, user)
-  if (!layoutObjectKey || !storage.readText) return pages
-  let stored: unknown
-  try {
-    stored = JSON.parse(await storage.readText(layoutObjectKey))
-  } catch {
-    return pages
-  }
-  const layout = documentTextLayoutSchema.safeParse(stored)
-  if (!layout.success) return pages
-  for (const span of run.spans) {
-    const segment = layout.data.segments.find(
+  for (const span of spans) {
+    const segment = layout.segments.find(
       (candidate) =>
         candidate.start <= span.start && candidate.end > span.start,
     )
@@ -107,29 +105,23 @@ async function pagesBySpan(
   return pages
 }
 
-/** The shareable audit as the bytes the download serves. */
-export async function shareableAuditBytes(
+export async function shareableSpanPages(
   pool: Pool,
   storage: StorageService,
   run: RedactionRunRecord,
   user: AuthenticatedOrgUser,
-  report: AuditReport,
-): Promise<Uint8Array> {
-  const names = await reviewerNames(
-    pool,
-    run.organisationId,
-    [
-      ...Object.values(run.decisions).map((decision) => decision.decidedBy),
-      ...report.auditLog.flatMap((entry) => entry.userId ?? []),
-    ],
-  )
-  const shareable = buildShareableAuditReport(
-    report,
-    run,
-    names,
-    await pagesBySpan(pool, storage, run, user),
-  )
-  return new TextEncoder().encode(`${JSON.stringify(shareable, null, 2)}\n`)
+) {
+  const layoutObjectKey = await getRunLayoutObjectKey(pool, run, user)
+  if (!layoutObjectKey || !storage.readText) return new Map<string, number>()
+  let stored: unknown
+  try {
+    stored = JSON.parse(await storage.readText(layoutObjectKey))
+  } catch {
+    return new Map<string, number>()
+  }
+  const layout = documentTextLayoutSchema.safeParse(stored)
+  if (!layout.success) return new Map<string, number>()
+  return spanPages(layout.data, run.spans)
 }
 
 export function shareableAuditFilename() {

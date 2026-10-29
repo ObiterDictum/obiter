@@ -10,9 +10,12 @@ import { saveRedactionOutputToMatter } from '../redaction-save-to-matter'
 import { requireManageRole } from '../authz'
 import { buildAuditReport } from '../redaction-audit-report'
 import {
+  buildShareableAuditReport,
   shareableAuditBytes,
   shareableAuditFilename,
+  shareableSpanPages,
 } from '../redaction-audit-shareable'
+import { reviewerNames } from '../reviewer-names'
 import {
   renderScheduleDocx,
   renderSchedulePdf,
@@ -313,7 +316,18 @@ export function createRedactLifecycleRoutes(
     const format = c.req.query('format') ?? 'json'
     if (format === 'json') return c.json(report)
     if (format === 'json-shareable') {
-      const bytes = await shareableAuditBytes(pool, storage, run, user, report)
+      const names = await reviewerNames(pool, run.organisationId, [
+        ...Object.values(run.decisions).map((decision) => decision.decidedBy),
+        ...report.auditLog.flatMap((entry) => entry.userId ?? []),
+      ])
+      const bytes = shareableAuditBytes(
+        buildShareableAuditReport(
+          report,
+          run,
+          names,
+          await shareableSpanPages(pool, storage, run, user),
+        ),
+      )
       return c.body(Uint8Array.from(bytes), 200, {
         'content-type': 'application/json',
         'content-disposition': downloadContentDisposition(

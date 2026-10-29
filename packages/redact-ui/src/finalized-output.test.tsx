@@ -576,6 +576,14 @@ describe('redaction schedule', () => {
     expect(mutate).toHaveBeenCalledWith('docx', expect.anything())
     expect(downloaded).toBe('brief-schedule.docx')
 
+    // The shareable audit leaves the firm, so its name never carries the
+    // source filename the schedule's own name does.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Export shareable JSON' }),
+    )
+    expect(mutate).toHaveBeenCalledWith('json-shareable', expect.anything())
+    expect(downloaded).toBe('redaction-audit.json')
+
     if (descriptor)
       Object.defineProperty(HTMLAnchorElement.prototype, 'download', descriptor)
     createObjectURL.mockRestore()

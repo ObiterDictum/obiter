@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from 'bun:test'
 import { Hono } from 'hono'
 import type { AuthzVariables } from '../authz'
 import { createTestPool } from '../test-database.test-support'
+import { getDocument, listDocuments } from '../database'
 import { createRedactLifecycleRoutes } from './redact-lifecycle'
 import {
   cleanupMatter,
@@ -348,6 +349,65 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         [seed.matterId],
       )
       expect(documents.rows).toHaveLength(1)
+    } finally {
+      await cleanupRun(seed)
+    }
+  })
+  it('marks the filed version with its run and withholds the run from a member who cannot open it', async () => {
+    const seed = await seedStandaloneRun(await seedMatter(pool, 'edit'))
+    try {
+      await pool.query(
+        `insert into audit_logs (
+           organisation_id, user_id, entity_type, entity_id, action,
+           metadata_json, request_id, created_at
+         ) values ($1, $2, 'redaction_run', $3, 'redaction.finalize',
+           '{}'::jsonb, 'req_provenance', now())`,
+        [seed.orgId, seed.ownerId, seed.runId],
+      )
+      const storage = storageFor(seed)
+      storage.binary.set(seed.outputKey, copyBytes)
+      const saved = await saveApp(storage, ownerUser(seed)).request(
+        `/api/redaction-runs/${seed.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+      expect(saved.status).toBe(201)
+      const { documentId } = (await saved.json()) as { documentId: string }
+
+      const ownerView = await getDocument(
+        pool,
+        { id: seed.ownerId, organisationId: seed.orgId, role: 'owner' },
+        documentId,
+        'view',
+      )
+      expect(ownerView?.document.currentVersion?.redaction).toEqual({
+        runId: seed.runId,
+        producedBy: 'Race Owner',
+        canOpen: true,
+      })
+
+      // The copy is filed in a matter the editor can read; the standalone run
+      // stays with the person who ran it, so the mark is not a link for them.
+      const filed = (
+        await listDocuments(
+          pool,
+          { id: seed.editorId, organisationId: seed.orgId, role: 'member' },
+          seed.matterId,
+        )
+      ).find((document) => document.id === documentId)
+      expect(filed?.currentVersion?.redaction).toEqual({
+        runId: seed.runId,
+        producedBy: 'Race Owner',
+        canOpen: false,
+      })
+
+      // An ordinary version carries no mark at all.
+      const original = await getDocument(
+        pool,
+        { id: seed.ownerId, organisationId: seed.orgId, role: 'owner' },
+        seed.documentId,
+        'view',
+      )
+      expect(original?.document.currentVersion?.redaction).toBeNull()
     } finally {
       await cleanupRun(seed)
     }

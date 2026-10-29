@@ -1324,7 +1324,10 @@ export async function listDocuments(
   return result.rows.map((row) => ({
     ...mapDocument(row),
     currentVersion: row.current_version
-      ? mapVersion(row.current_version, versionRedaction(row.current_version_redaction))
+      ? mapVersion(
+          row.current_version,
+          versionRedaction(row.current_version_redaction),
+        )
       : null,
   }))
 }

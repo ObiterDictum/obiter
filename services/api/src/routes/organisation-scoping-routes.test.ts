@@ -237,7 +237,12 @@ function scoped<T extends { organisation_id: string }>(
 
 const query = async (sql: string, parameters: unknown[] = []) => {
   const text = sql.replace(/\s+/gu, ' ')
-  if (text.includes('from audit_logs')) {
+  // The version read joins the run's finalise audit row for its provenance, so
+  // it must not be answered by the audit-log branch below.
+  if (
+    text.includes('from audit_logs') &&
+    !text.includes('from document_versions')
+  ) {
     return {
       rows: audits.filter(
         (row) =>
