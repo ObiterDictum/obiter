@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'bun:test'
 import type { AuthzUser, AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
 import { createTestPool } from '../test-database.test-support'
+import { createDocument } from '../document-database'
 import { createOrganisationsRoutes } from './organisations'
 import {
   app,
@@ -149,6 +150,40 @@ describe('member removal vs a removable matter creator', () => {
   function creatorWriter(seed: Seed, gatePool: Pool) {
     return app(gatePool, storageFor(seed), ownerUser(seed), 'req_writer')
   }
+
+  it('denies document creation when the matter creator is removed first', async () => {
+    const seed = await creatorSeed()
+    const writerGate = matterLockGate(pool)
+    const removal = removalApp(
+      pool,
+      { id: seed.editorId, organisationId: seed.orgId, role: 'owner' },
+      'req_removal',
+    )
+    const writing = createDocument(writerGate.pool, {
+      organisationId: seed.orgId,
+      matterId: seed.matterId,
+      userId: seed.ownerId,
+      filename: 'synthetic.txt',
+      fileType: 'text/plain',
+      sizeBytes: 1,
+      contentSha256: 'a'.repeat(64),
+    })
+    try {
+      await withTimeout(writerGate.entered, 5000, 'matter lock')
+      const removed = await removal.request(
+        removeMemberPath(seed, seed.ownerId),
+        { method: 'DELETE' },
+      )
+      expect(removed.status).toBe(200)
+      writerGate.open()
+      expect(Boolean(await writing)).toBe(false)
+      expect((await state(pool, seed)).versions).toBe(1)
+    } finally {
+      writerGate.open()
+      await Promise.allSettled([writing])
+      await cleanupRemoval(pool, seed)
+    }
+  })
 
   it('denies an in-flight creator write when the creator is removed first', async () => {
     const seed = await creatorSeed()
