@@ -14,8 +14,6 @@ describe('resolveLegislationActPage', () => {
     extent: 'E+W+S',
   }
 
-  // Document order: s. 10 follows s. 9, and the inserted s. 13A sits
-  // between ss. 13 and 14. Lexical label sort would put s. 10 first.
   const actProvisions: Array<{
     label: string
     labelPath: string
@@ -125,9 +123,6 @@ describe('resolveLegislationActPage', () => {
   ) {
     return {
       query: vi.fn(async (text: string) => {
-        // The Act-page gate flag and the content rows are returned by one
-        // statement (getLegislationActProvisionsSnapshot), so the fixture
-        // answers both from that single snapshot shape.
         if (text.includes('json_agg')) {
           return { rows: [{ classified, rows: provisions }] }
         }
@@ -146,8 +141,6 @@ describe('resolveLegislationActPage', () => {
       'https://www.legislation.gov.uk/ukpga/2010/15',
     )
     expect(result.page.act.canonicalUrl).toBe('/ln/ukpga/2010/15')
-    // Roots are the containers; the inserted s. 13A stays between ss. 13
-    // and 14 inside Part 2, and the schedule has its paragraphs inside.
     expect(result.page.act.contents.map((entry) => entry.label)).toEqual([
       'Part 2',
       'Schedule 2',
@@ -171,8 +164,6 @@ describe('resolveLegislationActPage', () => {
   })
 
   it('counts withheld content rows only, containers excluded', async () => {
-    // withheld: s. 14 and Sch. 2 para. 5. Containers (Part 2, Schedule 2)
-    // are headings and never figure in either count.
     const result = await resolveLegislationActPage(actPool(), 'ukpga/2010/15')
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
@@ -197,8 +188,6 @@ describe('resolveLegislationActPage', () => {
     )
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
-    // s. 14, Sch. 2 para. 5 (flagged) plus the flagless s. 15: only
-    // explicit false reads as servable, matching the provision-page gate.
     expect(result.page.act.totalCount).toBe(8)
     expect(result.page.act.withheldCount).toBe(3)
     expect(result.page.act.contents).toHaveLength(3)
@@ -206,9 +195,6 @@ describe('resolveLegislationActPage', () => {
   })
 
   it('counts unchecked false rows as withheld, not servable', async () => {
-    // A legacy row with flag false but no check timestamp (migration
-    // default) is unknown, not known-good: it must withhold like a flagged
-    // row even though has_unapplied_effects reads false.
     const unchecked = {
       label: 's. 16',
       labelPath: 'section/16',
@@ -242,9 +228,6 @@ describe('resolveLegislationActPage', () => {
   })
 
   it('withholds the whole page while legacy rows are unclassified', async () => {
-    // Pre-migration rows carry kind = NULL (migration 0022 leaves them
-    // unknown rather than defaulting to a misleading 'P1'), so without the
-    // gate their P2..P5 content would render as flat top-level provisions.
     const legacy = actPool(actDocument, [], /* classified */ false)
     const result = await resolveLegislationActPage(legacy, 'ukpga/2010/15')
     expect(result.status).toBe('unavailable')
@@ -252,28 +235,15 @@ describe('resolveLegislationActPage', () => {
   })
 
   it('never serves an incomplete tree from a torn reparse read', async () => {
-    // Regression for the gate/contents race: gate and rows must be read by
-    // one statement so they share one snapshot. The fake pool simulates the
-    // interleaving that broke the old two-query read — the listing
-    // statement's snapshot predates the --force-reparse commit (legacy
-    // NULL-kind rows filtered out, no rows), while an independent gate
-    // statement reads after it (classified true). A combined statement can
-    // never see that mix: it returns the pre-commit snapshot (gate closed),
-    // so the page withholds instead of serving an empty 200 tree.
     const torn = {
       query: vi.fn(async (text: string) => {
         if (text.includes('json_agg')) {
-          // Single statement: pre-commit snapshot, legacy NULL kinds still
-          // present, so the gate reads unclassified and the listing is
-          // empty. This is the consistent answer an indivisible read gives.
           return { rows: [{ classified: false, rows: [] }] }
         }
         if (text.includes('kind is null')) {
-          // Tear: a gate-only statement reading after the commit.
           return { rows: [{ classified: true }] }
         }
         if (text.includes('from legislation_provisions')) {
-          // Tear: a listing-only statement reading before the commit.
           return { rows: [] }
         }
         return { rows: [actDocument] }
@@ -281,8 +251,6 @@ describe('resolveLegislationActPage', () => {
     } as unknown as LegislationServeDeps['pool']
     const result = await resolveLegislationActPage(torn, 'ukpga/2010/15')
     expect(result.status).toBe('unavailable')
-    // Gate and contents travel in one statement: the document read plus one
-    // snapshot read, never a third independent gate query.
     expect(torn.query).toHaveBeenCalledTimes(2)
   })
 

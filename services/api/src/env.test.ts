@@ -30,8 +30,6 @@ afterEach(() => {
   process.env = { ...originalEnv }
 })
 
-// The corpus variables are cleared before every test so a value inherited from
-// the developer's shell cannot decide whether a writer is configured.
 beforeEach(() => {
   delete process.env.CORPUS_DATABASE_URL
   delete process.env.CORPUS_WRITE_DATABASE_URL
@@ -58,8 +56,6 @@ describe('corpus database resolution', () => {
 
     const env = readApiEnv()
 
-    // The compatibility seam: with no new variable set, there is no separate
-    // corpus target and the corpus is the application database.
     expect(env.corpusDatabaseUrl).toBeNull()
     expect(env.corpusWriteDatabaseUrl).toBeNull()
   })
@@ -75,7 +71,6 @@ describe('corpus database resolution', () => {
 
     expect(env.corpusDatabaseUrl).toContain('/obiter_corpus')
     expect(env.corpusDatabaseUrl).not.toBe(env.databaseUrl)
-    // A reader alone is the ordinary lane: no writer, so no write path.
     expect(env.corpusWriteDatabaseUrl).toBeNull()
   })
 
@@ -632,8 +627,6 @@ describe('readRampartDetectionConfig', () => {
     delete process.env.OBITER_RAMPART_CHUNK_TOKENS
     process.env.OBITER_RAMPART_CACHE_DIR = '/tmp/rampart-cache'
 
-    // The prefetch script runs where production secrets are absent, so it must
-    // not inherit readApiEnv's requirements.
     expect(() => readApiEnv()).toThrow(/Missing required production/)
     expect(readRampartDetectionConfig()).toEqual({
       model: 'qarlus/rampart',

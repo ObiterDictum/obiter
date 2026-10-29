@@ -14,8 +14,6 @@ const paragraph = sourceStory?.paragraphs.find((item) => item.runs.length > 0)
 if (!paragraph) throw new Error('Edit fixture has no body paragraph.')
 const paragraphId = paragraph.id
 
-// E5 API leg: page setup and a break arrive as one atomic batch and the version
-// must carry the section properties and both breaks.
 describe('POST /api/documents/:id/edit page setup and breaks', () => {
   it('writes section properties and both breaks in one version', async () => {
     const database = new EditDatabase()

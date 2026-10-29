@@ -186,7 +186,6 @@ describe('buildRedactedDocx', () => {
     expect(document).toContain('<w:b/>')
     expect(document).toContain('<w:tbl>')
     expect(entries.get('word/footnotes.xml')).toContain('[REDACTED]')
-    // Metadata authorship emptied, non-authorship fields kept.
     expect(entries.get('docProps/core.xml')).toContain(
       '<dc:creator></dc:creator>',
     )
@@ -194,7 +193,6 @@ describe('buildRedactedDocx', () => {
       '<cp:revision>2</cp:revision>',
     )
     expect(entries.get('docProps/app.xml')).toContain('<Company></Company>')
-    // Split runs keep unique ids.
     const reparsed = await parseDocx(output)
     const ids = reparsed.model.stories.flatMap((story) =>
       story.paragraphs.flatMap((p) => [p.id, ...p.runs.map((r) => r.id)]),

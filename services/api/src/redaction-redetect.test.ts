@@ -15,9 +15,6 @@ const detector = vi.hoisted(() => ({
   detectRedactionSpans: vi.fn(),
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const redactionDatabaseModuleKeys = Object.fromEntries(
   Object.keys(await import('./redaction-database')).map((key) => [
     key,
@@ -27,9 +24,6 @@ const redactionDatabaseModuleKeys = Object.fromEntries(
 mock.module('./redaction-database', () =>
   Object.assign({ ...redactionDatabaseModuleKeys }, (() => database)()),
 )
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const redactionRunCreationModuleKeys = Object.fromEntries(
   Object.keys(await import('./redaction-run-creation')).map((key) => [
     key,
@@ -39,9 +33,6 @@ const redactionRunCreationModuleKeys = Object.fromEntries(
 mock.module('./redaction-run-creation', () =>
   Object.assign({ ...redactionRunCreationModuleKeys }, (() => creation)()),
 )
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const redactionDetectionModuleKeys = Object.fromEntries(
   Object.keys(await import('./redaction-detection')).map((key) => [
     key,
@@ -60,9 +51,6 @@ mock.module('./redaction-detection', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { redetectRedactionRun } = await import('./redaction-redetect')
 
 const sourceRun = {

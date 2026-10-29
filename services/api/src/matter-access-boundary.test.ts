@@ -15,8 +15,6 @@ describe('matter resource architecture boundary', () => {
         file.endsWith('.ts') &&
         !file.includes('.test') &&
         !file.endsWith('.seed.ts') &&
-        // Only the top-level document-access module may query these tables;
-        // matching the complete relative path prevents a nested bypass.
         file !== 'document-access.ts',
     )
     const bypasses: string[] = []

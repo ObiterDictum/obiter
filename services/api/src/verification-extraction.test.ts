@@ -74,8 +74,6 @@ describe('extractVerificationCandidates', () => {
     ])
     const quote = extracted.quotes[0]
     expect(quote?.rawText).toBe('the court must consider')
-    // Two citations could own this quotation, so the conservative policy
-    // refuses to choose one.
     expect(quote?.attributedCitationId).toBeNull()
     expect(quote?.attribution).toBe('ambiguous')
     expect(

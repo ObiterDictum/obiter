@@ -52,11 +52,6 @@ describe('verification run persistence', () => {
   let seed: OrganisationIsolationSeed
 
   beforeAll(async () => {
-    // The test database is migrated by the runner before the suite runs — CI
-    // and scripts/ci-local.sh both require every file recorded in
-    // schema_migrations — so this suite assumes the schema, like the other
-    // database-backed suites here. It does not call runMigrations: everything
-    // is already recorded, so a run would only skip files.
     seed = await seedOrganisationIsolation(pool)
   })
 
@@ -242,8 +237,6 @@ describe('verification run persistence', () => {
     )
 
     expect(first.run.documentVersionId).toBe(version)
-    // A terminal attempt leaves the live index, so the next request is a fresh
-    // run rather than a reuse of completed state.
     expect(first.run.id).not.toBe(second.run.id)
     expect(first.run.status).toBe('failed')
     expect(first.run.failureCode).toBe('model_unavailable')
@@ -345,7 +338,6 @@ describe('verification run persistence', () => {
     const actions = audit.rows.map((row) => row.action)
     expect(actions).toContain('verification.run_create')
     expect(actions).toContain('verification.run_fail')
-    // Audit carries identifiers and counts only, never finding text.
     for (const row of audit.rows) {
       expect(Object.keys(row.metadata_json).sort()).toEqual([
         'documentId',
@@ -402,8 +394,6 @@ describe('verification run persistence', () => {
         id: 'uksc-1:judgment_document',
         sourceId: 'uksc-1',
         label: 'Judgment uksc-1',
-        // The fixture names a source the store does not hold, so there is no
-        // stored URL to name it from and no page to link: both stay null.
         source: {
           url: null,
           canonicalUrl: null,
@@ -458,8 +448,6 @@ describe('verification run persistence', () => {
       },
     })
 
-    // The check's own outcome is untouched: the finding is still review
-    // required, and the dismissal is a separate, attributable decision.
     const findings = verificationFindingsResponseSchema.parse(
       await (
         await userA.request(`/api/verification-runs/${runId}/findings`)
@@ -477,7 +465,6 @@ describe('verification run persistence', () => {
     )
     expect(stillClear?.dismissal).toBeNull()
 
-    // A dismissed finding is a decision, not attention outstanding.
     const run = verificationRunResponseSchema.parse(
       await (await userA.request(`/api/verification-runs/${runId}`)).json(),
     )
@@ -489,8 +476,6 @@ describe('verification run persistence', () => {
       dismissedCount: 1,
     })
 
-    // Reopening puts the finding back in the queue. Deleting the dismissal is
-    // the only thing that survives it in the log, so it is audited.
     const reopen = await userA.request(
       `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,
       { method: 'DELETE' },
@@ -510,8 +495,6 @@ describe('verification run persistence', () => {
       [runId],
     )
     expect(audit.rows).toEqual([{ user_id: seed.userA }])
-    // Reopening an open finding is a no-op rather than an error, and another
-    // tenant cannot reopen this organisation's finding.
     expect(
       (
         await userA.request(
@@ -529,9 +512,6 @@ describe('verification run persistence', () => {
       ).status,
     ).toBe(404)
 
-    // A decision recorded under an account that is not in this organisation
-    // resolves to no name: the resolver is scoped to the tenant, so a stale id
-    // can never surface somebody else's colleague.
     await pool.query(
       `insert into verification_finding_dismissals (
          run_id, finding_id, organisation_id, reason, dismissed_by, dismissed_at
@@ -553,7 +533,6 @@ describe('verification run persistence', () => {
       [runId, review.id],
     )
 
-    // A check that found nothing has no decision for a person to record.
     const clearDismissal = await userA.request(
       `/api/verification-runs/${runId}/findings/${encodeURIComponent(clear.id)}/dismiss`,
       {
@@ -567,8 +546,6 @@ describe('verification run persistence', () => {
       apiErrorResponseSchema.parse(await clearDismissal.json()).error.code,
     ).toBe('verification_finding_not_dismissable')
 
-    // Another tenant cannot dismiss this organisation's finding, and the
-    // refusal names nothing about the run.
     const userB = app(pool, seed.userB, seed.orgB)
     const foreign = await userB.request(
       `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,

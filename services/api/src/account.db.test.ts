@@ -5,15 +5,6 @@ import { createApiApp } from './app'
 import type { createAuth } from './auth'
 import { createTestApiEnv } from './test-api-env'
 
-/**
- * Real-database coverage for the account and organisation settings mutations.
- *
- * `app.test.ts` covers the same routes against a fake pool, which cannot show
- * that the SQL scopes a write to the caller's own row or that a foreign
- * organisation is left untouched. This file drives the real pool through the
- * HTTP boundary, so the statement the route builds is the statement Postgres
- * runs.
- */
 type Auth = ReturnType<typeof createAuth>
 
 interface AccountSeed {
@@ -30,11 +21,6 @@ describe('account and organisation settings (Postgres)', () => {
   let seed: AccountSeed
   let currentUserId = ''
 
-  /**
-   * A session stands in for better-auth so the route, the session scope and
-   * the SQL are all real. The bearer/cookie layer is covered by
-   * organization-membership.db.test.ts and by the browser pass.
-   */
   function app() {
     const account =
       currentUserId === seed.ownerB
@@ -110,15 +96,6 @@ describe('account and organisation settings (Postgres)', () => {
   afterAll(async () => {
     if (!seed) return
     const userIds = [seed.ownerA, seed.memberA, seed.ownerB]
-    // Audit records are append-only (docs/prds/archive/platform-deletion.md
-    // §2): this teardown does not delete them. It does not null their subject
-    // links either — the repository's only policy-compliant cleanup path
-    // (`moveUserAndDeleteEmptyOrganisation`) nulls a vacated organisation
-    // because its user is moving to another tenant, which is not this case.
-    // The seeded users and organisations therefore stay as well: every audit
-    // row they produced references them, and removing the parents would mean
-    // removing the rows. Only the synthetic sessions go; a session is not an
-    // audit record.
     await pool.query(`delete from sessions where "userId" = any($1::text[])`, [
       userIds,
     ])

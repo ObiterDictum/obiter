@@ -149,7 +149,6 @@ describe('organisation member removal concurrency (Postgres)', () => {
       const requests: Array<Response | Promise<Response>> = []
       try {
         await gateClient.query('begin')
-        // Hold the owner set so both removals read it before either mutates it.
         await gateClient.query(
           `
             select id
@@ -172,11 +171,6 @@ describe('organisation member removal concurrency (Postgres)', () => {
           ),
         )
 
-        // Both removal transactions must be parked on a lock over the owner
-        // rows before the gate is released. Otherwise one can finish before
-        // the other reads the owner set and the round proves nothing. The
-        // filter covers the owner-set lock and the target-row lock alike, so
-        // the test still detects a regression that drops the owner-set lock.
         const deadline = Date.now() + 3000
         let blocked = 0
         while (Date.now() < deadline) {

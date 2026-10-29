@@ -152,8 +152,6 @@ describe('POST /api/documents/:id/edit', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'validation_failed' },
     })
-    // Nothing was committed: no new version, no pointer move, no object write,
-    // no audit, and the source version is untouched.
     expect(database.versions.size).toBe(1)
     expect(database.currentVersionId).toBe('ver_1')
     expect(database.audits).toEqual([])
@@ -233,7 +231,6 @@ describe('POST /api/documents/:id/edit', () => {
       versionNumber: 2,
       lineage: expect.any(Object),
     })
-    // The lineage names the source and result versions and the accepted batch.
     expect(body.lineage).toMatchObject({
       version: 1,
       baseVersionId: 'ver_1',
@@ -319,8 +316,6 @@ describe('POST /api/documents/:id/edit', () => {
   it('returns the base version for a flip that repeats the stored setting', async () => {
     const database = new EditDatabase()
     const { app, storage } = routeApp(database)
-    // The stored setting is off, so asking for off writes nothing: no
-    // version, no audit, no object — a repeated toggle stays idempotent.
     const response = await app.request('/api/documents/doc_1/edit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

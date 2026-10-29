@@ -18,9 +18,6 @@ function hit(overrides: Partial<LegalSearchHit> = {}): LegalSearchHit {
 
 describe('toSummaryHit match reasons', () => {
   it('labels a single distinctive title term as a partial title match', () => {
-    // The misspelled query defeats every whole-title tier, so the rank comes
-    // from tier 4. The card must say so even though the body also mentions
-    // Donoghue: title evidence outranks body evidence.
     const summary = toSummaryHit(
       hit({
         paragraphs: [
@@ -40,9 +37,6 @@ describe('toSummaryHit match reasons', () => {
   })
 
   it('keeps every-term title evidence as a full title match', () => {
-    // Rank tier 5: scattered across the title but every query term names
-    // this judgment. Previously this fell through to keyword_match because
-    // the reason mapping only knew exact and whole-phrase titles.
     const summary = toSummaryHit(
       hit({ title: 'Material v Contribution' }),
       'material contribution',
@@ -77,8 +71,6 @@ describe('toSummaryHit match reasons', () => {
       'Donoghue v Stevnson',
     )
 
-    // 'stevnson' matches nothing, but 'donoghue' and 'v' are body terms, so
-    // a snippet exists without any title evidence.
     expect(summary.matchReason).toBe('body_text_match')
   })
 

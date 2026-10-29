@@ -173,7 +173,6 @@ describe('buildHardRedactionPdf', () => {
       renderer,
       tokenMap: {},
     })
-    // The renderer receives the sanitized .docx, never the original name.
     expect(rendered).not.toBeNull()
     const zip = await JSZip.loadAsync(rendered ?? Buffer.alloc(0))
     const documentXml =
@@ -267,8 +266,6 @@ describe('buildHardRedactionPdf', () => {
           new RedactionRendererError(failure, 'typed'),
         ),
       ).toBe(failure)
-    // The validation gate is not a renderer: its refusal keeps its own category
-    // so operators can tell a safety refusal from a geometry or transport one.
     expect(
       hardRedactionFailureCategory(
         new SecurePdfValidationError('source_text_survives', 'refused'),
@@ -277,9 +274,6 @@ describe('buildHardRedactionPdf', () => {
   })
 
   it('surfaces a secure-PDF validation refusal as validation_failed, not a burn failure', async () => {
-    // An accepted span whose text also appears in the PDF container (`%PDF`) is
-    // refused by the byte scan. This proves the validation failure propagates
-    // unwrapped, rather than being re-labelled by the PDF burn catch.
     const pdfToken = span('%PDF', 0)
     const error = await buildHardRedactionPdf({
       run: run({}, [pdfToken]),

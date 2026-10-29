@@ -15,16 +15,6 @@ import { createDocumentCollaborationRoutes } from './document-collaboration'
 import { createDocumentEditRoutes } from './document-edit'
 import { createTrackedChangeRoutes } from './tracked-changes'
 
-/**
- * P0.13: share revocation must not race an already-authorised document or
- * comment write into committing afterwards.
- *
- * Each path below runs the real route against a real database. The writer is
- * paused by a promise gate placed immediately after its route-level access
- * query, so the ordering "early check passed, revocation commits, writer
- * resumes" is exact and needs no sleeps. A write that wins the lock instead
- * commits first and revocation follows.
- */
 
 const plainSourceBytes = await readFile(
   '../../data/evals/redact/demo-fixture.docx',
@@ -181,8 +171,6 @@ export async function seedMatter(
     [seed.versionId, seed.documentId],
   )
   await pool.query(
-    // The racing writer is the editor, so the seeded comment must be theirs:
-    // resolution is author-or-manager, not any editor.
     `insert into document_comments (
        id, organisation_id, matter_id, document_id, anchor_version_id,
        paragraph_id, start_offset, end_offset, body, author_id, author_name,
@@ -299,12 +287,6 @@ export function shareApp(pool: Pool, user: AuthzUser, requestId: string) {
   return routes
 }
 
-/**
- * Replaces the pool handed to the routes with one that resolves the first
- * route-level document access query, then holds the caller until opened. The
- * query has already run, so the early access decision is fixed; the writer has
- * not yet opened its write transaction.
- */
 export function accessGate(pool: Pool) {
   let markEntered: () => void = () => undefined
   let openGate: () => void = () => undefined

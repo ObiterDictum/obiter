@@ -11,12 +11,6 @@ import {
   request,
 } from './quote-fidelity.test-support'
 
-/**
- * Quote fidelity against the real Postgres public legal-source record for case
- * law. The comparison matrix is exercised in the pure suite; these are the
- * end-to-end retrievals that prove the store scoping. Requires
- * TEST_DATABASE_URL.
- */
 
 describe('quote fidelity judgments against the stored record', () => {
   const pool = createTestPool()

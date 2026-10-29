@@ -120,7 +120,6 @@ function acceptAll(spans: RedactionSpan[]) {
   )
 }
 
-/** Horizontal centre of each character, from a layout advance list. */
 function charCenters(advances: number[], origin: number) {
   const centers: number[] = []
   let cursor = origin
@@ -149,7 +148,6 @@ interface DrawnLine {
   pageIndex: number
 }
 
-/** A synthetic PDF plus matching layout for one or more drawn lines. */
 async function pdfWithLines(lines: DrawnLine[]) {
   const doc = await PDFDocument.create()
   const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -194,10 +192,6 @@ async function pdfWithLines(lines: DrawnLine[]) {
   }
 }
 
-/**
- * A cover paint is opaque black. Alpha matters: `getImageData` returns
- * `(0,0,0,0)` for an unpainted pixel, and RGB alone would call that black.
- */
 function isNearBlack(r: number, g: number, b: number, a: number) {
   return a >= 250 && r < 20 && g < 20 && b < 20
 }
@@ -316,7 +310,6 @@ describe('redaction-pdf-output', () => {
     const cover = covers[0]!
     const [coverPixel, backgroundPixel] = await sampleOutputPixels(output, [
       { x: cover.x + cover.width / 2, y: cover.y + cover.height / 2 },
-      // Deterministic page background above every glyph and every bar.
       { x: 100, y: 180 },
     ])
 
@@ -334,9 +327,6 @@ describe('redaction-pdf-output', () => {
   })
 
   it('refuses a page too large to rasterize before allocating its canvas', async () => {
-    // 6000 pt at RENDER_SCALE 2 is 12000 px on a side, over the 10000 px cap.
-    // Without the guard this allocates a multi-hundred-megabyte canvas; the
-    // guard must refuse first, which is what the test observes.
     const document = await PDFDocument.create()
     document.addPage([6000, 6000])
     const bytes = Buffer.from(await document.save())
@@ -352,7 +342,6 @@ describe('redaction-pdf-output', () => {
       pages: [{ width: 200, height: 200 }],
       segments: [
         {
-          // Offsets do not overlap the accepted span at 0–5.
           start: 100,
           end: 105,
           pageIndex: 0,
@@ -376,9 +365,6 @@ describe('redaction-pdf-output', () => {
   })
 
   it('accepts a cover on a page whose box does not start at the origin', async () => {
-    // The stored layout records width/height only. A page with an offset
-    // MediaBox must not be judged against [0, width], or visible text near the
-    // right edge is refused as off-page.
     const doc = await PDFDocument.create()
     const font = await doc.embedFont(StandardFonts.Helvetica)
     const page = doc.addPage([622, 802])
@@ -421,7 +407,6 @@ describe('redaction-pdf-output', () => {
           end: 5,
           pageIndex: 0,
           x: 40,
-          // Above the 200pt page: the cover would paint nothing.
           y: 400,
           width: 30,
           height: 12,
@@ -526,7 +511,6 @@ describe('redaction-pdf-output', () => {
       wordSpan(text, 'Smith', 'span_smith'),
     ]
     const decisions = acceptAll(spans)
-    // Geometry plan, independent of any rasterizer: one region, one rect.
     expect(coalesceRedactionRegions(text, spans, decisions)).toEqual([
       {
         start: 0,
@@ -544,7 +528,6 @@ describe('redaction-pdf-output', () => {
     expect(covers).toHaveLength(1)
     const cover = covers[0]!
     const centers = charCenters(advancesByLine[0]!, 40)
-    // The rect spans the whitespace between the words, not just their glyphs.
     for (const index of [4, 12]) {
       expect(centers[index]!).toBeGreaterThan(cover.x)
       expect(centers[index]!).toBeLessThan(cover.x + cover.width)
@@ -565,8 +548,6 @@ describe('redaction-pdf-output', () => {
   })
 
   it('merges a whitespace gap wider than a single space into one bar', async () => {
-    // Two spaces between each word: per-span bars would leave a visible white
-    // gap, while coalescing paints one continuous bar.
     const { pdfBytes, layout, text, advancesByLine } = await pdfWithLines([
       { text: 'John  Michael  Smith', x: 40, y: 100, pageIndex: 0 },
     ])
@@ -608,8 +589,6 @@ describe('redaction-pdf-output', () => {
       wordSpan(text, 'Smith', 'span_smith'),
     ]
     const decisions = acceptAll(spans)
-    // The visible word forbids one region at the source level, so the plan
-    // holds two rects even though both spans share a baseline.
     expect(coalesceRedactionRegions(text, spans, decisions)).toEqual([
       { start: 0, end: 4, spanIds: ['span_john'] },
       { start: 9, end: 14, spanIds: ['span_smith'] },
@@ -633,8 +612,6 @@ describe('redaction-pdf-output', () => {
       decisions,
     })
     const centers = charCenters(advancesByLine[0]!, 40)
-    // The space after the John bar, before the visible 'a'. Deterministic
-    // background, never the glyph ink the old test sampled.
     const [gap] = await sampleOutputPixels(output, [{ x: centers[4]!, y: 106 }])
     expect(isNearBlack(gap!.r, gap!.g, gap!.b, gap!.a)).toBe(false)
   })

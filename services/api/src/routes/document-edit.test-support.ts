@@ -194,9 +194,6 @@ class EditTransaction {
         )
       }
       this.matterLockChecked = true
-      // The locking statement must not evaluate access. Under READ COMMITTED a
-      // blocked FOR UPDATE does not re-run the qual it read before the wait, so
-      // the share predicate belongs in the separate re-check below.
       return { rows: [{ id: 'mtr_1' }] }
     }
     if (sql.includes('select matter.id from matters matter')) {

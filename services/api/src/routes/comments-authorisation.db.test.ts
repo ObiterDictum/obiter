@@ -14,12 +14,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-/**
- * Route-level authorisation and comment semantics against a real database:
- * view shares read but never write, strangers see nothing, resolution is
- * author-or-manager, client-key reuse replays or conflicts honestly, and an
- * imported reply is bound to the head identity served when it was written.
- */
 
 const pool = createTestPool()
 
@@ -333,8 +327,6 @@ describe('document comment authorisation', () => {
         importedCommentFingerprint(importedHead),
       )
 
-      // A later version reuses the same w:id for a different thread: the
-      // reply must surface as orphaned rather than attach on the slot alone.
       storage.text.set(
         seed.modelKey,
         JSON.stringify({

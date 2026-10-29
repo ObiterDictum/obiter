@@ -13,13 +13,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-/**
- * Filing a standalone run's copy into a matter, against a real database and a
- * real route. A run that began as a loose upload has no version to return to,
- * so this path creates the document: the access check on the chosen matter, the
- * stored bytes, the extraction and the audit entries all have to be the real
- * production path, not a mock of it.
- */
 const pool = createTestPool()
 const copyBytes = Buffer.from(
   'Synthetic redacted witness statement for the schema test.\n',
@@ -37,7 +30,6 @@ interface StandaloneSeed extends Seed {
 async function seedStandaloneRun(seed: Seed): Promise<StandaloneSeed> {
   const runId = `red_standalone_${seed.documentId}`
   const outputId = `out_standalone_${seed.documentId}`
-  // The outputs table constrains the key shape: org/<org>/outputs/<id>.
   const outputKey = `org/${seed.orgId}/outputs/${outputId}`
   await pool.query(
     `insert into outputs (
@@ -130,7 +122,6 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
       expect(body.matterId).toBe(seed.matterId)
       expect(body.versionNumber).toBe(1)
 
-      // The redacted copy is the stored output byte for byte, filed in the matter.
       const stored = await pool.query<{ object_key: string }>(
         `select object_key from document_versions where id = $1`,
         [body.versionId],
@@ -139,7 +130,6 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         storage.binary.get(stored.rows[0]!.object_key)?.equals(copyBytes),
       ).toBe(true)
 
-      // Text extraction ran, so the new document can be opened and searched.
       const version = await pool.query<{
         document_status: string
         text_object_key: string | null
@@ -175,7 +165,6 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
       )
       expect(run.rows[0]?.returned_document_version_id).toBe(body.versionId)
 
-      // A retry resolves to the version it already created, never a second one.
       const again = await app.request(
         `/api/redaction-runs/${seed.runId}/save-to-matter`,
         saveRequest(seed.matterId),
@@ -385,8 +374,6 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         canOpen: true,
       })
 
-      // The copy is filed in a matter the editor can read; the standalone run
-      // stays with the person who ran it, so the mark is not a link for them.
       const filed = (
         await listDocuments(
           pool,
@@ -400,7 +387,6 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         canOpen: false,
       })
 
-      // An ordinary version carries no mark at all.
       const original = await getDocument(
         pool,
         { id: seed.ownerId, organisationId: seed.orgId, role: 'owner' },

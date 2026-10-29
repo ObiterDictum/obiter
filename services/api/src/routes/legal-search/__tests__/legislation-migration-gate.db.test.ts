@@ -2,17 +2,6 @@ import { createTestPool } from '../../../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { resolveLegislationActPage } from '../legislation-act'
 
-/**
- * Act-page transitional gate against the real Postgres record store:
- * rows written before migration 0022 carry kind = NULL (the migration
- * deliberately leaves them unknown rather than defaulting to 'P1', which
- * would mis-classify P2..P5 content as flat top-level provisions), and
- * until --force-reparse rewrites every row of the document the Act page
- * must read as unavailable, never as a mis-classified tree. After the
- * rewrite (simulated with the same row updates the ingestor performs) the
- * page serves with containers and P1 rows only, P2..P5 staying off the
- * page. Requires TEST_DATABASE_URL.
- */
 
 const identity = 'ukpga/2024/99'
 const title = 'Migration Gate Test Act 2024'
@@ -118,7 +107,6 @@ describe('legislation act-page transition gate', () => {
   })
 
   it('reads the gate and the rows from one snapshot across a reparse commit', async () => {
-    // Reset to the pre-reparse state: every row kind = NULL again.
     await pool.query(
       'delete from legislation_provisions where document_identity = $1',
       [identity],
@@ -127,12 +115,6 @@ describe('legislation act-page transition gate', () => {
       await pool.query(insertProvisionRowQuery(row, null, null))
     }
 
-    // The reparse replaces every row of the document in one transaction
-    // (the ingestor holds one client for BEGIN/delete/insert/COMMIT). The
-    // Act-page read is a single statement, so it must see either the whole
-    // pre-commit legacy state (gate closed: unavailable) or the whole
-    // post-commit classified state (gate open: the complete tree), never a
-    // half-rewritten document. Hold the rewrite open and read mid-flight.
     const client = await pool.connect()
     let committed = false
     try {
@@ -150,8 +132,6 @@ describe('legislation act-page transition gate', () => {
       for (const { row, kind, parent } of reparsed) {
         await client.query(insertProvisionRowQuery(row, kind, parent))
       }
-      // Uncommitted reparse must be invisible to the combined read: the
-      // page still sees the legacy NULL-kind rows and withholds.
       const during = await resolveLegislationActPage(pool, identity)
       expect(during).toEqual({ status: 'unavailable' })
       await client.query('COMMIT')
@@ -173,9 +153,6 @@ describe('legislation act-page transition gate', () => {
   })
 
   it('serves the tree only after the reparse rewrite classifies every row', async () => {
-    // The reparse ingestor rewrites every row of the document in one
-    // transaction; simulate the same result: container rows get container
-    // kinds, P1 rows 'P1', sub-provisions their true P2..P5 kinds.
     const reparsed = [
       { row: legacyRows[0]!, kind: 'part', parent: null },
       { row: legacyRows[1]!, kind: 'P1', parent: 'part/1' },
@@ -189,8 +166,6 @@ describe('legislation act-page transition gate', () => {
     const result = await resolveLegislationActPage(pool, identity)
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
-    // P2 sub-provisions never render on the Act page: only the container
-    // roots with their P1 children.
     expect(result.page.act.contents.map((entry) => entry.label)).toEqual([
       'Part 1',
     ])

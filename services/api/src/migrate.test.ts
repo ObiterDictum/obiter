@@ -70,13 +70,11 @@ describe('migration runner', () => {
         applied: ['0002_b.sql'],
         skipped: ['0001_a.sql'],
       })
-      // Tracking table created, advisory lock held around the whole run.
       expect(statements[0]).toContain(
         'create table if not exists schema_migrations',
       )
       expect(statements[1]).toContain('pg_advisory_lock')
       expect(statements.at(-1)).toContain('pg_advisory_unlock')
-      // Second run against the now-recorded state is a no-op.
       const second = createMockPool({ recorded: ['0001_a.sql', '0002_b.sql'] })
       await expect(runMigrations(second.pool, dir)).resolves.toEqual({
         applied: [],
@@ -121,8 +119,6 @@ describe('migration runner', () => {
       await expect(runMigrations(pool, dir)).rejects.toThrow(
         'Migration 0002_wrapped.sql carries transaction control (begin)',
       )
-      // Nothing was applied: no transaction opened for the refused file, and
-      // the earlier file is not recorded as part of a failed run.
       expect(statements.filter((s) => s === 'begin')).toHaveLength(0)
       expect(
         statements.some((s) => s.startsWith('insert into schema_migrations')),
@@ -133,8 +129,6 @@ describe('migration runner', () => {
   })
 
   it('allows transaction words inside quoted strings and dollar-quoted bodies', async () => {
-    // Each fixture puts the keyword at the start of a line inside the quoted
-    // region, so the scan is what keeps it from reading as a statement.
     const dir = fixtureDir({
       '0001_dollar.sql':
         'insert into notes (body) values ($tag$\ncommit;\n$tag$);\n',

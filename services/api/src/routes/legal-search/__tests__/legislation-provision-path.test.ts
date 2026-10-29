@@ -5,12 +5,6 @@ import {
   type StoredLegislationProvision,
 } from '../legislation-store'
 
-/**
- * The shared store-resolution algorithm, exercised without a database. Both
- * the serving path and the authority-existence check call this function, so
- * these cases are the parity contract: a citation the Act page resolves must
- * not read as not held to verification, and the alias must never guess.
- */
 
 function provision(
   identity: string,

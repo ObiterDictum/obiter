@@ -117,15 +117,12 @@ describe('LegalSearchHydrationBudget', () => {
       ),
     ).toEqual({ status: 'budget_exceeded' })
 
-    // Two more users plus a third push the victim's window off the LRU cap.
     for (const name of ['a', 'b', 'c']) {
       const key = canonicalHydrationQueryKey({ query: name })
       budget.tryBeginHydration(`usr_${name}`, key)
       budget.completeHydration(key)
     }
 
-    // Pinned contract: eviction resets the count, so the per-user window is a
-    // fairness bound, not a hard identity bound.
     expect(
       budget.tryBeginHydration(
         'usr_victim',
@@ -169,8 +166,6 @@ describe('LegalSearchHydrationBudget', () => {
     ).toEqual({ status: 'queued' })
     budget.completeHydration(anonymousKey)
 
-    // A synthetic session id must get its own window, not share the anonymous
-    // bucket. The colon in the sentinel is outside the id alphabet.
     const userKey = documentHydrationKey('doc-b')
     expect(budget.tryBeginHydration('usr_real', userKey)).toEqual({
       status: 'queued',
@@ -197,7 +192,6 @@ describe('LegalSearchHydrationBudget', () => {
     })
     expect(thrown).toEqual({ status: 'failed' })
 
-    // The queue slot was released, so the next operation still reserves.
     const next = await gate.run('usr_a', 'query-b', async () => 'ok')
     expect(next).toEqual({ status: 'ok', value: 'ok' })
   })
@@ -218,8 +212,6 @@ describe('LegalSearchHydrationBudget', () => {
 
     const charged = await budget.admit('usr_a', 'query', true)
     expect(charged.status).toBe('admitted')
-    // Downstream work still needs an in-flight slot, so it is refused while
-    // the charged request holds the only one.
     expect((await budget.admit('usr_a', 'detail', false)).status).toBe(
       'budget_exceeded',
     )
@@ -229,8 +221,6 @@ describe('LegalSearchHydrationBudget', () => {
     expect(detail.status).toBe('admitted')
     if (detail.status === 'admitted') await budget.complete(detail.leaseId)
 
-    // The uncharged lease did not spend the window: it still holds exactly
-    // the one charged miss.
     expect((await budget.admit('usr_a', 'query-2', true)).status).toBe(
       'budget_exceeded',
     )

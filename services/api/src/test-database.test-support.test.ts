@@ -11,8 +11,6 @@ const testDatabaseUrl =
   'postgres://obiter:obiter@localhost:5432/obiter_lane_search_test'
 
 function setEnv(values: Record<string, string | undefined>) {
-  // Both corpus variables are cleared by default: a value inherited from the
-  // shell must not make one of these assertions pass or fail by accident.
   const cleared = {
     CORPUS_DATABASE_URL: undefined,
     CORPUS_WRITE_DATABASE_URL: undefined,

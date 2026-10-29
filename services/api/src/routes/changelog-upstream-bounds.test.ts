@@ -12,19 +12,6 @@ import {
   release,
 } from './changelog-test-helpers'
 
-/**
- * Throttle scheduling, the rolling upstream-request budget, body and entry
- * caps, link validation and the real-socket deadline. Every test drives the
- * real route with a mocked GitHub boundary and a controllable clock, except
- * the last, which uses a task-owned local server. None touch GitHub.
- *
- * The documented policy these tests hold to: a 60-second minimum throttle
- * cooldown that a provider delay can only extend (up to a 24-hour cap), 30
- * upstream requests per rolling hour across every regime, and a 64 KiB body
- * cap with entry and field limits. Tests use concrete windows rather than
- * importing the constants so a policy change has to be made deliberately,
- * here as well. Cache, failure and stale behavior live in changelog.test.ts.
- */
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -76,7 +63,6 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
       const harness = await throttledReleases(headers)
       expect(harness.fetchMock).toHaveBeenCalledTimes(1)
 
-      // 59 seconds is still inside the floor; the next second retries.
       expect(await retriedAfter(harness, 59_000)).toBe(false)
       expect(await retriedAfter(harness, 1_000)).toBe(true)
     })
@@ -129,12 +115,10 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
     expect(first.status).toBe(503)
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
-    // The one-second provider delay does not shorten the local floor.
     clock.advance(59_000)
     await app.request('/api/changelog')
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
-    // One retry after the floor, which makes two more requests.
     clock.advance(1_000)
     await app.request('/api/changelog')
     expect(fetchMock).toHaveBeenCalledTimes(4)
@@ -163,11 +147,9 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
     const { clock, fetchMock, app } = await fillThrottledBudget()
     expect(fetchMock).toHaveBeenCalledTimes(30)
 
-    // Still inside the window: the 31st request is denied without a fetch.
     await app.request('/api/changelog')
     expect(fetchMock).toHaveBeenCalledTimes(30)
 
-    // Exactly one hour after the first request its slot is free again.
     clock.advance(30 * 60_000)
     await app.request('/api/changelog')
     expect(fetchMock).toHaveBeenCalledTimes(31)
@@ -176,8 +158,6 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
   it('does not let concurrent callers exceed the rolling request budget', async () => {
     const { clock, fetchMock, app } = await fillThrottledBudget()
 
-    // The cooldown has cleared but the window is full, so every concurrent
-    // caller shares one denied refresh and no upstream request is made.
     clock.advance(0)
     const responses = await Promise.all(
       Array.from({ length: 8 }, () => app.request('/api/changelog')),
@@ -190,7 +170,7 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
     const clock = clockFrom(START)
     let cancelled = false
     let streamed = 0
-    let remaining = 40 // 640 KiB, comfortably past the 64 KiB cap.
+    let remaining = 40 
     const oversized = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (remaining <= 0) {
@@ -214,14 +194,10 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
 
     const response = await app.request('/api/changelog')
 
-    // The oversized releases body is dropped and the commits fallback runs.
     expect(await response.json()).toEqual({
       entries: [commitEntry],
       source: 'github_commits',
     })
-    // The stream is cancelled, which is the cap firing. The exact number of
-    // chunks read ahead is runtime-dependent; the point is that it never
-    // consumed the whole body.
     expect(cancelled).toBe(true)
     expect(streamed).toBeLessThanOrEqual(16 * 16 * 1024)
   })
@@ -294,8 +270,6 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
     const server: Server = createServer((_request, response) => {
       stalled += 1
       response.writeHead(200, { 'content-type': 'application/json' })
-      // Headers and a partial body, then never finish. Without an abort this
-      // hangs forever; the route's deadline must cover body consumption.
       response.write('[')
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -323,7 +297,6 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
       ])
       clearTimeout(guard)
       expect(response.status).toBe(503)
-      // Two sequential 500 ms deadlines (releases, then commits).
       expect(Date.now() - started).toBeLessThan(3_000)
       expect(stalled).toBeGreaterThanOrEqual(1)
     } finally {

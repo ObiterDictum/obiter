@@ -14,13 +14,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-/**
- * E12 handoff, exercised end to end: a finalized document-bound run returns
- * its burned DOCX output to the source document as a new immutable
- * version. Every case below runs the real route against a real database so
- * the locking, ACL and provenance ordering is the production path, not a
- * mock of it.
- */
 const pool = createTestPool()
 const outputBytes = await readFile('../../data/evals/redact/demo-fixture.docx')
 const outputSha256 = createHash('sha256').update(outputBytes).digest('hex')
@@ -93,7 +86,6 @@ async function seedFinalizedRun(
   return { ...seed, runId, outputId, outputKey }
 }
 
-/** Move the document head forward, leaving the run's source historical. */
 async function supersedeSource(seed: ReturnSeed) {
   const versionId = `${seed.versionId}_v2`
   await pool.query(
@@ -196,8 +188,6 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
       expect(body.documentId).toBe(seed.documentId)
       expect(body.versionNumber).toBe(2)
 
-      // The document head moved to the returned version, which carries the
-      // output bytes byte-for-byte.
       const head = await pool.query<{ current_version_id: string }>(
         `select current_version_id from matter_documents where id = $1`,
         [seed.documentId],
@@ -291,8 +281,6 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
     const seed = await seedFinalizedRun('edit')
     try {
       const other = await supersedeSource(seed)
-      // The head moved and the caller still names it: the run's source is
-      // historical now, so even a current base cannot carry this output.
       await pool.query(
         `update matter_documents set current_version_id = $1 where id = $2`,
         [seed.versionId, seed.documentId],
@@ -379,7 +367,6 @@ describe('POST /api/redaction-runs/:runId/return-to-document', () => {
         returnRequest(seed),
       )
       expect(foreign.status).toBe(404)
-      // Neither attempt created a version.
       expect(await versionCount(seed)).toBe(1)
 
       const owner = returnApp(storage, ownerUser(seed))

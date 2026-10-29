@@ -7,13 +7,7 @@ import { sendEmail } from '../auth'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const authModule = { ...(await import('../auth')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const authModuleKeys = Object.fromEntries(
   Object.keys(await import('../auth')).map((key) => [key, undefined]),
 )
@@ -27,9 +21,6 @@ mock.module('../auth', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { createOrganisationsRoutes } = await import('./organisations')
 
 interface UserRow {
@@ -738,7 +729,6 @@ describe('organisation membership routes', () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined)
     const store = new MembershipStore()
     store.auditLogs.push({ organisation_id: 'org_b' })
-    // A sign-up stash predates the invite: joining a firm consumes it.
     store.users.get('usr_invitee')!.pendingOrganisationName = 'Solo Practice'
     const ownerApp = appFor(store, {
       id: 'usr_owner',

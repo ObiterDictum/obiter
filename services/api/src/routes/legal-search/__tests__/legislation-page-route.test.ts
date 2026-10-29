@@ -11,13 +11,7 @@ const searchClientMock = vi.hoisted(() => ({
   search: vi.fn(),
 }))
 
-// The real module, snapshotted before mock.module registers: a factory that
-// awaited its own specifier re-entered the in-flight mock registration and
-// deadlocked under bun's module registry.
 const obiterSearchClientModule = { ...(await import('@obiter/search-client')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterSearchClientKeys = Object.fromEntries(
   Object.keys(await import('@obiter/search-client')).map((key) => [
     key,
@@ -34,9 +28,6 @@ mock.module('@obiter/search-client', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { createLegalSearchProxyRoutes } = await import('../proxy-routes')
 
 const currentProvision = {
@@ -83,8 +74,6 @@ function createApp(
   tree = [provision, ...currentSubsections],
 ) {
   const pool = {
-    // The page reads the provision row, then its tree; both come from this
-    // double, so the tree is told apart by the recursive query's shape.
     query: vi.fn(async (sql: string) => ({
       rows: sql.includes('with recursive') ? tree : [provision],
     })),
@@ -124,10 +113,7 @@ describe('GET /api/search/legislation/*', () => {
     }
     expect(body.provision.legislationStatus).toBe('current')
     expect(body.provision.heading).toBe('Direct discrimination')
-    // The retrieval date is served, so the page does not warn it is missing.
     expect(body.provision.acquiredAt).toBe('2026-09-06T14:49:54.709Z')
-    // The subsection structure is served with each level's own words, so a
-    // section page can render s. 13(1) and s. 13(2) nested under s. 13.
     expect(
       body.provision.subsections?.map((node) => [node.label, node.text]),
     ).toEqual([
@@ -163,8 +149,6 @@ describe('GET /api/search/legislation/*', () => {
   })
 
   it('withholds an unchecked false row on the page too', async () => {
-    // Migration-default rows carry the flag false with no check timestamp:
-    // the page must withhold text, never treat them as known-good.
     const response = await createApp({
       ...currentProvision,
       effectsCheckedAt: null as string | null,
@@ -207,9 +191,6 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
   function createActApp(documentRows = [actDocument]) {
     const pool = {
       query: vi.fn(async (text: string) => {
-        // The Act-page gate flag and the content rows are returned by one
-        // statement (getLegislationActProvisionsSnapshot); this fixture
-        // holds classified rows, so the gate reads as ready.
         if (text.includes('json_agg')) {
           return {
             rows: [
@@ -243,7 +224,6 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
             ],
           }
         }
-        // Provision-page reads and any rows-only query.
         if (text.includes('from legislation_provisions')) {
           return {
             rows: [

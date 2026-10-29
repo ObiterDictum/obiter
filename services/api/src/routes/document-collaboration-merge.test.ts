@@ -187,9 +187,6 @@ describe('collaboration merges', () => {
     expect(first.status).toBe(201)
     expect(second.status).toBe(201)
     expect(body).toMatchObject({ versionNumber: 3, outcome: 'merged' })
-    // A true reconciled merge is bound to the client's base version and names
-    // the base run the client edited, so the client's history can be
-    // translated against the merged result rather than blocked.
     expect(body.lineage?.baseVersionId).toBe('ver_1')
     expect(body.lineage?.acceptedOperations).toEqual([0])
     const mapped = body.lineage?.paragraphs
@@ -217,9 +214,6 @@ describe('collaboration merges', () => {
   it('commits a settings-only merge against a skeleton-changed current version', async () => {
     const database = new EditDatabase()
     const route = collaborationApp(database)
-    // A collaborator's insert changes the current skeleton against the
-    // client's base, which the empty batch cannot reconcile — it has no
-    // operations to conflict. The merge must still commit the toggle.
     const inserted = await route.app.request(
       '/api/documents/doc_1/collaboration/merge',
       {
@@ -298,8 +292,6 @@ describe('collaboration merges', () => {
       await settingsOnly.json(),
     )
 
-    // The stored setting is already off, so the merge commits nothing and a
-    // replayed sync id stays idempotent.
     expect(settingsOnly.status).toBe(200)
     expect(body).toMatchObject({
       versionId: 'ver_1',

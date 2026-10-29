@@ -9,10 +9,6 @@ import {
   sourceKey,
 } from './document-edit.test-support'
 
-// E44 review finding 1, API leg: a run that mixes text with a page break is a
-// shape imported documents produce. Typing into it and emphasising the typed
-// text used to be rejected with 400; it must now write one immutable version
-// with the break preserved.
 const sourceBytes = await readFile('../../data/evals/redact/demo-fixture.docx')
 const bodyXml =
   '<w:body><w:p>' +
@@ -28,8 +24,6 @@ const paragraphId = breakParagraph?.id
 const runId = breakParagraph?.runs[0]?.id
 if (!paragraphId || !runId) throw new Error('Break fixture has no text run.')
 
-// E57: the same shape with a text-wrapping break, which occupies one `\n` in
-// the paragraph text rather than none.
 const wrappingXml =
   '<w:body><w:p>' +
   '<w:r><w:t>ab</w:t><w:br/><w:t>cdef</w:t></w:r>' +

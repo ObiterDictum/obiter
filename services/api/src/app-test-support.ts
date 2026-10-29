@@ -3,11 +3,6 @@ import type { createAuth } from './auth'
 import type { ApiEnv } from './env'
 import { createTestApiEnv } from './test-api-env'
 
-/**
- * Pool doubles and the shared test environment for suites that drive
- * `createApiApp` through Hono's `request`. Not collected as a test: vitest's
- * default include matches `*.test.*`, and this file is `*-test-support.ts`.
- */
 
 export type Auth = ReturnType<typeof createAuth>
 export type QueryMock = (...args: unknown[]) => Promise<{ rows: unknown[] }>

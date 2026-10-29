@@ -113,8 +113,6 @@ describe('getDocumentModel through the worker pool', () => {
     expect(storage.textWrites).toHaveLength(1)
   }, 20_000)
 
-  // Last in the file: it closes the shared pool, so nothing after it may load
-  // a model in this module registry (the runner isolates files, not test cases).
   it('reports the curated store error once the pool has shut down', async () => {
     await closeDocumentModelWorkers()
 

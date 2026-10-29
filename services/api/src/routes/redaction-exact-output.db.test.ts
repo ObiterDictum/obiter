@@ -12,8 +12,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-// Inference is an external boundary. The review decisions and every byte path
-// below use the real implementation, storage adapter and database transactions.
 mock.module('../redaction-detection', () => ({
   detectionMode: () => 'model+supplement',
   detectRedactionSpans: async (text: string) => ({

@@ -7,18 +7,7 @@ import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
 import type { UserRole } from '@obiter/contracts'
 
-/**
- * P0.13 residual write paths: matter PATCH, matter soft-delete and restore,
- * document upload, document soft-delete and restore, and actor-side share
- * grant/revoke. Each app below runs the real route against a real database so a
- * lock order can be observed rather than assumed.
- */
 
-/**
- * A session user for the seeded database rows. The route's role check reads the
- * session, while membership is re-read from the `users` row, so the two are
- * deliberately separate.
- */
 export function sessionUser(
   seed: { orgId: string; ownerId: string; editorId: string },
   which: 'owner' | 'editor',
@@ -47,7 +36,6 @@ function routeApp(
   return routes
 }
 
-/** All three real route groups over one pool, for positive controls. */
 export function fullApp(
   pool: Pool,
   storage: StorageService,

@@ -193,7 +193,6 @@ describe('verification run recovery and pagination', () => {
       leaseSecondsFromNow: -60,
       leaseToken: 'dead-token',
     })
-    // A partial attempt left findings behind before the process died.
     const subject: Subject = { documentId: seed.documentA, versionId: version }
     await insertFinding(pool, seed.orgA, staleId, clearCaseLawFinding(subject))
 
@@ -245,7 +244,6 @@ describe('verification run recovery and pagination', () => {
       },
     }
     const first = createRun(version, blockedStorage)
-    // Wait until the first request has reclaimed and created the replacement.
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const live = await pool.query<{ id: string }>(
         `select id from verification_runs
@@ -317,8 +315,6 @@ describe('verification run recovery and pagination', () => {
     })
     const first = await createRun(version)
     const retry = await createRun(version)
-    // The first replacement has already terminated (failed), so the retry is a
-    // fresh run rather than the dead one; neither is the wedged row.
     expect(first.body.run.id).not.toBe(staleId)
     expect(retry.body.run.id).not.toBe(staleId)
     const live = await pool.query<{ id: string }>(
@@ -374,8 +370,6 @@ describe('verification run recovery and pagination', () => {
       if (!cursor) break
     }
     expect(new Set(seen).size).toBe(seen.length)
-    // All five page rows share one timestamp, so they must still come back in
-    // the id-desc tiebreaker order with no gap or repeat.
     const pageIds = seen.filter((id) => ids.includes(id))
     expect(pageIds).toEqual([...ids].reverse())
   })

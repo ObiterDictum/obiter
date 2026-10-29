@@ -7,24 +7,6 @@ import { createApiApp } from './app'
 import { createAuth } from './auth'
 import { createTestApiEnv } from './test-api-env'
 
-/**
- * The password change end to end against real Postgres and real better-auth.
- *
- * A fake pool can show the audit branch was reached; it cannot show that the
- * password actually changed, that the other sessions are gone, or that the
- * caller's replacement session still works after an audit-append failure. This
- * suite drives the HTTP boundary with a live better-auth instance, then checks
- * the database and the auth API for the observable result.
- *
- * The audit insert failing is simulated by routing the app's own pool to a
- * wrapper that rejects that one statement. `auth` keeps the real pool, so only
- * Obiter's audit append fails — exactly the production boundary, where
- * better-auth has already committed the change before the audit runs.
- *
- * Append-only policy: this suite never deletes audit rows. Users and
- * organisations are retained because their audit rows reference them; only
- * synthetic sessions are removed.
- */
 describe('password change end to end (Postgres + better-auth)', () => {
   const pool = createTestPool()
   const env = createTestApiEnv()
@@ -33,8 +15,6 @@ describe('password change end to end (Postgres + better-auth)', () => {
   let counter = 0
 
   beforeAll(() => {
-    // better-auth's verification-email callback logs the one-time URL in a
-    // development-style environment; this suite is not about email delivery.
     vi.spyOn(console, 'info').mockImplementation(() => {})
   })
 
@@ -87,7 +67,6 @@ describe('password change end to end (Postgres + better-auth)', () => {
     return result.token
   }
 
-  /** A pool that refuses only Obiter's audit append; better-auth keeps the real one. */
   function poolWithoutPasswordAudit(base: Pool): Pool {
     return {
       query: async (text: unknown, params?: unknown) => {
@@ -163,23 +142,17 @@ describe('password change end to end (Postgres + better-auth)', () => {
     const audit = await passwordAuditRows(user.userId)
     expect(audit).toHaveLength(1)
     expect(audit[0].organisation_id).toBe(user.organisationId)
-    // Identifiers only: no name, no credential material.
     expect(audit[0].metadata_json).toEqual({})
 
-    // The new password works, the old one no longer does.
     await expect(signIn(user.email, newPassword)).resolves.toBeTruthy()
     await expect(signIn(user.email, user.password)).rejects.toThrow()
 
-    // Other sessions are gone; the replacement session issued by the change
-    // is the one that survives.
     const replacementToken = response.headers.get('set-auth-token')
     expect(replacementToken).toBeTruthy()
     await expect(sessionFor(otherToken)).resolves.toBeNull()
     const survivor = await sessionFor(replacementToken!)
     expect(survivor?.user.id).toBe(user.userId)
 
-    // A retry from the surviving session with the now-stale password is
-    // rejected and adds no second event.
     const retry = await changePasswordRequest(app, replacementToken!, {
       currentPassword: user.password,
       newPassword: `${newPassword}-again`,
@@ -201,13 +174,11 @@ describe('password change end to end (Postgres + better-auth)', () => {
       newPassword,
     })
 
-    // Truthful success: the mutation committed before the audit was attempted.
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({
       user: { id: user.userId },
     })
 
-    // The failure is operationally visible with identifiers only.
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('auth.password_changed'),
       expect.objectContaining({
@@ -221,8 +192,6 @@ describe('password change end to end (Postgres + better-auth)', () => {
     expect(logged).not.toContain(newPassword)
     expect(logged).not.toContain(user.name)
 
-    // The change really applied, the other sessions really went, and the
-    // caller's replacement session still works.
     expect(await passwordAuditRows(user.userId)).toHaveLength(0)
     await expect(signIn(user.email, newPassword)).resolves.toBeTruthy()
     await expect(signIn(user.email, user.password)).rejects.toThrow()
@@ -247,7 +216,6 @@ describe('password change end to end (Postgres + better-auth)', () => {
 
     expect(response.status).toBe(400)
     expect(await passwordAuditRows(user.userId)).toHaveLength(0)
-    // Both sessions survive a rejected change.
     expect(await sessionCount(user.userId)).toBe(2)
     await expect(signIn(user.email, user.password)).resolves.toBeTruthy()
     await expect(sessionFor(currentToken)).resolves.toMatchObject({

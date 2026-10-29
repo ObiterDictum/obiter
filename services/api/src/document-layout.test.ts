@@ -42,7 +42,6 @@ function lineChars(text: string, startX = 40, baseline = 100): LaidChar[] {
   }))
 }
 
-/** Modelled on pushPdfItemChars: glyphWidth = itemWidth / glyphCount. */
 function charsFromPdfItems(
   items: Array<{ text: string; x: number; width: number }>,
 ): LaidChar[] {
@@ -130,10 +129,6 @@ describe('layoutFromLaidChars', () => {
   })
 
   it('keeps cover geometry exact across adjacent items with unequal advances', () => {
-    // Two runs on one baseline with different average advances. Merging them
-    // once cost geometry: uniform interpolation put the cover 7.7pt out and
-    // left the first redacted glyph showing. Recorded advances let the run
-    // merge and still place every character where it was drawn.
     const prefix = 'Mr. '
     const name = 'Wilhelmina'
     const prefixAdvance = 4.5
@@ -150,8 +145,6 @@ describe('layoutFromLaidChars', () => {
     const merged = layoutFromLaidChars(chars, [{ width: 400, height: 200 }])
     const unmerged = unmergedCharSegments(chars)
 
-    // Contiguous same-baseline text collapses to one run, and that run carries
-    // one advance per character so nothing about position is inferred.
     expect(merged.segments).toHaveLength(1)
     const run = merged.segments[0]!
     expect(run.end - run.start).toBe(chars.length)
@@ -187,8 +180,6 @@ describe('layoutFromLaidChars', () => {
     const trueFirstX = chars[spanStart]!.x
     expect(mergedCovers[0]!.x).toBeLessThanOrEqual(trueFirstX)
 
-    // The regression this guards: interpolating across the merged run put the
-    // left edge 7.7pt right of the ink, exposing the whole first glyph.
     const interpolated = coverRectsForSpan({
       segments: [{ ...run, advances: undefined }],
       spanStart,

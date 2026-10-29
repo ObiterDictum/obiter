@@ -36,8 +36,6 @@ describe('composeMojRequestBudget', () => {
       status: 'rate_limited',
       retryAfterSeconds: 3,
     })
-    // The shared ledger was never consulted, so no cluster slot was spent on
-    // an attempt this replica refused.
     expect(shared.spent()).toBe(0)
   })
 

@@ -7,12 +7,6 @@ import {
 } from './app-test-support'
 import { createApiApp } from './app'
 
-/**
- * The account name route, `PATCH /api/me`, against a fake pool. The statement
- * the route builds is pinned here; `account.db.test.ts` runs the same route
- * against real Postgres, which is what proves the SQL scopes the write to the
- * caller's own row.
- */
 describe('PATCH /api/me — account name', () => {
   it('updates the signed-in account name through PATCH /api/me', async () => {
     const queries: unknown[] = []
@@ -71,7 +65,6 @@ describe('PATCH /api/me — account name', () => {
     const update = queries.find((args) =>
       String((args as unknown[])[0]).includes('update users'),
     ) as unknown[]
-    // A client-supplied id in the body must never widen the update scope.
     expect(update[1]).toEqual(['usr_1', 'Ada Lovelace'])
     expect(JSON.stringify(update[1])).not.toContain('usr_2')
   })
@@ -204,14 +197,6 @@ describe('PATCH /api/me — account name', () => {
     expect(JSON.stringify(audit[1])).not.toContain('Old Name')
   })
 
-  // Audit records are append-only (docs/prds/archive/platform-deletion.md §2):
-  // no route may delete or rewrite them. This pins that for the write paths
-  // this surface adds, so a future cleanup cannot quietly reach the table.
-  //
-  // Both pools are wired because the two legs reach the table differently: the
-  // PATCH runs inside a transaction (`connect`), while the change-password audit
-  // is appended through the pool directly (`query`). A double missing either
-  // half would make its assertion pass without the statement existing.
   it('appends audit records but never deletes or updates them', async () => {
     const queries: unknown[] = []
     const auth = {
@@ -276,8 +261,6 @@ describe('PATCH /api/me — account name', () => {
     const statements = queries.map((args) => String((args as unknown[])[0]))
     expect(statements.length).toBeGreaterThan(0)
 
-    // Both append-only inserts were actually issued, so the guard cannot pass
-    // because a pool double lacked the method the audit path calls.
     const appends = queries.filter((args) =>
       String((args as unknown[])[0]).includes('insert into audit_logs'),
     ) as unknown[][]

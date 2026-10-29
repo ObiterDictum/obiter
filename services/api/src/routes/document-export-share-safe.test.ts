@@ -41,8 +41,6 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     )
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
-    // Product comments never entered the package — they were not listed, and
-    // the sanitizer verifies the output has no comments surface anyway.
     expect(
       new TextDecoder().decode(
         exported.sourceParts.get('word/comments.xml')?.originalPayload,
@@ -84,8 +82,6 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
     expect(JSON.parse(body)).toMatchObject({
       error: { code: 'share_safe_export_refused' },
     })
-    // The refusal is audited with the bounded policy class only — no part
-    // names, attribute values or document text reach the record.
     expect(database.audits).toEqual([
       {
         organisationId: 'org_1',
@@ -103,12 +99,9 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
       },
     ])
     expect(JSON.stringify(database.audits)).not.toContain('IN THE HIGH COURT')
-    // The response is the error envelope, not document bytes: the refusal is
-    // a JSON body well under the source package's size.
     expect(body.length).toBeLessThan(tracked.byteLength)
   })
 
-  // Real-toolchain corpus: ordinary Word output must export, not refuse.
   it.each([
     'letter-plain.docx',
     'letter-table.docx',
@@ -170,9 +163,6 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
       new MemoryStorage(tracked),
     ).app.request('/api/documents/doc_1/export?mode=share-safe')
 
-    // An unrecordable refusal is not silently reported as a clean refusal:
-    // the audit failure surfaces as the standard storage error, matching the
-    // success path, and no bytes ship either way.
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'storage_unavailable' },
@@ -199,7 +189,6 @@ describe('GET /api/documents/:id/export?mode=share-safe', () => {
   })
 })
 
-/** The demo fixture plus one tracked insertion — share-safe must refuse it. */
 async function trackedChangesDocx() {
   const zip = await JSZip.loadAsync(sourceBytes)
   const document = zip.file('word/document.xml')

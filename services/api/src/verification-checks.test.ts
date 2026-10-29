@@ -89,8 +89,6 @@ describe('collectVerificationFindings', () => {
     )
     expect(findings).toHaveLength(1)
     expect(findings[0]?.type).toBe('quote_fidelity')
-    // The structured reason reaches the UI, so the quote is visibly not checked
-    // against a guessed authority.
     expect(findings[0]?.status).toEqual({
       state: 'review_required',
       reason: 'citation_ambiguous',
@@ -98,9 +96,6 @@ describe('collectVerificationFindings', () => {
   })
 
   it('confines a failed store read to the finding that needed it', async () => {
-    // Resolution succeeds, so the citation has an identity; the authority
-    // lookup for that identity fails to read, and so does the quotation's
-    // source. Neither failure may abort the batch or turn into a pass.
     const { pool } = queryDouble((text) => {
       if (text.includes('like any')) {
         return queryResult([
@@ -147,9 +142,6 @@ describe('collectVerificationFindings', () => {
       ],
     )
 
-    // The resolution check completed on its own facts; the two checks that
-    // needed a source read stayed uncertain rather than aborting the batch or
-    // inventing a verdict.
     expect(
       findings.map((finding) => `${finding.type}:${finding.status.state}`),
     ).toEqual([

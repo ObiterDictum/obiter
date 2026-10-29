@@ -22,13 +22,6 @@ import { createTestApiEnv } from './test-api-env'
 
 type Auth = ReturnType<typeof createAuth>
 
-/**
- * P2.39 regression: a partial-overlap union used to carry the winner's `text`
- * while `start`/`end` covered both spans, so finalize's
- * `text.slice(start, end) === text` check failed with a permanent 409. The
- * product now derives union text at this boundary; this drives the real
- * reconcile, policy merge and finalize route.
- */
 const text = 'Alice alice@example.com'
 const heuristic = detectHeuristics(text)
 const modelSpan = {
@@ -63,7 +56,6 @@ function accepted(spans: RedactionSpan[]): Decisions {
   )
 }
 
-/** Automatic policy: accept redact suggestions, reject keep suggestions. */
 function fromSuggestions(spans: RedactionSpan[]): Decisions {
   return Object.fromEntries(
     spans.map((span) => [
@@ -210,31 +202,18 @@ describe('redaction merge integrity (P2.39)', () => {
       body: JSON.stringify({ outputMode: 'redacted' }),
     })
 
-    // A matched union must not 409 on span integrity, and the hard-redaction
-    // output is the secure PDF rather than text.
     expect(response.status).toBe(200)
     expect(written()).toBeNull()
     expect(writtenBytes()!.subarray(0, 5).toString('latin1')).toBe('%PDF-')
   })
 })
 
-/**
- * P0.30: `trimLeadingTitles` and `isDeniedPersonName` are written for a span the
- * model returned as one detection. Applied to the partial-overlap union they
- * discard bytes the losing contributor supplied, silently, because finalize
- * derives span text from the source instead of rejecting a mismatch (P2.39).
- * Production normalises each contributing detection before the union; these
- * drive the real normaliser, reconciler and mapper.
- */
 describe('heuristics run per detection before the span union (P0.30)', () => {
   function detect(text: string, spans: RampartSpan[]): RedactionSpan[] {
     return reconcileRampartSpans(text, normalizePersonDetections(text, spans))
   }
 
   it('covers bytes a losing detection contributed a title-shaped prefix to', () => {
-    // The address detection starts "Dr", which the person heuristic would read
-    // as an honorific. Trimmed on the union it advances past the address's own
-    // bytes; trimmed per detection it leaves them covered.
     const text = 'Dr Smith Street'
     const spans = detect(text, [
       {
@@ -260,8 +239,6 @@ describe('heuristics run per detection before the span union (P0.30)', () => {
   })
 
   it('drops only the detection that contained the line break', () => {
-    // Denying the union on its newline discards both contributors; denying per
-    // detection keeps the clean one redacted.
     const text = 'Jo\nnes Smith'
     const spans = detect(text, [
       {
@@ -313,12 +290,6 @@ describe('heuristics run per detection before the span union (P0.30)', () => {
   })
 })
 
-/**
- * P0.31: reconciliation must not let a keep-category winner disposition bytes a
- * redact detection contributed. This drives the real reconciler, policy merge,
- * suggestion-derived automatic decisions and the real finalize route, and
- * asserts on the bytes written rather than an intermediate label.
- */
 describe('overlap disposition (P0.31)', () => {
   const source = 'alpha bravo charlie delta'
   const contributors: RampartSpan[] = [
@@ -340,9 +311,6 @@ describe('overlap disposition (P0.31)', () => {
     },
   ]
 
-  // The contained detection is the higher-scoring keep winner; the container is
-  // a redact detection. The old vendored merge collapsed the union to the
-  // contained winner's range, so an override only covered that range.
   const containment: RampartSpan[] = [
     {
       start: 6,
@@ -371,9 +339,6 @@ describe('overlap disposition (P0.31)', () => {
       supplementSpans(source),
     )
     const decisions = fromSuggestions(spans)
-    // The union's disposition is a policy decision; assert it directly. The
-    // route then publishes the redacted text as a secure, image-only PDF, so
-    // the accepted bytes cannot appear in the output.
     expect(applyRedacted(source, spans, decisions)).toBe(
       'alpha [REDACTED] delta',
     )
@@ -386,7 +351,6 @@ describe('overlap disposition (P0.31)', () => {
     })
 
     expect(response.status).toBe(200)
-    // No text fallback: the only output is the secure PDF.
     expect(written()).toBeNull()
     const bytes = writtenBytes()
     expect(bytes).not.toBeNull()
@@ -395,9 +359,6 @@ describe('overlap disposition (P0.31)', () => {
   })
 
   it('honours explicit keep and redact overrides on the same union', async () => {
-    // Containment, not partial overlap: this is the case whose covered range
-    // changed, so it proves the doc claim that override_redact now reaches the
-    // whole union rather than the contained winner's bytes.
     const spans = mergeSpans(
       reconcileRampartSpans(
         source,
@@ -450,16 +411,7 @@ describe('overlap disposition (P0.31)', () => {
   })
 })
 
-/**
- * P0.31 regression: `detectNer` used to union spans from overlapping token
- * windows with the vendored `policy.mergeSpans` before the product saw them, so
- * a keep-category model span at a seam could absorb a redact-category span and
- * `reconcileRampartSpans` never saw the contributor. `detectNer` now returns
- * the contributors and the product reconciles them. This drives the real
- * `detectNer` through the product detector and the finalize route.
- */
 describe('multi-window cross-window merge (P0.31 residual)', () => {
-  // Unique alphabetic filler: no heuristic match and no repeated word.
   const text =
     'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima ' +
     'mike november oscar papa quebec romeo sierra tango uniform victor whiskey ' +
@@ -509,9 +461,6 @@ describe('multi-window cross-window merge (P0.31 residual)', () => {
     )
     const detection = await detect(text)
     expect(detection.degraded).toBe(false)
-    // URL and GIVEN_NAME were emitted from separate windows over the same
-    // bytes; the union must keep the redact requirement and, through the real
-    // finalize route, withhold the contributor's bytes from the output.
     expect(detection.spans).toHaveLength(1)
     expect(detection.spans[0]).toMatchObject({ suggestion: 'redact' })
 

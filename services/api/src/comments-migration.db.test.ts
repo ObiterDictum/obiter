@@ -3,18 +3,6 @@ import type { PoolClient } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from './test-database.test-support'
 
-/**
- * The comment threads migrations applied for real, twice, against a live
- * database: the scoped key the replies foreign key depends on must survive
- * re-application, the foreign key must still cascade, and a stale draft
- * index of the same name must converge to the author-scoped columns rather
- * than silently survive `if not exists`.
- *
- * Every scenario runs in a throwaway schema inside one rolled-back
- * transaction, so the real tables are untouched. The migrations' unqualified
- * relation names resolve through search_path, which each scenario points at
- * its scratch schema, exactly as the runner would.
- */
 
 const threadsMigration = readFileSync(
   new URL(
@@ -51,12 +39,6 @@ describe('comment threads migrations 0030+0031 (db)', () => {
     await pool.end()
   })
 
-  /**
-   * A fresh schema holding the pre-0030 relations the migrations alter or
-   * reference: document_comments at its 0014 shape minus the foreign keys
-   * (irrelevant to what 0030/0031 change), plus the targets the replies
-   * table's foreign keys point at.
-   */
   async function scratchSchema(): Promise<string> {
     const schema = `comment_threads_${schemaCount++}`
     await client.query(`create schema ${schema}`)
@@ -91,10 +73,6 @@ describe('comment threads migrations 0030+0031 (db)', () => {
     return schema
   }
 
-  /**
-   * Run a statement inside a savepoint so a hard failure leaves the shared
-   * transaction usable for assertions and the next scenario.
-   */
   async function runSql(sql: string): Promise<string | null> {
     await client.query('savepoint before_statement')
     try {
@@ -144,8 +122,6 @@ describe('comment threads migrations 0030+0031 (db)', () => {
 
     await client.query(threadsMigration)
     await client.query(fingerprintMigration)
-    // Second application must be a no-op. Dropping document_comments_scoped_id_key
-    // here would fail hard: the replies foreign key depends on it.
     await client.query(threadsMigration)
     await client.query(fingerprintMigration)
 
@@ -178,8 +154,6 @@ describe('comment threads migrations 0030+0031 (db)', () => {
     )
     expect(columns.rows[0]?.n).toBe(1)
 
-    // The surviving foreign key must still be functional: a reply attaches to
-    // a parent inside its scope and cascades on delete.
     await client.query(`insert into matters values ('m1', 'o1')`)
     await client.query(`insert into matter_documents values ('d1', 'm1', 'o1')`)
     await client.query(`insert into users values ('u1')`)
@@ -204,9 +178,6 @@ describe('comment threads migrations 0030+0031 (db)', () => {
 
   it('converges a stale draft index to the author-scoped columns', async () => {
     const schema = await scratchSchema()
-    // A draft deployment added client_key but shaped the index without
-    // author_id; `if not exists` alone would leave it there and let different
-    // authors' keys collide.
     await client.query(
       `alter table document_comments add column client_key text`,
     )
@@ -221,7 +192,6 @@ describe('comment threads migrations 0030+0031 (db)', () => {
       await indexDefinition(schema, 'document_comments_client_key_idx'),
     ).toContain('btree (document_id, author_id, client_key)')
 
-    // The replies index converges the same way on re-application.
     await client.query(`drop index document_comment_replies_client_key_idx`)
     await client.query(
       `create unique index document_comment_replies_client_key_idx

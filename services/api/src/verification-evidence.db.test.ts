@@ -76,7 +76,6 @@ it('serves the exact checked paragraph after corpus changes, with real-session o
       ],
     )
     await insertFinding(pool, seed.orgA, runId, finding)
-    // The corpus is mutable; a later read must not replace the checked passage.
     await pool.query(
       'delete from legal_source_documents where document_id = $1',
       [sourceId],

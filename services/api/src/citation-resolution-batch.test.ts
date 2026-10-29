@@ -20,12 +20,6 @@ import {
   type CitationCandidate,
 } from './citation-resolution'
 
-/**
- * V3's batch boundary, operational failure classification and the seam into the
- * authority-existence check. The properties here are the ones a document-level
- * caller depends on: bounded query count, deterministic ordering, and no path
- * from a non-resolved result into V2 as an identity.
- */
 
 const authorities: AuthorityRow[] = Array.from({ length: 6 }, (_, index) => ({
   documentId: `uksc-2066-${index + 1}`,
@@ -114,8 +108,6 @@ describe('batching and query count', () => {
   })
 
   it('keeps each authority family on its own resolution path', async () => {
-    // A neutral citation cannot resolve to an Act identity and a legislation
-    // citation cannot resolve to a judgment: the families never cross.
     const { pool } = fakePool({ authorities })
     const results = await resolveCitationCandidates(pool, [
       { id: 'case-law', rawText: '[2066] UKSC 1' },
@@ -149,8 +141,6 @@ describe('batching and query count', () => {
 
     const authoritiesCall = calls.find((call) => call.table === 'authorities')
     expect(authoritiesCall?.text).not.toContain('drop table')
-    // The candidate itself is never sent: only the year it must contain, which
-    // the exact fold still re-checks in Node.
     expect(authoritiesCall?.values).toEqual([['%2066%']])
     for (const call of calls) {
       expect(call.text).not.toContain('[2066] UKSC 1')
@@ -243,9 +233,6 @@ describe('operational failures', () => {
   })
 
   it('propagates a directory that cannot be built instead of calling it a store failure', async () => {
-    // A row the fold cannot read is not an unavailable store. Classification
-    // stays at the read boundary, so a programmer error is not swallowed into
-    // an inconclusive finding.
     const pool = {
       query: async () => ({
         rows: [
@@ -287,8 +274,6 @@ describe('resolution to existence seam', () => {
     location: { paragraphId: 'p-1', start: 0, end: '[2066] UKSC 1'.length },
   }
 
-  /** A non-resolved result carries no identity, so V2 neither reads the store
-   * for it nor clears it, and it refuses a store outcome outright. */
   function expectNoIdentityReachesV2(resolution: CitationResolution) {
     expect(resolution.outcome).not.toBe('resolved')
     const normalized: NormalizedCitation =

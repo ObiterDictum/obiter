@@ -58,19 +58,12 @@ describe('document comments migration', () => {
 
 describe('comment threads migration 0030', () => {
   it('is safe to re-apply: the scoped key is never dropped', () => {
-    // The replies table's foreign key depends on
-    // document_comments_scoped_id_key, so the constraint must only ever be
-    // created behind an existence guard — a drop would need cascade and
-    // would silently rebuild the replies FK or fail.
     expect(threadsMigration).not.toMatch(
       /drop constraint if exists document_comments_scoped_id_key/u,
     )
     expect(threadsMigration).toMatch(
       /if not exists[\s\S]*document_comments_scoped_id_key[\s\S]*add constraint document_comments_scoped_id_key/u,
     )
-    // The guard resolves the table through the same search_path the ALTER
-    // uses: a same-named constraint on another schema's table must not
-    // satisfy it and leave this schema without the key the replies FK needs.
     expect(threadsMigration).toContain(
       "target_relation regclass := 'document_comments'::regclass",
     )
@@ -78,8 +71,6 @@ describe('comment threads migration 0030', () => {
   })
 
   it('converges the client-key indexes to the author-scoped definition', () => {
-    // A draft index of the same name on different columns must not survive
-    // re-application: each idempotency index is dropped then recreated.
     for (const table of ['document_comments', 'document_comment_replies']) {
       const name = `${table}_client_key_idx`
       expect(threadsMigration).toContain(`drop index if exists ${name};`)

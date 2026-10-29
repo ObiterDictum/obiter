@@ -3,12 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { checkQuoteFidelity } from './quote-fidelity'
 import { acts, insertAct, request } from './quote-fidelity.test-support'
 
-/**
- * Quote fidelity against the real Postgres public legal-source record for
- * legislation. A provision citation is compared only against its own provision,
- * and the single-schedule alias has one owner shared with the serving path.
- * Requires TEST_DATABASE_URL.
- */
 
 const identity = 'ukpga/2077/1'
 

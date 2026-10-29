@@ -6,11 +6,6 @@ import {
 } from './legislation-citations'
 import { legislationTitleJoiningWords } from './legislation-titles'
 
-/**
- * Title-shape tests for the whole-title-versus-prose boundary: the bounded
- * trailing punctuation and wrappers a title request may carry, the closed
- * joining-word grammar, and the absence of any caller-mutable grammar state.
- */
 
 function entry(
   year: number,
@@ -31,25 +26,21 @@ const held: LegislationActDirectoryEntry[] = [
   entry(2010, 15, 'Equality Act 2010'),
 ]
 
-// Teaches `of` and `the` as title-joining words.
 const teachesOfAndTheEntries = [
   ...held,
   entry(2022, 1, 'Protection of the Person Act 2022'),
 ]
 
-// Teaches only `of`.
 const teachesOfEntries = [
   ...held,
   entry(2023, 42, 'Powers of Attorney Act 2023'),
 ]
 
-// Teaches only `and`, so it has a non-empty grammar without `of` or `the`.
 const teachesAndEntries = [
   ...held,
   entry(2022, 32, 'Police, Crime, Sentencing and Courts Act 2022'),
 ]
 
-// Teaches a joining word the boundary must not adopt.
 const teachesUnderEntries = [
   ...held,
   entry(2022, 3, 'Administration under Wills Act 2022'),
@@ -72,8 +63,6 @@ describe('whole-title boundary', () => {
     'Children Act 1989 (repealed).',
     'Data Protection Act 2018.',
   ])('suppresses the punctuated or wrapped unheld title %s', (query) => {
-    // A standalone title request must never keyword-serve provisions of
-    // unrelated Acts just because the caller typed a full stop or a quote.
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
       kind: 'unresolved_title',
       recognisedQuery: query,
@@ -86,9 +75,6 @@ describe('whole-title boundary', () => {
     'Children Act 1989 (not repealed)',
     'Children Act 1989 (Public Lavatories)',
   ])('keeps %s, which only resembles a title, on the keyword path', (query) => {
-    // Normalisation is bounded to punctuation, balanced wrappers and the one
-    // recognised terminal annotation. Arbitrary trailing words and
-    // parentheticals must leave the query prose.
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
       kind: 'unrecognised',
     })
@@ -118,9 +104,6 @@ describe('whole-title boundary', () => {
 
 describe('the title-joining grammar is closed', () => {
   it('keeps a title joined by "the" regardless of which titles are stored', () => {
-    // Removing the one stored title carrying lowercase `the` used to flip
-    // `Offences Against the Person Act 1861` from suppression to keyword
-    // search. The grammar must not read the directory.
     const query = 'Offences Against the Person Act 1861'
     const expected = { kind: 'unresolved_title', recognisedQuery: query }
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual(
@@ -139,8 +122,6 @@ describe('the title-joining grammar is closed', () => {
   })
 
   it('does not adopt a joining word just because a stored title uses it', () => {
-    // A title containing lowercase `under` must not put `under` back into the
-    // grammar: `Defences under Children Act 1989` is the L35 prose boundary.
     const query = 'Defences under Children Act 1989'
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
       kind: 'unrecognised',
@@ -151,8 +132,6 @@ describe('the title-joining grammar is closed', () => {
   })
 
   it('still suppresses connector-bearing titles with an empty directory', () => {
-    // With no stored titles there is no directory evidence at all, so the
-    // closed grammar alone keeps an unheld title request suppressed.
     expect(
       classifyLegislationCitation(
         'Misuse of Drugs Act 1971',
@@ -172,9 +151,6 @@ describe('grammar mutation', () => {
       'Misuse of Drugs Act 1971',
       directory,
     )
-    // Before the repair `titleConnectors()` returned the live internal Set, so
-    // deleting `of` from it flipped the connector-bearing title to keyword
-    // search. The directory must expose no such handle.
     const mutable = (
       directory as unknown as { titleConnectors?: () => Set<string> }
     ).titleConnectors
@@ -185,9 +161,6 @@ describe('grammar mutation', () => {
   })
 
   it('freezes the grammar at runtime', () => {
-    // `Object.freeze` is the load-bearing guard, not the `readonly` type:
-    // without it a caller could push `under` and silently revert the L35
-    // boundary. The cast is the point of the test, not sloppiness.
     expect(Object.isFrozen(legislationTitleJoiningWords)).toBe(true)
     expect(() =>
       (legislationTitleJoiningWords as string[]).push('under'),
@@ -204,9 +177,6 @@ describe('grammar mutation', () => {
   })
 })
 
-// A held amending Act whose own short title embeds another held Act. The
-// real corpus holds ukpga/2023/51:
-// `Worker Protection (Amendment of Equality Act 2010) Act 2023`.
 const nestedHeldEntries = [
   ...held,
   entry(
@@ -229,10 +199,6 @@ describe('nested held-title containment (finding 1)', () => {
     'Worker Protection (Amendment of Equality Act 2010) Act 2010 (repealed)',
     'Worker Safety (Amendment of Equality Act 2010) Act 2011',
   ])('suppresses the standalone outer title %s', (query) => {
-    // The complete run is itself a title phrase, so it is a whole-title
-    // request even though a held title sits inside it. Routing it to the
-    // keyword path used to serve provisions of the 2023 Act for the 2010
-    // (unheld) outer title.
     expect(classifyLegislationCitation(query, nested)).toEqual({
       kind: 'unresolved_title',
       recognisedQuery: query,
@@ -455,8 +421,6 @@ describe('terminal ", as amended" qualifier (finding 4)', () => {
     'Children Act 1989, as amended;',
     'Children Act 1989, as amended (repealed)',
   ])('suppresses the unheld qualified title %s', (query) => {
-    // A standalone whole-title request with the conventional terminal
-    // qualifier must not keyword-serve provisions of unrelated Acts.
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
       kind: 'unresolved_title',
       recognisedQuery: query,
@@ -483,19 +447,12 @@ describe('terminal ", as amended" qualifier (finding 4)', () => {
     'Children Act 1989, as amended by Parliament',
     'Children Act 1989, as amended, subject to savings',
   ])('leaves the arbitrary trailing clause %s as prose', (query) => {
-    // The supported qualifier is terminal and bounded. A longer clause that
-    // merely begins with it is not presentation metadata.
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
       kind: 'unrecognised',
     })
   })
 })
 
-// The attached-opener defect: a held title whose first token carries the
-// opening bracket read as an unbracketed separate mention, so the query
-// reached the keyword path and served provisions of an unrelated Act while
-// the whitespace-separated form suppressed. The directory below is the
-// minimum that holds the two Acts the regression queries embed.
 describe('bracketed contained runs: attached and spaced delimiters (finding 5)', () => {
   it.each([
     [
@@ -513,9 +470,6 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
   ])(
     'suppresses the attached and spaced forms of %s identically',
     (attached, spaced) => {
-      // A space inside the bracket must not decide the routing. Before the
-      // fix `depthBefore` was read at the raw token boundary, so only the
-      // spaced form reached `unresolved_title`.
       expect(classifyLegislationCitation(attached, teachesOfAndThe)).toEqual({
         kind: 'unresolved_title',
         recognisedQuery: attached,
@@ -528,8 +482,6 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
   )
 
   it('never turns the attached-opener form into an authoritative not-held', () => {
-    // The suppression must stay a suppression. It may not claim the Act is
-    // absent, because the local directory is partial.
     const outcome = classifyLegislationCitation(
       'Amendment of (Equality Act 2010) Act 2020',
       teachesOfAndThe,
@@ -568,12 +520,8 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
   })
 
   it.each([
-    // Balanced, but the opener sits after the title text in its own token, so
-    // it must not retroactively bracket the run.
     'X Equality(Act 2010) Act 2020',
     'X Equality[Act 2010] Act 2020',
-    // Balanced, but the closer precedes the title text: the earlier group does
-    // not surround the run.
     'X (A) Equality Act 2010 Act 2020',
   ])('leaves %s on the keyword path: no opener surrounds the run', (query) => {
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
@@ -582,8 +530,6 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
   })
 
   it.each([
-    // Mismatched families and unbalanced delimiters are malformed, so they
-    // fail conservatively: no unrelated provision may be served.
     'X (Equality Act 2010] Act 2020',
     'X [Equality Act 2010) Act 2020',
     'X {Equality Act 2010] Act 2020',
@@ -600,13 +546,8 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
   })
 
   it.each([
-    // Bracketed, but the outer words are not a title phrase, so the held-title
-    // mention is prose evidence and the query stays searchable.
     'duties under (Equality Act 2010) Act 2020',
     'Duties under (equality act 2010) Act 2020',
-    // The sub-word shares a raw token with the opener. Removing the whole
-    // token on partial coverage would discard `under` and read the remainder
-    // as a title phrase; the token is kept, so the prose stays searchable.
     'Duties under(equality act 2010) Act 2020',
     'the Equality Act 2010 and the Human Rights Act 1998',
     'Defences under Equality Act 2010',
@@ -617,13 +558,6 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
   })
 })
 
-// A raw token can straddle the residue and a contained held-title run:
-// `under(Equality`, `of{Human`, `under[Children`. The residue must be the
-// whole query's folded pieces with the covered run pieces removed, each still
-// carrying its own casing. Reading the raw token instead let the covered run
-// word's capital (`Equality`, `Children`) count as a name word, and the
-// trimmed-away closer then read as an unbalanced bracket, so genuine prose was
-// suppressed as a standalone outer title.
 describe('straddling-token residue (finding 6)', () => {
   it.each([
     'Duties under(Equality Act 2010)',
@@ -650,8 +584,6 @@ describe('straddling-token residue (finding 6)', () => {
   })
 
   it.each([
-    // A non-held Act glued to the prose word has no covered piece to remove,
-    // so the word split, not the casing exclusion, is what keeps it prose.
     'Defences under[Children Act 1989]',
     'Defences under [Children Act 1989]',
     'Defences under(Children Act 1989)',
@@ -664,18 +596,12 @@ describe('straddling-token residue (finding 6)', () => {
   })
 
   it('reads casing from the uncovered residue only', () => {
-    // The covered `Equality` piece must not contribute its capital: the
-    // uncovered `under` decides, and it is not a title word.
     expect(
       classifyLegislationCitation(
         'Duties under(Equality Act 2010)',
         teachesOfAndThe,
       ).kind,
     ).toBe('unrecognised')
-    // An uncovered capitalised prose word still counts as a name word, so the
-    // residue stays a title phrase and the unbalanced opener suppresses it.
-    // This is the documented residual: casing still decides when nothing in
-    // the residue separates a clause from a title.
     expect(
       classifyLegislationCitation(
         'Duties Under(Equality Act 2010)',
@@ -685,7 +611,6 @@ describe('straddling-token residue (finding 6)', () => {
   })
 
   it.each([
-    // Fabricated outer titles the residue rule must keep suppressing.
     'Worker Safety (Amendment of Equality Act 2010) Act 2011',
     'X ((Equality Act 2010)) Act 2020',
     'X ([Equality Act 2010]) Act 2020',
@@ -697,13 +622,9 @@ describe('straddling-token residue (finding 6)', () => {
     'X Equality Act 2010) Act 2020',
     'X Equality Act 2010] Act 2020',
     'X (Equality Act 2010) (Human Rights Act 1998) Act 2020',
-    // Containment on both sides of the held-title span.
     'X(Equality Act 2010)Y Act 2020',
-    // Punctuation and quotes around a fabricated outer title.
     '"Worker Safety (Amendment of Equality Act 2010) Act 2011"',
     'Worker Safety (Amendment of Equality Act 2010) Act 2011.',
-    // A fragment with no outer year is still title-shaped and stays
-    // conservatively suppressed rather than keyword-serving.
     'X (Equality Act 2010)',
   ])('still suppresses the fabricated title-shaped form %s', (query) => {
     expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({

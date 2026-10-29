@@ -16,8 +16,6 @@ it('keeps dev matter extraction while Redact separates deleted text and exposes 
     `<w:comments xmlns:w="${w}"><w:comment w:id="0"><w:p><w:r><w:t>Private review note</w:t></w:r></w:p></w:comment></w:comments>`,
   )
   const bytes = Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
-  // Literal dev oracle: Mammoth reads insertions, omits deletions and comments,
-  // and retains its trailing paragraph separator.
   expect((await extractDocumentContent('docx', bytes)).text).toBe(
     'New Client\n\n',
   )

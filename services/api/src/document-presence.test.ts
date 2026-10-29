@@ -61,7 +61,6 @@ describe('DocumentPresenceRegistry', () => {
       },
     ])
 
-    // Leaving one tab removes only that tab's row.
     registry.update(scope({ clientId: 'tab_a' }), null)
     expect(registry.read(readScope())).toEqual([
       {

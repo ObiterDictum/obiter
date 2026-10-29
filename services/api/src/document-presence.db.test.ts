@@ -14,12 +14,6 @@ import {
   storageFor,
 } from './routes/document-write-share-revocation.test-support'
 
-/**
- * P2-8: presence is Postgres-backed, so cursors written through one API
- * instance are visible to another. Two `PostgresDocumentPresence` objects
- * over one pool are two instances; two mounted route apps over the same
- * pool prove the same at the HTTP boundary — no shared registry object.
- */
 
 const pool = createTestPool()
 
@@ -48,7 +42,6 @@ function cursor(seed: Seed): DocumentCursor {
   }
 }
 
-/** Read straight past the backend to assert exactly what was stored. */
 async function rawRows(seed: Seed) {
   const result = await pool.query<{
     user_id: string
@@ -95,8 +88,6 @@ describe('PostgresDocumentPresence', () => {
     try {
       const store = new PostgresDocumentPresence(pool)
       await store.update(scopeFor(seed, seed.editorId, 'tab-1'), cursor(seed))
-      // A heartbeat anchored to a superseded version stops matching the
-      // current-version read without needing a delete.
       expect(
         await store.read({
           organisationId: seed.orgId,
@@ -124,8 +115,6 @@ describe('PostgresDocumentPresence', () => {
       await store.update(scopeFor(seed, seed.editorId, 'tab-2'), cursor(seed))
       await store.update(scopeFor(seed, seed.ownerId, 'tab-9'), cursor(seed))
 
-      // Leaving on one tab removes exactly that row; the other tab and the
-      // other user are untouched.
       await store.update(scopeFor(seed, seed.editorId, 'tab-1'), null)
 
       const participants = await store.read({
@@ -147,8 +136,6 @@ describe('PostgresDocumentPresence', () => {
     try {
       const store = new PostgresDocumentPresence(pool)
       await store.update(scopeFor(seed, seed.editorId, 'tab-1'), cursor(seed))
-      // Age the row past expiry without a delete, the way a closed tab's
-      // heartbeat simply stops.
       await pool.query(
         `update document_presence
          set expires_at = now() - interval '2 minutes'
@@ -163,7 +150,6 @@ describe('PostgresDocumentPresence', () => {
         }),
       ).toEqual([])
 
-      // The next write's bounded sweep reclaims the dead row.
       await store.update(scopeFor(seed, seed.ownerId, 'tab-9'), cursor(seed))
       expect(await rawRows(seed)).toHaveLength(1)
     } finally {
@@ -181,7 +167,6 @@ describe('PostgresDocumentPresence', () => {
         scopeFor(other, other.editorId, 'tab-1'),
         cursor(other),
       )
-      // Cross-organisation and cross-document reads see nothing.
       expect(
         await store.read({
           organisationId: seed.otherOrgId,
@@ -212,8 +197,6 @@ describe('PostgresDocumentPresence', () => {
   it('bounds the participant list at the contract cap', async () => {
     const seed = await seedMatter(pool, 'edit')
     try {
-      // The participant cap counts distinct users/tabs; synthesise members
-      // rather than reusing the two seeded users.
       const extras = Array.from(
         { length: DOCUMENT_COLLABORATION_PARTICIPANT_MAX_COUNT + 5 },
         (_, index) => `usr_race_extra_${index}_${seed.matterId.slice(-6)}`,
@@ -283,8 +266,6 @@ describe('presence across independent route instances', () => {
   it('a cursor written through one app is read back through another', async () => {
     const seed = await seedMatter(pool, 'edit')
     try {
-      // Two route apps sharing one pool are two API instances: neither
-      // holds presence state, so visibility must come from Postgres.
       const instanceA = routeApp(
         pool,
         storageFor(seed),

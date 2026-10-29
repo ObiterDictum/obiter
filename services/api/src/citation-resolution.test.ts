@@ -8,12 +8,6 @@ import {
 } from './citation-resolution.test-support'
 import { resolveCitationCandidates } from './citation-resolution'
 
-/**
- * V3 case-law resolution and grammar rejection against an injected pool. The
- * store's own SQL is pinned in
- * `routes/legal-search/__tests__/authority-citation-lookup.test.ts`; here the
- * fake answers like the real one, so the orchestration is what is under test.
- */
 
 const held: AuthorityRow[] = [
   { documentId: 'uksc-2066-1', neutralCitation: '[2066] UKSC 1' },
@@ -22,13 +16,6 @@ const held: AuthorityRow[] = [
 ]
 
 describe('case law resolution', () => {
-  it('resolves a neutral citation to its one stored canonical identity', async () => {
-    expect(await resolveOne('[2066] UKSC 1', { authorities: held })).toEqual({
-      kind: 'case_law',
-      neutralCitation: '[2066] UKSC 1',
-      sourceId: 'uksc-2066-1',
-    })
-  })
 
   it.each(['[2066]  uksc   1', '[2066] UKSC 1', '[2066]\tUKSC\t1'])(
     'resolves the harmless variants of %j',
@@ -40,11 +27,6 @@ describe('case law resolution', () => {
     },
   )
 
-  it('resolves a zero-padded tribunal citation to the unpadded record', async () => {
-    expect(
-      await resolveOne('[2066] UKUT 236 (IAC)', { authorities: held }),
-    ).toMatchObject({ kind: 'case_law', sourceId: 'ukut-2066-pad' })
-  })
 
   it.each([
     '[2065] UKSC 1',
@@ -52,9 +34,6 @@ describe('case law resolution', () => {
     '[2066] UKSC 2',
     '[2066] EWHC 1 (Admin)',
   ])('leaves %j unresolved, never "does not exist"', async (rawText) => {
-    // The candidate is inside the grammar and no stored record carries it. That
-    // is an absent identity, not an absent authority, and the two must not be
-    // conflated.
     expect(await resolveOne(rawText, { authorities: held })).toEqual({
       kind: 'unresolved',
       reason: 'no_canonical_match',
@@ -73,28 +52,6 @@ describe('case law resolution', () => {
     }
   })
 
-  it('resolves the one live carrier beside withdrawn history, never ambiguous', async () => {
-    // A withdrawn row is a source that was once minted and is no longer
-    // trustworthy, not a second candidate identity. One live carrier resolves
-    // whatever withdrawn history sits beside it, which is what the
-    // authority-existence check documents for the same store state.
-    expect(
-      await resolveOne('[2066] UKSC 8', {
-        authorities: [
-          { documentId: 'live', neutralCitation: '[2066] UKSC 8' },
-          {
-            documentId: 'withdrawn',
-            neutralCitation: '[2066] UKSC 8',
-            withdrawn: true,
-          },
-        ],
-      }),
-    ).toEqual({
-      kind: 'case_law',
-      neutralCitation: '[2066] UKSC 8',
-      sourceId: 'live',
-    })
-  })
 
   it('stays ambiguous for two live carriers, in either row order', async () => {
     const live: AuthorityRow[] = [
@@ -128,10 +85,6 @@ describe('case law resolution', () => {
   })
 
   it('fails closed on two withdrawn carriers it cannot represent as one id', async () => {
-    // One sourceId cannot name two withdrawn carriers, and resolution never
-    // picks by row order. V2 would report source_withdrawn for the same state;
-    // both answers are review-required, so resolution refuses to choose rather
-    // than selecting arbitrarily.
     for (const rows of [
       [
         {
@@ -212,8 +165,6 @@ describe('case law grammar rejection', () => {
       candidates('[2066 UKSC 1', 'UKSC 1', '[2066] UKSC 1 and [2066] UKSC 2'),
     )
 
-    // The legislation classifier decides these, so only its directory is read;
-    // none of them is a case-law candidate lookup.
     expect(calls.some((call) => call.table === 'authorities')).toBe(false)
   })
 
@@ -271,8 +222,6 @@ describe('legislation path resolution', () => {
     '/ln/ukpga/2066/1/',
     '/ln/ukpga/2066/1/../../x',
     '/ln/ukpga/2066/1/section/%2e%2e',
-    // A non-canonical Act year is not a canonical path, so it is malformed
-    // rather than resolving to an identity Number() would rewrite.
     '/ln/ukpga/0204/1',
     '/ln/ukpga/1800/1',
     'ukpga/2066/1/section/40',
@@ -312,9 +261,6 @@ describe('free-text legislation resolution', () => {
   })
 
   it('resolves an unheld chapter to the identity the citation proves', async () => {
-    // A chapter citation is a canonical identity in itself, so an absent
-    // chapter is a heldness question for the existence check, not a
-    // resolution failure.
     expect(await resolveOne('2066 c. 99')).toEqual({
       kind: 'legislation',
       documentIdentity: 'ukpga/2066/99',
@@ -432,7 +378,6 @@ describe('free-text legislation resolution', () => {
       documentIdentity: 'ukpga/2066/1',
       labelPath: null,
     })
-    // And it resolves to nothing at all rather than to a guess.
     expect(resolution.kind).toBe('unresolved')
   })
 

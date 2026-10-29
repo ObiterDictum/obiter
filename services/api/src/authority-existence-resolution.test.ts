@@ -9,16 +9,6 @@ import {
   type VerificationSubject,
 } from '@obiter/verification-core'
 
-/**
- * The seam V2 sits behind. Free-text legislation citations are resolved by the
- * existing Search classifier and title fold; V2 only ever sees the canonical
- * identity that resolution produces. These pin the cases the slice names
- * (ambiguous titles, the `(repealed)` annotation, apostrophe and case folding)
- * at the seam so V2 is not tempted to reimplement them.
- *
- * Pure: no store, no database. The same resolution is exercised end to end in
- * `authority-existence.db.test.ts`.
- */
 
 const subject: VerificationSubject = { documentId: 'd-v2', versionId: 'v-1' }
 

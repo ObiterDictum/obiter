@@ -22,8 +22,6 @@ describe('chapter citation classification', () => {
   })
 
   it('still reports an absent canonical chapter as not held', () => {
-    // A parsed chapter citation is a canonical identity: year and number
-    // prove what was requested, so the store proves it is absent.
     expect(classifyLegislationCitation('2008 c. 12', directory)).toEqual({
       kind: 'not_held',
       identity: 'ukpga/2008/12',
@@ -51,8 +49,6 @@ describe('chapter citation classification', () => {
   })
 
   it('resolves a held chapter whose number is zero-padded', () => {
-    // Leading zeros are harmless for a count: `042` and `42` name the same
-    // chapter, so the stored Act still answers.
     const outcome = classifyLegislationCitation('1998 c. 042', directory)
     expect(outcome.kind).toBe('act')
     if (outcome.kind === 'act') {
@@ -69,8 +65,6 @@ describe('chapter citation classification', () => {
   })
 
   it('resolves a supported historical year to its canonical identity', () => {
-    // 1801 is the first year of the Parliament of the United Kingdom, whose
-    // Public General Acts are the `ukpga` corpus.
     expect(classifyLegislationCitation('1801 c. 1', directory)).toEqual({
       kind: 'not_held',
       identity: 'ukpga/1801/1',
@@ -103,8 +97,6 @@ describe('chapter citation classification', () => {
   })
 
   it.each([
-    // A year that is not the canonical four-digit Act year is not a chapter
-    // citation at all, so it must not be derived from a numeric conversion.
     '0204 c. 1',
     '0000 c. 1',
     '1800 c. 1',

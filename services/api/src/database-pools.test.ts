@@ -31,11 +31,6 @@ describe('createDatabasePools mode selection', () => {
     await pools.close()
   })
 
-  // Every configured reader is a separate, read-only corpus, whatever it names,
-  // and nothing falls back to the application pool for writes. The mode follows
-  // configuration provenance rather than URL equality, so a spelling that
-  // happens to name the application database cannot make the corpus share the
-  // application's write owner.
   it.each([
     ['the identical URL', 'postgres://obiter:obiter@localhost:5432/obiter'],
     ['a host alias', 'postgres://obiter:obiter@127.0.0.1:5432/obiter'],
@@ -51,7 +46,6 @@ describe('createDatabasePools mode selection', () => {
       const pools = createDatabasePools(envWithCorpus(corpusDatabaseUrl))
 
       expect(pools.corpus.read).not.toBe(pools.application)
-      // Absence of CORPUS_WRITE_DATABASE_URL is the whole capability model.
       expect(pools.corpus.write).toBeNull()
 
       await pools.close()
@@ -71,8 +65,6 @@ describe('createDatabasePools mode selection', () => {
   })
 
   it('keeps reader and writer as distinct pools when their URLs are identical', async () => {
-    // One host and one database under two roles are two access boundaries. A
-    // URL comparison cannot see the difference, so provenance has to decide.
     const pools = createDatabasePools(
       envWithCorpus(separateCorpusUrl, separateCorpusUrl),
     )
@@ -84,9 +76,6 @@ describe('createDatabasePools mode selection', () => {
   })
 
   it('refuses a writer with no reader even when called with a hand-built env', () => {
-    // Bypasses readCorpusDatabaseUrls deliberately: the factory is the last
-    // boundary before pools exist and must not construct the forbidden
-    // read-application-write-corpus topology from an ApiEnv it is handed.
     expect(() =>
       createDatabasePools(
         createTestApiEnv({
@@ -108,8 +97,6 @@ describe('createDatabasePools shutdown', () => {
     await pools.close()
     await pools.close()
 
-    // A second end() on a pool already ended is how a shutdown path closes a
-    // pool another owner still expects to use.
     expect(end).toHaveBeenCalledTimes(1)
   })
 
@@ -206,7 +193,6 @@ describe('createDatabasePools shutdown', () => {
     await expect(pools.close()).rejects.toBeInstanceOf(AggregateError)
     await expect(pools.close()).rejects.toBeInstanceOf(AggregateError)
 
-    // The failure is surfaced on every call; neither pool is closed twice.
     expect(end).toHaveBeenCalledTimes(2)
   })
 

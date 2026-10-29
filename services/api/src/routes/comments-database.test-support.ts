@@ -166,11 +166,6 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('client_key = $3')
         ) {
           this.queries.push(sql)
-          // Mirror the query's own scope: only organisations the SQL names
-          // are filtered, so dropping the predicate in the source makes the
-          // other organisation's row match again and the guard test fails.
-          // Match the predicate itself, not the column name: `organisation_id`
-          // would appear in the projection if a column list ever grew one.
           const scoped = sql.includes('organisation_id = $4')
           const [documentId, authorId, clientKey, organisationId] =
             parameters as string[]
@@ -205,7 +200,6 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('comment_id = $1')
         ) {
           this.queries.push(sql)
-          // The resolution path's pre-commit thread read.
           const [commentId, documentId, matterId, organisationId] =
             parameters as string[]
           const replies = [...stagedReplies.values()].filter(
@@ -222,7 +216,6 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('from document_comments')
         ) {
           this.queries.push(sql)
-          // The reply parent's scoped-existence probe.
           const [commentId, documentId, matterId, organisationId] =
             parameters as string[]
           const existing = stagedComments.get(commentId)
@@ -241,8 +234,6 @@ export class TestDatabase extends SharedTestDatabase {
           sql.includes('where id = $1')
         ) {
           this.queries.push(sql)
-          // The resolution-miss probe: reports whether the row exists in
-          // scope so the route can separate not-found from forbidden.
           const [commentId, documentId, matterId, organisationId] =
             parameters as string[]
           const existing = stagedComments.get(commentId)
@@ -294,7 +285,6 @@ export class TestDatabase extends SharedTestDatabase {
                 comment.clientKey === clientKey,
             )
           ) {
-            // `on conflict do nothing` reports no returning row.
             return { rows: [] }
           }
           const value = this.storedComment({

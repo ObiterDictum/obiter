@@ -40,8 +40,6 @@ describe('citation form tolerance (finding 3)', () => {
   })
 
   it('resolves a schedule citation that names no schedule number', () => {
-    // The unnumbered single-schedule storage path. The serve layer decides
-    // whether the Act actually uses it; the parser must not drop the form.
     const outcome = classifyLegislationCitation(
       'Sch. para. 2 Sample Act 2020',
       directory,
@@ -65,9 +63,6 @@ describe('citation form tolerance (finding 3)', () => {
   })
 
   it('never passes an unrecognised citation prefix into title resolution', () => {
-    // "s. 20 (3) Equalities Act 2010" has a misspelled Act: the provision
-    // path must not be rebuilt from the leftover section text, and the Act
-    // must be missing-provision, not a manufactured title.
     const outcome = classifyLegislationCitation(
       's. 20 (3) Equalities Act 2010',
       directory,
@@ -138,8 +133,6 @@ describe('schedule citation examples (finding 4)', () => {
   })
 
   it('names the schedule a bare paragraph citation leaves out', () => {
-    // The store only reports an unnumbered citation as underspecified on an
-    // Act holding a numbered Schedule 1, so Schedule 1 is the example to give.
     const citation = formatScheduleCitation('schedule/paragraph/2')
     expect(citation).not.toBeNull()
     expect(parseScheduleLabelPath(citation ?? '')).toBe(

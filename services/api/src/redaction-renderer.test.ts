@@ -125,7 +125,6 @@ describe('createHttpRedactionRenderer', () => {
   })
 
   it('reports an unreachable renderer as unavailable', async () => {
-    // Port 1 is reserved and never listening; the connection is refused.
     const renderer = createHttpRedactionRenderer({
       url: 'http://127.0.0.1:1',
       timeoutMs: 250,

@@ -1036,8 +1036,6 @@ describe('restoreRedactionRunWithAudit', () => {
     )
   })
 
-  // The repository has no committed live-Postgres test harness; this exact
-  // query-order regression test protects the lock protocol at the transactional seam.
   it('locks linked restore parents before the run', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
@@ -1110,8 +1108,6 @@ describe('restoreRedactionRunWithAudit', () => {
         return {
           rows: [
             runRow({
-              // node-postgres returns Date for an uncast timestamptz, losing
-              // the six-digit fraction that the restore must match exactly.
               deleted_at: text.includes('run.deleted_at::text')
                 ? deletedAt
                 : new Date('2026-02-01T00:00:00.123Z'),
@@ -1194,8 +1190,6 @@ describe('restoreRedactionRunWithAudit', () => {
       replacementRunId: 'red_2',
     })
 
-    // The source run is held for update so a concurrent re-detection cannot
-    // install a competing replacement after this check.
     expect(
       calls.some(
         ([sql]) =>

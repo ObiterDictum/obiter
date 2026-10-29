@@ -3,14 +3,6 @@ import type { PoolClient } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from './test-database.test-support'
 
-/**
- * P0.20: matter_shares must reject a grantee outside the share organisation.
- *
- * Every scenario runs in a throwaway schema inside one rolled-back
- * transaction, so the real matter_shares table is untouched. The migration's
- * unqualified relation names resolve through search_path, which each scenario
- * points at its scratch schema, exactly as the runner would.
- */
 
 const migration = readFileSync(
   new URL(
@@ -45,7 +37,6 @@ describe('matter share grantee organisation constraint (db)', () => {
     await pool.end()
   })
 
-  /** A fresh schema holding the pre-0027 tables, made the search_path target. */
   async function scratchSchema(): Promise<string> {
     const schema = `matter_share_constraint_${schemaCount++}`
     await client.query(`create schema ${schema}`)
@@ -102,11 +93,6 @@ describe('matter share grantee organisation constraint (db)', () => {
     `)
   }
 
-  /**
-   * Run the migration inside a savepoint so a hard failure leaves the
-   * transaction usable for assertions and the next scenario, and returns the
-   * failure message (null when it succeeded).
-   */
   async function runMigration(): Promise<string | null> {
     await client.query('savepoint before_migration')
     try {
@@ -132,9 +118,6 @@ describe('matter share grantee organisation constraint (db)', () => {
     await scratchSchema()
     await seedTwoOrganisations()
 
-    // The gap the migration closes: the legacy key ties the grantee to users
-    // only, so organisation B's user can be granted access to organisation A's
-    // matter at the database boundary.
     await expect(
       client.query(
         share(`'shr_pre', 'org_a', 'mtr_a', 'usr_b', 'view', 'usr_a'`),
@@ -201,8 +184,6 @@ describe('matter share grantee organisation constraint (db)', () => {
     ).rejects.toThrow(new RegExp(compositeConstraint))
     await client.query('rollback to savepoint before_bad_membership_move')
 
-    // The null-case (member removal) is the same constraint: a share cannot be
-    // left naming a user who has no organisation.
     await client.query('savepoint before_bad_membership_removal')
     await expect(
       client.query(
@@ -232,8 +213,6 @@ describe('matter share grantee organisation constraint (db)', () => {
     await seedTwoOrganisations()
     expect(await runMigration()).toBeNull()
 
-    // created_by records historical authorship, not current membership, so a
-    // grant made by an author who has since left every organisation is valid.
     await expect(
       client.query(
         share(
@@ -253,8 +232,6 @@ describe('matter share grantee organisation constraint (db)', () => {
     const error = await runMigration()
     expect(error).toContain('P0.20')
     expect(error).toContain('Revoke them')
-    // The whole file rolled back: no composite constraint, and the legacy key
-    // it would have replaced is still the one in force.
     const { rows } = await client.query<{ indexname: string }>(
       `select indexname from pg_indexes
        where schemaname = $1 and indexname = 'users_id_organisation_key'`,

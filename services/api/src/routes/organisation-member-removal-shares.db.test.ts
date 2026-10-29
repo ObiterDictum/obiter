@@ -8,12 +8,6 @@ import { createTestApiEnv } from '../test-api-env'
 import { createDocumentAccessRoutes } from './document-access'
 import { createOrganisationsRoutes } from './organisations'
 
-/**
- * Removing a member must revoke their matter shares in the same transaction.
- * The composite grantee key from 0027 rejects the organisationId change while
- * any share remains, so this exercises the transactional revocation the route
- * performs and the real lock interaction with a concurrent grant.
- */
 
 const REQUEST_ID = 'req_member_removal_shares'
 
@@ -218,7 +212,6 @@ describe('organisation member removal revokes matter shares (db)', () => {
   })
 
   it('revokes a share granted concurrently with the removal', async () => {
-    // Re-seat the member so the concurrent grant is valid when it starts.
     await pool.query(
       `update users set "organisationId" = $1, role = 'member', "updatedAt" = now()
        where id = $2`,
@@ -226,10 +219,6 @@ describe('organisation member removal revokes matter shares (db)', () => {
     )
     const owner = app(pool, seedData.ownerId, seedData.orgId)
 
-    // Hold FOR SHARE on the member: the grant's own FOR SHARE is compatible,
-    // so the grant commits, while the removal's FOR UPDATE cannot start until
-    // the gate releases. That forces the removal to run its revocation against
-    // a share that already exists.
     const gate: PoolClient = await gatePool.connect()
     try {
       await gate.query('begin')

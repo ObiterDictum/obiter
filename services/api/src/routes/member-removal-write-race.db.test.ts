@@ -25,14 +25,6 @@ import {
   transactionPauseGate,
 } from './matter-lock-race.test-support'
 
-/**
- * Member removal locks the departing user row `FOR UPDATE` and deletes that
- * user's shares; `lockMatterForEdit` takes a `FOR SHARE` on the acting user
- * row after the matter lock. The writer is paused by a transaction gate after
- * its matter lock, removal commits, and the writer resumes. On the unfixed
- * head the writer has no membership re-read and commits; on the fix it
- * observes the removed membership and fails.
- */
 
 type Seed = Awaited<ReturnType<typeof seedMatter>>
 
@@ -149,9 +141,6 @@ for (const spec of specs) {
 describe('member removal vs a removable matter creator', () => {
   async function creatorSeed() {
     const seed = await seedMatter(pool, 'edit')
-    // The member with the share becomes the second owner so the creator can be
-    // removed, while the creator reaches the matter through `created_by`, the
-    // branch share deletion cannot change.
     await pool.query(`update users set role = 'owner' where id = $1`, [
       seed.editorId,
     ])

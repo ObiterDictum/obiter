@@ -6,19 +6,9 @@ import { supplementSpans } from '@obiter/redaction-policy'
 
 const unpdf = vi.hoisted(() => ({ getDocumentProxy: vi.fn() }))
 
-// The real unpdf namespace, snapshotted before mock.module patches it in
-// place below: the factory runs at registration time, so its spread already
-// captured the real exports; this keeps them for the tests that need the
-// real getDocumentProxy behind the mocked one.
 const unpdfActual = { ...(await import('unpdf')) }
 
-// The real module, snapshotted before mock.module registers: a factory that
-// awaited its own specifier re-entered the in-flight mock registration and
-// deadlocked under bun's module registry.
 const unpdfModule = { ...(await import('unpdf')) }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const unpdfKeys = Object.fromEntries(
   Object.keys(await import('unpdf')).map((key) => [key, undefined]),
 )
@@ -32,9 +22,6 @@ mock.module('unpdf', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const {
   DocumentExtractionError,
   extractDocumentText,
@@ -98,8 +85,6 @@ async function createMinimalDocx(
   return archive.generateAsync({ type: 'nodebuffer' })
 }
 
-/** Minimal DOCX carrying one footnote and one endnote, each after a
- *  self-closing separator placeholder. */
 async function createNotesDocx() {
   const archive = new JSZip()
   archive.file(
@@ -221,12 +206,10 @@ describe('extractDocumentText', () => {
 
     const text = await extractDocumentText('docx', fixture)
 
-    // Both note bodies, including the one after the self-closing separator.
     expect(text).toContain('Three Rivers')
     expect(text).toContain('disclosure timetable agreed on 2 May')
     expect(text).toContain('[Footnote 2]')
     expect(text).toContain('[Footnote 3]')
-    // Notes sit after the last body paragraph, so body offsets are stable.
     const notesStart = text.indexOf('[Footnote 2]')
     expect(notesStart).toBeGreaterThan(text.indexOf('Footnote reference 9.'))
     expect(text.slice(0, notesStart)).not.toContain(
@@ -250,7 +233,6 @@ describe('extractDocumentText', () => {
     })
     const full = await extractDocumentText('docx', fixture)
 
-    // Notes are appended, never interleaved: every pre-existing offset holds.
     expect(full.startsWith(baseline)).toBe(true)
     warn.mockRestore()
   })

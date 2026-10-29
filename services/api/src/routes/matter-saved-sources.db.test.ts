@@ -7,12 +7,6 @@ import { createTestPool } from '../test-database.test-support'
 import { createMatterSavedSourcesRoutes } from './matter-saved-sources'
 import { waitForLockWait } from './matter-lock-race.test-support'
 
-/**
- * Saved sources belong to one matter in one organisation. These cases drive
- * the routes against a real database because the whole guarantee is the
- * authorisation join: a stranger with a valid matter and saved-source id must
- * still see nothing, and saving is a write, so a view share cannot do it.
- */
 
 const pool = createTestPool()
 
@@ -158,8 +152,6 @@ describe('matter saved sources', () => {
       }
       expect(savedSource.sourceId).toBe(sourceBody.sourceId)
 
-      // Filing the same source again revives one row rather than adding a
-      // second entry.
       const again = await asOwner.request(
         `/api/matters/${seed.matterId}/saved-sources`,
         {
@@ -178,8 +170,6 @@ describe('matter saved sources', () => {
       }
       expect(savedSources).toHaveLength(1)
 
-      // A member of another organisation cannot read or extend it, even with
-      // the real matter id.
       const stranger = app(pool, {
         id: seed.strangerId,
         organisationId: seed.otherOrgId,
@@ -202,8 +192,6 @@ describe('matter saved sources', () => {
         ).status,
       ).toBe(404)
 
-      // Unsaving is a write, so the view-only share cannot do it; the owner
-      // can, and the row is soft-deleted out of the list.
       const viewer = app(pool, {
         id: seed.viewerId,
         organisationId: seed.orgId,

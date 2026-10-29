@@ -3,12 +3,6 @@ import {
   type LegislationActDirectoryEntry,
 } from './legislation-citations'
 
-/**
- * The stored Act directory the citation-classification tests resolve against.
- * Defined once and shared by the split test files so the fixture cannot drift
- * between them. Titles are chosen so each fold under test (case, quote, hyphen,
- * `(repealed)`, alias) has exactly one stored Act to converge on.
- */
 export const entries: LegislationActDirectoryEntry[] = [
   {
     actType: 'ukpga',
@@ -31,9 +25,6 @@ export const entries: LegislationActDirectoryEntry[] = [
     identity: 'ukpga/2020/1',
     title: 'Sample Act 2020',
   },
-  // Real titles whose lowercase joining words (`of`, `and`) teach the
-  // directory what a short title may contain. Without them the classifier has
-  // no title grammar to read and can only fall back on containment.
   {
     actType: 'ukpga',
     year: 2023,

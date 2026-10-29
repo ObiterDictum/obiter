@@ -3,17 +3,6 @@ import type { PoolClient } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from './test-database.test-support'
 
-/**
- * Restoring `legislation_documents_act_type_check` on a database whose
- * `legislation_documents` table predates 0020. 0020 declares the constraint
- * only inside `create table if not exists`, so an existing table never received
- * it, and a fresh-install run of the migration skips the add entirely.
- *
- * Every scenario runs in a throwaway schema inside one rolled-back transaction,
- * so the real `legislation_documents` table is untouched. The migration's
- * unqualified relation names resolve through `search_path`, which each scenario
- * points at its scratch schema, exactly as the runner would.
- */
 
 const migration = readFileSync(
   new URL(
@@ -49,7 +38,6 @@ describe('legislation act-type constraint migration (db)', () => {
     await pool.end()
   })
 
-  /** A fresh schema holding the pre-0020 table, made the search_path target. */
   async function scratchSchema(): Promise<string> {
     const schema = `act_type_migration_${schemaCount++}`
     await client.query(`create schema ${schema}`)
@@ -60,11 +48,6 @@ describe('legislation act-type constraint migration (db)', () => {
     return schema
   }
 
-  /**
-   * Run the migration inside a savepoint so a hard failure leaves the
-   * transaction usable for assertions and the next scenario, and returns the
-   * failure message (null when it succeeded).
-   */
   async function runMigration(): Promise<string | null> {
     await client.query('savepoint before_migration')
     try {
@@ -148,8 +131,6 @@ describe('legislation act-type constraint migration (db)', () => {
     )
 
     expect(await runMigration()).toBeNull()
-    // A second run must not add, drop or revalidate anything: the runner skips
-    // a recorded file, and the guard must still be a no-op if it is re-run.
     expect(await runMigration()).toBeNull()
 
     const { rows } = await client.query<{ n: number }>(
@@ -174,7 +155,6 @@ describe('legislation act-type constraint migration (db)', () => {
 
     const error = await runMigration()
     expect(error).toContain('unexpected definition')
-    // Loud failure, not a silent drop-and-replace of an unexpected object.
     expect(await constraint(schema)).toEqual({
       contype: 'c',
       validated: true,
@@ -242,8 +222,6 @@ describe('legislation act-type constraint migration (db)', () => {
     )
 
     expect(await runMigration()).toContain('is violated by some row')
-    // The add and the validation rolled back together, so nothing is left
-    // half-applied and the migration is not recorded as done.
     expect(await constraint(schema)).toBeNull()
   })
 

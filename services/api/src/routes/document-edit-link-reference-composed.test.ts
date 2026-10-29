@@ -27,9 +27,6 @@ const referenceOffset = Math.min(
   referenceParagraph.runs.map((run) => run.text).join('').length,
 )
 
-// E6b API leg: a hyperlink range and a REF field arrive as two operations in
-// one request, and the persisted version carries both — the relationship and
-// the bookmark — through the same validation the typed edits take.
 describe('POST /api/documents/:id/edit hyperlinks and cross-references', () => {
   it('saves the hyperlink and the cross-reference in one version', async () => {
     const database = new EditDatabase()
@@ -60,7 +57,6 @@ describe('POST /api/documents/:id/edit hyperlinks and cross-references', () => {
     expect(xml).toMatch(/<w:instrText[^>]*>\s*REF _Ref_/u)
     expect(xml).toMatch(/<w:bookmarkStart[^>]*w:name="_Ref_/u)
 
-    // The link text itself is untouched: the mark wraps, it never inserts.
     const saved = await parseDocx(edited)
     const savedStory = saved.model.stories.find(
       ({ kind }) => kind === 'document',

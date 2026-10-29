@@ -7,20 +7,9 @@ import {
 } from '@obiter/redaction-policy'
 import { createRedactionDetector } from './redaction-detection'
 
-/**
- * P0.31: `policy.mergeSpans` decides both coverage and disposition, and it
- * inherits the preferred detection's label for the whole union. A keep-category
- * winner can therefore disposition bytes a redact detection contributed, and
- * containment can drop a redact loser's exclusive bytes. These drive the real
- * detector with synthetic model spans over filler text that no heuristic or UK
- * supplement pattern matches, so the geometry under test is exactly the
- * contributors given. The final case drives a real premasked URL, the only
- * reachable keep-category label in the pinned pipeline.
- */
 
 const classifier = (async () => []) as never
 
-/** Lowercase filler: no heuristic match and no UK supplement pattern match. */
 const filler = 'alpha bravo charlie delta echo foxtrot'
 
 function at(word: string, text: string = filler) {
@@ -126,8 +115,6 @@ describe('overlap disposition (P0.31)', () => {
   })
 
   it('restores a redact container the keep winner would have shrunk past', async () => {
-    // Before P0.31 the contained URL winner collapsed the union to its own
-    // range, silently keeping the container's exclusive bytes.
     const spans = await detected(filler, [
       modelSpan('GIVEN_NAME', at('bravo charlie'), 0.5),
       modelSpan('URL', at('charlie'), 0.99),
@@ -164,8 +151,6 @@ describe('overlap disposition (P0.31)', () => {
   })
 
   it('carries a redact detection across a chained overlap', async () => {
-    // [0,10] keep -- [8,15] redact -- [13,20] keep: the middle detection must
-    // not be stranded between two keep winners.
     const text = filler.slice(0, 21)
     const spans = await detected(text, [
       modelSpan('URL', { start: 0, end: 10, text: text.slice(0, 10) }, 0.9),
@@ -252,10 +237,6 @@ describe('overlap disposition (P0.31)', () => {
   })
 
   it('leaves no redact-required content in the automatic output', async () => {
-    // The pinned model emits no DATE, so a keep-category winner over redact
-    // coverage needs a reachable keep label. URL is the only one, and it is
-    // premasked: the model sees "[URL] Alice" and its span projects back over
-    // the URL's whole raw range plus the name beside it.
     const text = 'https://x.com Alice'
     const detect = createRedactionDetector({
       loadClassifier: async () => classifier,
@@ -275,9 +256,6 @@ describe('overlap disposition (P0.31)', () => {
       end: text.length,
       suggestion: 'redact',
     })
-    // Automatic policy: follow the detector's own suggestion. Before P0.31 the
-    // union was a keep-suggestion URL span, so this reject left "Alice" in the
-    // output; the assertion is on the produced bytes, not an intermediate label.
     const output = applyRedacted(
       text,
       result.spans,
@@ -288,9 +266,6 @@ describe('overlap disposition (P0.31)', () => {
   })
 
   it('redacts a degraded-mode heuristic overlap', async () => {
-    // EMAIL sits inside the URL match. The deterministic layer is the only
-    // source when the model cannot run, and the URL (a keep category) is the
-    // longer, preferred contributor; the email must still take the union.
     const text = 'See https://example.com/a@b.com now'
     const detect = createRedactionDetector({
       loadClassifier: async () => {

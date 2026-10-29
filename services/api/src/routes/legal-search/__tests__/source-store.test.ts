@@ -62,11 +62,6 @@ const withdrawn = (id: string): StoredAuthorityCarrier => ({
   withdrawn: true,
 })
 
-/**
- * The one live/withdrawn carrier rule. It states which identities exist and
- * which are trustworthy; V2 maps a selection onto heldness and V3 onto an
- * identity, so this table is the contract both stages read.
- */
 describe('selectAuthorityCarriers', () => {
   it.each([
     ['no carrier', [], { kind: 'none' }],
@@ -102,22 +97,16 @@ describe('selectAuthorityCarriers', () => {
     expect(selectAuthorityCarriers(carriers)).toEqual(
       selectAuthorityCarriers([...carriers].reverse()),
     )
-    // Two live carriers stay ambiguous in either order: no carrier wins by
-    // arriving first.
     expect(selectAuthorityCarriers([live('a'), live('b')])).toEqual({
       kind: 'ambiguous',
     })
   })
 
   it('deduplicates a repeated id and fails closed on a conflicting one', () => {
-    // `document_id` is the store's primary key, so a duplicate is not reachable
-    // from the store; a direct caller passing one must not change the outcome.
     expect(selectAuthorityCarriers([live('a'), live('a')])).toEqual({
       kind: 'single_live',
       id: 'a',
     })
-    // A conflicting duplicate is withdrawn, which is the untrustworthy state,
-    // rather than clearing on it.
     expect(selectAuthorityCarriers([live('a'), withdrawn('a')])).toEqual({
       kind: 'no_live',
       ids: ['a'],

@@ -176,7 +176,6 @@ describe('tracked change routes', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'validation_failed' },
     })
-    // Accepting the mark would persist an empty body, so nothing is committed.
     expect(database.currentVersionId).toBe('ver_1')
     expect(database.versions.size).toBe(1)
     expect(database.audits).toEqual([])
@@ -220,7 +219,6 @@ describe('tracked change routes', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'validation_failed' },
     })
-    // Rejecting the shell would remove the only paragraph, so nothing commits.
     expect(database.currentVersionId).toBe('ver_1')
     expect(database.versions.size).toBe(1)
     expect(database.audits).toEqual([])
@@ -240,7 +238,6 @@ describe('tracked change routes', () => {
       versionNumber: number
     }
 
-    // One request, one immutable version, every change applied inside it.
     expect(response.status).toBe(201)
     expect(body.versionNumber).toBe(2)
     expect(database.versions.size).toBe(2)
@@ -259,7 +256,6 @@ describe('tracked change routes', () => {
     expect(xml).not.toContain('<w:ins')
     expect(xml).not.toContain('<w:del ')
     expect(xml).not.toContain('PrChange')
-    // The base version's bytes are untouched.
     expect(route.storage.binary.get(sourceKey)).toEqual(trackedSourceBytes)
   })
 
@@ -330,8 +326,6 @@ describe('tracked change routes', () => {
       throw new Error('Crafted two-insert shell is missing.')
     }
 
-    // Rejecting the first insert and naming the shell would delete the
-    // second insert's markup without a decision — refuse and write nothing.
     const response = await route.app.request(
       '/api/documents/doc_1/tracked-changes/decision',
       {

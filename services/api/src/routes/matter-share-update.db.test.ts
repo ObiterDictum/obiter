@@ -9,12 +9,6 @@ import {
   shareApp,
 } from './document-write-share-revocation.test-support'
 
-/**
- * Changing a grant's access in place. The Share dialog lets the owner move
- * somebody between "Can view" and "Can edit" without revoking and re-granting,
- * so the route behind it has to be owner-only, audited, and refuse an unknown
- * share with the same 404 the read routes use.
- */
 
 const pool: Pool = createTestPool()
 

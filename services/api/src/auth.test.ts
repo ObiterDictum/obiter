@@ -5,9 +5,6 @@ import { createTestApiEnv } from './test-api-env'
 
 const resendSendMock = vi.hoisted(() => vi.fn())
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const resendModuleKeys = Object.fromEntries(
   Object.keys(await import('resend')).map((key) => [key, undefined]),
 )
@@ -57,8 +54,6 @@ describe('userAdditionalFields — sign-up stash seam (config regression)', () =
   it('accepts the sign-up organisation name but never privileged fields', () => {
     const fields = userAdditionalFields()
 
-    // The cross-device stash: clients may send it at sign-up, and
-    // better-auth persists it on the user row for provisioning to consume.
     expect(fields.pendingOrganisationName).toMatchObject({
       type: 'string',
       required: false,
@@ -66,7 +61,6 @@ describe('userAdditionalFields — sign-up stash seam (config regression)', () =
     expect(
       (fields.pendingOrganisationName as { input?: boolean }).input,
     ).not.toBe(false)
-    // Privilege boundary: organisation assignment stays server-side.
     expect(fields.organisationId).toMatchObject({ input: false })
     expect(fields.role).toMatchObject({ input: false })
   })
@@ -290,8 +284,6 @@ describe('resetPasswordUrl', () => {
   })
 
   it('uses the web origin even when the request came from the desktop custom scheme', () => {
-    // The desktop renderer origin (env.desktopOrigin) must never appear in the
-    // reset link — it would not open in a browser.
     const url = resetPasswordUrl(
       {
         ...baseEnv,
@@ -307,9 +299,6 @@ describe('resetPasswordUrl', () => {
 })
 
 describe('sendResetPasswordEmail — reset link targets the web origin', () => {
-  // Empirical guard: the email URL must contain the web origin, not
-  // better-auth's default or the desktop scheme. This catches the case where
-  // the sendResetPassword callback silently fails to derive the URL.
   it('sends an email whose URL contains the web origin and ?token=', async () => {
     resendSendMock.mockResolvedValueOnce({
       data: { id: 'email_4' },
@@ -336,7 +325,6 @@ describe('sendResetPasswordEmail — reset link targets the web origin', () => {
     expect(call.text).toContain(
       'https://app.obiter.test/reset-password?token=tok_abc',
     )
-    // The desktop custom scheme must never leak into the reset link.
     expect(call.html).not.toContain('obiter://')
   })
 })
@@ -431,10 +419,6 @@ describe('buildAuthAuditEvent', () => {
 })
 
 describe('emailAndPasswordOptions — password reset revokes sessions (config regression)', () => {
-  // A full session-lifecycle test needs the DB; instead assert the config is
-  // set truthfully. better-auth's resetPassword route calls
-  // deleteSessions(userId) only when this option is true, so without it a
-  // stolen session cookie survives a password reset.
   it('enables revokeSessionsOnPasswordReset so a stolen session is invalidated on reset', () => {
     expect(emailAndPasswordOptions(baseEnv).revokeSessionsOnPasswordReset).toBe(
       true,
@@ -443,11 +427,6 @@ describe('emailAndPasswordOptions — password reset revokes sessions (config re
 })
 
 describe('sendResetPasswordForUser — delivery failure is logged, not silent', () => {
-  // better-auth runs the sendResetPassword callback in the background and
-  // swallows throws after the token is stored, so an unhandled throw would be
-  // invisible. The wrapper catches the failure and logs it at error level. The
-  // client-facing "email sent" message deliberately does not change (no
-  // account-existence leak).
   it('logs at error level and resolves when Resend rejects the reset email', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     resendSendMock.mockResolvedValueOnce({
@@ -467,9 +446,6 @@ describe('sendResetPasswordForUser — delivery failure is logged, not silent', 
       ),
     ).resolves.toBeUndefined()
 
-    // The wrapper logs a concise correlation line with the masked email, the
-    // email domain, and a fresh requestId (sendEmail's [resend] log also fires
-    // with the transport detail before throwing).
     expect(consoleError).toHaveBeenCalledWith(
       'Reset-password email delivery failed',
       expect.objectContaining({
