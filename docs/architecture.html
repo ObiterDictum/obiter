@@ -3644,6 +3644,19 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    DELETE
+                    /api/verification-runs/:runId/findings/:findingId/dismiss
+                  </td>
+                  <td class="id">verification-runs.ts</td>
+                  <td>
+                    Edit-gated. Reopens a dismissed finding and appends a
+                    <code>verification.finding_undismissed</code> audit record,
+                    because the dismissal row was the only record of the
+                    decision. Idempotent.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">POST /api/auth/sign-out</td>
                   <td class="id">app.ts</td>
                   <td>
