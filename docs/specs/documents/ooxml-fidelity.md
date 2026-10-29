@@ -127,3 +127,13 @@ Malformed or unsupported input may fail with a curated package error. Source-pre
 ## Stage boundary
 
 Stage A consisted only of these specifications and the equivalence checker with focused tests. The owner approved the specifications before Stage B added package archive handling, the wire schema, parser, overlays, serialiser, fixtures and golden round-trip tests. S1 performs no PDF work; PDF import-to-view belongs to S2b.
+
+## Rules no unit test can reach
+
+These rules were in code comments until the no-comments rule (29 Oct 2026). No public path reaches them today, so they are stated here; change them only deliberately.
+
+- In a run fold, non-run siblings come back unchanged, so the caller's one-run check refuses them (`run-effective.ts`).
+- A non-run-keyed replacement strictly inside a run fails closed (`section-edits.ts`).
+- A target that a kept relationship also reaches under a refused role is refused (`share-safe-inventory.ts`).
+- A run whose anchors do not reconstruct its model text is refused, never placed by guesswork (`text-offsets.ts`).
+- The comparison parser is built lazily so it never enters the client bundle (`xml-canonicalisation.ts`).
