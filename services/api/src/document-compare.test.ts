@@ -460,6 +460,15 @@ describe('compareDocumentModels', () => {
     expect(kinds.sort()).toEqual(['added', 'removed'])
   })
 
+  it('excludes whitespace from paragraph similarity scoring', () => {
+    const base = model([paragraph('p1', 'one two three four five')])
+    const target = model([paragraph('q1', 'one  two  three  six  seven')])
+
+    expect(
+      compareDocumentModels(base, target).entries.map((entry) => entry.type),
+    ).toEqual(['modified'])
+  })
+
   it('reports story structure and package area changes', () => {
     const base = model([paragraph('p1', 'Text.', { sourceParaId: 'aa01' })], {
       styles: [{ styleId: 'Normal', sourceFragment: '<w:style a/>' }],
