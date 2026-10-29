@@ -479,6 +479,15 @@ describe('compareDocumentModels', () => {
     ).toEqual(['modified'])
   })
 
+  it('does not pair paragraphs on fewer than three common words', () => {
+    const base = model([paragraph('p1', 'one two')])
+    const target = model([paragraph('q1', 'one two three')])
+
+    expect(
+      compareDocumentModels(base, target).entries.map((entry) => entry.type),
+    ).toEqual(['removed', 'added'])
+  })
+
   it('reports story structure and package area changes', () => {
     const base = model([paragraph('p1', 'Text.', { sourceParaId: 'aa01' })], {
       styles: [{ styleId: 'Normal', sourceFragment: '<w:style a/>' }],
