@@ -219,6 +219,40 @@ describe('matter saved sources', () => {
     }
   })
 
+  it('revives the same saved source when it is filed again after removal', async () => {
+    const seed = await seedMatter()
+    try {
+      const asOwner = app(pool, owner(seed))
+      const first = (await (
+        await asOwner.request(`/api/matters/${seed.matterId}/saved-sources`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(sourceBody),
+        })
+      ).json()) as { savedSource: { id: string } }
+      await asOwner.request(
+        `/api/matters/${seed.matterId}/saved-sources/${first.savedSource.id}`,
+        { method: 'DELETE' },
+      )
+
+      const second = (await (
+        await asOwner.request(`/api/matters/${seed.matterId}/saved-sources`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(sourceBody),
+        })
+      ).json()) as { savedSource: { id: string } }
+
+      expect(second.savedSource.id).toBe(first.savedSource.id)
+      const listed = (await (
+        await asOwner.request(`/api/matters/${seed.matterId}/saved-sources`)
+      ).json()) as { savedSources: unknown[] }
+      expect(listed.savedSources).toHaveLength(1)
+    } finally {
+      await cleanup(seed)
+    }
+  })
+
   it('refuses a save queued behind a share revocation', async () => {
     const seed = await seedMatter()
     const writerPool = createTestPool()
