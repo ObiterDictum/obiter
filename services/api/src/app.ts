@@ -88,10 +88,7 @@ function readDevelopmentApiProvenance(
   let databaseName: string | null = null
   try {
     databaseName = readDatabaseIdentity(databaseUrl, 'DATABASE_URL').database
-  } catch {
-    // Health must stay useful on a malformed env; the lane check treats a
-    // null name as "cannot prove the write target" and refuses.
-  }
+  } catch {}
   try {
     const checkoutRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       cwd: process.cwd(),

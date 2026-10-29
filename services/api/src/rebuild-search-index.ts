@@ -100,9 +100,7 @@ async function main() {
     snapshotOpen = false
     try {
       await snapshot.query('ROLLBACK')
-    } catch {
-      // The original error matters; a rollback failure only affects cleanup.
-    }
+    } catch {}
   }
   try {
     snapshot = await pool.connect()

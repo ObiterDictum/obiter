@@ -220,7 +220,6 @@ export function createDocumentsRoutes(
         ) {
           return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
         }
-        // Content-level failures reuse the post-create failure path below.
       }
     }
 
@@ -246,9 +245,7 @@ export function createDocumentsRoutes(
             failureReason,
           })
           if (version) result.version = version
-        } catch {
-          // Preserve the original storage failure response.
-        }
+        } catch {}
       }
       const textObjectKey = result.version.objectKey.replace(
         /\/source$/,

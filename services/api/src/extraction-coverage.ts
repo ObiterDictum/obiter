@@ -275,9 +275,7 @@ export async function findUncoveredDocxRegions(
           limits,
         ),
       ).text === extractedText.trim()
-  } catch {
-    // Not walker coordinates; the burn refuses these runs on its own.
-  }
+  } catch {}
   return walkerCoordinates ? docxRegions(entries, extractedText, true) : regions
 }
 

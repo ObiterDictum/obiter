@@ -4,16 +4,12 @@ export const DOCX_CONTENT_TYPE =
 export type RedactionRendererFailure =
   | 'renderer_unavailable'
   | 'renderer_timeout'
-  // The worker is healthy but busy or still warming. Distinct from a generic
-  // error because both are retriable rather than a property of the document.
   | 'renderer_at_capacity'
   | 'renderer_not_ready'
-  // The document itself is outside a worker bound and will fail every retry.
   | 'renderer_input_too_large'
   | 'renderer_too_many_pages'
   | 'renderer_error'
   | 'renderer_invalid_pdf'
-  // The response body exceeded this client's buffer ceiling before any parse.
   | 'renderer_too_large'
 
 export class RedactionRendererError extends Error {
@@ -130,9 +126,7 @@ async function readWorkerFailure(
       const failure = workerFailureForCode(parsed.error.code)
       if (failure) return failure
     }
-  } catch {
-    // Fall through to the generic category.
-  }
+  } catch {}
   return 'renderer_error'
 }
 

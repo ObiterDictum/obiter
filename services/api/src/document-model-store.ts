@@ -68,8 +68,6 @@ async function readOrGenerateModel(
     }
     if (cached.status === 'ok') return cached.model
     if (cached.status === 'failed') throw new DocumentModelStoreError()
-    // 'invalid': the cached model is unusable or from an older layout, so the
-    // stored source regenerates it exactly as an absent cache would.
   }
 
   try {

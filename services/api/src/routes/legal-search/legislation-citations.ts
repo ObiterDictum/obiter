@@ -31,17 +31,7 @@ export type LegislationCitationOutcome =
       recognisedQuery: string
     }
   | { kind: 'ambiguous'; candidates: LegislationActRef[]; reason: string }
-  // A well-formed chapter citation for a year and number the corpus does not
-  // hold. This is authoritative: the year and number are the canonical
-  // identity, so an absent chapter proves the Act is absent. `identity` is that
-  // canonical identity, so a caller that needs one (verification's resolution
-  // step) does not have to re-parse the citation or invent it. A failed *title*
-  // lookup does not prove absence (see `unresolved_title`).
   | { kind: 'not_held'; identity: string; recognisedQuery: string }
-  // The query is a whole Act-title request, but the directory cannot resolve
-  // it. The local directory is partial and title resolution is imperfect, so
-  // this state suppresses unrelated keyword provisions without claiming the
-  // Act is absent.
   | { kind: 'unresolved_title'; recognisedQuery: string }
   | { kind: 'unrecognised' }
 

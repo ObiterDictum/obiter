@@ -258,9 +258,7 @@ export async function commitPreparedVersion(
 export async function rollback(client: PoolClient) {
   try {
     await client.query('rollback')
-  } catch {
-    // The public failure remains curated when rollback cannot be confirmed.
-  }
+  } catch {}
 }
 
 async function writeCandidate(

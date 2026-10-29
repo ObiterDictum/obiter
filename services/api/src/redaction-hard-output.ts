@@ -198,10 +198,7 @@ async function readLayout(
       JSON.parse(await storage.readText(layoutObjectKey)),
     )
     if (parsed.success) return parsed.data
-  } catch {
-    // Fall through to the empty layout: an accepted span then refuses with a
-    // cover-geometry error instead of redacting the wrong bytes.
-  }
+  } catch {}
   return { version: 2, pages: [{ width: 1, height: 1 }], segments: [] }
 }
 
