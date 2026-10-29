@@ -341,9 +341,7 @@ async function main() {
         if (context) {
           try {
             await sample({ context, journey, fixtures })
-          } catch {
-            // The measured samples report the reason.
-          }
+          } catch {}
         }
         const rows = []
         const failedSamples = []
