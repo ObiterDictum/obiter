@@ -35,7 +35,7 @@ export interface PremaskResult {
 }
 
 /** The sentinel substituted for a premasked label. Stable across train/serve. */
-export function sentinelFor(label: PiiLabel): string {
+function sentinelFor(label: PiiLabel): string {
   return `[${label}]`;
 }
 

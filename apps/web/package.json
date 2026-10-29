@@ -21,8 +21,6 @@
     "@tanstack/react-router": "^1.168.23",
     "@tanstack/react-router-ssr-query": "^1.166.11",
     "@tanstack/react-start": "^1.167.44",
-    "@tanstack/router-plugin": "^1.167.22",
-    "better-auth": "^1.6.8",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vite": "^8.0.0"

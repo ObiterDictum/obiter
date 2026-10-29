@@ -321,6 +321,3 @@ export function shareSafeAttributeVerdict(
   // mc: elements never emit; metadata parts discard their input.
   return 'strip'
 }
-
-/** `wp:docPr`/`a:cNvPr` — kept for the verifier's descriptive checks. */
-export const DOCUMENT_OBJECT_PROPS_ELEMENTS = new Set(['docPr', 'cNvPr'])

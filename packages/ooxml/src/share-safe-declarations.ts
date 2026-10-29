@@ -28,19 +28,18 @@ import { refuseShareSafe } from './share-safe-refusal'
  */
 
 /** `xsd:ID` — an NCName: letter or underscore, then name characters. */
-export const RELATIONSHIP_ID = /^[A-Za-z_][\w.-]{0,127}$/u
+const RELATIONSHIP_ID = /^[A-Za-z_][\w.-]{0,127}$/u
 /** `xsd:anyURI` for a declaration slot — bounded, no whitespace. */
-export const RELATIONSHIP_URI = /^\S{1,2048}$/u
+const RELATIONSHIP_URI = /^\S{1,2048}$/u
 /** `ST_Extension` reduced to the extension alphabet Office writes. */
-export const CONTENT_TYPE_EXTENSION = /^[A-Za-z0-9]{1,32}$/u
+const CONTENT_TYPE_EXTENSION = /^[A-Za-z0-9]{1,32}$/u
 /** `ST_ContentType` — a `token/token` media type with optional params. */
-export const CONTENT_TYPE_MEDIA =
+const CONTENT_TYPE_MEDIA =
   /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,127}(?:\s*;\s*[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}="[^"]{0,255}")*$/u
 /** `xsd:anyURI` part names — `/`-rooted, bounded segments. */
-export const CONTENT_TYPE_PART_NAME =
-  /^\/[^\s/]{1,256}(?:\/[^\s/]{1,256}){0,31}$/u
+const CONTENT_TYPE_PART_NAME = /^\/[^\s/]{1,256}(?:\/[^\s/]{1,256}){0,31}$/u
 /** `ST_TargetMode` — the two spellings the enumeration declares. */
-export const RELATIONSHIP_TARGET_MODES = new Set(['Internal', 'External'])
+const RELATIONSHIP_TARGET_MODES = new Set(['Internal', 'External'])
 
 /**
  * No declaration element carries text: `Relationships`, `Relationship`,

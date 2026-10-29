@@ -89,7 +89,7 @@ export function compareOoxmlProductCommentExport(
   return compareOoxmlPackages(expected, exported)
 }
 
-function sameStrings(left: string[], right: string[]) {
+export function sameStrings(left: string[], right: string[]) {
   return (
     left.length === right.length &&
     left.every((value, index) => value === right[index])

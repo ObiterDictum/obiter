@@ -1,15 +1,10 @@
-import {
-  CUSTOM_PROPERTIES_NAMESPACE,
-  DOC_PROPS_VT_NAMESPACE,
-} from './parts/custom-properties'
+import { CUSTOM_PROPERTIES_NAMESPACE } from './parts/custom-properties'
 import {
   WORD_NAMESPACE,
   type ExpandedName,
   type XmlAttribute,
   type XmlElement,
 } from './parts/xml-elements'
-
-export { DOC_PROPS_VT_NAMESPACE }
 
 /**
  * The package-level half of the share-safe policy: which parts may ship,
@@ -172,7 +167,7 @@ export type ShareSafeContentPlan = {
   attrOverrides: Map<XmlAttribute, string | undefined>
 }
 
-export type DetachedReferenceShape =
+type DetachedReferenceShape =
   'hyperlink' | 'attachedTemplate' | 'printerSettings'
 
 const w = (localName: string): ExpandedName => ({
@@ -325,7 +320,7 @@ export function isWordExtensionNamespace(namespaceUri: string) {
   return namespaceUri.startsWith(WORD_EXTENSION_PREFIX)
 }
 
-export function isEmbeddedNamespace(namespaceUri: string) {
+function isEmbeddedNamespace(namespaceUri: string) {
   return (
     namespaceUri.startsWith(DRAWINGML_PREFIX) ||
     namespaceUri.startsWith(DRAWING_EXTENSION_PREFIX) ||
