@@ -103,6 +103,17 @@ export function requestedVersionSelection(c: RouteContext) {
   return versionId === undefined ? {} : { versionId }
 }
 
+export function conflictDetected(c: RouteContext) {
+  const body: ApiErrorResponse = {
+    error: {
+      code: 'conflict_detected',
+      message: 'The document has changed since editing began.',
+      requestId: c.get('requestId'),
+    },
+  }
+  return c.json(body, 409)
+}
+
 export function documentNotFound(c: RouteContext) {
   const body: ApiErrorResponse = {
     error: {

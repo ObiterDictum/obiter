@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg'
+import { rollbackQuietly } from './database-transaction'
 import type {
   MojRequestBudget,
   MojRequestCharge,
@@ -159,14 +160,6 @@ export function composeMojRequestBudget(
       if (localCharge.status !== 'allowed') return localCharge
       return shared.charge(now)
     },
-  }
-}
-
-async function rollbackQuietly(client: PoolClient): Promise<void> {
-  try {
-    await client.query('rollback')
-  } catch {
-    // The connection is already broken; there is nothing to roll back.
   }
 }
 

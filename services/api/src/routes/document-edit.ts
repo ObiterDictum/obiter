@@ -13,6 +13,7 @@ import {
 } from '../document-versions'
 import type { StorageService } from '../storage'
 import {
+  conflictDetected,
   documentNotFound,
   resolveCurrentReadyDocumentVersion,
 } from './document-route-shared'
@@ -86,15 +87,4 @@ function validationFailed(c: RouteContext) {
     },
   }
   return c.json(body, 400)
-}
-
-function conflictDetected(c: RouteContext) {
-  const body: ApiErrorResponse = {
-    error: {
-      code: 'conflict_detected',
-      message: 'The document has changed since editing began.',
-      requestId: c.get('requestId'),
-    },
-  }
-  return c.json(body, 409)
 }

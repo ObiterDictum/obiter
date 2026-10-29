@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg'
+import { rollbackQuietly } from './database-transaction'
 import type {
   HydrationAdmission,
   LegalHydrationLedger,
@@ -171,13 +172,5 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
       // forever.
       console.error('Legal hydration lease release failed')
     }
-  }
-}
-
-async function rollbackQuietly(client: PoolClient): Promise<void> {
-  try {
-    await client.query('rollback')
-  } catch {
-    // The connection is already broken; there is nothing to roll back.
   }
 }
