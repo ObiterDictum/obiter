@@ -244,7 +244,7 @@ function withTable(model: DocumentModelWire): DocumentModelWire {
   }
 }
 
-export type WorkspaceModelSource = (id: string) => {
+type WorkspaceModelSource = (id: string) => {
   versionId: string
   versionNumber: number
   model: DocumentModelWire

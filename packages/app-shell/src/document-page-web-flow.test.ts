@@ -5,17 +5,10 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { layoutDocument } from './document-page-engine'
+import { textParagraph as paragraph } from './document-wire-test-support'
 
 const A4_LETTER =
   '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>'
-
-function paragraph(id: string, text: string): DocumentParagraphWire {
-  return {
-    id,
-    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
-    preservedXmlFragments: [],
-  }
-}
 
 function modelOf(
   paragraphs: DocumentParagraphWire[],

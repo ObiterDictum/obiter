@@ -17,6 +17,7 @@ import {
   type StructuralDraft,
 } from './document-structural-drafts'
 import type { TableOfAuthoritiesFacts } from './document-legal-toolbar'
+import { bodyStory } from './document-wire-test-support'
 
 const toaDraft = (
   id: string,
@@ -59,17 +60,6 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
       privileged: false,
       withoutPrejudice: false,
     },
-  }
-}
-
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
-  return {
-    partName: 'word/document.xml',
-    kind: 'document',
-    paragraphs,
-    preservedXmlFragments: [],
-    fields: [],
-    unanchoredFieldParagraphIds: [],
   }
 }
 

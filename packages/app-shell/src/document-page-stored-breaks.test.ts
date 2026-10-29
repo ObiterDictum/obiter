@@ -5,14 +5,7 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { layoutDocument } from './document-page-engine'
-
-function paragraph(id: string, text: string): DocumentParagraphWire {
-  return {
-    id,
-    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
-    preservedXmlFragments: [],
-  }
-}
+import { textParagraph as paragraph } from './document-wire-test-support'
 
 function storedBreakParagraph(
   id: string,

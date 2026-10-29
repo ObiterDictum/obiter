@@ -20,6 +20,7 @@ import {
   structuralEditOperations,
   type StructuralDraft,
 } from './document-structural-drafts'
+import { bodyStory } from './document-wire-test-support'
 
 const tocDraft = (
   id: string,
@@ -62,17 +63,6 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
       privileged: false,
       withoutPrejudice: false,
     },
-  }
-}
-
-function bodyStory(paragraphs: DocumentParagraphWire[]): DocumentStoryWire {
-  return {
-    partName: 'word/document.xml',
-    kind: 'document',
-    paragraphs,
-    preservedXmlFragments: [],
-    fields: [],
-    unanchoredFieldParagraphIds: [],
   }
 }
 
