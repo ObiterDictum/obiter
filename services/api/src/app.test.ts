@@ -151,6 +151,23 @@ describe('createApiApp', () => {
     })
   })
 
+  it('rejects a profile update when the session user no longer exists', async () => {
+    const response = await createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    ).request('/api/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Test User' }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
+  })
+
   it('reports the serving adapter when the entry point declares one', async () => {
     const auth = {
       api: {
